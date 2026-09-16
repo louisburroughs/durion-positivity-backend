@@ -48,23 +48,39 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Default implementation of the scrap/write-off workflow (odoo-parity D1, issue #1030).
+ * Default implementation of the scrap/write-off workflow (odoo-parity D1, issue
+ * #1030).
  *
- * <p>Approval model (mirrors {@link CycleCountAdjustmentServiceImpl}): scrap thresholds are
- * value-based — quantity × unit-cost snapshot — evaluated against the {@code SCRAP} rows of
- * {@code approval_threshold_config}. A scrap whose cost snapshot is unknown ({@code costSource
- * = NONE}) cannot be proven below any threshold, so it always requires approval at
- * {@code TIER_1_MANAGER} (the lowest tier: value is unknown, not provably large).
+ * <p>
+ * Approval model (mirrors {@link CycleCountAdjustmentServiceImpl}): scrap
+ * thresholds are
+ * value-based — quantity × unit-cost snapshot — evaluated against the
+ * {@code SCRAP} rows of
+ * {@code approval_threshold_config}. A scrap whose cost snapshot is unknown
+ * ({@code costSource
+ * = NONE}) cannot be proven below any threshold, so it always requires approval
+ * at
+ * {@code TIER_1_MANAGER} (the lowest tier: value is unknown, not provably
+ * large).
  *
- * <p>Cost snapshot (interim rule, ADR-0048 / plan D-6): latest {@code GOODS_RECEIPT} unit cost
- * for the SKU, falling back to the latest non-null unit cost of any ledger entry, else null.
+ * <p>
+ * Cost snapshot (interim rule, ADR-0048 / plan D-6): latest
+ * {@code GOODS_RECEIPT} unit cost
+ * for the SKU, falling back to the latest non-null unit cost of any ledger
+ * entry, else null.
  * odoo-parity J1 replaces this with the authoritative cost source.
  *
- * <p>Posting: {@code SCRAP_OUT} through the {@link LedgerPostingService} funnel with
- * {@code sourceTransactionId = scrapId}. The funnel's negative-stock matrix marks SCRAP_OUT
- * {@code BLOCKED_OVERRIDABLE}; this service performs the {@code inventory:adjustment:override}
- * permission check and passes the explicit flag, per the funnel contract. An insufficient-stock
- * rejection surfaces as a guided-reconciliation 422 ({@code SCRAP_INSUFFICIENT_STOCK}),
+ * <p>
+ * Posting: {@code SCRAP_OUT} through the {@link LedgerPostingService} funnel
+ * with
+ * {@code sourceTransactionId = scrapId}. The funnel's negative-stock matrix
+ * marks SCRAP_OUT
+ * {@code BLOCKED_OVERRIDABLE}; this service performs the
+ * {@code inventory:adjustment:override}
+ * permission check and passes the explicit flag, per the funnel contract. An
+ * insufficient-stock
+ * rejection surfaces as a guided-reconciliation 422
+ * ({@code SCRAP_INSUFFICIENT_STOCK}),
  * mirroring the putaway source-on-hand rule.
  */
 @Service
@@ -91,8 +107,10 @@ public class ScrapServiceImpl implements ScrapService {
 
     /**
      * Lot-gate-less constructor kept for the pre-E2 unit-test fixtures: without an
-     * {@link InventoryLotOutboundService} every SKU behaves untracked (no lot validation,
-     * lot-null postings) — identical to the service's behavior for NONE-tracked products
+     * {@link InventoryLotOutboundService} every SKU behaves untracked (no lot
+     * validation,
+     * lot-null postings) — identical to the service's behavior for NONE-tracked
+     * products
      * (odoo-parity E2, issue #1042).
      */
     public ScrapServiceImpl(
@@ -130,9 +148,12 @@ public class ScrapServiceImpl implements ScrapService {
         CostSnapshot costSnapshot = snapshotCost(request.getStockItemId());
 
         // odoo-parity E2 (#1042): LOT-tracked SKUs must key the lot being written off
-        // (422 LOT_NUMBER_REQUIRED / LOT_UNKNOWN / LOT_NOT_AVAILABLE); the resolved lot rides
-        // on the D1-reserved ScrapRecord.lotId column and stamps the SCRAP_OUT posting —
-        // including the approval path, which posts later from the stored record. Untracked
+        // (422 LOT_NUMBER_REQUIRED / LOT_UNKNOWN / LOT_NOT_AVAILABLE); the resolved lot
+        // rides
+        // on the D1-reserved ScrapRecord.lotId column and stamps the SCRAP_OUT posting
+        // —
+        // including the approval path, which posts later from the stored record.
+        // Untracked
         // SKUs resolve to null, byte-identical to pre-E2.
         UUID lotId = lotOutboundService == null
                 ? null
@@ -223,8 +244,10 @@ public class ScrapServiceImpl implements ScrapService {
     @Transactional(readOnly = true)
     public @NonNull ScrapResponse getScrap(@NonNull UUID scrapId) {
         ScrapRecord scrap = scrapRepository.findById(scrapId).orElseThrow(() -> new ScrapNotFoundException(scrapId));
-        // ADR-0061 §3 (#1872): the list is narrowed by location, so the by-id read is gated on the
-        // loaded record's location — after the 404, so ids cannot be probed. Either view alternate
+        // ADR-0061 §3 (#1872): the list is narrowed by location, so the by-id read is
+        // gated on the
+        // loaded record's location — after the 404, so ids cannot be probed. Either
+        // view alternate
         // the caller holds may cover it.
         locationScopeService.require(
                 scrap.getLocationId(),
@@ -248,7 +271,8 @@ public class ScrapServiceImpl implements ScrapService {
         if (status != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
         }
-        // ADR-0061 §3 (#1872): a named location is gated; none narrows a scoped caller to their reach.
+        // ADR-0061 §3 (#1872): a named location is gated; none narrows a scoped caller
+        // to their reach.
         Optional<Set<UUID>> reach = locationScopeService.narrowTo(
                 locationId, InventoryPermissionRegistry.SCRAP_VIEW, InventoryPermissionRegistry.SCRAP_APPROVE);
         if (locationId != null) {
@@ -271,10 +295,14 @@ public class ScrapServiceImpl implements ScrapService {
     }
 
     /**
-     * Value-threshold evaluation. An unknown cost snapshot ({@code costSource = NONE}) means the
-     * scrap value cannot be compared against any threshold; treating unknown as "free" would let
-     * arbitrarily large write-offs auto-post, so unknown value always requires approval at the
-     * lowest tier ({@code TIER_1_MANAGER} — the value is unknown, not provably large).
+     * Value-threshold evaluation. An unknown cost snapshot
+     * ({@code costSource = NONE}) means the
+     * scrap value cannot be compared against any threshold; treating unknown as
+     * "free" would let
+     * arbitrarily large write-offs auto-post, so unknown value always requires
+     * approval at the
+     * lowest tier ({@code TIER_1_MANAGER} — the value is unknown, not provably
+     * large).
      */
     private Optional<ApprovalTier> evaluateRequiredTier(ScrapRecord scrap) {
         BigDecimal scrapValue = scrap.getScrapValue();
@@ -289,9 +317,12 @@ public class ScrapServiceImpl implements ScrapService {
     }
 
     /**
-     * Interim cost snapshot (ADR-0048 / plan D-6): most recent {@code GOODS_RECEIPT} unit cost
-     * for the SKU, falling back to the latest non-null unit cost of any ledger entry. Both are
-     * labeled {@code LATEST_RECEIPT}; no cost history at all yields {@code NONE} with a null
+     * Interim cost snapshot (ADR-0048 / plan D-6): most recent
+     * {@code GOODS_RECEIPT} unit cost
+     * for the SKU, falling back to the latest non-null unit cost of any ledger
+     * entry. Both are
+     * labeled {@code LATEST_RECEIPT}; no cost history at all yields {@code NONE}
+     * with a null
      * snapshot. odoo-parity J1 replaces this with the authoritative cost source.
      */
     private CostSnapshot snapshotCost(String stockItemId) {
@@ -308,24 +339,32 @@ public class ScrapServiceImpl implements ScrapService {
     }
 
     /**
-     * Posts an approved/auto-approved scrap: {@code SCRAP_OUT} through the funnel, then the
-     * {@code ScrapPostedV1} occurrence fact and the optional replenishment evaluation.
+     * Posts an approved/auto-approved scrap: {@code SCRAP_OUT} through the funnel,
+     * then the
+     * {@code ScrapPostedV1} occurrence fact and the optional replenishment
+     * evaluation.
      *
-     * <p>Failure semantics: an insufficient-stock rejection (funnel's
-     * {@code NEGATIVE_STOCK_OVERRIDE_REQUIRED}) rolls back the whole transaction as the guided
-     * 422 — on approve, the scrap stays {@code PENDING_APPROVAL}. Unexpected posting failures
-     * follow the cycle-count FAILED pattern ({@link CycleCountAdjustmentServiceImpl}) and
+     * <p>
+     * Failure semantics: an insufficient-stock rejection (funnel's
+     * {@code NEGATIVE_STOCK_OVERRIDE_REQUIRED}) rolls back the whole transaction as
+     * the guided
+     * 422 — on approve, the scrap stays {@code PENDING_APPROVAL}. Unexpected
+     * posting failures
+     * follow the cycle-count FAILED pattern
+     * ({@link CycleCountAdjustmentServiceImpl}) and
      * surface as {@link ScrapLedgerPostingException}.
      */
     private void postApprovedScrap(ScrapRecord scrap, boolean overrideRequested) {
         boolean negativeStockOverride = resolveNegativeStockOverride(overrideRequested);
-        UUID postingLocationId =
-                scrap.getStorageLocationId() != null ? scrap.getStorageLocationId() : scrap.getLocationId();
+        UUID postingLocationId = scrap.getStorageLocationId() != null ? scrap.getStorageLocationId()
+                : scrap.getLocationId();
 
         BigDecimal currentOnHand = Quantities.nz(
                 ledgerRepository.calculateOnHandQuantityAtLocation(scrap.getStockItemId(), postingLocationId));
-        // A scrap request quantity is still an Integer (the scrap DTOs widen with the UOM work in
-        // ADR-0055 stage 4); this widens at the boundary rather than narrowing the ledger total.
+        // A scrap request quantity is still an Integer (the scrap DTOs widen with the
+        // UOM work in
+        // ADR-0055 stage 4); this widens at the boundary rather than narrowing the
+        // ledger total.
         BigDecimal scrappedQuantity = BigDecimal.valueOf(scrap.getQuantity());
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(scrap.getStockItemId())
@@ -347,7 +386,7 @@ public class ScrapServiceImpl implements ScrapService {
         } catch (NegativeStockPolicyViolationException e) {
             if (NegativeStockPolicyViolationException.OVERRIDE_REQUIRED.equals(e.getErrorCode())) {
                 // Guided-reconciliation 422 mirroring the putaway source-on-hand
-                // rule (docs/putaway-validation-rules.md).
+                // rule (durion/domains/inventory/putaway-validation-rules.md).
                 throw new ScrapInsufficientStockException(
                         scrap.getStockItemId(), postingLocationId, scrap.getQuantity());
             }
@@ -367,11 +406,16 @@ public class ScrapServiceImpl implements ScrapService {
         scrap.setPostedAt(postedAt);
         scrapRepository.save(scrap);
 
-        // odoo-parity J3 (#1053): the fact carries the J1 engine's method-derived cost stamped on
-        // the SCRAP_OUT entry by LedgerCostingService during the posting above (ADR-0048) — the
-        // authoritative cost at the moment of the movement — not the interim approval-time
-        // latest-receipt snapshot (that snapshot still gates the value-based approval tier). When
-        // the engine could not cost the movement (uncosted SKU) the fact stays null-cost / NONE,
+        // odoo-parity J3 (#1053): the fact carries the J1 engine's method-derived cost
+        // stamped on
+        // the SCRAP_OUT entry by LedgerCostingService during the posting above
+        // (ADR-0048) — the
+        // authoritative cost at the moment of the movement — not the interim
+        // approval-time
+        // latest-receipt snapshot (that snapshot still gates the value-based approval
+        // tier). When
+        // the engine could not cost the movement (uncosted SKU) the fact stays
+        // null-cost / NONE,
         // and the accounting shrinkage consumer record-and-skips it (odoo-parity D2).
         BigDecimal engineUnitCost = saved.getUnitCost();
         String factCostSource = engineUnitCost == null
@@ -404,8 +448,10 @@ public class ScrapServiceImpl implements ScrapService {
     }
 
     /**
-     * The funnel never consults the security context; the caller owns the permission check
-     * (see {@link LedgerPostingService}). An override request without the permission is a hard
+     * The funnel never consults the security context; the caller owns the
+     * permission check
+     * (see {@link LedgerPostingService}). An override request without the
+     * permission is a hard
      * 403 rather than a silent downgrade to the 422 path.
      */
     private boolean resolveNegativeStockOverride(boolean overrideRequested) {
@@ -419,11 +465,14 @@ public class ScrapServiceImpl implements ScrapService {
         return true;
     }
 
-    /** Odoo do_replenish analog (spec D3): best-effort — a failed evaluation never rolls back the posting. */
+    /**
+     * Odoo do_replenish analog (spec D3): best-effort — a failed evaluation never
+     * rolls back the posting.
+     */
     private void evaluateReplenishment(ScrapRecord scrap, UUID postingLocationId) {
         try {
-            var result =
-                    replenishmentService.evaluatePickFaceForReplenishment(scrap.getStockItemId(), postingLocationId);
+            var result = replenishmentService.evaluatePickFaceForReplenishment(scrap.getStockItemId(),
+                    postingLocationId);
             log.info(
                     "Replenishment evaluation for scrapped SKU {} at {}: {}",
                     scrap.getStockItemId(),
@@ -476,5 +525,6 @@ public class ScrapServiceImpl implements ScrapService {
     }
 
     private record CostSnapshot(
-            @Nullable BigDecimal unitCost, @NonNull ScrapCostSource source) {}
+            @Nullable BigDecimal unitCost, @NonNull ScrapCostSource source) {
+    }
 }

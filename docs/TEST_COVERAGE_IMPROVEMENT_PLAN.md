@@ -1047,7 +1047,7 @@ nightly will blame the floor.
 1. `pos-bulk-ingest-lib` needs the tests, not a lower floor. **Done** — see below.
 2. `pos-tenancy-common` needs only a re-derivation from a fresh `-DskipITs`
    build; its branch floor is 0.2 points from the threshold on coverage that has
-   not meaningfully moved. **Still open.**
+   not meaningfully moved. **Done, and the diagnosis was wrong** — see below.
 
 **Outcome for `pos-bulk-ingest-lib` (2026-09-15).** A `Deferred` nest in
 `AbstractBulkIngestControllerTest` now drives the 503 arm through `rowFailure`
@@ -1070,6 +1070,45 @@ ratchet went from `THIN` straight to `STALE` and the floors were re-derived to
 (`.claude/hooks/mutation-check-hook.sh`): disabling the `isRetryable` guard,
 changing the fallback string, and disabling the rejection guard each fail the
 test that claims to defend them.
+
+**Outcome for `pos-tenancy-common` (2026-09-16).** The re-derivation was never
+run, and the next nightly (`35057994389`, `main` at `e5d7ec8`) reported the same
+two `THIN` counters at the same numbers: 92.0% line, 79.8% branch. Reproducing
+with the gate's own command gave the same figures to the decimal, so this was
+not parallel-CI variation, and ranking the module's classes by missed lines
+named the cause at once: `replica.TenantDisplayName`, added on 2026-09-13
+(`11420bbc`, bounded in `3eeeff17`), with **0 of 11 lines and 0 of 4 branches
+covered**. Eleven lines of 502 is 2.2 points — the whole fall from the 94.1%
+peak. Its four branches are the two in `truncate()` (over the bound or not,
+high surrogate at the cut or not), and nothing exercised either arm.
+
+That makes it the `pos-bulk-ingest-lib` case again, not the noise case the
+table above filed it under: a small utility with fully specified behaviour
+(NFKC, whitespace collapse, case fold, surrogate-safe truncation at 200) that
+every login lookup keys on, merged without a test. `TenantDisplayNameTest` now
+pins each rule the class's javadoc states — the javadoc's own two-spelling
+example, NFKC of fullwidth letters and a ligature, `displayForm` keeping the
+operator's casing, both sides of the length bound, a cut that lands on
+whitespace, a cut that would split a surrogate pair, a pair that just fits,
+and the two lengthening cases the javadoc calls out (200 U+FB03 ligatures
+becoming 600 characters, 200 U+0130 becoming 400 after folding).
+
+```
+before   line 462/502 = 92.0%   branch 142/178 = 79.8%   THIN
+after    line 473/502 = 94.2%   branch 146/178 = 82.0%   OK
+```
+
+Coverage came back over the 94.1% peak, the branch floor rose 0.78 → 0.79 by
+`update-coverage-floors.sh --apply`, and the same run rewrote the pom comment
+that §6.6 flagged as wrong (it now records 94.2% / 82.0%). Three mutation checks
+back the new tests (`.claude/hooks/mutation-check-hook.sh`): disabling the
+surrogate guard, flipping the case fold to upper, and downgrading NFKC to NFC
+each fail the test that claims to defend it.
+
+**The rule this adds.** When a nightly reports `THIN`, rank the module's
+classes by missed lines before calling it variation. A class at 0/N covered is
+a test that was not written, and the ratchet found it; re-deriving the floor
+over it is the write-off the paragraph above warns against.
 
 The four lines still uncovered are all pre-existing and none is new: the
 `bulkIngest` endpoint body, which no test posts through, and the
