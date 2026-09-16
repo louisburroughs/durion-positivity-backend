@@ -89,6 +89,30 @@ public class ExtWorkorderReplica extends TenantScopedEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * When work actually began on this workorder (owner's {@code work_started_at}); null while it
+     * has not started. The <em>actual</em> start, never a planned or scheduled time (#2021).
+     */
+    @Column(name = "work_started_at")
+    private Instant workStartedAt;
+
+    /**
+     * When this workorder actually completed (owner's {@code completed_at}); null while still
+     * open (#2021).
+     */
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
+    /**
+     * The owner's projection of when a running job will finish (#2021). Column kept for contract
+     * stability even though the owner publishes {@code null} in every fact today by design —
+     * projecting a finish needs estimated remaining labour, which is ADR-0058/ADR-0059 territory
+     * and both are still PROPOSED, not accepted. Not populated by this module from any other
+     * source: a guessed projection would be indistinguishable from a known one.
+     */
+    @Column(name = "expected_end_at")
+    private Instant expectedEndAt;
+
     /** ArchUnit UUIDv7 rule hook (ADR-0013): the key is the owner's UUIDv7, stored verbatim. */
     @Transient
     public Class<?> uuidv7Dependency() {

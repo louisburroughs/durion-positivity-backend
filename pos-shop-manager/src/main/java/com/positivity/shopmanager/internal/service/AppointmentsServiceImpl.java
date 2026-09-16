@@ -64,6 +64,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -539,7 +540,10 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 "Building schedule view for location {} with correlationId={}",
                 request.getLocationId(),
                 normalizedCorrelationId);
-        ZoneId zoneId = resolveZoneId(request.getLocationId());
+        // One shop lookup, reused below by resolveZoneId and resolveResourceNames (#2023 F6) —
+        // this used to be two separate shopRepository.findById calls for the same location.
+        Shop shop = shopRepository.findById(request.getLocationId()).orElse(null);
+        ZoneId zoneId = resolveZoneId(shop, request.getLocationId());
         LocalDate targetDate = request.getDate();
 
         TimeWindow dayWindow = resolveDayWindow(targetDate, zoneId, request.getRange());
@@ -575,8 +579,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             }
         }
 
-        Map<ResourceLaneKey, String> resourceNames =
-                resolveResourceNames(request.getLocationId(), filteredByType.keySet());
+        Map<ResourceLaneKey, String> resourceNames = resolveResourceNames(shop, filteredByType.keySet());
         List<ScheduleViewResponse.ScheduleResourceView> resources = filteredByType.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> toResourceView(entry.getKey(), entry.getValue(), resourceNames.get(entry.getKey())))
@@ -606,12 +609,22 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         return response;
     }
 
+    /** Looks up the shop itself; used only where the caller has no {@link Shop} in hand already. */
     private ZoneId resolveZoneId(UUID locationId) {
-        String configuredTimezone = shopRepository
-                .findById(locationId)
-                .map(Shop::getTimezone)
-                .filter(timezone -> timezone != null && !timezone.isBlank())
-                .orElse(null);
+        return resolveZoneId(shopRepository.findById(locationId).orElse(null), locationId);
+    }
+
+    /**
+     * Resolves the schedule window's timezone from an already-loaded {@link Shop} (#2023 F6): {@code
+     * getScheduleView} loads the shop once and passes it here and to {@link
+     * #resolveResourceNames(Shop, Set)} rather than querying it twice for the same location.
+     */
+    private ZoneId resolveZoneId(@Nullable Shop shop, UUID locationId) {
+        String configuredTimezone = shop == null
+                ? null
+                : Optional.ofNullable(shop.getTimezone())
+                        .filter(timezone -> !timezone.isBlank())
+                        .orElse(null);
         if (configuredTimezone == null) {
             log.warn(
                     "Location {} has no configured timezone; defaulting to UTC. "
@@ -762,7 +775,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         return resourceView;
     }
 
-    private Map<ResourceLaneKey, String> resolveResourceNames(UUID locationId, Set<ResourceLaneKey> laneKeys) {
+    private Map<ResourceLaneKey, String> resolveResourceNames(@Nullable Shop shop, Set<ResourceLaneKey> laneKeys) {
         Map<ResourceLaneKey, String> resourceNames = HashMap.newHashMap(laneKeys.size());
         if (laneKeys.isEmpty()) {
             return resourceNames;
@@ -773,7 +786,6 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             return resourceNames;
         }
 
-        Shop shop = shopRepository.findById(locationId).orElse(null);
         if (!shopHasTechnicians(shop)) {
             return resourceNames;
         }

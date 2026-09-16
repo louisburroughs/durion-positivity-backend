@@ -186,6 +186,52 @@ class WorkorderEventsListenerTest {
     }
 
     @Test
+    @DisplayName("#2021 - workStartedAt and completedAt land on ext_workorder; expectedEndAt is null")
+    void actualTimeBlockLands() {
+        listener.onWorkorderEvent("""
+                {"eventId":"%s","eventType":"%s","aggregateVersion":3,"payload":{
+                  "workorderId":"%s","workorderNumber":"WO-2026-1001","status":"WORK_IN_PROGRESS","shopId":"%s",
+                  "customerId":null,"vehicleId":"%s","invoiceId":null,"parts":[],"services":[],
+                  "createdAt":null,"updatedAt":null,"locationId":"%s","resourceId":"%s",
+                  "resourceType":"BAY","mechanicIds":["%s","%s"],"promisedAt":null,
+                  "scheduledDate":"2026-09-03","workStartedAt":"2026-09-03T08:00:00Z",
+                  "completedAt":"2026-09-03T10:30:00Z","expectedEndAt":null}}""".formatted(
+                        EVENT_ID,
+                        WorkorderUpdatedV1.EVENT_TYPE,
+                        WORKORDER_ID,
+                        LOCATION_ID,
+                        VEHICLE_ID,
+                        LOCATION_ID,
+                        BAY_ID,
+                        MECHANIC_ONE,
+                        MECHANIC_TWO));
+
+        ArgumentCaptor<ExtWorkorderReplica> captor = ArgumentCaptor.forClass(ExtWorkorderReplica.class);
+        verify(workorderRepository).save(captor.capture());
+        ExtWorkorderReplica saved = captor.getValue();
+        assertThat(saved.getWorkStartedAt()).isEqualTo(Instant.parse("2026-09-03T08:00:00Z"));
+        assertThat(saved.getCompletedAt()).isEqualTo(Instant.parse("2026-09-03T10:30:00Z"));
+        assertThat(saved.getExpectedEndAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("re-published fact at the same aggregateVersion re-applies; a strictly-lower one is ignored")
+    void staleGuardIsStrictlyBelow() {
+        when(workorderRepository.findById(WORKORDER_ID))
+                .thenReturn(Optional.of(ExtWorkorderReplica.builder()
+                        .workorderId(WORKORDER_ID)
+                        .status("ASSIGNED")
+                        .aggregateVersion(5)
+                        .build()));
+
+        listener.onWorkorderEvent(envelope(4, "WORK_IN_PROGRESS", BAY_ID, "BAY"));
+        verify(workorderRepository, never()).save(any());
+
+        listener.onWorkorderEvent(envelope(5, "WORK_IN_PROGRESS", BAY_ID, "BAY"));
+        verify(workorderRepository).save(any());
+    }
+
+    @Test
     @DisplayName("#1658 - locationId falls back to shopId when the owner published only the latter")
     void locationIdFallsBackToShopId() {
         listener.onWorkorderEvent("""

@@ -74,13 +74,12 @@ import tools.jackson.databind.ObjectMapper;
  *       live call is the expensive one, which is the reverse of the usual trade.
  * </ol>
  *
- * <p><strong>The honest consequence:</strong> pos-location's {@code LocationFactPublisher} does not
- * publish bay or mobile-unit facts yet — it emits {@code location.location.*} and
- * {@code location.storage-location.updated} and nothing else. So these two tables start empty and
- * stay empty until that publisher exists, and until then the dashboard's {@code units[]} is empty
- * while {@code openWorkorders[]} is fully populated. A live read would have returned units today
- * at the price above. The upstream publisher is the cross-repo follow-up that closes the gap for
- * both this module and pos-workorder at once.
+ * <p><strong>Update (#2023 F5):</strong> the paragraph above once said pos-location did not publish
+ * bay or mobile-unit facts and that {@code ext_bay} / {@code ext_mobile_unit} would start empty and
+ * stay empty. That has been false since issue #1668: this listener has handled {@code
+ * BayUpdatedV1}/{@code BayDeletedV1}/{@code MobileUnitUpdatedV1}/{@code MobileUnitDeletedV1} ever
+ * since, and {@link ReplicaAndManifestListenerContractTest} exercises all four. The bay roster is
+ * available to the dashboard today.
  *
  * <p>Consumer contract as per this module's other replica listeners: {@code processed_events}
  * idempotency in the apply transaction, strictly-below {@code aggregateVersion} stale guard,
@@ -196,6 +195,7 @@ public class LocationEventsListener {
                 .bayId(payload.bayId())
                 .locationId(payload.locationId())
                 .name(payload.name())
+                .bayType(payload.bayType())
                 .active(isActiveStatus(payload.status()))
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
@@ -245,6 +245,11 @@ public class LocationEventsListener {
                 .active(payload.active())
                 .aggregateVersion(aggregateVersion)
                 .syncedAt(Instant.now(clock))
+                .timezone(payload.timezone())
+                .operatingHours(serializeJson(payload.operatingHours()))
+                .holidayClosures(serializeJson(payload.holidayClosures()))
+                .checkInBufferMinutes(payload.checkInBufferMinutes())
+                .cleanupBufferMinutes(payload.cleanupBufferMinutes())
                 .build());
 
         // The fact carries the child's full typed parent-edge set — replace, don't merge.
@@ -291,5 +296,16 @@ public class LocationEventsListener {
      */
     private static boolean isActiveStatus(@Nullable String status) {
         return status != null && "ACTIVE".equalsIgnoreCase(status.strip());
+    }
+
+    /**
+     * Snapshots a fact's list field as raw JSON text, preserving the null-versus-empty distinction
+     * load-bearing for {@code operatingHours} / {@code holidayClosures} (#2023,
+     * DECISION-LOCATION-004/005): a {@code null} list stores {@code null} ("never configured"), an
+     * empty list stores {@code "[]"} ("configured as empty"), and the two must never collapse into
+     * one another.
+     */
+    private @Nullable String serializeJson(@Nullable List<?> list) {
+        return list == null ? null : objectMapper.writeValueAsString(list);
     }
 }

@@ -64,6 +64,47 @@ public class ExtLocationReplica extends TenantScopedEntity {
     @Column(name = "synced_at", nullable = false)
     private Instant syncedAt;
 
+    /**
+     * IANA timezone id, mirrored verbatim from the owner (#2023 F4). This replica is now the
+     * authoritative source for a new read of the location's timezone — see the note on
+     * {@link Shop#getTimezone()} — but nothing in this module has been switched over to read it
+     * yet, and existing reads of {@code Shop.timezone} are untouched.
+     */
+    @Column(name = "timezone", length = 64)
+    private String timezone;
+
+    /**
+     * Weekly opening windows, snapshotted as the raw JSON array the fact carried (issue #2023).
+     * Stored verbatim rather than normalized, for the same reason as {@link
+     * ExtWorkorderReplica#getMechanicIds()}: this module must not invent a normalized join table
+     * for a fact it does not own, and the capacity read this feeds parses the column once per
+     * request rather than joining a child table.
+     *
+     * <p><strong>{@code null} and {@code "[]"} are different facts and both must survive
+     * round-tripping through this column.</strong> {@code null} means the owner never configured
+     * hours; the JSON text {@code "[]"} means the owner configured the location as closed every
+     * day (DECISION-LOCATION-004). A reader that collapses the two cannot distinguish a closure it
+     * should label from a gap it should warn about.
+     */
+    @Column(name = "operating_hours", columnDefinition = "text")
+    private String operatingHours;
+
+    /**
+     * Dated closures, snapshotted as the raw JSON array the fact carried (issue #2023). Same
+     * null-versus-empty distinction as {@link #operatingHours} (DECISION-LOCATION-005): {@code
+     * null} means never configured, {@code "[]"} means configured with no closures.
+     */
+    @Column(name = "holiday_closures", columnDefinition = "text")
+    private String holidayClosures;
+
+    /** Minutes reserved before an appointment for check-in; null when not configured (#2023). */
+    @Column(name = "check_in_buffer_minutes")
+    private Integer checkInBufferMinutes;
+
+    /** Minutes reserved after an appointment for cleanup; null when not configured (#2023). */
+    @Column(name = "cleanup_buffer_minutes")
+    private Integer cleanupBufferMinutes;
+
     /** Ancestors along the {@code FINANCIAL} parent chain, inclusive of this location (ADR-0061 §2). */
     @Builder.Default
     @Convert(converter = UuidSetConverter.class)

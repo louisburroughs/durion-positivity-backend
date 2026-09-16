@@ -42,6 +42,14 @@ public class ScheduleViewRequest {
             requiredMode = NOT_REQUIRED)
     private boolean includeAvailabilityOverlay;
 
-    @Schema(description = "Optional view range hint (e.g. DAY or WEEK)", example = "DAY", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Optional day-window hint. Recognised values are FULL_DAY (the target date's "
+                    + "midnight-to-midnight window in the location's timezone) and LOCATION_HOURS, the "
+                    + "controller's own default. Despite its name, LOCATION_HOURS is a hardcoded 06:00-18:00 "
+                    + "local window for every location and every date (#2023 F1) — no location's actual "
+                    + "operating hours are consulted by this endpoint. Any value other than FULL_DAY, "
+                    + "including an unrecognised one, silently degrades to that same 06:00-18:00 window.",
+            example = "LOCATION_HOURS",
+            requiredMode = NOT_REQUIRED)
     private String range;
 }

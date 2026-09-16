@@ -166,6 +166,9 @@ public class WorkorderEventsListener {
                 .mechanicIds(serializeMechanicIds(payload.mechanicIds()))
                 .promisedAt(payload.promisedAt())
                 .scheduledDate(payload.scheduledDate())
+                .workStartedAt(payload.workStartedAt())
+                .completedAt(payload.completedAt())
+                .expectedEndAt(payload.expectedEndAt())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

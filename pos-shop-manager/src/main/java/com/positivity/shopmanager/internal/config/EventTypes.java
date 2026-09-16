@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the shop manager module.
-     * Total: 19 event types.
+     * Total: 20 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -55,6 +55,12 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "SHOPMGR_SCHEDULE_VIEW", "View schedule by location and resource filters")
+                        .build(),
+                // ScheduleController capacity read - 1 event (#2023)
+                EventTypeRegistration.search(
+                                "SHOPMGR_SCHEDULE_CAPACITY_VIEW",
+                                "View per-day, per-bay occupancy for a location across a bounded date range")
+                        .apiVersion("1")
                         .build(),
                 // ConflictOverrideController - 1 event
                 EventTypeRegistration.write(

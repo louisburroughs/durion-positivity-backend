@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -108,6 +109,25 @@ class LocationEventsListenerTest {
                 """.formatted(eventId, LocationUpdatedV1.EVENT_TYPE, version, LOCATION_ID, active);
     }
 
+    /** Same shape as {@link #locationUpdated}, plus the #2023 hours/closures/buffer fields. */
+    private static String locationUpdatedWithHours(
+            String eventId, long version, @Nullable String operatingHoursJson, @Nullable String holidayClosuresJson) {
+        String operatingHours = operatingHoursJson == null ? "null" : operatingHoursJson;
+        String holidayClosures = holidayClosuresJson == null ? "null" : holidayClosuresJson;
+        return """
+                {"eventId":"%s","eventType":"%s","aggregateVersion":%d,
+                 "payload":{"locationId":"%s","name":"Main Shop","code":"SHOP-1","status":"OPEN",
+                   "active":true,"locationType":"SHOP","hrLocationId":null,"timezone":"America/Chicago",
+                   "addressLine1":"1 Main St","addressLine2":null,"city":"Austin","region":"TX",
+                   "postalCode":"78701","country":"US","defaultStagingLocationId":null,
+                   "defaultQuarantineLocationId":null,"parents":[],
+                   "operatingHours":%s,"holidayClosures":%s,
+                   "checkInBufferMinutes":15,"cleanupBufferMinutes":10,
+                   "createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-08-01T00:00:00Z"}}
+                """.formatted(
+                        eventId, LocationUpdatedV1.EVENT_TYPE, version, LOCATION_ID, operatingHours, holidayClosures);
+    }
+
     @Test
     @DisplayName("keeps only the fields the scope replica needs from a much wider payload")
     void projectsTheNeededFields() {
@@ -141,6 +161,64 @@ class LocationEventsListenerTest {
         ArgumentCaptor<ExtLocationReplica> captor = ArgumentCaptor.forClass(ExtLocationReplica.class);
         verify(extLocationReplicaRepository).save(captor.capture());
         assertThat(captor.getValue().isActive()).isFalse();
+    }
+
+    @Test
+    @DisplayName("#2023: hours, closures and both buffers land on ext_location; timezone lands")
+    void operatingHoursClosuresAndBuffersLand() {
+        String hours = """
+                [{"dayOfWeek":"MONDAY","openTime":"08:00:00","closeTime":"17:00:00"}]""";
+        String closures = """
+                [{"date":"2026-12-25","reason":"Christmas"}]""";
+
+        listener.onLocationEvent(locationUpdatedWithHours("evt-hours", 5, hours, closures));
+
+        ArgumentCaptor<ExtLocationReplica> captor = ArgumentCaptor.forClass(ExtLocationReplica.class);
+        verify(extLocationReplicaRepository).save(captor.capture());
+        ExtLocationReplica saved = captor.getValue();
+        assertThat(saved.getTimezone()).isEqualTo("America/Chicago");
+        assertThat(saved.getOperatingHours())
+                .contains("MONDAY")
+                .contains("08:00:00")
+                .contains("17:00:00");
+        assertThat(saved.getHolidayClosures()).contains("2026-12-25").contains("Christmas");
+        assertThat(saved.getCheckInBufferMinutes()).isEqualTo(15);
+        assertThat(saved.getCleanupBufferMinutes()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("#2023 DECISION-LOCATION-004/005: null operatingHours stores null, "
+            + "an empty list stores \"[]\", and the two stay distinguishable on read-back")
+    void nullVersusEmptyOperatingHoursIsPreserved() {
+        listener.onLocationEvent(locationUpdatedWithHours("evt-null", 5, null, null));
+        listener.onLocationEvent(locationUpdatedWithHours("evt-empty", 6, "[]", "[]"));
+
+        ArgumentCaptor<ExtLocationReplica> captor = ArgumentCaptor.forClass(ExtLocationReplica.class);
+        verify(extLocationReplicaRepository, Mockito.times(2)).save(captor.capture());
+        ExtLocationReplica notConfigured = captor.getAllValues().get(0);
+        ExtLocationReplica configuredClosed = captor.getAllValues().get(1);
+        assertThat(notConfigured.getOperatingHours()).isNull();
+        assertThat(notConfigured.getHolidayClosures()).isNull();
+        assertThat(configuredClosed.getOperatingHours()).isEqualTo("[]");
+        assertThat(configuredClosed.getHolidayClosures()).isEqualTo("[]");
+    }
+
+    @Test
+    @DisplayName("a fact predating the #2023 hours/buffer fields does not corrupt the row's other columns")
+    void factPredatingNewFieldsDoesNotCorruptOtherColumns() {
+        listener.onLocationEvent(locationUpdated("evt-old-shape", 5, true));
+
+        ArgumentCaptor<ExtLocationReplica> captor = ArgumentCaptor.forClass(ExtLocationReplica.class);
+        verify(extLocationReplicaRepository).save(captor.capture());
+        ExtLocationReplica saved = captor.getValue();
+        assertThat(saved.getCode()).isEqualTo("SHOP-1");
+        assertThat(saved.getName()).isEqualTo("Main Shop");
+        assertThat(saved.isActive()).isTrue();
+        assertThat(saved.getTimezone()).isEqualTo("America/Chicago");
+        assertThat(saved.getOperatingHours()).isNull();
+        assertThat(saved.getHolidayClosures()).isNull();
+        assertThat(saved.getCheckInBufferMinutes()).isNull();
+        assertThat(saved.getCleanupBufferMinutes()).isNull();
     }
 
     @Test

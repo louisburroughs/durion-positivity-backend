@@ -36,6 +36,13 @@ public class Shop extends TenantScopedEntity {
     private String name;
     private String address;
 
+    /**
+     * This module's own locally-maintained timezone value, read today by {@code
+     * /v1/schedules/view}. As of #2023, {@link ExtLocationReplica#getTimezone()} carries the same
+     * fact from pos-location, the actual owner, and supersedes this column for any <em>new</em>
+     * read. Switching {@code /v1/schedules/view} itself over is deliberately out of scope here —
+     * that endpoint's output must stay bit-for-bit unchanged.
+     */
     @Column(length = 64)
     private String timezone;
 
