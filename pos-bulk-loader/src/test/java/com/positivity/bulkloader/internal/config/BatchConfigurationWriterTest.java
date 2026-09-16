@@ -30,6 +30,7 @@ import com.positivity.bulkloader.internal.domain.InventoryStockCountLoaderStrate
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationRecord;
 import com.positivity.bulkloader.internal.domain.MechanicSkillLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.PersonCredentialLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.MobileUnitLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.NumberedRecord;
 import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
@@ -136,6 +137,9 @@ class BatchConfigurationWriterTest {
     MechanicSkillLoaderStrategy mechanicSkillLoaderStrategy;
 
     @Mock
+    PersonCredentialLoaderStrategy personCredentialLoaderStrategy;
+
+    @Mock
     RestClient.Builder restClientBuilder;
 
     @Mock
@@ -204,6 +208,7 @@ class BatchConfigurationWriterTest {
                 securityUserLoaderStrategy,
                 userPersonLinkLoaderStrategy,
                 mechanicSkillLoaderStrategy,
+                personCredentialLoaderStrategy,
                 // The Tier 0 strategies are read by the reader and processor beans, never by a
                 // writer bean, so these tests hand them nothing rather than mocking six objects
                 // that would go untouched.

@@ -2,6 +2,10 @@ package com.positivity.people.internal.config;
 
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.people.EmployeeUpdatedV1;
+import com.positivity.domainevents.people.PersonCredentialUpdatedV1;
+import com.positivity.people.internal.entity.PersonCredential;
+import com.positivity.people.internal.entity.Skill;
+import java.time.LocalDate;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpsertRequestedV1;
 import com.positivity.people.internal.entity.Employee;
@@ -110,6 +114,44 @@ public class PeopleEventPublisher {
                 "Queued people.staffing-assignment.updated assignmentId={} locationId={}",
                 assignment.getId(),
                 assignment.getLocationId());
+    }
+
+    /** Queue a {@code people.person-credential.updated} fact for the credential's current state (CAP-328). */
+    public void publishPersonCredentialUpdated(@NonNull PersonCredential credential) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        Skill skill = credential.getSkill();
+        PersonCredentialUpdatedV1 payload = new PersonCredentialUpdatedV1(
+                credential.getId(),
+                credential.getPersonId(),
+                skill.getId(),
+                skill.getCode(),
+                skill.getCompetenceCode(),
+                skill.getMinGvwrClass(),
+                skill.getMaxGvwrClass(),
+                credential.getIssuer(),
+                credential.getSourceCode(),
+                credential.getSourceCredentialCode(),
+                credential.getIssuedOn(),
+                credential.getExpiresOn(),
+                credential.getProficiency(),
+                credential.effectiveStatus(LocalDate.now(clock)).name(),
+                credential.getEvidenceRef(),
+                credential.getSupersededBy());
+        writer.publish(
+                eventsTopic,
+                envelope(
+                        PersonCredentialUpdatedV1.EVENT_TYPE,
+                        PersonCredentialUpdatedV1.SCHEMA_VERSION,
+                        credential.getId(),
+                        payload));
+        log.debug(
+                "Queued people.person-credential.updated credentialId={} personId={} skill={}",
+                credential.getId(),
+                credential.getPersonId(),
+                skill.getCode());
     }
 
     /**

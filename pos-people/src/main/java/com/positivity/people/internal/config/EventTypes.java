@@ -138,8 +138,12 @@ public final class EventTypes {
                                 "Generate identity-compliance report of active users linked to inactive persons")
                         .build(),
 
-                // SkillController - 1 event (CAP-328)
+                // SkillController, PersonCredentialController, PersonCredentialBulkIngestController (CAP-328)
                 EventTypeRegistration.fastRead("PEOPLE_SKILL_LIST", "List the platform skill registry")
+                        .build(),
+                EventTypeRegistration.fastRead("PEOPLE_CREDENTIAL_LIST", "List the credentials a person holds")
+                        .build(),
+                EventTypeRegistration.write("PEOPLE_CREDENTIAL_BULK_INGEST", "Bulk import the credentials people hold")
                         .build());
     }
 }

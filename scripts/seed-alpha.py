@@ -86,6 +86,7 @@ PACK_FILES = [
     ("location/mobile-units.csv", "@mobile-units"),
     ("people/employees.csv", "PERSON"),
     ("people/staffing-assignments.csv", "STAFFING_ASSIGNMENT"),
+    ("people/credentials.csv", "PERSON_CREDENTIAL"),
     ("security/user-person-links.csv", "USER_PERSON_LINK"),
     ("shop-manager/mechanic-skills.csv", "MECHANIC_SKILL"),
     ("customer/person-customers.csv", "CUSTOMER"),

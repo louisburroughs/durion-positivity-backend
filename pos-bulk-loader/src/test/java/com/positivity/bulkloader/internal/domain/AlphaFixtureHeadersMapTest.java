@@ -67,6 +67,7 @@ class AlphaFixtureHeadersMapTest {
                 // not by the loader, so they map to no record field by design. The other API pack,
                 // location/site-defaults.csv, has never appeared here either.
                 Arguments.of("people/staffing-assignments.csv", DomainType.STAFFING_ASSIGNMENT, Set.<String>of()),
+                Arguments.of("people/credentials.csv", DomainType.PERSON_CREDENTIAL, Set.<String>of()),
                 Arguments.of("inventory/putaway-rules.csv", DomainType.PUTAWAY_RULE, Set.<String>of()),
                 Arguments.of("inventory/cycle-count-plans.csv", DomainType.CYCLE_COUNT_PLAN, Set.<String>of()),
                 Arguments.of("security/roles.csv", DomainType.SECURITY_ROLE, Set.<String>of()),

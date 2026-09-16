@@ -24,8 +24,11 @@ import com.positivity.bulkloader.internal.domain.LaborRateLoaderRecord;
 import com.positivity.bulkloader.internal.domain.LaborRateLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationRecord;
+import com.positivity.bulkloader.internal.domain.LoaderValues;
 import com.positivity.bulkloader.internal.domain.MechanicSkillLoaderRecord;
 import com.positivity.bulkloader.internal.domain.MechanicSkillLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.PersonCredentialLoaderRecord;
+import com.positivity.bulkloader.internal.domain.PersonCredentialLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.MobileUnitLoaderRecord;
 import com.positivity.bulkloader.internal.domain.MobileUnitLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.NumberedRecord;
@@ -112,6 +115,7 @@ public class BatchConfiguration {
     private final SecurityUserLoaderStrategy securityUserLoaderStrategy;
     private final UserPersonLinkLoaderStrategy userPersonLinkLoaderStrategy;
     private final MechanicSkillLoaderStrategy mechanicSkillLoaderStrategy;
+    private final PersonCredentialLoaderStrategy personCredentialLoaderStrategy;
     private final CatalogServiceLoaderStrategy catalogServiceLoaderStrategy;
     private final ServiceLaborStandardLoaderStrategy serviceLaborStandardLoaderStrategy;
     private final ServicePackageLoaderStrategy servicePackageLoaderStrategy;
@@ -1252,6 +1256,68 @@ public class BatchConfiguration {
     }
 
     @Bean
+    public Job personCredentialBulkLoadJob(Step personCredentialBulkLoadStep) {
+        return jobFactory.job("personCredentialBulkLoadJob", personCredentialBulkLoadStep);
+    }
+
+    @Bean
+    public Step personCredentialBulkLoadStep(
+            ItemStreamReader<PersonCredentialLoaderRecord> personCredentialReader,
+            ItemProcessor<PersonCredentialLoaderRecord, NumberedRecord<PersonCredentialLoaderRecord>>
+                    personCredentialItemProcessor,
+            ItemWriter<NumberedRecord<PersonCredentialLoaderRecord>> personCredentialBulkIngestWriter) {
+        return jobFactory.step(
+                "personCredentialBulkLoadStep",
+                personCredentialReader,
+                personCredentialItemProcessor,
+                personCredentialBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<PersonCredentialLoaderRecord> personCredentialReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(personCredentialLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<PersonCredentialLoaderRecord, NumberedRecord<PersonCredentialLoaderRecord>>
+            personCredentialItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                personCredentialLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    /**
+     * CAP-328: credentials land in pos-people, the module that owns mechanic data
+     * (DECISION-SHOPMGMT-009); the ingest resolves employee numbers itself, so rows travel as read.
+     */
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<PersonCredentialLoaderRecord>> personCredentialBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "personCredentialBulkIngestWriter",
+                        DomainType.PERSON_CREDENTIAL,
+                        peopleServiceId,
+                        "/v1/people/credentials/bulk-ingest",
+                        "people:employee:edit"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapPersonCredentialPayloads);
+    }
+
+    @Bean
     public Job catalogServiceBulkLoadJob(Step catalogServiceBulkLoadStep) {
         return jobFactory.job("catalogServiceBulkLoadJob", catalogServiceBulkLoadStep);
     }
@@ -1818,6 +1884,34 @@ public class BatchConfiguration {
     }
 
     private record MechanicSkillWriterPayload(String personId, String skillCode, int proficiencyLevel) {}
+
+    private List<PersonCredentialWriterPayload> mapPersonCredentialPayloads(List<PersonCredentialLoaderRecord> items) {
+        List<PersonCredentialWriterPayload> payloads = new ArrayList<>(items.size());
+        for (PersonCredentialLoaderRecord item : items) {
+            payloads.add(new PersonCredentialWriterPayload(
+                    item.getEmployeeNumber().trim(),
+                    blankToNull(item.getSkillCode()),
+                    blankToNull(item.getSourceCode()),
+                    blankToNull(item.getSourceCredentialCode()),
+                    blankToNull(item.getIssuer()),
+                    item.getIssuedOn().trim(),
+                    blankToNull(item.getExpiresOn()),
+                    LoaderValues.isBlank(item.getProficiency()) ? null : Integer.parseInt(item.getProficiency().trim()),
+                    blankToNull(item.getEvidenceRef())));
+        }
+        return payloads;
+    }
+
+    private record PersonCredentialWriterPayload(
+            String employeeNumber,
+            String skillCode,
+            String sourceCode,
+            String sourceCredentialCode,
+            String issuer,
+            String issuedOn,
+            String expiresOn,
+            Integer proficiency,
+            String evidenceRef) {}
 
     // ─── payload projections for the packs converted from API scripts ────────
     //
