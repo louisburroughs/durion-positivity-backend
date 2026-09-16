@@ -2,15 +2,22 @@ package com.positivity.shopmanager.internal.service;
 
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.ConflictRule;
+import com.positivity.shopmanager.internal.entity.ExtCatalogServiceReplica;
+import com.positivity.shopmanager.internal.entity.ExtCatalogServiceSkillReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
+import com.positivity.shopmanager.internal.entity.ExtPersonCredentialReplica;
 import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.ConflictSeverity;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.ConflictRuleRepository;
 import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtCatalogServiceReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtCatalogServiceSkillReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.shopmanager.internal.service.LocationHoursParser.RawOperatingHoursEntry;
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -21,11 +28,16 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -70,6 +82,10 @@ public class SchedulingConflictEvaluator {
     static final String CODE_BAY_DOUBLE_BOOKED = "BAY_DOUBLE_BOOKED";
     static final String CODE_MECHANIC_UNAVAILABLE = "MECHANIC_UNAVAILABLE";
     static final String CODE_FACILITY_NEAR_CAPACITY = "FACILITY_NEAR_CAPACITY";
+    static final String CODE_NO_COMPETENT_MECHANIC_ROSTERED = "NO_COMPETENT_MECHANIC_ROSTERED";
+    static final String CODE_COMPETENT_MECHANIC_UNAVAILABLE = "COMPETENT_MECHANIC_UNAVAILABLE";
+    static final String TECHNICIAN_ROLE = "TECHNICIAN";
+    static final String TECHNICIAN_RESOURCE_TYPE = "TECHNICIAN";
     static final String UNASSIGNED = "UNASSIGNED";
     static final String STAFFING_ACTIVE = "ACTIVE";
     static final double NEAR_CAPACITY_RATIO = 0.9;
@@ -81,6 +97,10 @@ public class SchedulingConflictEvaluator {
     private final AppointmentRepository appointmentRepository;
     private final ExtStaffingAssignmentReplicaRepository staffingAssignmentRepository;
     private final ExtBayReplicaRepository extBayReplicaRepository;
+    private final ExtCatalogServiceReplicaRepository catalogServiceRepository;
+    private final ExtCatalogServiceSkillReplicaRepository catalogServiceSkillRepository;
+    private final ExtPersonCredentialReplicaRepository credentialRepository;
+    private final ExtVehicleReplicaRepository vehicleRepository;
 
     /**
      * One booking attempt. {@code excludeAppointmentId} is the appointment being rescheduled, whose
@@ -91,7 +111,20 @@ public class SchedulingConflictEvaluator {
             @Nullable String resourceId,
             @NonNull Instant startAt,
             @NonNull Instant endAt,
-            @Nullable UUID excludeAppointmentId) {}
+            @Nullable UUID excludeAppointmentId,
+            @NonNull List<UUID> serviceIds,
+            @Nullable UUID vehicleId) {
+
+        /** An attempt that names no services and no vehicle: the SKILL rules have nothing to resolve. */
+        public BookingAttempt(
+                @NonNull UUID locationId,
+                @Nullable String resourceId,
+                @NonNull Instant startAt,
+                @NonNull Instant endAt,
+                @Nullable UUID excludeAppointmentId) {
+            this(locationId, resourceId, startAt, endAt, excludeAppointmentId, List.of(), null);
+        }
+    }
 
     /** One rule that fired, with the resource it names and its template rendered for this attempt. */
     public record DetectedConflict(
@@ -120,7 +153,12 @@ public class SchedulingConflictEvaluator {
             return detected;
         }
         evaluateBay(attempt, zone, detected);
-        evaluateStaffing(attempt, zone, detected);
+        boolean anyonePresent = evaluateStaffing(attempt, zone, detected);
+        if (anyonePresent) {
+            // Zero technicians is MECHANIC_UNAVAILABLE and never a competence failure (#2035 answer
+            // 5): the SKILL rules ask about the people who are here, and there are none to ask about.
+            evaluateSkills(attempt, zone, detected);
+        }
         evaluateCapacity(attempt, zone, detected);
         return detected;
     }
@@ -216,15 +254,138 @@ public class SchedulingConflictEvaluator {
 
     // ── MECHANIC ────────────────────────────────────────────────────────────────────────────────
 
-    private void evaluateStaffing(BookingAttempt attempt, @Nullable ZoneId zone, List<DetectedConflict> detected) {
-        LocalDate localDate =
-                attempt.startAt().atZone(zone == null ? ZoneOffset.UTC : zone).toLocalDate();
-        boolean anyonePresent =
-                staffingAssignmentRepository.findByLocationIdAndStatus(attempt.locationId(), STAFFING_ACTIVE).stream()
-                        .anyMatch(assignment -> covers(assignment, localDate));
+    private boolean evaluateStaffing(BookingAttempt attempt, @Nullable ZoneId zone, List<DetectedConflict> detected) {
+        boolean anyonePresent = !rosteredTechnicians(attempt, zone).isEmpty();
         if (!anyonePresent) {
             fire(CODE_MECHANIC_UNAVAILABLE, attempt, zone, null, detected);
         }
+        return anyonePresent;
+    }
+
+    /** People with an ACTIVE staffing assignment at the location covering the attempt's local date. */
+    private Set<UUID> rosteredTechnicians(BookingAttempt attempt, @Nullable ZoneId zone) {
+        LocalDate localDate = localDate(attempt, zone);
+        return staffingAssignmentRepository.findByLocationIdAndStatus(attempt.locationId(), STAFFING_ACTIVE).stream()
+                .filter(assignment -> covers(assignment, localDate))
+                .map(ExtStaffingAssignmentReplica::getPersonId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private static LocalDate localDate(BookingAttempt attempt, @Nullable ZoneId zone) {
+        return attempt.startAt().atZone(zone == null ? ZoneOffset.UTC : zone).toLocalDate();
+    }
+
+    // ── SKILL (CAP-329, spec D10.1) ─────────────────────────────────────────────────────────────
+
+    /**
+     * Resolves (services, vehicle GVWR class) → required skills from the catalog replica, then asks
+     * two SOFT questions about the technicians rostered here that day: does anyone hold each skill
+     * (else NO_COMPETENT_MECHANIC_ROSTERED, the window-invariant absence), and if so, is any holder
+     * free in the window (else COMPETENT_MECHANIC_UNAVAILABLE, the contention). Neither withholds
+     * a booking; a manager may override either (D10).
+     *
+     * <p>A credential counts only while held on the facility-local date of the attempt
+     * (DECISION-SHOPMGMT-015); a lapsed one is named in the detail rather than silently ignored.
+     * A service whose requirements were never configured contributes nothing here — "not
+     * configured" is a different answer from "requires nothing", and it is #2022's
+     * SERVICE_REQUIREMENTS_NOT_CONFIGURED to report, not a competence rule. Without a vehicle
+     * class only ANY-class requirements apply, and the detail says the class was not determined.
+     */
+    private void evaluateSkills(BookingAttempt attempt, @Nullable ZoneId zone, List<DetectedConflict> detected) {
+        if (attempt.serviceIds().isEmpty()) {
+            return;
+        }
+        Integer gvwrClass = attempt.vehicleId() == null
+                ? null
+                : vehicleRepository
+                        .findById(attempt.vehicleId())
+                        .map(vehicle -> vehicle.getGvwrClass())
+                        .orElse(null);
+        Map<String, UUID> required = requiredSkills(attempt.serviceIds(), gvwrClass);
+        if (required.isEmpty()) {
+            return;
+        }
+        LocalDate localDate = localDate(attempt, zone);
+        Set<UUID> rostered = rosteredTechnicians(attempt, zone);
+        Map<String, Set<UUID>> holdersBySkill = holdersBySkill(rostered, required.keySet(), localDate);
+
+        List<String> missing = required.keySet().stream()
+                .filter(code -> holdersBySkill.getOrDefault(code, Set.of()).isEmpty())
+                .toList();
+        String classNote = gvwrClass == null ? " (vehicle duty class not determined)" : "";
+        if (!missing.isEmpty()) {
+            fire(CODE_NO_COMPETENT_MECHANIC_ROSTERED, attempt, zone, String.join(", ", missing) + classNote, detected);
+        }
+        List<String> contended = required.keySet().stream()
+                .filter(code -> !holdersBySkill.getOrDefault(code, Set.of()).isEmpty())
+                .filter(code -> holdersBySkill.get(code).stream().allMatch(person -> busy(person, attempt)))
+                .toList();
+        if (!contended.isEmpty()) {
+            fire(
+                    CODE_COMPETENT_MECHANIC_UNAVAILABLE,
+                    attempt,
+                    zone,
+                    String.join(", ", contended) + classNote,
+                    detected);
+        }
+    }
+
+    /** Required skill codes (insertion-ordered, by service then code) → skill id, for the class. */
+    private Map<String, UUID> requiredSkills(List<UUID> serviceIds, @Nullable Integer gvwrClass) {
+        Set<UUID> configured = catalogServiceRepository.findAllByServiceIdIn(serviceIds).stream()
+                .filter(ExtCatalogServiceReplica::isRequirementsConfigured)
+                .map(ExtCatalogServiceReplica::getServiceId)
+                .collect(Collectors.toSet());
+        if (configured.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, UUID> required = new LinkedHashMap<>();
+        catalogServiceSkillRepository.findAllByServiceIdIn(configured).stream()
+                .filter(skill -> skill.appliesTo(gvwrClass))
+                .sorted(java.util.Comparator.comparing(ExtCatalogServiceSkillReplica::getSkillCode))
+                .forEach(skill -> required.putIfAbsent(skill.getSkillCode(), skill.getSkillId()));
+        return required;
+    }
+
+    /**
+     * For each required skill code, the rostered people holding a credential for it on {@code
+     * onDate}. Matching is on the Durion skill code or the issuer's code, uppercase-and-trimmed.
+     */
+    private Map<String, Set<UUID>> holdersBySkill(Set<UUID> rostered, Collection<String> codes, LocalDate onDate) {
+        if (rostered.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Set<UUID>> holders = new LinkedHashMap<>();
+        for (ExtPersonCredentialReplica credential :
+                credentialRepository.findByPersonIdInOrderByIssuedOnDesc(rostered)) {
+            if (!credential.statusOn(onDate).isHeld()) {
+                continue;
+            }
+            for (String code : codes) {
+                String normalized = normalize(code);
+                if (normalized.equals(normalize(credential.getSkillCode()))
+                        || normalized.equals(normalize(credential.getSourceCredentialCode()))) {
+                    holders.computeIfAbsent(code, ignored -> new LinkedHashSet<>())
+                            .add(credential.getPersonId());
+                }
+            }
+        }
+        return holders;
+    }
+
+    /** Busy = already the technician on a held appointment overlapping the window (self excluded). */
+    private boolean busy(UUID personId, BookingAttempt attempt) {
+        return appointmentRepository
+                .findHeldOverlappingForResource(
+                        personId.toString(), attempt.startAt(), attempt.endAt(), AppointmentStatus.holdingAResource())
+                .stream()
+                .filter(appointment -> TECHNICIAN_RESOURCE_TYPE.equalsIgnoreCase(appointment.getResourceType()))
+                .anyMatch(
+                        appointment -> !Objects.equals(appointment.getAppointmentId(), attempt.excludeAppointmentId()));
+    }
+
+    private static String normalize(@Nullable String code) {
+        return code == null ? "" : code.trim().toUpperCase(java.util.Locale.ROOT);
     }
 
     private static boolean covers(ExtStaffingAssignmentReplica assignment, LocalDate date) {
@@ -292,7 +453,11 @@ public class SchedulingConflictEvaluator {
         return resourceId != null && !resourceId.isBlank() && !UNASSIGNED.equals(resourceId);
     }
 
-    /** Renders the rule's {@code {placeholders}} in facility-local time when the zone is known. */
+    /**
+     * Renders the rule's {@code {placeholders}} in facility-local time when the zone is known.
+     * {@code closureReason} doubles as the rule's free-text detail: the closure's reason for the
+     * HOURS templates, the skill codes for the SKILL templates.
+     */
     static String render(
             ConflictRule rule, BookingAttempt attempt, @Nullable ZoneId zone, @Nullable String closureReason) {
         ZoneId renderZone = zone == null ? ZoneOffset.UTC : zone;
@@ -304,6 +469,8 @@ public class SchedulingConflictEvaluator {
                 .replace("{end}", end.format(LOCAL_TIME))
                 .replace("{date}", start.toLocalDate().toString())
                 .replace("{reason}", closureReason == null || closureReason.isBlank() ? "" : " (" + closureReason + ")")
-                .replace("{skills}", "the required skills");
+                .replace(
+                        "{skills}",
+                        closureReason == null || closureReason.isBlank() ? "the required skills" : closureReason);
     }
 }

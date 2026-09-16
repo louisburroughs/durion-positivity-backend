@@ -99,6 +99,10 @@ pos:
       people-manifest-consumer-group: ${POS_SHOP_MANAGER_PEOPLE_MANIFEST_CONSUMER_GROUP:pos-shop-manager-people-manifests}
       people-commands-topic: ${POS_SHOP_MANAGER_PEOPLE_COMMANDS_TOPIC:people.commands.v1}
       # Customer-party + vehicle replica feeds + reconciliation (ADR-0044 §6, #891)
+      # Catalog service replica feed: the service and its skill requirement (CAP-329, ADR-0044 §6),
+      # which the submit-time SKILL rules resolve against without calling pos-catalog.
+      catalog-events-topic: ${POS_SHOP_MANAGER_CATALOG_EVENTS_TOPIC:catalog.events.v1}
+      catalog-events-consumer-group: ${POS_SHOP_MANAGER_CATALOG_EVENTS_CONSUMER_GROUP:pos-shop-manager-catalog-events}
       customer-events-topic: ${POS_SHOP_MANAGER_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
       customer-events-consumer-group: ${POS_SHOP_MANAGER_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-shop-manager-customer-events}
       customer-manifest-topic: ${POS_SHOP_MANAGER_CUSTOMER_MANIFEST_TOPIC:customer.manifest.v1}

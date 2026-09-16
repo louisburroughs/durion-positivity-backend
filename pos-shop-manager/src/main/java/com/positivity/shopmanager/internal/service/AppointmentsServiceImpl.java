@@ -170,7 +170,13 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         // The submit-time tier (DECISION-SHOPMGMT-002/-011, CAP-326): HARD refuses, SOFT warns and allows.
         BookingAttempt attempt = new BookingAttempt(
-                request.getLocationId(), request.getResourceId(), request.getStartAt(), request.getEndAt(), null);
+                request.getLocationId(),
+                request.getResourceId(),
+                request.getStartAt(),
+                request.getEndAt(),
+                null,
+                request.getServiceRequestIds() == null ? List.of() : request.getServiceRequestIds(),
+                request.getCrmVehicleId());
         List<DetectedConflict> conflicts = conflictEvaluator.evaluate(attempt);
         refuseIfHard(attempt, conflicts);
 
@@ -420,7 +426,11 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 appointment.getResourceId(),
                 request.getNewStartAt(),
                 request.getNewEndAt(),
-                appointmentId);
+                appointmentId,
+                appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId).stream()
+                        .map(AppointmentServiceRequest::getServiceEntityId)
+                        .toList(),
+                appointment.getCrmVehicleId());
         List<DetectedConflict> conflicts = conflictEvaluator.evaluate(attempt);
         refuseIfHard(attempt, conflicts);
 

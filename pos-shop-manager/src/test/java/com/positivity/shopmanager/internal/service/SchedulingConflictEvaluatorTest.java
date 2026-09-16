@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,15 +15,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.ConflictRule;
 import com.positivity.shopmanager.internal.entity.ExtBayReplica;
+import com.positivity.shopmanager.internal.entity.ExtCatalogServiceReplica;
+import com.positivity.shopmanager.internal.entity.ExtCatalogServiceSkillReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
+import com.positivity.shopmanager.internal.entity.ExtPersonCredentialReplica;
 import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
+import com.positivity.shopmanager.internal.entity.ExtVehicleReplica;
 import com.positivity.shopmanager.internal.enums.ConflictResourceType;
 import com.positivity.shopmanager.internal.enums.ConflictSeverity;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.ConflictRuleRepository;
 import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtCatalogServiceReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtCatalogServiceSkillReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.shopmanager.internal.service.SchedulingConflictEvaluator.BookingAttempt;
 import com.positivity.shopmanager.internal.service.SchedulingConflictEvaluator.DetectedConflict;
 import java.time.Instant;
@@ -71,7 +80,9 @@ class SchedulingConflictEvaluatorTest {
             "OUTSIDE_OPERATING_HOURS", ConflictSeverity.HARD,
             "BAY_DOUBLE_BOOKED", ConflictSeverity.HARD,
             "MECHANIC_UNAVAILABLE", ConflictSeverity.HARD,
-            "FACILITY_NEAR_CAPACITY", ConflictSeverity.SOFT);
+            "FACILITY_NEAR_CAPACITY", ConflictSeverity.SOFT,
+            "NO_COMPETENT_MECHANIC_ROSTERED", ConflictSeverity.SOFT,
+            "COMPETENT_MECHANIC_UNAVAILABLE", ConflictSeverity.SOFT);
 
     @Mock
     private ConflictRuleRepository conflictRuleRepository;
@@ -88,6 +99,18 @@ class SchedulingConflictEvaluatorTest {
     @Mock
     private ExtBayReplicaRepository extBayReplicaRepository;
 
+    @Mock
+    private ExtCatalogServiceReplicaRepository catalogServiceRepository;
+
+    @Mock
+    private ExtCatalogServiceSkillReplicaRepository catalogServiceSkillRepository;
+
+    @Mock
+    private ExtPersonCredentialReplicaRepository credentialRepository;
+
+    @Mock
+    private ExtVehicleReplicaRepository vehicleRepository;
+
     private SchedulingConflictEvaluator evaluator;
 
     @BeforeEach
@@ -98,7 +121,11 @@ class SchedulingConflictEvaluatorTest {
                 new LocationHoursParser(new ObjectMapper()),
                 appointmentRepository,
                 staffingRepository,
-                extBayReplicaRepository);
+                extBayReplicaRepository,
+                catalogServiceRepository,
+                catalogServiceSkillRepository,
+                credentialRepository,
+                vehicleRepository);
         lenient().when(conflictRuleRepository.findByCode(anyString())).thenAnswer(invocation -> {
             String code = invocation.getArgument(0);
             ConflictSeverity severity = CATALOG.get(code);
@@ -332,6 +359,251 @@ class SchedulingConflictEvaluatorTest {
 
     // ── fixtures ────────────────────────────────────────────────────────────────────────────────
 
+    @Nested
+    @DisplayName("SKILL (CAP-329)")
+    class Skill {
+        private static final UUID BRAKE_JOB = UUID.fromString("0196cf6f-c8dd-7ee0-93e7-f48a5698a535");
+        private static final UUID DOT_INSPECTION = UUID.fromString("0196cf6f-c8dd-7ee0-93e7-f48a5698a540");
+        private static final UUID UNCONFIGURED = UUID.fromString("0196cf6f-c8dd-7ee0-93e7-f48a5698a541");
+        private static final UUID VEHICLE = UUID.fromString("0196cf6f-c8dd-7ee0-93e7-f48a5698a600");
+        private static final UUID TECH = UUID.fromString("01960011-0000-7000-8000-0000000000e1");
+
+        @BeforeEach
+        void catalog() {
+            // BRAKE-PAD-REPLACE-FRONT: A-series brakes on classes 1-3, T-series on 4-8 (one SKU, class-
+            // conditional competence). DOT-ANNUAL-INSPECTION: DOT-INSPECTOR for ANY class.
+            lenient()
+                    .when(catalogServiceRepository.findAllByServiceIdIn(any()))
+                    .thenAnswer(inv -> ((java.util.Collection<UUID>) inv.getArgument(0))
+                            .stream()
+                                    .filter(id -> !UNCONFIGURED.equals(id))
+                                    .map(id -> ExtCatalogServiceReplica.builder()
+                                            .serviceId(id)
+                                            .active(true)
+                                            .requirementsConfiguredAt(Instant.parse("2026-06-01T00:00:00Z"))
+                                            .build())
+                                    .toList());
+            lenient()
+                    .when(catalogServiceSkillRepository.findAllByServiceIdIn(any()))
+                    .thenAnswer(inv -> {
+                        java.util.Collection<UUID> ids = inv.getArgument(0);
+                        List<ExtCatalogServiceSkillReplica> rows = new java.util.ArrayList<>();
+                        if (ids.contains(BRAKE_JOB)) {
+                            rows.add(requirement(BRAKE_JOB, "BRAKES-LIGHT", 1, 3));
+                            rows.add(requirement(BRAKE_JOB, "BRAKES-MEDIUM_HEAVY", 4, 8));
+                        }
+                        if (ids.contains(DOT_INSPECTION)) {
+                            rows.add(requirement(DOT_INSPECTION, "DOT-INSPECTOR", null, null));
+                        }
+                        return rows;
+                    });
+            // One technician rostered, holding T-series brakes (issued as ASE T4-BRAKES) through 2027.
+            lenient()
+                    .when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE"))
+                    .thenReturn(List.of(staffingFor(TECH)));
+            lenient()
+                    .when(credentialRepository.findByPersonIdInOrderByIssuedOnDesc(any()))
+                    .thenReturn(List.of(
+                            credential(TECH, "BRAKES-MEDIUM_HEAVY", "T4-BRAKES", LocalDate.of(2027, 1, 1), "ACTIVE")));
+            lenient().when(vehicleRepository.findById(VEHICLE)).thenReturn(Optional.of(vehicle(6)));
+        }
+
+        private BookingAttempt booking(UUID service, UUID vehicle) {
+            return new BookingAttempt(LOCATION, BAY, TUE_10, TUE_11, null, List.of(service), vehicle);
+        }
+
+        @Test
+        @DisplayName("a heavy vehicle needs T-series brakes; the rostered holder is free: nothing fires")
+        void heavyVehicleWithCompetentFreeMechanicIsClean() {
+            assertThat(evaluator.evaluate(booking(BRAKE_JOB, VEHICLE))).isEmpty();
+        }
+
+        @Test
+        @DisplayName("the same unforked service on a light vehicle resolves to A-series, which nobody here holds")
+        void lightVehicleResolvesToDifferentSkill_andItsAbsenceIsSoft() {
+            when(vehicleRepository.findById(VEHICLE)).thenReturn(Optional.of(vehicle(2)));
+
+            List<DetectedConflict> detected = evaluator.evaluate(booking(BRAKE_JOB, VEHICLE));
+
+            assertThat(codes(detected)).containsExactly("NO_COMPETENT_MECHANIC_ROSTERED");
+            assertThat(detected.get(0).isHard()).isFalse();
+            assertThat(detected.get(0).detail()).contains("BRAKES-LIGHT").doesNotContain("MEDIUM_HEAVY");
+        }
+
+        @Test
+        @DisplayName("class 3 is light duty under Durion's grouping and resolves to A-series (the boundary case)")
+        void classThreeResolvesToLightDuty() {
+            when(vehicleRepository.findById(VEHICLE)).thenReturn(Optional.of(vehicle(3)));
+
+            assertThat(evaluator.evaluate(booking(BRAKE_JOB, VEHICLE)).get(0).detail())
+                    .contains("BRAKES-LIGHT");
+        }
+
+        @Test
+        @DisplayName(
+                "without a vehicle only ANY-class requirements apply, and the detail says the class is undetermined")
+        void noVehicleAppliesOnlyAnyClassRequirements() {
+            // Brake job: both requirements are class-ranged, so nothing applies without a class.
+            assertThat(evaluator.evaluate(booking(BRAKE_JOB, null))).isEmpty();
+            // DOT inspection: ANY-class requirement, nobody holds it.
+            List<DetectedConflict> detected = evaluator.evaluate(booking(DOT_INSPECTION, null));
+            assertThat(codes(detected)).containsExactly("NO_COMPETENT_MECHANIC_ROSTERED");
+            assertThat(detected.get(0).detail()).contains("DOT-INSPECTOR").contains("not determined");
+        }
+
+        @Test
+        @DisplayName("a competent mechanic who is busy in the window is contention, not absence")
+        void busyCompetentMechanicIsContention() {
+            when(appointmentRepository.findHeldOverlappingForResource(
+                            eq(TECH.toString()), eq(TUE_10), eq(TUE_11), any()))
+                    .thenReturn(List.of(Appointment.builder()
+                            .appointmentId(UUID.randomUUID())
+                            .resourceType("TECHNICIAN")
+                            .resourceId(TECH.toString())
+                            .build()));
+
+            List<DetectedConflict> detected = evaluator.evaluate(booking(BRAKE_JOB, VEHICLE));
+
+            assertThat(codes(detected)).containsExactly("COMPETENT_MECHANIC_UNAVAILABLE");
+            assertThat(detected.get(0).detail()).contains("BRAKES-MEDIUM_HEAVY");
+        }
+
+        @Test
+        @DisplayName("the mechanic's own slot does not count against a reschedule")
+        void rescheduleExcludesItsOwnAppointment() {
+            UUID self = UUID.randomUUID();
+            when(appointmentRepository.findHeldOverlappingForResource(eq(TECH.toString()), any(), any(), any()))
+                    .thenReturn(List.of(Appointment.builder()
+                            .appointmentId(self)
+                            .resourceType("TECHNICIAN")
+                            .resourceId(TECH.toString())
+                            .build()));
+
+            assertThat(evaluator.evaluate(
+                            new BookingAttempt(LOCATION, BAY, TUE_10, TUE_11, self, List.of(BRAKE_JOB), VEHICLE)))
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("an expired credential does not satisfy a requirement, judged on the facility-local date")
+        void expiredCredentialDoesNotCount() {
+            // Expired 2026-06-15; the booking is Tuesday 2026-06-16 in Chicago.
+            when(credentialRepository.findByPersonIdInOrderByIssuedOnDesc(any()))
+                    .thenReturn(List.of(
+                            credential(TECH, "BRAKES-MEDIUM_HEAVY", "T4-BRAKES", LocalDate.of(2026, 6, 15), "ACTIVE")));
+
+            assertThat(codes(evaluator.evaluate(booking(BRAKE_JOB, VEHICLE))))
+                    .containsExactly("NO_COMPETENT_MECHANIC_ROSTERED");
+        }
+
+        @Test
+        @DisplayName("a credential expiring on the booking's local date is still held that day")
+        void credentialExpiringTodayStillCounts() {
+            when(credentialRepository.findByPersonIdInOrderByIssuedOnDesc(any()))
+                    .thenReturn(List.of(
+                            credential(TECH, "BRAKES-MEDIUM_HEAVY", "T4-BRAKES", LocalDate.of(2026, 6, 16), "ACTIVE")));
+
+            assertThat(evaluator.evaluate(booking(BRAKE_JOB, VEHICLE))).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a revoked credential never counts, whatever its dates")
+        void revokedCredentialDoesNotCount() {
+            when(credentialRepository.findByPersonIdInOrderByIssuedOnDesc(any()))
+                    .thenReturn(List.of(credential(TECH, "BRAKES-MEDIUM_HEAVY", "T4-BRAKES", null, "REVOKED")));
+
+            assertThat(codes(evaluator.evaluate(booking(BRAKE_JOB, VEHICLE))))
+                    .containsExactly("NO_COMPETENT_MECHANIC_ROSTERED");
+        }
+
+        @Test
+        @DisplayName(
+                "the issuer's own code satisfies a requirement written against the Durion code, case-insensitively")
+        void sourceCodeMatches() {
+            // doReturn: when(mock.call(any())) would invoke the class-level thenAnswer with a null argument.
+            doReturn(List.of(requirement(BRAKE_JOB, "t4-brakes ", 4, 8)))
+                    .when(catalogServiceSkillRepository)
+                    .findAllByServiceIdIn(any());
+
+            assertThat(evaluator.evaluate(booking(BRAKE_JOB, VEHICLE))).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a service whose requirements were never configured fires no competence rule")
+        void unconfiguredServiceFiresNothing() {
+            assertThat(evaluator.evaluate(booking(UNCONFIGURED, VEHICLE))).isEmpty();
+        }
+
+        @Test
+        @DisplayName("zero technicians is MECHANIC_UNAVAILABLE and never a competence failure (#2035 answer 5)")
+        void zeroTechniciansIsNotACompetenceFailure() {
+            when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE"))
+                    .thenReturn(List.of());
+
+            List<DetectedConflict> detected = evaluator.evaluate(booking(DOT_INSPECTION, VEHICLE));
+
+            assertThat(codes(detected)).containsExactly("MECHANIC_UNAVAILABLE");
+            verify(credentialRepository, never()).findByPersonIdInOrderByIssuedOnDesc(any());
+        }
+
+        @Test
+        @DisplayName("an attempt naming no services asks the catalog nothing")
+        void noServicesAskNothing() {
+            assertThat(evaluator.evaluate(attempt(TUE_10, TUE_11, null))).isEmpty();
+            verify(catalogServiceRepository, never()).findAllByServiceIdIn(any());
+        }
+
+        private static ExtCatalogServiceSkillReplica requirement(UUID service, String code, Integer min, Integer max) {
+            return ExtCatalogServiceSkillReplica.builder()
+                    .id(UUID.randomUUID())
+                    .serviceId(service)
+                    .skillId(UUID.nameUUIDFromBytes(code.getBytes()))
+                    .skillCode(code)
+                    .minGvwrClass(min)
+                    .maxGvwrClass(max)
+                    .build();
+        }
+
+        private static ExtStaffingAssignmentReplica staffingFor(UUID personId) {
+            return ExtStaffingAssignmentReplica.builder()
+                    .assignmentId(UUID.randomUUID())
+                    .locationId(LOCATION)
+                    .personId(personId)
+                    .role("TECHNICIAN")
+                    .status("ACTIVE")
+                    .effectiveFrom(LocalDate.of(2026, 1, 1))
+                    .build();
+        }
+
+        private static ExtPersonCredentialReplica credential(
+                UUID personId, String skillCode, String sourceCode, LocalDate expiresOn, String status) {
+            return ExtPersonCredentialReplica.builder()
+                    .credentialId(UUID.randomUUID())
+                    .personId(personId)
+                    .skillId(UUID.nameUUIDFromBytes(skillCode.getBytes()))
+                    .skillCode(skillCode)
+                    .competenceCode("BRAKES")
+                    .minGvwrClass(4)
+                    .maxGvwrClass(8)
+                    .issuer("ASE")
+                    .sourceCode("ASE")
+                    .sourceCredentialCode(sourceCode)
+                    .issuedOn(LocalDate.of(2021, 1, 1))
+                    .expiresOn(expiresOn)
+                    .status(status)
+                    .aggregateVersion(1)
+                    .updatedAt(Instant.parse("2026-01-01T00:00:00Z"))
+                    .build();
+        }
+
+        private static ExtVehicleReplica vehicle(int gvwrClass) {
+            return ExtVehicleReplica.builder()
+                    .vehicleId(VEHICLE)
+                    .gvwrClass(gvwrClass)
+                    .build();
+        }
+    }
+
     private static BookingAttempt attempt(Instant start, Instant end, UUID exclude) {
         return new BookingAttempt(LOCATION, BAY, start, end, exclude);
     }
@@ -345,6 +617,9 @@ class SchedulingConflictEvaluatorTest {
                 switch (code) {
                     case "FACILITY_CLOSED" -> "The location is closed on {date}{reason}.";
                     case "BAY_DOUBLE_BOOKED" -> "Bay {resource} is already booked for part of {start}–{end}.";
+                    case "NO_COMPETENT_MECHANIC_ROSTERED" -> "No mechanic at this location holds {skills}.";
+                    case "COMPETENT_MECHANIC_UNAVAILABLE" ->
+                        "A mechanic holding {skills} works at this location but none is free for {start}–{end}.";
                     default -> code + " {start}–{end}";
                 };
         return ConflictRule.builder()

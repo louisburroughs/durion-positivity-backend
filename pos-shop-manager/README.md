@@ -100,6 +100,23 @@ refusal (`23P01`) is recorded as a `BAY_DOUBLE_BOOKED` conflict on a fresh conne
 `SchedulingConflictRecorder` — unless the refused insert was an exact keyless double-submit of the
 appointment that won, in which case the winner is replayed with `200`.
 
+### Skill rules (CAP-329, spec D10.1)
+
+The two `SKILL` rules are evaluated at create and reschedule from replicas alone. The
+booking's services are resolved on `ext_catalog_service` / `ext_catalog_service_skill`
+(the `catalog.service.updated` v3 fact): a service whose requirements were never
+configured contributes nothing — "not configured" is not "requires nothing" — and a
+requirement applies when its GVWR class range covers the vehicle's `gvwr_class`
+(`ext_vehicle`, CAP-327) or is unranged (ANY). Without a vehicle class only ANY
+requirements apply and the detail says so. The technicians rostered at the location that
+local day are checked on `ext_person_credential`, a credential counting only while held on
+the facility-local date (DECISION-SHOPMGMT-015; expiry inclusive, REVOKED/SUPERSEDED never).
+Nobody holding a required skill → `NO_COMPETENT_MECHANIC_ROSTERED` (SOFT, names the codes);
+holders present but every one already the technician on an overlapping held appointment →
+`COMPETENT_MECHANIC_UNAVAILABLE` (SOFT). Zero technicians at the location is
+`MECHANIC_UNAVAILABLE` alone, never a competence failure (#2035 answer 5). Neither rule
+withholds a booking; both are manager-overridable (`shop:conflict:override`).
+
 ## Shop dashboard (`GET /v1/shop-dashboard`)
 
 One call returns everything a shop manager board shows for a location, requiring
@@ -153,6 +170,7 @@ but the event consumer writes them, and no synchronous call crosses a domain wal
 | `ext_vehicle` | `vehicle.events.v1` | `VehicleEventsListener` |
 | `ext_people_staffing_assignment` | `people.events.v1` | `PeopleEventsListener` |
 | `ext_person_credential` | `people.events.v1` | `PeopleEventsListener` |
+| `ext_catalog_service`, `ext_catalog_service_skill` | `catalog.events.v1` | `CatalogEventsListener` |
 | `ext_people_contact_person` | `people-contact.events.v1` | `PeopleContactEventsListener` |
 | `ext_workorder` | `workorder.events.v1` | `WorkorderEventsListener` |
 | `ext_bay`, `ext_mobile_unit` | `location.events.v1` | `LocationEventsListener` |
