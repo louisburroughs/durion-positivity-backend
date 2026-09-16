@@ -1134,11 +1134,18 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      * <p>{@code toResponse} is never called in a loop today (create, the idempotent-duplicate lookup,
      * reschedule, cancel, and getById each resolve exactly one appointment), so one extra query here
      * costs a single round trip per call, not an N+1 across a list.
+     *
+     * <p>More than one mapping row can resolve for this appointment (#2023 S1 — appointment ->
+     * mapping is one-to-many; only {@code workOrderId} is unique in the baseline schema), so the
+     * duplicates are collapsed through {@link WorkorderActuals#mostCurrent} — the same rule {@link
+     * com.positivity.shopmanager.internal.service.ScheduleCapacityServiceImpl} applies to its own
+     * batch resolution (#2023 F3) — rather than taking whichever row the database happens to return
+     * first, which is nondeterministic and can surface a stale workorder's actuals.
      */
     private @Nullable WorkorderActuals resolveWorkorderActuals(@NonNull UUID appointmentId) {
         List<WorkorderActuals> actuals =
                 workOrderAppointmentMappingRepository.findActualsByAppointmentIds(List.of(appointmentId));
-        return actuals.isEmpty() ? null : actuals.get(0);
+        return actuals.stream().reduce(WorkorderActuals::mostCurrent).orElse(null);
     }
 
     private void saveServiceRequests(Appointment appointment, List<UUID> serviceRequestIds) {

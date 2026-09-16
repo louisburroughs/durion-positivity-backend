@@ -184,7 +184,8 @@ public class LocationEventsListener {
     }
 
     private void applyBayUpdated(JsonNode envelope) {
-        BayUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), BayUpdatedV1.class);
+        JsonNode payloadNode = envelope.path("payload");
+        BayUpdatedV1 payload = objectMapper.treeToValue(payloadNode, BayUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtBayReplica existing =
                 extBayReplicaRepository.findById(payload.bayId()).orElse(null);
@@ -195,7 +196,12 @@ public class LocationEventsListener {
                 .bayId(payload.bayId())
                 .locationId(payload.locationId())
                 .name(payload.name())
-                .bayType(payload.bayType())
+                // bayType was added after this listener started running (#2023/#2021): a fact
+                // serialized by a pre-change producer has no such field at all, which must not be
+                // read as "clear the bayType already replicated" during a rolling deploy or replay
+                // of an older stored event (#2023 F2).
+                .bayType(mergeField(
+                        payloadNode, "bayType", payload.bayType(), existing == null ? null : existing.getBayType()))
                 .active(isActiveStatus(payload.status()))
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
@@ -231,13 +237,21 @@ public class LocationEventsListener {
     }
 
     private void applyLocationUpdated(JsonNode envelope) {
-        LocationUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), LocationUpdatedV1.class);
+        JsonNode payloadNode = envelope.path("payload");
+        LocationUpdatedV1 payload = objectMapper.treeToValue(payloadNode, LocationUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtLocationReplica existing =
                 extLocationReplicaRepository.findById(payload.locationId()).orElse(null);
         if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
             return;
         }
+        // timezone/operatingHours/holidayClosures/both buffers were added to this fact after this
+        // listener started running (#2023/#2021). A pre-change producer's serialized event has no
+        // such field at all, and rebuilding the row straight from the payload would read that
+        // absence as an explicit null and overwrite an already-replicated value during a rolling
+        // deploy or replay of an older stored event (#2023 F2). mergeField keeps the existing value
+        // when the field is genuinely absent from the raw envelope, and only clears it when the
+        // fact carries an explicit JSON null.
         extLocationReplicaRepository.save(ExtLocationReplica.builder()
                 .locationId(payload.locationId())
                 .code(payload.code())
@@ -245,11 +259,28 @@ public class LocationEventsListener {
                 .active(payload.active())
                 .aggregateVersion(aggregateVersion)
                 .syncedAt(Instant.now(clock))
-                .timezone(payload.timezone())
-                .operatingHours(serializeJson(payload.operatingHours()))
-                .holidayClosures(serializeJson(payload.holidayClosures()))
-                .checkInBufferMinutes(payload.checkInBufferMinutes())
-                .cleanupBufferMinutes(payload.cleanupBufferMinutes())
+                .timezone(mergeField(
+                        payloadNode, "timezone", payload.timezone(), existing == null ? null : existing.getTimezone()))
+                .operatingHours(mergeField(
+                        payloadNode,
+                        "operatingHours",
+                        serializeJson(payload.operatingHours()),
+                        existing == null ? null : existing.getOperatingHours()))
+                .holidayClosures(mergeField(
+                        payloadNode,
+                        "holidayClosures",
+                        serializeJson(payload.holidayClosures()),
+                        existing == null ? null : existing.getHolidayClosures()))
+                .checkInBufferMinutes(mergeField(
+                        payloadNode,
+                        "checkInBufferMinutes",
+                        payload.checkInBufferMinutes(),
+                        existing == null ? null : existing.getCheckInBufferMinutes()))
+                .cleanupBufferMinutes(mergeField(
+                        payloadNode,
+                        "cleanupBufferMinutes",
+                        payload.cleanupBufferMinutes(),
+                        existing == null ? null : existing.getCleanupBufferMinutes()))
                 .build());
 
         // The fact carries the child's full typed parent-edge set — replace, don't merge.
@@ -307,5 +338,20 @@ public class LocationEventsListener {
      */
     private @Nullable String serializeJson(@Nullable List<?> list) {
         return list == null ? null : objectMapper.writeValueAsString(list);
+    }
+
+    /**
+     * Distinguishes a field <em>absent</em> from the raw envelope (a pre-change producer that
+     * predates the field entirely) from one carrying an <em>explicit</em> JSON {@code null} (#2023
+     * F2). {@code JsonNode.has} is true for either a present non-null value or an explicit
+     * {@code null} node, and false only when the field is missing outright — exactly the "was this
+     * field ever serialized" question a rolling deploy or replay of an older stored event needs
+     * answered before applying it. Absent keeps whatever this replica already holds; present
+     * (including an explicit null) always takes {@code newValue}, clearing the column when that is
+     * what the fact says.
+     */
+    private <T> @Nullable T mergeField(
+            JsonNode payloadNode, String fieldName, @Nullable T newValue, @Nullable T existingValue) {
+        return payloadNode.has(fieldName) ? newValue : existingValue;
     }
 }

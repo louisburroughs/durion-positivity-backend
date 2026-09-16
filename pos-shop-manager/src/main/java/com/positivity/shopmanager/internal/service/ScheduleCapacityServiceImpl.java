@@ -32,6 +32,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -90,6 +91,13 @@ import org.springframework.transaction.annotation.Transactional;
  * annotated (AC5) — with the detail (which bay, which appointment/workorder, how many bay-hours)
  * surfaced alongside so a board can explain the number. A carry-over target beyond the requested
  * range has nothing to net against and is silently dropped rather than fabricating a day.
+ *
+ * <p>An overrun longer than one operating day's own window is <em>distributed</em> across as many
+ * successive {@code OK} days as it takes to exhaust it (#2023 F8), rather than dumped in full onto
+ * the first one: each day absorbs at most its own window's worth of minutes — keeping {@code
+ * occupiedMinutes} and {@code occupancy} consistent with each other on every day the carry-over
+ * touches — and whatever does not fit continues on to the next {@code OK} day, carrying the same
+ * {@code fromDate} (the original source day) on every hop's {@code CarryOverView}.
  */
 @Slf4j
 @Service
@@ -130,15 +138,19 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
 
         // One query spanning the whole range (AC7) — never one per day, and skipped entirely when
         // the timezone cannot be resolved, since no day in the range can be OK in that case anyway.
-        Map<String, List<Appointment>> appointmentsByBay = zoneId == null
+        // Bay membership is resolved here, in memory, against the active bay roster already loaded
+        // above: Appointment.resourceType is never written by any production create path (#2023
+        // F1), so the SQL only narrows by locationId/range/status and this grouping step is what
+        // actually decides which rows occupy a bay.
+        Set<UUID> activeBayIds = bays.stream().map(ExtBayReplica::getBayId).collect(Collectors.toSet());
+        Map<UUID, List<Appointment>> appointmentsByBay = zoneId == null
                 ? Map.of()
-                : appointmentRepository
-                        .findBayAppointmentsForCapacity(
+                : groupByBay(
+                        appointmentRepository.findAppointmentsForCapacity(
                                 locationId,
                                 to.plusDays(1).atStartOfDay(zoneId).toInstant(),
-                                from.atStartOfDay(zoneId).toInstant())
-                        .stream()
-                        .collect(Collectors.groupingBy(Appointment::getResourceId));
+                                from.atStartOfDay(zoneId).toInstant()),
+                        activeBayIds);
 
         // One more query (#2021), only when there is something to resolve: the workorder
         // actual-time block for every appointment (3) fetched, batched rather than looped per
@@ -191,9 +203,20 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     /**
      * Parses the replicated {@code operating_hours} JSON into a per-day-of-week map.
      *
-     * @return {@code null} when the JSON cannot be parsed at all (distinct from an empty, valid
-     *     list) so the caller reports every date {@code UNAVAILABLE} rather than asserting a
-     *     closure the data does not actually confirm
+     * <p>A malformed {@code dayOfWeek} entry (missing, or not one of the seven names) invalidates
+     * the whole payload rather than just that entry (#2023 F7): dropping only the bad entry would
+     * leave {@code byDayOfWeek} silently missing that weekday, and {@code assembleDay} reports a
+     * missing weekday entry as {@code CLOSED} — a confirmed closure the data never actually stated.
+     * A malformed hours fact is <em>unknown</em>, not a closure, so it must degrade the same way an
+     * entirely unparsable JSON payload does: every date in the range reports {@code UNAVAILABLE}.
+     * This mirrors the producer's own all-or-nothing rule (publishing {@code operatingHours = null}
+     * rather than a partial list) instead of inventing a third, more lenient rule on the consumer
+     * side.
+     *
+     * @return {@code null} when the JSON cannot be parsed at all, or any one entry's {@code
+     *     dayOfWeek} cannot be resolved (distinct from an empty, valid list) so the caller reports
+     *     every date {@code UNAVAILABLE} rather than asserting a closure the data does not actually
+     *     confirm
      */
     private @Nullable Map<DayOfWeek, RawOperatingHoursEntry> parseOperatingHours(UUID locationId, String json) {
         try {
@@ -202,15 +225,21 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
             Map<DayOfWeek, RawOperatingHoursEntry> byDayOfWeek = new EnumMap<>(DayOfWeek.class);
             for (RawOperatingHoursEntry entry : entries) {
                 if (entry == null || entry.dayOfWeek() == null) {
-                    continue;
+                    log.warn(
+                            "Location {} has an operatingHours entry with no dayOfWeek; treating the whole payload"
+                                    + " as unparsable so no weekday is silently reported CLOSED",
+                            locationId);
+                    return null;
                 }
                 try {
                     byDayOfWeek.put(DayOfWeek.valueOf(entry.dayOfWeek()), entry);
                 } catch (IllegalArgumentException e) {
                     log.warn(
-                            "Location {} operatingHours entry has an unrecognised dayOfWeek '{}'; skipping it",
+                            "Location {} operatingHours entry has an unrecognised dayOfWeek '{}'; treating the whole"
+                                    + " payload as unparsable so that weekday is UNAVAILABLE, never CLOSED",
                             locationId,
                             entry.dayOfWeek());
+                    return null;
                 }
             }
             return byDayOfWeek;
@@ -282,12 +311,52 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     }
 
     /**
+     * Groups every appointment fetched for the range by the active bay it occupies (#2023 F1).
+     *
+     * <p>{@link Appointment#getResourceType()} is never populated on the production create path, so
+     * bay membership cannot be read off the row: it is derived from {@link
+     * Appointment#getResourceId()} against {@code activeBayIds}, the same active-bay roster already
+     * loaded for the request. A {@code resourceId} that is not a UUID, or that is a UUID but does
+     * not name an active bay at this location (unassigned, a technician lane, or a since-deactivated
+     * bay), simply is not a bay for this read — never an error, and never grouped.
+     */
+    private Map<UUID, List<Appointment>> groupByBay(List<Appointment> appointments, Set<UUID> activeBayIds) {
+        Map<UUID, List<Appointment>> byBay = new HashMap<>();
+        for (Appointment appointment : appointments) {
+            UUID bayId = parseBayId(appointment.getResourceId());
+            if (bayId == null || !activeBayIds.contains(bayId)) {
+                continue;
+            }
+            byBay.computeIfAbsent(bayId, ignored -> new ArrayList<>()).add(appointment);
+        }
+        return byBay;
+    }
+
+    /** Null for a blank/non-UUID {@code resourceId} (unassigned or a technician lane), not an error. */
+    private @Nullable UUID parseBayId(@Nullable String resourceId) {
+        if (resourceId == null || resourceId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(resourceId);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /**
      * Batches the workorder actual-time lookup for every appointment {@link
      * #getCapacity} fetched (#2021 AC1-AC6), in one query rather than one per appointment — an
      * appointment with no linked workorder, or one whose workorder has not replicated, simply has
      * no entry.
+     *
+     * <p>An appointment can resolve more than one mapping row (#2023 F3 — appointment -> mapping is
+     * one-to-many; only {@code workOrderId} is unique in the baseline schema), so the merge function
+     * collapses duplicates through {@link WorkorderActuals#mostCurrent} rather than letting {@link
+     * Collectors#toMap(java.util.function.Function, java.util.function.Function)} throw on a
+     * duplicate key.
      */
-    private Map<UUID, WorkorderActuals> resolveActuals(Map<String, List<Appointment>> appointmentsByBay) {
+    private Map<UUID, WorkorderActuals> resolveActuals(Map<UUID, List<Appointment>> appointmentsByBay) {
         List<UUID> appointmentIds = appointmentsByBay.values().stream()
                 .flatMap(List::stream)
                 .map(Appointment::getAppointmentId)
@@ -297,7 +366,8 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
             return Map.of();
         }
         return workOrderAppointmentMappingRepository.findActualsByAppointmentIds(appointmentIds).stream()
-                .collect(Collectors.toMap(WorkorderActuals::appointmentId, actuals -> actuals));
+                .collect(Collectors.toMap(
+                        WorkorderActuals::appointmentId, actuals -> actuals, WorkorderActuals::mostCurrent));
     }
 
     /**
@@ -307,7 +377,7 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     private List<ScheduleCapacityResponse.DayCapacityView> assembleDayViews(
             List<DayAssembly> assemblies,
             List<ExtBayReplica> bays,
-            Map<String, List<Appointment>> appointmentsByBay,
+            Map<UUID, List<Appointment>> appointmentsByBay,
             Map<UUID, WorkorderActuals> actualsByAppointmentId) {
 
         // Pass 1: base occupancy per OK day, fed each appointment's effective (actual-if-known,
@@ -325,8 +395,7 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
             Map<UUID, BayDayAccumulator> byBay = new HashMap<>();
             for (ExtBayReplica bay : bays) {
                 BayDayAccumulator accumulator = new BayDayAccumulator(slotCount);
-                List<Appointment> bayAppointments =
-                        appointmentsByBay.getOrDefault(bay.getBayId().toString(), List.of());
+                List<Appointment> bayAppointments = appointmentsByBay.getOrDefault(bay.getBayId(), List.of());
                 for (Appointment appointment : bayAppointments) {
                     WorkorderActuals actuals = actualsByAppointmentId.get(appointment.getAppointmentId());
                     Instant effectiveStart = effectiveStart(appointment, actuals);
@@ -350,34 +419,57 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
         }
 
         // Pass 2: carry-over (#2021 AC4/AC5/AC6), additive on top of pass 1's accumulators.
+        //
+        // The overrun is a plain duration (minutes past the source day's close), not an absolute
+        // instant to be re-anchored on a later day's clock — a carried-over job is netted as work
+        // starting at the *target* day's own open time, regardless of what wall-clock time the
+        // source day's overrun technically ended at (#2021 AC5's "netted, not annotated"). When
+        // that duration is longer than one operating day's own window, dumping all of it onto the
+        // immediate next open day made the day's occupiedMinutes total disagree with what
+        // markSlots could actually mark, since markSlots clamps at that day's own slot count
+        // (#2023 F8). Distributing the remainder across successive open days keeps the two
+        // representations consistent at every hop: each day absorbs at most its own window's worth
+        // of minutes, and whatever does not fit carries forward again.
         for (Map.Entry<UUID, OverrunTracker> entry : lastOverlapByAppointment.entrySet()) {
             OverrunTracker tracker = entry.getValue();
             DayAssembly sourceDay = tracker.lastOverlapDay();
             if (!tracker.effectiveEnd().isAfter(sourceDay.dayEndAt())) {
                 continue;
             }
-            DayAssembly targetDay = nextOpenDay(assemblies, sourceDay.date());
-            if (targetDay == null) {
-                // The next open day is beyond the requested range; nothing visible to net against.
-                continue;
-            }
-            BayDayAccumulator targetAccumulator =
-                    accumulatorsByDate.get(targetDay.date()).get(tracker.bay().getBayId());
-            long overrunMinutes = Duration.between(sourceDay.dayEndAt(), tracker.effectiveEnd())
+            long remainingMinutes = Duration.between(sourceDay.dayEndAt(), tracker.effectiveEnd())
                     .toMinutes();
-            targetAccumulator.occupiedMinutes += overrunMinutes;
-            markSlots(
-                    targetAccumulator.occupancy,
-                    targetDay.dayStartAt(),
-                    targetDay.dayStartAt(),
-                    targetDay.dayStartAt().plusSeconds(overrunMinutes * 60));
+            DayAssembly cursorDay = sourceDay;
+            while (remainingMinutes > 0) {
+                DayAssembly targetDay = nextOpenDay(assemblies, cursorDay.date());
+                if (targetDay == null) {
+                    // The next open day is beyond the requested range; nothing visible to net
+                    // against for whatever remains.
+                    break;
+                }
+                BayDayAccumulator targetAccumulator = accumulatorsByDate
+                        .get(targetDay.date())
+                        .get(tracker.bay().getBayId());
+                long targetDayCapacityMinutes = Duration.between(targetDay.dayStartAt(), targetDay.dayEndAt())
+                        .toMinutes();
+                long minutesForThisDay = Math.min(remainingMinutes, targetDayCapacityMinutes);
 
-            ScheduleCapacityResponse.CarryOverView carryOverView = new ScheduleCapacityResponse.CarryOverView();
-            carryOverView.setFromDate(sourceDay.date());
-            carryOverView.setAppointmentId(entry.getKey());
-            carryOverView.setWorkorderId(tracker.workOrderId());
-            carryOverView.setBayHours(bayHours(overrunMinutes));
-            targetAccumulator.carryOverIn.add(carryOverView);
+                targetAccumulator.occupiedMinutes += minutesForThisDay;
+                markSlots(
+                        targetAccumulator.occupancy,
+                        targetDay.dayStartAt(),
+                        targetDay.dayStartAt(),
+                        targetDay.dayStartAt().plusSeconds(minutesForThisDay * 60));
+
+                ScheduleCapacityResponse.CarryOverView carryOverView = new ScheduleCapacityResponse.CarryOverView();
+                carryOverView.setFromDate(sourceDay.date());
+                carryOverView.setAppointmentId(entry.getKey());
+                carryOverView.setWorkorderId(tracker.workOrderId());
+                carryOverView.setBayHours(bayHours(minutesForThisDay));
+                targetAccumulator.carryOverIn.add(carryOverView);
+
+                remainingMinutes -= minutesForThisDay;
+                cursorDay = targetDay;
+            }
         }
 
         List<ScheduleCapacityResponse.DayCapacityView> views = new ArrayList<>(assemblies.size());

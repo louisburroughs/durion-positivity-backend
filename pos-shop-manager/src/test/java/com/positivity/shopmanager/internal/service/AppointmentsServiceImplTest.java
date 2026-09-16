@@ -40,6 +40,7 @@ import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
+import com.positivity.shopmanager.internal.repository.WorkorderActuals;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -88,6 +89,9 @@ class AppointmentsServiceImplTest {
     @Mock
     private SourceEligibilityService sourceEligibilityService;
 
+    @Mock
+    private WorkOrderAppointmentMappingRepository workOrderAppointmentMappingRepository;
+
     private AppointmentsServiceImpl appointmentsService;
 
     @BeforeEach
@@ -106,7 +110,7 @@ class AppointmentsServiceImplTest {
                 sourceEligibilityService,
                 mock(ExtPersonReplicaRepository.class),
                 Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC),
-                mock(WorkOrderAppointmentMappingRepository.class));
+                workOrderAppointmentMappingRepository);
     }
 
     @Test
@@ -563,6 +567,42 @@ class AppointmentsServiceImplTest {
         verify(appointmentLoadService)
                 .loadCreateModel(eq("WORKORDER"), eq("wo-1"), eq(facilityId), correlationCaptor.capture());
         assertNotNull(correlationCaptor.getValue());
+    }
+
+    @Test
+    void getById_resolvesMostCurrentMapping_whenAppointmentHasMultipleWorkorderMappings() {
+        // #2023 S1: appointment -> mapping is one-to-many (a reopened work order links a new
+        // mapping row without deleting the earlier one). resolveWorkorderActuals must not take
+        // whichever row the database happens to return first; it must deterministically prefer the
+        // mapping with the greatest workOrderId (WorkorderActuals#mostCurrent, #2023 F3/S1).
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Instant startAt = Instant.parse("2026-03-10T10:00:00Z");
+        Instant endAt = Instant.parse("2026-03-10T11:00:00Z");
+        Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED, startAt, endAt);
+
+        UUID staleWorkOrderId = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        UUID currentWorkOrderId = UUID.fromString("00000000-0000-0000-0000-000000000020");
+        WorkorderActuals staleActuals = new WorkorderActuals(
+                appointmentId, staleWorkOrderId, Instant.parse("2026-03-10T10:00:00Z"), null, null);
+        WorkorderActuals currentActuals = new WorkorderActuals(
+                appointmentId,
+                currentWorkOrderId,
+                Instant.parse("2026-03-10T10:05:00Z"),
+                Instant.parse("2026-03-10T11:05:00Z"),
+                null);
+
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId))
+                .thenReturn(List.of());
+        // Order deliberately reversed from creation order to prove the selection is not
+        // "whichever the database returns first".
+        when(workOrderAppointmentMappingRepository.findActualsByAppointmentIds(List.of(appointmentId)))
+                .thenReturn(List.of(staleActuals, currentActuals));
+
+        AppointmentResponse response = appointmentsService.getById(appointmentId.toString(), null);
+
+        assertEquals(currentActuals.workStartedAt(), response.getActualStartAt());
+        assertEquals(currentActuals.completedAt(), response.getActualEndAt());
     }
 
     private ScheduleViewRequest scheduleRequest(UUID locationId, LocalDate date, boolean includeAvailabilityOverlay) {

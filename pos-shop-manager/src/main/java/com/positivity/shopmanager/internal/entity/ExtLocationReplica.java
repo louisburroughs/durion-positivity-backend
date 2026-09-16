@@ -65,10 +65,11 @@ public class ExtLocationReplica extends TenantScopedEntity {
     private Instant syncedAt;
 
     /**
-     * IANA timezone id, mirrored verbatim from the owner (#2023 F4). This replica is now the
-     * authoritative source for a new read of the location's timezone — see the note on
-     * {@link Shop#getTimezone()} — but nothing in this module has been switched over to read it
-     * yet, and existing reads of {@code Shop.timezone} are untouched.
+     * IANA timezone id, mirrored verbatim from the owner (#2023 F4). This replica is authoritative
+     * for {@code GET /v1/schedules/capacity}, which reads {@link #getTimezone()} on every request —
+     * see the note on {@link Shop#getTimezone()} — while {@code /v1/schedules/view} remains on
+     * {@code Shop.timezone}, deliberately untouched (#2023 scope: that endpoint's output must stay
+     * bit-for-bit unchanged).
      */
     @Column(name = "timezone", length = 64)
     private String timezone;

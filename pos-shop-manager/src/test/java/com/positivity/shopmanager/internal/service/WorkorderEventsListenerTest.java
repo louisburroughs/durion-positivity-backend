@@ -215,6 +215,75 @@ class WorkorderEventsListenerTest {
     }
 
     @Test
+    @DisplayName("#2023 F4 - a pre-#2021 fact with the actual-time fields entirely absent keeps "
+            + "the already-replicated actuals, never erases them")
+    void actualTimeFieldsAbsentFromEnvelopeKeepExistingActuals() {
+        Instant existingWorkStartedAt = Instant.parse("2026-09-03T08:00:00Z");
+        Instant existingCompletedAt = Instant.parse("2026-09-03T10:30:00Z");
+        Instant existingExpectedEndAt = Instant.parse("2026-09-03T11:00:00Z");
+        when(workorderRepository.findById(WORKORDER_ID))
+                .thenReturn(Optional.of(ExtWorkorderReplica.builder()
+                        .workorderId(WORKORDER_ID)
+                        .status("WORK_IN_PROGRESS")
+                        .aggregateVersion(2)
+                        .workStartedAt(existingWorkStartedAt)
+                        .completedAt(existingCompletedAt)
+                        .expectedEndAt(existingExpectedEndAt)
+                        .build()));
+
+        // envelope(...) is the pre-#2021 shape: no workStartedAt/completedAt/expectedEndAt keys at
+        // all - a rolling deploy or a replay of a stored older event, not an explicit clear.
+        listener.onWorkorderEvent(envelope(3, "WORK_IN_PROGRESS", BAY_ID, "BAY"));
+
+        ArgumentCaptor<ExtWorkorderReplica> captor = ArgumentCaptor.forClass(ExtWorkorderReplica.class);
+        verify(workorderRepository).save(captor.capture());
+        ExtWorkorderReplica saved = captor.getValue();
+        assertThat(saved.getWorkStartedAt()).isEqualTo(existingWorkStartedAt);
+        assertThat(saved.getCompletedAt()).isEqualTo(existingCompletedAt);
+        assertThat(saved.getExpectedEndAt()).isEqualTo(existingExpectedEndAt);
+    }
+
+    @Test
+    @DisplayName("#2023 F4 - a fact with an explicit null actual-time field clears the " + "already-replicated value")
+    void explicitNullActualTimeFieldClearsExistingValue() {
+        when(workorderRepository.findById(WORKORDER_ID))
+                .thenReturn(Optional.of(ExtWorkorderReplica.builder()
+                        .workorderId(WORKORDER_ID)
+                        .status("WORK_IN_PROGRESS")
+                        .aggregateVersion(2)
+                        .workStartedAt(Instant.parse("2026-09-03T08:00:00Z"))
+                        .completedAt(Instant.parse("2026-09-03T10:30:00Z"))
+                        .build()));
+
+        // The owner explicitly reset workStartedAt/completedAt to null (e.g. the workorder was
+        // reopened) - the fact says so in the raw JSON, distinct from the field being absent.
+        listener.onWorkorderEvent("""
+                {"eventId":"%s","eventType":"%s","aggregateVersion":3,"payload":{
+                  "workorderId":"%s","workorderNumber":"WO-2026-1001","status":"WORK_IN_PROGRESS","shopId":"%s",
+                  "customerId":null,"vehicleId":"%s","invoiceId":null,"parts":[],"services":[],
+                  "createdAt":null,"updatedAt":null,"locationId":"%s","resourceId":"%s",
+                  "resourceType":"BAY","mechanicIds":["%s","%s"],"promisedAt":null,
+                  "scheduledDate":"2026-09-03","workStartedAt":null,
+                  "completedAt":null,"expectedEndAt":null}}""".formatted(
+                        EVENT_ID,
+                        WorkorderUpdatedV1.EVENT_TYPE,
+                        WORKORDER_ID,
+                        LOCATION_ID,
+                        VEHICLE_ID,
+                        LOCATION_ID,
+                        BAY_ID,
+                        MECHANIC_ONE,
+                        MECHANIC_TWO));
+
+        ArgumentCaptor<ExtWorkorderReplica> captor = ArgumentCaptor.forClass(ExtWorkorderReplica.class);
+        verify(workorderRepository).save(captor.capture());
+        ExtWorkorderReplica saved = captor.getValue();
+        assertThat(saved.getWorkStartedAt()).isNull();
+        assertThat(saved.getCompletedAt()).isNull();
+        assertThat(saved.getExpectedEndAt()).isNull();
+    }
+
+    @Test
     @DisplayName("re-published fact at the same aggregateVersion re-applies; a strictly-lower one is ignored")
     void staleGuardIsStrictlyBelow() {
         when(workorderRepository.findById(WORKORDER_ID))

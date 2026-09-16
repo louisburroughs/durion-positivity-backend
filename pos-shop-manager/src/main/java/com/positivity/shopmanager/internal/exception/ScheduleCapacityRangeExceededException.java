@@ -16,6 +16,6 @@ public class ScheduleCapacityRangeExceededException extends RuntimeException {
 
     public ScheduleCapacityRangeExceededException(int maxDays, long requestedDays) {
         super("Requested range spans " + requestedDays + " day(s), exceeding the maximum of " + maxDays
-                + " days. A year-long range is not supported; request the calendar in bounded windows.");
+                + " days; request the calendar in bounded windows of " + maxDays + " days or fewer.");
     }
 }

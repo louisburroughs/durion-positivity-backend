@@ -122,11 +122,15 @@ class ScheduleCapacityContractBehaviorIT extends BaseContractIntegrationTest {
                 .aggregateVersion(1)
                 .updatedAt(Instant.now())
                 .build());
+        // Built the way AppointmentsServiceImpl#persistAppointment actually creates a row:
+        // resourceId set, resourceType left null (#2023 F1 — production never writes
+        // Appointment.resourceType; a fixture that sets it asserts a shape production cannot
+        // produce). Bay membership must resolve from resourceId alone against the active bay
+        // roster, which is exactly what this test proves.
         appointmentRepository.save(Appointment.builder()
                 .status(AppointmentStatus.SCHEDULED)
                 .locationId(LOCATION_ID)
                 .resourceId(bayId.toString())
-                .resourceType("BAY")
                 .crmCustomerId(CUSTOMER_ID)
                 .crmVehicleId(VEHICLE_ID)
                 .startAt(Instant.parse("2026-10-05T10:00:00Z"))

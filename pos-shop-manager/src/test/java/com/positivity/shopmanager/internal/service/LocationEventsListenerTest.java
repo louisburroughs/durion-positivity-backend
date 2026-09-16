@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.domainevents.location.StorageLocationUpdatedV1;
+import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationParentReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
 import com.positivity.shopmanager.internal.entity.ProcessedEvent;
@@ -219,6 +220,120 @@ class LocationEventsListenerTest {
         assertThat(saved.getHolidayClosures()).isNull();
         assertThat(saved.getCheckInBufferMinutes()).isNull();
         assertThat(saved.getCleanupBufferMinutes()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2023 F2 - a fact with timezone/hours/closures/buffers entirely absent keeps "
+            + "the already-replicated values, never erases them")
+    void addedFieldsAbsentFromEnvelopeKeepExistingValues() {
+        when(extLocationReplicaRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(ExtLocationReplica.builder()
+                        .locationId(LOCATION_ID)
+                        .aggregateVersion(5)
+                        .timezone("America/Chicago")
+                        .operatingHours(
+                                "[{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"08:00:00\",\"closeTime\":\"17:00:00\"}]")
+                        .holidayClosures("[{\"date\":\"2026-12-25\",\"reason\":\"Christmas\"}]")
+                        .checkInBufferMinutes(15)
+                        .cleanupBufferMinutes(10)
+                        .build()));
+
+        // A pre-#2023 producer's shape: no timezone/operatingHours/holidayClosures/buffer keys at
+        // all - a rolling deploy or a replay of a stored older event, not an explicit clear.
+        listener.onLocationEvent("""
+                {"eventId":"evt-absent","eventType":"%s","aggregateVersion":6,
+                 "payload":{"locationId":"%s","name":"Main Shop","code":"SHOP-1","status":"OPEN",
+                   "active":true,"parents":[]}}
+                """.formatted(LocationUpdatedV1.EVENT_TYPE, LOCATION_ID));
+
+        ArgumentCaptor<ExtLocationReplica> captor = ArgumentCaptor.forClass(ExtLocationReplica.class);
+        verify(extLocationReplicaRepository).save(captor.capture());
+        ExtLocationReplica saved = captor.getValue();
+        assertThat(saved.getTimezone()).isEqualTo("America/Chicago");
+        assertThat(saved.getOperatingHours()).contains("MONDAY");
+        assertThat(saved.getHolidayClosures()).contains("Christmas");
+        assertThat(saved.getCheckInBufferMinutes()).isEqualTo(15);
+        assertThat(saved.getCleanupBufferMinutes()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("#2023 F2 - a fact with explicit null timezone/hours/closures/buffers clears the "
+            + "already-replicated values")
+    void addedFieldsExplicitNullClearExistingValues() {
+        when(extLocationReplicaRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(ExtLocationReplica.builder()
+                        .locationId(LOCATION_ID)
+                        .aggregateVersion(5)
+                        .timezone("America/Chicago")
+                        .operatingHours(
+                                "[{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"08:00:00\",\"closeTime\":\"17:00:00\"}]")
+                        .holidayClosures("[{\"date\":\"2026-12-25\",\"reason\":\"Christmas\"}]")
+                        .checkInBufferMinutes(15)
+                        .cleanupBufferMinutes(10)
+                        .build()));
+
+        // The owner explicitly reset every one of these to null - the fact says so in the raw
+        // JSON, distinct from the fields being absent.
+        listener.onLocationEvent("""
+                {"eventId":"evt-explicit-null","eventType":"%s","aggregateVersion":6,
+                 "payload":{"locationId":"%s","name":"Main Shop","code":"SHOP-1","status":"OPEN",
+                   "active":true,"parents":[],"timezone":null,"operatingHours":null,
+                   "holidayClosures":null,"checkInBufferMinutes":null,"cleanupBufferMinutes":null}}
+                """.formatted(LocationUpdatedV1.EVENT_TYPE, LOCATION_ID));
+
+        ArgumentCaptor<ExtLocationReplica> captor = ArgumentCaptor.forClass(ExtLocationReplica.class);
+        verify(extLocationReplicaRepository).save(captor.capture());
+        ExtLocationReplica saved = captor.getValue();
+        assertThat(saved.getTimezone()).isNull();
+        assertThat(saved.getOperatingHours()).isNull();
+        assertThat(saved.getHolidayClosures()).isNull();
+        assertThat(saved.getCheckInBufferMinutes()).isNull();
+        assertThat(saved.getCleanupBufferMinutes()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2023 F2 - a bay fact with bayType absent keeps the already-replicated value")
+    void bayTypeAbsentFromEnvelopeKeepsExistingValue() {
+        when(extBayReplicaRepository.findById(any()))
+                .thenReturn(Optional.of(ExtBayReplica.builder()
+                        .bayId(LOCATION_ID)
+                        .locationId(LOCATION_ID)
+                        .bayType("LIFT")
+                        .aggregateVersion(1)
+                        .build()));
+
+        listener.onLocationEvent(
+                """
+                {"eventId":"evt-bay-absent","eventType":"%s","aggregateVersion":2,
+                 "payload":{"bayId":"%s","locationId":"%s","name":"Front Bay 1","status":"ACTIVE"}}
+                """.formatted(com.positivity.domainevents.location.BayUpdatedV1.EVENT_TYPE, LOCATION_ID, LOCATION_ID));
+
+        ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+        verify(extBayReplicaRepository).save(captor.capture());
+        assertThat(captor.getValue().getBayType()).isEqualTo("LIFT");
+    }
+
+    @Test
+    @DisplayName("#2023 F2 - a bay fact with an explicit null bayType clears the already-replicated value")
+    void bayTypeExplicitNullClearsExistingValue() {
+        when(extBayReplicaRepository.findById(any()))
+                .thenReturn(Optional.of(ExtBayReplica.builder()
+                        .bayId(LOCATION_ID)
+                        .locationId(LOCATION_ID)
+                        .bayType("LIFT")
+                        .aggregateVersion(1)
+                        .build()));
+
+        listener.onLocationEvent(
+                """
+                {"eventId":"evt-bay-null","eventType":"%s","aggregateVersion":2,
+                 "payload":{"bayId":"%s","locationId":"%s","name":"Front Bay 1","bayType":null,
+                   "status":"ACTIVE"}}
+                """.formatted(com.positivity.domainevents.location.BayUpdatedV1.EVENT_TYPE, LOCATION_ID, LOCATION_ID));
+
+        ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+        verify(extBayReplicaRepository).save(captor.capture());
+        assertThat(captor.getValue().getBayType()).isNull();
     }
 
     @Test
