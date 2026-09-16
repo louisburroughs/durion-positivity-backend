@@ -642,6 +642,131 @@ paths:
       - Schedule API
       x-required-permissions:
       - shop:schedule:view
+  /v1/schedules/openings:
+    get:
+      description: 'Finds the windows at one location in which a whole job fits, unbroken, in one eligible bay, with a technician rostered that day and free in the window, honouring the location''s check-in and cleanup buffers, and ranks them earliest start first with CERTIFIED openings before AWAITING ones at equal starts.
+
+        Use this tool when a service advisor asks when the next slot for a job of a given length is; use getScheduleCapacity instead for per-day, per-bay occupancy of a calendar range rather than bookable windows.
+
+        Preconditions: the location must be known to shop management with a recognised timezone and published operating hours, and every serviceId must be a catalog service known to shop management.
+
+        Required inputs: locationId (UUID), serviceIds (one to ten catalog service UUIDs), durationMinutes (1 to 1440) and earliestStart (ISO-8601 instant); vehicleId and technicianId are optional, horizonDays defaults to 30 (the maximum) and limit defaults to 10 (maximum 50).
+
+        Emits a SHOPMGR_SCHEDULE_OPENING_SEARCH audit event and changes no state; the search is advisory and the submit-time conflict evaluation on appointment creation remains authoritative, which is why every opening lists constraintsEvaluated.
+
+        Skill never withholds an opening: a technician lacking a required skill makes the opening AWAITING, and nobody competent rostered in the horizon is reported once as staffingAdvisory alongside the openings rather than as a noOpeningReason, which names only NO_ELIGIBLE_BAY_AT_LOCATION or ALL_ELIGIBLE_BAYS_BOOKED.
+
+        Returns 400 for a malformed or out-of-range value, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, 404 when the location or a service is unknown, and 422 OPENING_HORIZON_EXCEEDED, OPENING_LIMIT_EXCEEDED, OPENING_TOO_MANY_SERVICES or LOCATION_HOURS_UNKNOWN when a policy bound or a facility fact is not met.
+
+        '
+      operationId: searchOpenings
+      parameters:
+      - description: Location ID
+        in: query
+        name: locationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Catalog service ids the job consists of (1-10)
+        in: query
+        name: serviceIds
+        required: true
+        schema:
+          items:
+            format: uuid
+            type: string
+          type: array
+      - description: Job duration in minutes (1-1440)
+        in: query
+        name: durationMinutes
+        required: true
+        schema:
+          format: int32
+          type: integer
+      - description: No opening starts before this instant (ISO-8601)
+        in: query
+        name: earliestStart
+        required: true
+        schema:
+          format: date-time
+          type: string
+      - description: Vehicle whose GVWR class narrows bays and skill requirements
+        in: query
+        name: vehicleId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Restrict openings to ones this technician (person id) can take
+        in: query
+        name: technicianId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Facility-local days to search forward from earliestStart (1-30)
+        in: query
+        name: horizonDays
+        required: false
+        schema:
+          default: 30
+          format: int32
+          type: integer
+      - description: Most openings to return (1-50)
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 10
+          format: int32
+          type: integer
+      - description: Correlation ID for request tracing
+        in: header
+        name: X-Correlation-Id
+        required: false
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpeningSearchResponse'
+          description: Openings computed; the list may be empty with noOpeningReason set.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Malformed or out-of-range input
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds shop:schedule:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Location or catalog service unknown to shop management
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A policy bound exceeded or the location's hours unpublished (ApiError.code OPENING_HORIZON_EXCEEDED, OPENING_LIMIT_EXCEEDED, OPENING_TOO_MANY_SERVICES, LOCATION_HOURS_UNKNOWN).
+      security:
+      - bearerAuth:
+        - shop:schedule:view
+      summary: Search duration-aware eligible openings for a job
+      tags:
+      - Schedule API
+      x-required-permissions:
+      - shop:schedule:view
   /v1/schedules/view:
     get:
       description: 'Builds the read-only schedule board for one location and date, grouping appointments into resource lanes (bay, mobile unit, technician or UNASSIGNED) and marking overlaps of one minute or more within the same lane as BLOCKING conflicts.
@@ -1589,6 +1714,31 @@ components:
       - occupancy
       - occupiedMinutes
       type: object
+    BayEligibility:
+      description: Bay eligibility summary for the requested services and vehicle
+      properties:
+        activeBays:
+          description: Active bays at the location
+          format: int32
+          type: integer
+        eligibleBays:
+          description: Bays eligible for every requested service and the vehicle's duty class
+          format: int32
+          type: integer
+        excludedByCapability:
+          description: Bays excluded because a specialty bay claims one of the operations and this bay does not
+          format: int32
+          type: integer
+        excludedByDutyClass:
+          description: Bays excluded because their maxDutyClass is below the vehicle's GVWR class
+          format: int32
+          type: integer
+      required:
+      - activeBays
+      - eligibleBays
+      - excludedByCapability
+      - excludedByDutyClass
+      type: object
     CancelAppointmentRequest:
       description: Request to cancel an existing appointment with a mandatory reason code
       properties:
@@ -1944,6 +2094,143 @@ components:
         terminationDate:
           format: date
           type: string
+      type: object
+    Opening:
+      description: 'One opening: bay, technician, and the constraints actually evaluated'
+      properties:
+        bayId:
+          description: Bay the whole duration is free in
+          format: uuid
+          type: string
+        bayName:
+          description: Bay display name
+          example: Bay 3
+          type: string
+        constraintsEvaluated:
+          description: Constraints this opening actually evaluated (D11)
+          items:
+            enum:
+            - HOURS
+            - BAY
+            - DURATION
+            - BUFFER
+            - ROSTER
+            - SKILL
+            type: string
+          type: array
+        endAt:
+          description: Window end (ISO-8601); the cleanup buffer follows it
+          format: date-time
+          type: string
+        localDate:
+          description: Facility-local date of the opening
+          example: '2026-10-04'
+          type: string
+        skillFulfillment:
+          description: Whether the named technician holds every required skill on this date
+          enum:
+          - CERTIFIED
+          - AWAITING
+          type: string
+        startAt:
+          description: Window start (ISO-8601); the check-in buffer precedes it
+          format: date-time
+          type: string
+        technicianId:
+          description: Technician (person id) rostered that day and free in the window
+          format: uuid
+          type: string
+        technicianRosterGrain:
+          description: 'Grain of the roster check. DAY: rostered is day-grain from the staffing replica, busy is minute-grain from appointments; PTO is not modelled'
+          example: DAY
+          type: string
+        unmetSkillCodes:
+          description: Required skill codes the named technician does not hold; empty when CERTIFIED
+          items:
+            type: string
+          type: array
+      required:
+      - bayId
+      - constraintsEvaluated
+      - endAt
+      - localDate
+      - skillFulfillment
+      - startAt
+      - technicianId
+      - technicianRosterGrain
+      - unmetSkillCodes
+      type: object
+    OpeningSearchResponse:
+      description: Duration-aware eligible openings for a job at a location, earliest first
+      properties:
+        bayEligibility:
+          $ref: '#/components/schemas/BayEligibility'
+        durationMinutes:
+          description: Requested job duration in minutes
+          example: 90
+          format: int32
+          type: integer
+        generatedAt:
+          description: Instant this search was computed (ISO-8601)
+          format: date-time
+          type: string
+        locationId:
+          description: Location searched
+          example: 01960003-0000-7000-8000-000000000003
+          format: uuid
+          type: string
+        noOpeningReason:
+          description: Why openings is empty. Null whenever openings is non-empty, and null when the list is empty solely because no technician is rostered (see staffingAdvisory)
+          enum:
+          - NO_ELIGIBLE_BAY_AT_LOCATION
+          - ALL_ELIGIBLE_BAYS_BOOKED
+          type: string
+        openings:
+          description: Openings ranked earliest start first; CERTIFIED before AWAITING at equal starts
+          items:
+            $ref: '#/components/schemas/Opening'
+          type: array
+        requiredSkillCodes:
+          description: Skill codes the job requires for this vehicle class, from the catalog replica
+          items:
+            type: string
+          type: array
+        searchedFrom:
+          description: Start of the searched horizon (the earliestStart requested, ISO-8601)
+          format: date-time
+          type: string
+        searchedTo:
+          description: 'Exclusive end of the searched horizon: earliestStart plus horizonDays (ISO-8601)'
+          format: date-time
+          type: string
+        serviceIds:
+          description: Catalog service ids the job consists of
+          items:
+            format: uuid
+            type: string
+          type: array
+        staffingAdvisory:
+          $ref: '#/components/schemas/StaffingAdvisory'
+        timezone:
+          description: IANA timezone the day windows were computed in, from the location replica
+          example: America/New_York
+          type: string
+        vehicleGvwrClass:
+          description: Vehicle GVWR class (1-8) the requirements were resolved for; null when no vehicle was given or its class is undetermined, in which case only ANY-class requirements applied
+          example: 2
+          format: int32
+          type: integer
+      required:
+      - bayEligibility
+      - durationMinutes
+      - generatedAt
+      - locationId
+      - openings
+      - requiredSkillCodes
+      - searchedFrom
+      - searchedTo
+      - serviceIds
+      - timezone
       type: object
     OverrideEntry:
       description: One accepted conflict
@@ -2432,6 +2719,31 @@ components:
           description: Human-readable workorder number.
           example: WO-2026-1001
           type: string
+      type: object
+    StaffingAdvisory:
+      description: Response-level staffing advisory
+      properties:
+        absenceScope:
+          description: Which remedy applies
+          enum:
+          - NOT_ROSTERED_THIS_DAY
+          - NOT_AT_THIS_LOCATION
+          type: string
+        code:
+          description: Condition code, shared with conflict_rule.code
+          enum:
+          - NO_COMPETENT_MECHANIC_ROSTERED
+          - MECHANIC_UNAVAILABLE
+          type: string
+        missingSkillCodes:
+          description: Required skill codes nobody rostered here holds; empty for MECHANIC_UNAVAILABLE
+          items:
+            type: string
+          type: array
+      required:
+      - absenceScope
+      - code
+      - missingSkillCodes
       type: object
     SuggestedAlternative:
       description: A suggested alternative appointment slot that avoids detected conflicts

@@ -56,6 +56,12 @@ public final class EventTypes {
                                 "View per-day, per-bay occupancy for a location across a bounded date range")
                         .apiVersion("1")
                         .build(),
+                // ScheduleController opening search - 1 event (#2022)
+                EventTypeRegistration.search(
+                                "SHOPMGR_SCHEDULE_OPENING_SEARCH",
+                                "Search duration-aware eligible openings for a job at a location")
+                        .apiVersion("1")
+                        .build(),
                 // ConflictOverrideController - 1 event
                 EventTypeRegistration.write(
                                 "SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE",

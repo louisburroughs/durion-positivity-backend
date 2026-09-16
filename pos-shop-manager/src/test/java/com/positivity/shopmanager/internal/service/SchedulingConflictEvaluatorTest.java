@@ -122,10 +122,11 @@ class SchedulingConflictEvaluatorTest {
                 appointmentRepository,
                 staffingRepository,
                 extBayReplicaRepository,
-                catalogServiceRepository,
-                catalogServiceSkillRepository,
-                credentialRepository,
-                vehicleRepository);
+                new SkillRequirementResolver(
+                        catalogServiceRepository,
+                        catalogServiceSkillRepository,
+                        credentialRepository,
+                        vehicleRepository));
         lenient().when(conflictRuleRepository.findByCode(anyString())).thenAnswer(invocation -> {
             String code = invocation.getArgument(0);
             ConflictSeverity severity = CATALOG.get(code);
@@ -647,6 +648,7 @@ class SchedulingConflictEvaluatorTest {
                 .assignmentId(UUID.randomUUID())
                 .locationId(LOCATION)
                 .personId(UUID.randomUUID())
+                .role("TECHNICIAN")
                 .status("ACTIVE")
                 .effectiveFrom(from)
                 .effectiveTo(to)

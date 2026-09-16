@@ -2,22 +2,15 @@ package com.positivity.shopmanager.internal.service;
 
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.ConflictRule;
-import com.positivity.shopmanager.internal.entity.ExtCatalogServiceReplica;
-import com.positivity.shopmanager.internal.entity.ExtCatalogServiceSkillReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
-import com.positivity.shopmanager.internal.entity.ExtPersonCredentialReplica;
 import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.ConflictSeverity;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.ConflictRuleRepository;
 import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
-import com.positivity.shopmanager.internal.repository.ExtCatalogServiceReplicaRepository;
-import com.positivity.shopmanager.internal.repository.ExtCatalogServiceSkillReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
-import com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
-import com.positivity.shopmanager.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.shopmanager.internal.service.LocationHoursParser.RawOperatingHoursEntry;
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -28,8 +21,6 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -66,11 +57,13 @@ import org.springframework.stereotype.Component;
  *       a different rule).
  *   <li>{@code FACILITY_NEAR_CAPACITY} (SOFT, CAPACITY) — this booking would put held appointments
  *       at or above 90% of the location's active bays.
+ *   <li>{@code NO_COMPETENT_MECHANIC_ROSTERED} / {@code COMPETENT_MECHANIC_UNAVAILABLE} (SOFT,
+ *       SKILL; CAP-329) — see {@link #evaluateSkills}; competence is read through {@link
+ *       SkillRequirementResolver}, the same reading the opening search uses.
  * </ul>
  *
- * <p>Not evaluated yet, though seeded: the two SKILL rules need the service's skill requirement
- * and the mechanics' credentials (CAP-328), and {@code MECHANIC_OVERTIME} needs timekeeping. A rule
- * this evaluator does not implement simply does not fire; nothing here pretends otherwise.
+ * <p>Not evaluated yet, though seeded: {@code MECHANIC_OVERTIME} needs timekeeping. A rule this
+ * evaluator does not implement simply does not fire; nothing here pretends otherwise.
  */
 @Slf4j
 @Component
@@ -84,7 +77,6 @@ public class SchedulingConflictEvaluator {
     static final String CODE_FACILITY_NEAR_CAPACITY = "FACILITY_NEAR_CAPACITY";
     static final String CODE_NO_COMPETENT_MECHANIC_ROSTERED = "NO_COMPETENT_MECHANIC_ROSTERED";
     static final String CODE_COMPETENT_MECHANIC_UNAVAILABLE = "COMPETENT_MECHANIC_UNAVAILABLE";
-    static final String TECHNICIAN_ROLE = "TECHNICIAN";
     static final String TECHNICIAN_RESOURCE_TYPE = "TECHNICIAN";
     static final String UNASSIGNED = "UNASSIGNED";
     static final String STAFFING_ACTIVE = "ACTIVE";
@@ -97,10 +89,7 @@ public class SchedulingConflictEvaluator {
     private final AppointmentRepository appointmentRepository;
     private final ExtStaffingAssignmentReplicaRepository staffingAssignmentRepository;
     private final ExtBayReplicaRepository extBayReplicaRepository;
-    private final ExtCatalogServiceReplicaRepository catalogServiceRepository;
-    private final ExtCatalogServiceSkillReplicaRepository catalogServiceSkillRepository;
-    private final ExtPersonCredentialReplicaRepository credentialRepository;
-    private final ExtVehicleReplicaRepository vehicleRepository;
+    private final SkillRequirementResolver skillRequirementResolver;
 
     /**
      * One booking attempt. {@code excludeAppointmentId} is the appointment being rescheduled, whose
@@ -262,11 +251,16 @@ public class SchedulingConflictEvaluator {
         return anyonePresent;
     }
 
-    /** People with an ACTIVE staffing assignment at the location covering the attempt's local date. */
+    /**
+     * Technicians with an ACTIVE staffing assignment at the location covering the attempt's local
+     * date. Role-filtered: a service advisor on the roster is somebody present, but not somebody who
+     * can be the mechanic on the job (#2035 answer 5 asks about mechanics).
+     */
     private Set<UUID> rosteredTechnicians(BookingAttempt attempt, @Nullable ZoneId zone) {
         LocalDate localDate = localDate(attempt, zone);
         return staffingAssignmentRepository.findByLocationIdAndStatus(attempt.locationId(), STAFFING_ACTIVE).stream()
-                .filter(assignment -> covers(assignment, localDate))
+                .filter(SkillRequirementResolver::isTechnician)
+                .filter(assignment -> SkillRequirementResolver.covers(assignment, localDate))
                 .map(ExtStaffingAssignmentReplica::getPersonId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
@@ -295,23 +289,17 @@ public class SchedulingConflictEvaluator {
         if (attempt.serviceIds().isEmpty()) {
             return;
         }
-        Integer gvwrClass = attempt.vehicleId() == null
-                ? null
-                : vehicleRepository
-                        .findById(attempt.vehicleId())
-                        .map(vehicle -> vehicle.getGvwrClass())
-                        .orElse(null);
-        Map<String, UUID> required = requiredSkills(attempt.serviceIds(), gvwrClass);
+        Integer gvwrClass = skillRequirementResolver.gvwrClassOf(attempt.vehicleId());
+        Map<String, UUID> required = skillRequirementResolver.requiredSkills(attempt.serviceIds(), gvwrClass);
         if (required.isEmpty()) {
             return;
         }
         LocalDate localDate = localDate(attempt, zone);
         Set<UUID> rostered = rosteredTechnicians(attempt, zone);
-        Map<String, Set<UUID>> holdersBySkill = holdersBySkill(rostered, required.keySet(), localDate);
+        Map<String, Set<UUID>> holdersBySkill =
+                skillRequirementResolver.holdersBySkill(rostered, required.keySet(), localDate);
 
-        List<String> missing = required.keySet().stream()
-                .filter(code -> holdersBySkill.getOrDefault(code, Set.of()).isEmpty())
-                .toList();
+        List<String> missing = SkillRequirementResolver.missing(required.keySet(), holdersBySkill);
         String classNote = gvwrClass == null ? " (vehicle duty class not determined)" : "";
         if (!missing.isEmpty()) {
             fire(CODE_NO_COMPETENT_MECHANIC_ROSTERED, attempt, zone, String.join(", ", missing) + classNote, detected);
@@ -330,49 +318,6 @@ public class SchedulingConflictEvaluator {
         }
     }
 
-    /** Required skill codes (insertion-ordered, by service then code) → skill id, for the class. */
-    private Map<String, UUID> requiredSkills(List<UUID> serviceIds, @Nullable Integer gvwrClass) {
-        Set<UUID> configured = catalogServiceRepository.findAllByServiceIdIn(serviceIds).stream()
-                .filter(ExtCatalogServiceReplica::isRequirementsConfigured)
-                .map(ExtCatalogServiceReplica::getServiceId)
-                .collect(Collectors.toSet());
-        if (configured.isEmpty()) {
-            return Map.of();
-        }
-        Map<String, UUID> required = new LinkedHashMap<>();
-        catalogServiceSkillRepository.findAllByServiceIdIn(configured).stream()
-                .filter(skill -> skill.appliesTo(gvwrClass))
-                .sorted(java.util.Comparator.comparing(ExtCatalogServiceSkillReplica::getSkillCode))
-                .forEach(skill -> required.putIfAbsent(skill.getSkillCode(), skill.getSkillId()));
-        return required;
-    }
-
-    /**
-     * For each required skill code, the rostered people holding a credential for it on {@code
-     * onDate}. Matching is on the Durion skill code or the issuer's code, uppercase-and-trimmed.
-     */
-    private Map<String, Set<UUID>> holdersBySkill(Set<UUID> rostered, Collection<String> codes, LocalDate onDate) {
-        if (rostered.isEmpty()) {
-            return Map.of();
-        }
-        Map<String, Set<UUID>> holders = new LinkedHashMap<>();
-        for (ExtPersonCredentialReplica credential :
-                credentialRepository.findByPersonIdInOrderByIssuedOnDesc(rostered)) {
-            if (!credential.statusOn(onDate).isHeld()) {
-                continue;
-            }
-            for (String code : codes) {
-                String normalized = normalize(code);
-                if (normalized.equals(normalize(credential.getSkillCode()))
-                        || normalized.equals(normalize(credential.getSourceCredentialCode()))) {
-                    holders.computeIfAbsent(code, ignored -> new LinkedHashSet<>())
-                            .add(credential.getPersonId());
-                }
-            }
-        }
-        return holders;
-    }
-
     /** Busy = already the technician on a held appointment overlapping the window (self excluded). */
     private boolean busy(UUID personId, BookingAttempt attempt) {
         return appointmentRepository
@@ -382,18 +327,6 @@ public class SchedulingConflictEvaluator {
                 .filter(appointment -> TECHNICIAN_RESOURCE_TYPE.equalsIgnoreCase(appointment.getResourceType()))
                 .anyMatch(
                         appointment -> !Objects.equals(appointment.getAppointmentId(), attempt.excludeAppointmentId()));
-    }
-
-    private static String normalize(@Nullable String code) {
-        return code == null ? "" : code.trim().toUpperCase(java.util.Locale.ROOT);
-    }
-
-    private static boolean covers(ExtStaffingAssignmentReplica assignment, LocalDate date) {
-        boolean started = assignment.getEffectiveFrom() == null
-                || !assignment.getEffectiveFrom().isAfter(date);
-        boolean notEnded = assignment.getEffectiveTo() == null
-                || !assignment.getEffectiveTo().isBefore(date);
-        return started && notEnded;
     }
 
     // ── CAPACITY ────────────────────────────────────────────────────────────────────────────────

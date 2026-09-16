@@ -11,6 +11,7 @@ import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundExceptio
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
+import com.positivity.shopmanager.internal.exception.OpeningSearchPolicyException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
@@ -100,6 +101,14 @@ public class GlobalExceptionHandler {
                 ScheduleCapacityRangeExceededException.CODE,
                 exception.getMessage(),
                 correlationId);
+    }
+
+    /** A policy bound of the opening search exceeded (#2022 AC11): 422, the code naming the bound. */
+    @ExceptionHandler(OpeningSearchPolicyException.class)
+    public ResponseEntity<ApiError> handleOpeningSearchPolicy(
+            OpeningSearchPolicyException exception, HttpServletRequest request) {
+        UUID correlationId = resolveCorrelationId(request);
+        return respond(HttpStatus.UNPROCESSABLE_CONTENT, exception.getCode(), exception.getMessage(), correlationId);
     }
 
     /**

@@ -12,6 +12,7 @@ import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundExceptio
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
+import com.positivity.shopmanager.internal.exception.OpeningSearchPolicyException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
@@ -356,6 +357,9 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleScheduleCapacityRangeExceeded", (HandlerInvocation)
                             request -> sut.handleScheduleCapacityRangeExceeded(
                                     new ScheduleCapacityRangeExceededException(42, 43), request)),
+                    Named.of("handleOpeningSearchPolicy", (HandlerInvocation) request -> sut.handleOpeningSearchPolicy(
+                            new OpeningSearchPolicyException(OpeningSearchPolicyException.HORIZON_EXCEEDED, "31 > 30"),
+                            request)),
                     Named.of("handleSchedulingConflict", (HandlerInvocation) request -> sut.handleSchedulingConflict(
                             new SchedulingConflictException(new ConflictResponse(
                                     "SCHEDULING_CONFLICT", "bay is booked", null, null, List.of())),

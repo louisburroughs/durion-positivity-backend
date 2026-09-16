@@ -117,6 +117,49 @@ holders present but every one already the technician on an overlapping held appo
 `MECHANIC_UNAVAILABLE` alone, never a competence failure (#2035 answer 5). Neither rule
 withholds a booking; both are manager-overridable (`shop:conflict:override`).
 
+## Opening search (`GET /v1/schedules/openings`, #2022)
+
+"When is the next slot that fits a 90-minute alignment?" answered in one call, from replicas
+alone (ADR-0044 §6) and in a fixed number of queries whatever the horizon: the location, its
+bays, the services, the vehicle, the technician roster, everyone's credentials, and one
+appointment read spanning the whole horizon. Advisory by the domain's own contract
+(DECISION-SHOPMGMT-011): `POST /v1/appointments` decides, and every opening carries
+`constraintsEvaluated` so nothing reads as enforcement (spec D11).
+
+Parameters: `locationId`, `serviceIds` (1–10 catalog service ids), `durationMinutes` (1–1440),
+`earliestStart`; optional `vehicleId` (resolves the GVWR class), `technicianId` (restricts to
+openings that person can take), `horizonDays` (default and maximum 30, facility-local days from
+`earliestStart`'s date), `limit` (default 10, maximum 50). Malformed values are 400; exceeding a
+bound is 422 `OPENING_HORIZON_EXCEEDED` / `OPENING_LIMIT_EXCEEDED` / `OPENING_TOO_MANY_SERVICES`;
+a location without a recognised timezone and published hours is 422 `LOCATION_HOURS_UNKNOWN`
+(hours are HARD and Location is authoritative — without them every instant would read as open).
+
+An opening is the earliest start in a free gap of one eligible bay at which the job, with the
+location's `checkInBufferMinutes` before and `cleanupBufferMinutes` after, fits inside the gap and
+inside the day's operating window, and at which a technician rostered that day (day grain, from
+`ext_staffing_assignment`; PTO is not modelled) is not on an overlapping held appointment
+(minute grain). One opening per gap per bay, at real minute resolution; closed days and
+holiday closures are skipped, never reported as full. Ranking: earliest start, then `CERTIFIED`
+before `AWAITING`, then bay.
+
+Bay eligibility (CAP-325 D13/D14): a bay is eligible for an operation when it claims the
+operation code in `serviceCapabilityCodes`, or when no bay at the location claims it and the
+bay is general (no codes). A bay whose `maxDutyClass` is below the vehicle's class is out;
+`bayEligibility` counts the two misses separately. Empty list reasons are exactly two:
+`NO_ELIGIBLE_BAY_AT_LOCATION` and `ALL_ELIGIBLE_BAYS_BOOKED`.
+
+Skill (CAP-329 D10, read through `SkillRequirementResolver`, the same reading the submit-time
+evaluator uses): competence never withholds an opening. A technician holding every required
+skill on the opening's facility-local date is preferred (`skillFulfillment: CERTIFIED`);
+otherwise the opening names a free technician with `AWAITING` and `unmetSkillCodes`. The
+window-invariant fact is reported once as `staffingAdvisory` alongside the (non-empty) list,
+never as a `noOpeningReason`: `NO_COMPETENT_MECHANIC_ROSTERED` with `missingSkillCodes` and
+`absenceScope` `NOT_AT_THIS_LOCATION` (nobody staffed here holds it) or `NOT_ROSTERED_THIS_DAY`
+(a holder works here, not in the searched days); and `MECHANIC_UNAVAILABLE` when no technician
+is rostered on any open day in the horizon (#2035 answer 5 — never a competence rule), in which
+case the list is empty and `noOpeningReason` stays null. `NOT_IN_TENANT` and
+`alternateLocations[]` are deliberately absent (DECISION-SHOPMGMT-012).
+
 ## Shop dashboard (`GET /v1/shop-dashboard`)
 
 One call returns everything a shop manager board shows for a location, requiring
