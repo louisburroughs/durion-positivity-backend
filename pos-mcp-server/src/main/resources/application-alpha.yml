@@ -83,7 +83,7 @@ mcp:
   rag:
     table-name: mcp_document_embedding
     # G5.4 #1194 cutover complete + #1207 (V33): single embedding column, 1024-dim bge-m3 —
-    # mirrors the base application.yml defaults; see docs/gate5-rag-hybrid-design.md.
+    # mirrors the base application.yml defaults; see durion/domains/general/mcp-server/archive/gate5-rag-hybrid-design.md.
     embedding-column: ${MCP_RAG_EMBEDDING_COLUMN:embedding}
     dimension: ${MCP_RAG_DIMENSION:1024}
     index-type: ivfflat

@@ -1,6 +1,6 @@
 # Loki ruler rules for the NLTI Gate 7 LogQL alerts (#1424).
 #
-# Source of truth for intent and thresholds: pos-mcp-server/docs/alerts/nlti-alerts.md.
+# Source of truth for intent and thresholds: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/alerts/nlti-alerts.md.
 # This file materializes the Loki-evaluable half of that document (doc rules 2, 5-8, 10
 # and the Loki supplements of 9 and 11); the Prometheus half stays where the document
 # says it lives. docker-compose mounts this directory at /loki/rules/fake ("fake" is
@@ -25,7 +25,7 @@
 #   signal needs tuning.
 #
 # When an emitter gap closes (fallbackUsed, rag.retrieved scores — see the gap table
-# in pos-mcp-server/docs/dashboards/nlti-overview.md), switch the affected rule to the
+# in https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/dashboards/nlti-overview.md), switch the affected rule to the
 # telemetry form named in the document and delete the substitute here.
 
 groups:
@@ -51,7 +51,7 @@ groups:
           severity: P2
         annotations:
           summary: NLTI p99 request latency above 2s over 5m (latency.totalMs telemetry field).
-          runbook: pos-mcp-server/docs/runbooks/downstream-timeout.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/downstream-timeout.md
 
   - name: nlti-gate7-routing
     interval: 1m
@@ -96,7 +96,7 @@ groups:
           severity: P3
         annotations:
           summary: Share of intent type {{ $labels.routing_intentType }} rose more than 30pp vs the same window yesterday.
-          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/planning-failure.md
       # Doc rule 5, falling side of the same comparison.
       - alert: NltiRoutingMixShift
         expr: |
@@ -135,7 +135,7 @@ groups:
           severity: P3
         annotations:
           summary: Share of intent type {{ $labels.routing_intentType }} fell more than 30pp vs the same window yesterday.
-          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/planning-failure.md
       # Doc rule 5, unclassified dominance — the Gate 4 router attached no
       # classification at all (empty/missing routing.intentType majority).
       - alert: NltiRoutingMixShift
@@ -158,7 +158,7 @@ groups:
           severity: P3
         annotations:
           summary: Majority of NLTI requests carry no routing.intentType — the Gate 4 router is not classifying.
-          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/planning-failure.md
       # Doc rule 6. Only meaningful with MCP_MODEL_TIERING_ENABLED=true — the flag is
       # not visible to LogQL, so silence this alert when tiering is deliberately off.
       # As of #1683 the flag DEFAULTS to false (tier routing is dormant: both T2 tiers resolved
@@ -180,7 +180,7 @@ groups:
           severity: P2
         annotations:
           summary: No T2_COMPLEX traffic in 1h despite >100 NLTI requests — the tiered router is not routing.
-          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/planning-failure.md
       # Doc rule 6, second signal — no-tier share above 20%.
       - alert: NltiModelTierStarved
         expr: |
@@ -202,7 +202,7 @@ groups:
           severity: P2
         annotations:
           summary: More than 20% of NLTI requests carry no routing.tier — tier-quality comparisons in this window are void.
-          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/planning-failure.md
       # Doc rule 7, substitute signal. The telemetry form (model.fallbackUsed) cannot
       # fire yet — the factory hardcodes fallbackUsed=false; switch when instrumented.
       - alert: NltiModelFallbackRateHigh
@@ -212,7 +212,7 @@ groups:
           severity: P2
         annotations:
           summary: Tier resolver warned in the last 10m — a tier silently served the default model.
-          runbook: pos-mcp-server/docs/runbooks/downstream-timeout.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/downstream-timeout.md
 
   - name: nlti-gate7-prompt-rag
     interval: 1m
@@ -234,7 +234,7 @@ groups:
           severity: P2
         annotations:
           summary: NLTI requests composed with no prompt layers in the last 15m — answers degrade to the built-in BASE layer.
-          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/planning-failure.md
       # Doc rule 8, seeding WARN stream.
       - alert: NltiPromptLayerMissing
         expr: |
@@ -243,7 +243,7 @@ groups:
           severity: P2
         annotations:
           summary: Prompt seeding warned in the last 15m — master prompt or role persona missing.
-          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/planning-failure.md
       # Doc rule 8, ROLE-layer share below 90% of composed prompts.
       - alert: NltiPromptLayerMissing
         expr: |
@@ -265,7 +265,7 @@ groups:
           severity: P2
         annotations:
           summary: ROLE prompt-layer share below 90% — responses are losing the permission-appropriate persona.
-          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/planning-failure.md
       # Doc rule 10, substitute signal: DOMAIN prompt-layer share as the grounding
       # proxy. Switch to the rag.retrieved[0].score form once retrieval scores are
       # emitted (the factory currently always passes null for Rag.retrieved).
@@ -289,7 +289,7 @@ groups:
           severity: P2
         annotations:
           summary: DOMAIN prompt-layer share below 50% — RAG grounding is degraded.
-          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/planning-failure.md
       # Doc rule 10, static-corpus preload failure.
       - alert: NltiRagRecallDegraded
         expr: |
@@ -298,7 +298,7 @@ groups:
           severity: P2
         annotations:
           summary: Static-corpus preload failed in the last hour — part of the RAG corpus is missing.
-          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/planning-failure.md
 
   - name: nlti-gate7-authz-write
     interval: 1m
@@ -323,7 +323,7 @@ groups:
           severity: P1
         annotations:
           summary: At least 5% of NLTI requests resolved zero permission codes — likely a broken gateway bitset decode, will present as mass user error.
-          runbook: pos-mcp-server/docs/runbooks/authz-outage.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/authz-outage.md
       # Doc rule 11, Loki complement (the confirmation-outcome half is Prometheus):
       # write intents detected but no write plan created in the same window.
       - alert: NltiWriteIntentWithoutPlan
@@ -342,4 +342,4 @@ groups:
           severity: P2
         annotations:
           summary: Write intents detected in the last 15m but no write plan was created — the confirmation gate is not engaging.
-          runbook: pos-mcp-server/docs/runbooks/confirmation-gate-mismatch.md
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/confirmation-gate-mismatch.md

@@ -6,7 +6,7 @@ human-actionable gap report to grow the RAG corpus systematically. The same harn
 measured evidence for [#1124](https://github.com/louisburroughs/durion-positivity-backend/issues/1124)'s
 hybrid-lexical flip-threshold.
 
-- **Design:** [`pos-mcp-server/docs/rag-corpus-gap-harness-design.md`](../../pos-mcp-server/docs/rag-corpus-gap-harness-design.md)
+- **Design:** [`durion/domains/general/mcp-server/archive/rag-corpus-gap-harness-design.md`](https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/archive/rag-corpus-gap-harness-design.md)
 - **CLI:** [`scripts/rag_gap_harness.py`](../rag_gap_harness.py) · **runner:** [`scripts/run-gap-harness.sh`](../run-gap-harness.sh)
 - **Builds on:** [`scripts/eval_live.py`](../eval_live.py) (retrieval reproduction + RRF) and
   [`scripts/rag_seed.py`](../rag_seed.py) (the 17-doc corpus manifest).

@@ -6,7 +6,7 @@ context, grades answers with a source-grounded judge, classifies every failure i
 taxonomy, and emits a human-actionable gap report — while measuring dense-vs-hybrid recovery to
 answer #1124's hybrid-lexical flip-threshold.
 
-Design: pos-mcp-server/docs/rag-corpus-gap-harness-design.md
+Design: durion/domains/general/mcp-server/archive/rag-corpus-gap-harness-design.md
 Builds on: scripts/eval_live.py (retrieval reproduction + RRF), scripts/rag_seed.py (corpus manifest).
 
 Subcommands:

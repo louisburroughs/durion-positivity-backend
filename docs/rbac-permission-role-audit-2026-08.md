@@ -869,7 +869,7 @@ The matrix behind this is now reproducible offline —
 `python3 scripts/mcp-facade-reachability.py` — rather than reconstructed by querying alpha. It
 reads the facade permission groups from `pos-mcp-server`'s migrations and the grants from the
 bulk-load baseline, and reproduced the live alpha figures exactly for all ten roles the issue
-scored. `docs/mcp-facade-reachability-1612.md` holds the before/after and the reasoning for what
+scored. `durion/domains/general/mcp-server/archive/mcp-facade-reachability-1612.md` holds the before/after and the reasoning for what
 is still blocked.
 
 ### Dispositions, per code group

@@ -1,7 +1,7 @@
 # PRD — `pos-warranty`: Warranty Claims Module
 
 - **Status:** Approved for design; implementation not started
-- **Resolves:** [#786](https://github.com/louisburroughs/durion-positivity-backend/issues/786) (Warranty / claim capability — no owning service exists), `pos-mcp-server/docs/BACKLOG.md` BL-1
+- **Resolves:** [#786](https://github.com/louisburroughs/durion-positivity-backend/issues/786) (Warranty / claim capability — no owning service exists), `durion/domains/general/mcp-server/archive/BACKLOG.md` BL-1
 - **Owner:** product / louisburroughs
 - **Date:** 2026-07-15
 
@@ -389,7 +389,7 @@ and linked from the claim (`replacementWorkorderId`), keeping the dependency one
 3. ✅ Update RAG docs and remove OPEN notes:
    `pos-mcp-server/src/main/resources/rag/glossary-identifiers.md` (Claim code → `WC-yyyy-nnnnnn`)
    and `pos-mcp-server/src/main/resources/rag/cross-domain-playbooks.md` (warranty/claim playbook
-   → flows in §7/§9); mark `pos-mcp-server/docs/BACKLOG.md` BL-1 resolved. — implemented on branch `claude/warranty-claims-multi-agent-egmrea`
+   → flows in §7/§9); mark `durion/domains/general/mcp-server/archive/BACKLOG.md` BL-1 resolved. — implemented on branch `claude/warranty-claims-multi-agent-egmrea`
 4. ✅ Scaffold module, entities + Flyway baseline, state machine + eligibility service, claim
    APIs, settlements (invoice integration), reimbursement + part-return APIs, events/outbox. — implemented on branch `claude/warranty-claims-multi-agent-egmrea`
 

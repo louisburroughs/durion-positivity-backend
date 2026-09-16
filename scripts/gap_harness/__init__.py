@@ -6,7 +6,7 @@ every failure into a four-way taxonomy, and emits a human-actionable gap report 
 corpus systematically. The retrieval-miss bucket doubles as the measured evidence for #1124's
 hybrid-lexical flip-threshold.
 
-Design: pos-mcp-server/docs/rag-corpus-gap-harness-design.md
+Design: durion/domains/general/mcp-server/archive/rag-corpus-gap-harness-design.md
 Builds on: scripts/eval_live.py (retrieval reproduction + RRF) and scripts/rag_seed.py (corpus
 manifest).
 

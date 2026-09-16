@@ -6,7 +6,7 @@ import org.jspecify.annotations.NonNull;
 
 /**
  * Aggregate count result shared across domain services (the rung-1 "count convention" of the
- * answer resolution ladder — see {@code pos-mcp-server/docs/answer-resolution-ladder-design.md}).
+ * answer resolution ladder — see {@code durion/domains/general/mcp-server/archive/answer-resolution-ladder-design.md}).
  *
  * <p>{@code total} is the grand total; {@code groups} is the optional per-key breakdown (e.g.
  * status &rarr; count). Both are server-computed via COUNT queries — callers never page a full

@@ -150,7 +150,7 @@ public class OllamaChatModelConfiguration {
      * alpha chat base-url points at applies a per-model default we neither set nor can read back.
      * Sending it explicitly is what makes the window ours in both cases — though it is a request,
      * not a guarantee: a backend may still cap it below what we ask for, which is why the
-     * verification procedure in {@code docs/gate-verification-runbook.md} exists.
+     * verification procedure in {@code durion/domains/general/mcp-server/archive/gate-verification-runbook.md} exists.
      *
      * <p>Temperature defaults to 0: the analytics workload is graded at n=1, so sampling only adds
      * run-to-run variance to results we compare across builds.

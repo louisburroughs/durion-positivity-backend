@@ -61,7 +61,7 @@ import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * Issue #1196 (Gate 3 closure, {@code docs/gate3-openapi-bridge-design.md}): proves that the
+ * Issue #1196 (Gate 3 closure, {@code durion/domains/general/mcp-server/archive/gate3-openapi-bridge-design.md}): proves that the
  * per-role cached agent does <em>not</em> leak OpenAPI-discovered tools across callers with
  * different permissions.
  *

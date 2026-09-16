@@ -29,9 +29,9 @@ import org.springframework.core.io.ClassPathResource;
 
 /**
  * Gate 5 retrieval lock — offline half (#1217, Wave 0.2 of
- * {@code docs/gate-closeout-plan-1212-1219.md}).
+ * {@code durion/domains/general/mcp-server/archive/gate-closeout-plan-1212-1219.md}).
  *
- * <p>The Gate 5 block in {@code docs/implementation_checklist.md} states the retrieval lock as:
+ * <p>The Gate 5 block in {@code durion/domains/general/mcp-server/archive/implementation_checklist.md} states the retrieval lock as:
  * <em>"every doc has: deterministic ID, content hash, {@code rag-scope}, permission metadata,
  * documented chunking"</em>. This test asserts that lock over the whole static corpus declared under
  * {@code mcp.rag.preload.docs}, with no running Spring context, no database, and no embedding

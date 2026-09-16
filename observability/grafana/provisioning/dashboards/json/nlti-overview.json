@@ -6,7 +6,7 @@
   "schemaVersion": 39,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
-  "description": "Request health for the NL-interface. Counters/timers come from Prometheus (pos-mcp-server /actuator/prometheus). True latency percentiles and per-outcome splits come from the nlti.request.telemetry log stream in Loki. See pos-mcp-server/docs/dashboards/nlti-overview.md.",
+  "description": "Request health for the NL-interface. Counters/timers come from Prometheus (pos-mcp-server /actuator/prometheus). True latency percentiles and per-outcome splits come from the nlti.request.telemetry log stream in Loki. See https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/dashboards/nlti-overview.md.",
   "panels": [
     {
       "id": 1,

@@ -3,7 +3,7 @@
 --    each is past due?"
 --
 -- Wave 1 gate recorded a full pass for Q13; that run predates issue #1604 and its figures are NOT
--- comparable to what this script now specifies (see docs/gate-runs/2026-09-01-ar-aging-basis-
+-- comparable to what this script now specifies (see durion/domains/general/mcp-server/archive/gate-runs/2026-09-01-ar-aging-basis-
 -- change.md). The chat answer is produced from ONE tool call —
 -- AccountingFacadeTool.getAgedReceivables(asOfDate) → GET /v1/accounting/reports/financial/
 -- aged-receivables?asOfDate= — with the model doing the Pareto in-context. This script is the

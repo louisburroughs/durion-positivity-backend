@@ -1,6 +1,6 @@
 # Eval fixtures & harness (Gate 0)
 
-Source of truth for formats: `../../../../docs/phase0-fixtures-and-telemetry.md`.
+Formats were first specified in [`durion/domains/general/mcp-server/archive/phase0-fixtures-and-telemetry.md`](https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/archive/phase0-fixtures-and-telemetry.md), now historical; this README is the source of truth for them.
 
 ## Layout
 
@@ -149,7 +149,7 @@ It emits `realistic_rate`, `no_tool_rate`, `outcome_confusion`, and `gap_candida
 entries feed a `*FacadeTool` `@Tool` description-tightening pass, then a re-run should move the
 fixture to `realistic-response`. First live alpha run + gap triage write-up: pending (#1164 AC3-5).
 
-## Analytics gate suite (`docs/analytics-capability-plan.md` §6)
+## Analytics gate suite (`durion/domains/general/mcp-server/analytics-capability-plan.md` §6)
 
 The twenty business questions in plan §6 are the acceptance gates for the three analytics waves.
 Each question has a tool-selection fixture so a selection regression is caught in CI, with no

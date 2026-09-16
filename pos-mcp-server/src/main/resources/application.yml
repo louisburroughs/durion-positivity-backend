@@ -102,13 +102,13 @@ mcp:
     table-name: mcp_document_embedding
     # G5.4 #1194 cutover complete + #1207 (V33): the embedding column is 1024-dim bge-m3; the 768
     # nomic columns and the dual-column selector were retired. The knobs remain for a future
-    # embedding-model migration — see docs/gate5-rag-hybrid-design.md.
+    # embedding-model migration — see durion/domains/general/mcp-server/archive/gate5-rag-hybrid-design.md.
     embedding-column: ${MCP_RAG_EMBEDDING_COLUMN:embedding}
     dimension: ${MCP_RAG_DIMENSION:1024}
     # #1194: dense-retrieval cosine-similarity floors (primary retriever / tier-2 wide
     # retriever), calibrated per embedding model. Defaults fit bge-m3 (the alpha floor sweep chose
     # 0.45/0.40; nomic-embed-text needed 0.6/0.55 — its similarities sit ~0.10-0.15 higher). Flip
-    # together with the embedding model — see docs/gate5-rag-hybrid-design.md G5.4.
+    # together with the embedding model — see durion/domains/general/mcp-server/archive/gate5-rag-hybrid-design.md G5.4.
     min-score: ${MCP_RAG_MIN_SCORE:0.45}
     tier2-min-score: ${MCP_RAG_TIER2_MIN_SCORE:0.40}
     index-type: ivfflat
@@ -345,7 +345,7 @@ mcp:
     # MCP_MODEL_SIMPLE (see below); enabling it alone only restores that cost.
     # Note for operators: the NltiModelTierStarved and NltiRoutingMixShift Loki alerts in
     # observability/loki/rules/nlti-alerts.yml only make sense with tiering ON — keep them
-    # silenced while this is false (docs/alerts/nlti-alerts.md).
+    # silenced while this is false (durion/domains/general/mcp-server/operations/alerts/nlti-alerts.md).
     tiering-enabled: ${MCP_MODEL_TIERING_ENABLED:false}
     # T1 router/classifier model (strict JSON, always temperature 0). Deliberately small. If the
     # model is not pulled on the Ollama host the router call fails fast and the request safely
@@ -436,7 +436,7 @@ pos:
     balance-sheet-uri-template: ${POS_ACCOUNTING_BALANCE_SHEET_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/balance-sheet?asOfDate={asOfDate}}
     # The trial-balance as-of query param is `asOf` — unlike the sibling reports' `asOfDate`.
     trial-balance-uri-template: ${POS_ACCOUNTING_TRIAL_BALANCE_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/trial-balance?asOf={asOf}}
-    # W1.2 aging facades (docs/analytics-capability-plan.md §3): per-counterparty A/R and A/P
+    # W1.2 aging facades (durion/domains/general/mcp-server/analytics-capability-plan.md §3): per-counterparty A/R and A/P
     # aging aggregates; a historical asOfDate reconstructs the point-in-time balance.
     aged-receivables-uri-template: ${POS_ACCOUNTING_AGED_RECEIVABLES_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/aged-receivables?asOfDate={asOfDate}}
     aged-payables-uri-template: ${POS_ACCOUNTING_AGED_PAYABLES_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/aged-payables?asOfDate={asOfDate}}

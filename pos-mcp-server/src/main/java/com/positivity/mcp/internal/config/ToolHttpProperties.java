@@ -12,7 +12,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * @param connectTimeout TCP connect timeout, default 2s.
  * @param readTimeout socket read timeout, default 30s — comfortably above the 6.6-13.5s whole-turn
- *     times the gate measured (docs/gate-runs/wave-2), so a healthy multi-round chat turn is never
+ *     times the gate measured (durion/domains/general/mcp-server/archive/gate-runs/wave-2), so a healthy multi-round chat turn is never
  *     cut short by this bound.
  */
 @ConfigurationProperties(prefix = "pos.tools.http")
