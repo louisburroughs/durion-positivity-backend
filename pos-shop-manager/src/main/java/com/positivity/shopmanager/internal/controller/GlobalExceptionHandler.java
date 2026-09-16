@@ -11,6 +11,7 @@ import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
+import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
@@ -97,6 +98,21 @@ public class GlobalExceptionHandler {
         return respond(
                 HttpStatus.UNPROCESSABLE_CONTENT,
                 exception.getErrorCode() != null ? exception.getErrorCode() : "SOURCE_NOT_ELIGIBLE",
+                exception.getMessage(),
+                correlationId);
+    }
+
+    /**
+     * The capacity read's 42-day policy limit (issue #2023 AC3): {@code to}/{@code from} are both
+     * valid dates, so this is a policy failure, not a syntactic one (DECISION-SHOPMGMT-011).
+     */
+    @ExceptionHandler(ScheduleCapacityRangeExceededException.class)
+    public ResponseEntity<ApiError> handleScheduleCapacityRangeExceeded(
+            ScheduleCapacityRangeExceededException exception, HttpServletRequest request) {
+        UUID correlationId = resolveCorrelationId(request);
+        return respond(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                ScheduleCapacityRangeExceededException.CODE,
                 exception.getMessage(),
                 correlationId);
     }
@@ -285,8 +301,10 @@ public class GlobalExceptionHandler {
             case CODE_CRM_UNAVAILABLE, CODE_HR_UNAVAILABLE, CODE_MECHANIC_REPLICATION_PENDING ->
                 HttpStatus.SERVICE_UNAVAILABLE.value();
             case "NOT_IMPLEMENTED" -> HttpStatus.NOT_IMPLEMENTED.value();
-            case "SOURCE_NOT_ELIGIBLE", "ESTIMATE_NOT_ELIGIBLE", "WORKORDER_NOT_ELIGIBLE" ->
-                HttpStatus.UNPROCESSABLE_CONTENT.value();
+            case "SOURCE_NOT_ELIGIBLE",
+                    "ESTIMATE_NOT_ELIGIBLE",
+                    "WORKORDER_NOT_ELIGIBLE",
+                    ScheduleCapacityRangeExceededException.CODE -> HttpStatus.UNPROCESSABLE_CONTENT.value();
             default -> HttpStatus.BAD_REQUEST.value();
         };
     }

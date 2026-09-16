@@ -128,6 +128,7 @@ CREATE TABLE public.ext_bay (
     bay_id uuid NOT NULL,
     location_id uuid,
     name character varying(255),
+    bay_type character varying(64),
     active boolean DEFAULT false NOT NULL,
     aggregate_version bigint NOT NULL,
     updated_at timestamp(6) with time zone NOT NULL
@@ -153,7 +154,12 @@ CREATE TABLE public.ext_location (
     aggregate_version bigint NOT NULL,
     synced_at timestamp(6) with time zone NOT NULL,
     financial_ancestor_ids text DEFAULT ''::text NOT NULL,
-    other_ancestor_ids text DEFAULT ''::text NOT NULL
+    other_ancestor_ids text DEFAULT ''::text NOT NULL,
+    timezone character varying(64),
+    operating_hours text,
+    holiday_closures text,
+    check_in_buffer_minutes integer,
+    cleanup_buffer_minutes integer
 );
 
 CREATE TABLE public.ext_location_parent (
@@ -229,7 +235,10 @@ CREATE TABLE public.ext_workorder (
     promised_at timestamp(6) with time zone,
     scheduled_date date,
     aggregate_version bigint NOT NULL,
-    updated_at timestamp(6) with time zone NOT NULL
+    updated_at timestamp(6) with time zone NOT NULL,
+    work_started_at timestamp(6) with time zone,
+    completed_at timestamp(6) with time zone,
+    expected_end_at timestamp(6) with time zone
 );
 
 CREATE TABLE public.hr_integration_log (

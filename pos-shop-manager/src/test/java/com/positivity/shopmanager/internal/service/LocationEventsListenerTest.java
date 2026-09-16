@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.domainevents.location.StorageLocationUpdatedV1;
+import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationParentReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
 import com.positivity.shopmanager.internal.entity.ProcessedEvent;
@@ -23,6 +24,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -108,6 +110,25 @@ class LocationEventsListenerTest {
                 """.formatted(eventId, LocationUpdatedV1.EVENT_TYPE, version, LOCATION_ID, active);
     }
 
+    /** Same shape as {@link #locationUpdated}, plus the #2023 hours/closures/buffer fields. */
+    private static String locationUpdatedWithHours(
+            String eventId, long version, @Nullable String operatingHoursJson, @Nullable String holidayClosuresJson) {
+        String operatingHours = operatingHoursJson == null ? "null" : operatingHoursJson;
+        String holidayClosures = holidayClosuresJson == null ? "null" : holidayClosuresJson;
+        return """
+                {"eventId":"%s","eventType":"%s","aggregateVersion":%d,
+                 "payload":{"locationId":"%s","name":"Main Shop","code":"SHOP-1","status":"OPEN",
+                   "active":true,"locationType":"SHOP","hrLocationId":null,"timezone":"America/Chicago",
+                   "addressLine1":"1 Main St","addressLine2":null,"city":"Austin","region":"TX",
+                   "postalCode":"78701","country":"US","defaultStagingLocationId":null,
+                   "defaultQuarantineLocationId":null,"parents":[],
+                   "operatingHours":%s,"holidayClosures":%s,
+                   "checkInBufferMinutes":15,"cleanupBufferMinutes":10,
+                   "createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-08-01T00:00:00Z"}}
+                """.formatted(
+                        eventId, LocationUpdatedV1.EVENT_TYPE, version, LOCATION_ID, operatingHours, holidayClosures);
+    }
+
     @Test
     @DisplayName("keeps only the fields the scope replica needs from a much wider payload")
     void projectsTheNeededFields() {
@@ -141,6 +162,178 @@ class LocationEventsListenerTest {
         ArgumentCaptor<ExtLocationReplica> captor = ArgumentCaptor.forClass(ExtLocationReplica.class);
         verify(extLocationReplicaRepository).save(captor.capture());
         assertThat(captor.getValue().isActive()).isFalse();
+    }
+
+    @Test
+    @DisplayName("#2023: hours, closures and both buffers land on ext_location; timezone lands")
+    void operatingHoursClosuresAndBuffersLand() {
+        String hours = """
+                [{"dayOfWeek":"MONDAY","openTime":"08:00:00","closeTime":"17:00:00"}]""";
+        String closures = """
+                [{"date":"2026-12-25","reason":"Christmas"}]""";
+
+        listener.onLocationEvent(locationUpdatedWithHours("evt-hours", 5, hours, closures));
+
+        ArgumentCaptor<ExtLocationReplica> captor = ArgumentCaptor.forClass(ExtLocationReplica.class);
+        verify(extLocationReplicaRepository).save(captor.capture());
+        ExtLocationReplica saved = captor.getValue();
+        assertThat(saved.getTimezone()).isEqualTo("America/Chicago");
+        assertThat(saved.getOperatingHours())
+                .contains("MONDAY")
+                .contains("08:00:00")
+                .contains("17:00:00");
+        assertThat(saved.getHolidayClosures()).contains("2026-12-25").contains("Christmas");
+        assertThat(saved.getCheckInBufferMinutes()).isEqualTo(15);
+        assertThat(saved.getCleanupBufferMinutes()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("#2023 DECISION-LOCATION-004/005: null operatingHours stores null, "
+            + "an empty list stores \"[]\", and the two stay distinguishable on read-back")
+    void nullVersusEmptyOperatingHoursIsPreserved() {
+        listener.onLocationEvent(locationUpdatedWithHours("evt-null", 5, null, null));
+        listener.onLocationEvent(locationUpdatedWithHours("evt-empty", 6, "[]", "[]"));
+
+        ArgumentCaptor<ExtLocationReplica> captor = ArgumentCaptor.forClass(ExtLocationReplica.class);
+        verify(extLocationReplicaRepository, Mockito.times(2)).save(captor.capture());
+        ExtLocationReplica notConfigured = captor.getAllValues().get(0);
+        ExtLocationReplica configuredClosed = captor.getAllValues().get(1);
+        assertThat(notConfigured.getOperatingHours()).isNull();
+        assertThat(notConfigured.getHolidayClosures()).isNull();
+        assertThat(configuredClosed.getOperatingHours()).isEqualTo("[]");
+        assertThat(configuredClosed.getHolidayClosures()).isEqualTo("[]");
+    }
+
+    @Test
+    @DisplayName("a fact predating the #2023 hours/buffer fields does not corrupt the row's other columns")
+    void factPredatingNewFieldsDoesNotCorruptOtherColumns() {
+        listener.onLocationEvent(locationUpdated("evt-old-shape", 5, true));
+
+        ArgumentCaptor<ExtLocationReplica> captor = ArgumentCaptor.forClass(ExtLocationReplica.class);
+        verify(extLocationReplicaRepository).save(captor.capture());
+        ExtLocationReplica saved = captor.getValue();
+        assertThat(saved.getCode()).isEqualTo("SHOP-1");
+        assertThat(saved.getName()).isEqualTo("Main Shop");
+        assertThat(saved.isActive()).isTrue();
+        assertThat(saved.getTimezone()).isEqualTo("America/Chicago");
+        assertThat(saved.getOperatingHours()).isNull();
+        assertThat(saved.getHolidayClosures()).isNull();
+        assertThat(saved.getCheckInBufferMinutes()).isNull();
+        assertThat(saved.getCleanupBufferMinutes()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2023 F2 - a fact with timezone/hours/closures/buffers entirely absent keeps "
+            + "the already-replicated values, never erases them")
+    void addedFieldsAbsentFromEnvelopeKeepExistingValues() {
+        when(extLocationReplicaRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(ExtLocationReplica.builder()
+                        .locationId(LOCATION_ID)
+                        .aggregateVersion(5)
+                        .timezone("America/Chicago")
+                        .operatingHours(
+                                "[{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"08:00:00\",\"closeTime\":\"17:00:00\"}]")
+                        .holidayClosures("[{\"date\":\"2026-12-25\",\"reason\":\"Christmas\"}]")
+                        .checkInBufferMinutes(15)
+                        .cleanupBufferMinutes(10)
+                        .build()));
+
+        // A pre-#2023 producer's shape: no timezone/operatingHours/holidayClosures/buffer keys at
+        // all - a rolling deploy or a replay of a stored older event, not an explicit clear.
+        listener.onLocationEvent("""
+                {"eventId":"evt-absent","eventType":"%s","aggregateVersion":6,
+                 "payload":{"locationId":"%s","name":"Main Shop","code":"SHOP-1","status":"OPEN",
+                   "active":true,"parents":[]}}
+                """.formatted(LocationUpdatedV1.EVENT_TYPE, LOCATION_ID));
+
+        ArgumentCaptor<ExtLocationReplica> captor = ArgumentCaptor.forClass(ExtLocationReplica.class);
+        verify(extLocationReplicaRepository).save(captor.capture());
+        ExtLocationReplica saved = captor.getValue();
+        assertThat(saved.getTimezone()).isEqualTo("America/Chicago");
+        assertThat(saved.getOperatingHours()).contains("MONDAY");
+        assertThat(saved.getHolidayClosures()).contains("Christmas");
+        assertThat(saved.getCheckInBufferMinutes()).isEqualTo(15);
+        assertThat(saved.getCleanupBufferMinutes()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("#2023 F2 - a fact with explicit null timezone/hours/closures/buffers clears the "
+            + "already-replicated values")
+    void addedFieldsExplicitNullClearExistingValues() {
+        when(extLocationReplicaRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(ExtLocationReplica.builder()
+                        .locationId(LOCATION_ID)
+                        .aggregateVersion(5)
+                        .timezone("America/Chicago")
+                        .operatingHours(
+                                "[{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"08:00:00\",\"closeTime\":\"17:00:00\"}]")
+                        .holidayClosures("[{\"date\":\"2026-12-25\",\"reason\":\"Christmas\"}]")
+                        .checkInBufferMinutes(15)
+                        .cleanupBufferMinutes(10)
+                        .build()));
+
+        // The owner explicitly reset every one of these to null - the fact says so in the raw
+        // JSON, distinct from the fields being absent.
+        listener.onLocationEvent("""
+                {"eventId":"evt-explicit-null","eventType":"%s","aggregateVersion":6,
+                 "payload":{"locationId":"%s","name":"Main Shop","code":"SHOP-1","status":"OPEN",
+                   "active":true,"parents":[],"timezone":null,"operatingHours":null,
+                   "holidayClosures":null,"checkInBufferMinutes":null,"cleanupBufferMinutes":null}}
+                """.formatted(LocationUpdatedV1.EVENT_TYPE, LOCATION_ID));
+
+        ArgumentCaptor<ExtLocationReplica> captor = ArgumentCaptor.forClass(ExtLocationReplica.class);
+        verify(extLocationReplicaRepository).save(captor.capture());
+        ExtLocationReplica saved = captor.getValue();
+        assertThat(saved.getTimezone()).isNull();
+        assertThat(saved.getOperatingHours()).isNull();
+        assertThat(saved.getHolidayClosures()).isNull();
+        assertThat(saved.getCheckInBufferMinutes()).isNull();
+        assertThat(saved.getCleanupBufferMinutes()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2023 F2 - a bay fact with bayType absent keeps the already-replicated value")
+    void bayTypeAbsentFromEnvelopeKeepsExistingValue() {
+        when(extBayReplicaRepository.findById(any()))
+                .thenReturn(Optional.of(ExtBayReplica.builder()
+                        .bayId(LOCATION_ID)
+                        .locationId(LOCATION_ID)
+                        .bayType("LIFT")
+                        .aggregateVersion(1)
+                        .build()));
+
+        listener.onLocationEvent(
+                """
+                {"eventId":"evt-bay-absent","eventType":"%s","aggregateVersion":2,
+                 "payload":{"bayId":"%s","locationId":"%s","name":"Front Bay 1","status":"ACTIVE"}}
+                """.formatted(com.positivity.domainevents.location.BayUpdatedV1.EVENT_TYPE, LOCATION_ID, LOCATION_ID));
+
+        ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+        verify(extBayReplicaRepository).save(captor.capture());
+        assertThat(captor.getValue().getBayType()).isEqualTo("LIFT");
+    }
+
+    @Test
+    @DisplayName("#2023 F2 - a bay fact with an explicit null bayType clears the already-replicated value")
+    void bayTypeExplicitNullClearsExistingValue() {
+        when(extBayReplicaRepository.findById(any()))
+                .thenReturn(Optional.of(ExtBayReplica.builder()
+                        .bayId(LOCATION_ID)
+                        .locationId(LOCATION_ID)
+                        .bayType("LIFT")
+                        .aggregateVersion(1)
+                        .build()));
+
+        listener.onLocationEvent(
+                """
+                {"eventId":"evt-bay-null","eventType":"%s","aggregateVersion":2,
+                 "payload":{"bayId":"%s","locationId":"%s","name":"Front Bay 1","bayType":null,
+                   "status":"ACTIVE"}}
+                """.formatted(com.positivity.domainevents.location.BayUpdatedV1.EVENT_TYPE, LOCATION_ID, LOCATION_ID));
+
+        ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+        verify(extBayReplicaRepository).save(captor.capture());
+        assertThat(captor.getValue().getBayType()).isNull();
     }
 
     @Test

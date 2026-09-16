@@ -448,6 +448,7 @@ class ReplicaAndManifestListenerContractTest {
             verify(bayRepository).save(captor.capture());
             assertThat(captor.getValue().getBayId()).isEqualTo(ID);
             assertThat(captor.getValue().getName()).isEqualTo("Front Bay 1");
+            assertThat(captor.getValue().getBayType()).isEqualTo("LIFT");
             assertThat(captor.getValue().getLocationId()).isEqualTo(ID);
             assertThat(captor.getValue().isActive()).isTrue();
         }

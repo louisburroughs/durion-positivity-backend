@@ -41,6 +41,8 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
+import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
+import com.positivity.shopmanager.internal.repository.WorkorderActuals;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -64,6 +66,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -94,6 +97,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final SourceEligibilityService sourceEligibilityService;
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final Clock clock;
+    private final WorkOrderAppointmentMappingRepository workOrderAppointmentMappingRepository;
 
     /**
      * Creates an appointment from an Estimate or Workorder.
@@ -539,7 +543,10 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 "Building schedule view for location {} with correlationId={}",
                 request.getLocationId(),
                 normalizedCorrelationId);
-        ZoneId zoneId = resolveZoneId(request.getLocationId());
+        // One shop lookup, reused below by resolveZoneId and resolveResourceNames (#2023 F6) —
+        // this used to be two separate shopRepository.findById calls for the same location.
+        Shop shop = shopRepository.findById(request.getLocationId()).orElse(null);
+        ZoneId zoneId = resolveZoneId(shop, request.getLocationId());
         LocalDate targetDate = request.getDate();
 
         TimeWindow dayWindow = resolveDayWindow(targetDate, zoneId, request.getRange());
@@ -575,8 +582,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             }
         }
 
-        Map<ResourceLaneKey, String> resourceNames =
-                resolveResourceNames(request.getLocationId(), filteredByType.keySet());
+        Map<ResourceLaneKey, String> resourceNames = resolveResourceNames(shop, filteredByType.keySet());
         List<ScheduleViewResponse.ScheduleResourceView> resources = filteredByType.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> toResourceView(entry.getKey(), entry.getValue(), resourceNames.get(entry.getKey())))
@@ -606,12 +612,22 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         return response;
     }
 
+    /** Looks up the shop itself; used only where the caller has no {@link Shop} in hand already. */
     private ZoneId resolveZoneId(UUID locationId) {
-        String configuredTimezone = shopRepository
-                .findById(locationId)
-                .map(Shop::getTimezone)
-                .filter(timezone -> timezone != null && !timezone.isBlank())
-                .orElse(null);
+        return resolveZoneId(shopRepository.findById(locationId).orElse(null), locationId);
+    }
+
+    /**
+     * Resolves the schedule window's timezone from an already-loaded {@link Shop} (#2023 F6): {@code
+     * getScheduleView} loads the shop once and passes it here and to {@link
+     * #resolveResourceNames(Shop, Set)} rather than querying it twice for the same location.
+     */
+    private ZoneId resolveZoneId(@Nullable Shop shop, UUID locationId) {
+        String configuredTimezone = shop == null
+                ? null
+                : Optional.ofNullable(shop.getTimezone())
+                        .filter(timezone -> !timezone.isBlank())
+                        .orElse(null);
         if (configuredTimezone == null) {
             log.warn(
                     "Location {} has no configured timezone; defaulting to UTC. "
@@ -762,7 +778,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         return resourceView;
     }
 
-    private Map<ResourceLaneKey, String> resolveResourceNames(UUID locationId, Set<ResourceLaneKey> laneKeys) {
+    private Map<ResourceLaneKey, String> resolveResourceNames(@Nullable Shop shop, Set<ResourceLaneKey> laneKeys) {
         Map<ResourceLaneKey, String> resourceNames = HashMap.newHashMap(laneKeys.size());
         if (laneKeys.isEmpty()) {
             return resourceNames;
@@ -773,7 +789,6 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             return resourceNames;
         }
 
-        Shop shop = shopRepository.findById(locationId).orElse(null);
         if (!shopHasTechnicians(shop)) {
             return resourceNames;
         }
@@ -1101,7 +1116,36 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         response.setServiceRequestIds(loadServiceRequestIds(appointment.getAppointmentId()));
         response.setCustomerSnapshot(readSnapshot(appointment.getCustomerSnapshot()));
         response.setVehicleSnapshot(readSnapshot(appointment.getVehicleSnapshot()));
+
+        WorkorderActuals actuals = resolveWorkorderActuals(appointment.getAppointmentId());
+        response.setActualStartAt(actuals == null ? null : actuals.workStartedAt());
+        response.setActualEndAt(actuals == null ? null : actuals.completedAt());
+        response.setExpectedEndAt(actuals == null ? null : actuals.expectedEndAt());
         return response;
+    }
+
+    /**
+     * Resolves the actual-time block for one appointment through {@link
+     * com.positivity.shopmanager.internal.entity.WorkOrderAppointmentMapping} (#2021 F9) — the
+     * authoritative appointment↔workorder link, not {@code workorderLinkRef} or
+     * {@code sourceType}/{@code sourceId}, which are creation-time provenance only. Null when the
+     * appointment has no linked workorder, or the workorder's replica has not landed yet.
+     *
+     * <p>{@code toResponse} is never called in a loop today (create, the idempotent-duplicate lookup,
+     * reschedule, cancel, and getById each resolve exactly one appointment), so one extra query here
+     * costs a single round trip per call, not an N+1 across a list.
+     *
+     * <p>More than one mapping row can resolve for this appointment (#2023 S1 — appointment ->
+     * mapping is one-to-many; only {@code workOrderId} is unique in the baseline schema), so the
+     * duplicates are collapsed through {@link WorkorderActuals#mostCurrent} — the same rule {@link
+     * com.positivity.shopmanager.internal.service.ScheduleCapacityServiceImpl} applies to its own
+     * batch resolution (#2023 F3) — rather than taking whichever row the database happens to return
+     * first, which is nondeterministic and can surface a stale workorder's actuals.
+     */
+    private @Nullable WorkorderActuals resolveWorkorderActuals(@NonNull UUID appointmentId) {
+        List<WorkorderActuals> actuals =
+                workOrderAppointmentMappingRepository.findActualsByAppointmentIds(List.of(appointmentId));
+        return actuals.stream().reduce(WorkorderActuals::mostCurrent).orElse(null);
     }
 
     private void saveServiceRequests(Appointment appointment, List<UUID> serviceRequestIds) {

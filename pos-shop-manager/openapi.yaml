@@ -554,6 +554,86 @@ paths:
       - Appointments API
       x-required-permissions:
       - appointments:reschedule
+  /v1/schedules/capacity:
+    get:
+      description: 'Returns, for every date in [from, to], the location''s day status (OK, CLOSED, HOLIDAY or UNAVAILABLE) and, on an OK date, every active bay with its occupied-minutes total and an hourly occupancy count array — never appointment identifiers, customer snapshots, titles or conflict details.
+
+        Use this tool to render a week or month capacity calendar in one call; use viewSchedule instead when a single day''s full appointment board, including conflicts, is needed.
+
+        Preconditions: the day window and hours come from the location''s replicated timezone and weekly operating hours (fed by pos-location facts), not from this module''s Shop.timezone column; a location this module has not yet replicated, or whose timezone is unknown or blank, reports every requested date UNAVAILABLE rather than assuming UTC.
+
+        Required inputs: locationId (UUID), from and to (YYYY-MM-DD, inclusive, to on or after from). The span must not exceed 42 days; a longer span, including a full year, is rejected.
+
+        Emits exactly one SHOPMGR_SCHEDULE_CAPACITY_VIEW audit event per call, never one per day; no state changes occur. A bay with zero appointments on a date is still listed with occupiedMinutes 0 — free capacity is the reason this endpoint exists. A date is never omitted from the response, even when it cannot be assembled.
+
+        A caller whose shop:schedule:view grant is location-scoped must have locationId within reach (ADR-0061).
+
+        Returns 400 when locationId, from or to is malformed or to is before from, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, and 422 CAPACITY_RANGE_EXCEEDED when the span exceeds 42 days.
+
+        '
+      operationId: getScheduleCapacity
+      parameters:
+      - description: Location ID
+        in: query
+        name: locationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: First date in the range, inclusive (YYYY-MM-DD)
+        in: query
+        name: from
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Last date in the range, inclusive (YYYY-MM-DD)
+        in: query
+        name: to
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Correlation ID for request tracing
+        in: header
+        name: X-Correlation-Id
+        required: false
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleCapacityResponse'
+          description: Capacity view retrieved successfully.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: locationId, from or to is malformed, or to is before from.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds shop:schedule:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The [from, to] span exceeds the 42-day policy limit (ApiError.code CAPACITY_RANGE_EXCEEDED).
+      security:
+      - bearerAuth:
+        - shop:schedule:view
+      summary: Get per-day, per-bay occupancy for a location across a date range
+      tags:
+      - Schedule API
+      x-required-permissions:
+      - shop:schedule:view
   /v1/schedules/view:
     get:
       description: 'Builds the read-only schedule board for one location and date, grouping appointments into resource lanes (bay, mobile unit, technician or UNASSIGNED) and marking overlaps of one minute or more within the same lane as BLOCKING conflicts.
@@ -1376,6 +1456,16 @@ components:
     AppointmentResponse:
       description: Response describing a created or retrieved appointment
       properties:
+        actualEndAt:
+          description: When work actually finished, resolved the same way as actualStartAt (#2021). Null while the linked workorder is still open, or when there is no link. endAt above stays the planned window regardless.
+          example: '2026-06-18T10:40:00Z'
+          format: date-time
+          type: string
+        actualStartAt:
+          description: 'When work actually began, resolved from the linked workorder''s actual-time block through WorkOrderAppointmentMapping (issue #2021). Null when the appointment has no linked workorder, the link has not replicated yet, or work has not started. startAt above stays the planned window regardless.'
+          example: '2026-06-18T08:05:00Z'
+          format: date-time
+          type: string
         appointmentId:
           description: Unique appointment identifier
           example: 01960003-0000-7000-8000-000000000001
@@ -1410,6 +1500,11 @@ components:
         endAt:
           description: Appointment end instant in UTC (ISO-8601)
           example: '2026-06-18T10:00:00Z'
+          format: date-time
+          type: string
+        expectedEndAt:
+          description: 'The workorder owner''s projection of when a still-running job will finish (#2021). Null in every response today by design: a projected finish needs estimated remaining labour (ADR-0058/ADR-0059, both PROPOSED, not accepted) and this field is never synthesised from the current time. A caller states "N minutes over planned" from actualStartAt, endAt and status instead of waiting on this field.'
+          example: 'null'
           format: date-time
           type: string
         locationId:
@@ -1532,6 +1627,47 @@ components:
       - override
       - status
       type: object
+    BayCapacityView:
+      description: One bay's occupancy on one date
+      properties:
+        bayId:
+          description: Bay identifier
+          example: 01960003-0000-7000-8000-000000000010
+          format: uuid
+          type: string
+        carryOverIn:
+          description: 'Bay-hours carried into this day from an appointment that overran a prior open day''s close (issue #2021 AC4/AC5/AC6). Already netted into occupiedMinutes and occupancy above — this list is the detail behind that number, not an addition to it. Empty when nothing carried over.'
+          items:
+            $ref: '#/components/schemas/CarryOverView'
+          type: array
+        name:
+          description: Display name of the bay
+          example: Bay 1
+          type: string
+        occupancy:
+          description: 'One slot per hour of the day''s window (a partial trailing hour still gets a slot); each value is the count of appointments overlapping that hour, so a double-booking reads greater than 1. Carry-over from a prior open day (below) is already reflected here, marked from the start of the window (issue #2021 AC5).'
+          example:
+          - 0
+          - 0
+          - 1
+          - 1
+          - 1
+          - 0
+          items:
+            format: int32
+            type: integer
+          type: array
+        occupiedMinutes:
+          description: Total minutes of the day's window occupied by appointments in this bay (the real overlap, not slots * 60; CANCELLED appointments never occupy a bay)
+          example: 240
+          format: int32
+          type: integer
+      required:
+      - bayId
+      - carryOverIn
+      - occupancy
+      - occupiedMinutes
+      type: object
     BulkIngestRequestMechanicSkillBulkIngestRecord:
       description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
       properties:
@@ -1644,6 +1780,33 @@ components:
       required:
       - cancellationReason
       type: object
+    CarryOverView:
+      description: 'One appointment''s overrun, carried from a prior open day into this bay''s capacity on this date (issue #2021 AC4/AC5/AC6)'
+      properties:
+        appointmentId:
+          description: The overrunning appointment's identifier
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        bayHours:
+          description: Bay-hours carried into this date from the overrun above, in tenths of an hour
+          example: 1.5
+          type: number
+        fromDate:
+          description: The date the appointment actually overran its own operating-day close
+          example: '2026-10-10'
+          format: date
+          type: string
+        workorderId:
+          description: The linked workorder identifier the overrun comes from, when known
+          example: 01960003-0000-7000-8000-000000000005
+          format: uuid
+          type: string
+      required:
+      - appointmentId
+      - bayHours
+      - fromDate
+      type: object
     ConflictDetails:
       description: Details about a conflict associated with a schedule event
       properties:
@@ -1745,6 +1908,47 @@ components:
       required:
       - appointmentId
       - mechanics
+      type: object
+    DayCapacityView:
+      description: Bay occupancy for a single date
+      properties:
+        bays:
+          description: Every active bay at the location with its occupancy for this date. Empty unless status is OK — a bay with zero appointments is still listed, with occupiedMinutes 0 (AC9).
+          items:
+            $ref: '#/components/schemas/BayCapacityView'
+          type: array
+        closureReason:
+          description: Reason recorded against the holiday closure covering this date; set only when status is HOLIDAY
+          example: Thanksgiving
+          type: string
+        date:
+          description: Calendar date (ISO-8601)
+          example: '2026-10-04'
+          format: date
+          type: string
+        dayEndAt:
+          description: End of this date's operating window, from this date's own hours entry. Null unless status is OK.
+          example: '2026-10-04T22:00:00Z'
+          format: date-time
+          type: string
+        dayStartAt:
+          description: Start of this date's operating window, from this date's own hours entry. Null unless status is OK.
+          example: '2026-10-04T13:00:00Z'
+          format: date-time
+          type: string
+        status:
+          description: Assembly outcome for this date
+          enum:
+          - OK
+          - CLOSED
+          - HOLIDAY
+          - UNAVAILABLE
+          example: OK
+          type: string
+      required:
+      - bays
+      - date
+      - status
       type: object
     FieldError:
       description: Validation error for a specific request field
@@ -1992,6 +2196,45 @@ components:
       - newEndAt
       - newStartAt
       - reason
+      type: object
+    ScheduleCapacityResponse:
+      description: Per-day, per-bay occupancy for a location across a bounded date range
+      properties:
+        days:
+          description: One entry per date in [from, to], in order; never omits a date
+          items:
+            $ref: '#/components/schemas/DayCapacityView'
+          type: array
+        from:
+          description: First date in the requested range, inclusive (ISO-8601)
+          example: '2026-10-01'
+          format: date
+          type: string
+        locationId:
+          description: Location identifier the capacity view belongs to
+          example: 01960003-0000-7000-8000-000000000003
+          format: uuid
+          type: string
+        timezone:
+          description: IANA timezone id the day windows were computed in, from the location replica. Null when the location's timezone is unknown — never silently UTC (AC11).
+          example: America/Chicago
+          type: string
+        to:
+          description: Last date in the requested range, inclusive (ISO-8601)
+          example: '2026-11-11'
+          format: date
+          type: string
+        viewGeneratedAt:
+          description: Instant this view was generated (ISO-8601)
+          example: '2026-09-16T07:55:00Z'
+          format: date-time
+          type: string
+      required:
+      - days
+      - from
+      - locationId
+      - to
+      - viewGeneratedAt
       type: object
     ScheduleEventView:
       description: A single event displayed within a resource lane
