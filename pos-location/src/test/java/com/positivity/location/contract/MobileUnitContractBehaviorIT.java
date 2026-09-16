@@ -13,6 +13,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.location.BaseContractIntegrationTest;
 import com.positivity.location.config.TestSecurityConfig;
+import com.positivity.location.internal.entity.ExtCatalogServiceReplica;
+import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
+import java.time.Instant;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +44,14 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private ExtCatalogServiceReplicaRepository extCatalogServiceReplicaRepository;
+
+    @AfterEach
+    void clearCatalogReplica() {
+        extCatalogServiceReplicaRepository.deleteAll();
+    }
 
     @Test
     @DisplayName("#76 - POST /v1/mobile-units returns 201")
@@ -287,10 +300,14 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
     void shouldChangeEligibilityWhenPostalCodesAreReplaced() throws Exception {
         // The acceptance criterion of #1991 is not "the DTO comes back changed" but "coverage
         // resolution follows", so this drives the real query either side of the replacement.
-        // The unit is created INACTIVE and then flipped: an ACTIVE unit must arrive with
-        // capabilities, and the reference capabilities are seeded by Flyway, which the H2 test
-        // profile disables. Eligibility reads status, coverage rules and postal codes only.
+        // The unit is created INACTIVE and then flipped, and going ACTIVE now requires a complete
+        // unit (CAP-325 D14): a travel buffer policy, a capability claim and coverage rules. The
+        // claim validates against the catalog replica, which Flyway would seed and the H2 test
+        // profile does not, so the IT plants the operation code itself. Eligibility still reads
+        // status, coverage rules and postal codes only.
         String areaId = createServiceArea("Eligibility Shift Zone", "98160");
+        String policyId = createTravelBufferPolicy("Eligibility Shift Buffer");
+        seedCatalogOperationCode("CAP-MOBILE-DIAGNOSTIC");
 
         String unit = mockMvc.perform(withGatewayAuth(post("/v1/mobile-units")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -298,11 +315,13 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                                 {
                                   "name": "MU-ELIGIBILITY-1991",
                                   "status": "INACTIVE",
+                                  "travelBufferPolicyId": "%s",
+                                  "serviceCapabilityCodes": [ "CAP-MOBILE-DIAGNOSTIC" ],
                                   "coverageRules": [
                                     { "serviceAreaId": "%s", "ruleType": "SERVICE_AREA", "priority": 1 }
                                   ]
                                 }
-                                """.formatted(areaId))))
+                                """.formatted(policyId, areaId))))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -352,6 +371,35 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 .getResponse()
                 .getContentAsString();
         return new ObjectMapper().readTree(body).get("id").asText();
+    }
+
+    private String createTravelBufferPolicy(String name) throws Exception {
+        String body = mockMvc.perform(withGatewayAuth(post("/v1/travel-buffer-policies")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "%s",
+                                  "bufferType": "FLAT_MINUTES",
+                                  "bufferValue": 15
+                                }
+                                """.formatted(name))))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return new ObjectMapper().readTree(body).get("id").asText();
+    }
+
+    /** Plants an active catalog operation code as pos-catalog's fact would (CAP-325 D14). */
+    private void seedCatalogOperationCode(String operationCode) {
+        extCatalogServiceReplicaRepository.save(ExtCatalogServiceReplica.builder()
+                .serviceId(UUID.randomUUID())
+                .operationCode(operationCode)
+                .name(operationCode)
+                .active(true)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.now())
+                .build());
     }
 
     @Test
