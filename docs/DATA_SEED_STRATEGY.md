@@ -92,11 +92,17 @@ All `*_operational_*` seed data (and catalog items — see §2) moves out of Fly
   reachable. A job that rejected rows reports `PARTIAL`, not `COMPLETED`.
 - **Fallback channel: plain gateway API calls** (scripted, `X-API-Version: 1`, a dedicated
   `seed-operator` service account) for domains whose bulk-ingest endpoint cannot express the
-  rows the fixture needs. Two packs use it: `location/site-defaults.csv`, which calls a single
-  idempotent upsert per site, and `location/mobile-units.csv`, which moved off the loader in #1986
-  — an ACTIVE mobile unit needs a travel buffer policy, capabilities and coverage rules, and
-  `MobileUnitLoaderRecord` carries none of the three, so every active row failed. `DomainType.
-  MOBILE_UNIT` and its loader strategy remain wired for callers outside the seed pipeline.
+  rows the fixture needs. The driver marks these with an `@` name; each one exists because the
+  loader path cannot carry its rows. `location/site-defaults.csv` and `shop-manager/shops.csv`
+  each call a single idempotent upsert per site (the second has no loader domain at all).
+  `location/operating-hours.csv` patches a site's weekly hours, which `LocationRecord` has no
+  field for and no create endpoint accepts — and without which pos-shop-manager's capacity
+  calendar reports every date UNAVAILABLE. `catalog/tier0-service-skill-requirements.csv`
+  replaces a service's whole requirement set per call. And `location/mobile-units.csv` moved off
+  the loader in #1986 — an ACTIVE mobile unit needs a travel buffer policy, capabilities and
+  coverage rules, and `MobileUnitLoaderRecord` carries none of the three, so every active row
+  failed. `DomainType.MOBILE_UNIT` and its loader strategy remain wired for callers outside the
+  seed pipeline.
 
 The pipeline is:
 

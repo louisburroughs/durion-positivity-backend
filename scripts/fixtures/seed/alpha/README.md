@@ -70,7 +70,9 @@ duplicate failure in the LOCATION job).
 
 Most packs load this way. The exceptions are marked with an `@` name in the driver and call
 the gateway directly: `location/site-defaults.csv` (`@site-defaults`), one idempotent upsert
-per site (`PUT /v1/locations/{id}/defaults`); `location/mobile-units.csv` (`@mobile-units`),
+per site (`PUT /v1/locations/{id}/defaults`); `location/operating-hours.csv`
+(`@location-hours`), one `PATCH /v1/locations/{id}` per site carrying its whole week, because
+the `LOCATION` record has no `operatingHours` field; `location/mobile-units.csv` (`@mobile-units`),
 one `POST /v1/mobile-units` per unit carrying its policy, capabilities and coverage rules —
 see the mobile-unit note under `location/` below for why the loader cannot;
 `catalog/tier0-service-skill-requirements.csv` (`@service-skill-requirements`); and
@@ -80,7 +82,8 @@ see the mobile-unit note under `location/` below for why the loader cannot;
 An `@` pack is authorized as the caller itself, not through the loader's relay, so the token
 needs that endpoint's own authority: `@shops` needs `shop:schedule:edit` **covering every
 location in `shop-manager/shops.csv`** (the endpoint is location-scoped, ADR-0061),
-`@site-defaults` needs `location:write`, and `@mobile-units` needs
+`@site-defaults` and `@location-hours` need `location:write` (`@location-hours` is
+location-scoped too, so the grant must cover all four shops), and `@mobile-units` needs
 `location:mobile_unit:manage`. A token without them gets a 403 per row, and the pack reports
 every row as a failure rather than loading anything.
 
@@ -98,7 +101,7 @@ Afterwards, verify: row counts on the owner, `replica_drift_total` flat, expecte
 event volume in pos-event-receiver.
 
 Run order (services must exist before data referencing them): security users/roles →
-**location** (sites, storage topology, site defaults) → people → people-contact →
+**location** (sites, operating hours, storage topology, site defaults) → people → people-contact →
 **customer** → vehicle → catalog (products, services, labor, packages, skill
 requirements) → **location bays and mobile units** → price → inventory (putaway rules,
 then on-hand, then cycle count plans). Locations must be loaded (or already present)
@@ -457,6 +460,7 @@ about where part numbers come from first.
 |---|---|---|
 | `locations.csv` | 6 sites (4 service centers — including the SDK seeder's Riverside Auto Service, ATX-RIV-001 — mobile hub, corporate HQ) | `POST /v1/locations/bulk-ingest` (`domainType: LOCATION`) |
 | `storage-locations.csv` | 228 (38 per site: 3 floors, 2 cages, 7 shelves, 1 truck, 24 bins under the parts shelves, 1 retired bin) | gateway API pack (`POST .../storage-locations` per row, parents resolved in order; `status`/capacity applied by follow-up `PATCH`) |
+| `operating-hours.csv` | 24 open days across the 4 shops (Mon–Sat each; Sunday closed) | gateway API pack (`PATCH /v1/locations/{id}` per site, carrying that site's whole week) |
 | `site-defaults.csv` | 6 rows, one per site | gateway API pack (`PUT /v1/locations/{id}/defaults` per row) |
 | `bays.csv` | 24 service bays (6 types; 21 from the seed and the SDK seeder's Bay 1–3 at ATX-RIV-001) | gateway API pack (`POST .../bays` per row; 409 = exists) |
 | `mobile-units.csv` | 9 mobile units, 8 `ACTIVE` and 1 parked (see below) | gateway API pack (`POST /location/mobile-units`, one call carrying the unit's policy, capabilities and coverage rules; existing names skipped via the list) |
@@ -562,6 +566,43 @@ bin rows means recomputing these three caps.
 Already-existing rows are never patched, so re-runs converge without overwriting
 operator edits; applying a changed status/capacity to a live row is an operator
 `PATCH`, not a reseed.
+
+Columns (`operating-hours.csv`): `locationCode,dayOfWeek,openTime,closeTime` — one row per open
+day, `HH:MM` local times.
+
+**Operating hours are what make the capacity calendar answer (#2023).** pos-shop-manager reads a
+location's timezone and weekly windows from its `ext_location` replica of the location fact, never
+from the `shop` row's timezone. Hours that were never published are an unknown fact, not an open
+day: `ScheduleCapacityServiceImpl` reports every requested date `UNAVAILABLE` rather than assuming
+one, `searchOpenings` has no window to fit a job into, and the two HOURS conflict rules
+(`OUTSIDE_OPERATING_HOURS`, `FACILITY_CLOSED`) never fire. No pack published them before this one,
+so a freshly seeded alpha had a schedule board and an empty calendar beside it.
+
+They cannot ride the `LOCATION` loader pack: `LocationRecord` carries name, address, type and
+timezone and nothing else, and `POST /v1/locations` takes no hours either. `PATCH
+/v1/locations/{id}` does, it replaces the whole weekly set, and it republishes the location fact —
+so the pack sends one PATCH per site and re-runs converge. The PATCH body carries `operatingHours`
+and nothing else, because every non-null field it carries is applied: a stray key would rewrite a
+site's name, status or timezone on a reseed.
+
+**A day with no row is closed, not unknown.** pos-location refuses an entry missing either time
+(422), so a closed day cannot be expressed as blank times; pos-shop-manager reports a date whose
+day-of-week has no entry `CLOSED`, which is exactly what the absent Sunday means. Note that a
+rejected PATCH leaves the site with *no* hours rather than with its good rows, which is why
+`scripts/tests/test_seed_alpha_location_hours.py` checks every row's times at build time rather
+than leaving it to a per-row WARN on alpha. That test also pins hours to the four sites that have
+bays and a shop row — the mobile hub and corporate HQ are deliberately absent, as they are from
+`shop-manager/shops.csv` — and keeps every window inside the 06:00–18:00 `LOCATION_HOURS` window
+`viewSchedule` defaults to, so nothing bookable falls off the day board.
+
+**Known deltas:**
+
+- `holidayClosures` are not seeded. The same PATCH accepts them and pos-shop-manager reports a
+  closed date `HOLIDAY` with its reason, but a dated closure is calendar-specific data that rots;
+  add rows when a demo needs a specific holiday.
+- `checkInBufferMinutes` / `cleanupBufferMinutes` are not seeded either, so they stay null and the
+  opening search treats them as zero (`zeroIfNull`). Nothing in the alpha demo depends on a
+  non-zero buffer yet.
 
 Columns (`site-defaults.csv`): `locationCode,stagingName,quarantineName`.
 

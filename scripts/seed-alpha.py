@@ -82,6 +82,10 @@ PACK_FILES = [
     ("security/role-permissions.csv", "SECURITY_ROLE_PERMISSION"),
     ("security/users.csv", "SECURITY_USER"),
     ("location/locations.csv", "LOCATION"),
+    # The sites' weekly hours, which the LOCATION record cannot carry: pos-shop-manager's capacity
+    # calendar and opening search read them from the location fact, and report every date
+    # UNAVAILABLE until one arrives.
+    ("location/operating-hours.csv", "@location-hours"),
     ("shop-manager/shops.csv", "@shops"),
     ("location/storage-locations.csv", "STORAGE_LOCATION"),
     ("location/site-defaults.csv", "@site-defaults"),
@@ -547,6 +551,60 @@ def run_mobile_units(gateway, relative_path, _location_id):
     return failures == 0
 
 
+def run_location_hours(gateway, relative_path, _location_id):
+    """API pack: publish each service centre's weekly operating hours.
+
+    pos-shop-manager reads a location's timezone and weekly windows from its ext_location
+    replica of the location fact, never from the shop row. Until the hours arrive,
+    ScheduleCapacityServiceImpl reports every requested date UNAVAILABLE rather than assuming a
+    default day (#2023 AC11), the opening search has no window to fit a job into, and the
+    HOURS conflict rules never fire -- an unknown fact is not a confirmed closure.
+
+    The LOCATION loader pack cannot carry them: LocationRecord has no operatingHours field and
+    the create endpoint takes none, so the hours arrive here as one
+    PATCH /v1/locations/{id} per site, which replaces the whole weekly set and republishes the
+    fact. Re-runs converge.
+
+    A day with no row is closed: pos-location refuses an entry missing either time (422), and
+    pos-shop-manager reports a date whose day-of-week has no entry CLOSED rather than
+    UNAVAILABLE -- which is what the missing Sunday in the fixture means. Runs straight after
+    locations.csv, before anything that books work."""
+    location_ids = location_id_map(gateway)
+    by_code = collections.OrderedDict()
+    for row in read_fixture_rows(relative_path):
+        by_code.setdefault(row["locationCode"], []).append(row)
+
+    configured, days, failures = 0, 0, 0
+
+    for code, rows in by_code.items():
+        site_id = location_ids.get(code)
+        if site_id is None:
+            print(f"  WARN: operating hours for {code}: location not found")
+            failures += 1
+            continue
+
+        entries = [
+            {
+                "dayOfWeek": row["dayOfWeek"],
+                "openTime": row["openTime"],
+                "closeTime": row["closeTime"],
+            }
+            for row in rows
+        ]
+        status_code, _ = gateway.patch_json(
+            f"/location/locations/{site_id}", {"operatingHours": entries}, allow_error=True
+        )
+        if 200 <= status_code < 300:
+            configured += 1
+            days += len(entries)
+        else:
+            print(f"  WARN: operating hours for {code}: HTTP {status_code}")
+            failures += 1
+
+    print(f"  operating hours: sites={configured} open_days={days} failures={failures}")
+    return failures == 0
+
+
 def run_shops(gateway, relative_path, _location_id):
     """API pack: give each service centre its pos-shop-manager shop record.
 
@@ -656,6 +714,7 @@ def run_service_skill_requirements(gateway, relative_path, _location_id):
 
 
 API_PACKS = {
+    "@location-hours": run_location_hours,
     "@shops": run_shops,
     "@site-defaults": run_site_defaults,
     "@mobile-units": run_mobile_units,
