@@ -1,7 +1,9 @@
 package com.positivity.people.internal.dto;
 
 import com.positivity.people.internal.enums.AssignmentStatus;
+import com.positivity.people.internal.enums.ClockState;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 import lombok.Builder;
@@ -65,4 +67,37 @@ public class PeopleAvailabilityResponse {
             example = "2026-02-16",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private LocalDate availableOn;
+
+    // ---- Current work-session (clock) state (issue #2061) ---------------------------------
+    // Derived on read from the open WorkSession and WorkSessionBreak, resolved for the whole
+    // page in a bounded number of queries. Present only for rows the caller may see: their own
+    // person, or any person when they hold people:timekeeping:view covering the row's location.
+
+    @Schema(
+            description = "The person's current clock state: CLOCKED_IN (open work session, no open break),"
+                    + " ON_BREAK (open session with an open break) or CLOCKED_OUT (no open session). Null when"
+                    + " the caller may not see this person's clock state: it is shown for the caller's own row,"
+                    + " and for every row when the caller holds people:timekeeping:view covering the location.",
+            example = "CLOCKED_IN",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private ClockState clockState;
+
+    @Schema(
+            description = "The open work session; non-null exactly when clockState is CLOCKED_IN or ON_BREAK."
+                    + " The break endpoints are keyed by this id.",
+            example = "01960011-0000-7000-8000-000000000002",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private UUID workSessionId;
+
+    @Schema(
+            description = "When the open work session started; non-null exactly when workSessionId is",
+            example = "2026-02-16T08:00:00Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private Instant clockedInAt;
+
+    @Schema(
+            description = "When the open break started; non-null exactly when clockState is ON_BREAK",
+            example = "2026-02-16T12:00:00Z",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private Instant breakStartedAt;
 }

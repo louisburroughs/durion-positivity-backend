@@ -76,6 +76,12 @@ class PeopleAvailabilityLocationScopeTest {
     @Mock
     private LocationReferenceService locationReferenceService;
 
+    @Mock
+    private WorkSessionService workSessionService;
+
+    @Mock
+    private WorkSessionAccessPolicy workSessionAccessPolicy;
+
     private PeopleAvailabilityServiceImpl service;
 
     @BeforeEach
@@ -86,9 +92,15 @@ class PeopleAvailabilityLocationScopeTest {
                 userPersonTranslationService,
                 CLOCK,
                 extLocationReplicaRepository,
-                locationReferenceService);
+                locationReferenceService,
+                workSessionService,
+                workSessionAccessPolicy);
         when(userPersonTranslationService.getPersonUuidForUser(USERNAME)).thenReturn(PERSON_ID);
         when(extPersonReplicaRepository.findAllById(any())).thenReturn(List.of());
+        // Clock state is orthogonal to the location decision under test: a caller who sees no row.
+        when(workSessionAccessPolicy.clockStateViewer())
+                .thenReturn(new WorkSessionAccessPolicy.ClockStateViewer(null, LocationScope.unscoped()));
+        when(workSessionAccessPolicy.mayViewClockState(any(), any(), any())).thenReturn(false);
     }
 
     @AfterEach

@@ -1,12 +1,14 @@
 package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.dto.BreakDto;
+import com.positivity.people.internal.dto.WorkSessionClockStateResponse;
 import com.positivity.people.internal.dto.WorkSessionDto;
 import com.positivity.people.internal.dto.WorkSessionSubmitRequest;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.entity.WorkSession;
 import com.positivity.people.internal.entity.WorkSessionBreak;
+import com.positivity.people.internal.enums.ClockState;
 import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
@@ -16,17 +18,35 @@ import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
 import com.positivity.security.common.SecurityContextHelper;
+import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Work-session lifecycle plus the derived clock-state reads (issue #2061).
+ *
+ * <p>Every mutation is gated by {@link WorkSessionAccessPolicy#requireMayManage} after its
+ * existence check: only the person themself or a holder of {@code people:timekeeping:approve}
+ * covering the person's location may clock them in or out, control their breaks, or submit
+ * their session (#85 OQ2, #2061 OQ2). The reads are gated by
+ * {@link WorkSessionAccessPolicy#requireMayView} or left to the caller for the batched form.
+ */
+@Slf4j
 @Service
 @Transactional
 public class WorkSessionServiceImpl implements WorkSessionService {
@@ -52,14 +72,18 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     private final EmployeeLocationAssignmentRepository locationAssignmentRepository;
 
+    private final WorkSessionAccessPolicy accessPolicy;
+
     public WorkSessionServiceImpl(
             WorkSessionRepository workSessionRepository,
             WorkSessionBreakRepository workSessionBreakRepository,
             ExtPersonReplicaRepository extPersonReplicaRepository,
             TimeEntryRepository timeEntryRepository,
             EmployeeLocationAssignmentRepository locationAssignmentRepository,
+            WorkSessionAccessPolicy accessPolicy,
             Clock clock) {
         this.clock = clock;
+        this.accessPolicy = Objects.requireNonNull(accessPolicy, "accessPolicy must not be null");
         this.workSessionRepository =
                 Objects.requireNonNull(workSessionRepository, "workSessionRepository must not be null");
         this.workSessionBreakRepository =
@@ -81,6 +105,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         if (!extPersonReplicaRepository.existsById(personId)) {
             throw new PersonNotFoundException(personId);
         }
+        accessPolicy.requireMayManage(personId);
 
         if (workSessionRepository.findByPersonIdAndEndedAtIsNull(personId).isPresent()) {
             throw new IllegalStateException("An active session already exists for personId=" + personId);
@@ -111,6 +136,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
                 .findByPersonIdAndEndedAtIsNull(personId)
                 .orElseThrow(
                         () -> new WorkSessionNotFoundException("No active session found for personId=" + personId));
+        accessPolicy.requireMayManage(personId);
 
         Instant endedAt = Instant.now(clock);
         session.setStatus(STATUS_ENDED);
@@ -138,6 +164,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
                 .findBySessionIdAndEndedAtIsNull(sessionId)
                 .orElseThrow(() ->
                         new WorkSessionNotFoundException("No active work session found for sessionId=" + sessionId));
+        accessPolicy.requireMayManage(session.getPersonId());
 
         if (workSessionBreakRepository
                 .findBySession_SessionIdAndEndedAtIsNull(session.getSessionId())
@@ -168,6 +195,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         WorkSessionBreak activeBreak = workSessionBreakRepository
                 .findBySession_SessionIdAndEndedAtIsNull(sessionId)
                 .orElseThrow(() -> new IllegalStateException("No active break found for sessionId=" + sessionId));
+        accessPolicy.requireMayManage(activeBreak.getSession().getPersonId());
 
         activeBreak.setEndedAt(Instant.now(clock));
         activeBreak.setActor(resolvedActor);
@@ -185,6 +213,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
                 .findById(sessionId)
                 .orElseThrow(
                         () -> new WorkSessionNotFoundException("No work session found for sessionId=" + sessionId));
+        accessPolicy.requireMayManage(session.getPersonId());
 
         if (!STATUS_ENDED.equals(session.getStatus())) {
             throw new IllegalStateException("Only an ENDED session can be submitted; sessionId=" + sessionId
@@ -200,6 +229,85 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         WorkSession submitted = workSessionRepository.save(session);
         recordTimeEntry(submitted, request);
         return toWorkSessionDto(submitted);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull WorkSessionClockStateResponse getCurrentClockState(@Nullable UUID personId) {
+        UUID target = personId != null
+                ? personId
+                : accessPolicy
+                        .callerPersonId()
+                        .orElseThrow(() -> new EntityNotFoundException(
+                                "personId was not provided and no person is linked to the current user"));
+        // 404 before 403, so an id cannot be probed through the access check.
+        if (!extPersonReplicaRepository.existsById(target)) {
+            throw new PersonNotFoundException(target);
+        }
+        accessPolicy.requireMayView(target);
+        return resolveClockStates(List.of(target)).get(target);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull Map<UUID, WorkSessionClockStateResponse> resolveClockStates(@NonNull Collection<UUID> personIds) {
+        Objects.requireNonNull(personIds, "personIds must not be null");
+        if (personIds.isEmpty()) {
+            return Map.of();
+        }
+        // Query 1: every open session of the page's people, newest first (BR7).
+        Map<UUID, WorkSession> openByPerson = new LinkedHashMap<>();
+        for (WorkSession session :
+                workSessionRepository.findByPersonIdInAndEndedAtIsNullOrderByStartedAtDesc(personIds)) {
+            WorkSession kept = openByPerson.putIfAbsent(session.getPersonId(), session);
+            if (kept != null) {
+                // BR2: start's 409 and the unique index make this unreachable through the API;
+                // if the data holds it anyway, surface the newest and say so loudly.
+                log.error(
+                        "Person {} has more than one open work session ({} and {}); reporting the most recent",
+                        session.getPersonId(),
+                        kept.getSessionId(),
+                        session.getSessionId());
+            }
+        }
+        // Query 2: every open break across those sessions — skipped when nobody is clocked in.
+        Map<UUID, WorkSessionBreak> openBreakBySession = new HashMap<>();
+        if (!openByPerson.isEmpty()) {
+            List<UUID> sessionIds = openByPerson.values().stream()
+                    .map(WorkSession::getSessionId)
+                    .toList();
+            for (WorkSessionBreak openBreak :
+                    workSessionBreakRepository.findBySession_SessionIdInAndEndedAtIsNull(sessionIds)) {
+                openBreakBySession.merge(
+                        openBreak.getSessionId(),
+                        openBreak,
+                        (a, b) -> a.getStartedAt().isAfter(b.getStartedAt()) ? a : b);
+            }
+        }
+        Map<UUID, WorkSessionClockStateResponse> states = new HashMap<>();
+        for (UUID personId : personIds) {
+            WorkSession session = openByPerson.get(personId);
+            WorkSessionBreak openBreak = session == null ? null : openBreakBySession.get(session.getSessionId());
+            states.put(personId, toClockState(personId, session, openBreak));
+        }
+        return states;
+    }
+
+    private static WorkSessionClockStateResponse toClockState(
+            UUID personId, @Nullable WorkSession session, @Nullable WorkSessionBreak openBreak) {
+        if (session == null) {
+            return WorkSessionClockStateResponse.builder()
+                    .personId(personId)
+                    .clockState(ClockState.CLOCKED_OUT)
+                    .build();
+        }
+        return WorkSessionClockStateResponse.builder()
+                .personId(personId)
+                .clockState(openBreak == null ? ClockState.CLOCKED_IN : ClockState.ON_BREAK)
+                .workSessionId(session.getSessionId())
+                .clockedInAt(session.getStartedAt())
+                .breakStartedAt(openBreak == null ? null : openBreak.getStartedAt())
+                .build();
     }
 
     /**

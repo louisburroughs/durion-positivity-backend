@@ -67,6 +67,39 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
 - `GET /v1/people/{timeEntryId}/adjustments` — adjustments for a time entry
 - `GET /v1/people/approvedTime` — approved time summary
 - `POST /v1/people/bulk-ingest` — bulk import employees (auth: `people:employee:create`)
+- `GET /v1/people/workSessions/current` — a person's current clock state (auth: `people:self:view`
+  for one's own, `people:timekeeping:view` for another person's; see "Work sessions and clock state")
+
+## Work sessions and clock state (#85, #2061)
+
+`WorkSessionController` (`/v1/people/workSessions`) is the clock-in/out surface: `POST /start`,
+`POST /stop` (keyed by person), `POST /{id}/breaks/start`, `POST /{id}/breaks/stop` and
+`POST /{id}/submit`. The read half, added by #2061 so a dispatch board can render the toggle in
+the right position:
+
+- `GET /v1/people/workSessions/current?personId=` — one person's current state
+  (`clockState` `CLOCKED_IN` | `ON_BREAK` | `CLOCKED_OUT`, `workSessionId`, `clockedInAt`,
+  `breakStartedAt`); `personId` defaults to the caller's own linked person, and nothing open is a
+  200 `CLOCKED_OUT`, never a 404 (auth: `people:self:view` for one's own state,
+  `people:timekeeping:view` for another person's).
+- `GET /v1/people/availability` carries the same four fields per row, resolved for the whole page
+  in two queries (`WorkSessionRepository.findByPersonIdInAndEndedAtIsNull…`, then the open breaks
+  across those sessions) — never one per person. The fields are null on rows the caller may not
+  see: their own row is always visible, every other row needs `people:timekeeping:view` covering
+  the row's location, and the request is never refused for lacking it.
+
+Clock state is derived on read from the open `work_session` and `work_session_break`; there is no
+status column, table or migration behind it. Two open sessions for one person cannot be created
+through the API; if the data holds them anyway the newest is reported and an ERROR is logged.
+
+**Who may act on a session** (`WorkSessionAccessPolicy`, from the story's owner on #2061): only
+the user linked to the person, or a supervisor. "Supervisor" means `people:timekeeping:approve`
+for every mutation (start, stop, breaks, submit) and `people:timekeeping:view` for the reads. When
+that grant is location-scoped (ADR-0061) it must cover one of the person's active staffing
+assignment locations today — a person with no assignment is outside every scoped caller's reach,
+and an unscoped grant or a pre-rollout token needs no lookup. The gate runs after the existence
+check (404 before 403). Self-management still needs only authentication; the self read needs
+`people:self:view`.
 
 ## Location scope
 
@@ -87,6 +120,8 @@ refused location is a 403 with `ApiError.code` `LOCATION_SCOPE_DENIED` and never
 | `PUT /v1/people/staffing/assignments/{id}` | gate (existing and requested location) | `people:employee:edit` | `StaffingAssignmentServiceImpl.update` |
 | `DELETE /v1/people/staffing/assignments/{id}` | gate (existing location) | `people:employee:edit` | `StaffingAssignmentServiceImpl.end` |
 | `POST /v1/people/bulk-ingest` | unscoped | — | ADMIN-only load; the location is a payload default |
+| `POST /v1/people/workSessions/start`, `/stop`, `/{id}/breaks/start`, `/{id}/breaks/stop`, `/{id}/submit` | gate (the person's assignment locations) | `people:timekeeping:approve` | `WorkSessionAccessPolicy.requireMayManage` — self needs no permission |
+| `GET /v1/people/workSessions/current` | gate (the person's assignment locations) | `people:timekeeping:view` | `WorkSessionAccessPolicy.requireMayView` — self needs `people:self:view` |
 
 - **gate** — the named location must be within the caller's reach or the request is refused.
   Gates run after the existence checks so a 404 precedes a 403 and ids cannot be probed.
@@ -96,6 +131,9 @@ refused location is a 403 with `ApiError.code` `LOCATION_SCOPE_DENIED` and never
   own, so the narrowed result is that location's rows when covered and an empty list otherwise.
 - Staffing assignments feed a person's location-scope claims, so every mutation is gated: a
   LOCATION-scoped HR user can only assign, move or end assignments within their own reach.
+- Work sessions take no `locationId`: the gate is on the person, and a scoped supervisor must
+  cover one of that person's active assignment locations today (a person with no assignment is
+  outside every scoped caller's reach). See "Work sessions and clock state".
 
 ## Configuration
 

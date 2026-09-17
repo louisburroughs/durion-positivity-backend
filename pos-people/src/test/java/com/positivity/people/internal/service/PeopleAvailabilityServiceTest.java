@@ -65,6 +65,12 @@ class PeopleAvailabilityServiceTest {
     @Mock
     private LocationReferenceService locationReferenceService;
 
+    @Mock
+    private WorkSessionService workSessionService;
+
+    @Mock
+    private WorkSessionAccessPolicy workSessionAccessPolicy;
+
     @BeforeEach
     void setUp() {
         service = new PeopleAvailabilityServiceImpl(
@@ -73,7 +79,9 @@ class PeopleAvailabilityServiceTest {
                 userPersonTranslationService,
                 FIXED_CLOCK,
                 extLocationReplicaRepository,
-                locationReferenceService);
+                locationReferenceService,
+                workSessionService,
+                workSessionAccessPolicy);
     }
 
     private ExtLocationReplica topLevelReplica() {

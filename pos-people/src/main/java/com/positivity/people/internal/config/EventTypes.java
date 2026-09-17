@@ -63,6 +63,11 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write("PEOPLE_WORK_SESSION_BREAK_STOP", "End a break within a work session")
                         .build(),
+                EventTypeRegistration.write("PEOPLE_WORK_SESSION_SUBMIT", "Submit an ended work session for approval")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "PEOPLE_WORK_SESSION_CURRENT_GET", "Read a person's current work-session (clock) state")
+                        .build(),
 
                 // TimeEntryAdjustmentController - 2 events
                 EventTypeRegistration.write(

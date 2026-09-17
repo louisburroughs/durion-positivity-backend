@@ -31,10 +31,14 @@ public class UserPersonTranslationServiceImpl implements UserPersonTranslationSe
     @Override
     @NonNull
     public UUID getPersonUuidForUser(@NonNull String username) {
-        return linkReplicaRepository
-                .findFirstByUsername(username)
-                .map(ExtUserLinkReplica::getPersonId)
+        return findPersonUuidForUser(username)
                 .orElseThrow(() -> new EntityNotFoundException("No person link found for username: " + username));
+    }
+
+    @Override
+    @NonNull
+    public Optional<UUID> findPersonUuidForUser(@NonNull String username) {
+        return linkReplicaRepository.findFirstByUsername(username).map(ExtUserLinkReplica::getPersonId);
     }
 
     @Override

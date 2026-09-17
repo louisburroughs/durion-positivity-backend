@@ -33,3 +33,27 @@ decisions:
     shape: gate
     permission: people:employee:edit
     reason: resource-addressed sibling of createAssignment/updateAssignment; the assignment's location is read off the loaded entity after the 404 so a LOCATION-scoped HR user cannot end an assignment (and so remove scope) outside their own reach.
+  - operation: WorkSessionController.startWorkSession
+    shape: gate
+    permission: people:timekeeping:approve
+    reason: takes no locationId; the person in the body is gated by WorkSessionAccessPolicy after the 404 — the caller is the person themself, or holds people:timekeeping:approve covering one of the person's active assignment locations today (#2061 BR4, #85 OQ2).
+  - operation: WorkSessionController.stopWorkSession
+    shape: gate
+    permission: people:timekeeping:approve
+    reason: sibling of startWorkSession; the person in the body is gated the same way after the open-session 404.
+  - operation: WorkSessionController.startWorkSessionBreak
+    shape: gate
+    permission: people:timekeeping:approve
+    reason: session-addressed sibling of startWorkSession; the session's person is gated the same way after the 404.
+  - operation: WorkSessionController.stopWorkSessionBreak
+    shape: gate
+    permission: people:timekeeping:approve
+    reason: session-addressed sibling of startWorkSession; the open break's person is gated the same way after the 409.
+  - operation: WorkSessionController.submitWorkSession
+    shape: gate
+    permission: people:timekeeping:approve
+    reason: session-addressed sibling of startWorkSession; the session's person is gated the same way after the 404.
+  - operation: WorkSessionController.getCurrentWorkSession
+    shape: gate
+    permission: people:timekeeping:view
+    reason: takes no locationId; a person reads their own state with people:self:view, another person's needs people:timekeeping:view covering one of that person's active assignment locations today, gated by WorkSessionAccessPolicy after the 404 (#2061).
