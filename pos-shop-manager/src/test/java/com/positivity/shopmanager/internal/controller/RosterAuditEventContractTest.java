@@ -65,6 +65,7 @@ class RosterAuditEventContractTest {
                 UUID.class,
                 com.positivity.shopmanager.internal.enums.MechanicStatus.class,
                 String.class,
+                java.time.LocalDate.class,
                 Pageable.class);
 
         EmitEvent emitEvent = emitEventOn(listLocationTechnicians);

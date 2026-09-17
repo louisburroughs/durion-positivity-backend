@@ -216,6 +216,35 @@ Errors follow ADR-0017 in the standard `ApiError` envelope: `400` for a malforme
 `date`, `403` without the permission, `404` for an unknown location. The read emits the
 `SHOPMGR_SHOP_DASHBOARD_VIEW` audit event and changes no state.
 
+## Placeholder: mechanic shift window (#2060)
+
+`GET /v1/shop-manager/{locationId}/technicians` carries five **PLACEHOLDER** fields per roster
+entry — `shiftStart`, `shiftEnd`, `shiftMinutes`, `shiftSource`, `shiftStatus` — so the dispatch
+board can render free hours today. They are derived by `LocationHoursShiftWindowService` from the
+**location's operating hours** in the `ext_location` replica (`timezone`, `operating_hours`,
+`holiday_closures`, read through the one existing `LocationHoursParser`), for the optional `date`
+query parameter (default: today in the location's own timezone). They are **not** a person's
+schedule: the platform has no per-person shift entity, so every mechanic at a location receives
+the same window, and staggered shifts, part-timers, split shifts, overtime and PTO are invisible.
+
+| `shiftStatus` | Meaning | Window fields |
+| --- | --- | --- |
+| `DERIVED` | the weekday's open/close in the location zone, emitted as UTC instants | set |
+| `CLOSED` | a `holiday_closures` entry covers the date — a known fact | null |
+| `UNKNOWN` | no replica, no usable timezone, unparsable hours, no entry for the weekday, or `openTime` not before `closeTime` (logged) — never a default window | null |
+
+`shiftSource` is `LOCATION_HOURS` on every entry; `PERSON_SCHEDULE` is reserved for the real
+implementation. The check-in and cleanup buffers are appointment concerns and are not folded in.
+No new permission, table, event or replica: the read inherits `shop:technician:view` and the
+endpoint's location-scope gate.
+
+The real per-person window is [#71](https://github.com/louisburroughs/durion-positivity-backend/issues/71),
+blocked on the HR availability contract question in
+[#271](https://github.com/louisburroughs/durion-positivity-backend/issues/271). When it lands,
+delete `LocationHoursShiftWindowService`, this section, and the placeholder wording on the
+controller's `@Operation` and the DTO's `@Schema` descriptions; the fields stay and are then filled
+from the person's schedule with `shiftSource = PERSON_SCHEDULE`.
+
 ## Local replicas (ADR-0044)
 
 This module reads other domains only through read-only `ext_*` tables fed by their events; nothing

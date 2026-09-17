@@ -18,6 +18,8 @@ import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.entity.Shop;
 import com.positivity.shopmanager.internal.enums.CredentialStatus;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import com.positivity.shopmanager.internal.enums.ShiftSource;
+import com.positivity.shopmanager.internal.enums.ShiftStatus;
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
@@ -70,6 +72,8 @@ class MechanicRosterQueryServiceTest {
     @Mock
     private ExtLocationReplicaRepository locationReplicaRepository;
 
+    private final LocationHoursParser hoursParser = new LocationHoursParser(new ObjectMapper());
+
     private MechanicRosterQueryService service;
 
     @BeforeEach
@@ -79,7 +83,8 @@ class MechanicRosterQueryServiceTest {
                 credentialRepository,
                 shopRepository,
                 locationReplicaRepository,
-                new LocationHoursParser(new ObjectMapper()),
+                hoursParser,
+                new LocationHoursShiftWindowService(hoursParser),
                 CLOCK);
     }
 
@@ -169,7 +174,7 @@ class MechanicRosterQueryServiceTest {
                 .thenReturn(List.of(brakes(facilityDate, "ACTIVE")));
 
         Page<LocationTechnicianRosterEntryResponse> result =
-                service.listLocationTechnicians(LOCATION_ID, null, "T4-BRAKES", pageable);
+                service.listLocationTechnicians(LOCATION_ID, null, "T4-BRAKES", null, pageable);
 
         assertThat(result.getContent()).singleElement().satisfies(entry -> {
             assertThat(entry.getLocationId()).isEqualTo(LOCATION_ID);
@@ -196,7 +201,7 @@ class MechanicRosterQueryServiceTest {
                         eq(LOCATION_ID), eq(MechanicStatus.ACTIVE), eq(null), eq(LocalDate.parse("2026-09-15")), any()))
                 .thenReturn(Page.empty(pageable));
 
-        service.listLocationTechnicians(LOCATION_ID, null, null, pageable);
+        service.listLocationTechnicians(LOCATION_ID, null, null, null, pageable);
 
         verify(mechanicRepository)
                 .findRosterByLocation(
@@ -223,7 +228,7 @@ class MechanicRosterQueryServiceTest {
     void listLocationTechniciansReturnsNotFoundForUnknownLocation() {
         when(shopRepository.findById(LOCATION_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.listLocationTechnicians(LOCATION_ID, null, null, PageRequest.of(0, 20)))
+        assertThatThrownBy(() -> service.listLocationTechnicians(LOCATION_ID, null, null, null, PageRequest.of(0, 20)))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
                         .isEqualTo(HttpStatus.NOT_FOUND));
@@ -241,7 +246,7 @@ class MechanicRosterQueryServiceTest {
                 .thenReturn(Page.empty(pageable));
 
         Page<LocationTechnicianRosterEntryResponse> result =
-                service.listLocationTechnicians(LOCATION_ID, MechanicStatus.INACTIVE, "BRAKES", pageable);
+                service.listLocationTechnicians(LOCATION_ID, MechanicStatus.INACTIVE, "BRAKES", null, pageable);
 
         assertThat(result).isEmpty();
         assertThat(result.getTotalElements()).isZero();
@@ -260,8 +265,123 @@ class MechanicRosterQueryServiceTest {
                 .thenReturn(Page.empty(repositoryPageable));
 
         Page<LocationTechnicianRosterEntryResponse> result =
-                service.listLocationTechnicians(LOCATION_ID, null, null, requestedPageable);
+                service.listLocationTechnicians(LOCATION_ID, null, null, null, requestedPageable);
 
         assertThat(result.getPageable()).isEqualTo(repositoryPageable);
+    }
+
+    // ---- PLACEHOLDER shift window on the location roster (issue #2060) ----------------------
+
+    private static final String WEEKDAY_HOURS = """
+            [{"dayOfWeek":"MONDAY","openTime":"08:00","closeTime":"17:00"},
+             {"dayOfWeek":"TUESDAY","openTime":"08:00","closeTime":"17:00"},
+             {"dayOfWeek":"WEDNESDAY","openTime":"08:00","closeTime":"17:00"},
+             {"dayOfWeek":"THURSDAY","openTime":"08:00","closeTime":"17:00"},
+             {"dayOfWeek":"FRIDAY","openTime":"08:00","closeTime":"17:00"}]
+            """;
+
+    private static Mechanic grace() {
+        return Mechanic.builder()
+                .mechanicId(UUID.fromString("01960011-0000-7000-8000-000000000011"))
+                .personId(UUID.fromString("01960011-0000-7000-8000-000000000012"))
+                .firstName("Grace")
+                .lastName("Hopper")
+                .status(MechanicStatus.ACTIVE)
+                .build();
+    }
+
+    @Test
+    @DisplayName("AC1/AC7: every technician on the roster for the date carries the same location-hours window")
+    void everyTechnicianReceivesTheSameDerivedWindow() {
+        Pageable pageable = PageRequest.of(0, 20);
+        LocalDate tuesday = LocalDate.parse("2026-09-15");
+        when(shopRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(Shop.builder().id(LOCATION_ID).build()));
+        when(locationReplicaRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(ExtLocationReplica.builder()
+                        .locationId(LOCATION_ID)
+                        .timezone("America/New_York")
+                        .operatingHours(WEEKDAY_HOURS)
+                        .build()));
+        when(mechanicRepository.findRosterByLocation(LOCATION_ID, MechanicStatus.ACTIVE, null, tuesday, pageable))
+                .thenReturn(new PageImpl<>(List.of(ada(), grace()), pageable, 2));
+        when(credentialRepository.findByPersonIdInOrderByIssuedOnDesc(any())).thenReturn(List.of());
+
+        Page<LocationTechnicianRosterEntryResponse> result =
+                service.listLocationTechnicians(LOCATION_ID, null, null, tuesday, pageable);
+
+        assertThat(result.getContent()).hasSize(2).allSatisfy(entry -> {
+            assertThat(entry.getShiftStatus()).isEqualTo(ShiftStatus.DERIVED);
+            assertThat(entry.getShiftSource()).isEqualTo(ShiftSource.LOCATION_HOURS);
+            // 08:00–17:00 New York on 2026-09-15 (EDT, UTC-4).
+            assertThat(entry.getShiftStart()).isEqualTo(Instant.parse("2026-09-15T12:00:00Z"));
+            assertThat(entry.getShiftEnd()).isEqualTo(Instant.parse("2026-09-15T21:00:00Z"));
+            assertThat(entry.getShiftMinutes()).isEqualTo(540);
+        });
+        // Pinned explicitly: the two entries are identical in every window field, by construction.
+        LocationTechnicianRosterEntryResponse first = result.getContent().get(0);
+        LocationTechnicianRosterEntryResponse second = result.getContent().get(1);
+        assertThat(second.getShiftStart()).isEqualTo(first.getShiftStart());
+        assertThat(second.getShiftEnd()).isEqualTo(first.getShiftEnd());
+        assertThat(second.getShiftMinutes()).isEqualTo(first.getShiftMinutes());
+        // AC9: the requested date is also the roster's assignment/credential reference date.
+        verify(mechanicRepository).findRosterByLocation(LOCATION_ID, MechanicStatus.ACTIVE, null, tuesday, pageable);
+    }
+
+    @Test
+    @DisplayName("AC2/AC9: without a location replica the window is UNKNOWN and nothing else changes")
+    void withoutAReplicaTheWindowIsUnknownWithNullBounds() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(shopRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(Shop.builder().id(LOCATION_ID).build()));
+        when(locationReplicaRepository.findById(LOCATION_ID)).thenReturn(Optional.empty());
+        when(mechanicRepository.findRosterByLocation(
+                        LOCATION_ID, MechanicStatus.ACTIVE, null, LocalDate.parse("2026-09-16"), pageable))
+                .thenReturn(new PageImpl<>(List.of(ada()), pageable, 1));
+        when(credentialRepository.findByPersonIdInOrderByIssuedOnDesc(List.of(PERSON_ID)))
+                .thenReturn(List.of());
+
+        Page<LocationTechnicianRosterEntryResponse> result =
+                service.listLocationTechnicians(LOCATION_ID, null, null, null, pageable);
+
+        assertThat(result.getContent()).singleElement().satisfies(entry -> {
+            assertThat(entry.getShiftStatus()).isEqualTo(ShiftStatus.UNKNOWN);
+            assertThat(entry.getShiftSource()).isEqualTo(ShiftSource.LOCATION_HOURS);
+            assertThat(entry.getShiftStart()).isNull();
+            assertThat(entry.getShiftEnd()).isNull();
+            assertThat(entry.getShiftMinutes()).isNull();
+            assertThat(entry.getPersonId()).isEqualTo(PERSON_ID);
+        });
+    }
+
+    @Test
+    @DisplayName("AC6: an omitted date is today in the location's timezone, and the window is derived for it")
+    void anOmittedDateDefaultsToTheFacilityTodayForTheWindowToo() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(shopRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(Shop.builder().id(LOCATION_ID).build()));
+        when(locationReplicaRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(ExtLocationReplica.builder()
+                        .locationId(LOCATION_ID)
+                        .timezone("America/Los_Angeles")
+                        .operatingHours(WEEKDAY_HOURS)
+                        .build()));
+        // 2026-09-16T03:30Z is still Tuesday the 15th in Los Angeles.
+        LocalDate facilityToday = LocalDate.parse("2026-09-15");
+        when(mechanicRepository.findRosterByLocation(LOCATION_ID, MechanicStatus.ACTIVE, null, facilityToday, pageable))
+                .thenReturn(new PageImpl<>(List.of(ada()), pageable, 1));
+        when(credentialRepository.findByPersonIdInOrderByIssuedOnDesc(List.of(PERSON_ID)))
+                .thenReturn(List.of());
+
+        Page<LocationTechnicianRosterEntryResponse> result =
+                service.listLocationTechnicians(LOCATION_ID, null, null, null, pageable);
+
+        assertThat(result.getContent()).singleElement().satisfies(entry -> {
+            assertThat(entry.getShiftStatus()).isEqualTo(ShiftStatus.DERIVED);
+            // 08:00–17:00 Los Angeles on the 15th (PDT, UTC-7), not on the UTC 16th.
+            assertThat(entry.getShiftStart()).isEqualTo(Instant.parse("2026-09-15T15:00:00Z"));
+            assertThat(entry.getShiftEnd()).isEqualTo(Instant.parse("2026-09-16T00:00:00Z"));
+            assertThat(entry.getShiftMinutes()).isEqualTo(540);
+        });
     }
 }
