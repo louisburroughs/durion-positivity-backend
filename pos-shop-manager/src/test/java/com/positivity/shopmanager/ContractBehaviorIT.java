@@ -5,9 +5,16 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
+import com.positivity.shopmanager.internal.repository.AppointmentRepository;
+import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ConflictRuleRepository;
+import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
+import com.positivity.shopmanager.internal.repository.SchedulingConflictRepository;
 import com.positivity.shopmanager.internal.service.CrmSnapshotService;
 import com.positivity.shopmanager.internal.service.StaffingScheduleService;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +46,24 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     @MockitoBean
     private StaffingScheduleService staffingScheduleService;
 
+    @Autowired
+    private ConflictRuleRepository conflictRuleRepository;
+
+    @Autowired
+    private ExtStaffingAssignmentReplicaRepository staffingAssignmentRepository;
+
+    @Autowired
+    private AppointmentRepository appointmentRepository;
+
+    @Autowired
+    private AppointmentAuditRepository appointmentAuditRepository;
+
+    @Autowired
+    private AppointmentServiceRequestRepository appointmentServiceRequestRepository;
+
+    @Autowired
+    private SchedulingConflictRepository schedulingConflictRepository;
+
     // Fixed UUIDs shared across tests
     private static final String CUSTOMER_1 = "aaaaaaaa-0000-0000-0000-000000000001";
     private static final String CUSTOMER_2 = "aaaaaaaa-0000-0000-0000-000000000002";
@@ -47,10 +72,28 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     private static final String SERVICE_REQ = "cccccccc-0000-0000-0000-000000000001";
     private static final String LOCATION = "dddddddd-0000-0000-0000-000000000001";
 
+    /**
+     * Each test owns the slot it books: without this, an earlier test's identical booking makes the
+     * next one an exact keyless resubmission, which CAP-326 replays with 200 instead of creating
+     * (spec D17 item 3) — a pass or fail that depends on test order.
+     */
+    @BeforeEach
+    void clearAppointments() {
+        schedulingConflictRepository.deleteAll();
+        appointmentServiceRequestRepository.deleteAll();
+        appointmentAuditRepository.deleteAll();
+        appointmentRepository.deleteAll();
+    }
+
     @BeforeEach
     void setUp() {
         when(crmSnapshotService.getCustomerById(any())).thenReturn(Map.of("id", "customer-snapshot"));
         when(crmSnapshotService.getVehicleById(any())).thenReturn(Map.of("id", "vehicle-snapshot"));
+        // CAP-326's evaluator runs on every booking: it resolves each conflict code against the
+        // seeded catalog, and refuses HARD when no mechanic is rostered. Both facts are migration
+        // and replica state that this H2 context starts without.
+        SchedulingWorldFixture.seedConflictRules(conflictRuleRepository);
+        SchedulingWorldFixture.rosterTechnician(staffingAssignmentRepository, UUID.fromString(LOCATION));
     }
 
     @Override
@@ -169,12 +212,14 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 .get("appointmentId")
                 .asString();
 
+        // The replay does not create a second appointment, so it answers 200, not 201 (spec D17
+        // item 3 / DECISION-SHOPMGMT-014, documented on the endpoint).
         MvcResult result2 = mockMvc.perform(withGatewayAuth(post("/v1/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)
                         .header("X-Correlation-Id", "00000000-0000-0000-0000-000000000006")
                         .header("Idempotency-Key", idempotencyKey)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isOk())
                 .andReturn();
 
         String id2 = objectMapper
@@ -200,12 +245,18 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         // Different customer+vehicle booking overlapping slot in same bay
         String payload2 = createAppointmentPayload(
                 CUSTOMER_2, VEHICLE_2, LOCATION, "2026-05-01T14:30:00Z", "2026-05-01T15:30:00Z", "BAY-CONFLICT");
+        // CAP-326: BAY_DOUBLE_BOOKED is a HARD rule, so the refusal is the
+        // DECISION-SHOPMGMT-002 conflict envelope with 409 (the endpoint's documented answer for a
+        // hard conflict), not the 400 VALIDATION_ERROR this assertion expected before the
+        // enforcement tier existed.
         mockMvc.perform(withGatewayAuth(post("/v1/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload2)
                         .header("X-Correlation-Id", "00000000-0000-0000-0000-000000000007")))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("SCHEDULING_CONFLICT"))
+                .andExpect(jsonPath("$.conflicts[0].code").value("BAY_DOUBLE_BOOKED"))
+                .andExpect(jsonPath("$.conflicts[0].severity").value("HARD"));
     }
 
     @Test

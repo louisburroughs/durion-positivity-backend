@@ -8,11 +8,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.shopmanager.BaseContractIntegrationTest;
 import com.positivity.shopmanager.PosShopManagerApplication;
+import com.positivity.shopmanager.SchedulingWorldFixture;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.AppointmentAudit;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
+import com.positivity.shopmanager.internal.repository.ConflictRuleRepository;
+import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.service.CrmSnapshotService;
 import java.time.Instant;
@@ -97,6 +100,12 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
     @Autowired
     private RescheduleHistoryRepository rescheduleHistoryRepository;
 
+    @Autowired
+    private ConflictRuleRepository conflictRuleRepository;
+
+    @Autowired
+    private ExtStaffingAssignmentReplicaRepository staffingAssignmentRepository;
+
     // Mocked to prevent context-startup failures; not invoked by reschedule/cancel
     // stubs
     @MockitoBean
@@ -112,6 +121,11 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
         appointmentAuditRepository.deleteAll();
         rescheduleHistoryRepository.deleteAll();
         appointmentRepository.deleteAll();
+        // A reschedule is evaluated exactly as a booking is (CAP-326), so it needs the rule catalog
+        // the migration seeds and a mechanic on the roster; without them every accepted-path test
+        // here is a 500 or a 409 about the empty world rather than about rescheduling.
+        SchedulingWorldFixture.seedConflictRules(conflictRuleRepository);
+        SchedulingWorldFixture.rosterTechnician(staffingAssignmentRepository, TEST_LOCATION_ID);
     }
 
     @Override
