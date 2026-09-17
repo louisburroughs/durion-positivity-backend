@@ -97,4 +97,32 @@ class UserPersonTranslationServiceTest {
 
         assertEquals(true, result);
     }
+
+    @Test
+    void findActivePersonUuidForUser_returnsPersonWhenTheLinkIsActive() {
+        when(linkReplicaRepository.findFirstByUsernameAndStatus(testUsername, "ACTIVE"))
+                .thenReturn(Optional.of(link()));
+
+        assertEquals(Optional.of(testPersonId), userPersonTranslationService.findActivePersonUuidForUser(testUsername));
+    }
+
+    @Test
+    void findActivePersonUuidForUser_isEmptyWhenOnlyAnInactiveLinkExists() {
+        // The repository query filters on ACTIVE, so a revoked link simply does not come back.
+        // WorkSessionAccessPolicy reads "empty" as "not this person" and falls through to the
+        // supervisory check rather than granting the self path (#2062 review).
+        when(linkReplicaRepository.findFirstByUsernameAndStatus(testUsername, "ACTIVE"))
+                .thenReturn(Optional.empty());
+
+        assertEquals(Optional.empty(), userPersonTranslationService.findActivePersonUuidForUser(testUsername));
+    }
+
+    @Test
+    void findActivePersonUuidForUser_neverThrowsForAnUnknownUser() {
+        when(linkReplicaRepository.findFirstByUsernameAndStatus(missingUsername, "ACTIVE"))
+                .thenReturn(Optional.empty());
+
+        // Deliberately not an exception: it is read inside a caller's transaction.
+        assertEquals(Optional.empty(), userPersonTranslationService.findActivePersonUuidForUser(missingUsername));
+    }
 }

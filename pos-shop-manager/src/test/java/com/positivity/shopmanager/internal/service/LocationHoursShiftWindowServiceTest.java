@@ -209,4 +209,49 @@ class LocationHoursShiftWindowServiceTest {
         assertThat(window.end()).isEqualTo(Instant.parse("2026-09-15T21:00:00Z"));
         assertThat(window.minutes()).isEqualTo(540);
     }
+
+    @Test
+    @DisplayName("AC3/BR3: a dated closure still reports CLOSED when the timezone or hours are missing")
+    void holidayClosureWinsEvenWithoutTimezoneOrHours() {
+        String closures = """
+                [{"date":"2026-09-15","reason":"Inventory day"}]
+                """;
+        // A partially-replicated location: the closures arrived, the timezone or the weekly hours
+        // have not. The closure is still a known fact about this date (#2062 review).
+        assertNoWindow(
+                service.resolve(LOCATION_ID, replica(null, ALL_WEEK_08_17, closures), LocalDate.parse("2026-09-15")),
+                ShiftStatus.CLOSED);
+        assertNoWindow(
+                service.resolve(LOCATION_ID, replica(NEW_YORK, null, closures), LocalDate.parse("2026-09-15")),
+                ShiftStatus.CLOSED);
+        assertNoWindow(
+                service.resolve(LOCATION_ID, replica(NEW_YORK, "not json", closures), LocalDate.parse("2026-09-15")),
+                ShiftStatus.CLOSED);
+        // A date the closures do not cover is still UNKNOWN when the prerequisites are missing.
+        assertNoWindow(
+                service.resolve(LOCATION_ID, replica(null, ALL_WEEK_08_17, closures), LocalDate.parse("2026-09-16")),
+                ShiftStatus.UNKNOWN);
+    }
+
+    @Test
+    @DisplayName("AC5: a window opening inside the spring-forward gap is UNKNOWN, never a negative span")
+    void windowInsideTheDstGapIsUnknown() {
+        // New York skips 02:00-03:00 on 2026-03-08, so ZonedDateTime.of normalises an 02:30 open
+        // forward to 03:30 while the 03:00 close does not move: the resolved start would sit after
+        // the resolved end. Valid in local time, impossible on the clock (#2062 review).
+        String insideTheGap = """
+                [{"dayOfWeek":"SUNDAY","openTime":"02:30","closeTime":"03:00"}]
+                """;
+        ShiftWindow window =
+                service.resolve(LOCATION_ID, replica(NEW_YORK, insideTheGap, null), LocalDate.parse("2026-03-08"));
+
+        assertNoWindow(window, ShiftStatus.UNKNOWN);
+        assertThat(window.minutes()).isNull();
+
+        // The identical entry on an ordinary Sunday is a normal 30-minute window.
+        ShiftWindow ordinary =
+                service.resolve(LOCATION_ID, replica(NEW_YORK, insideTheGap, null), LocalDate.parse("2026-03-15"));
+        assertThat(ordinary.status()).isEqualTo(ShiftStatus.DERIVED);
+        assertThat(ordinary.minutes()).isEqualTo(30);
+    }
 }

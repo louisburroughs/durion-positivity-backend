@@ -49,7 +49,10 @@ public class WorkSessionAccessPolicy {
     private final EmployeeLocationAssignmentRepository assignmentRepository;
     private final Clock clock;
 
-    /** The caller's linked person, or empty when the caller is unauthenticated or unlinked. */
+    /**
+     * The caller's own person, or empty when the caller is unauthenticated, unlinked, or linked
+     * only by a link that is no longer ACTIVE.
+     */
     public @NonNull Optional<UUID> callerPersonId() {
         String username;
         try {
@@ -60,10 +63,11 @@ public class WorkSessionAccessPolicy {
         if (username == null) {
             return Optional.empty();
         }
-        // The non-throwing lookup on purpose: the mutations run inside a transaction, and an
-        // exception thrown through the translation service's own transactional boundary would
-        // mark that transaction rollback-only even when caught here.
-        return userPersonTranslationService.findPersonUuidForUser(username);
+        // ACTIVE-only and non-throwing, both on purpose: an INACTIVE link is a historical
+        // association that must not still grant the self-service path, and an exception thrown
+        // through the translation service's own transactional boundary would mark the caller's
+        // transaction rollback-only even when caught here.
+        return userPersonTranslationService.findActivePersonUuidForUser(username);
     }
 
     /**

@@ -97,15 +97,18 @@ public class LocationHoursShiftWindowService {
         if (location == null) {
             return ShiftWindow.unknown();
         }
-        ZoneId zoneId = locationHoursParser.parseZone(locationId, location.getTimezone());
-        if (zoneId == null || location.getOperatingHours() == null) {
-            return ShiftWindow.unknown();
-        }
-        // BR3: a confirmed closure is a fact and outranks the weekly hours.
+        // BR3, and before the zone and weekly-hours prerequisites on purpose: a dated closure is
+        // a fact about this date that needs neither of them, so a replica holding closures but
+        // not yet a timezone or an hours payload must still report CLOSED rather than burying a
+        // known closure under UNKNOWN (#2062 review).
         if (locationHoursParser
                 .parseHolidayClosures(locationId, location.getHolidayClosures())
                 .containsKey(date)) {
             return ShiftWindow.closed();
+        }
+        ZoneId zoneId = locationHoursParser.parseZone(locationId, location.getTimezone());
+        if (zoneId == null || location.getOperatingHours() == null) {
+            return ShiftWindow.unknown();
         }
         Map<DayOfWeek, RawOperatingHoursEntry> hoursByDow =
                 locationHoursParser.parseOperatingHours(locationId, location.getOperatingHours());
@@ -150,6 +153,25 @@ public class LocationHoursShiftWindowService {
         // ScheduleCapacityServiceImpl.assembleDay makes, so a DST day spans its real length.
         Instant start = ZonedDateTime.of(date.atTime(openTime), zoneId).toInstant();
         Instant end = ZonedDateTime.of(date.atTime(closeTime), zoneId).toInstant();
+        // The local-time check above is not enough on a spring-forward date: a window that opens
+        // inside the skipped hour is normalised forward by ZonedDateTime.of, which can push the
+        // start past an unmoved close (02:30-03:00 in New York becomes 03:30-03:00). AC5 forbids
+        // emitting the negative span that would follow, so the ordering is re-checked on the
+        // resolved instants, where the shift actually lives (#2062 review).
+        if (!start.isBefore(end)) {
+            log.warn(
+                    "Location {} operatingHours entry for {} resolves to {} - {} in zone {}, which is not a"
+                            + " forward window (a DST transition can do this to an otherwise valid {} - {});"
+                            + " shift window is UNKNOWN rather than a negative span",
+                    locationId,
+                    date.getDayOfWeek(),
+                    start,
+                    end,
+                    zoneId,
+                    openTime,
+                    closeTime);
+            return ShiftWindow.unknown();
+        }
         return ShiftWindow.derived(start, end);
     }
 }

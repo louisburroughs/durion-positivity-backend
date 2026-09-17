@@ -100,11 +100,11 @@ class WorkSessionAccessPolicyTest {
     }
 
     private void linked(String username, UUID personId) {
-        when(userPersonTranslationService.findPersonUuidForUser(username)).thenReturn(Optional.of(personId));
+        when(userPersonTranslationService.findActivePersonUuidForUser(username)).thenReturn(Optional.of(personId));
     }
 
     private void unlinked(String username) {
-        when(userPersonTranslationService.findPersonUuidForUser(username)).thenReturn(Optional.empty());
+        when(userPersonTranslationService.findActivePersonUuidForUser(username)).thenReturn(Optional.empty());
     }
 
     @Nested
@@ -137,6 +137,18 @@ class WorkSessionAccessPolicyTest {
             caller(MANAGER_USER, null);
 
             assertThatThrownBy(() -> policy().requireMayManage(ADA)).isInstanceOf(AccessDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("a caller whose only link is INACTIVE is not 'self' and is refused (#2062 review)")
+        void inactiveLinkIsNotSelf() {
+            // The ACTIVE-only lookup answers empty for a link that has been revoked, so the
+            // former person's own clock is no longer reachable without a supervisory grant.
+            unlinked(ADA_USER);
+            caller(ADA_USER, null);
+
+            assertThatThrownBy(() -> policy().requireMayManage(ADA)).isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> policy().requireMayView(ADA)).isInstanceOf(AccessDeniedException.class);
         }
 
         @Test
@@ -325,7 +337,8 @@ class WorkSessionAccessPolicyTest {
             Arrays.asList(ADA, GRACE, UUID.randomUUID())
                     .forEach(person -> policy.mayViewClockState(viewer, person, SHOP_A));
 
-            verify(userPersonTranslationService, org.mockito.Mockito.times(1)).findPersonUuidForUser(MANAGER_USER);
+            verify(userPersonTranslationService, org.mockito.Mockito.times(1))
+                    .findActivePersonUuidForUser(MANAGER_USER);
         }
     }
 }

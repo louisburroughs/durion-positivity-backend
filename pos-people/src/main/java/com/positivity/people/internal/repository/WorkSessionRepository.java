@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface WorkSessionRepository extends JpaRepository<WorkSession, UUID> {
@@ -17,5 +18,6 @@ public interface WorkSessionRepository extends JpaRepository<WorkSession, UUID> 
      * Every open session of the given people in one query, most recently started first, so a
      * roster's clock state is resolved without a query per person (issue #2061, BR7).
      */
-    List<WorkSession> findByPersonIdInAndEndedAtIsNullOrderByStartedAtDesc(Collection<UUID> personIds);
+    @NonNull
+    List<WorkSession> findByPersonIdInAndEndedAtIsNullOrderByStartedAtDesc(@NonNull Collection<UUID> personIds);
 }

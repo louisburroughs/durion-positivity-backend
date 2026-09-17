@@ -261,8 +261,13 @@ public class WorkSessionServiceImpl implements WorkSessionService {
                 workSessionRepository.findByPersonIdInAndEndedAtIsNullOrderByStartedAtDesc(personIds)) {
             WorkSession kept = openByPerson.putIfAbsent(session.getPersonId(), session);
             if (kept != null) {
-                // BR2: start's 409 and the unique index make this unreachable through the API;
-                // if the data holds it anyway, surface the newest and say so loudly.
+                // BR2. Not unreachable: startSession's pre-check narrows the window and its
+                // DataIntegrityViolation catch would close it, but `work_session` carries no
+                // uniqueness on (person, open) — only (tenant_id, session_id) — so two
+                // concurrent starts can both commit. Closing that needs a partial unique index,
+                // which is a migration #2061 explicitly excludes. Until one exists the read is
+                // deterministic rather than arbitrary: surface the newest, and log loudly enough
+                // that the duplicate gets found.
                 log.error(
                         "Person {} has more than one open work session ({} and {}); reporting the most recent",
                         session.getPersonId(),
