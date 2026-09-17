@@ -1383,6 +1383,8 @@ paths:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop~1audit
   /v1/shop/audit/{id}:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop~1audit~1{id}
+  /v1/shops/{locationId}:
+    $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shops~1{locationId}
   /v1/supplier/admin/audit/exchanges:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges
   /v1/supplier/admin/audit/exchanges/by-correlation/{correlationId}:

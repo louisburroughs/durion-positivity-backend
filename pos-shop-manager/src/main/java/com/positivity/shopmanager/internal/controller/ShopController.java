@@ -9,6 +9,7 @@ import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.ShopConfigurationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +29,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/shops")
 @RequiredArgsConstructor
 public class ShopController {
+
+    private static final String SHOP_EXAMPLE = """
+            {
+              "name": "Charlotte Main Service Center",
+              "address": "100 Trade Street",
+              "timezone": "America/New_York"
+            }
+            """;
 
     private final ShopConfigurationService shopConfigurationService;
 
@@ -68,7 +77,21 @@ public class ShopController {
     @PreAuthorize("hasAuthority('" + ShopPermissions.SCHEDULE_EDIT + "')")
     @PutMapping("/{locationId}")
     public ResponseEntity<ShopResponse> upsertShop(
-            @PathVariable UUID locationId, @Valid @RequestBody ShopUpsertRequest request) {
+            @PathVariable UUID locationId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Scheduling configuration for the location: a non-blank name, an optional"
+                                    + " address and an optional IANA timezone the day window is computed in.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Schedulable service center",
+                                                            value = SHOP_EXAMPLE)))
+                    @Valid
+                    @RequestBody
+                    ShopUpsertRequest request) {
         // locationId names the site being configured; a scoped caller must have it in reach
         // (ADR-0061 §3, #1872). Without this a caller scoped to one site could make any other
         // site schedulable, or retime its day. Spring has already rejected a malformed id.
