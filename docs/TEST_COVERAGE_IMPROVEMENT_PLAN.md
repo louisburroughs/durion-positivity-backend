@@ -1136,6 +1136,70 @@ lowering a floor to clear a `THIN` caused by a genuine regression buys a green
 nightly by writing off the points that caused it.
 
 
+### 6.7 Two stale floors and one regression (2026-09-17)
+
+**Run 35184260406** (nightly, `main` at `9e37280`) failed `Enforce coverage floor
+drift` on three counters across three modules, and — as in §6.6 — they are not
+the same kind of failure:
+
+| module | counter | floor | floor derived from | measured 2026-09-17 | cushion | status |
+|---|---|---:|---:|---:|---:|---|
+| `pos-shop-manager` | line | 0.83 | 86.5% | 89.1% | +6.1 | `STALE` |
+| `pos-shop-manager` | branch | 0.69 | 72.3% | 77.4% | +8.4 | `STALE` |
+| `pos-vehicle-inventory` | line | 0.75 | 78.5% | 83.7% | +8.7 | `STALE` |
+| `pos-vehicle-inventory` | branch | 0.70 | 73.3% | 79.5% | +9.5 | `STALE` |
+| `pos-location` | line | 0.79 | 82.1% | 80.2% | +1.2 | `THIN` |
+
+The two `STALE` modules are the ratchet working as designed and nothing else.
+Both took a wave of CAP-325/326 work with its tests over 2026-09-15..16 —
+shop-manager gained 2.6 line and 5.1 branch points, vehicle-inventory 5.2 and
+6.2 — and nothing raised the floors behind the gains. Re-deriving them is the
+whole fix: 0.83/0.69 → 0.86/0.74 and 0.75/0.70 → 0.80/0.76.
+
+`pos-location` is the §6.6 case again, and §6.6's rule found it in one step:
+rank the module's classes by missed lines before calling a `THIN` variation.
+`internal.service.CatalogEventsListener`, added 2026-09-16 (`3a41e4f4`, put to
+work in `00699d3b`), had **0 of 51 lines and 0 of 12 branches covered**. Fifty-one
+lines of 2,921 is 1.7 points — the whole fall from the 82.1% peak the floor was
+derived from. It is the third consecutive nightly whose `THIN` was one
+event-consumer or replica class merged without a test, which is now a pattern
+rather than a coincidence: the listener shape is boilerplate enough to look
+tested and branchy enough that it is not.
+
+`CatalogEventsListenerTest` pins the consumer contract the class's javadoc
+states: only `catalog.service.updated` is applied and a product fact on the same
+topic is skipped without a dedup row; a missing, blank or already-seen `eventId`
+is dropped; an unparsable message and a malformed payload are logged and dropped
+rather than poisoning the partition, and neither leaves a `processed_events` row
+behind to hide it; a transient DB error reaches the container for retry/DLQ; the
+stale guard discards an older fact but still records it, and **applies on an
+equal version** so `facts/replay` repairs rather than no-ops (#1486); and the
+delete tombstone lands as `active = false` rather than removing the row, which is
+what keeps a retired operation code distinguishable from an unknown one.
+
+```
+before   line 2343/2921 = 80.2%   branch 751/1079 = 69.6%   THIN
+after    line 2394/2921 = 82.0%   branch 763/1079 = 70.7%   OK
+```
+
+The floors do not move: 82.0% is a tenth under the 82.1% peak 0.79 was derived
+from, so `proposed_floors()` drops the 0.78 candidate, which is the ratchet
+refusing to write off the point it just recovered. Three mutation checks back the
+new tests (`.claude/hooks/mutation-check-hook.sh`): inverting the stale-guard
+argument order, swallowing the `TransientDataAccessException` rethrow, and
+dropping the blank-`eventId` half of the guard each fail the test that claims to
+defend them.
+
+**A measurement note on `pos-vehicle-inventory`.** Its floors were derived from
+the percentages this nightly published rather than a local re-run:
+`VehicleFactReplayRepositoryTest` needs a Postgres container, and the environment
+the re-derivation ran in cannot reach the registry, which costs that module 1.1
+line and 1.7 branch points. Deriving from the local figure would have written
+0.79/0.74 — floors a point under what the gate actually measures, i.e. the slack
+this check exists to remove. `pos-shop-manager` and `pos-location` were derived
+from a local `verify -DskipITs` that reproduces the nightly to the decimal.
+
+
 ## 7. What is still open
 
 1. ~~**Wave 1c** (`{Module}PermissionRegistry`, §3.3)~~ — closed 2026-08-12, see §7.1.
