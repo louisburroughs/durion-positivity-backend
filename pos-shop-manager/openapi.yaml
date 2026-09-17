@@ -2812,7 +2812,7 @@ components:
           description: Display name of the shop
           example: Charlotte Main Service Center
           maxLength: 255
-          minLength: 0
+          minLength: 1
           type: string
         timezone:
           description: IANA timezone the shop's day window is computed in
