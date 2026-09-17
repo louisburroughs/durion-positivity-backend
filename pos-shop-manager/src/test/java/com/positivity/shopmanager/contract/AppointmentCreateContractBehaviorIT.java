@@ -8,8 +8,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.shopmanager.BaseContractIntegrationTest;
 import com.positivity.shopmanager.PosShopManagerApplication;
+import com.positivity.shopmanager.SchedulingWorldFixture;
 import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
+import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
+import com.positivity.shopmanager.internal.repository.AppointmentRepository;
+import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ConflictRuleRepository;
+import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
+import com.positivity.shopmanager.internal.repository.SchedulingConflictRepository;
 import com.positivity.shopmanager.internal.service.CrmSnapshotService;
 import java.util.Map;
 import java.util.UUID;
@@ -65,6 +72,48 @@ class AppointmentCreateContractBehaviorIT extends BaseContractIntegrationTest {
 
     @MockitoBean
     private CrmSnapshotService crmSnapshotService;
+
+    @Autowired
+    private ConflictRuleRepository conflictRuleRepository;
+
+    @Autowired
+    private ExtStaffingAssignmentReplicaRepository staffingAssignmentRepository;
+
+    @Autowired
+    private AppointmentRepository appointmentRepository;
+
+    @Autowired
+    private AppointmentAuditRepository appointmentAuditRepository;
+
+    @Autowired
+    private AppointmentServiceRequestRepository appointmentServiceRequestRepository;
+
+    @Autowired
+    private SchedulingConflictRepository schedulingConflictRepository;
+
+    /**
+     * Each test owns the slot it books: without this, an earlier test's identical booking makes the
+     * next one an exact keyless resubmission, which CAP-326 replays with 200 instead of creating
+     * (spec D17 item 3) — a pass or fail that depends on test order.
+     */
+    @BeforeEach
+    void clearAppointments() {
+        schedulingConflictRepository.deleteAll();
+        appointmentServiceRequestRepository.deleteAll();
+        appointmentAuditRepository.deleteAll();
+        appointmentRepository.deleteAll();
+    }
+
+    /**
+     * The booking preconditions CAP-326 added: the seeded rule catalog the evaluator resolves every
+     * code against, and an ACTIVE technician at the test location, without whom HARD
+     * MECHANIC_UNAVAILABLE refuses each creation these tests expect to succeed.
+     */
+    @BeforeEach
+    void seedSchedulingWorld() {
+        SchedulingWorldFixture.seedConflictRules(conflictRuleRepository);
+        SchedulingWorldFixture.rosterTechnician(staffingAssignmentRepository, TEST_LOCATION_ID);
+    }
 
     @BeforeEach
     void setupCrmStubs() {
