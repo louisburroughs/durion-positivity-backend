@@ -1161,6 +1161,8 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1time-periods~1{timePeriodId}~1people~1{personId}~1reject
   /v1/people/timekeeping/timekeeping-entries:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timekeeping~1timekeeping-entries
+  /v1/people/workSessions/current:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1workSessions~1current
   /v1/people/workSessions/start:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1workSessions~1start
   /v1/people/workSessions/stop:

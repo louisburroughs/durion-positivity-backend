@@ -51,14 +51,14 @@ public class TechnicianController {
                     Returns the technicians assigned to one shop location on a date, enriched with mechanic \
                     identity and skills from the eventually consistent HR read model, plus a PLACEHOLDER shift \
                     window per technician.
-                    PLACEHOLDER shift window: shiftStart, shiftEnd, shiftMinutes, shiftSource and shiftStatus are \
-                    derived from the shop location's operating hours for the requested date, not from the \
-                    person's own schedule, so every technician at the location receives the same window and \
-                    staggered shifts, part-time hours, split shifts, overtime and PTO are invisible to it. \
-                    shiftSource is LOCATION_HOURS until the real per-person shift schedule (#71, blocked on \
-                    #271) replaces it; read shiftSource, not the docs, to tell the two apart. When the location's \
-                    timezone or hours are missing or unreadable the window is UNKNOWN with null bounds rather \
-                    than a default, and a holiday closure is CLOSED (see #2060).
+                    PLACEHOLDER: shiftStart, shiftEnd, shiftMinutes, shiftSource and shiftStatus are derived from \
+                    the shop location's operating hours for the requested date, not from the person's own roster, \
+                    so every technician at the location carries the same window and staggered shifts, part-time \
+                    hours, overtime and PTO are invisible to it; shiftSource reads LOCATION_HOURS until the real \
+                    per-person shift schedule (issue 71, blocked on issue 271) replaces it, so read that field \
+                    rather than this prose to tell a placeholder window from a real one; an unknown timezone or \
+                    unreadable hours give shiftStatus UNKNOWN with null bounds rather than a default window, and a \
+                    dated holiday closure gives CLOSED.
                     Use this tool when staffing or dispatching work at a single location; use listMechanics instead \
                     for the shop-wide roster, and getTechnicianPerson instead for one technician's contact details.
                     Preconditions: the location must exist as a shop, and both the technician assignments and their \
