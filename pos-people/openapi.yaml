@@ -2430,6 +2430,60 @@ paths:
       - Timekeeping Approval API
       x-required-permissions:
       - people:timekeeping:view
+  /v1/people/workSessions/current:
+    get:
+      description: 'Reads a person''s current clock state — CLOCKED_IN, ON_BREAK or CLOCKED_OUT — with the open session id, its start time and the open break''s start time when there is one. Derived on read from the open work session and break; nothing is created, closed or changed.
+
+        Use this tool to render a clock-in/out toggle for one person, for example after a toggle press or on a self-service view; use listPeopleAvailability instead to read the clock state of everyone at a location in one call, which is what a dispatch board needs.
+
+        Preconditions: the person must exist in the identity replica.
+
+        Required inputs: none are mandatory; personId (UUID) as a query parameter defaults to the caller''s own linked person when omitted.
+
+        Authorization: a person reads their own state with people:self:view; reading another person''s state needs people:timekeeping:view, and when that grant is location-scoped it must cover one of the person''s active assignment locations.
+
+        Emits a PEOPLE_WORK_SESSION_CURRENT_GET audit event but changes no state.
+
+        Returns 200 with clockState CLOCKED_OUT and null session fields when nothing is open — never 404 for that; 404 PERSON_NOT_FOUND when the person is unknown, 404 when personId is omitted and the caller has no linked person, 403 FORBIDDEN when the caller is neither the person nor a people:timekeeping:view holder, and 403 LOCATION_SCOPE_DENIED when the caller''s grant does not cover the person''s location.
+
+        '
+      operationId: getCurrentWorkSession
+      parameters:
+      - description: Person whose clock state to read. Defaults to the caller's own linked person when omitted.
+        example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        in: query
+        name: personId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkSessionClockStateResponse'
+          description: Current clock state returned; CLOCKED_OUT when nothing is open.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller is neither the person nor a people:timekeeping:view holder (ApiError.code FORBIDDEN), or their grant does not cover the person's location (LOCATION_SCOPE_DENIED).
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Person not found, or personId omitted and the caller has no linked person.
+      security:
+      - bearerAuth: []
+      summary: Get A Person's Current Work-Session (Clock) State
+      tags:
+      - Work Sessions API
+      x-required-permissions:
+      - people:self:view
+      - people:timekeeping:view
   /v1/people/workSessions/start:
     post:
       description: 'Starts a new ACTIVE work session for a person, stamping the start time from the server clock and the actor from the security context.
@@ -2439,6 +2493,8 @@ paths:
         Preconditions: the person must exist in the identity replica, and the person must have no session that is still open.
 
         Required inputs: personId (UUID) in the body; the body''s actor field is ignored, because the recorded actor is always the authenticated username.
+
+        Authorization: the caller must be the person themself, or hold people:timekeeping:approve; when that grant is location-scoped it must cover one of the person''s active assignment locations (403 FORBIDDEN otherwise, 403 LOCATION_SCOPE_DENIED when only the scope fails).
 
         Emits a PEOPLE_WORK_SESSION_START event.
 
@@ -2482,6 +2538,8 @@ paths:
 
         Required inputs: personId (UUID) in the body; the body''s actor field is ignored in favour of the authenticated username.
 
+        Authorization: the caller must be the person themself, or hold people:timekeeping:approve; when that grant is location-scoped it must cover one of the person''s active assignment locations (403 FORBIDDEN otherwise, 403 LOCATION_SCOPE_DENIED when only the scope fails).
+
         Emits a PEOPLE_WORK_SESSION_STOP event.
 
         Returns 404 when no active session exists for the person.
@@ -2523,6 +2581,8 @@ paths:
         Preconditions: the session must exist and still be open, and no break may already be open on it.
 
         Required inputs: the work session id (UUID) as the path parameter; there is no request body.
+
+        Authorization: the caller must be the session''s person, or hold people:timekeeping:approve; when that grant is location-scoped it must cover one of the person''s active assignment locations (403 FORBIDDEN otherwise, 403 LOCATION_SCOPE_DENIED when only the scope fails).
 
         Emits a PEOPLE_WORK_SESSION_BREAK_START event.
 
@@ -2569,6 +2629,8 @@ paths:
 
         Required inputs: the work session id (UUID) as the path parameter; there is no request body.
 
+        Authorization: the caller must be the session''s person, or hold people:timekeeping:approve; when that grant is location-scoped it must cover one of the person''s active assignment locations (403 FORBIDDEN otherwise, 403 LOCATION_SCOPE_DENIED when only the scope fails).
+
         Emits a PEOPLE_WORK_SESSION_BREAK_STOP event.
 
         Returns 409 when no open break exists for the session, including when the session id itself is unknown.
@@ -2613,6 +2675,8 @@ paths:
         Preconditions: the session must exist and be in ENDED status; ACTIVE or already SUBMITTED sessions are rejected.
 
         Required inputs: the work session id (UUID) path parameter and a body with billableMinutes and breakMinutes (both zero or greater) and submittedAt (ISO-8601 instant).
+
+        Authorization: the caller must be the session''s person, or hold people:timekeeping:approve; when that grant is location-scoped it must cover one of the person''s active assignment locations (403 FORBIDDEN otherwise, 403 LOCATION_SCOPE_DENIED when only the scope fails).
 
         Emits a PEOPLE_WORK_SESSION_SUBMIT event.
 
@@ -3706,6 +3770,24 @@ components:
           example: '2026-02-16'
           format: date
           type: string
+        breakStartedAt:
+          description: When the open break started; non-null exactly when clockState is ON_BREAK
+          example: '2026-02-16T12:00:00Z'
+          format: date-time
+          type: string
+        clockState:
+          description: 'The person''s current clock state: CLOCKED_IN (open work session, no open break), ON_BREAK (open session with an open break) or CLOCKED_OUT (no open session). Null when the caller may not see this person''s clock state: it is shown for the caller''s own row, and for every row when the caller holds people:timekeeping:view covering the location.'
+          enum:
+          - CLOCKED_IN
+          - ON_BREAK
+          - CLOCKED_OUT
+          example: CLOCKED_IN
+          type: string
+        clockedInAt:
+          description: When the open work session started; non-null exactly when workSessionId is
+          example: '2026-02-16T08:00:00Z'
+          format: date-time
+          type: string
         effectiveFrom:
           description: Date the assignment becomes effective
           example: '2026-02-01'
@@ -3741,6 +3823,11 @@ components:
         role:
           description: Assignment role at the location
           example: TECHNICIAN
+          type: string
+        workSessionId:
+          description: The open work session; non-null exactly when clockState is CLOCKED_IN or ON_BREAK. The break endpoints are keyed by this id.
+          example: 01960011-0000-7000-8000-000000000002
+          format: uuid
           type: string
       required:
       - assignmentStatus
@@ -4701,6 +4788,41 @@ components:
       - locationId
       - personId
       - role
+      type: object
+    WorkSessionClockStateResponse:
+      description: 'A person''s current work-session (clock) state, derived from their open work session and open break. CLOCKED_OUT is an answer, not an error: it is returned when nothing is open.'
+      properties:
+        breakStartedAt:
+          description: When the open break started; non-null exactly when clockState is ON_BREAK
+          example: '2026-02-16T12:00:00Z'
+          format: date-time
+          type: string
+        clockState:
+          description: CLOCKED_IN (open session, no open break), ON_BREAK (open session with an open break) or CLOCKED_OUT (no open session)
+          enum:
+          - CLOCKED_IN
+          - ON_BREAK
+          - CLOCKED_OUT
+          example: CLOCKED_IN
+          type: string
+        clockedInAt:
+          description: When the open session started; non-null exactly when workSessionId is
+          example: '2026-02-16T08:00:00Z'
+          format: date-time
+          type: string
+        personId:
+          description: Person the state belongs to
+          example: 01960011-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        workSessionId:
+          description: The open work session; non-null exactly when clockState is CLOCKED_IN or ON_BREAK. The break endpoints are keyed by this id.
+          example: 01960011-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+      required:
+      - clockState
+      - personId
       type: object
     WorkSessionDto:
       description: Work session representing a tracked period of work for a person

@@ -54,6 +54,9 @@ class WorkSessionServiceTest {
     @Mock
     private EmployeeLocationAssignmentRepository locationAssignmentRepository;
 
+    @Mock
+    private WorkSessionAccessPolicy accessPolicy;
+
     private WorkSessionService service;
 
     private UUID personId;
@@ -66,6 +69,7 @@ class WorkSessionServiceTest {
                 extPersonReplicaRepository,
                 timeEntryRepository,
                 locationAssignmentRepository,
+                accessPolicy,
                 Clock.systemUTC());
         personId = UUID.fromString("10000000-0000-0000-0000-000000000001");
         org.mockito.Mockito.lenient()

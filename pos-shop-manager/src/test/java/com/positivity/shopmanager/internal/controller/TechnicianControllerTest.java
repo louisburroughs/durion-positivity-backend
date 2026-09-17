@@ -2,6 +2,7 @@ package com.positivity.shopmanager.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,10 +12,13 @@ import com.positivity.shopmanager.internal.dto.LocationTechnicianRosterEntryResp
 import com.positivity.shopmanager.internal.dto.TechnicianCredentialResponse;
 import com.positivity.shopmanager.internal.enums.CredentialStatus;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import com.positivity.shopmanager.internal.enums.ShiftSource;
+import com.positivity.shopmanager.internal.enums.ShiftStatus;
 import com.positivity.shopmanager.internal.service.MechanicRosterQueryService;
 import com.positivity.shopmanager.internal.service.TechnicianPersonService;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
@@ -63,7 +67,7 @@ class TechnicianControllerTest {
                         .build()))
                 .build();
         when(mechanicRosterQueryService.listLocationTechnicians(
-                        eq(LOCATION_ID), eq(MechanicStatus.ON_LEAVE), eq("BRAKES"), any()))
+                        eq(LOCATION_ID), eq(MechanicStatus.ON_LEAVE), eq("BRAKES"), isNull(), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(entry)));
 
         mockMvc.perform(get("/v1/shop-manager/{locationId}/technicians", LOCATION_ID)
@@ -76,6 +80,42 @@ class TechnicianControllerTest {
                 .andExpect(jsonPath("$.content[0].locationId").value(LOCATION_ID.toString()))
                 .andExpect(jsonPath("$.content[0].status").value("ON_LEAVE"))
                 .andExpect(jsonPath("$.page.totalElements").value(1));
+    }
+
+    @Test
+    @WithMockUser(authorities = "shop:technician:view")
+    void listLocationTechniciansPassesTheDateThroughAndSerializesThePlaceholderShiftWindow() throws Exception {
+        LocalDate date = LocalDate.parse("2026-09-15");
+        LocationTechnicianRosterEntryResponse entry = LocationTechnicianRosterEntryResponse.builder()
+                .locationId(LOCATION_ID)
+                .personId(UUID.fromString("01960011-0000-7000-8000-000000000002"))
+                .status(MechanicStatus.ACTIVE)
+                .credentials(List.of())
+                .shiftStart(Instant.parse("2026-09-15T12:00:00Z"))
+                .shiftEnd(Instant.parse("2026-09-15T21:00:00Z"))
+                .shiftMinutes(540)
+                .shiftSource(ShiftSource.LOCATION_HOURS)
+                .shiftStatus(ShiftStatus.DERIVED)
+                .build();
+        when(mechanicRosterQueryService.listLocationTechnicians(eq(LOCATION_ID), isNull(), isNull(), eq(date), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(entry)));
+
+        mockMvc.perform(get("/v1/shop-manager/{locationId}/technicians", LOCATION_ID)
+                        .param("date", "2026-09-15"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].shiftStart").value("2026-09-15T12:00:00Z"))
+                .andExpect(jsonPath("$.content[0].shiftEnd").value("2026-09-15T21:00:00Z"))
+                .andExpect(jsonPath("$.content[0].shiftMinutes").value(540))
+                .andExpect(jsonPath("$.content[0].shiftSource").value("LOCATION_HOURS"))
+                .andExpect(jsonPath("$.content[0].shiftStatus").value("DERIVED"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "shop:technician:view")
+    void listLocationTechniciansRejectsAMalformedDate() throws Exception {
+        mockMvc.perform(get("/v1/shop-manager/{locationId}/technicians", LOCATION_ID)
+                        .param("date", "15/09/2026"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

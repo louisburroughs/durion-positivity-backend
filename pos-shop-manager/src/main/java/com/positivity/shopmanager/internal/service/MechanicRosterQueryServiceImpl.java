@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.service;
 import com.positivity.shopmanager.internal.dto.LocationTechnicianRosterEntryResponse;
 import com.positivity.shopmanager.internal.dto.MechanicRosterEntryResponse;
 import com.positivity.shopmanager.internal.dto.TechnicianCredentialResponse;
+import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
 import com.positivity.shopmanager.internal.entity.ExtPersonCredentialReplica;
 import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.entity.Shop;
@@ -11,6 +12,7 @@ import com.positivity.shopmanager.internal.repository.ExtLocationReplicaReposito
 import com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
+import com.positivity.shopmanager.internal.service.LocationHoursShiftWindowService.ShiftWindow;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -18,6 +20,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +41,11 @@ import org.springframework.web.server.ResponseStatusException;
  *
  * <p>The reference date for "held" is the facility's local date for a location roster
  * (DECISION-SHOPMGMT-015) and the clock's date for the location-less mechanic roster.
+ *
+ * <p>The location roster also carries a PLACEHOLDER shift window per entry (issue #2060): the
+ * location's operating hours for the roster date, resolved once by {@link
+ * LocationHoursShiftWindowService} and stamped unchanged on every technician, so the board can
+ * render free hours until a real per-person schedule exists (#71).
  */
 @Service
 @RequiredArgsConstructor
@@ -48,6 +56,7 @@ public class MechanicRosterQueryServiceImpl implements MechanicRosterQueryServic
     private final ShopRepository shopRepository;
     private final ExtLocationReplicaRepository locationReplicaRepository;
     private final LocationHoursParser hoursParser;
+    private final LocationHoursShiftWindowService shiftWindowService;
     private final Clock clock;
 
     @Override
@@ -79,12 +88,21 @@ public class MechanicRosterQueryServiceImpl implements MechanicRosterQueryServic
             @NonNull UUID locationId,
             @Nullable MechanicStatus status,
             @Nullable String skillCode,
+            @Nullable LocalDate date,
             @NonNull Pageable pageable) {
         Shop shop = shopRepository
                 .findById(locationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND"));
         MechanicStatus effectiveStatus = status == null ? MechanicStatus.ACTIVE : status;
-        LocalDate onDate = LocalDate.now(clock.withZone(facilityZone(locationId, shop)));
+        // One replica read serves both the facility date and the placeholder shift window.
+        ExtLocationReplica location =
+                locationReplicaRepository.findById(locationId).orElse(null);
+        // AC6: an omitted date is today in the facility's own zone — not the server's, not UTC.
+        LocalDate onDate =
+                date != null ? date : LocalDate.now(clock.withZone(facilityZone(locationId, location, shop)));
+        // AC7: resolved once per request and stamped on every entry, so the placeholder's "same
+        // window for everyone" simplification is structural rather than incidental.
+        ShiftWindow shiftWindow = shiftWindowService.resolve(locationId, location, onDate);
         Pageable fixedOrderPageable = pageable.isPaged()
                 ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize())
                 : Pageable.unpaged();
@@ -103,6 +121,11 @@ public class MechanicRosterQueryServiceImpl implements MechanicRosterQueryServic
                 .terminationDate(mechanic.getTerminationDate())
                 .lastSyncedAt(mechanic.getLastSyncedAt())
                 .credentials(credentialsByPerson.getOrDefault(mechanic.getPersonId(), List.of()))
+                .shiftStart(shiftWindow.start())
+                .shiftEnd(shiftWindow.end())
+                .shiftMinutes(shiftWindow.minutes())
+                .shiftSource(shiftWindow.source())
+                .shiftStatus(shiftWindow.status())
                 .build());
     }
 
@@ -111,9 +134,8 @@ public class MechanicRosterQueryServiceImpl implements MechanicRosterQueryServic
      * this module's own {@code Shop.timezone}, else UTC — the same fallback the schedule uses when
      * the owner has not said.
      */
-    private ZoneId facilityZone(UUID locationId, Shop shop) {
-        ZoneId fromReplica = locationReplicaRepository
-                .findById(locationId)
+    private ZoneId facilityZone(UUID locationId, @Nullable ExtLocationReplica location, Shop shop) {
+        ZoneId fromReplica = Optional.ofNullable(location)
                 .map(replica -> hoursParser.parseZone(locationId, replica.getTimezone()))
                 .orElse(null);
         if (fromReplica != null) {

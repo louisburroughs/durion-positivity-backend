@@ -2,6 +2,7 @@ package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.dto.PeopleAvailabilityResponse;
 import com.positivity.people.internal.dto.PrimaryLocationResolution;
+import com.positivity.people.internal.dto.WorkSessionClockStateResponse;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.entity.ExtLocationReplica;
 import com.positivity.people.internal.entity.ExtPersonReplica;
@@ -14,9 +15,11 @@ import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +48,14 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * A caller whose permission is global, or whose token predates the scope claims, sees the
  * list exactly as before.
+ *
+ * <h2>Clock state on the availability list (#2061)</h2>
+ *
+ * Each row also carries the person's current work-session state, resolved for the whole page by
+ * {@link WorkSessionService#resolveClockStates} in a bounded number of queries (BR7). Visibility
+ * is per row, decided by {@link WorkSessionAccessPolicy#mayViewClockState}: the caller's own row
+ * always, every other row only under {@code people:timekeeping:view} covering the location
+ * (OQ1). Rows the caller may not see keep null clock fields rather than failing the request.
  */
 @Service
 @RequiredArgsConstructor
@@ -62,6 +73,10 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
     private final ExtLocationReplicaRepository extLocationReplicaRepository;
 
     private final LocationReferenceService locationReferenceService;
+
+    private final WorkSessionService workSessionService;
+
+    private final WorkSessionAccessPolicy workSessionAccessPolicy;
 
     @Override
     @NonNull
@@ -92,9 +107,12 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
                 .stream()
                 .collect(Collectors.toMap(ExtPersonReplica::getPersonId, person -> person));
 
+        Map<UUID, WorkSessionClockStateResponse> clockStates = resolveVisibleClockStates(assignments);
+
         return assignments.stream()
                 .map(assignment -> {
                     ExtPersonReplica person = peopleById.get(assignment.getPersonId());
+                    WorkSessionClockStateResponse clockState = clockStates.get(assignment.getPersonId());
                     return PeopleAvailabilityResponse.builder()
                             .personId(assignment.getPersonId())
                             .firstName(person != null ? person.getFirstName() : null)
@@ -106,9 +124,35 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
                             .effectiveFrom(assignment.getEffectiveFrom())
                             .effectiveTo(assignment.getEffectiveTo())
                             .availableOn(targetDate)
+                            .clockState(clockState == null ? null : clockState.getClockState())
+                            .workSessionId(clockState == null ? null : clockState.getWorkSessionId())
+                            .clockedInAt(clockState == null ? null : clockState.getClockedInAt())
+                            .breakStartedAt(clockState == null ? null : clockState.getBreakStartedAt())
                             .build();
                 })
                 .toList();
+    }
+
+    /**
+     * Clock state for exactly the rows the caller may see, fetched in one batched call — or no
+     * call at all when they may see none (#2061 AC4, OQ1).
+     */
+    @NonNull
+    private Map<UUID, WorkSessionClockStateResponse> resolveVisibleClockStates(
+            @NonNull List<EmployeeLocationAssignment> assignments) {
+        if (assignments.isEmpty()) {
+            return Map.of();
+        }
+        WorkSessionAccessPolicy.ClockStateViewer viewer = workSessionAccessPolicy.clockStateViewer();
+        Set<UUID> visiblePersonIds = assignments.stream()
+                .filter(assignment -> workSessionAccessPolicy.mayViewClockState(
+                        viewer, assignment.getPersonId(), assignment.getLocationId()))
+                .map(EmployeeLocationAssignment::getPersonId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (visiblePersonIds.isEmpty()) {
+            return Map.of();
+        }
+        return workSessionService.resolveClockStates(visiblePersonIds);
     }
 
     @Override

@@ -31,10 +31,21 @@ public class UserPersonTranslationServiceImpl implements UserPersonTranslationSe
     @Override
     @NonNull
     public UUID getPersonUuidForUser(@NonNull String username) {
+        // Deliberately unfiltered, as it has always been: the identity resolutions that use it
+        // (availability defaulting, the /me reads) answer "who is this" rather than "may they",
+        // and narrowing them to ACTIVE here would change behaviour well outside #2061's scope.
         return linkReplicaRepository
                 .findFirstByUsername(username)
                 .map(ExtUserLinkReplica::getPersonId)
                 .orElseThrow(() -> new EntityNotFoundException("No person link found for username: " + username));
+    }
+
+    @Override
+    @NonNull
+    public Optional<UUID> findActivePersonUuidForUser(@NonNull String username) {
+        return linkReplicaRepository
+                .findFirstByUsernameAndStatus(username, ACTIVE)
+                .map(ExtUserLinkReplica::getPersonId);
     }
 
     @Override

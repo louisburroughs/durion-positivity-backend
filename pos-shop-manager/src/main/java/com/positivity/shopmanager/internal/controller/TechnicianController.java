@@ -15,12 +15,14 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.data.web.PagedModel;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,24 +48,34 @@ public class TechnicianController {
             operationId = "listLocationTechnicians",
             summary = "List technicians assigned to a location",
             description = """
-                    Returns the technicians assigned to one shop location, enriched with mechanic identity and \
-                    skills from the eventually consistent HR read model.
+                    Returns the technicians assigned to one shop location on a date, enriched with mechanic \
+                    identity and skills from the eventually consistent HR read model, plus a PLACEHOLDER shift \
+                    window per technician.
+                    PLACEHOLDER: shiftStart, shiftEnd, shiftMinutes, shiftSource and shiftStatus are derived from \
+                    the shop location's operating hours for the requested date, not from the person's own roster, \
+                    so every technician at the location carries the same window and staggered shifts, part-time \
+                    hours, overtime and PTO are invisible to it; shiftSource reads LOCATION_HOURS until the real \
+                    per-person shift schedule (issue 71, blocked on issue 271) replaces it, so read that field \
+                    rather than this prose to tell a placeholder window from a real one; an unknown timezone or \
+                    unreadable hours give shiftStatus UNKNOWN with null bounds rather than a default window, and a \
+                    dated holiday closure gives CLOSED.
                     Use this tool when staffing or dispatching work at a single location; use listMechanics instead \
                     for the shop-wide roster, and getTechnicianPerson instead for one technician's contact details.
                     Preconditions: the location must exist as a shop, and both the technician assignments and their \
                     mechanic projection must have arrived over Kafka.
                     Required inputs: locationId (UUID) as a path parameter, and there is no request body; optionally \
                     narrow with status and skillCode, both exact matches, where an omitted status defaults to ACTIVE, \
-                    and page with page and size, since sort is accepted but ignored and the location roster is \
-                    returned in a fixed order.
+                    choose the roster date with date (yyyy-MM-dd), which defaults to today in the location's own \
+                    timezone, and page with page and size, since sort is accepted but ignored and the location \
+                    roster is returned in a fixed order.
                     Emits a SHOPMGR_LOCATION_TECHNICIAN_LIST audit event; no state changes occur, and the enrichment \
                     trails the People/HR authority by the event-propagation delay.
                     A caller whose shop:technician:view grant is location-scoped must have locationId within \
                     reach (ADR-0061).
-                    Returns 404 when no shop exists for the location id, 403 FORBIDDEN when the caller lacks \
-                    shop:technician:view, 403 LOCATION_SCOPE_DENIED when the caller's location scope does not \
-                    cover locationId, and an empty page rather than an error when no technician matches the \
-                    filters.
+                    Returns 400 when date is malformed, 404 when no shop exists for the location id, 403 FORBIDDEN \
+                    when the caller lacks shop:technician:view, 403 LOCATION_SCOPE_DENIED when the caller's \
+                    location scope does not cover locationId, and an empty page rather than an error when no \
+                    technician matches the filters.
                     """)
     @ApiResponse(responseCode = "200", description = "Location technician roster page returned.")
     @ApiResponse(
@@ -85,12 +97,20 @@ public class TechnicianController {
             @Parameter(description = "Shop location ID") @PathVariable UUID locationId,
             @RequestParam(required = false) MechanicStatus status,
             @RequestParam(required = false) String skillCode,
+            @Parameter(
+                            description = "Roster date as a date-only yyyy-MM-dd string (ADR-0038). Defaults to today"
+                                    + " in the location's own timezone. Also the day the PLACEHOLDER shift window"
+                                    + " is derived for, from the location's operating hours (#2060).",
+                            example = "2026-09-17")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate date,
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         // locationId names the roster being read; a scoped caller must have it in reach
         // (ADR-0061 §3, #1872). Spring has already rejected a malformed id with a 400.
         SecurityContextHelper.locationScope().require(ShopPermissions.TECHNICIAN_VIEW, locationId);
         return ResponseEntity.ok(new PagedModel<>(
-                mechanicRosterQueryService.listLocationTechnicians(locationId, status, skillCode, pageable)));
+                mechanicRosterQueryService.listLocationTechnicians(locationId, status, skillCode, date, pageable)));
     }
 
     @Operation(operationId = "getTechnicianPerson", summary = "Get Person Details for a Technician", description = """

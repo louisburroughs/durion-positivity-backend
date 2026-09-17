@@ -733,7 +733,7 @@ class LocationScopeControllerTest {
         @Test
         @DisplayName("list: scoped caller with the location in reach answers 200")
         void listInReach() throws Exception {
-            when(mechanicRosterQueryService.listLocationTechnicians(eq(SHOP_A), isNull(), isNull(), any()))
+            when(mechanicRosterQueryService.listLocationTechnicians(eq(SHOP_A), isNull(), isNull(), isNull(), any()))
                     .thenReturn(new PageImpl<>(List.of()));
             asScoped(ShopPermissions.TECHNICIAN_VIEW);
 
@@ -749,13 +749,13 @@ class LocationScopeControllerTest {
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
 
-            verify(mechanicRosterQueryService, never()).listLocationTechnicians(any(), any(), any(), any());
+            verify(mechanicRosterQueryService, never()).listLocationTechnicians(any(), any(), any(), any(), any());
         }
 
         @Test
         @DisplayName("list: pre-rollout token without loc_* claims keeps today's behaviour")
         void listPreRolloutUnchanged() throws Exception {
-            when(mechanicRosterQueryService.listLocationTechnicians(eq(SHOP_B), isNull(), isNull(), any()))
+            when(mechanicRosterQueryService.listLocationTechnicians(eq(SHOP_B), isNull(), isNull(), isNull(), any()))
                     .thenReturn(new PageImpl<>(List.of()));
             asPreRollout(ShopPermissions.TECHNICIAN_VIEW);
 

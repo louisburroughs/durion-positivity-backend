@@ -1016,19 +1016,21 @@ paths:
       - shop:technician:view
   /v1/shop-manager/{locationId}/technicians:
     get:
-      description: 'Returns the technicians assigned to one shop location, enriched with mechanic identity and skills from the eventually consistent HR read model.
+      description: 'Returns the technicians assigned to one shop location on a date, enriched with mechanic identity and skills from the eventually consistent HR read model, plus a PLACEHOLDER shift window per technician.
+
+        PLACEHOLDER: shiftStart, shiftEnd, shiftMinutes, shiftSource and shiftStatus are derived from the shop location''s operating hours for the requested date, not from the person''s own roster, so every technician at the location carries the same window and staggered shifts, part-time hours, overtime and PTO are invisible to it; shiftSource reads LOCATION_HOURS until the real per-person shift schedule (issue 71, blocked on issue 271) replaces it, so read that field rather than this prose to tell a placeholder window from a real one; an unknown timezone or unreadable hours give shiftStatus UNKNOWN with null bounds rather than a default window, and a dated holiday closure gives CLOSED.
 
         Use this tool when staffing or dispatching work at a single location; use listMechanics instead for the shop-wide roster, and getTechnicianPerson instead for one technician''s contact details.
 
         Preconditions: the location must exist as a shop, and both the technician assignments and their mechanic projection must have arrived over Kafka.
 
-        Required inputs: locationId (UUID) as a path parameter, and there is no request body; optionally narrow with status and skillCode, both exact matches, where an omitted status defaults to ACTIVE, and page with page and size, since sort is accepted but ignored and the location roster is returned in a fixed order.
+        Required inputs: locationId (UUID) as a path parameter, and there is no request body; optionally narrow with status and skillCode, both exact matches, where an omitted status defaults to ACTIVE, choose the roster date with date (yyyy-MM-dd), which defaults to today in the location''s own timezone, and page with page and size, since sort is accepted but ignored and the location roster is returned in a fixed order.
 
         Emits a SHOPMGR_LOCATION_TECHNICIAN_LIST audit event; no state changes occur, and the enrichment trails the People/HR authority by the event-propagation delay.
 
         A caller whose shop:technician:view grant is location-scoped must have locationId within reach (ADR-0061).
 
-        Returns 404 when no shop exists for the location id, 403 FORBIDDEN when the caller lacks shop:technician:view, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, and an empty page rather than an error when no technician matches the filters.
+        Returns 400 when date is malformed, 404 when no shop exists for the location id, 403 FORBIDDEN when the caller lacks shop:technician:view, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, and an empty page rather than an error when no technician matches the filters.
 
         '
       operationId: listLocationTechnicians
@@ -1053,6 +1055,14 @@ paths:
         name: skillCode
         required: false
         schema:
+          type: string
+      - description: Roster date as a date-only yyyy-MM-dd string (ADR-0038). Defaults to today in the location's own timezone. Also the day the PLACEHOLDER shift window is derived for, from the location's operating hours (#2060).
+        example: '2026-09-17'
+        in: query
+        name: date
+        required: false
+        schema:
+          format: date
           type: string
       - description: Zero-based page index (0..N)
         in: query
@@ -2100,6 +2110,35 @@ components:
         personId:
           format: uuid
           type: string
+        shiftEnd:
+          description: 'PLACEHOLDER: end of the technician''s shift window on the roster date, as a UTC instant. Derived from the shop location''s operating hours (its close time in the location''s timezone), not from the person''s own schedule, so every technician at the location carries the same value. Null when shiftStatus is CLOSED or UNKNOWN.'
+          example: '2026-09-17T22:00:00Z'
+          format: date-time
+          type: string
+        shiftMinutes:
+          description: 'PLACEHOLDER: minutes between shiftStart and shiftEnd, for the board to subtract committed time from. Derived from the shop location''s operating hours, not from the person''s own schedule. Null whenever either bound is null; never negative.'
+          example: 540
+          format: int32
+          type: integer
+        shiftSource:
+          description: 'PLACEHOLDER: where the shift window came from. LOCATION_HOURS means the window is the shop location''s operating hours, the same for every technician there, and not the person''s roster. A consumer must read this to tell a placeholder window from a real per-person one; PERSON_SCHEDULE is reserved for that (#71).'
+          enum:
+          - LOCATION_HOURS
+          example: LOCATION_HOURS
+          type: string
+        shiftStart:
+          description: 'PLACEHOLDER: start of the technician''s shift window on the roster date, as a UTC instant. Derived from the shop location''s operating hours (its open time in the location''s timezone), not from the person''s own schedule, so every technician at the location carries the same value. Null when shiftStatus is CLOSED or UNKNOWN.'
+          example: '2026-09-17T13:00:00Z'
+          format: date-time
+          type: string
+        shiftStatus:
+          description: 'PLACEHOLDER: whether a shift window could be derived from the shop location''s operating hours (not from the person''s own schedule). DERIVED carries a window; CLOSED means a dated holiday closure covers the day; UNKNOWN means the location''s timezone or hours are missing or unreadable, or the weekday has no entry — no default window is ever substituted.'
+          enum:
+          - DERIVED
+          - CLOSED
+          - UNKNOWN
+          example: DERIVED
+          type: string
         status:
           enum:
           - ACTIVE
@@ -2109,6 +2148,9 @@ components:
         terminationDate:
           format: date
           type: string
+      required:
+      - shiftSource
+      - shiftStatus
       type: object
     MechanicAssignmentItem:
       description: A single mechanic entry within an assignment request

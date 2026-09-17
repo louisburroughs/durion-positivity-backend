@@ -19,6 +19,14 @@ public interface ExtUserLinkReplicaRepository extends JpaRepository<ExtUserLinkR
     @NonNull
     Optional<ExtUserLinkReplica> findFirstByUsername(@NonNull String username);
 
+    /**
+     * The caller's link only while it is still live. {@code INACTIVE} is a historical
+     * association, so an authorization decision that asks "is this caller that person" must not
+     * see it: a revoked link would otherwise still answer "self" (#2062 review).
+     */
+    @NonNull
+    Optional<ExtUserLinkReplica> findFirstByUsernameAndStatus(@NonNull String username, @NonNull String status);
+
     boolean existsByUsernameAndPersonId(@NonNull String username, @NonNull UUID personId);
 
     @NonNull
