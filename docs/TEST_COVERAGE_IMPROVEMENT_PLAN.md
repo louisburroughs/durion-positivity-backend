@@ -1139,7 +1139,7 @@ nightly by writing off the points that caused it.
 ### 6.7 Two stale floors and one regression (2026-09-17)
 
 **Run 35184260406** (nightly, `main` at `9e37280`) failed `Enforce coverage floor
-drift` on three counters across three modules, and — as in §6.6 — they are not
+drift` on five counters across three modules, and — as in §6.6 — they are not
 the same kind of failure:
 
 | module | counter | floor | floor derived from | measured 2026-09-17 | cushion | status |
