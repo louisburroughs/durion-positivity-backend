@@ -303,7 +303,7 @@ echo "case 12: a scale that cannot close the gap is refused"
 make_alpha_root none
 run_case "${ACCEL_ENV[@]}" POS_TIME_ACCELERATED_SCALE=1 -- "${SHA}"
 assert "exits 1" "$([[ ${RC} -eq 1 ]] && echo pass)"
-assert "names convergence as the reason" "$(grep -q 'greater than 1 when convergence is enabled' <<< "${OUT}" && echo pass)"
+assert "names the gap as the reason" "$(grep -q 'must be greater than 1' <<< "${OUT}" && echo pass)"
 assert "touched nothing" "$([[ ! -s "${WORK}/compose.log" ]] && echo pass)"
 end_case
 
@@ -315,7 +315,67 @@ assert "names the value" "$(grep -q "must be a positive number (got 'fast')" <<<
 assert "touched nothing" "$([[ ! -s "${WORK}/compose.log" ]] && echo pass)"
 end_case
 
-echo "case 14: an override file that is not on the box is refused"
+echo "case 14: convergence cannot be turned off for a shared deploy"
+# Refused rather than warned about: with converge=false the clock runs PAST wall time, so the
+# run stops back-dating and starts future-dating a database other people share, and no later
+# deploy can unwrite those rows. A warning in a 25-service deploy log is not a control.
+make_alpha_root none
+run_case "${ACCEL_ENV[@]}" POS_TIME_ACCELERATED_CONVERGE=false -- "${SHA}"
+assert "exits 1" "$([[ ${RC} -eq 1 ]] && echo pass)"
+assert "names the variable and the value" "$(grep -q "POS_TIME_ACCELERATED_CONVERGE must be 'true' for an accelerated deploy (got 'false')" <<< "${OUT}" && echo pass)"
+assert "says why: future-dated records" "$(grep -q 'runs PAST wall time' <<< "${OUT}" && echo pass)"
+assert "touched nothing" "$([[ ! -s "${WORK}/compose.log" ]] && echo pass)"
+end_case
+
+echo "case 15: a zone java.time.ZoneId would reject is refused before the rollout"
+# An empty-string check does not catch this. AcceleratedTimeProperties binds the value to a
+# ZoneId, so an unknown id fails the configuration binding at startup — which is 25 JVMs
+# crash-looping after every image has been pulled and every container recreated.
+make_alpha_root none
+run_case "${ACCEL_ENV[@]}" POS_TIME_ACCELERATED_ZONE=not-a-zone -- "${SHA}"
+assert "exits 1" "$([[ ${RC} -eq 1 ]] && echo pass)"
+assert "names the value" "$(grep -q "POS_TIME_ACCELERATED_ZONE='not-a-zone' is not a zone" <<< "${OUT}" && echo pass)"
+assert "says what would happen" "$(grep -q 'fail its configuration binding at startup' <<< "${OUT}" && echo pass)"
+assert "touched nothing" "$([[ ! -s "${WORK}/compose.log" ]] && echo pass)"
+end_case
+
+echo "case 16: a region id that is not in the box's zone database is refused"
+# The shape 'Region/City' is not enough — 'Mars/Olympus_Mons' has it and is not a zone. The
+# check reads the same tz database the JVM does.
+make_alpha_root none
+run_case "${ACCEL_ENV[@]}" POS_TIME_ACCELERATED_ZONE=Mars/Olympus_Mons -- "${SHA}"
+assert "exits 1" "$([[ ${RC} -eq 1 ]] && echo pass)"
+assert "names the value" "$(grep -q "POS_TIME_ACCELERATED_ZONE='Mars/Olympus_Mons' is not a zone" <<< "${OUT}" && echo pass)"
+assert "touched nothing" "$([[ ! -s "${WORK}/compose.log" ]] && echo pass)"
+end_case
+
+echo "case 17: a real IANA region id is accepted"
+# The guard must not be a UTC-only allowlist wearing a validator's clothes: a zone the JVM
+# would accept has to get through, or it is refusing deploys for a reason nobody can act on.
+make_alpha_root none
+run_case "${ACCEL_ENV[@]}" POS_TIME_ACCELERATED_ZONE=America/New_York -- "${SHA}"
+assert "exits 0" "$([[ ${RC} -eq 0 ]] && echo pass)"
+assert "persists the zone it was given" "$(env_has 'POS_TIME_ACCELERATED_ZONE=America/New_York' && echo pass)"
+assert "applies the override to every compose call" "$(every_compose_call_is_accelerated && echo pass)"
+end_case
+
+echo "case 18: a fixed offset is accepted"
+make_alpha_root none
+run_case "${ACCEL_ENV[@]}" POS_TIME_ACCELERATED_ZONE=+05:30 -- "${SHA}"
+assert "exits 0" "$([[ ${RC} -eq 0 ]] && echo pass)"
+assert "persists the offset" "$(env_has 'POS_TIME_ACCELERATED_ZONE=+05:30' && echo pass)"
+end_case
+
+echo "case 19: a box with no zone database warns instead of blocking the deploy"
+# A false refusal here would block a deploy for a reason the operator cannot act on, and the
+# startup binding still catches a real typo. Degrade, do not fail closed.
+make_alpha_root none
+run_case "${ACCEL_ENV[@]}" POS_TIME_ACCELERATED_ZONE=America/New_York ZONEINFO_DIR="${WORK}/no-such-zoneinfo" -- "${SHA}"
+assert "exits 0" "$([[ ${RC} -eq 0 ]] && echo pass)"
+assert "says it could not check" "$(grep -q 'no zone database at' <<< "${OUT}" && echo pass)"
+end_case
+
+echo "case 20: an override file that is not on the box is refused"
 make_alpha_root none absent
 run_case "${ACCEL_ENV[@]}" -- "${SHA}"
 assert "exits 1" "$([[ ${RC} -eq 1 ]] && echo pass)"
@@ -323,7 +383,7 @@ assert "names the missing file" "$(grep -q 'docker-compose.accelerated.yml is no
 assert "touched nothing" "$([[ ! -s "${WORK}/compose.log" ]] && echo pass)"
 end_case
 
-echo "case 15: a stale on-box override is refused by the checksum guard"
+echo "case 21: a stale on-box override is refused by the checksum guard"
 make_alpha_root none
 run_case "${ACCEL_ENV[@]}" \
   ACCELERATED_OVERRIDE_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
@@ -333,7 +393,7 @@ assert "names the file" "$(grep -q 'on-box accelerated override' <<< "${OUT}" &&
 assert "touched nothing" "$([[ ! -s "${WORK}/compose.log" ]] && echo pass)"
 end_case
 
-echo "case 16: a matching checksum passes the guard"
+echo "case 22: a matching checksum passes the guard"
 make_alpha_root none
 run_case "${ACCEL_ENV[@]}" \
   "ACCELERATED_OVERRIDE_SHA256=$(sha256sum "${WORK}/alpha/docker-compose.accelerated.yml" | awk '{print $1}')" \
@@ -343,7 +403,7 @@ assert "reports the match" "$(grep -q 'accelerated override matches committed sh
 assert "applies the override to every compose call" "$(every_compose_call_is_accelerated && echo pass)"
 end_case
 
-echo "case 17: a config-only sync on a box marked accelerated but missing an anchor aborts"
+echo "case 23: a config-only sync on a box marked accelerated but missing an anchor aborts"
 make_alpha_root true
 sed -i '/^POS_TIME_ACCELERATED_VIRTUAL_START=/d' "${WORK}/alpha/.env"
 run_case - -- --config-only

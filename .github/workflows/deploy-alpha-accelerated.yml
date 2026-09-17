@@ -233,14 +233,16 @@ jobs:
 
       - name: Verify every JVM shares the run's anchors
         # A green deploy is not the same as an accelerated stack: one service left on the wall
-        # clock writes records a year ahead of everything else in the same database. The
-        # verifier reads the anchors out of all 25 containers, then confirms the live clock at
-        # GET /system/time and that virtual time is actually advancing at ~scale.
+        # clock writes records a year ahead of everything else in the same database, and one
+        # left with convergence off writes ahead of real time. The verifier reads all five
+        # settings out of all 25 containers, then confirms the live clock at GET /system/time
+        # and that virtual time is actually advancing at ~scale. The two values below are the
+        # verifier's defaults, passed explicitly so this step states what it is checking.
         run: |
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters "{\"commands\":[\"EXPECTED_REAL_START='${{ steps.run.outputs.real_start }}' EXPECTED_VIRTUAL_START='${{ steps.run.outputs.virtual_start }}' EXPECTED_SCALE='${{ steps.run.outputs.scale }}' bash /opt/durion/alpha/scripts/verify-accelerated-deployment.sh\"]}" \
+            --parameters "{\"commands\":[\"EXPECTED_REAL_START='${{ steps.run.outputs.real_start }}' EXPECTED_VIRTUAL_START='${{ steps.run.outputs.virtual_start }}' EXPECTED_SCALE='${{ steps.run.outputs.scale }}' EXPECTED_ZONE='UTC' EXPECTED_CONVERGE='true' bash /opt/durion/alpha/scripts/verify-accelerated-deployment.sh\"]}" \
             --timeout-seconds 300 \
             --query "Command.CommandId" --output text)
           echo "SSM Command ID: $COMMAND_ID"

@@ -50,7 +50,9 @@ x-accelerated-env: &accelerated-env
   POS_TIME_ACCELERATED_ZONE: ${POS_TIME_ACCELERATED_ZONE:-UTC}
   # Convergence is the reason an accelerated run cannot write future-dated records:
   # virtual(t) = min(virtualStart + scale * (now - realStart), now), so virtual time trails
-  # wall time, catches up, and then ticks at scale 1 forever. Leave it on.
+  # wall time, catches up, and then ticks at scale 1 forever. With it off the clock runs PAST
+  # wall time and future-dates everything it writes, so deploy-backend.sh refuses anything but
+  # `true` on this path; the variable stays interpolable for a local single-machine stack.
   POS_TIME_ACCELERATED_CONVERGE: ${POS_TIME_ACCELERATED_CONVERGE:-true}
   POS_TIME_ACCELERATED_REAL_START: ${POS_TIME_ACCELERATED_REAL_START:?required — generate the anchors once, at dispatch time, and pass the same pair to every service}
   POS_TIME_ACCELERATED_VIRTUAL_START: ${POS_TIME_ACCELERATED_VIRTUAL_START:?required — generate the anchors once, at dispatch time, and pass the same pair to every service}

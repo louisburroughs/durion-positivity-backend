@@ -27,8 +27,11 @@ virtual(t) = min(virtualStart + scale * (now - realStart), now)
 Three consequences worth holding on to:
 
 - **It never writes future-dated records.** Virtual time is clamped to wall time, so it trails
-  the present, catches up, and then ticks at 1× forever. This is what `converge` (default
-  `true`) buys, and it is why the run does not need to be stopped by hand at the current date.
+  the present, catches up, and then ticks at 1× forever. This is what `converge` buys, and it is
+  why the run does not need to be stopped by hand at the current date. It is not optional here:
+  `deploy-backend.sh` refuses `POS_TIME_ACCELERATED_CONVERGE` set to anything but `true`, because
+  with it off the stack future-dates every row it writes into a database other people share, and
+  no later deploy can unwrite them.
 - **It stops being accelerated once it converges.** A one-year gap closes after
   `gap / (scale - 1)` real time — about 6 h at 1460, 3 h at 2920, 1 h at 8760. After that the
   stack is on ordinary wall time and there is no back-dated window left, so the SDK run has to
@@ -93,7 +96,11 @@ The deploy refuses, before anything on the box is touched:
 - a `virtual-start` less than **360 days** before `real-start` (the SDK suite refuses such a
   backend anyway, and failing at deploy time is cheaper than failing after a 25-service
   rollout);
-- a scale that is not a positive number, or is `<= 1` while convergence is on;
+- a scale that is not a positive number, or is `<= 1` (the gap would never close);
+- `POS_TIME_ACCELERATED_CONVERGE` set to anything but `true` (see above);
+- a `POS_TIME_ACCELERATED_ZONE` that `java.time.ZoneId` would reject — checked against the box's
+  IANA database rather than for emptiness, since an unknown id otherwise fails the configuration
+  binding at startup, on all 25 services at once;
 - `ACCELERATED=true` on a `--config-only` sync;
 - an on-box override file that is missing or does not match the committed one.
 
@@ -112,8 +119,10 @@ bash /opt/durion/alpha/scripts/verify-accelerated-deployment.sh
 
 It answers three separate questions:
 
-1. **Every POS JVM** carries the profile and the *same* anchors, read from each container's
-   environment. The gateway answering correctly says nothing about the other 24.
+1. **Every POS JVM** carries the profile and the *same* five settings — both anchors, the scale,
+   the zone and convergence — read from each container's environment. The gateway answering
+   correctly says nothing about the other 24, and a single JVM with convergence off would
+   future-date everything it writes while every other check still passed.
 2. **The live clock** at `GET /system/time` reports `accelerated: true`, `converged: false`,
    the dispatched scale and the generated anchors.
 3. **Virtual time is moving** at roughly `scale`, measured across two samples.

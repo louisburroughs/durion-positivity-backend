@@ -12,9 +12,12 @@ set -euo pipefail
 #   EXPECTED_SCALE=1460 \
 #   bash /opt/durion/alpha/scripts/verify-accelerated-deployment.sh
 #
+# EXPECTED_ZONE and EXPECTED_CONVERGE default to UTC and true, the only values a shared
+# accelerated deployment may have; pass them to check against something else.
+#
 # Three questions, because a stack can fail this in three independent ways:
 #
-#   1. Did EVERY POS JVM get the profile and the SAME anchors? The gateway answering
+#   1. Did EVERY POS JVM get the profile and the SAME five settings? The gateway answering
 #      correctly says nothing about the other 24 — and one service left on the wall clock
 #      writes records a year ahead of everything else in the same database. Checked from the
 #      container environment (`docker inspect`), which is per-JVM ground truth, against the
@@ -42,6 +45,13 @@ RATE_TOLERANCE="${RATE_TOLERANCE:-0.25}"
 EXPECTED_REAL_START="${EXPECTED_REAL_START:?EXPECTED_REAL_START is required}"
 EXPECTED_VIRTUAL_START="${EXPECTED_VIRTUAL_START:?EXPECTED_VIRTUAL_START is required}"
 EXPECTED_SCALE="${EXPECTED_SCALE:?EXPECTED_SCALE is required}"
+# The remaining two settings the override applies. They default rather than being required
+# because both have one correct value for a shared deployment and deploy-backend.sh already
+# refuses anything else — but they are still CHECKED, because a JVM that somehow came up
+# with converge=false would pass every other check here and then write future-dated records,
+# and one with a different zone would report a different calendar day to everything else.
+EXPECTED_ZONE="${EXPECTED_ZONE:-UTC}"
+EXPECTED_CONVERGE="${EXPECTED_CONVERGE:-true}"
 
 failures=0
 
@@ -88,7 +98,7 @@ if [[ "${#SERVICES[@]}" -eq 0 ]]; then
   exit 1
 fi
 
-echo "Checking ${#SERVICES[@]} services carry the profile and the run's anchors"
+echo "Checking ${#SERVICES[@]} services carry the profile and all five of the run's settings"
 for service in "${SERVICES[@]}"; do
   cid="$(docker ps -q --filter "label=com.docker.compose.service=${service}" | head -n1)"
   if [[ -z "${cid}" ]]; then
@@ -100,6 +110,8 @@ for service in "${SERVICES[@]}"; do
   real="$(container_env "${service}" POS_TIME_ACCELERATED_REAL_START)"
   virtual="$(container_env "${service}" POS_TIME_ACCELERATED_VIRTUAL_START)"
   scale="$(container_env "${service}" POS_TIME_ACCELERATED_SCALE)"
+  zone="$(container_env "${service}" POS_TIME_ACCELERATED_ZONE)"
+  converge="$(container_env "${service}" POS_TIME_ACCELERATED_CONVERGE)"
 
   service_ok=1
   [[ "${profiles}" == *accelerated* ]] || { fail "${service}: SPRING_PROFILES_INCLUDE is '${profiles}', expected to include 'accelerated'"; service_ok=0; }
@@ -107,6 +119,11 @@ for service in "${SERVICES[@]}"; do
   [[ "${virtual}" == "${EXPECTED_VIRTUAL_START}" ]] || { fail "${service}: virtual-start is '${virtual}', expected '${EXPECTED_VIRTUAL_START}'"; service_ok=0; }
   awk -v a="${scale}" -v b="${EXPECTED_SCALE}" 'BEGIN { exit !(a + 0 == b + 0) }' \
     || { fail "${service}: scale is '${scale}', expected '${EXPECTED_SCALE}'"; service_ok=0; }
+  [[ "${zone}" == "${EXPECTED_ZONE}" ]] || { fail "${service}: zone is '${zone}', expected '${EXPECTED_ZONE}'"; service_ok=0; }
+  # The safety property, checked per JVM rather than inferred from the deploy having been
+  # asked for convergence: with this false the service runs past wall time and future-dates
+  # everything it writes, while every other check on this page still passes.
+  [[ "${converge}" == "${EXPECTED_CONVERGE}" ]] || { fail "${service}: converge is '${converge}', expected '${EXPECTED_CONVERGE}' — this service would write future-dated records"; service_ok=0; }
 
   [[ "${service_ok}" -eq 1 ]] && echo "  ok   ${service}"
 done
@@ -136,6 +153,8 @@ echo "  ${FIRST}"
   || fail "/system/time reports virtualStart=$(time_field virtualStart "${FIRST}"), expected ${EXPECTED_VIRTUAL_START}"
 awk -v a="$(time_field scale "${FIRST}")" -v b="${EXPECTED_SCALE}" 'BEGIN { exit !(a + 0 == b + 0) }' \
   || fail "/system/time reports scale=$(time_field scale "${FIRST}"), expected ${EXPECTED_SCALE}"
+[[ "$(time_field zone "${FIRST}")" == "${EXPECTED_ZONE}" ]] \
+  || fail "/system/time reports zone=$(time_field zone "${FIRST}"), expected ${EXPECTED_ZONE}"
 
 CONVERGED="$(time_field converged "${FIRST}")"
 if [[ "${CONVERGED}" == "true" ]]; then
@@ -181,7 +200,7 @@ fi
 
 echo
 if [[ "${failures}" -eq 0 ]]; then
-  echo "PASS: ${#SERVICES[@]} services share the run's anchors and the clock is advancing at ~${EXPECTED_SCALE}x"
+  echo "PASS: ${#SERVICES[@]} services share the run's settings and the clock is advancing at ~${EXPECTED_SCALE}x"
   exit 0
 fi
 echo "FAIL: ${failures} check(s) failed" >&2
