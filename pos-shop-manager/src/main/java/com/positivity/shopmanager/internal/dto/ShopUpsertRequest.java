@@ -22,8 +22,13 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Scheduling configuration for one location")
 public class ShopUpsertRequest {
 
+    /**
+     * {@code @Size(min = 1)} alongside {@code @NotBlank} so the published schema says {@code
+     * minLength: 1}: springdoc does not read {@code @NotBlank}, and a client validating against a
+     * {@code minLength: 0} contract would send the empty string the server refuses with 400.
+     */
     @NotBlank
-    @Size(max = 255)
+    @Size(min = 1, max = 255)
     @Schema(description = "Display name of the shop", example = "Charlotte Main Service Center")
     private String name;
 

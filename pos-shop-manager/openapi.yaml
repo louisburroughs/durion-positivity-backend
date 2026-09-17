@@ -26,6 +26,8 @@ tags:
   name: Conflict Override API
 - description: Technician identity lookups for a shop location
   name: Technician API
+- description: Scheduling configuration that makes a location schedulable
+  name: Shop API
 paths:
   /v1/appointments:
     post:
@@ -1341,6 +1343,72 @@ paths:
       x-required-permissions:
       - shop:schedule:view
       - appointments:view
+  /v1/shops/{locationId}:
+    put:
+      description: 'Creates the shop record that makes a location schedulable, or replaces its configuration when one already exists.
+
+        Use this tool to make a site bookable for the first time or to correct its name, address or scheduling timezone; use viewSchedule to read what is booked, which answers 404 for any location that has no shop record.
+
+        Preconditions: none beyond the id — the shop carries the pos-location location id by convention, which is how every other read in this module resolves a request''s locationId, and this operation does not verify that the location exists.
+
+        Required inputs: locationId (UUID) as a path parameter and a body with a non-blank name; address is optional, and timezone is optional but must be a valid IANA zone id when supplied, because the schedule view computes the day window in it and falls back to UTC when it is unset.
+
+        Emits a SHOPMGR_SHOP_UPSERT audit event and writes only the shop row; no other records are touched and no fact is published.
+
+        Idempotent on locationId, so a reseed converges rather than duplicating.
+
+        Returns 400 when the name is blank or the timezone is not a zone id, and 403 when the caller lacks shop:schedule:edit.
+
+        '
+      operationId: upsertShop
+      parameters:
+      - in: path
+        name: locationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Schedulable service center:
+                description: Schedulable service center
+                value:
+                  address: 100 Trade Street
+                  name: Charlotte Main Service Center
+                  timezone: America/New_York
+            schema:
+              $ref: '#/components/schemas/ShopUpsertRequest'
+        description: 'Scheduling configuration for the location: a non-blank name, an optional address and an optional IANA timezone the day window is computed in.'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopResponse'
+          description: Shop configuration created or replaced.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Blank name or invalid timezone.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks schedule edit permission.
+      security:
+      - bearerAuth:
+        - shop:schedule:edit
+      summary: Create or Replace a Location's Shop Configuration
+      tags:
+      - Shop API
+      x-required-permissions:
+      - shop:schedule:edit
 components:
   schemas:
     ApiError:
@@ -2717,6 +2785,43 @@ components:
           description: Human-readable workorder number.
           example: WO-2026-1001
           type: string
+      type: object
+    ShopResponse:
+      description: Scheduling configuration for one location
+      properties:
+        address:
+          type: string
+        id:
+          format: uuid
+          type: string
+        name:
+          type: string
+        timezone:
+          type: string
+      type: object
+    ShopUpsertRequest:
+      description: Scheduling configuration for one location
+      properties:
+        address:
+          description: Street address of the shop
+          example: 100 Trade Street
+          maxLength: 255
+          minLength: 0
+          type: string
+        name:
+          description: Display name of the shop
+          example: Charlotte Main Service Center
+          maxLength: 255
+          minLength: 1
+          type: string
+        timezone:
+          description: IANA timezone the shop's day window is computed in
+          example: America/New_York
+          maxLength: 64
+          minLength: 0
+          type: string
+      required:
+      - name
       type: object
     StaffingAdvisory:
       description: Response-level staffing advisory
