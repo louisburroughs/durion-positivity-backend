@@ -21,7 +21,9 @@ on:
     paths:
       - docker-compose.yml
       - deployment/alpha/docker-compose.prod.yml
+      - deployment/alpha/docker-compose.accelerated.yml
       - deployment/alpha/deploy-backend.sh
+      - deployment/alpha/verify-accelerated-deployment.sh
       - deployment/alpha/cloudwatch-agent-config.json
       - deployment/alpha/install-cloudwatch-agent.sh
       - postgres/init-databases.sql
@@ -62,7 +64,13 @@ jobs:
         run: |
           aws s3 cp docker-compose.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml
           aws s3 cp deployment/alpha/docker-compose.prod.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml
+          # Shipped on every sync, accelerated stack or not (#2065): when the box IS on the
+          # accelerated clock, deploy-backend.sh --config-only applies this file and checksums
+          # it, so a stale on-box copy would abort the sync — which is the one path that has
+          # to keep working mid-run.
+          aws s3 cp deployment/alpha/docker-compose.accelerated.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.accelerated.yml
           aws s3 cp deployment/alpha/deploy-backend.sh s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh
+          aws s3 cp deployment/alpha/verify-accelerated-deployment.sh s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/verify-accelerated-deployment.sh
           # Host-level monitoring (#1862). The CloudWatch agent runs on the box, not in a
           # container, so it is shipped here rather than in the observability tree.
           aws s3 cp deployment/alpha/cloudwatch-agent-config.json s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/cloudwatch-agent-config.json
@@ -79,13 +87,14 @@ jobs:
         run: |
           echo "prod=$(sha256sum deployment/alpha/docker-compose.prod.yml | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "base=$(sha256sum docker-compose.yml | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "accel=$(sha256sum deployment/alpha/docker-compose.accelerated.yml | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - name: Pull config files on alpha host
         run: |
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters '{"commands":["mkdir -p /opt/durion/alpha/backend/postgres /opt/durion/alpha/scripts","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh /opt/durion/alpha/scripts/deploy-backend.sh","chmod +x /opt/durion/alpha/scripts/deploy-backend.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/cloudwatch-agent-config.json /opt/durion/alpha/cloudwatch-agent-config.json","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/install-cloudwatch-agent.sh /opt/durion/alpha/scripts/install-cloudwatch-agent.sh","chmod +x /opt/durion/alpha/scripts/install-cloudwatch-agent.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql /opt/durion/alpha/backend/postgres/init-databases.sql","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-tenancy.sh /opt/durion/alpha/backend/postgres/init-tenancy.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/observability.tgz /opt/durion/alpha/backend/observability.tgz","rm -rf /opt/durion/alpha/backend/observability","tar xzf /opt/durion/alpha/backend/observability.tgz -C /opt/durion/alpha/backend/","rm -f /opt/durion/alpha/backend/observability.tgz"]}' \
+            --parameters '{"commands":["mkdir -p /opt/durion/alpha/backend/postgres /opt/durion/alpha/scripts","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.accelerated.yml /opt/durion/alpha/docker-compose.accelerated.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh /opt/durion/alpha/scripts/deploy-backend.sh","chmod +x /opt/durion/alpha/scripts/deploy-backend.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/verify-accelerated-deployment.sh /opt/durion/alpha/scripts/verify-accelerated-deployment.sh","chmod +x /opt/durion/alpha/scripts/verify-accelerated-deployment.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/cloudwatch-agent-config.json /opt/durion/alpha/cloudwatch-agent-config.json","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/install-cloudwatch-agent.sh /opt/durion/alpha/scripts/install-cloudwatch-agent.sh","chmod +x /opt/durion/alpha/scripts/install-cloudwatch-agent.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql /opt/durion/alpha/backend/postgres/init-databases.sql","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-tenancy.sh /opt/durion/alpha/backend/postgres/init-tenancy.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/observability.tgz /opt/durion/alpha/backend/observability.tgz","rm -rf /opt/durion/alpha/backend/observability","tar xzf /opt/durion/alpha/backend/observability.tgz -C /opt/durion/alpha/backend/","rm -f /opt/durion/alpha/backend/observability.tgz"]}' \
             --query "Command.CommandId" --output text)
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
@@ -96,7 +105,7 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters "{\"commands\":[\"PROD_OVERRIDE_SHA256='${{ steps.sums.outputs.prod }}' BASE_COMPOSE_SHA256='${{ steps.sums.outputs.base }}' bash /opt/durion/alpha/scripts/deploy-backend.sh --config-only\"]}" \
+            --parameters "{\"commands\":[\"PROD_OVERRIDE_SHA256='${{ steps.sums.outputs.prod }}' BASE_COMPOSE_SHA256='${{ steps.sums.outputs.base }}' ACCELERATED_OVERRIDE_SHA256='${{ steps.sums.outputs.accel }}' bash /opt/durion/alpha/scripts/deploy-backend.sh --config-only\"]}" \
             --timeout-seconds 2700 \
             --query "Command.CommandId" --output text)
           echo "SSM Command ID: $COMMAND_ID"

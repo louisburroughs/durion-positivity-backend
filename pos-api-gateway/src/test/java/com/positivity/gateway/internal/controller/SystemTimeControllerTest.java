@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -88,6 +89,32 @@ class SystemTimeControllerTest {
                 .withPropertyValues("spring.profiles.active=accelerated")
                 .withUserConfiguration(ClockConfiguration.class, SystemTimeController.class)
                 .run(context -> assertThat(context).hasSingleBean(SystemTimeController.class));
+    }
+
+    /**
+     * The shape an accelerated deployment actually has.
+     * {@code deployment/alpha/docker-compose.accelerated.yml} sets {@code SPRING_PROFILES_INCLUDE},
+     * not {@code SPRING_PROFILES_ACTIVE}, because services carrying their own active profile
+     * (pos-mcp-server: {@code alpha}, pos-security-service: {@code docker}) must keep it — replacing
+     * it would drop their datasource and security configuration. The whole deployment therefore
+     * rests on {@code spring.profiles.include} being additive, which is a framework behaviour this
+     * repository does not otherwise exercise.
+     *
+     * <p>{@link ConfigDataApplicationContextInitializer} is what makes the runner process
+     * {@code spring.profiles.include}: plain property binding only reads
+     * {@code spring.profiles.active}, so without it this would pass for the wrong reason or fail
+     * for one.
+     */
+    @Test
+    void controller_isRegisteredWhenTheProfileArrivesThroughSpringProfilesInclude() {
+        new ApplicationContextRunner()
+                .withInitializer(new ConfigDataApplicationContextInitializer())
+                .withPropertyValues("spring.profiles.active=alpha", "spring.profiles.include=accelerated")
+                .withUserConfiguration(ClockConfiguration.class, SystemTimeController.class)
+                .run(context -> {
+                    assertThat(context.getEnvironment().getActiveProfiles()).contains("alpha", "accelerated");
+                    assertThat(context).hasSingleBean(SystemTimeController.class);
+                });
     }
 
     private static WebTestClient clientFor(ScaledClock clock) {

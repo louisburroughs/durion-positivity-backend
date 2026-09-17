@@ -122,3 +122,15 @@ Every entry must carry a justification — a separate test fails on a blank one.
 After an accelerated run, `deployment/alpha/verify-accelerated-timestamps.sql` checks the
 result: no timestamp after wall time, none before the run's virtual anchor, and no
 `updated_at` preceding its own `created_at`.
+
+## Deploying on the accelerated clock
+
+`docs/runbooks/accelerated-alpha-deployment.md` is the operator procedure: dispatching
+`Deploy Alpha (Accelerated Clock)`, confirming every JVM shares one pair of anchors, and the
+teardown, whose proof is `GET /system/time` answering 404 again.
+
+Note what convergence means for the audit above. Virtual time is
+`min(virtualStart + scale * elapsed, now)`, so it trails wall time, closes the gap in
+`gap / (scale - 1)` real time, and then ticks at 1x forever. An accelerated run therefore
+cannot write a future-dated record — and it also stops being accelerated at that point, so a
+run has to fit inside that budget.

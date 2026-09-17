@@ -79,11 +79,22 @@ Two workflows deliver changes to the alpha EC2 box; which one runs depends on wh
   and the config-only sync never reset (the script refuses `RESET_DATABASES=true` on
   `--config-only`). Procedure and verification: `docs/runbooks/flyway-baseline-reset.md`,
   "Alpha Cutover". Covered by `scripts/tests/deploy-backend-reset-databases-selftest.sh`.
+- **Accelerated clock** (#2065): dispatch `deploy-alpha-accelerated.yml` to put the whole stack on
+  the `accelerated` profile with one clock anchored a year in the past, which is what the SDK
+  repo's year-long integration run needs. It builds nothing — it redeploys a tag already in ECR
+  with `ACCELERATED=true`, which layers `deployment/alpha/docker-compose.accelerated.yml` on top of
+  the two ordinary compose files. **Any ordinary deploy is the teardown**, and `GET /system/time`
+  answering 404 is the proof; until it does, every non-accelerated integration run stays blocked.
+  A config-only sync inherits the box's state instead, so a merged compose change cannot drop a
+  run back to wall time halfway through. Procedure, verification and teardown:
+  `docs/runbooks/accelerated-alpha-deployment.md`. Covered by
+  `scripts/tests/deploy-backend-accelerated-selftest.sh` and `scripts/check-accelerated-compose.sh`.
 
 Both paths pass the committed files' sha256 digests (`PROD_OVERRIDE_SHA256`,
-`BASE_COMPOSE_SHA256`) into `deploy-backend.sh`, which refuses to compose against an on-box file
-that does not match — a stale override is a loud failure, not a silent no-op. `--config-only`
-also refuses to run on a box that has never had a full deploy (no `BACKEND_TAG` in `.env`).
+`BASE_COMPOSE_SHA256`, and `ACCELERATED_OVERRIDE_SHA256` when the accelerated override is in play)
+into `deploy-backend.sh`, which refuses to compose against an on-box file that does not match — a
+stale override is a loud failure, not a silent no-op. `--config-only` also refuses to run on a box
+that has never had a full deploy (no `BACKEND_TAG` in `.env`).
 
 `--config-only` resolves every backend image before it touches a container, because the box stays
 pinned to the `BACKEND_TAG` of the last full deploy and a config sync never advances it. What it
