@@ -153,6 +153,18 @@
             <artifactId>pos-tenancy-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Markdown parsing (#2072): segment the final chat answer into typed blocks. -->
+        <dependency>
+            <groupId>org.commonmark</groupId>
+            <artifactId>commonmark</artifactId>
+            <version>0.24.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.commonmark</groupId>
+            <artifactId>commonmark-ext-gfm-tables</artifactId>
+            <version>0.24.0</version>
+        </dependency>
+
         <!-- Testcontainers Postgres for the tenancy isolation and schema-conformance ITs (plan R-B7) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
