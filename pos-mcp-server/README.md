@@ -38,6 +38,14 @@ operator needs to build, configure and run the module.
 | ------------------------------------- | --------------------- | ------------------------------------ |
 | `POST /v1/mcp/chat`                   | `mcp:chat:execute`    | Synchronous chat                     |
 | `POST /v1/mcp/chat/stream`            | `mcp:chat:stream`     | Streaming SSE chat                   |
+| `GET /v1/mcp/conversations`           | `mcp:chat:execute`    | List conversations, pinned first     |
+| `POST /v1/mcp/conversations`          | `mcp:chat:execute`    | Create a new conversation            |
+| `GET /v1/mcp/conversations/{id}`      | `mcp:chat:execute`    | Get conversation and messages        |
+| `PATCH /v1/mcp/conversations/{id}`    | `mcp:chat:execute`    | Rename or pin conversation           |
+| `DELETE /v1/mcp/conversations/{id}`   | `mcp:chat:execute`    | Delete a conversation                |
+| `DELETE /v1/mcp/conversations`        | `mcp:chat:execute`    | Clear all conversations              |
+| `POST /v1/mcp/conversations/{id}/messages` | `mcp:chat:execute` | Append a message to conversation     |
+| `GET /v1/mcp/conversations/policy`    | `mcp:chat:execute`    | Get retention policy                 |
 | `POST /v1/mcp/documents`              | `mcp:document:ingest` | Ingest a document into the RAG store |
 | `GET  /v1/mcp/documents/jobs/{jobId}` | `mcp:document:ingest` | Check ingestion job status           |
 | `POST /v1/nlt/requests`               | `nlti:request:submit` | Submit an NLTI request               |
@@ -46,6 +54,8 @@ operator needs to build, configure and run the module.
 | `GET/POST/PUT/DELETE /v1/llm-apis`    | `mcp:llm_api:*`       | LLM API config CRUD                  |
 
 **Chat response blocks:** `POST /v1/mcp/chat` carries an optional `blocks` array alongside `response`. Blocks are typed rendering units (markdown, table, code, and forward-compatible schema for chart/image/file/error) segmented server-side from the final markdown answer in source order. Older clients may ignore `blocks` and parse `response` instead; when `blocks` is empty or absent, render `response` as before.
+
+**Conversation persistence:** `POST /v1/mcp/chat` now persists each turn and returns `conversationId` and `messageId`. An absent `conversationId` starts a new persisted conversation; clients must echo the returned id on follow-up turns to continue the same conversation. An unknown or foreign UUID answers 404; a non-UUID string keeps the old memory-only behaviour. Chat memory is rebuilt from stored turns on a cache miss; client-appended turns are never replayed into model context.
 
 Permission constants are defined in `McpPermissions`. Errors use the standard `ApiError` envelope.
 
@@ -62,6 +72,8 @@ Permission constants are defined in `McpPermissions`. Errors use the standard `A
 | `mcp.agent.cache-ttl-minutes`               | `30`                                        | Agent cache TTL (role agents + sessions)                                                                                                                                                                                                                                                                                                                                   |
 | `mcp.agent.candidate-tool-limit`            | `MCP_AGENT_CANDIDATE_TOOL_LIMIT` `8` (alpha `24`) | Max candidate tools per chat request. Keep it above the facade count (#1840; `McpServerPropertiesDefaultsTest`)                                                                                                                                                                                                                                                  |
 | `mcp.agent.discovered-tool-limit`           | _(candidate-tool-limit)_ (alpha `16`)       | Max OpenAPI-discovered operations per chat request (#1840)                                                                                                                                                                                                                                                                                                                 |
+| `mcp.conversation.retention-days`           | `MCP_CONVERSATION_RETENTION_DAYS` `30`      | Days an unpinned conversation stays before purge; pinned conversations exempt                                                                                                                                                                                                                                                                                               |
+| `mcp.conversation.purge-interval`           | `MCP_CONVERSATION_PURGE_INTERVAL` `1h`      | Scheduler interval for purging idle unpinned conversations (hourly per tenant via `TenantIterator`)                                                                                                                                                                                                                                                                     |
 | `mcp.rag.chunking.enabled`                  | `MCP_RAG_CHUNKING_ENABLED` `true`           | Chunk documents before embedding                                                                                                                                                                                                                                                                                                                                           |
 | `mcp.rag.chunking.max-segment-size`         | `MCP_RAG_MAX_SEGMENT_SIZE`                  | Max chunk size                                                                                                                                                                                                                                                                                                                                                             |
 | `mcp.rag.chunking.max-overlap-size`         | `MCP_RAG_MAX_OVERLAP_SIZE`                  | Chunk overlap                                                                                                                                                                                                                                                                                                                                                              |
