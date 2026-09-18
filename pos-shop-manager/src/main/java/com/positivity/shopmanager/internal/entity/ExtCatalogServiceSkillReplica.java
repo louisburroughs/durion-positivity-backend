@@ -51,12 +51,15 @@ public class ExtCatalogServiceSkillReplica extends TenantScopedEntity {
 
     /**
      * Whether this requirement applies to a vehicle of {@code gvwrClass}. A null class (the vehicle's
-     * class is not determined) satisfies only an ANY-class requirement.
+     * class is not determined) satisfies only an ANY-class requirement. Either bound may be absent
+     * on its own (the columns are independently nullable), which leaves that side of the range open.
      */
     public boolean appliesTo(@Nullable Integer gvwrClass) {
         if (minGvwrClass == null && maxGvwrClass == null) {
             return true;
         }
-        return gvwrClass != null && gvwrClass >= minGvwrClass && gvwrClass <= maxGvwrClass;
+        return gvwrClass != null
+                && (minGvwrClass == null || gvwrClass >= minGvwrClass)
+                && (maxGvwrClass == null || gvwrClass <= maxGvwrClass);
     }
 }

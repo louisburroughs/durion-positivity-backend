@@ -52,6 +52,22 @@ public class SchedulingConflictRecorder {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordRefused(@NonNull BookingAttempt attempt, @NonNull List<DetectedConflict> conflicts) {
+        saveRefused(attempt, conflicts);
+    }
+
+    /** The exclusion constraint refused the insert: record BAY_DOUBLE_BOOKED and return it for the envelope. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public @NonNull DetectedConflict recordRefusedOverlap(@NonNull BookingAttempt attempt) {
+        DetectedConflict conflict = evaluator.bayDoubleBooked(attempt);
+        saveRefused(attempt, List.of(conflict));
+        return conflict;
+    }
+
+    /**
+     * The shared write, run inside whichever {@code REQUIRES_NEW} transaction the public caller
+     * opened. A call from one public method to the other would bypass the proxy and its propagation.
+     */
+    private void saveRefused(BookingAttempt attempt, List<DetectedConflict> conflicts) {
         Appointment rescheduling = attempt.excludeAppointmentId() == null
                 ? null
                 : appointmentRepository.findById(attempt.excludeAppointmentId()).orElse(null);
@@ -59,14 +75,6 @@ public class SchedulingConflictRecorder {
         for (DetectedConflict conflict : conflicts) {
             schedulingConflictRepository.save(row(conflict, attempt, rescheduling, now));
         }
-    }
-
-    /** The exclusion constraint refused the insert: record BAY_DOUBLE_BOOKED and return it for the envelope. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public @NonNull DetectedConflict recordRefusedOverlap(@NonNull BookingAttempt attempt) {
-        DetectedConflict conflict = evaluator.bayDoubleBooked(attempt);
-        recordRefused(attempt, List.of(conflict));
-        return conflict;
     }
 
     /** Records the SOFT conflicts a booking proceeded under, in the booking's own transaction. */

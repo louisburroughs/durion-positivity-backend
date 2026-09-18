@@ -176,7 +176,7 @@ public class AppointmentsController {
         } catch (KeylessDuplicateReplayException raced) {
             // An exact keyless double-submit lost the race to its twin (CAP-326, spec D17 item 3):
             // the booking transaction is gone, so the twin is loaded afresh and replayed.
-            return ResponseEntity.ok(
+            creation = AppointmentCreation.replayed(
                     appointmentsService.getById(raced.getExistingAppointmentId().toString(), correlationId));
         }
         AppointmentResponse response = creation.appointment();
