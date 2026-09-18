@@ -22,7 +22,10 @@ public class BulkLoadJobCreateRequest {
     private String fileName;
 
     @NotNull
-    @Schema(description = "Target domain for the bulk load", example = "CATALOG_PRODUCT", requiredMode = REQUIRED)
+    @Schema(
+            description = "Target domain for the bulk load. RETIRED is refused with 400 BULK_JOB_DOMAIN_RETIRED",
+            example = "CATALOG_PRODUCT",
+            requiredMode = REQUIRED)
     private DomainType domainType;
 
     @Schema(

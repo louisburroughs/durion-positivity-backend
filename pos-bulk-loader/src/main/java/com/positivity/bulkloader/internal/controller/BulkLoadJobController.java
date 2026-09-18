@@ -75,14 +75,16 @@ public class BulkLoadJobController {
                     BULK_JOB_TENANT_UNBOUND_TARGET_FORBIDDEN when the caller has no tenant bound on its token yet \
                     and still named one explicitly, rather than omitting tenantId for the transitional default; \
                     403 with BULK_JOB_TENANT_DOMAIN_FORBIDDEN when the target is the platform tenant and \
-                    domainType is not one of its own packs; and 409 when the operator already has an active bulk \
+                    domainType is not one of its own packs; 400 with BULK_JOB_DOMAIN_RETIRED when domainType is \
+                    RETIRED; and 409 when the operator already has an active bulk \
                     load job in progress.
                     """)
     @ApiResponse(responseCode = "201", description = "Job created")
     @ApiResponse(
             responseCode = "400",
             description = "BULK_JOB_TENANT_REQUIRED: no tenantId and no transitional default; BULK_JOB_TENANT_UNKNOWN:"
-                    + " the tenant is not active in this cell; VALIDATION_ERROR: a malformed request",
+                    + " the tenant is not active in this cell; BULK_JOB_DOMAIN_RETIRED: domainType is RETIRED;"
+                    + " VALIDATION_ERROR: a malformed request",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",

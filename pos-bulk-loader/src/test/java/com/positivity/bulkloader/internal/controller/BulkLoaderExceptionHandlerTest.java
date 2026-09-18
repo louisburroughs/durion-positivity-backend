@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.positivity.bulkloader.internal.exception.BulkLoadDomainRetiredException;
 import com.positivity.bulkloader.internal.exception.BulkLoadTenantException;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.exception.TusOffsetConflictException;
@@ -127,6 +128,25 @@ class BulkLoaderExceptionHandlerTest {
             assertThat(result.getBody()).isNotNull();
             assertThat(result.getBody().code()).isEqualTo("BULK_JOB_TENANT_FORBIDDEN");
             assertThat(result.getBody().message()).isEqualTo("not your tenant");
+            assertThat(result.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID);
+        }
+    }
+
+    @Nested
+    @DisplayName("handleDomainRetired")
+    class HandleDomainRetired {
+
+        @Test
+        @DisplayName("returns 400 BULK_JOB_DOMAIN_RETIRED and sets the correlation id header")
+        void returns400AndSetsHeader() {
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            ResponseEntity<ApiError> result =
+                    sut.handleDomainRetired(new BulkLoadDomainRetiredException(), requestWithHeader(), response);
+
+            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(result.getBody()).isNotNull();
+            assertThat(result.getBody().code()).isEqualTo("BULK_JOB_DOMAIN_RETIRED");
             assertThat(result.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID);
         }
     }
@@ -278,6 +298,8 @@ class BulkLoaderExceptionHandlerTest {
                             handler.handleTusConflict(new TusOffsetConflictException(10L, 5L), request, response)),
                     Named.of("handleTusExpired", (HandlerInvocation) (request, response) -> handler.handleTusExpired(
                             new TusUploadExpiredException(UUID.randomUUID()), request, response)),
+                    Named.of("handleDomainRetired", (HandlerInvocation) (request, response) ->
+                            handler.handleDomainRetired(new BulkLoadDomainRetiredException(), request, response)),
                     Named.of("handleValidation", (HandlerInvocation) (request, response) ->
                             handler.handleValidation(methodArgumentNotValidException, request, response)));
         }

@@ -143,6 +143,9 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
                     case SERVICE_PACKAGE_MEMBER -> "servicePackageMemberBulkLoadJob";
                     case LABOR_RATE -> "laborRateBulkLoadJob";
                     case LABOR_RATE_ADJUSTMENT -> "laborRateAdjustmentBulkLoadJob";
+                    case RETIRED ->
+                        throw new IllegalStateException(
+                                "Domain type RETIRED has no batch job; a retired domain cannot be run");
                 };
 
         Job job = jobsByName.get(beanName);

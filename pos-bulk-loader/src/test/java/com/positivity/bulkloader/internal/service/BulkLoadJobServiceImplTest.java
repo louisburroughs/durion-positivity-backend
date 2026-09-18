@@ -16,6 +16,7 @@ import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.exception.BulkLoadDomainRetiredException;
 import com.positivity.bulkloader.internal.exception.BulkLoadTenantException;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
@@ -159,6 +160,18 @@ class BulkLoadJobServiceImplTest {
                 .isInstanceOf(BulkLoadTenantException.class)
                 .hasMessageContaining("tenantId is required");
         verifyNoInteractions(jobRepository, transactionManager);
+    }
+
+    @Test
+    void createJob_forTheRetiredPlaceholder_isRefusedBeforeAnythingIsBoundOrWritten() {
+        BulkLoadJobCreateRequest request = new BulkLoadJobCreateRequest();
+        request.setFileName("mechanic-skills.csv");
+        request.setDomainType(DomainType.RETIRED);
+        request.setTenantId(TENANT);
+
+        assertThatThrownBy(() -> service.createJob(request, OPERATOR_ID))
+                .isInstanceOf(BulkLoadDomainRetiredException.class);
+        verifyNoInteractions(tenantBinding, jobRepository, transactionManager);
     }
 
     @Test
