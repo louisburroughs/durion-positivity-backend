@@ -52,7 +52,8 @@ public class BulkLoadJobResponse {
     private String fileName;
 
     @Schema(
-            description = "Detected or selected target domain for the load",
+            description = "Detected or selected target domain for the load. RETIRED when the job's domain has"
+                    + " since been removed from the loader; such a job can be listed but never run",
             example = "CATALOG_PRODUCT",
             requiredMode = REQUIRED)
     @NotNull

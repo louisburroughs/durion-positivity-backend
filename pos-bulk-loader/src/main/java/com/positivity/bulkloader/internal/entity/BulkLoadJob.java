@@ -5,6 +5,7 @@ import com.positivity.bulkloader.internal.enums.JobStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -54,8 +55,14 @@ public class BulkLoadJob extends TenantScopedEntity {
     @Column(name = "original_file_path")
     private String originalFilePath;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "domain_type", nullable = false)
+    /**
+     * Read through {@link DomainTypeConverter}, so a row whose domain has since been retired from
+     * {@link DomainType} hydrates as {@link DomainType#RETIRED} instead of failing the whole page
+     * (#2070). Not updatable: the domain never changes after creation, and this keeps a later
+     * status update on a retired job from overwriting the stored name with {@code RETIRED}.
+     */
+    @Convert(converter = DomainTypeConverter.class)
+    @Column(name = "domain_type", nullable = false, updatable = false)
     private DomainType domainType;
 
     @Enumerated(EnumType.STRING)

@@ -1,5 +1,6 @@
 package com.positivity.bulkloader.internal.controller;
 
+import com.positivity.bulkloader.internal.exception.BulkLoadDomainRetiredException;
 import com.positivity.bulkloader.internal.exception.BulkLoadTenantException;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.exception.TusOffsetConflictException;
@@ -90,6 +91,14 @@ public class BulkLoaderExceptionHandler {
     public ResponseEntity<ApiError> handleTenantBinding(
             BulkLoadTenantException ex, HttpServletRequest request, HttpServletResponse response) {
         return envelope(ex.getStatus(), ex.getCode(), ex.getMessage(), request, response);
+    }
+
+    /** A create request named {@code RETIRED}, which only labels jobs of a domain since removed (#2070). */
+    @ExceptionHandler(BulkLoadDomainRetiredException.class)
+    public ResponseEntity<ApiError> handleDomainRetired(
+            BulkLoadDomainRetiredException ex, HttpServletRequest request, HttpServletResponse response) {
+        return envelope(
+                HttpStatus.BAD_REQUEST, BulkLoadDomainRetiredException.CODE, ex.getMessage(), request, response);
     }
 
     @ExceptionHandler(NoSuchElementException.class)

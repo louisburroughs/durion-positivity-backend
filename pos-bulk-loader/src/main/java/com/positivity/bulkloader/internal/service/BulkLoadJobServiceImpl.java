@@ -3,7 +3,9 @@ package com.positivity.bulkloader.internal.service;
 import com.positivity.bulkloader.internal.dto.BulkLoadJobCreateRequest;
 import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
+import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.exception.BulkLoadDomainRetiredException;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
 import com.positivity.tenancy.TenantContext;
@@ -102,6 +104,9 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
      */
     @Override
     public BulkLoadJobResponse createJob(@NonNull BulkLoadJobCreateRequest request, @NonNull String operatorId) {
+        if (request.getDomainType() == DomainType.RETIRED) {
+            throw new BulkLoadDomainRetiredException();
+        }
         UUID tenantId = tenantBinding.resolveTarget(request.getTenantId(), request.getDomainType());
         return TenantContext.callAs(
                 tenantId,

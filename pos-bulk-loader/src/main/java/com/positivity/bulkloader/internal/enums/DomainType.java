@@ -26,5 +26,11 @@ public enum DomainType {
     SERVICE_PACKAGE,
     SERVICE_PACKAGE_MEMBER,
     LABOR_RATE,
-    LABOR_RATE_ADJUSTMENT
+    LABOR_RATE_ADJUSTMENT,
+    /**
+     * Read-only placeholder for a job whose stored domain has since been removed from this enum
+     * (MECHANIC_SKILL, retired by CAP-328). Only {@code DomainTypeConverter} produces it; a job can
+     * never be created or launched for it.
+     */
+    RETIRED
 }
