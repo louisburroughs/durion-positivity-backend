@@ -41,7 +41,10 @@ final class CatchAllAdviceScanner {
                     + "(?:\\s*+,\\s*+(?:\\w++\\.)++class)*+\\s*+\\}?\\s*+\\)"
                     + "(?:\\s*+@\\w[\\w.]*+(?:\\([^)]*+\\))?)*+" // any further annotations on the method
                     + "\\s*+(?:(?:public|protected|private)\\s++)?" // optional visibility modifier
-                    + "([^;{]*?)\\s*+\\w++\\s*+\\(", // the return type, up to the method name
+                    // The return type, up to the method name: whole tokens, each taken possessively, and
+                    // an identifier only when no parameter list follows it. A lazy [^;{]*? here re-scanned
+                    // the rest of an identifier from every one of its characters.
+                    + "((?:[^;{(\\w]++|\\w++(?!\\s*+\\())*+)\\s*+\\w++\\s*+\\(",
             Pattern.DOTALL);
 
     /** Java line and block comments, stripped before matching so tombstone prose is not a hit. */

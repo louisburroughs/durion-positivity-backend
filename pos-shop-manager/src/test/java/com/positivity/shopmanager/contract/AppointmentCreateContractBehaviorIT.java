@@ -96,8 +96,7 @@ class AppointmentCreateContractBehaviorIT extends BaseContractIntegrationTest {
      * next one an exact keyless resubmission, which CAP-326 replays with 200 instead of creating
      * (spec D17 item 3) — a pass or fail that depends on test order.
      */
-    @BeforeEach
-    void clearAppointments() {
+    private void clearAppointments() {
         schedulingConflictRepository.deleteAll();
         appointmentServiceRequestRepository.deleteAll();
         appointmentAuditRepository.deleteAll();
@@ -109,14 +108,19 @@ class AppointmentCreateContractBehaviorIT extends BaseContractIntegrationTest {
      * code against, and an ACTIVE technician at the test location, without whom HARD
      * MECHANIC_UNAVAILABLE refuses each creation these tests expect to succeed.
      */
-    @BeforeEach
-    void seedSchedulingWorld() {
+    private void seedSchedulingWorld() {
         SchedulingWorldFixture.seedConflictRules(conflictRuleRepository);
         SchedulingWorldFixture.rosterTechnician(staffingAssignmentRepository, TEST_LOCATION_ID);
     }
 
     @BeforeEach
-    void setupCrmStubs() {
+    void setUp() {
+        clearAppointments();
+        seedSchedulingWorld();
+        setupCrmStubs();
+    }
+
+    private void setupCrmStubs() {
         when(crmSnapshotService.getCustomerById(VALID_CRM_CUSTOMER_ID)).thenReturn(validCustomerSnapshot());
         when(crmSnapshotService.getCustomerById(UNKNOWN_CRM_CUSTOMER_ID))
                 .thenThrow(new CrmCustomerNotFoundException(UNKNOWN_CRM_CUSTOMER_ID));

@@ -57,8 +57,7 @@ public final class ServiceCapabilityCodeValidator {
         throwIfInvalid(invalid);
 
         Set<String> found = new LinkedHashSet<>();
-        List<ExtCatalogServiceReplica> services = replicaRepository.findByOperationCodeInAndActiveIsTrue(normalized);
-        for (ExtCatalogServiceReplica service : services == null ? List.<ExtCatalogServiceReplica>of() : services) {
+        for (ExtCatalogServiceReplica service : replicaRepository.findByOperationCodeInAndActiveIsTrue(normalized)) {
             if (service.getOperationCode() != null) {
                 found.add(normalize(service.getOperationCode()));
             }

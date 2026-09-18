@@ -77,8 +77,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
      * next one an exact keyless resubmission, which CAP-326 replays with 200 instead of creating
      * (spec D17 item 3) — a pass or fail that depends on test order.
      */
-    @BeforeEach
-    void clearAppointments() {
+    private void clearAppointments() {
         schedulingConflictRepository.deleteAll();
         appointmentServiceRequestRepository.deleteAll();
         appointmentAuditRepository.deleteAll();
@@ -87,6 +86,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        clearAppointments();
         when(crmSnapshotService.getCustomerById(any())).thenReturn(Map.of("id", "customer-snapshot"));
         when(crmSnapshotService.getVehicleById(any())).thenReturn(Map.of("id", "vehicle-snapshot"));
         // CAP-326's evaluator runs on every booking: it resolves each conflict code against the
