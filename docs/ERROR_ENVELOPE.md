@@ -157,7 +157,7 @@ Any service may therefore return these in addition to its module codes below.
 | `CONSTRAINT_VIOLATION` | 422 | Check-constraint violation; message names the constraint |
 | `VALIDATION_ERROR` | 400 | Bean-validation failure (with `fieldErrors`) or malformed request |
 | `NO_ENDPOINT` | 404 | No route on this service matches the request path (Spring MVC routing failure) |
-| `NOT_FOUND` | 404 | The route exists but the resource does not — a status the application declared, e.g. `ResponseStatusException(NOT_FOUND, …)` or a `@ResponseStatus(NOT_FOUND)` domain exception. Message is always `Requested resource was not found`; the exception's reason is logged, never echoed (#2076) |
+| `NOT_FOUND` | 404 | The route exists but the resource does not — a status the application declared. `ResponseStatusException(NOT_FOUND, …)` always answers `Requested resource was not found`; its reason is never echoed, because it routinely embeds the id the client sent (#2076). A `@ResponseStatus(NOT_FOUND)` domain exception answers that same message, or the annotation's own `reason` when it declares one — a compile-time constant, not client data |
 | `METHOD_NOT_ALLOWED` | 405 | HTTP method not supported for this path |
 | `NOT_ACCEPTABLE` / `PAYLOAD_TOO_LARGE` / `UNSUPPORTED_MEDIA_TYPE` / `REQUEST_REJECTED` | 406/413/415/other 4xx | Framework-rejected request |
 | `INTERNAL_ERROR` | 500 | Unhandled exception, or a not-null violation on a server-populated audit column; stack trace logged at ERROR against the `correlationId` |

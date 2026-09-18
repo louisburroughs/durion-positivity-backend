@@ -48,10 +48,11 @@ registered via Spring Boot auto-configuration at `Ordered.LOWEST_PRECEDENCE`:
   request) keep their framework status and gain the envelope, rather than collapsing to 500.
 - A 404 names the layer that answered (#2076): the framework's routing failures
   (`NoResourceFoundException`, `NoHandlerFoundException`) are `NO_ENDPOINT` / "No endpoint for the
-  requested path", while a status the application declared for a record it could not find — a
-  `ResponseStatusException(NOT_FOUND, …)` or a `@ResponseStatus(NOT_FOUND)` domain exception — is
-  `NOT_FOUND` / "Requested resource was not found". A `ResponseStatusException` reason is not echoed:
-  it routinely embeds the id the client sent.
+  requested path", while a status the application declared for a record it could not find is
+  `NOT_FOUND`. A `ResponseStatusException(NOT_FOUND, …)` always answers "Requested resource was not
+  found" — its reason is never echoed, because it routinely embeds the id the client sent. A
+  `@ResponseStatus(NOT_FOUND)` domain exception answers that same message unless the annotation
+  declares a `reason`, which is a compile-time constant and is echoed as it was before.
 - 500 bodies stay generic (`INTERNAL_ERROR` / "Unexpected error occurred"); the correlation id is the
   diagnostic handle. Rejected data values are never echoed; only constraint/column identifiers may be
   named on 409/422.

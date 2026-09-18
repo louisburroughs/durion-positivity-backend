@@ -50,8 +50,10 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  *
  * <p>A 404 says which layer answered: Spring MVC's own routing failures get
  * {@code NO_ENDPOINT} / "No endpoint for the requested path", while a status an application
- * threw for a record it could not find gets {@code NOT_FOUND} / "Requested resource was not
- * found" (issue #2076).
+ * threw for a record it could not find gets {@code NOT_FOUND}, whose message is the generic
+ * "Requested resource was not found" — except where a {@link ResponseStatus @ResponseStatus}
+ * declares a {@code reason} of its own, which is echoed as {@link #handleUnhandled} describes
+ * (issue #2076).
  */
 @RestControllerAdvice
 @Order(Ordered.LOWEST_PRECEDENCE)
@@ -397,9 +399,11 @@ public class GlobalApiExceptionHandler {
      *
      * <p>Listed by type rather than by status, because status alone cannot tell the two apart — a
      * 404 from {@link NoResourceFoundException} and a 404 from {@link ResponseStatusException} are
-     * the same {@code HttpStatusCode}. Spring models these five outside the
-     * {@code ResponseStatusException} hierarchy today, but naming them keeps the split correct if
-     * that ever changes.
+     * the same {@code HttpStatusCode}. Naming the types keeps the split correct however Spring
+     * chooses to model them: whether a routing exception happens to sit inside the
+     * {@code ResponseStatusException} hierarchy has moved between Spring lines, and this split does
+     * not depend on it. {@code frameworkStaticResourceMissIsReportedAsAMissingEndpoint} pins the
+     * behaviour.
      */
     private static boolean isRoutingFailure(Exception ex) {
         return ex instanceof NoResourceFoundException
