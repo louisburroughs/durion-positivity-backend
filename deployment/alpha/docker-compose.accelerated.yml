@@ -1,0 +1,141 @@
+# Accelerated-clock override for the alpha stack (#2065).
+#
+# Layered on top of docker-compose.yml + docker-compose.prod.yml by
+# deployment/alpha/deploy-backend.sh when ACCELERATED=true, so the whole stack runs on the
+# `accelerated` Spring profile with its clock anchored in the past. The SDK repo's
+# accelerated integration suite drives 365 virtual days of shop activity against a stack
+# deployed this way (louisburroughs/durion-positivity-sdk#64).
+#
+# The clock itself is pos-events: AcceleratedTimeProperties binds pos.time.accelerated.*,
+# TimeConfig.AcceleratedTimeConfiguration supplies the shared ScaledClock under the profile,
+# and pos-api-gateway's GET /system/time reports it. This file only deploys it.
+#
+# Two rules this file exists to enforce:
+#
+#   1. EVERY POS JVM gets the SAME anchors. A service deriving its own anchor is skewed from
+#      every other by `scale x` its own startup delay; at 1460 one real second of startup
+#      skew is 24 virtual minutes. So the anchors are generated once, in CI at dispatch time,
+#      and every service below reads the same two values through the shared YAML anchor.
+#
+#   2. NO POS JVM is left on the wall clock. One service still stamping wall time writes
+#      records a year ahead of everything else in the same database, which is not a
+#      recoverable state for a shared environment. Hence the single `*accelerated-env`
+#      applied to every service rather than per-service blocks, and
+#      scripts/check-accelerated-compose.sh, which fails CI when a service added to
+#      docker-compose.yml is missing here.
+#
+# `${VAR:?...}` on the two anchors makes a missing one fail the `docker compose` invocation
+# itself, before a single container is recreated, rather than silently starting one service
+# unaccelerated. deploy-backend.sh checks them earlier still, and also refuses a virtual
+# start less than 360 days before the real one.
+#
+# Compose MERGES the environment mapping rather than replacing it, so every service keeps
+# its datasource, Kafka, OTEL and security/events client variables. Services carrying their
+# own SPRING_PROFILES_ACTIVE (pos-mcp-server: alpha, pos-security-service: docker) keep it
+# and gain SPRING_PROFILES_INCLUDE: accelerated, which is additive.
+#
+# Deliberately NOT here:
+#   eureka-server      - a service registry writes no business timestamps.
+#   pos-reference-mock - a mock external vendor, likewise.
+#   pos-frontend       - not a JVM.
+# scripts/check-accelerated-compose.sh knows this list; add to it there too if it changes.
+
+x-accelerated-env: &accelerated-env
+  SPRING_PROFILES_INCLUDE: accelerated
+  # Virtual seconds per real second. A one-year gap closes in G / (scale - 1) real time:
+  # 1460 ~ 6h, 2920 ~ 3h, 8760 ~ 1h. Faster is not better — at 26280 (~20m) a ten-hour
+  # virtual open window is 1.4 real seconds, too tight for any work to progress, and the
+  # SDK suite refuses it.
+  POS_TIME_ACCELERATED_SCALE: ${POS_TIME_ACCELERATED_SCALE:-1460}
+  POS_TIME_ACCELERATED_ZONE: ${POS_TIME_ACCELERATED_ZONE:-UTC}
+  # Convergence is the reason an accelerated run cannot write future-dated records:
+  # virtual(t) = min(virtualStart + scale * (now - realStart), now), so virtual time trails
+  # wall time, catches up, and then ticks at scale 1 forever. With it off the clock runs PAST
+  # wall time and future-dates everything it writes, so deploy-backend.sh refuses anything but
+  # `true` on this path; the variable stays interpolable for a local single-machine stack.
+  POS_TIME_ACCELERATED_CONVERGE: ${POS_TIME_ACCELERATED_CONVERGE:-true}
+  POS_TIME_ACCELERATED_REAL_START: ${POS_TIME_ACCELERATED_REAL_START:?required — generate the anchors once, at dispatch time, and pass the same pair to every service}
+  POS_TIME_ACCELERATED_VIRTUAL_START: ${POS_TIME_ACCELERATED_VIRTUAL_START:?required — generate the anchors once, at dispatch time, and pass the same pair to every service}
+
+services:
+
+  # ── Platform core ──────────────────────────────────────────────────────────
+
+  pos-event-receiver:
+    environment: *accelerated-env
+
+  # ── Security + routing edge ────────────────────────────────────────────────
+
+  pos-api-gateway:
+    environment: *accelerated-env
+
+  pos-security-service:
+    environment: *accelerated-env
+
+  # ── Domain services ────────────────────────────────────────────────────────
+
+  pos-accounting:
+    environment: *accelerated-env
+
+  pos-bulk-loader:
+    environment: *accelerated-env
+
+  pos-catalog:
+    environment: *accelerated-env
+
+  pos-customer:
+    environment: *accelerated-env
+
+  pos-documents:
+    environment: *accelerated-env
+
+  pos-image:
+    environment: *accelerated-env
+
+  pos-inventory:
+    environment: *accelerated-env
+
+  pos-invoice:
+    environment: *accelerated-env
+
+  pos-location:
+    environment: *accelerated-env
+
+  pos-marketing:
+    environment: *accelerated-env
+
+  pos-mcp-server:
+    environment: *accelerated-env
+
+  pos-order:
+    environment: *accelerated-env
+
+  pos-people:
+    environment: *accelerated-env
+
+  pos-people-contact:
+    environment: *accelerated-env
+
+  pos-price:
+    environment: *accelerated-env
+
+  pos-shop-manager:
+    environment: *accelerated-env
+
+  pos-supplier:
+    environment: *accelerated-env
+
+  pos-tax:
+    environment: *accelerated-env
+
+  pos-tenant:
+    environment: *accelerated-env
+
+  pos-vehicle-inventory:
+    environment: *accelerated-env
+
+  pos-warranty:
+    environment: *accelerated-env
+
+  pos-workorder:
+    environment: *accelerated-env

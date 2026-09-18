@@ -1,0 +1,312 @@
+name: Deploy Alpha (Accelerated Clock)
+
+# Deploys an ALREADY-PUSHED backend tag to alpha on the `accelerated` Spring profile, with
+# every POS JVM sharing one clock anchored a year in the past (#2065). The SDK repo's
+# accelerated integration suite needs a backend deployed this way: it drives 365 virtual days
+# of shop activity in 1-6 real hours, producing a year of financial history
+# (louisburroughs/durion-positivity-sdk#64).
+#
+# Deliberately a separate workflow rather than an input on build-push-ecr.yml. That workflow's
+# automatic promotion path fires on every green CI run on main, and an accelerated deploy
+# back-dates records in a shared database — it must never be reachable by accident.
+#
+# This workflow builds and pushes nothing. It deploys a tag that is already in ECR, so run
+# build-push-ecr.yml first if the commit you want has not been pushed.
+#
+# Teardown is an ordinary deploy: run build-push-ecr.yml with deploy_alpha=true (or let the
+# next promotion run), and deploy-backend.sh strips the anchors from the on-box env file and
+# drops the override. GET /system/time answering 404 is the proof. Until it does, every
+# non-accelerated integration run stays blocked — their guard aborts on a 200.
+on:
+  workflow_dispatch:
+    inputs:
+      backend_tag:
+        description: "ECR tag to deploy (sha-a1b2c3d) or the commit SHA behind it; blank = this ref's head commit"
+        required: false
+        default: ""
+        type: string
+      scale:
+        description: "Virtual seconds per real second. 1460 ~ 6h to close a year, 2920 ~ 3h, 8760 ~ 1h"
+        required: false
+        default: "1460"
+        type: string
+      days:
+        description: "Virtual days the SDK run will drive (recorded in the run summary; the clock is always anchored one year back)"
+        required: false
+        default: "365"
+        type: string
+      confirm:
+        description: "Type ACCELERATE ALPHA to confirm — this back-dates records in a shared database"
+        required: true
+        type: string
+
+# Shared with build-push-ecr.yml's deploy-alpha job and sync-alpha-config.yml: exactly one
+# workflow touches the alpha host's config + compose state at a time. That is also what stops
+# two accelerated dispatches overlapping — the SDK suite's lock file is per-machine and cannot
+# see another runner, so the serialisation has to live here.
+concurrency:
+  group: alpha-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  # The fastest scale the SDK suite will accept. Above it a ten-hour virtual open window is
+  # under 1.4 real seconds, too tight for any work to progress, and the suite refuses the
+  # deployment — so refuse it here rather than after a 25-service rollout.
+  MAX_SCALE: "26280"
+
+jobs:
+  deploy:
+    name: Deploy alpha on the accelerated clock
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Confirm the dispatch
+        # An accelerated stack writes a year of back-dated records into the shared alpha
+        # database and blocks every ordinary integration run until it is torn down.
+        #
+        # Through the environment, never interpolated into the script: `${{ inputs.confirm }}`
+        # inline would let a dispatch value close the quote and run its own commands here.
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [[ "${CONFIRM}" != "ACCELERATE ALPHA" ]]; then
+            echo "::error::confirm must be exactly 'ACCELERATE ALPHA'; nothing was deployed."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Resolve the image tag and validate the inputs
+        id: run
+        env:
+          BACKEND_TAG_INPUT: ${{ inputs.backend_tag }}
+          SCALE: ${{ inputs.scale }}
+          DAYS: ${{ inputs.days }}
+        run: |
+          set -euo pipefail
+
+          # deploy-backend.sh takes a commit SHA and derives BACKEND_TAG=sha-<first 7>. It only
+          # ever reads those 7 characters, so a `sha-a1b2c3d` tag round-trips by handing back
+          # its own hex — no lookup needed to accept either spelling.
+          tag_input="$(tr -d '[:space:]' <<< "${BACKEND_TAG_INPUT}")"
+          if [[ -z "${tag_input}" ]]; then
+            sha="${{ github.sha }}"
+          elif [[ "${tag_input}" =~ ^sha-([0-9a-f]{7})$ ]]; then
+            sha="${BASH_REMATCH[1]}"
+          elif [[ "${tag_input}" =~ ^[0-9a-f]{7,40}$ ]]; then
+            sha="${tag_input}"
+          else
+            echo "::error::backend_tag must be a sha-xxxxxxx ECR tag or a commit SHA (got '${tag_input}')."
+            exit 1
+          fi
+
+          if [[ ! "${SCALE}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || ! awk -v s="${SCALE}" 'BEGIN { exit !(s > 1) }'; then
+            echo "::error::scale must be a number greater than 1 (got '${SCALE}'); at 1 or below the one-year gap never closes."
+            exit 1
+          fi
+          if ! awk -v s="${SCALE}" -v m="${MAX_SCALE}" 'BEGIN { exit !(s < m) }'; then
+            echo "::error::scale must be below ${MAX_SCALE} (got '${SCALE}'). The SDK suite refuses a backend that fast: a ten-hour virtual window would be ~1.4 real seconds."
+            exit 1
+          fi
+          if [[ ! "${DAYS}" =~ ^[0-9]+$ ]] || [[ "${DAYS}" -le 0 ]]; then
+            echo "::error::days must be a positive integer (got '${DAYS}')."
+            exit 1
+          fi
+
+          # Generated ONCE, here, and handed to every JVM. A service deriving its own anchor is
+          # skewed from every other by `scale x` its startup delay; at 1460 one real second of
+          # startup skew is 24 virtual minutes of service-to-service disagreement.
+          real_start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          virtual_start="$(date -u -d '1 year ago' +%Y-%m-%dT%H:%M:%SZ)"
+
+          {
+            echo "sha=${sha}"
+            echo "image_tag=sha-${sha:0:7}"
+            echo "real_start=${real_start}"
+            echo "virtual_start=${virtual_start}"
+            echo "scale=${SCALE}"
+            echo "days=${DAYS}"
+            echo "hours_to_converge=$(awk -v s="${SCALE}" 'BEGIN { printf "%.1f", 365 * 86400 / (s - 1) / 3600 }')"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload compose files to S3
+        # Same set build-push-ecr.yml ships, plus the accelerated override and the post-deploy
+        # verifier. The box only ever receives these through an S3 pull, and deploy-backend.sh
+        # checksums what it finds (#1457), so shipping the committed copies here is what makes
+        # the digests below meaningful.
+        run: |
+          aws s3 cp docker-compose.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml
+          aws s3 cp deployment/alpha/docker-compose.prod.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml
+          aws s3 cp deployment/alpha/docker-compose.accelerated.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.accelerated.yml
+          aws s3 cp deployment/alpha/deploy-backend.sh s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh
+          aws s3 cp deployment/alpha/verify-accelerated-deployment.sh s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/verify-accelerated-deployment.sh
+          aws s3 cp postgres/init-databases.sql s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql
+          aws s3 cp postgres/init-tenancy.sh s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-tenancy.sh
+          tar czf observability.tgz observability
+          aws s3 cp observability.tgz s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/observability.tgz
+
+      - name: Pull compose files on alpha host
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["mkdir -p /opt/durion/alpha/backend/postgres /opt/durion/alpha/scripts","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.accelerated.yml /opt/durion/alpha/docker-compose.accelerated.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh /opt/durion/alpha/scripts/deploy-backend.sh","chmod +x /opt/durion/alpha/scripts/deploy-backend.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/verify-accelerated-deployment.sh /opt/durion/alpha/scripts/verify-accelerated-deployment.sh","chmod +x /opt/durion/alpha/scripts/verify-accelerated-deployment.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql /opt/durion/alpha/backend/postgres/init-databases.sql","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-tenancy.sh /opt/durion/alpha/backend/postgres/init-tenancy.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/observability.tgz /opt/durion/alpha/backend/observability.tgz","rm -rf /opt/durion/alpha/backend/observability","tar xzf /opt/durion/alpha/backend/observability.tgz -C /opt/durion/alpha/backend/","rm -f /opt/durion/alpha/backend/observability.tgz"]}' \
+            --query "Command.CommandId" --output text)
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}"
+
+      - name: Compute committed config checksums
+        id: sums
+        run: |
+          echo "prod=$(sha256sum deployment/alpha/docker-compose.prod.yml | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "base=$(sha256sum docker-compose.yml | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "accel=$(sha256sum deployment/alpha/docker-compose.accelerated.yml | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy the accelerated stack on the alpha host
+        env:
+          SECURITY_SEED_ADMIN_PASSWORD_HASH: ${{ secrets.SECURITY_SEED_ADMIN_PASSWORD_HASH }}
+          SUPPLIER_AUDIT_ENC_KEY: ${{ secrets.SUPPLIER_AUDIT_ENC_KEY }}
+        run: |
+          # See build-push-ecr.yml for why these two are handled this way: a newline in the
+          # base64 breaks the --parameters JSON, and an empty export on the host shadows the
+          # real key in the on-box env file (#1577).
+          SUPPLIER_AUDIT_ENC_KEY="$(printf '%s' "${SUPPLIER_AUDIT_ENC_KEY}" | tr -d '[:space:]')"
+          SUPPLIER_KEY_ASSIGNMENT=""
+          if [[ -n "${SUPPLIER_AUDIT_ENC_KEY}" ]]; then
+            SUPPLIER_KEY_ASSIGNMENT="SUPPLIER_AUDIT_ENC_KEY='${SUPPLIER_AUDIT_ENC_KEY}' "
+          fi
+          # deploy-backend.sh re-checks all of this before it touches the host: the anchors'
+          # shape, the 360-day floor, and the scale. It also writes them into the on-box env
+          # file so a later config-only sync cannot drop the stack back to the wall clock
+          # mid-run.
+          # Built by appending rather than with backslash continuations: inside double quotes a
+          # continuation keeps the next line's YAML indentation, which would pad the command
+          # with runs of spaces for no reason.
+          ACCELERATED_ENV="ACCELERATED='true' "
+          ACCELERATED_ENV+="POS_TIME_ACCELERATED_SCALE='${{ steps.run.outputs.scale }}' "
+          ACCELERATED_ENV+="POS_TIME_ACCELERATED_ZONE='UTC' "
+          # Convergence on: virtual time is clamped to wall time, so the run closes the gap and
+          # then ticks at 1x. Without it the stack would write future-dated records into alpha.
+          ACCELERATED_ENV+="POS_TIME_ACCELERATED_CONVERGE='true' "
+          ACCELERATED_ENV+="POS_TIME_ACCELERATED_REAL_START='${{ steps.run.outputs.real_start }}' "
+          ACCELERATED_ENV+="POS_TIME_ACCELERATED_VIRTUAL_START='${{ steps.run.outputs.virtual_start }}' "
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' ${SUPPLIER_KEY_ASSIGNMENT}${ACCELERATED_ENV}PROD_OVERRIDE_SHA256='${{ steps.sums.outputs.prod }}' BASE_COMPOSE_SHA256='${{ steps.sums.outputs.base }}' ACCELERATED_OVERRIDE_SHA256='${{ steps.sums.outputs.accel }}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ steps.run.outputs.sha }}'\"]}" \
+            --timeout-seconds 2700 \
+            --query "Command.CommandId" --output text)
+          echo "SSM Command ID: $COMMAND_ID"
+          STATUS=Pending
+          for i in $(seq 1 180); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+              --query "Status" --output text)
+            echo "[$i/180] Status: $STATUS"
+            if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+              break
+            fi
+            sleep 15
+          done
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --query "[StandardOutputContent,StandardErrorContent]" \
+            --output text
+          if [[ "$STATUS" != "Success" ]]; then
+            echo "SSM command finished with status ${STATUS}" >&2
+            exit 1
+          fi
+
+      - name: Verify every JVM shares the run's anchors
+        # A green deploy is not the same as an accelerated stack: one service left on the wall
+        # clock writes records a year ahead of everything else in the same database, and one
+        # left with convergence off writes ahead of real time. The verifier reads all five
+        # settings out of all 25 containers, then confirms the live clock at GET /system/time
+        # and that virtual time is actually advancing at ~scale. The two values below are the
+        # verifier's defaults, passed explicitly so this step states what it is checking.
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "{\"commands\":[\"EXPECTED_REAL_START='${{ steps.run.outputs.real_start }}' EXPECTED_VIRTUAL_START='${{ steps.run.outputs.virtual_start }}' EXPECTED_SCALE='${{ steps.run.outputs.scale }}' EXPECTED_ZONE='UTC' EXPECTED_CONVERGE='true' bash /opt/durion/alpha/scripts/verify-accelerated-deployment.sh\"]}" \
+            --timeout-seconds 300 \
+            --query "Command.CommandId" --output text)
+          echo "SSM Command ID: $COMMAND_ID"
+          STATUS=Pending
+          for i in $(seq 1 30); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+              --query "Status" --output text)
+            echo "[$i/30] Status: $STATUS"
+            if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+              break
+            fi
+            sleep 10
+          done
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --query "[StandardOutputContent,StandardErrorContent]" \
+            --output text
+          if [[ "$STATUS" != "Success" ]]; then
+            echo "::error::the accelerated stack did not verify; tear it down with an ordinary build-push-ecr deploy before running anything against alpha."
+            exit 1
+          fi
+
+      - name: Record the run
+        if: always()
+        # The run's identity. The SDK suite's journal refuses to resume a run whose realStart
+        # differs from the one it recorded, so these values are what an operator copies into
+        # the suite. Deliberately carries no credentials.
+        run: |
+          {
+            echo "## Alpha accelerated deployment"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Result | \`${{ job.status }}\` |"
+            echo "| Backend tag | \`${{ steps.run.outputs.image_tag }}\` |"
+            echo "| Commit | \`${{ steps.run.outputs.sha }}\` |"
+            echo "| Scale | \`${{ steps.run.outputs.scale }}\`x |"
+            echo "| Virtual days requested | \`${{ steps.run.outputs.days }}\` |"
+            echo "| \`POS_TIME_ACCELERATED_REAL_START\` | \`${{ steps.run.outputs.real_start }}\` |"
+            echo "| \`POS_TIME_ACCELERATED_VIRTUAL_START\` | \`${{ steps.run.outputs.virtual_start }}\` |"
+            echo "| Converges on wall time after | ~\`${{ steps.run.outputs.hours_to_converge }}\` real hours |"
+            echo "| Requested by | @${{ github.actor }} |"
+            echo
+            echo "Virtual time is \`min(virtualStart + scale * elapsed, now)\`, so it closes the gap,"
+            echo "then ticks at 1x forever. It never passes wall time, so the run cannot write"
+            echo "future-dated records — but it also stops being accelerated at that point."
+            echo
+            echo "### While this is deployed"
+            echo
+            echo "- \`GET /system/time\` on the gateway answers 200 with these anchors."
+            echo "- Every non-accelerated integration run is blocked: their guard aborts on that 200."
+            echo "- A config-only sync (\`Sync Alpha Config\`) keeps the clock; an ordinary deploy ends it."
+            echo
+            echo "### Teardown"
+            echo
+            echo "Run \`Build and Push to ECR\` with \`deploy_alpha=true\`. That strips the anchors from"
+            echo "the on-box env file and drops the override; \`GET /system/time\` returning **404** is"
+            echo "the proof it is done. Then check the written history:"
+            echo
+            echo '```'
+            echo "psql -v virtual_start=${{ steps.run.outputs.virtual_start }} \\"
+            echo "  -f deployment/alpha/verify-accelerated-timestamps.sql"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

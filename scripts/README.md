@@ -27,7 +27,9 @@ Utility scripts for development, operations, testing, and deployment.
 | [`generate-openapi.sh`](#generate-openapish) | API | Generate per-module and aggregate OpenAPI specs |
 | [`check-openapi-inventory-drift.sh`](#check-openapi-inventory-driftsh) | API | Verify every spec-producing module is registered in `module-inventory.yaml` |
 | [`check-deploy-service-drift.sh`](#check-deploy-service-driftsh) | Deployment | Verify every deployable service is registered in all five deploy lists |
+| [`check-accelerated-compose.sh`](#check-accelerated-composesh) | Deployment | Verify the accelerated-clock override puts every POS JVM on one clock |
 | [`tests/deploy-backend-config-only-selftest.sh`](#testsdeploy-backend-config-only-selftestsh) | Deployment | Drive `deploy-backend.sh --config-only`'s image pre-flight against a stubbed Docker |
+| [`tests/deploy-backend-accelerated-selftest.sh`](#testsdeploy-backend-accelerated-selftestsh) | Deployment | Drive `deploy-backend.sh`'s accelerated-clock path against a stubbed Docker |
 | [`tests/deploy-backend-disk-reclaim-selftest.sh`](#testsdeploy-backend-disk-reclaim-selftestsh) | Deployment | Drive `deploy-backend.sh`'s pre-pull disk reclaim against a stubbed Docker and `df` |
 | [`tests/install-cloudwatch-agent-selftest.sh`](#testsinstall-cloudwatch-agent-selftestsh) | Deployment | Drive the alpha CloudWatch agent installer against a stubbed `dnf`, `systemctl` and agent control |
 | [`generate-kafka-topics.py`](#generate-kafka-topicspy) | Kafka | Derive the `kafka-topic-init` topic map from the topics services configure and consume |
@@ -367,7 +369,8 @@ Verifies that every module with a committed `openapi.yaml` is registered in
 
 ### `check-deploy-service-drift.sh`
 
-Verifies that every deployable service is registered in all five lists a deploy depends on:
+Verifies that every deployable service is registered in all five lists a deploy depends on
+(the accelerated-clock override is a sixth, checked by `check-accelerated-compose.sh`):
 the root `docker-compose.yml` service, `ALL_SERVICES_JSON` in `.github/workflows/build-push-ecr.yml`,
 the alpha image override, the alpha start order, and a Prometheus scrape job.
 
@@ -400,6 +403,38 @@ collects (#1580).
 
 ---
 
+### `check-accelerated-compose.sh`
+
+Verifies that `deployment/alpha/docker-compose.accelerated.yml` puts **every** POS JVM on the
+accelerated clock, by merging the three alpha compose files with `docker compose config` and
+reading the result (#2065).
+
+An accelerated alpha run anchors the whole stack a year in the past so the SDK suite can drive a
+year of shop activity in a few real hours. A service missing from the override stays on the wall
+clock and writes records a year ahead of everything else in the same database — and nothing fails
+at the time, so the gap is only visible in the data afterwards.
+
+**Usage:**
+```bash
+./scripts/check-accelerated-compose.sh
+```
+
+**Checks:**
+- Every compose service built from a `./pos-*` directory carries `SPRING_PROFILES_INCLUDE:
+  accelerated` and all five `POS_TIME_ACCELERATED_*` anchors in the **merged** config, so a new
+  service added to `docker-compose.yml` and not to the override is a red build
+- All of them carry the *same* anchors — a per-service override is exactly the skew this exists to
+  prevent (at scale 1460, one second of disagreement is 24 virtual minutes)
+- Nothing else is accelerated: `eureka-server` and `pos-reference-mock` are the documented
+  exclusions (`EXCLUDED_SERVICES` in the script), since neither writes business timestamps
+- A deploy missing `POS_TIME_ACCELERATED_REAL_START` or `_VIRTUAL_START` still fails
+  `docker compose config` by name — i.e. the `${VAR:?...}` required-variable syntax is intact
+
+Needs `docker compose` (v2). Run alongside `check-deploy-service-drift.sh`, which owns the other
+five deploy lists.
+
+---
+
 ### `tests/deploy-backend-config-only-selftest.sh`
 
 Drives the real `deployment/alpha/deploy-backend.sh --config-only` against a stubbed `docker`/`aws`
@@ -427,6 +462,31 @@ bash scripts/tests/deploy-backend-config-only-selftest.sh
   Placeholder status is not durable — the stale-entry checks are what notice when it stops being true.
 - The module <-> compose-service mapping is read from each service's `build.context`, so
   `pos-service-discovery` running as the compose service `eureka-server` needs no special case.
+
+---
+
+### `tests/deploy-backend-accelerated-selftest.sh`
+
+Drives the real `deploy-backend.sh` against a stubbed Docker to pin both halves of the
+accelerated-clock switch (#2065), neither of which is observable anywhere but on the alpha box.
+
+**Usage:**
+```bash
+bash scripts/tests/deploy-backend-accelerated-selftest.sh
+```
+
+**Cases:**
+- An ordinary full deploy applies no override, writes no anchors, and is otherwise unchanged
+- `ACCELERATED=true` applies the override to *every* compose invocation, after the prod override,
+  and persists the marker and all five anchors into the on-box `.env`
+- An ordinary full deploy is the **teardown**: it strips the marker and anchors so
+  `GET /system/time` returns 404 again, leaving the rest of the env file alone
+- A config-only sync inherits the box's state — it applies the override on an accelerated box
+  without re-anchoring it, and cannot be asked to start or end a run
+- Refused before anything on the host is touched: a missing or malformed anchor, a gap shorter
+  than 360 days, a virtual start after the real one, a scale that cannot converge, a non-numeric
+  scale, a value other than `true`/`false`, `--config-only`, and an override file that is missing
+  or fails its checksum
 
 ---
 

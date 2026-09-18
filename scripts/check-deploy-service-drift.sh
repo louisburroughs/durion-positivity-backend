@@ -12,6 +12,11 @@ set -euo pipefail
 #   4. deployment/alpha/deploy-backend.sh — CORE/PLATFORM/DOMAIN start tiers
 #   5. observability/prometheus.yml       — a scrape job
 #
+# A sixth list, deployment/alpha/docker-compose.accelerated.yml, is checked by
+# scripts/check-accelerated-compose.sh instead of here: it needs the MERGED
+# `docker compose config` to tell whether a service really gets the accelerated
+# clock, which is more than this file's static parsing can answer (#2065).
+#
 # Nothing enforces that they agree, and the same drift has been fixed by hand
 # three times (pos-supplier, pos-marketing, and eight services missing scrape
 # jobs — ba17a81, 104ccdb). This check makes the next omission a red build

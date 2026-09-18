@@ -158,6 +158,15 @@ pos.time.accelerated.zone=UTC
 `scale` must be a finite positive number. `zone` must be a valid Java
 `ZoneId`, such as `UTC` or `America/New_York`.
 
+`pos.time.accelerated.real-start` and `.virtual-start` have no defaults, on purpose: every JVM
+in a multi-service deployment must receive the **same** pair, generated once before the
+deployment. A service deriving its own anchor is skewed from every other by `scale x` its own
+startup delay.
+
+To deploy a whole stack this way, see
+[`docs/runbooks/accelerated-alpha-deployment.md`](../docs/runbooks/accelerated-alpha-deployment.md);
+`deployment/alpha/docker-compose.accelerated.yml` is the override that applies it.
+
 ### 4. Annotate Business Methods
 
 ```java
