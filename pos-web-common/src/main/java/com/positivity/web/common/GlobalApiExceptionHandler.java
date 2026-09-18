@@ -23,10 +23,16 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.ErrorResponse;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Platform fallback exception handler: guarantees that no exception leaves a service as
@@ -41,11 +47,19 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * <p>Response bodies stay generic on 500s — the correlation id, logged with the stack trace
  * at ERROR, is what makes the failure diagnosable. Constraint and column identifiers may be
  * named on 409/422; rejected data values are never echoed back.
+ *
+ * <p>A 404 says which layer answered: Spring MVC's own routing failures get
+ * {@code NO_ENDPOINT} / "No endpoint for the requested path", while a status an application
+ * threw for a record it could not find gets {@code NOT_FOUND} / "Requested resource was not
+ * found" (issue #2076).
  */
 @RestControllerAdvice
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class GlobalApiExceptionHandler {
     private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
+
+    /** Distinguishes "this service has no such route" from a resource that does not exist (#2076). */
+    private static final String NO_ENDPOINT = "NO_ENDPOINT";
 
     private static final Logger log = LoggerFactory.getLogger(GlobalApiExceptionHandler.class);
 
@@ -242,6 +256,10 @@ public class GlobalApiExceptionHandler {
      * against that id. Spring Security exceptions are rethrown so the filter chain renders
      * its 401/403; framework {@link ErrorResponse} exceptions and domain exceptions carrying
      * {@link ResponseStatus @ResponseStatus} keep their own status instead of collapsing to 500.
+     *
+     * <p>Within the {@link ErrorResponse} branch, {@link #isRoutingFailure routing failures} are
+     * worded as such; every other status the application declared is worded as a rejected
+     * request, not as an unknown route (issue #2076).
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnhandled(
@@ -263,7 +281,10 @@ public class GlobalApiExceptionHandler {
                         path,
                         correlationId,
                         status.value());
-                return envelope(status, frameworkErrorCode(status), frameworkErrorMessage(status), correlationId);
+                if (isRoutingFailure(ex)) {
+                    return envelope(status, routingErrorCode(status), routingErrorMessage(status), correlationId);
+                }
+                return envelope(status, frameworkErrorCode(status), declaredErrorMessage(status), correlationId);
             }
         }
 
@@ -326,10 +347,9 @@ public class GlobalApiExceptionHandler {
     }
 
     /**
-     * Codes/messages for Spring MVC's own {@link ErrorResponse} exceptions (unknown path,
-     * unsupported method/media type, malformed request). Deliberately generic: the request
-     * path and parameter values are user-controlled and must not be reflected (SonarCloud
-     * S5131); the path is already in the request the client sent.
+     * Status-to-code mapping shared by every branch of this advice. Deliberately coarse: the
+     * code names the class of failure, never the request path or a rejected value (SonarCloud
+     * S5131).
      */
     private static String frameworkErrorCode(HttpStatusCode status) {
         return switch (status.value()) {
@@ -349,10 +369,12 @@ public class GlobalApiExceptionHandler {
     }
 
     /**
-     * Messages for exceptions that declare a status but no {@code reason}. Generic for the
-     * same reason as {@link #frameworkErrorMessage}: the exception's own message routinely
-     * embeds the identifier or value the client sent, and this envelope must not reflect it
-     * (SonarCloud S5131). The correlation id ties the response to the logged exception.
+     * Messages for exceptions that carry a status of their own — {@link ResponseStatus}-annotated
+     * domain exceptions with no {@code reason}, and {@link ResponseStatusException} and friends
+     * thrown by application code. Generic for the same reason as {@link #routingErrorMessage}:
+     * the exception's own message (a {@code ResponseStatusException} reason routinely embeds the
+     * id the client sent) must not be reflected in the envelope (SonarCloud S5131). The
+     * correlation id ties the response to the logged exception.
      */
     private static String declaredErrorMessage(HttpStatusCode status) {
         return switch (status.value()) {
@@ -366,11 +388,47 @@ public class GlobalApiExceptionHandler {
         };
     }
 
-    private static String frameworkErrorMessage(HttpStatusCode status) {
+    /**
+     * Whether the exception is Spring MVC's own routing / content-negotiation failure — the only
+     * kind that genuinely means "this service has no such endpoint". Everything else reaching the
+     * {@link ErrorResponse} branch is an application-thrown status and must not borrow the routing
+     * wording: a service throwing {@link ResponseStatusException}{@code (NOT_FOUND, …)} for a
+     * missing record was sending clients to debug the wrong layer (issue #2076).
+     *
+     * <p>Listed by type rather than by status, because status alone cannot tell the two apart — a
+     * 404 from {@link NoResourceFoundException} and a 404 from {@link ResponseStatusException} are
+     * the same {@code HttpStatusCode}. Spring models these five outside the
+     * {@code ResponseStatusException} hierarchy today, but naming them keeps the split correct if
+     * that ever changes.
+     */
+    private static boolean isRoutingFailure(Exception ex) {
+        return ex instanceof NoResourceFoundException
+                || ex instanceof NoHandlerFoundException
+                || ex instanceof HttpRequestMethodNotSupportedException
+                || ex instanceof HttpMediaTypeNotSupportedException
+                || ex instanceof HttpMediaTypeNotAcceptableException;
+    }
+
+    /**
+     * Codes for the routing failures above. A 404 gets its own {@link #NO_ENDPOINT} code so a
+     * client can tell an unknown route from a known route with no such record — the
+     * {@code NO_ENDPOINT} convention pos-people and pos-people-contact already use. The other
+     * routing statuses are unambiguous and keep the shared codes.
+     */
+    private static String routingErrorCode(HttpStatusCode status) {
+        return status.value() == 404 ? NO_ENDPOINT : frameworkErrorCode(status);
+    }
+
+    /**
+     * Messages for the routing failures above. Deliberately generic: the request path and
+     * parameter values are user-controlled and must not be reflected (SonarCloud S5131); the path
+     * is already in the request the client sent.
+     */
+    private static String routingErrorMessage(HttpStatusCode status) {
         return switch (status.value()) {
-            case 400 -> "Malformed request";
             case 404 -> "No endpoint for the requested path";
             case 405 -> "HTTP method not supported for this path";
+            case 406 -> "No acceptable representation for the requested media type";
             case 415 -> "Unsupported media type";
             default -> "Request rejected";
         };

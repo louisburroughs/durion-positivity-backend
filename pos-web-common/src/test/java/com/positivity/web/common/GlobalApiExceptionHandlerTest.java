@@ -16,6 +16,7 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -26,6 +27,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 class GlobalApiExceptionHandlerTest {
 
@@ -174,6 +177,57 @@ class GlobalApiExceptionHandlerTest {
     }
 
     @Test
+    void unmappedPathIsReportedAsAMissingEndpoint() throws Exception {
+        mockMvc.perform(get("/test/no-such-route"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NO_ENDPOINT"))
+                .andExpect(jsonPath("$.message").value("No endpoint for the requested path"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    /**
+     * {@code NoResourceFoundException} carries the same 404 as an application-thrown one, so the
+     * advice has to tell them apart by type; it must keep the routing wording rather than fall
+     * through to the resource-not-found wording the test below asserts (issue #2076).
+     */
+    @Test
+    void frameworkStaticResourceMissIsReportedAsAMissingEndpoint() throws Exception {
+        mockMvc.perform(get("/test/no-static-resource"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NO_ENDPOINT"))
+                .andExpect(jsonPath("$.message").value("No endpoint for the requested path"));
+    }
+
+    @Test
+    void applicationThrownNotFoundIsReportedAsAMissingResourceNotAMissingEndpoint() throws Exception {
+        mockMvc.perform(get("/test/missing-record"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Requested resource was not found"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    void applicationThrownNotFoundBodyDoesNotEchoTheReason() throws Exception {
+        String body = mockMvc.perform(get("/test/missing-record"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(body).doesNotContain("01a0a52c-89f9-7ef9-9c97-583da36fa240");
+    }
+
+    @Test
+    void applicationThrownConflictKeepsItsStatusAndGenericMessage() throws Exception {
+        mockMvc.perform(get("/test/response-status-conflict"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"))
+                .andExpect(jsonPath("$.message").value("Request conflicts with the current state of the resource"));
+    }
+
+    @Test
     void responseStatusAnnotatedExceptionKeepsItsStatusInsteadOfCollapsingTo500() throws Exception {
         mockMvc.perform(get("/test/not-found"))
                 .andExpect(status().isNotFound())
@@ -316,6 +370,22 @@ class GlobalApiExceptionHandlerTest {
         @GetMapping("/test/wrapped-not-found")
         String wrappedNotFound() {
             throw new IllegalStateException("wrapper", new DomainNotFoundException("bay"));
+        }
+
+        @GetMapping("/test/no-static-resource")
+        String noStaticResource() throws NoResourceFoundException {
+            throw new NoResourceFoundException(HttpMethod.GET, "/assets/missing.js", "assets/missing.js");
+        }
+
+        @GetMapping("/test/missing-record")
+        String missingRecord() {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "No pick list found for workorder 01a0a52c-89f9-7ef9-9c97-583da36fa240");
+        }
+
+        @GetMapping("/test/response-status-conflict")
+        String responseStatusConflict() {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Pick list is already released");
         }
 
         @GetMapping("/test/denied")
