@@ -52,6 +52,22 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.approval(
                                 "MCP_TOOL_PERMISSION_REVOKE", "Revoke a permission code from a discovered OpenAPI tool")
+                        .build(),
+                // #2073: conversation history CRUD for the assistant modal.
+                EventTypeRegistration.fastRead("MCP_CONVERSATION_LIST", "List the caller's own conversations")
+                        .build(),
+                EventTypeRegistration.fastRead("MCP_CONVERSATION_VIEW", "View a single conversation and its messages")
+                        .build(),
+                EventTypeRegistration.write("MCP_CONVERSATION_CREATE", "Start a new conversation")
+                        .build(),
+                EventTypeRegistration.write("MCP_CONVERSATION_UPDATE", "Rename and/or pin/unpin a conversation")
+                        .build(),
+                EventTypeRegistration.write("MCP_CONVERSATION_DELETE", "Delete a single conversation")
+                        .build(),
+                EventTypeRegistration.write("MCP_CONVERSATION_CLEAR_ALL", "Delete every conversation the caller owns")
+                        .build(),
+                EventTypeRegistration.write(
+                                "MCP_CONVERSATION_MESSAGE_APPEND", "Append a client-authored message to a conversation")
                         .build());
     }
 }

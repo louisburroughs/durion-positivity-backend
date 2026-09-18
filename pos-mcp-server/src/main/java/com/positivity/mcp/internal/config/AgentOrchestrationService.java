@@ -39,4 +39,15 @@ public interface AgentOrchestrationService {
      * explicit logout.
      */
     void evict(@NonNull String username);
+
+    /**
+     * #2073: drops the cached chat memory of one conversation within the bound tenant, for every
+     * actor and role, after the conversation is deleted or purged. An implementation that holds no
+     * conversation memory has nothing to evict; one that does must override this.
+     *
+     * @param conversationId the conversation id component of the memory key
+     */
+    default void evictConversation(@NonNull String conversationId) {
+        // No conversation memory held by default.
+    }
 }

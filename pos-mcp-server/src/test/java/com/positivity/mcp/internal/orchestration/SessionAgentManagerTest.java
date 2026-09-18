@@ -34,6 +34,7 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.service.ConversationMemoryHistory;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.RolePromptResolver;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
@@ -56,7 +57,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -331,6 +335,107 @@ class SessionAgentManagerTest {
                         SessionAgentManager.memoryKey(TENANT_A, "user-2", "ROLE_ADMIN", "c1"),
                         SessionAgentManager.memoryKey(TENANT_B, "user-1", "ROLE_ADMIN", "c1"));
         assertThat(counters.asMap().keySet()).containsExactly(SessionAgentManager.actorKey(TENANT_B, "user-1"));
+    }
+
+    @Test
+    @DisplayName(
+            "persistedConversationId parses only a canonical-UUID 4th segment; ephemeral/no-conversation keys are null (#2073)")
+    void persistedConversationId_parsesOnlyCanonicalUuidSuffix() {
+        UUID conversationId = UUID.randomUUID();
+
+        assertThat(SessionAgentManager.persistedConversationId(
+                        SessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_ADMIN", conversationId.toString())))
+                .isEqualTo(conversationId);
+        assertThat(SessionAgentManager.persistedConversationId(
+                        SessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_ADMIN", "gate-q07")))
+                .as("the deprecated #1735 non-UUID ephemeral key names no persisted conversation")
+                .isNull();
+        assertThat(SessionAgentManager.persistedConversationId(
+                        SessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_ADMIN", null)))
+                .as("a key with no conversation segment at all")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("a chat-memory cache miss for a persisted conversation id rehydrates from stored history (#2073)")
+    void chatMemory_cacheMissForPersistedConversation_seedsFromHistory() {
+        UUID conversationId = UUID.randomUUID();
+        String memoryKey = SessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_ADMIN", conversationId.toString());
+        ConversationMemoryHistory history = mock(ConversationMemoryHistory.class);
+        List<Message> stored = List.of(new UserMessage("hi"), new AssistantMessage("hello"));
+        when(history.recentTurns(conversationId, 50)).thenReturn(stored);
+        manager.setConversationMemoryHistory(history);
+
+        ChatMemory memory = (ChatMemory) ReflectionTestUtils.invokeMethod(manager, "chatMemoryFor", memoryKey);
+
+        assertThat(memory.get(memoryKey)).containsExactlyElementsOf(stored);
+        verify(history).recentTurns(conversationId, 50);
+    }
+
+    @Test
+    @DisplayName(
+            "a chat-memory cache miss for the deprecated ephemeral (non-UUID) key never asks the history seam (#2073)")
+    void chatMemory_cacheMissForEphemeralKey_neverConsultsHistory() {
+        String memoryKey = SessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_ADMIN", "gate-q07");
+        ConversationMemoryHistory history = mock(ConversationMemoryHistory.class);
+        manager.setConversationMemoryHistory(history);
+
+        ChatMemory memory = (ChatMemory) ReflectionTestUtils.invokeMethod(manager, "chatMemoryFor", memoryKey);
+
+        assertThat(memory.get(memoryKey)).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(history);
+    }
+
+    @Test
+    @DisplayName("a chat-memory cache miss for a key with no conversation segment never asks the history seam (#2073)")
+    void chatMemory_cacheMissForKeyWithNoConversationId_neverConsultsHistory() {
+        String memoryKey = SessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_ADMIN", null);
+        ConversationMemoryHistory history = mock(ConversationMemoryHistory.class);
+        manager.setConversationMemoryHistory(history);
+
+        ChatMemory memory = (ChatMemory) ReflectionTestUtils.invokeMethod(manager, "chatMemoryFor", memoryKey);
+
+        assertThat(memory.get(memoryKey)).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(history);
+    }
+
+    @Test
+    @DisplayName("no ConversationMemoryHistory wired (pre-#2073 profiles) starts memory empty, no NPE")
+    void chatMemory_noHistoryWired_startsEmptyWithoutThrowing() {
+        UUID conversationId = UUID.randomUUID();
+        String memoryKey = SessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_ADMIN", conversationId.toString());
+
+        ChatMemory memory = (ChatMemory) ReflectionTestUtils.invokeMethod(manager, "chatMemoryFor", memoryKey);
+
+        assertThat(memory).isNotNull();
+        assertThat(memory.get(memoryKey)).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "evictConversation clears cached memory of that conversation across actors/roles within the bound tenant only (#2073)")
+    void evictConversation_clearsCachedMemoryWithinTenantOnly() {
+        UUID conversationId = UUID.randomUUID();
+        @SuppressWarnings("unchecked")
+        Cache<String, ChatMemory> memory =
+                (Cache<String, ChatMemory>) ReflectionTestUtils.getField(manager, "chatMemoryCache");
+        assertThat(memory).isNotNull();
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        memory.put(
+                SessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_ADMIN", conversationId.toString()), chatMemory);
+        memory.put(
+                SessionAgentManager.memoryKey(TENANT_A, "user-2", "ROLE_CASHIER", conversationId.toString()),
+                chatMemory);
+        memory.put(SessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_ADMIN", "other-conversation"), chatMemory);
+        memory.put(
+                SessionAgentManager.memoryKey(TENANT_B, "user-1", "ROLE_ADMIN", conversationId.toString()), chatMemory);
+
+        manager.evictConversation(conversationId.toString());
+
+        assertThat(memory.asMap().keySet())
+                .containsExactlyInAnyOrder(
+                        SessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_ADMIN", "other-conversation"),
+                        SessionAgentManager.memoryKey(TENANT_B, "user-1", "ROLE_ADMIN", conversationId.toString()));
     }
 
     @Test

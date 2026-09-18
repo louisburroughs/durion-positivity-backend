@@ -6,6 +6,12 @@ spring:
       - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   jackson:
     default-property-inclusion: non_null
+  jpa:
+    # #2073: no open-session-in-view. With it on, the first repository call of a request (e.g. the
+    # chat turn's conversation ownership check) pins a pooled connection until the response is
+    # written, i.e. across the model call. Every read here completes inside a service transaction
+    # and maps to DTOs there, so nothing relies on lazy loading in the web layer.
+    open-in-view: false
   ai:
     ollama:
       base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
@@ -305,6 +311,12 @@ mcp:
     cache-ttl-minutes: 30
     max-cached-agents: 500
     memory-max-messages: 50
+  # #2073: persisted assistant conversations. An unpinned conversation idle (no new turn, rename or
+  # pin change) longer than retention-days is purged by ConversationRetentionScheduler, every
+  # purge-interval, per tenant; pinned conversations are exempt (user decision U2).
+  conversation:
+    retention-days: ${MCP_CONVERSATION_RETENTION_DAYS:30}
+    purge-interval: ${MCP_CONVERSATION_PURGE_INTERVAL:1h}
   # Answer resolution ladder: on a turn that produced no direct answer, fall through to a
   # deep link (rung 3) or an honest hand-off (rung 4) instead of surfacing the thinking channel.
   ladder:

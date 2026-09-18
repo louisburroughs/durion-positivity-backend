@@ -20,6 +20,8 @@ import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFacto
 import com.positivity.mcp.internal.orchestration.retrieval.PermissionAwareMetadataFilter;
 import com.positivity.mcp.internal.security.PermissionCodes;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder;
+import com.positivity.mcp.internal.service.ConversationIds;
+import com.positivity.mcp.internal.service.ConversationMemoryHistory;
 import com.positivity.mcp.internal.service.NltiRouter;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
@@ -52,9 +54,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -115,6 +119,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     private final int memoryMaxMessages;
     private final int rateLimitPerSession;
+
+    /** #2073: reloads a persisted conversation's memory window on a cache miss; absent → fresh memory. */
+    private @Nullable ConversationMemoryHistory conversationMemoryHistory;
 
     public SessionAgentManager(
             @Qualifier("chatModel") @NonNull ChatModel chatModel,
@@ -186,6 +193,17 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 .expireAfterWrite(Duration.ofMinutes(cacheTtlMinutes))
                 .build();
         prebuildRoleAgents();
+    }
+
+    /**
+     * #2073 (anvil decision 7): wires the persisted-conversation history used to rehydrate a
+     * conversation's memory after a restart, eviction or TTL expiry. Setter-injected and optional so
+     * existing constructions (and profiles without persistence) keep the pre-#2073 fresh-memory
+     * behaviour.
+     */
+    @Autowired(required = false)
+    public void setConversationMemoryHistory(@Nullable ConversationMemoryHistory conversationMemoryHistory) {
+        this.conversationMemoryHistory = conversationMemoryHistory;
     }
 
     /**
@@ -638,10 +656,62 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private @NonNull ChatMemory chatMemoryFor(@NonNull Object memoryId) {
         // Tier 3: Replace MessageWindowChatMemory with SemanticChatMemoryStore
         // for persistent semantic memory and session summarization
-        return chatMemoryCache.get(
-                String.valueOf(memoryId),
-                ignored -> new SemanticChatMemoryStore(
-                        memoryMaxMessages, chatModel, embeddingModel, embeddingStore, sessionSummary));
+        String memoryKey = String.valueOf(memoryId);
+        ChatMemory cached = chatMemoryCache.getIfPresent(memoryKey);
+        if (cached != null) {
+            return cached;
+        }
+        // #2073: built (and, for a persisted conversation, rehydrated from the database) outside the
+        // cache's compute, so the blocking read never holds a Caffeine bin lock. Two concurrent misses
+        // may both build one; the first published wins and the other is discarded unused.
+        ChatMemory built = newChatMemory(memoryKey);
+        ChatMemory raced = chatMemoryCache.asMap().putIfAbsent(memoryKey, built);
+        return raced != null ? raced : built;
+    }
+
+    /**
+     * A fresh memory for {@code memoryKey}, seeded from the persisted conversation when the key names
+     * one (#2073): the cache only misses for a persisted conversation after a restart, an eviction or
+     * the TTL, and the model should continue that conversation rather than start over. Keys without a
+     * conversation id, and the deprecated non-UUID ephemeral ids, start empty as before.
+     */
+    private @NonNull ChatMemory newChatMemory(@NonNull String memoryKey) {
+        SemanticChatMemoryStore memory = new SemanticChatMemoryStore(
+                memoryMaxMessages, chatModel, embeddingModel, embeddingStore, sessionSummary);
+        ConversationMemoryHistory history = conversationMemoryHistory;
+        UUID conversationId = persistedConversationId(memoryKey);
+        if (history != null && conversationId != null) {
+            List<Message> window = history.recentTurns(conversationId, memoryMaxMessages);
+            if (!window.isEmpty()) {
+                memory.add(memoryKey, window);
+                LOGGER.debug("Rehydrated chat memory conversationId={} messages={}", conversationId, window.size());
+            }
+        }
+        return memory;
+    }
+
+    /**
+     * The conversation id of a {@link #memoryKey} when it is a canonical UUID (a persisted
+     * conversation), else {@code null}.
+     */
+    static @Nullable UUID persistedConversationId(@NonNull String memoryKey) {
+        String[] parts = memoryKey.split(MEMORY_KEY_SEPARATOR, -1);
+        if (parts.length != 4) {
+            return null;
+        }
+        return ConversationIds.parseCanonical(parts[3]);
+    }
+
+    /**
+     * #2073: drops every cached memory of {@code conversationId} within the bound tenant — across the
+     * actors and roles that chatted in it — after the conversation is deleted or purged, so a later
+     * turn cannot resurrect its content from the cache.
+     */
+    @Override
+    public void evictConversation(@NonNull String conversationId) {
+        String tenantPrefix = TenantContext.require() + MEMORY_KEY_SEPARATOR;
+        String suffix = MEMORY_KEY_SEPARATOR + conversationId;
+        chatMemoryCache.asMap().keySet().removeIf(key -> key.startsWith(tenantPrefix) && key.endsWith(suffix));
     }
 
     private @NonNull String simpleChat(

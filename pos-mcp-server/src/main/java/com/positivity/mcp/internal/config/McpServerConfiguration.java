@@ -27,7 +27,8 @@ import org.springframework.web.reactive.function.client.WebClient;
     HybridRetrievalProperties.class,
     CompoundRerankProperties.class,
     SiteMapProperties.class,
-    ToolHttpProperties.class
+    ToolHttpProperties.class,
+    ConversationProperties.class
 })
 public class McpServerConfiguration {
 

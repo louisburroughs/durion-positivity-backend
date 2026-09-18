@@ -10,6 +10,8 @@ tags:
   name: System Prompts
 - description: LLM provider API configuration management
   name: LLM API Configuration
+- description: Server-side conversation history for the assistant modal
+  name: MCP Conversations
 - description: RAG document ingestion job management
   name: Document Ingestion
 - description: NLTI Audit Ledger Query
@@ -262,6 +264,8 @@ paths:
 
         Returns 200 with the full response text plus a parallel `blocks` array segmented from that same text, in source order (markdown/table/code today; chart/text/image/file/error are modeled for forward compatibility but not yet produced) — markdown runs interleave with table/code blocks wherever they occur, with no guarantee the first block is markdown. `blocks` is optional and may be empty; older clients may ignore it, and when it is empty or absent, render `response` instead.
 
+        Conversation persistence (#2073): an absent `conversationId` starts a new persisted conversation with fresh memory — the response always carries the resolved `conversationId`, and callers must echo it on every follow-up turn to continue that same conversation rather than starting a new one each time. A `conversationId` that is a UUID owned by the caller reuses that conversation; a UUID that does not exist or belongs to another subject answers 404 `CONVERSATION_NOT_FOUND` rather than silently starting a new conversation under a caller-chosen id. A non-UUID `conversationId` is the deprecated ephemeral isolation key (#1735): memory-only, never persisted, echoed back unchanged, and `messageId` is `null` in that case. `messageId` (the persisted assistant message id) is also `null` if the conversation was deleted or purged in the moment between the turn starting and finishing — the answer is still returned.
+
         Returns 429 when the caller''s chat rate limit is exceeded.
 
         '
@@ -284,7 +288,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatResponse'
-          description: OK
+          description: Chat turn answered
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Malformed request (blank message, message over the length limit)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: conversationId is a UUID not found, or owned by another subject
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller's chat rate limit exceeded
       security:
       - bearerAuth:
         - mcp:chat:execute
@@ -338,6 +360,332 @@ paths:
       - mcp-streaming-chat-controller
       x-required-permissions:
       - mcp:chat:stream
+  /v1/mcp/conversations:
+    delete:
+      description: 'Deletes every conversation the caller owns.
+
+        Preconditions: none; a caller with zero conversations still succeeds.
+
+        Required inputs: none; there is no request body.
+
+        Emits a MCP_CONVERSATION_CLEAR_ALL event.
+
+        Returns 204 whether or not the caller had any conversations, making the call idempotent.
+
+        '
+      operationId: clearMcpConversations
+      responses:
+        '204':
+          description: All of the caller's conversations deleted
+      security:
+      - bearerAuth:
+        - mcp:chat:execute
+      summary: Clear All My Conversations
+      tags:
+      - MCP Conversations
+      x-required-permissions:
+      - mcp:chat:execute
+    get:
+      description: 'Returns the caller''s own conversation history, pinned first then most-recently-updated first, capped at 200 rows (no pagination).
+
+        Preconditions: none; an empty list means the caller has no conversations yet.
+
+        Required inputs: none; tenant and owner come from the authenticated principal, never from a request parameter.
+
+        Retention: unpinned conversations idle beyond the server''s retention window are purged; pinned conversations are exempt (see getMcpConversationPolicy).
+
+        Returns 200 with the caller''s conversation summaries.
+
+        '
+      operationId: listMcpConversations
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ConversationSummary'
+                type: array
+          description: Conversation summaries returned
+      security:
+      - bearerAuth:
+        - mcp:chat:execute
+      summary: List My Conversations
+      tags:
+      - MCP Conversations
+      x-required-permissions:
+      - mcp:chat:execute
+    post:
+      description: 'Starts a new, empty conversation owned by the caller, optionally with an initial title.
+
+        Use this tool to start a conversation the caller can then append turns to; do not use it to continue an existing one, since POST /mcp/chat with an existing conversationId does that.
+
+        Preconditions: none.
+
+        Required inputs: none; title is optional (1..120 characters after trimming) and, when omitted, is derived from the first message later appended to the conversation.
+
+        Emits a MCP_CONVERSATION_CREATE event.
+
+        Returns 201 with the created conversation (empty message list).
+
+        '
+      operationId: createMcpConversation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetail'
+          description: Conversation created
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Malformed request (title outside 1..120 characters after trimming)
+      security:
+      - bearerAuth:
+        - mcp:chat:execute
+      summary: Start a New Conversation
+      tags:
+      - MCP Conversations
+      x-required-permissions:
+      - mcp:chat:execute
+  /v1/mcp/conversations/policy:
+    get:
+      description: 'Returns the server-wide conversation retention policy, so the history rail''s footer can state it truthfully instead of the old per-browser wording.
+
+        Preconditions: none.
+
+        Required inputs: none.
+
+        Retention: unpinned conversations idle beyond retentionDays are purged; pinned conversations are exempt when pinnedExempt is true.
+
+        Returns 200 with the retention policy. No event is emitted for this read.
+
+        '
+      operationId: getMcpConversationPolicy
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationPolicy'
+          description: Retention policy returned
+      security:
+      - bearerAuth:
+        - mcp:chat:execute
+      summary: Get Conversation Retention Policy
+      tags:
+      - MCP Conversations
+      x-required-permissions:
+      - mcp:chat:execute
+  /v1/mcp/conversations/{id}:
+    delete:
+      description: 'Deletes one conversation and its messages.
+
+        Preconditions: the conversation must exist and belong to the caller.
+
+        Required inputs: id (conversation id) as a path parameter; there is no request body.
+
+        Emits a MCP_CONVERSATION_DELETE event.
+
+        Returns 204 on success and 404 (never 403) when the id does not exist or belongs to another subject.
+
+        '
+      operationId: deleteMcpConversation
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: Conversation deleted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: id path parameter is not a valid UUID
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No such conversation for the caller
+      security:
+      - bearerAuth:
+        - mcp:chat:execute
+      summary: Delete a Conversation
+      tags:
+      - MCP Conversations
+      x-required-permissions:
+      - mcp:chat:execute
+    get:
+      description: 'Returns a single conversation, including its full message history, so a reopened conversation renders identically to when it was live.
+
+        Preconditions: the conversation must exist and belong to the caller.
+
+        Required inputs: id (conversation id) as a path parameter.
+
+        Emits a MCP_CONVERSATION_VIEW event.
+
+        Returns 404 (never 403) when the id does not exist or belongs to another subject — the two are indistinguishable on purpose.
+
+        '
+      operationId: getMcpConversation
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetail'
+          description: Conversation returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: id path parameter is not a valid UUID
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No such conversation for the caller
+      security:
+      - bearerAuth:
+        - mcp:chat:execute
+      summary: Get a Conversation
+      tags:
+      - MCP Conversations
+      x-required-permissions:
+      - mcp:chat:execute
+    patch:
+      description: 'Applies a partial update to a conversation''s title and/or pinned state; either field may be omitted.
+
+        Preconditions: the conversation must exist and belong to the caller.
+
+        Required inputs: id (conversation id) as a path parameter; title (1..120 characters after trimming) and/or pinned in the body — a body with neither set is a no-op 200, not a 400.
+
+        Emits a MCP_CONVERSATION_UPDATE event.
+
+        Returns 404 (never 403) when the id does not exist or belongs to another subject.
+
+        '
+      operationId: updateMcpConversation
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateConversationRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetail'
+          description: Conversation updated (or left unchanged, if no fields set)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Malformed request (id not a valid UUID, or title outside 1..120 characters after trimming)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No such conversation for the caller
+      security:
+      - bearerAuth:
+        - mcp:chat:execute
+      summary: Rename or Pin a Conversation
+      tags:
+      - MCP Conversations
+      x-required-permissions:
+      - mcp:chat:execute
+  /v1/mcp/conversations/{id}/messages:
+    post:
+      description: 'Appends a client-authored turn directly to a conversation (for example, a one-time import of previously browser-only history, or a non-chat caller).
+
+        <strong>Do not call this for a turn POST /mcp/chat already returned</strong> — that endpoint persists its own user and assistant messages; re-appending them here would duplicate the conversation.
+
+        Preconditions: the conversation must exist and belong to the caller.
+
+        Required inputs: id (conversation id) as a path parameter; role ("user" or "assistant") and blocks (at most 64 entries, at most 256 KB serialized) in the body, plus an optional raw-text content fallback.
+
+        Emits a MCP_CONVERSATION_MESSAGE_APPEND event.
+
+        Returns 201 with the stored message, and 404 (never 403) when the id does not exist or belongs to another subject.
+
+        '
+      operationId: appendMcpConversationMessage
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppendMessageRequest'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationMessage'
+          description: Message appended
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Malformed request (id not a valid UUID, invalid role, more than 64 blocks, an unrecognized block kind, or the serialized body over 256 KB)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No such conversation for the caller
+      security:
+      - bearerAuth:
+        - mcp:chat:execute
+      summary: Append a Message to a Conversation
+      tags:
+      - MCP Conversations
+      x-required-permissions:
+      - mcp:chat:execute
   /v1/mcp/documents:
     post:
       description: 'Queues a text document for asynchronous ingestion into the RAG vector store and returns a trackable job.
@@ -1099,6 +1447,33 @@ components:
       - status
       - timestamp
       type: object
+    AppendMessageRequest:
+      description: Client-authored turn to append to a conversation.
+      properties:
+        blocks:
+          description: Typed rendering units for this turn. May be empty when `content` carries plain text only. At most 64 entries.
+          items:
+            $ref: '#/components/schemas/ChatBlock'
+          maxItems: 64
+          minItems: 0
+          type: array
+        content:
+          description: Optional raw text/markdown fallback for this turn, for clients that render `content` instead of `blocks`.
+          example: How many mechanics do I have?
+          type: string
+        role:
+          description: Who produced this turn.
+          enum:
+          - user
+          - assistant
+          example: user
+          minLength: 1
+          pattern: user|assistant
+          type: string
+      required:
+      - blocks
+      - role
+      type: object
     AuditEventResponse:
       description: Audit event record describing a single recorded action within the MCP server
       properties:
@@ -1343,13 +1718,14 @@ components:
         message: Hello
       properties:
         conversationId:
-          description: Optional conversation id. Turns sharing an id share one memory; omit it to use the caller's default per-role conversation, and supply a distinct id per request to ask independent questions that do not inherit each other's history (#1735).
-          example: gate-q07
+          description: 'Optional conversation id (#2073). Omit to start a new persisted conversation with fresh memory; the response''s `conversationId` is the id to echo on every follow-up turn. A UUID owned by the caller reuses that conversation; a UUID not found or owned by another subject answers 404 `CONVERSATION_NOT_FOUND`. A non-UUID value is the deprecated ephemeral isolation key (#1735): memory-only, never persisted, echoed back unchanged so existing non-UUID callers keep working. Deliberately typed as a plain string (not a UUID) precisely to accept that deprecated non-UUID form.'
+          example: 0198f2b1-6c2a-7c3e-8f00-1234567890ab
           type: string
         message:
-          description: User chat message to send to the agent
+          description: User chat message to send to the agent. At most 32000 characters.
           example: Hello
-          minLength: 1
+          maxLength: 32000
+          minLength: 0
           type: string
       required:
       - message
@@ -1360,6 +1736,8 @@ components:
         blocks:
         - kind: markdown
           markdown: Hi!
+        conversationId: 0198f2b1-6c2a-7c3e-8f00-1234567890ab
+        messageId: 0198f2b1-7a10-7b21-9c00-abcdef123456
         response: Hi!
       properties:
         blocks:
@@ -1367,11 +1745,22 @@ components:
           items:
             $ref: '#/components/schemas/ChatBlock'
           type: array
+        conversationId:
+          description: 'Conversation id this turn was recorded against (#2073). Always populated: newly created, reused from the request, or (deprecated ephemeral path) the caller''s own non-UUID key echoed back unchanged. Echo this value on the next turn''s `conversationId` to continue the same conversation. Deliberately typed as a plain string (not a UUID) to also carry the deprecated non-UUID ephemeral form back to the caller unchanged.'
+          example: 0198f2b1-6c2a-7c3e-8f00-1234567890ab
+          type: string
+        messageId:
+          description: Id of the persisted assistant message for this turn, or `null` in the deprecated ephemeral (non-UUID `conversationId`) path, or if the conversation was deleted/purged between the turn starting and finishing.
+          format: uuid
+          type:
+          - string
+          - 'null'
         response:
           description: Full agent response text
           example: Hi!
           type: string
       required:
+      - conversationId
       - response
       type: object
     ChatTableBlock:
@@ -1444,6 +1833,145 @@ components:
       properties:
         idempotencyKey:
           description: Idempotency key from the plan preview; when present it must match the plan
+          type: string
+      type: object
+    ConversationDetail:
+      description: A conversation and its full message history.
+      properties:
+        createdAt:
+          description: When the conversation was created.
+          format: date-time
+          type: string
+        id:
+          description: Conversation id.
+          example: 0198f2b1-6c2a-7c3e-8f00-1234567890ab
+          format: uuid
+          type: string
+        messages:
+          description: Every message in the conversation, oldest first. Reopening a conversation must render identically to when it was live.
+          items:
+            $ref: '#/components/schemas/ConversationMessage'
+          type: array
+        pinned:
+          description: Whether the caller pinned this conversation. Pinned conversations sort first and are exempt from retention purge.
+          type: boolean
+        preview:
+          description: First line of the latest assistant turn, truncated to 90 characters. Null for a conversation with no assistant turn yet.
+          example: You have 26 mechanics, all ACTIVE.
+          type:
+          - string
+          - 'null'
+        title:
+          description: Conversation title. Derived from the first user message until the caller renames it via PATCH.
+          example: Mechanic roster count
+          type: string
+        updatedAt:
+          description: When the conversation was last touched (new turn, rename, pin toggle).
+          format: date-time
+          type: string
+      required:
+      - createdAt
+      - id
+      - messages
+      - pinned
+      - title
+      - updatedAt
+      type: object
+    ConversationMessage:
+      description: One turn (user or assistant) of a persisted conversation.
+      properties:
+        blocks:
+          description: Typed rendering units segmented from `content`, in source order. May be empty (never partial) — when empty, render `content` instead.
+          items:
+            $ref: '#/components/schemas/ChatBlock'
+          type: array
+        content:
+          description: Raw text/markdown for this turn. Always populated; the fallback a client renders whenever `blocks` is empty.
+          example: You have **26 mechanics**, all ACTIVE.
+          type: string
+        id:
+          description: Message id.
+          example: 0198f2b1-7a10-7b21-9c00-abcdef123456
+          format: uuid
+          type: string
+        role:
+          description: Who produced this turn.
+          enum:
+          - user
+          - assistant
+          example: assistant
+          type: string
+        timestamp:
+          description: When the message was recorded.
+          format: date-time
+          type: string
+      required:
+      - blocks
+      - content
+      - id
+      - role
+      - timestamp
+      type: object
+    ConversationPolicy:
+      description: Server-wide conversation retention policy.
+      properties:
+        pinnedExempt:
+          description: Whether pinned conversations are exempt from the retention purge regardless of idle time.
+          example: true
+          type: boolean
+        retentionDays:
+          description: Days an unpinned conversation may sit idle (no new turns, no rename/pin change) before the retention purge deletes it.
+          example: 30
+          format: int32
+          type: integer
+      required:
+      - pinnedExempt
+      - retentionDays
+      type: object
+    ConversationSummary:
+      description: One entry in the caller's conversation history rail.
+      properties:
+        createdAt:
+          description: When the conversation was created.
+          format: date-time
+          type: string
+        id:
+          description: Conversation id.
+          example: 0198f2b1-6c2a-7c3e-8f00-1234567890ab
+          format: uuid
+          type: string
+        pinned:
+          description: Whether the caller pinned this conversation. Pinned conversations sort first and are exempt from retention purge.
+          type: boolean
+        preview:
+          description: First line of the latest assistant turn, truncated to 90 characters. Null for a conversation with no assistant turn yet.
+          example: You have 26 mechanics, all ACTIVE.
+          type:
+          - string
+          - 'null'
+        title:
+          description: Conversation title. Derived from the first user message until the caller renames it via PATCH.
+          example: Mechanic roster count
+          type: string
+        updatedAt:
+          description: When the conversation was last touched (new turn, rename, pin toggle).
+          format: date-time
+          type: string
+      required:
+      - createdAt
+      - id
+      - pinned
+      - title
+      - updatedAt
+      type: object
+    CreateConversationRequest:
+      description: Request to start a new conversation.
+      properties:
+        title:
+          description: Optional initial title, 1..120 characters after trimming. Omit to let the server derive a title from the first appended message.
+          example: Mechanic roster count
+          maxLength: 120
+          minLength: 1
           type: string
       type: object
     DocumentIngestionJobResponse:
@@ -1827,6 +2355,19 @@ components:
         toolName:
           description: Unique tool name
           example: event-receiver_getactiveeventtypes
+          type: string
+      type: object
+    UpdateConversationRequest:
+      description: Partial update for a conversation's title and/or pinned state.
+      properties:
+        pinned:
+          description: New pinned state. Omit to leave the pinned state unchanged. Pinned conversations are exempt from retention purge.
+          type: boolean
+        title:
+          description: New title, 1..120 characters after trimming. Omit to leave the title unchanged.
+          example: Mechanic roster (renamed)
+          maxLength: 120
+          minLength: 1
           type: string
       type: object
     WorkflowStateResponse:
