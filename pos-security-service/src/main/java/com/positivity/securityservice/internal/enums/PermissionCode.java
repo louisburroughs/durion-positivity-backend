@@ -999,13 +999,15 @@ public enum PermissionCode {
     // ── Shop (new) ─────────────────────────────────────────────────────────────
     SHOP__CONFLICT__OVERRIDE(531, "shop:conflict:override"),
     // ── Catalog (new) ──────────────────────────────────────────────────────────
-    CATALOG__SERVICE_REQUIREMENT__MANAGE(532, "catalog:service_requirement:manage");
+    CATALOG__SERVICE_REQUIREMENT__MANAGE(532, "catalog:service_requirement:manage"),
+    // ── Workorder (new) ────────────────────────────────────────────────────────
+    WORKORDER__POSITION__ASSIGN(533, "workorder:position:assign");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 88;
+    public static final int CATALOG_VERSION = 89;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

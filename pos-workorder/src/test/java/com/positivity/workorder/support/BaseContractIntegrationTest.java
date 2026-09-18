@@ -84,9 +84,11 @@ public abstract class BaseContractIntegrationTest {
             "workorder:workorder:generate_invoice",
             "workorder:workorder:reopen_completed",
             "workorder:workorder:assign-technician",
-            // #1983: service-position assignment reuses the operational-context grant rather than
-            // minting a permission for what is the same authority — deciding where a job happens.
             "workorder:operationalContext:override",
+            // #2059: service-position assign and release carry their own code. The override grant is
+            // the manager exception path (overrideOperationalContext), which also rewrites mechanics
+            // and location; a dispatcher who places work should not need it.
+            "workorder:position:assign",
             "workorder:invoice:view",
             "workorder:invoice:create",
             "workorder:parts:view",

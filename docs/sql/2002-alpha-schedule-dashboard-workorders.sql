@@ -22,7 +22,7 @@
 --     -H "X-API-Version: 1" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 --     -d '{"resourceType":"BAY","resourceId":"<bay-uuid>","reason":"Alpha dispatch-board fixture (#2002)"}'
 --
--- Requires workorder:operationalContext:override. Repeat with resourceType MOBILE_UNIT for the
+-- Requires workorder:position:assign (#2059; formerly workorder:operationalContext:override). Repeat with resourceType MOBILE_UNIT for the
 -- mobile-unit fixture. Re-running is safe: re-asserting a position a workorder already holds is a
 -- no-op placement that still repairs a missing date.
 --
