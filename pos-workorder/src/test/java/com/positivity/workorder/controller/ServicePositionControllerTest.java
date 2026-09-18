@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -28,6 +29,7 @@ import com.positivity.workorder.internal.service.ServicePositionService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -231,5 +233,68 @@ class ServicePositionControllerTest {
         when(servicePositionService.getPosition(WORKORDER_ID)).thenThrow(new WorkorderNotFoundException(WORKORDER_ID));
 
         mockMvc.perform(get(URL, WORKORDER_ID)).andExpect(status().isNotFound());
+    }
+
+    /**
+     * #2059 split placement off the manager override grant. The shared test caller holds both
+     * codes, so the happy paths above pass under either annotation and cannot pin the split —
+     * these send one authority at a time through the {@code X-Authorities} header the test
+     * filter honours, which is what makes the two codes distinguishable.
+     */
+    @Nested
+    @DisplayName("#2059: placement is gated on workorder:position:assign, not the override grant")
+    class PlacementAuthority {
+
+        private static final String OVERRIDE_ONLY = "workorder:operationalContext:override";
+        private static final String PLACEMENT_ONLY = "workorder:position:assign";
+
+        private static final String BAY_BODY = "{\"resourceType\":\"BAY\",\"resourceId\":\"" + BAY_ID + "\"}";
+
+        @Test
+        @DisplayName("PUT with only the manager override grant is refused")
+        void assignRefusesTheOverrideGrantAlone() throws Exception {
+            mockMvc.perform(put(URL, WORKORDER_ID)
+                            .header("X-Authorities", OVERRIDE_ONLY)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(BAY_BODY))
+                    .andExpect(status().isForbidden());
+
+            verifyNoInteractions(servicePositionService);
+        }
+
+        @Test
+        @DisplayName("DELETE with only the manager override grant is refused")
+        void releaseRefusesTheOverrideGrantAlone() throws Exception {
+            mockMvc.perform(delete(URL, WORKORDER_ID).header("X-Authorities", OVERRIDE_ONLY))
+                    .andExpect(status().isForbidden());
+
+            verifyNoInteractions(servicePositionService);
+        }
+
+        @Test
+        @DisplayName("PUT with only workorder:position:assign is allowed")
+        void assignAcceptsThePlacementGrantAlone() throws Exception {
+            when(servicePositionService.assignPosition(eq(WORKORDER_ID), any(), any()))
+                    .thenReturn(response(ResourceType.BAY, BAY_ID));
+
+            mockMvc.perform(put(URL, WORKORDER_ID)
+                            .header("X-Authorities", PLACEMENT_ONLY)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(BAY_BODY))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.resourceId").value(BAY_ID.toString()));
+        }
+
+        @Test
+        @DisplayName("DELETE with only workorder:position:assign is allowed")
+        void releaseAcceptsThePlacementGrantAlone() throws Exception {
+            when(servicePositionService.releasePosition(eq(WORKORDER_ID), any(), isNull()))
+                    .thenReturn(response(null, null));
+
+            mockMvc.perform(delete(URL, WORKORDER_ID).header("X-Authorities", PLACEMENT_ONLY))
+                    .andExpect(status().isOk());
+
+            verify(servicePositionService).releasePosition(eq(WORKORDER_ID), any(), isNull());
+        }
     }
 }

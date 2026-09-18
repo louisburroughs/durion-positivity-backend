@@ -340,6 +340,11 @@ class RolePermissionBaselineTest {
                         "appointments:cancel",
                         "workorder:workorder:view",
                         "workorder:workorder:assign-technician",
+                        // #2059. Placing a job in a bay is the other half of dispatch, and it used
+                        // to require workorder:operationalContext:override — a manager grant that
+                        // also rewrites a workorder's mechanics and location. The placement code is
+                        // now its own, so a dispatcher can work the board without it.
+                        "workorder:position:assign",
                         "people:availability:view",
                         // #1895. The dispatch board reads the caller's own primary location on
                         // load; the operational staff roles all hold this, so it is not

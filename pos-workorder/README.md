@@ -143,12 +143,20 @@ through — closing the history row and clearing `resourceId`. Clearing matters:
 `is_reopened`, so a closed workorder that kept its bay would re-enter the index on reopen and
 collide with whoever took the bay meanwhile.
 
-**Permissions.** Position assign and release reuse `workorder:operationalContext:override` and the
-read reuses `workorder:workorder:view`; no new permission is minted for what is the same authority —
-deciding where a job happens. `POST /v1/workorders/{id}/operationalContext/override` remains the
-manager exception path and now routes its position change through the same service, so it gets
-occupancy enforcement and a history row, while keeping override semantics: the position is not
-re-validated against the location replicas.
+**Permissions.** Position assign and release carry `workorder:position:assign`; the read reuses
+`workorder:workorder:view`. The two write endpoints share one code deliberately — freeing a bay is
+the same decision as filling one — and assign and release are gated on it in both directions.
+
+They reused `workorder:operationalContext:override` until #2059, on the argument that deciding where
+a job happens is one authority. The consequence was that the everyday dispatcher persona could hand
+a job to a technician on the board but could not put it in a bay without also holding the grant that
+rewrites a workorder's mechanics and location. #2059 settled that as Option B: the placement code is
+minted separately and seeded to the roles expected to place work (ADMIN, DISPATCHER,
+LOCATION_MANAGER, SHOP_MANAGER), while `POST /v1/workorders/{id}/operationalContext/override` keeps
+`workorder:operationalContext:override` to itself. That endpoint remains the manager exception path
+and routes its position change through the same service, so it gets occupancy enforcement and a
+history row, while keeping override semantics: the position is not re-validated against the location
+replicas, and it needs no placement grant of its own.
 
 ## Estimate/workorder snapshot facts (order parity E1)
 
@@ -450,7 +458,7 @@ module's `LocationAncestorResolver`; there is no per-request call to pos-locatio
 | `getEstimate`, `getEstimateSummary`, `generateEstimatePdf` | `workorder:estimate:view` | controller, off the loaded estimate's location, after the 404 |
 | `createEstimateFromAppointment` | `workorder:estimate:create` | controller, on the body's `locationId` |
 | `overrideOperationalContext` | `workorder:operationalContext:override` | `WorkorderServiceImpl`, after the 404 and before any write: first the workorder's current `shopId` (null fails closed), then the body's `locationId` |
-| `assignServicePosition`, `releaseServicePosition` | `workorder:operationalContext:override` | `ServicePositionServiceImpl`, after the 404 and before any write, on the workorder's `shopId` (null fails closed). The target position is at the workorder's own site by construction, so there is no second location to check |
+| `assignServicePosition`, `releaseServicePosition` | `workorder:position:assign` | `ServicePositionServiceImpl`, after the 404 and before any write, on the workorder's `shopId` (null fails closed). The target position is at the workorder's own site by construction, so there is no second location to check |
 | `startWorkexecWorkSession` | `timekeeping:work_session:create` | controller, on the body's `locationId` |
 
 **Narrow** — the location is an optional filter; a supplied one is gated, and without one a scoped

@@ -46,8 +46,8 @@ public class ServicePositionController {
     @EmitEvent(id = "WORKORDER_POSITION_ASSIGN", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"workorder:operationalContext:override"})
-    @PreAuthorize("hasAuthority('" + WorkorderPermissions.OPERATIONALCONTEXT_OVERRIDE + "')")
+            scopes = {"workorder:position:assign"})
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.POSITION_ASSIGN + "')")
     @Operation(
             operationId = "assignServicePosition",
             summary = "Assign or Change a Workorder's Service Position",
@@ -62,8 +62,8 @@ public class ServicePositionController {
                     Preconditions: the workorder must exist and must not be COMPLETED or CANCELLED; a BAY or \
                     MOBILE_UNIT must be known to this module's location replicas, belong to the workorder's own \
                     site and hold no other open workorder, while HOLD has no capacity limit and accepts only \
-                    the workorder's own locationId; and a caller whose workorder:operationalContext:override \
-                    grant is location-scoped must have the workorder's shop within reach (ADR-0061).
+                    the workorder's own locationId; and a caller whose workorder:position:assign grant is \
+                    location-scoped must have the workorder's shop within reach (ADR-0061).
                     Required inputs: workorderId (UUID) as a path parameter and a body with resourceType \
                     (BAY, MOBILE_UNIT or HOLD, required); resourceId is required for BAY and MOBILE_UNIT and \
                     optional for HOLD, reason is optional, and re-sending the placement already in force is a \
@@ -130,8 +130,8 @@ public class ServicePositionController {
     @EmitEvent(id = "WORKORDER_POSITION_RELEASE", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"workorder:operationalContext:override"})
-    @PreAuthorize("hasAuthority('" + WorkorderPermissions.OPERATIONALCONTEXT_OVERRIDE + "')")
+            scopes = {"workorder:position:assign"})
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.POSITION_ASSIGN + "')")
     @Operation(
             operationId = "releaseServicePosition",
             summary = "Release a Workorder's Service Position",

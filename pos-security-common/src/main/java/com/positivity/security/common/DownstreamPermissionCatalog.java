@@ -23,7 +23,7 @@ public final class DownstreamPermissionCatalog {
      * {@code PermissionCode.CATALOG_VERSION}.
      * Updated automatically by {@code scripts/generate-permissions.py --sync}.
      */
-    public static final int CATALOG_VERSION = 88;
+    public static final int CATALOG_VERSION = 89;
 
     /**
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
@@ -720,7 +720,10 @@ public final class DownstreamPermissionCatalog {
         "PERM_shop:conflict:override", // 531
 
         // ── New batch (bits 532–532) ──────────────────────────────────────────
-        "PERM_catalog:service_requirement:manage" // 532
+        "PERM_catalog:service_requirement:manage", // 532
+
+        // ── New batch (bits 533–533) ──────────────────────────────────────────
+        "PERM_workorder:position:assign" // 533
     };
 
     public static String authorityForBit(int bitIndex) {

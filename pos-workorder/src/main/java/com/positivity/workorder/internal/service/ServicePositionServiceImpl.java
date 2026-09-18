@@ -279,11 +279,14 @@ public class ServicePositionServiceImpl implements ServicePositionService {
      * reach. The workorder's shop is the gate, as it is for {@code overrideOperationalContext} — the
      * target position is at the workorder's own site by construction here (that is what
      * {@link #resolvePosition} enforces), so there is no second, different location to check.
+     *
+     * <p>The permission named here must be the one the endpoints reaching this method require
+     * (#1890): since #2059 that is {@code workorder:position:assign}, not the override grant.
      */
     private void requireLocationScope(@NonNull Workorder workorder) {
         LocationScope scope = SecurityContextHelper.locationScope();
         scope.require(
-                WorkorderPermissions.OPERATIONALCONTEXT_OVERRIDE,
+                WorkorderPermissions.POSITION_ASSIGN,
                 workorder.getShopId() == null ? "" : workorder.getShopId().toString());
     }
 

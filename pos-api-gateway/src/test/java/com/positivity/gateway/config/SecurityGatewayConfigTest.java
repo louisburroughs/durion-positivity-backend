@@ -1402,13 +1402,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 88")
+    @DisplayName("CATALOG_VERSION is 89")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(88);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(89);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 532")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 533")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1716,8 +1716,11 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(531)).isEqualTo("PERM_shop:conflict:override");
         // catalog v88 (CAP-329): declaring a catalog service's skill requirements (bit 532)
         assertThat(GatewayPermissionCatalog.authorityForBit(532)).isEqualTo("PERM_catalog:service_requirement:manage");
+        // catalog v89 (#2059): placing a workorder on a service position, split off the manager
+        // operational-context override grant (bit 533)
+        assertThat(GatewayPermissionCatalog.authorityForBit(533)).isEqualTo("PERM_workorder:position:assign");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(533)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(534)).isNull();
     }
 
     @Test

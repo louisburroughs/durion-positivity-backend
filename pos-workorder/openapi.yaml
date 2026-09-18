@@ -5943,12 +5943,12 @@ paths:
           description: Workorder is COMPLETED or CANCELLED (ApiError.code WORKORDER_CLOSED)
       security:
       - bearerAuth:
-        - workorder:operationalContext:override
+        - workorder:position:assign
       summary: Release a Workorder's Service Position
       tags:
       - Service Position API
       x-required-permissions:
-      - workorder:operationalContext:override
+      - workorder:position:assign
     get:
       description: 'Returns where the workorder is and who is working on it together — the current service position, the current technician, the workorder status, and the full position history newest first.
 
@@ -5999,7 +5999,7 @@ paths:
 
         Use this tool to dispatch a workorder to a bay, move it between bays or mobile units, or park it; do not use releaseServicePosition, which leaves the workorder unplaced, and do not use overrideOperationalContext, which is the manager exception path and also rewrites mechanics and location.
 
-        Preconditions: the workorder must exist and must not be COMPLETED or CANCELLED; a BAY or MOBILE_UNIT must be known to this module''s location replicas, belong to the workorder''s own site and hold no other open workorder, while HOLD has no capacity limit and accepts only the workorder''s own locationId; and a caller whose workorder:operationalContext:override grant is location-scoped must have the workorder''s shop within reach (ADR-0061).
+        Preconditions: the workorder must exist and must not be COMPLETED or CANCELLED; a BAY or MOBILE_UNIT must be known to this module''s location replicas, belong to the workorder''s own site and hold no other open workorder, while HOLD has no capacity limit and accepts only the workorder''s own locationId; and a caller whose workorder:position:assign grant is location-scoped must have the workorder''s shop within reach (ADR-0061).
 
         Required inputs: workorderId (UUID) as a path parameter and a body with resourceType (BAY, MOBILE_UNIT or HOLD, required); resourceId is required for BAY and MOBILE_UNIT and optional for HOLD, reason is optional, and re-sending the placement already in force is a no-op that writes no history.
 
@@ -6072,12 +6072,12 @@ paths:
           description: Unknown position, or one belonging to another site (ApiError.code SERVICE_POSITION_INVALID), or a bay or mobile unit that is not active (ApiError.code SERVICE_POSITION_INACTIVE)
       security:
       - bearerAuth:
-        - workorder:operationalContext:override
+        - workorder:position:assign
       summary: Assign or Change a Workorder's Service Position
       tags:
       - Service Position API
       x-required-permissions:
-      - workorder:operationalContext:override
+      - workorder:position:assign
   /v1/workorders/{workorderId}/reopen:
     post:
       description: 'Reopens a COMPLETED workorder in a controlled way: the finalized billable scope is superseded via a new snapshot, and the workorder is flagged isReopened with the actor, reason, and timestamp recorded — the status itself remains COMPLETED.

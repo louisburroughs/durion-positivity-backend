@@ -84,6 +84,8 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority("workorder:operationalContext:override"),
             // Issue CAP-140: Story #59 — operational context override authority
             new SimpleGrantedAuthority("workorder.operationalContext.override"),
+            // #2059: placing a workorder on a position is its own authority, not the manager override
+            new SimpleGrantedAuthority("workorder:position:assign"),
             // Issue CAP-142: Story #60 — daily dispatch board dashboard view authority
             new SimpleGrantedAuthority("workorder:dashboard:view"),
             // Issue CAP-218: pick list view/execute and parts consume authorities

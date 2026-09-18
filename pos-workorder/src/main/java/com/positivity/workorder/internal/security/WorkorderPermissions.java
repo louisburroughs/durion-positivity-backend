@@ -123,7 +123,13 @@ public final class WorkorderPermissions {
      */
     public static final String LABOR_INTELLIGENCE_VIEW = "workorder:labor_intelligence:view";
 
-    /** Override operationalContext. */
+    /**
+     * Override operationalContext — the manager exception path that rewrites a workorder's
+     * mechanics and location together.
+     *
+     * <p>Since #2059 this covers {@code overrideOperationalContext} only. Placing a workorder on a
+     * position, and taking it off one, are {@link #POSITION_ASSIGN}.
+     */
     public static final String OPERATIONALCONTEXT_OVERRIDE = "workorder:operationalContext:override";
 
     /** Record a note about the customer on a workorder. */
@@ -140,6 +146,22 @@ public final class WorkorderPermissions {
 
     /** View parts on workorder. */
     public static final String PARTS_VIEW = "workorder:parts:view";
+
+    /**
+     * Place a workorder on a service position — a bay, a mobile unit or the site's HOLD — and take
+     * it off again.
+     *
+     * <p>Minted by #2059 to separate everyday dispatch from the manager exception path. Position
+     * assign and release previously reused {@link #OPERATIONALCONTEXT_OVERRIDE} on the argument that
+     * deciding where a job happens is one authority; the consequence was that a dispatcher could not
+     * put a job in a bay without also holding the grant that lets them rewrite a workorder's
+     * mechanics and location through {@code overrideOperationalContext}. One code cannot be both,
+     * so this one covers the board and the override grant stays on the override endpoint.
+     *
+     * <p>Assign and release share the code deliberately: freeing a bay is the same decision as
+     * filling one, and a dispatcher who may place work must be able to unplace it.
+     */
+    public static final String POSITION_ASSIGN = "workorder:position:assign";
 
     /** View work-in-progress dashboard for workorders. */
     public static final String WIP_VIEW = "workorder:wip:view";
