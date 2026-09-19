@@ -93,7 +93,9 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
      * inside it, so a lower bound of {@code from} on {@code endAt} alone silently drops it and the
      * overrun never appears (#2050); a job planned entirely <em>after</em> the range can equally be
      * running inside it, because nothing constrains {@code workStartedAt} to fall on or after the
-     * planned {@code startAt} (#2085). The whole time predicate is therefore a disjunction of two
+     * planned {@code startAt} (#2085) — and nothing may, since an early start is a legitimate
+     * shop-floor outcome rather than a data defect (DECISION-SHOPMGMT-020). The whole time
+     * predicate is therefore a disjunction of two
      * complementary arms — each one a complete window test of its own, neither one a bound on the
      * other — and a row is fetched when either holds:
      *

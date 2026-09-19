@@ -172,7 +172,8 @@ import org.springframework.transaction.annotation.Transactional;
  * endAt}. This is the same per-day overlap computation {@code #2023} always used, just fed the
  * better time when one is known — never a second, independently-derived number that could disagree
  * with it (AC5). An appointment's own planned window is never mutated by this: {@code startAt}/
- * {@code endAt} keep meaning the planned window (#2021 F2).
+ * {@code endAt} keep meaning the planned window (#2021 F2) — the promise, kept alongside the
+ * actual rather than reconciled into it (DECISION-SHOPMGMT-020).
  *
  * <p>When an appointment's effective window runs past the close of the last day it directly
  * overlaps, the excess is carried onto the next {@code OK} day for the same bay (AC4), skipping any
