@@ -29,10 +29,17 @@ public class MechanicStatus {
     @Schema(description = "Current work status of the mechanic", example = "AVAILABLE", requiredMode = NOT_REQUIRED)
     String currentStatus;
 
+    /**
+     * The workorder this person is the current technician of, or {@code null} when they hold none
+     * (#2058). A mechanic merely planned onto a job through scheduling or a dispatch override is
+     * not held to it and does not appear here.
+     */
     @Schema(
-            description = "Identifier of the workorder the mechanic is currently assigned to",
+            description = "Identifier of the workorder this mechanic currently holds as its technician of record."
+                    + " Null when they hold none. A mechanic only planned onto a job does not appear here.",
             example = "01960003-0000-7000-8000-000000000002",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     String assignedWorkorderId;
 
     @Schema(description = "Whether the mechanic is currently on break", example = "false", requiredMode = NOT_REQUIRED)
