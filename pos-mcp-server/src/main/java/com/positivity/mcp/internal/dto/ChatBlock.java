@@ -49,12 +49,23 @@ import org.jspecify.annotations.Nullable;
     @JsonSubTypes.Type(value = ChatBlock.FileBlock.class, name = "file"),
     @JsonSubTypes.Type(value = ChatBlock.ErrorBlock.class, name = "error"),
 })
+/*
+ * `subTypes`, deliberately not `oneOf`: springdoc emits each variant as `allOf: [$ref ChatBlock,
+ * {...}]` because the records implement this interface, so declaring `oneOf` here too made the
+ * parent a union over schemas that each referenced the parent back. That circle is legal YAML and
+ * unusable output — openapi-generator's typescript-fetch emitted `interface ChatTextBlock extends
+ * ChatTextBlock`, failing the SDK build with TS2310/TS2312/TS2698 and taking the API Artifacts
+ * Sync chain down with it. With `subTypes` the parent stays a plain object carrying the
+ * discriminator, the variants extend it, and `ChatBlockFromJSON` still dispatches on `kind` to the
+ * right variant. The wire format is unchanged either way. Same shape as
+ * `com.positivity.customer.internal.domain.SegmentPredicate`.
+ */
 @Schema(
         name = "ChatBlock",
         description = "Typed rendering unit of an assistant chat answer. `kind` selects the "
                 + "variant; a `kind` this schema does not list should degrade to prose on the "
                 + "client rather than fail, since new kinds may be added without a version bump.",
-        oneOf = {
+        subTypes = {
             ChatBlock.MarkdownBlock.class,
             ChatBlock.TableBlock.class,
             ChatBlock.ChartBlock.class,

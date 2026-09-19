@@ -1786,15 +1786,6 @@ components:
           table: '#/components/schemas/ChatTableBlock'
           text: '#/components/schemas/ChatTextBlock'
         propertyName: kind
-      oneOf:
-      - $ref: '#/components/schemas/ChatMarkdownBlock'
-      - $ref: '#/components/schemas/ChatTableBlock'
-      - $ref: '#/components/schemas/ChatChartBlock'
-      - $ref: '#/components/schemas/ChatCodeBlock'
-      - $ref: '#/components/schemas/ChatTextBlock'
-      - $ref: '#/components/schemas/ChatImageBlock'
-      - $ref: '#/components/schemas/ChatFileBlock'
-      - $ref: '#/components/schemas/ChatErrorBlock'
       properties:
         kind:
           type: string
