@@ -1,6 +1,7 @@
 package com.positivity.price.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.price.internal.exception.OperationNotImplementedException;
 import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,7 +12,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,7 +37,10 @@ public class PriceNormalizationController {
                     changes.
                     Returns 501 unconditionally until the operation is implemented.
                     """)
-    @ApiResponse(responseCode = "501", description = "Not yet implemented.", content = @Content())
+    @ApiResponse(
+            responseCode = "501",
+            description = "Not yet implemented (code NOT_IMPLEMENTED).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "400",
             description = "Invalid request body.",
@@ -72,6 +75,6 @@ public class PriceNormalizationController {
                     @RequestBody(required = false)
                     Object requestBody) {
         log.info("POST /v1/price/normalize");
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        throw new OperationNotImplementedException("Pricing normalization is not implemented yet");
     }
 }

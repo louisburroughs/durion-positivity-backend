@@ -5,6 +5,7 @@ import com.positivity.price.internal.exception.BasePriceWindowConflictException;
 import com.positivity.price.internal.exception.DuplicatePromoCodeException;
 import com.positivity.price.internal.exception.EligibilityRuleNotFoundException;
 import com.positivity.price.internal.exception.LaborRateValidationException;
+import com.positivity.price.internal.exception.OperationNotImplementedException;
 import com.positivity.price.internal.exception.PromotionCodeNotFoundException;
 import com.positivity.price.internal.exception.PromotionMultipleNotAllowedException;
 import com.positivity.price.internal.exception.PromotionNotApplicableException;
@@ -42,6 +43,12 @@ public class GlobalExceptionHandler {
     private final Clock clock;
     private static final String PROMOTION_ERROR = "Promotion error [{}]: {}";
     private static final String CORRELATION_HEADER = "X-Correlation-Id";
+
+    @ExceptionHandler(OperationNotImplementedException.class)
+    public ResponseEntity<ApiError> handleOperationNotImplemented(
+            OperationNotImplementedException exception, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.NOT_IMPLEMENTED, "NOT_IMPLEMENTED", exception.getMessage(), null, request);
+    }
 
     @ExceptionHandler(PromotionOfferNotFoundException.class)
     public ResponseEntity<ApiError> handlePromotionOfferNotFound(
