@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.warranty.internal.dto.SettlementCreateRequest;
 import com.positivity.warranty.internal.dto.SettlementReconciliationRow;
 import com.positivity.warranty.internal.dto.SettlementResponse;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -73,10 +75,22 @@ public class SettlementController {
                     staff retry with a fresh settlement after checking reconcileSettlements).
                     """)
     @ApiResponse(responseCode = "201", description = "Settlement executed.")
-    @ApiResponse(responseCode = "404", description = "Claim not found.")
-    @ApiResponse(responseCode = "409", description = "Claim is not in a settleable state.")
-    @ApiResponse(responseCode = "422", description = "Referenced replacement workorder could not be resolved.")
-    @ApiResponse(responseCode = "502", description = "pos-invoice write failed; settlement recorded as FAILED.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Claim is not in a settleable state.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Referenced replacement workorder could not be resolved.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "502",
+            description = "pos-invoice write failed; settlement recorded as FAILED.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_SETTLE + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_SETTLE", apiVersion = "1")
     @PostMapping("/claims/{id}/settlements")

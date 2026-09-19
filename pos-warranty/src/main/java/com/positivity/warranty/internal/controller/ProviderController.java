@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.warranty.internal.dto.ProviderRequest;
 import com.positivity.warranty.internal.dto.ProviderResponse;
 import com.positivity.warranty.internal.enums.ProviderType;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -88,7 +90,10 @@ public class ProviderController {
                     Returns 404 when no provider exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Provider returned.")
-    @ApiResponse(responseCode = "404", description = "Provider not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Provider not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.PROVIDER_VIEW + "')")
     @GetMapping("/{id}")
     public ResponseEntity<ProviderResponse> getProvider(
@@ -111,7 +116,10 @@ public class ProviderController {
                     Returns 201 with the created provider on success.
                     """)
     @ApiResponse(responseCode = "201", description = "Provider created.")
-    @ApiResponse(responseCode = "400", description = "Invalid request.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.PROVIDER_MANAGE + "')")
     @EmitEvent(id = "WARRANTY_PROVIDER_CREATE", apiVersion = "1")
     @PostMapping
@@ -146,8 +154,14 @@ public class ProviderController {
                     Returns 404 when no provider exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Provider updated.")
-    @ApiResponse(responseCode = "400", description = "Invalid request.")
-    @ApiResponse(responseCode = "404", description = "Provider not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Provider not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.PROVIDER_MANAGE + "')")
     @EmitEvent(id = "WARRANTY_PROVIDER_UPDATE", apiVersion = "1")
     @PutMapping("/{id}")

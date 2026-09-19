@@ -191,7 +191,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request.
       security:
       - bearerAuth: []
@@ -295,7 +295,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim not found.
       security:
       - bearerAuth: []
@@ -355,13 +355,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim is not editable in its current status.
       security:
       - bearerAuth: []
@@ -416,13 +416,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Illegal transition; nextAction lists legal moves.
       security:
       - bearerAuth: []
@@ -477,13 +477,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Illegal transition or open child records; see nextAction.
       security:
       - bearerAuth: []
@@ -545,19 +545,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Missing required reason.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Illegal transition; nextAction lists legal moves.
       security:
       - bearerAuth: []
@@ -601,13 +601,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim already decided or terminal.
       security:
       - bearerAuth: []
@@ -671,13 +671,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim is not editable in its current status.
       security:
       - bearerAuth: []
@@ -728,13 +728,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim or line not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim is not editable in its current status.
       security:
       - bearerAuth: []
@@ -790,7 +790,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim not found.
       security:
       - bearerAuth: []
@@ -849,13 +849,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PartReturnResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim or claim line not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PartReturnResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Line already has a part return, or claim is terminal.
       security:
       - bearerAuth: []
@@ -906,13 +906,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim or photo not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim is not editable in its current status.
       security:
       - bearerAuth: []
@@ -967,13 +967,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim is not editable in its current status.
       security:
       - bearerAuth: []
@@ -1031,19 +1031,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReimbursementResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Target status outside the updatable set, or amountApproved missing when required.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReimbursementResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim or reimbursement not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReimbursementResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Illegal reimbursement transition.
       security:
       - bearerAuth: []
@@ -1101,13 +1101,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReimbursementResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim or provider not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReimbursementResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim state or reimbursement state does not allow submission.
       security:
       - bearerAuth: []
@@ -1167,25 +1167,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SettlementResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SettlementResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim is not in a settleable state.
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SettlementResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Referenced replacement workorder could not be resolved.
         '502':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SettlementResponse'
+                $ref: '#/components/schemas/ApiError'
           description: pos-invoice write failed; settlement recorded as FAILED.
       security:
       - bearerAuth: []
@@ -1229,19 +1229,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Claim not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Illegal transition; nextAction lists legal moves.
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClaimResponse'
+                $ref: '#/components/schemas/ApiError'
           description: 'Intake incomplete: no claim line (WARRANTY_CLAIM_MISSING_LINES) or the winning policy requires photo evidence that is missing (WARRANTY_CLAIM_PHOTO_EVIDENCE_REQUIRED).'
       security:
       - bearerAuth: []
@@ -1347,13 +1347,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PartReturnResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Part return not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PartReturnResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Illegal part-return transition.
       security:
       - bearerAuth: []
@@ -1465,13 +1465,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Referenced provider not found.
       security:
       - bearerAuth: []
@@ -1549,9 +1549,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/PolicyResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Missing or invalid parameters.
       security:
       - bearerAuth: []
@@ -1595,7 +1593,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Policy not found.
       security:
       - bearerAuth: []
@@ -1664,13 +1662,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Policy or referenced provider not found.
       security:
       - bearerAuth: []
@@ -1776,7 +1774,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProviderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request.
       security:
       - bearerAuth: []
@@ -1820,7 +1818,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProviderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Provider not found.
       security:
       - bearerAuth: []
@@ -1884,13 +1882,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProviderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProviderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Provider not found.
       security:
       - bearerAuth: []
@@ -2003,13 +2001,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RegistrationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RegistrationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Referenced policy not found.
       security:
       - bearerAuth: []
@@ -2053,7 +2051,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RegistrationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Registration not found.
       security:
       - bearerAuth: []
@@ -2116,13 +2114,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RegistrationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RegistrationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Registration or referenced policy not found.
       security:
       - bearerAuth: []

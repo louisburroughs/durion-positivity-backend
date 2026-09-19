@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.warranty.internal.dto.RegistrationRequest;
 import com.positivity.warranty.internal.dto.RegistrationResponse;
 import com.positivity.warranty.internal.enums.RegistrationStatus;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -89,7 +91,10 @@ public class RegistrationController {
                     Returns 404 when no registration exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Registration returned.")
-    @ApiResponse(responseCode = "404", description = "Registration not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Registration not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.REGISTRATION_VIEW + "')")
     @GetMapping("/{id}")
     public ResponseEntity<RegistrationResponse> getRegistration(
@@ -112,8 +117,14 @@ public class RegistrationController {
                     Returns 404 when the referenced policy cannot be resolved.
                     """)
     @ApiResponse(responseCode = "201", description = "Registration created.")
-    @ApiResponse(responseCode = "400", description = "Invalid request.")
-    @ApiResponse(responseCode = "404", description = "Referenced policy not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Referenced policy not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.REGISTRATION_MANAGE + "')")
     @EmitEvent(id = "WARRANTY_REGISTRATION_CREATE", apiVersion = "1")
     @PostMapping
@@ -151,8 +162,14 @@ public class RegistrationController {
                     Returns 404 when the registration or the referenced policy cannot be resolved.
                     """)
     @ApiResponse(responseCode = "200", description = "Registration updated.")
-    @ApiResponse(responseCode = "400", description = "Invalid request.")
-    @ApiResponse(responseCode = "404", description = "Registration or referenced policy not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Registration or referenced policy not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.REGISTRATION_MANAGE + "')")
     @EmitEvent(id = "WARRANTY_REGISTRATION_UPDATE", apiVersion = "1")
     @PutMapping("/{id}")
