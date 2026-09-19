@@ -147,7 +147,7 @@ ON CONFLICT (tenant_id, mapping_key_id) DO UPDATE SET
 
 -- GL mappings
 INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
-VALUES ('c3d2b7cf-a895-077a-2a37-48115a2b7c22'::uuid, 'ORDER', 'ORDER_COMPLETED', '70eb38c4-cf6a-992a-81c3-2a4c958a458a'::uuid, '05b9e38b-003d-5a02-ec1b-db48542ccc12'::uuid, 'b8798348-d3be-9582-7a6d-883ae3e64e66'::uuid, NOW(), NOW(), 'seed-generator')
+VALUES ('c3d2b7cf-a895-077a-2a37-48115a2b7c22'::uuid, 'ORDER', 'ORDER_COMPLETED', '70eb38c4-cf6a-992a-81c3-2a4c958a458a'::uuid, '05b9e38b-003d-5a02-ec1b-db48542ccc12'::uuid, 'b8798348-d3be-9582-7a6d-883ae3e64e66'::uuid, TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
 ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET
     source_system = EXCLUDED.source_system,
     external_code = EXCLUDED.external_code,

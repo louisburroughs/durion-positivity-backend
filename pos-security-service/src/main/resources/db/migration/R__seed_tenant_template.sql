@@ -162,10 +162,14 @@ INSERT INTO users (id, username, password, enabled)
 VALUES ('01900000-0000-7000-8000-0000000a0101'::uuid, 'admin.platform', '${seed_admin_password_hash}', TRUE)
 ON CONFLICT (tenant_id, username) DO UPDATE SET password = EXCLUDED.password, enabled = EXCLUDED.enabled;
 
+-- Back-dated, not CURRENT_DATE: under the accelerated clock (a virtual year behind wall time) an
+-- assignment starting on the load date does not exist until virtual time catches up (#2083). The
+-- update only ever moves a start earlier, so an existing row is back-dated and nothing else changes.
 INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, created_at, created_by)
 VALUES ('01900000-0000-7000-8000-0000000a0102'::uuid, '01900000-0000-7000-8000-0000000a0101'::uuid,
-        '01900000-0000-7000-8000-0000000a0100'::uuid, CURRENT_DATE, NOW(), 'seed-tenant-template')
-ON CONFLICT (tenant_id, id) DO NOTHING;
+        '01900000-0000-7000-8000-0000000a0100'::uuid, TIMESTAMP WITH TIME ZONE '2024-01-01 00:00:00+00', NOW(), 'seed-tenant-template')
+ON CONFLICT (tenant_id, id) DO UPDATE
+    SET effective_start_date = LEAST(role_assignments.effective_start_date, EXCLUDED.effective_start_date);
 
 -- ---------------------------------------------------------------------------
 -- 4. Fail loudly if the platform bootstrap did not resolve.

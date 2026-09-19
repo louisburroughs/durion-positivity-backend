@@ -6,6 +6,10 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.BitSet;
@@ -44,6 +48,12 @@ class SecurityGatewayConfigTest {
     private static final String TEST_ISSUER = "pos-security-service";
     private static final String TEST_AUDIENCE = "api-gateway";
     private static final SecretKey TEST_KEY = Keys.hmacShaKeyFor(TEST_SECRET.getBytes(StandardCharsets.UTF_8));
+    /**
+     * The gateway judges token expiry on the shared application clock (ADR-0024), so every instance
+     * here is given one. Fixed at class load: tokens minted from wall time an hour either side of it
+     * stay valid or expired for the whole run.
+     */
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.now(), ZoneOffset.UTC);
 
     // ── token / bit helpers ──────────────────────────────────────────────────
 
@@ -236,7 +246,7 @@ class SecurityGatewayConfigTest {
 
     private static HttpHeaders forward(GatewayAuthProperties properties, MockServerHttpRequest request) {
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), properties, new SimpleMeterRegistry())
+                        TEST_SECRET, false, Set.of("HS256"), properties, new SimpleMeterRegistry(), TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -250,7 +260,12 @@ class SecurityGatewayConfigTest {
     @Test
     void internalServicePath_isNeverForwarded_evenWithAPlatformTokenAndTheSharedSecret() {
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<Boolean> forwarded = new AtomicReference<>(false);
         GatewayFilterChain chain = ex -> {
@@ -379,7 +394,12 @@ class SecurityGatewayConfigTest {
     @Test
     void malformedTid_isRejected() {
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + buildTenantToken("not-a-uuid"))
@@ -469,7 +489,12 @@ class SecurityGatewayConfigTest {
         String token = buildToken("alice", "u1", permBits, GatewayPermissionCatalog.CATALOG_VERSION);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -501,7 +526,12 @@ class SecurityGatewayConfigTest {
         String token = buildToken("alice", "u1", permBits, GatewayPermissionCatalog.CATALOG_VERSION);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -529,7 +559,12 @@ class SecurityGatewayConfigTest {
         String token = buildToken("alice", "u1", permBits, GatewayPermissionCatalog.CATALOG_VERSION);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -558,7 +593,12 @@ class SecurityGatewayConfigTest {
                 "admin.alpha", "u1", null, permBits, GatewayPermissionCatalog.CATALOG_VERSION, "ROLE_ADMIN");
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -599,7 +639,12 @@ class SecurityGatewayConfigTest {
                 .compact();
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -619,7 +664,7 @@ class SecurityGatewayConfigTest {
         props.setTokenIdentityRequired(true);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                 .authFilter();
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -628,6 +673,67 @@ class SecurityGatewayConfigTest {
         filter.filter(exchange, ignored -> Mono.empty()).block();
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    /**
+     * #2082: under the accelerated profile the issuer stamps {@code exp} from a clock a year behind
+     * wall time. The gateway must judge expiry on that same clock, not the system clock.
+     */
+    @Nested
+    @DisplayName("#2082 token expiry is judged on the injected clock")
+    class InjectedClockExpiry {
+
+        private final Instant virtualIssuedAt = Instant.now().minus(Duration.ofDays(365));
+
+        private String tokenIssuedOnVirtualClock() {
+            return Jwts.builder()
+                    .subject("alice")
+                    .issuer(TEST_ISSUER)
+                    .audience()
+                    .add(TEST_AUDIENCE)
+                    .and()
+                    .claim("uid", "u1")
+                    .claim("perm_bits", "")
+                    .claim("perm_ver", GatewayPermissionCatalog.CATALOG_VERSION)
+                    .issuedAt(Date.from(virtualIssuedAt))
+                    .expiration(Date.from(virtualIssuedAt.plus(Duration.ofHours(1))))
+                    .signWith(TEST_KEY)
+                    .compact();
+        }
+
+        private HttpStatus statusAt(Instant gatewayNow) {
+            GlobalFilter filter = new SecurityGatewayConfig(
+                            TEST_SECRET,
+                            false,
+                            Set.of("HS256"),
+                            new GatewayAuthProperties(),
+                            new SimpleMeterRegistry(),
+                            TokenRevocationChecker.DISABLED,
+                            Clock.fixed(gatewayNow, ZoneOffset.UTC))
+                    .authFilter();
+            var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenIssuedOnVirtualClock())
+                    .build());
+
+            filter.filter(exchange, ignored -> Mono.empty()).block();
+
+            return (HttpStatus) exchange.getResponse().getStatusCode();
+        }
+
+        @Test
+        void tokenIsAccepted_beforeTheInjectedClockReachesExp() {
+            assertThat(statusAt(virtualIssuedAt.plus(Duration.ofMinutes(30)))).isNull();
+        }
+
+        @Test
+        void tokenIsRejected_afterTheInjectedClockPassesExp() {
+            assertThat(statusAt(virtualIssuedAt.plus(Duration.ofHours(2)))).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
+        @Test
+        void tokenIsRejected_onTheWallClock_whichIsWhatBrokeTheAcceleratedRun() {
+            assertThat(statusAt(Instant.now())).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
     }
 
     // ── PERM-009 — auth.token-identity-required feature flag ─────────────────
@@ -644,7 +750,7 @@ class SecurityGatewayConfigTest {
         props.setTokenIdentityRequired(true);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                 .authFilter();
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -664,7 +770,12 @@ class SecurityGatewayConfigTest {
         String token = buildToken("alice", "u1", permBits, 99);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -681,7 +792,12 @@ class SecurityGatewayConfigTest {
         String token = buildToken("alice", "u1", "!!!NOT_BASE64!!!", GatewayPermissionCatalog.CATALOG_VERSION);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -704,7 +820,12 @@ class SecurityGatewayConfigTest {
         String token = buildToken("alice", "u1", permBits, GatewayPermissionCatalog.CATALOG_VERSION);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -737,7 +858,12 @@ class SecurityGatewayConfigTest {
         String token = buildToken("alice", "u1", permBits, GatewayPermissionCatalog.CATALOG_VERSION);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -762,7 +888,12 @@ class SecurityGatewayConfigTest {
     @Test
     void publicPath_passesThrough_withHeaderStripping() {
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -794,7 +925,12 @@ class SecurityGatewayConfigTest {
         String token = buildLegacyAuthoritiesToken("alice", "u1", "PERM_accounting:je:view");
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -824,7 +960,12 @@ class SecurityGatewayConfigTest {
         String token = buildToken("alice", "u1", "", GatewayPermissionCatalog.CATALOG_VERSION);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -864,7 +1005,12 @@ class SecurityGatewayConfigTest {
         String token = buildToken("alice", "u1", permBits, GatewayPermissionCatalog.CATALOG_VERSION);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -895,7 +1041,12 @@ class SecurityGatewayConfigTest {
     @Test
     void missingAuthorizationHeader_returns401() {
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         var exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/people/v1/employees").build());
@@ -915,7 +1066,7 @@ class SecurityGatewayConfigTest {
         props.setStrippedAuthPathPrefix("/v1/auth/");
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                 .authFilter();
         AtomicReference<String> downstreamPath = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -941,7 +1092,7 @@ class SecurityGatewayConfigTest {
         props.setStrippedAuthPathPrefix("/v1/auth/");
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                 .authFilter();
         AtomicReference<String> downstreamPath = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -965,7 +1116,12 @@ class SecurityGatewayConfigTest {
     @Test
     void corsConfigurer_addCorsMappings_isCallable() {
         SecurityGatewayConfig config = new SecurityGatewayConfig(
-                TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry());
+                TEST_SECRET,
+                false,
+                Set.of("HS256"),
+                new GatewayAuthProperties(),
+                new SimpleMeterRegistry(),
+                TEST_CLOCK);
         var configurer = config.corsConfigurer();
         assertThat(configurer).isNotNull();
         configurer.addCorsMappings(new CorsRegistry());
@@ -986,7 +1142,7 @@ class SecurityGatewayConfigTest {
         props.setRejectHeaderTokenMismatch(true);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                 .authFilter();
 
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
@@ -1012,7 +1168,7 @@ class SecurityGatewayConfigTest {
         props.setRejectHeaderTokenMismatch(true);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -1048,7 +1204,7 @@ class SecurityGatewayConfigTest {
         props.setRejectHeaderTokenMismatch(true);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                 .authFilter();
 
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
@@ -1075,7 +1231,7 @@ class SecurityGatewayConfigTest {
         props.setRejectHeaderTokenMismatch(true);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -1109,7 +1265,7 @@ class SecurityGatewayConfigTest {
         props.setStripInboundIdentityHeaders(false);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                        TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -1135,7 +1291,12 @@ class SecurityGatewayConfigTest {
         String token = buildTokenWithoutSub("u1");
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
 
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
@@ -1156,7 +1317,12 @@ class SecurityGatewayConfigTest {
         String token = buildTokenWithoutUidClaim("alice", permBits, GatewayPermissionCatalog.CATALOG_VERSION);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -1186,7 +1352,12 @@ class SecurityGatewayConfigTest {
         String token = buildTokenWithoutPermBits("alice", "u1", GatewayPermissionCatalog.CATALOG_VERSION);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -1223,7 +1394,12 @@ class SecurityGatewayConfigTest {
                 .compact();
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
 
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
@@ -1251,7 +1427,12 @@ class SecurityGatewayConfigTest {
                 .compact();
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
 
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
@@ -1281,7 +1462,12 @@ class SecurityGatewayConfigTest {
         String unsignedToken = header + "." + payload + ".";
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, true, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        true,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
 
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
@@ -1304,7 +1490,12 @@ class SecurityGatewayConfigTest {
         String syntheticToken = parts[0] + "." + parts[1] + ".test-signature-tampered";
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, true, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        true,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
 
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
@@ -1322,7 +1513,12 @@ class SecurityGatewayConfigTest {
         String token = buildToken("alice", "u1", "", GatewayPermissionCatalog.CATALOG_VERSION);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, true, Set.of("HS384"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        true,
+                        Set.of("HS384"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
 
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
@@ -1341,7 +1537,12 @@ class SecurityGatewayConfigTest {
         String token = buildToken("alice", "u1", permBits, GatewayPermissionCatalog.CATALOG_VERSION);
 
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, true, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        true,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -1369,7 +1570,12 @@ class SecurityGatewayConfigTest {
     @Test
     void strictValidation_insufficientTokenParts_returns401() {
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, true, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        true,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
 
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
@@ -1387,7 +1593,12 @@ class SecurityGatewayConfigTest {
     @Test
     void strictValidation_malformedJwtHeader_returns401() {
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, true, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        true,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
 
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
@@ -1811,7 +2022,7 @@ class SecurityGatewayConfigTest {
             GatewayAuthProperties props = new GatewayAuthProperties();
             props.setStripInboundIdentityHeaders(true);
             GlobalFilter filter = new SecurityGatewayConfig(
-                            TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                            TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                     .authFilter();
             AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
             GatewayFilterChain chain = exchange -> {
@@ -1849,7 +2060,12 @@ class SecurityGatewayConfigTest {
             String token = buildCanonicalToken("alice", uid, null, permBits, GatewayPermissionCatalog.CATALOG_VERSION);
 
             GlobalFilter filter = new SecurityGatewayConfig(
-                            TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                            TEST_SECRET,
+                            false,
+                            Set.of("HS256"),
+                            new GatewayAuthProperties(),
+                            new SimpleMeterRegistry(),
+                            TEST_CLOCK)
                     .authFilter();
             AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
             GatewayFilterChain chain = exchange -> {
@@ -1886,7 +2102,12 @@ class SecurityGatewayConfigTest {
             String token = buildCanonicalToken("alice", uid, null, permBits, GatewayPermissionCatalog.CATALOG_VERSION);
 
             GlobalFilter filter = new SecurityGatewayConfig(
-                            TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                            TEST_SECRET,
+                            false,
+                            Set.of("HS256"),
+                            new GatewayAuthProperties(),
+                            new SimpleMeterRegistry(),
+                            TEST_CLOCK)
                     .authFilter();
             AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
             GatewayFilterChain chain = exchange -> {
@@ -1927,7 +2148,7 @@ class SecurityGatewayConfigTest {
             GatewayAuthProperties props = new GatewayAuthProperties();
             props.setStripInboundIdentityHeaders(true);
             GlobalFilter filter = new SecurityGatewayConfig(
-                            TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                            TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                     .authFilter();
             AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
             GatewayFilterChain chain = exchange -> {
@@ -1970,7 +2191,7 @@ class SecurityGatewayConfigTest {
             GatewayAuthProperties props = new GatewayAuthProperties();
             props.setStripInboundIdentityHeaders(true);
             GlobalFilter filter = new SecurityGatewayConfig(
-                            TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                            TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                     .authFilter();
             AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
             GatewayFilterChain chain = exchange -> {
@@ -2009,7 +2230,7 @@ class SecurityGatewayConfigTest {
             GatewayAuthProperties props = new GatewayAuthProperties();
             props.setStripInboundIdentityHeaders(true);
             GlobalFilter filter = new SecurityGatewayConfig(
-                            TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                            TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                     .authFilter();
             AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
             GatewayFilterChain chain = exchange -> {
@@ -2041,7 +2262,12 @@ class SecurityGatewayConfigTest {
     @Test
     void systemTimePath_passesThrough_withoutAuthorizationHeader() {
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
         GatewayFilterChain chain = ex -> {
@@ -2065,7 +2291,12 @@ class SecurityGatewayConfigTest {
     @Test
     void otherSystemPaths_withoutToken_returns401() {
         GlobalFilter filter = new SecurityGatewayConfig(
-                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                        TEST_SECRET,
+                        false,
+                        Set.of("HS256"),
+                        new GatewayAuthProperties(),
+                        new SimpleMeterRegistry(),
+                        TEST_CLOCK)
                 .authFilter();
         GatewayFilterChain chain = ex -> Mono.empty();
 
@@ -2139,7 +2370,8 @@ class SecurityGatewayConfigTest {
         }
 
         private static GlobalFilter filter(GatewayAuthProperties props) {
-            return new SecurityGatewayConfig(TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+            return new SecurityGatewayConfig(
+                            TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry(), TEST_CLOCK)
                     .authFilter();
         }
 
@@ -2244,7 +2476,7 @@ class SecurityGatewayConfigTest {
             String token = buildScopedToken(null, null, null);
             SimpleMeterRegistry registry = new SimpleMeterRegistry();
             GlobalFilter filter = new SecurityGatewayConfig(
-                            TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), registry)
+                            TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), registry, TEST_CLOCK)
                     .authFilter();
 
             HttpHeaders headers = forward(
@@ -2360,7 +2592,7 @@ class SecurityGatewayConfigTest {
             String token = buildScopedToken(encodePermBits(0), "", "ALL");
             SimpleMeterRegistry registry = new SimpleMeterRegistry();
             GlobalFilter filter = new SecurityGatewayConfig(
-                            TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), registry)
+                            TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), registry, TEST_CLOCK)
                     .authFilter();
 
             var exchange = exchange(token, b -> {});
@@ -2412,7 +2644,13 @@ class SecurityGatewayConfigTest {
 
         private static GlobalFilter filter(TokenRevocationChecker checker, SimpleMeterRegistry registry) {
             return new SecurityGatewayConfig(
-                            TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), registry, checker)
+                            TEST_SECRET,
+                            false,
+                            Set.of("HS256"),
+                            new GatewayAuthProperties(),
+                            registry,
+                            checker,
+                            TEST_CLOCK)
                     .authFilter();
         }
 

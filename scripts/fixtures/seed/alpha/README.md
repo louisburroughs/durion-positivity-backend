@@ -153,7 +153,7 @@ change.
 | File | Rows | Target |
 |---|---|---|
 | `employees.csv` | 46 employees (all staff — the seed has been employees-only since #875; EMP-T001…EMP-P001 are the SDK seeder's seven, staffed at ATX-RIV-001) | `POST /v1/people/bulk-ingest` (`domainType: PERSON`) |
-| `staffing-assignments.csv` | 46 role/location assignments | gateway API pack (`POST /people/staffing/assignments` per row) |
+| `staffing-assignments.csv` | 46 role/location assignments, each `effectiveFrom` the employee's `hireDate` | gateway API pack (`POST /people/staffing/assignments` per row) |
 | `credentials.csv` | 25 credentials across 7 technicians with real issue and expiry dates (CAP-328): the 23 ASE certifications the shop-manager `mechanic-skills.csv` carried as bare codes, two of them deliberately expired (EMP-0007 T7-HVAC, EMP-0009 T8-PMI), plus two `DOT-INSPECTOR` qualifications issued by the shop | `POST /v1/people/credentials/bulk-ingest` (`domainType: PERSON_CREDENTIAL`) |
 
 The people seed contains no customers: customer/contact identities moved to the
@@ -165,6 +165,9 @@ publishing the identity upsert command and `people.employee.updated` fact per ro
 Assignments have no bulk endpoint, so the driver replays them as an API pack:
 `employeeNumber → personId` via `getEmployeeByNumber`, `locationCode → id` via the
 roster, then `createStaffingAssignment` — employees and locations must load first.
+Each assignment starts on its employee's `hireDate` rather than defaulting to the load day: a
+roster dated to the load day leaves everyone unstaffed at any earlier instant, which is most of an
+accelerated run's year (#2083).
 
 **Deltas / not converted:**
 
@@ -438,6 +441,10 @@ and a matrix whose order matters — `CORROSION` (+15%) then `AFTER_HOURS` (+25%
 seed's placeholder shop UUIDs, so the shop-scoped rates attach to sites the location pack
 actually creates. A blank `locationCode` is the platform default rather than a failed lookup;
 only a code that was given and matched nothing fails its row.
+
+**Dated `2024-01-01`, like the base prices.** A rate effective from the load date is invisible
+to anything resolved at an earlier instant, and the accelerated clock runs a year behind wall time,
+so a later start leaves most of an accelerated year with no labor rate (#2084).
 
 **Idempotent, not editing.** A row whose location, category and `effectiveFrom` are already
 held is answered with the stored row unchanged — a rate that has priced an invoice is never

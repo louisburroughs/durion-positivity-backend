@@ -16,9 +16,12 @@ import io.jsonwebtoken.security.SignatureException;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.BitSet;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -130,6 +133,12 @@ public class SecurityGatewayConfig {
     private final GatewayAuthProperties authProperties;
     private final MeterRegistry meterRegistry;
     private final TokenRevocationChecker revocationChecker;
+    /**
+     * The clock tokens are validated against. It must be the clock the issuer stamps {@code iat} and
+     * {@code exp} with: under the accelerated profile that is the shared {@code ScaledClock}, and a
+     * gateway on the wall clock would see every token as expired (#2082).
+     */
+    private final Clock clock;
 
     @Autowired
     public SecurityGatewayConfig(
@@ -138,14 +147,16 @@ public class SecurityGatewayConfig {
             @Value("${pos.gateway.security.allowed-jwt-algorithms:HS256}") String allowedJwtAlgorithmsCsv,
             @NonNull GatewayAuthProperties authProperties,
             @NonNull MeterRegistry meterRegistry,
-            @NonNull TokenRevocationChecker revocationChecker) {
+            @NonNull TokenRevocationChecker revocationChecker,
+            @NonNull Clock clock) {
         this(
                 jwtSecret,
                 strictJwtHeaderValidation,
                 parseAllowedJwtAlgorithms(allowedJwtAlgorithmsCsv),
                 authProperties,
                 meterRegistry,
-                revocationChecker);
+                revocationChecker,
+                clock);
     }
 
     /**
@@ -157,14 +168,16 @@ public class SecurityGatewayConfig {
             boolean strictJwtHeaderValidation,
             Set<String> allowedJwtAlgorithms,
             @NonNull GatewayAuthProperties authProperties,
-            @NonNull MeterRegistry meterRegistry) {
+            @NonNull MeterRegistry meterRegistry,
+            @NonNull Clock clock) {
         this(
                 jwtSecret,
                 strictJwtHeaderValidation,
                 allowedJwtAlgorithms,
                 authProperties,
                 meterRegistry,
-                TokenRevocationChecker.DISABLED);
+                TokenRevocationChecker.DISABLED,
+                clock);
     }
 
     SecurityGatewayConfig(
@@ -173,13 +186,15 @@ public class SecurityGatewayConfig {
             Set<String> allowedJwtAlgorithms,
             @NonNull GatewayAuthProperties authProperties,
             @NonNull MeterRegistry meterRegistry,
-            @NonNull TokenRevocationChecker revocationChecker) {
+            @NonNull TokenRevocationChecker revocationChecker,
+            @NonNull Clock clock) {
         this.secretKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
         this.strictJwtHeaderValidation = strictJwtHeaderValidation;
         this.allowedJwtAlgorithms = normalizeAllowedJwtAlgorithms(allowedJwtAlgorithms);
         this.authProperties = authProperties;
         this.meterRegistry = meterRegistry;
         this.revocationChecker = revocationChecker;
+        this.clock = clock;
     }
 
     /**
@@ -353,6 +368,7 @@ public class SecurityGatewayConfig {
                     .verifyWith(secretKey)
                     .requireIssuer("pos-security-service")
                     .requireAudience("api-gateway")
+                    .clock(() -> Date.from(Instant.now(clock)))
                     .build()
                     .parseSignedClaims(token);
             return Optional.of(jwsClaims.getPayload());
