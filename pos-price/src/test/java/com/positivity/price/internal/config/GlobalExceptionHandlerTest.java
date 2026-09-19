@@ -7,6 +7,7 @@ import com.positivity.price.internal.exception.BasePriceWindowConflictException;
 import com.positivity.price.internal.exception.DuplicatePromoCodeException;
 import com.positivity.price.internal.exception.EligibilityRuleNotFoundException;
 import com.positivity.price.internal.exception.LaborRateValidationException;
+import com.positivity.price.internal.exception.OperationNotImplementedException;
 import com.positivity.price.internal.exception.PromotionCodeNotFoundException;
 import com.positivity.price.internal.exception.PromotionMultipleNotAllowedException;
 import com.positivity.price.internal.exception.PromotionNotApplicableException;
@@ -73,6 +74,9 @@ class GlobalExceptionHandlerTest {
                     binding);
 
             return Stream.of(
+                    Named.of("handleOperationNotImplemented", (HandlerInvocation)
+                            request -> handler.handleOperationNotImplemented(
+                                    new OperationNotImplementedException("not yet"), request)),
                     Named.of("handlePromotionOfferNotFound", (HandlerInvocation)
                             request -> handler.handlePromotionOfferNotFound(
                                     new PromotionOfferNotFoundException(UUID.randomUUID()), request)),

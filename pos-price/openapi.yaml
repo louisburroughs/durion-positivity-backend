@@ -88,8 +88,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-          description: Invalid request payload
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid batch envelope.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -128,17 +134,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/LaborRateResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/LaborRateResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
       security:
       - bearerAuth:
@@ -190,19 +192,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LaborRateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LaborRateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LaborRateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: The rate cannot be stored as described.
       security:
       - bearerAuth:
@@ -241,17 +243,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/LaborRateAdjustmentResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/LaborRateAdjustmentResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
       security:
       - bearerAuth:
@@ -304,19 +302,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LaborRateAdjustmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LaborRateAdjustmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LaborRateAdjustmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: The step cannot be stored as described.
       security:
       - bearerAuth:
@@ -377,8 +375,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-          description: Invalid request payload
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid batch envelope.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -481,13 +485,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid batch envelope.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
       security:
       - bearerAuth:
@@ -527,13 +531,13 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request body.
         '401':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
@@ -545,14 +549,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Internal server error.
         '501':
           content:
             application/json:
               schema:
-                type: object
-          description: Not yet implemented.
+                $ref: '#/components/schemas/ApiError'
+          description: Not yet implemented (code NOT_IMPLEMENTED).
       security:
       - bearerAuth:
         - pricing:normalization:edit
@@ -655,9 +659,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/RestrictionRuleResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
@@ -717,19 +719,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionRuleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request.
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionRuleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionRuleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
       security:
       - bearerAuth:
@@ -773,19 +775,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionRuleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionRuleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionRuleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Restriction rule not found.
       security:
       - bearerAuth:
@@ -828,7 +830,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionRuleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
@@ -840,7 +842,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionRuleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Restriction rule not found.
       security:
       - bearerAuth:
@@ -893,13 +895,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionEvaluationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request body.
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionEvaluationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
@@ -911,7 +913,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionEvaluationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Restriction evaluation service unavailable (commit path only).
       security:
       - bearerAuth:
@@ -966,25 +968,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionOverrideResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request body.
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionOverrideResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionOverrideResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions to override restrictions.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionOverrideResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Restriction rule not found.
       security:
       - bearerAuth:
@@ -1028,13 +1030,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PricingSnapshotResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PricingSnapshotResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Pricing snapshot not found.
       security:
       - bearerAuth: []
@@ -1090,25 +1092,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid promotion offer request.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Promotion code already exists.
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: startDate is after endDate.
       security:
       - bearerAuth:
@@ -1167,13 +1169,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApplyPromotionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request, unknown promo code, promotion not applicable, or promotion already applied.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApplyPromotionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden.
       security:
       - bearerAuth:
@@ -1216,13 +1218,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Promotion offer not found.
       security:
       - bearerAuth:
@@ -1266,13 +1268,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Promotion offer not found.
       security:
       - bearerAuth:
@@ -1316,19 +1318,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Promotion offer not found.
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Promotion offer cannot be activated in current state.
       security:
       - bearerAuth:
@@ -1372,19 +1374,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Promotion offer not found.
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionOfferResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Promotion offer is not currently ACTIVE.
       security:
       - bearerAuth:
@@ -1430,9 +1432,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/EligibilityRuleResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden.
       security:
       - bearerAuth:
@@ -1490,19 +1490,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EligibilityRuleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid eligibility rule request.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EligibilityRuleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EligibilityRuleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Promotion offer not found.
       security:
       - bearerAuth:
@@ -1561,13 +1561,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EligibilityDecisionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid evaluation request.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EligibilityDecisionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden.
       security:
       - bearerAuth:
@@ -1610,8 +1610,16 @@ paths:
         '204':
           description: Eligibility rule deleted.
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden.
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Promotion offer or rule not found.
       security:
       - bearerAuth:

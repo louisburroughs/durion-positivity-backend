@@ -15,6 +15,7 @@ modules:
   pos-price:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-customer:
     mode: STRICT
     annotationDepth: STRICT

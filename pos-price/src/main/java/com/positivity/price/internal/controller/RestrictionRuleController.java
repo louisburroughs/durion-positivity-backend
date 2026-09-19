@@ -59,9 +59,18 @@ public class RestrictionRuleController {
                     enum value.
                     """)
     @ApiResponse(responseCode = "201", description = "Restriction rule created.")
-    @ApiResponse(responseCode = "400", description = "Invalid request.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PRICE_RESTRICTION_RULE_CREATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -108,12 +117,18 @@ public class RestrictionRuleController {
                     Returns 404 when no restriction rule exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Restriction rule found.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Insufficient permissions.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Restriction rule not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Restriction rule not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:rule:view"})
@@ -135,7 +150,10 @@ public class RestrictionRuleController {
                     Returns 200 with an empty array when no active restriction rules exist.
                     """)
     @ApiResponse(responseCode = "200", description = "List of restriction rules.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Insufficient permissions.",
@@ -164,9 +182,18 @@ public class RestrictionRuleController {
                     rule produces a server error rather than a no-op.
                     """)
     @ApiResponse(responseCode = "200", description = "Restriction rule deactivated.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
-    @ApiResponse(responseCode = "404", description = "Restriction rule not found.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Restriction rule not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PRICE_RESTRICTION_RULE_DEACTIVATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
