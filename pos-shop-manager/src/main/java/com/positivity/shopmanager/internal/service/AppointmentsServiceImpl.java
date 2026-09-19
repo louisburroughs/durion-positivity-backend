@@ -144,10 +144,6 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 normalizedIdempotencyKey);
 
         validateTimeRange(request.getStartAt(), request.getEndAt());
-        // The booking horizon (DECISION-SHOPMGMT-019): refused here, before anything is written, so
-        // an out-of-horizon appointment never reaches the database.
-        bookingHorizonPolicy.verifyWithinHorizon(
-                request.getStartAt(), resolveZoneId(request.getLocationId()), Instant.now(clock));
         validateServiceRequestIdsPresent(request.getServiceRequestIds());
         validateCrmIdentifiers(request.getCrmCustomerId(), request.getCrmVehicleId());
 
@@ -155,6 +151,15 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         if (idempotentDuplicate.isPresent()) {
             return AppointmentCreation.replayed(idempotentDuplicate.get());
         }
+
+        // The booking horizon (DECISION-SHOPMGMT-019), checked once this is known to be a new
+        // booking rather than a replay. A repeated Idempotency-Key replays the appointment it
+        // already created (DECISION-SHOPMGMT-014), and a replay is not a write: lowering the
+        // horizon must not turn an accepted booking's retry into a 422 for a row that already
+        // exists. Still before the replica reads and before anything is persisted, so a genuinely
+        // out-of-horizon booking is refused cheaply.
+        bookingHorizonPolicy.verifyWithinHorizon(
+                request.getStartAt(), resolveZoneId(request.getLocationId()), Instant.now(clock));
 
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         // Local replica reads (ADR-0044 §6, #891): unknown ids raise the same not-found

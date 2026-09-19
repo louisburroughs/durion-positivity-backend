@@ -135,6 +135,15 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void mapsABookingBeyondTheHorizonToUnprocessableContent() {
+        ResponseEntity<ApiError> response =
+                handler.handleBookingHorizonExceeded(new BookingHorizonExceededException(180, 181), request());
+
+        assertEnvelope(response, HttpStatus.UNPROCESSABLE_CONTENT, "BOOKING_HORIZON_EXCEEDED");
+        assertThat(response.getBody().message()).contains("180");
+    }
+
+    @Test
     void mapsAnIllegalAppointmentTransitionToConflict() {
         assertEnvelope(
                 handler.handleAppointmentState(new AppointmentStateException("already checked in"), request()),

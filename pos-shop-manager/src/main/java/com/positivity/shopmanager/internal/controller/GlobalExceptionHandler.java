@@ -315,7 +315,8 @@ public class GlobalExceptionHandler {
             case "SOURCE_NOT_ELIGIBLE",
                     "ESTIMATE_NOT_ELIGIBLE",
                     "WORKORDER_NOT_ELIGIBLE",
-                    ScheduleCapacityRangeExceededException.CODE -> HttpStatus.UNPROCESSABLE_CONTENT.value();
+                    ScheduleCapacityRangeExceededException.CODE,
+                    BookingHorizonExceededException.CODE -> HttpStatus.UNPROCESSABLE_CONTENT.value();
             default -> HttpStatus.BAD_REQUEST.value();
         };
     }
