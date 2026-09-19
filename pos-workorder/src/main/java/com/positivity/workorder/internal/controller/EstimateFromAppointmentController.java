@@ -65,8 +65,14 @@ public class EstimateFromAppointmentController {
                     """)
     @ApiResponse(responseCode = "201", description = "Estimate created")
     @ApiResponse(responseCode = "200", description = "Existing estimate returned (idempotent)")
-    @ApiResponse(responseCode = "400", description = "Missing or invalid required fields")
-    @ApiResponse(responseCode = "401", description = "Unauthenticated")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or invalid required fields",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthenticated",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Caller lacks workorder:estimate:create (ApiError.code FORBIDDEN), or "

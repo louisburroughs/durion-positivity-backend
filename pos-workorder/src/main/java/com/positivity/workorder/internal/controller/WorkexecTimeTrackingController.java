@@ -89,7 +89,10 @@ public class WorkexecTimeTrackingController {
                     locationId, and 200 with an empty list when no time was tracked in the range.
                     """)
     @ApiResponse(responseCode = "200", description = "Job time totals returned successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request parameters")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request parameters",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
@@ -186,9 +189,18 @@ public class WorkexecTimeTrackingController {
             responseCode = "200",
             description = "Idempotent replay returned existing labor entry",
             content = @Content(schema = @Schema(implementation = WorkexecLaborPerformedResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "404", description = "Related resource not found")
-    @ApiResponse(responseCode = "409", description = "Conflict while recording labor")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Related resource not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Conflict while recording labor",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Completed labor quantity with its source-system provenance.",
             required = true,
@@ -263,7 +275,10 @@ public class WorkexecTimeTrackingController {
             description = "Active timers returned successfully",
             content =
                     @Content(array = @ArraySchema(schema = @Schema(implementation = WorkexecTimerEntryResponse.class))))
-    @ApiResponse(responseCode = "400", description = "Missing or invalid authenticated user id")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or invalid authenticated user id",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Object> getActiveTimerEntries() {
 
         UUID mechanicId = resolveAuthenticatedMechanicId();
@@ -310,12 +325,22 @@ public class WorkexecTimeTrackingController {
             responseCode = "200",
             description = "Idempotent replay returned existing timer",
             content = @Content(schema = @Schema(implementation = WorkexecTimerEntryResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Missing or invalid authenticated user id, or missing reason")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or invalid authenticated user id, or missing reason",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "Attributing labor to another technician without workorder:labor:add_on_behalf")
-    @ApiResponse(responseCode = "404", description = "Referenced resource not found")
-    @ApiResponse(responseCode = "409", description = "Conflict while starting timer")
+            description = "Attributing labor to another technician without workorder:labor:add_on_behalf",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Referenced resource not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Conflict while starting timer",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Workorder to time against, with optional item, labor code, and attribution target.",
             required = true,
@@ -379,8 +404,14 @@ public class WorkexecTimeTrackingController {
             responseCode = "200",
             description = "Timers stopped successfully",
             content = @Content(schema = @Schema(implementation = WorkexecTimerStopResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Missing or invalid authenticated user id")
-    @ApiResponse(responseCode = "409", description = "Conflict while stopping timers")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or invalid authenticated user id",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Conflict while stopping timers",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Object> stopTimers() {
 
         UUID mechanicId = resolveAuthenticatedMechanicId();
@@ -409,7 +440,7 @@ public class WorkexecTimeTrackingController {
      * propagate, both are caught by the module's {@code IllegalStateException} advice and surface as
      * 409 CONFLICT, which contradicts the 400 these endpoints document and leaks the internal
      * message. Catching here keeps the null-return contract that the callers — and the
-     * {@code @ApiResponse(responseCode = "400")} annotations — are written against.
+     * {@code @ApiResponse(responseCode = "400", content = @Content(schema = @Schema(implementation = ApiError.class)))} annotations — are written against.
      */
     private UUID resolveAuthenticatedMechanicId() {
         try {

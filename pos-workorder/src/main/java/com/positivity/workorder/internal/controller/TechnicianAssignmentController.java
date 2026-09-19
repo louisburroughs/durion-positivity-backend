@@ -84,9 +84,18 @@ public class TechnicianAssignmentController {
                         responseCode = "200",
                         description = "Technician assigned successfully",
                         content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid state transition"),
-                @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder not found"),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid state transition",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Workorder not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "409",
                         description = "The workorder is closed (ApiError.code WORKORDER_CLOSED) or already has "
@@ -207,9 +216,18 @@ public class TechnicianAssignmentController {
                         responseCode = "200",
                         description = "Technician reassigned successfully",
                         content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid state transition"),
-                @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder not found"),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid state transition",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Workorder not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "409",
                         description = "The workorder is closed (ApiError.code WORKORDER_CLOSED) or has no current "
@@ -313,7 +331,10 @@ public class TechnicianAssignmentController {
                         responseCode = "200",
                         description = "Assignment retrieved successfully",
                         content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
-                @ApiResponse(responseCode = "404", description = "Workorder not found or no assignment exists")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Workorder not found or no assignment exists",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/{workorderId}/technician")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -377,8 +398,14 @@ public class TechnicianAssignmentController {
                     """,
             responses = {
                 @ApiResponse(responseCode = "204", description = "Technician released, or none was assigned"),
-                @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder not found"),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Workorder not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "409",
                         description = "Workorder is COMPLETED or CANCELLED (ApiError.code WORKORDER_CLOSED)",

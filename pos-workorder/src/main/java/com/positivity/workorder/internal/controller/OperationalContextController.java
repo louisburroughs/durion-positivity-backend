@@ -54,7 +54,10 @@ public class OperationalContextController {
                     Returns 404 when no workorder exists for the id.
                     """)
     @ApiResponse(responseCode = "200", description = "Operational context returned")
-    @ApiResponse(responseCode = "404", description = "Workorder not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<OperationalContextResponse> getOperationalContext(@PathVariable UUID workorderId) {
         return ResponseEntity.ok(workorderService.getOperationalContext(workorderId));
     }
@@ -92,8 +95,14 @@ public class OperationalContextController {
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Workorder not found")
-    @ApiResponse(responseCode = "409", description = "Context locked (work started)")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Context locked (work started)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<OperationalContextResponse> overrideOperationalContext(
             @PathVariable UUID workorderId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -145,12 +154,19 @@ public class OperationalContextController {
                     both.
                     """)
     @ApiResponse(responseCode = "200", description = "Work started, context locked")
-    @ApiResponse(responseCode = "400", description = "Cannot start workorder due to pending change requests")
-    @ApiResponse(responseCode = "404", description = "Workorder not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Cannot start workorder due to pending change requests",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Work already started, or the workorder is not ASSIGNED — an APPROVED workorder is "
-                    + "missing a technician, a bay or mobile unit, or both, and the message names which")
+                    + "missing a technician, a bay or mobile unit, or both, and the message names which",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<WorkorderStartResponse> startWork(
             @PathVariable UUID workorderId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

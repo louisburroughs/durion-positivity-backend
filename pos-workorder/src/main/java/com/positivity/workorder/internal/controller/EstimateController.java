@@ -127,7 +127,10 @@ public class EstimateController {
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Estimate not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Estimate not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{estimateId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -263,12 +266,22 @@ public class EstimateController {
                     constraint fails.
                     """)
     @ApiResponse(responseCode = "201", description = "Estimate created successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid request - missing required fields.")
-    @ApiResponse(responseCode = "403", description = "Forbidden - user does not have ESTIMATE_CREATE permission.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request - missing required fields.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - user does not have ESTIMATE_CREATE permission.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Conflict - estimate could not be created due to state or integrity constraints.")
-    @ApiResponse(responseCode = "500", description = "Internal server error - unexpected estimate creation failure.")
+            description = "Conflict - estimate could not be created due to state or integrity constraints.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "Internal server error - unexpected estimate creation failure.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Customer, vehicle, and CRM references the draft estimate is opened for.",
             required = true,
@@ -375,12 +388,18 @@ public class EstimateController {
                     transition is not allowed from the current state.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate status updated")
-    @ApiResponse(responseCode = "400", description = "Estimate patch request is invalid")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Estimate patch request is invalid",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Estimate not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "409", description = "Estimate transition is not allowed")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Estimate transition is not allowed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:edit"})
@@ -435,8 +454,14 @@ public class EstimateController {
                     estimate does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate declined successfully.")
-    @ApiResponse(responseCode = "400", description = "Estimate cannot be declined in current state.")
-    @ApiResponse(responseCode = "404", description = "Estimate not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Estimate cannot be declined in current state.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Estimate not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{estimateId}/decline")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DECLINE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -471,8 +496,14 @@ public class EstimateController {
                     the estimate does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate reopened successfully.")
-    @ApiResponse(responseCode = "400", description = "Estimate cannot be reopened (not declined or expired).")
-    @ApiResponse(responseCode = "404", description = "Estimate not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Estimate cannot be reopened (not declined or expired).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Estimate not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{estimateId}/reopen")
     @EmitEvent(id = "WORKORDER_ESTIMATE_REOPEN", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -809,7 +840,10 @@ public class EstimateController {
                     Returns 204 regardless of whether the estimate previously existed.
                     """)
     @ApiResponse(responseCode = "204", description = "Estimate deleted successfully.")
-    @ApiResponse(responseCode = "404", description = "Estimate not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Estimate not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @DeleteMapping("/{estimateId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DELETE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -847,7 +881,10 @@ public class EstimateController {
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Line item added successfully"),
-                @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Validation error or invalid request",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "404",
                         description = "Estimate not found (ESTIMATE_NOT_FOUND)",
@@ -856,8 +893,12 @@ public class EstimateController {
                         responseCode = "422",
                         description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), "
                                 + "or the converted quantity exceeds the product's declared decimal scale "
-                                + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)"),
-                @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+                                + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "Estimate not in DRAFT status (INVALID_STATE)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Part or labor line being added to the draft estimate.",
@@ -925,7 +966,10 @@ public class EstimateController {
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Line item updated successfully"),
-                @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Validation error or invalid request",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "404",
                         description = "Estimate or item not found (ESTIMATE_NOT_FOUND / ESTIMATE_ITEM_NOT_FOUND)",
@@ -934,8 +978,12 @@ public class EstimateController {
                         responseCode = "422",
                         description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), "
                                 + "or the converted quantity exceeds the product's declared decimal scale "
-                                + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)"),
-                @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+                                + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "Estimate not in DRAFT status (INVALID_STATE)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Fields to change on the line item; omitted fields stay as they are.",
@@ -988,8 +1036,14 @@ public class EstimateController {
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "204", description = "Line item removed successfully"),
-                @ApiResponse(responseCode = "404", description = "Estimate or item not found"),
-                @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Estimate or item not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "Estimate not in DRAFT status (INVALID_STATE)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @DeleteMapping("/{estimateId}/items/{itemId}")
     @EmitEvent(id = "ESTIMATE_ITEM_DELETE", apiVersion = "1")
@@ -1035,8 +1089,14 @@ public class EstimateController {
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Totals calculated successfully"),
-                @ApiResponse(responseCode = "404", description = "Estimate not found"),
-                @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Estimate not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "Estimate not in DRAFT status (INVALID_STATE)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/{estimateId}/calculate")
     @EmitEvent(id = "ESTIMATE_CALCULATE", apiVersion = "1")
@@ -1087,7 +1147,10 @@ public class EstimateController {
                         responseCode = "403",
                         description = LOCATION_SCOPE_DENIED_DESCRIPTION,
                         content = @Content(schema = @Schema(implementation = ApiError.class))),
-                @ApiResponse(responseCode = "404", description = "Estimate not found")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Estimate not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/{estimateId}/summary")
     @EmitEvent(id = "ESTIMATE_SUMMARY_VIEW", apiVersion = "1")
@@ -1139,8 +1202,14 @@ public class EstimateController {
                         responseCode = "403",
                         description = LOCATION_SCOPE_DENIED_DESCRIPTION,
                         content = @Content(schema = @Schema(implementation = ApiError.class))),
-                @ApiResponse(responseCode = "404", description = "Estimate not found"),
-                @ApiResponse(responseCode = "502", description = "Document service unavailable")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Estimate not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "502",
+                        description = "Document service unavailable",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping(value = "/{estimateId}/pdf", produces = "application/pdf")
     @EmitEvent(id = "ESTIMATE_PDF_GENERATE", apiVersion = "1")

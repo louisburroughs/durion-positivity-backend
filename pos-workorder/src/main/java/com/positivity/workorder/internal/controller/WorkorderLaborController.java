@@ -84,9 +84,16 @@ public class WorkorderLaborController {
                         content = @Content(schema = @Schema(implementation = WorkorderLaborEntryResponse.class))),
                 @ApiResponse(
                         responseCode = "400",
-                        description = "Invalid state - active session exists or invalid status"),
-                @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder or service not found")
+                        description = "Invalid state - active session exists or invalid status",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Workorder or service not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Technician performing the labor and optional starting notes.",
@@ -172,9 +179,18 @@ public class WorkorderLaborController {
                         responseCode = "200",
                         description = "Labor session stopped successfully",
                         content = @Content(schema = @Schema(implementation = WorkorderLaborEntryResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Session already stopped"),
-                @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Labor entry not found")
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Session already stopped",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Labor entry not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/{workorderId}/labor/{entryId}/stop")
     @EmitEvent(id = "WORKORDER_LABOR_STOP", apiVersion = "1")
@@ -233,7 +249,10 @@ public class WorkorderLaborController {
                     """,
             responses = {
                 @ApiResponse(responseCode = "200", description = "Labor history retrieved successfully"),
-                @ApiResponse(responseCode = "403", description = "Permission denied")
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/{workorderId}/labor")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -277,8 +296,14 @@ public class WorkorderLaborController {
                         responseCode = "200",
                         description = "Labor hours adjusted successfully",
                         content = @Content(schema = @Schema(implementation = WorkorderLaborEntryResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid hours value"),
-                @ApiResponse(responseCode = "403", description = "Permission denied"),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid hours value",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "404",
                         description = "Labor entry not found",

@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.WorkorderNumberRef;
 import com.positivity.workorder.internal.dto.WorkorderNumberResolveRequest;
 import com.positivity.workorder.internal.dto.WorkorderSearchResult;
@@ -9,6 +10,8 @@ import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkorderSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -88,7 +91,10 @@ public class WorkorderSearchController {
                     WorkorderStatus value, and no 404 for empty results.
                     """)
     @ApiResponse(responseCode = "200", description = "Page of workorder search results returned.")
-    @ApiResponse(responseCode = "400", description = "status is not a valid WorkorderStatus value.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "status is not a valid WorkorderStatus value.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_VIEW + "')")
     @EmitEvent(id = "WORKORDER_SEARCH", apiVersion = "1")

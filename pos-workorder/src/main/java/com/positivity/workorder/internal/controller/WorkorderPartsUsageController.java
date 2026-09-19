@@ -73,14 +73,24 @@ public class WorkorderPartsUsageController {
             responseCode = "201",
             description = "Parts issued successfully",
             content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (negative quantity, etc.)")
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request (negative quantity, etc.)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder or part not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the "
                     + "converted quantity exceeds the product's declared decimal scale "
-                    + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)")
-    @ApiResponse(responseCode = "409", description = "Idempotency conflict (duplicate key)")
+                    + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Idempotency conflict (duplicate key)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Part line and quantity being issued from inventory to the job.",
             required = true,
@@ -137,12 +147,16 @@ public class WorkorderPartsUsageController {
             responseCode = "400",
             description = "Invalid request (quantity not positive)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder or part not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the "
                     + "converted quantity exceeds the product's declared decimal scale "
-                    + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)")
+                    + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Consumption exceeds issued quantity, or the part belongs to a different workorder",
@@ -203,12 +217,16 @@ public class WorkorderPartsUsageController {
             responseCode = "400",
             description = "Invalid request (quantity not positive)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder or part not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the "
                     + "converted quantity exceeds the product's declared decimal scale "
-                    + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)")
+                    + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Return exceeds available quantity, or the part belongs to a different workorder",
@@ -264,7 +282,10 @@ public class WorkorderPartsUsageController {
                             array =
                                     @ArraySchema(
                                             schema = @Schema(implementation = WorkorderPartUsageEventResponse.class))))
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder or part not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<WorkorderPartUsageEventResponse>> getUsageHistory(
             @PathVariable @NonNull UUID workorderId,
             @RequestParam(required = false)

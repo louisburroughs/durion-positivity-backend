@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.ApproveChangeRequestDTO;
 import com.positivity.workorder.internal.dto.ChangeRequestResponse;
 import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
@@ -61,8 +62,12 @@ public class ChangeRequestController {
                     "Change request created successfully, or existing change request returned if idempotency key was previously processed")
     @ApiResponse(
             responseCode = "400",
-            description = "Invalid request - missing description, no items, or validation failed")
-    @ApiResponse(responseCode = "404", description = "Work order not found")
+            description = "Invalid request - missing description, no items, or validation failed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work order not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Requested additional work: description plus the service and part items needing approval.",
             required = true,
@@ -114,8 +119,14 @@ public class ChangeRequestController {
                     when the change request does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Change request approved successfully")
-    @ApiResponse(responseCode = "400", description = "Cannot approve - invalid state or missing approval note")
-    @ApiResponse(responseCode = "404", description = "Change request not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Cannot approve - invalid state or missing approval note",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Change request not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Advisor's approval note recorded as the approval artifact.",
             required = true,
@@ -164,8 +175,14 @@ public class ChangeRequestController {
                     when the change request does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Change request declined successfully")
-    @ApiResponse(responseCode = "400", description = "Cannot decline - invalid state or missing note")
-    @ApiResponse(responseCode = "404", description = "Change request not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Cannot decline - invalid state or missing note",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Change request not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Advisor's note recording why the change request was declined.",
             required = true,
@@ -211,8 +228,14 @@ public class ChangeRequestController {
                     not declined, and 404 when the change request does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "Acknowledgment recorded successfully")
-    @ApiResponse(responseCode = "400", description = "Not an emergency request or invalid state")
-    @ApiResponse(responseCode = "404", description = "Change request not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Not an emergency request or invalid state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Change request not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/changeRequests/{changeId}/acknowledgeDenial")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_DENIAL_ACKNOWLEDGE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
@@ -249,9 +272,18 @@ public class ChangeRequestController {
                     404 when the change request does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Emergency override applied successfully")
-    @ApiResponse(responseCode = "400", description = "Cannot apply override - invalid state or missing reason")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions - Manager role required")
-    @ApiResponse(responseCode = "404", description = "Change request not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Cannot apply override - invalid state or missing reason",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions - Manager role required",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Change request not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Reason justifying the manager's emergency exception approval.",
             required = true,
@@ -294,7 +326,10 @@ public class ChangeRequestController {
                     Returns 404 when no change request exists for the id.
                     """)
     @ApiResponse(responseCode = "200", description = "Change request found")
-    @ApiResponse(responseCode = "404", description = "Change request not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Change request not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/changeRequests/{changeId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
