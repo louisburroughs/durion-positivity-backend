@@ -366,16 +366,11 @@ class McpChatControllerTest {
     @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat: a table nested in a list item degrades to an empty blocks array (O1, #2072)")
     void chat_nestedTableAnswer_emptyBlocksArrayResponseUnchanged() throws Exception {
-        // O1 (orchestrator, Wave 1 review cycle 2): blocks is either a faithful segmentation or
-        // EMPTY — never a partial one carrying raw pipes the frontend cannot render. A prior edit
-        // here asserted a single markdown-block "fallback", which contradicts O1 and current
-        // production intent; restored to the spec's required contract. See ChatBlockSegmenterTest's
-        // tableNestedInListItem_returnsEmptyList for the matching unit-level defect evidence: this
-        // scenario currently segments to a single raw-pipe-carrying MarkdownBlock instead of [],
-        // because the GFM table extension never forms a nested Table AST node for a table directly
-        // following a list item's first line without a blank line, so the segmenter's
-        // nested-node safety net has nothing to detect. This test is therefore expected to be RED
-        // until that gap is closed in production — do not "fix" it by weakening this assertion.
+        // blocks is either a faithful segmentation or EMPTY — never a partial one carrying raw
+        // pipes the frontend cannot render. The GFM table extension forms no Table node for a
+        // table directly after a list item's first line, so the table stays paragraph text; the
+        // segmenter's final safety net (a delimiter row inside an emitted markdown block) is what
+        // turns this answer into []. The client then parses `response` itself.
         String agentMarkdown = "- item one\n  | A | B |\n  | --- | --- |\n  | 1 | 2 |";
         when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
                 .thenReturn(agentMarkdown);
