@@ -67,7 +67,7 @@ BEGIN
                 'MANAGER',
                 TRUE,
                 'ACTIVE',
-                CURRENT_DATE,
+                DATE '2024-01-15',
                 NOW(),
                 NOW(),
                 'seed-generator'

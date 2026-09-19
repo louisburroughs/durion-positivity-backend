@@ -817,9 +817,13 @@ VALUES ('e7b4a283-5c91-4d6e-8f0b-2a3c1d9e7f85'::uuid, 'bulkImport:status:read', 
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
 
 -- Role assignments
+-- Back-dated, not CURRENT_DATE: under the accelerated clock (a virtual year behind wall time) an
+-- assignment starting on the load date does not exist until virtual time catches up (#2083). The
+-- update only ever moves a start earlier, so an existing row is back-dated and nothing else changes.
 INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, created_at, created_by)
-VALUES ('4f0e5eea-bf75-2da2-0f8a-de2c522d237e'::uuid, 'd981cd20-55a1-b43c-9332-0ef2cd630e1a'::uuid, '7a276629-86e5-ee4a-1ee7-0f598b322aea'::uuid, CURRENT_DATE, NOW(), 'seed-generator')
-ON CONFLICT (tenant_id, id) DO NOTHING;
+VALUES ('4f0e5eea-bf75-2da2-0f8a-de2c522d237e'::uuid, 'd981cd20-55a1-b43c-9332-0ef2cd630e1a'::uuid, '7a276629-86e5-ee4a-1ee7-0f598b322aea'::uuid, TIMESTAMP WITH TIME ZONE '2024-01-01 00:00:00+00', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, id) DO UPDATE
+    SET effective_start_date = LEAST(role_assignments.effective_start_date, EXCLUDED.effective_start_date);
 
 -- Role/permission mapping
 -- Intentionally minimal by default; populate security.role_permission_overrides for strict curation.
