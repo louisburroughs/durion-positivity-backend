@@ -75,7 +75,8 @@ BEGIN
                 SELECT 1 FROM public.location
                 WHERE id = 'f3ad439a-7dff-850c-395e-ea280bb82f05'::uuid
             )
-            ON CONFLICT (tenant_id, id) DO NOTHING
+            ON CONFLICT (tenant_id, id) DO UPDATE
+                SET effective_from = LEAST(employee_location_assignment.effective_from, EXCLUDED.effective_from)
         $sql$;
     END IF;
 END $$;

@@ -51,19 +51,28 @@ WHERE ela.status = 'ACTIVE'
 
 SELECT count(*) AS staffing_rows_to_backdate FROM staffing_backdate;
 
+-- Rechecks the snapshot, so a row that moved or ended since is left alone.
 UPDATE employee_location_assignment ela
 SET effective_from = b.new_from
 FROM staffing_backdate b
-WHERE ela.tenant_id = b.tenant_id AND ela.id = b.id;
+WHERE ela.tenant_id = b.tenant_id
+  AND ela.id = b.id
+  AND ela.effective_from = b.old_from
+  AND ela.status = 'ACTIVE'
+  AND ela.effective_to IS NULL;
 
--- The security replica is in another database; carry the same moves across by id.
+-- The security replica is in another database, so the two cannot commit together. The replica
+-- phase therefore reconciles against people's current state, every active open-ended assignment,
+-- rather than against this run's moves: if it fails after people has committed, a re-run still
+-- carries the earlier start across.
 \pset tuples_only on
 \pset format unaligned
 \o /tmp/backdate-staffing-replica.sql
 SELECT format(
-    'UPDATE ext_people_staffing_assignment SET effective_from = %L WHERE tenant_id = %L AND assignment_id = %L AND (effective_from IS NULL OR effective_from > %L);',
-    new_from, tenant_id, id, new_from)
-FROM staffing_backdate;
+    'UPDATE ext_people_staffing_assignment SET effective_from = %L WHERE tenant_id = %L AND assignment_id = %L AND status = %L AND effective_to IS NULL AND (effective_from IS NULL OR effective_from > %L);',
+    ela.effective_from, ela.tenant_id, ela.id, 'ACTIVE', ela.effective_from)
+FROM employee_location_assignment ela
+WHERE ela.status = 'ACTIVE' AND ela.effective_to IS NULL;
 \o
 \pset tuples_only off
 \pset format aligned
