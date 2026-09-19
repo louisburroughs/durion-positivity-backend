@@ -91,7 +91,7 @@ paths:
 
         Emits a BULK_LOADER_JOB_CREATE event; no file content is stored by this call.
 
-        Returns 201 with the new job; 400 with BULK_JOB_TENANT_REQUIRED when tenantId is omitted and no transitional default tenant is configured (with the default, the job uses it and logs a WARN); 400 with BULK_JOB_TENANT_UNKNOWN when the tenant is not active in this cell; 403 with BULK_JOB_TENANT_FORBIDDEN when a bound caller may not load into the tenant it named; 403 with BULK_JOB_TENANT_UNBOUND_TARGET_FORBIDDEN when the caller has no tenant bound on its token yet and still named one explicitly, rather than omitting tenantId for the transitional default; 403 with BULK_JOB_TENANT_DOMAIN_FORBIDDEN when the target is the platform tenant and domainType is not one of its own packs; and 409 when the operator already has an active bulk load job in progress.
+        Returns 201 with the new job; 400 with BULK_JOB_TENANT_REQUIRED when tenantId is omitted and no transitional default tenant is configured (with the default, the job uses it and logs a WARN); 400 with BULK_JOB_TENANT_UNKNOWN when the tenant is not active in this cell; 403 with BULK_JOB_TENANT_FORBIDDEN when a bound caller may not load into the tenant it named; 403 with BULK_JOB_TENANT_UNBOUND_TARGET_FORBIDDEN when the caller has no tenant bound on its token yet and still named one explicitly, rather than omitting tenantId for the transitional default; 403 with BULK_JOB_TENANT_DOMAIN_FORBIDDEN when the target is the platform tenant and domainType is not one of its own packs; 400 with BULK_JOB_DOMAIN_RETIRED when domainType is RETIRED; and 409 when the operator already has an active bulk load job in progress.
 
         '
       operationId: createBulkLoadJob
@@ -122,7 +122,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'BULK_JOB_TENANT_REQUIRED: no tenantId and no transitional default; BULK_JOB_TENANT_UNKNOWN: the tenant is not active in this cell; VALIDATION_ERROR: a malformed request'
+          description: 'BULK_JOB_TENANT_REQUIRED: no tenantId and no transitional default; BULK_JOB_TENANT_UNKNOWN: the tenant is not active in this cell; BULK_JOB_DOMAIN_RETIRED: domainType is RETIRED; VALIDATION_ERROR: a malformed request'
         '403':
           content:
             application/json:
@@ -1058,6 +1058,11 @@ components:
           description: Machine-readable error code
           example: ORDER_NOT_FOUND
           type: string
+        conflicts:
+          description: Itemized conflicts behind a 409 whose cause is a set of named conflicts, such as SCHEDULING_CONFLICT (ADR-0017 §3). Present only on such a 409; absent otherwise
+          items:
+            $ref: '#/components/schemas/Conflict'
+          type: array
         correlationId:
           description: Unique correlation ID for distributed request tracing
           example: 550e8400-e29b-41d4-a716-446655440000
@@ -1084,6 +1089,11 @@ components:
           example: 404
           format: int32
           type: integer
+        suggestedAlternatives:
+          description: Alternatives the caller may retry with, accompanying conflicts when the service can compute them. Optional even when conflicts is present
+          items:
+            $ref: '#/components/schemas/SuggestedAlternative'
+          type: array
         supportAction:
           description: Support or admin investigation guidance, when applicable
           example: Contact support with the correlation ID for assistance
@@ -1228,7 +1238,7 @@ components:
       description: Request to create a new bulk load job
       properties:
         domainType:
-          description: Target domain for the bulk load
+          description: Target domain for the bulk load. RETIRED is refused with 400 BULK_JOB_DOMAIN_RETIRED
           enum:
           - CATALOG_PRODUCT
           - INVENTORY_STOCK_COUNT
@@ -1249,13 +1259,14 @@ components:
           - SECURITY_ROLE_PERMISSION
           - SECURITY_USER
           - USER_PERSON_LINK
-          - MECHANIC_SKILL
+          - PERSON_CREDENTIAL
           - CATALOG_SERVICE
           - SERVICE_LABOR_STANDARD
           - SERVICE_PACKAGE
           - SERVICE_PACKAGE_MEMBER
           - LABOR_RATE
           - LABOR_RATE_ADJUSTMENT
+          - RETIRED
           example: CATALOG_PRODUCT
           type: string
         fileName:
@@ -1291,7 +1302,7 @@ components:
           format: date-time
           type: string
         domainType:
-          description: Detected or selected target domain for the load
+          description: Detected or selected target domain for the load. RETIRED when the job's domain has since been removed from the loader; such a job can be listed but never run
           enum:
           - CATALOG_PRODUCT
           - INVENTORY_STOCK_COUNT
@@ -1312,13 +1323,14 @@ components:
           - SECURITY_ROLE_PERMISSION
           - SECURITY_USER
           - USER_PERSON_LINK
-          - MECHANIC_SKILL
+          - PERSON_CREDENTIAL
           - CATALOG_SERVICE
           - SERVICE_LABOR_STANDARD
           - SERVICE_PACKAGE
           - SERVICE_PACKAGE_MEMBER
           - LABOR_RATE
           - LABOR_RATE_ADJUSTMENT
+          - RETIRED
           example: CATALOG_PRODUCT
           type: string
         failureCount:
@@ -1473,6 +1485,35 @@ components:
       - sourceColumn
       - targetField
       type: object
+    Conflict:
+      description: A single named conflict behind a 409 response
+      properties:
+        affectedResource:
+          description: Resource affected by the conflict
+          example: 'Mechanic: John Doe'
+          type: string
+        code:
+          description: Machine-readable conflict code
+          example: MECHANIC_UNAVAILABLE
+          type: string
+        message:
+          description: User-safe description of the conflict
+          example: The selected mechanic is already booked
+          type: string
+        overridable:
+          description: Whether the conflict can be overridden (HARD=false, SOFT=true)
+          example: true
+          type: boolean
+        severity:
+          description: Conflict severity (HARD or SOFT)
+          example: SOFT
+          type: string
+      required:
+      - code
+      - message
+      - overridable
+      - severity
+      type: object
     ContentDetectionResult:
       description: Result of content detection over an uploaded file, used to infer the target domain and mappings
       properties:
@@ -1503,13 +1544,14 @@ components:
           - SECURITY_ROLE_PERMISSION
           - SECURITY_USER
           - USER_PERSON_LINK
-          - MECHANIC_SKILL
+          - PERSON_CREDENTIAL
           - CATALOG_SERVICE
           - SERVICE_LABOR_STANDARD
           - SERVICE_PACKAGE
           - SERVICE_PACKAGE_MEMBER
           - LABOR_RATE
           - LABOR_RATE_ADJUSTMENT
+          - RETIRED
           example: CATALOG_PRODUCT
           type: string
         llmFallbackUsed:
@@ -1656,6 +1698,25 @@ components:
           type: boolean
         unsorted:
           type: boolean
+      type: object
+    SuggestedAlternative:
+      description: A suggested alternative accompanying a 409 conflict
+      properties:
+        endDateTime:
+          description: Suggested end time (ISO-8601 with offset)
+          example: '2026-06-18T10:00:00-05:00'
+          type: string
+        reason:
+          description: Reason this alternative is suggested
+          example: Mechanic available
+          type: string
+        startDateTime:
+          description: Suggested start time (ISO-8601 with offset)
+          example: '2026-06-18T09:00:00-05:00'
+          type: string
+      required:
+      - endDateTime
+      - startDateTime
       type: object
   securitySchemes:
     bearerAuth:

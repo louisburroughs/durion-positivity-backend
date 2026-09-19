@@ -3566,6 +3566,11 @@ components:
           description: Machine-readable error code
           example: ORDER_NOT_FOUND
           type: string
+        conflicts:
+          description: Itemized conflicts behind a 409 whose cause is a set of named conflicts, such as SCHEDULING_CONFLICT (ADR-0017 §3). Present only on such a 409; absent otherwise
+          items:
+            $ref: '#/components/schemas/Conflict'
+          type: array
         correlationId:
           description: Unique correlation ID for distributed request tracing
           example: 550e8400-e29b-41d4-a716-446655440000
@@ -3592,6 +3597,11 @@ components:
           example: 404
           format: int32
           type: integer
+        suggestedAlternatives:
+          description: Alternatives the caller may retry with, accompanying conflicts when the service can compute them. Optional even when conflicts is present
+          items:
+            $ref: '#/components/schemas/SuggestedAlternative'
+          type: array
         supportAction:
           description: Support or admin investigation guidance, when applicable
           example: Contact support with the correlation ID for assistance
@@ -3732,6 +3742,35 @@ components:
           - DELIVERY
           example: DELIVERY
           type: string
+      type: object
+    Conflict:
+      description: A single named conflict behind a 409 response
+      properties:
+        affectedResource:
+          description: Resource affected by the conflict
+          example: 'Mechanic: John Doe'
+          type: string
+        code:
+          description: Machine-readable conflict code
+          example: MECHANIC_UNAVAILABLE
+          type: string
+        message:
+          description: User-safe description of the conflict
+          example: The selected mechanic is already booked
+          type: string
+        overridable:
+          description: Whether the conflict can be overridden (HARD=false, SOFT=true)
+          example: true
+          type: boolean
+        severity:
+          description: Conflict severity (HARD or SOFT)
+          example: SOFT
+          type: string
+      required:
+      - code
+      - message
+      - overridable
+      - severity
       type: object
     EndpointBindingRequest:
       description: 'Create/update payload for a capability endpoint binding (ADR-0050 §3): at most one binding per capability per profile. An absent or disabled binding means the capability is disabled for the supplier and resolves to the typed CAPABILITY_NOT_CONFIGURED status -- a value of the capability response''s own status enum, returned with HTTP 200, not an error. Do not confuse it with the ApiError code SUPPLIER_CAPABILITY_NOT_CONFIGURED, which is the same condition escaping as a 4xx and indicates a defect, not a normal outcome.'
@@ -4691,6 +4730,25 @@ components:
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
           format: uuid
           type: string
+      type: object
+    SuggestedAlternative:
+      description: A suggested alternative accompanying a 409 conflict
+      properties:
+        endDateTime:
+          description: Suggested end time (ISO-8601 with offset)
+          example: '2026-06-18T10:00:00-05:00'
+          type: string
+        reason:
+          description: Reason this alternative is suggested
+          example: Mechanic available
+          type: string
+        startDateTime:
+          description: Suggested start time (ISO-8601 with offset)
+          example: '2026-06-18T09:00:00-05:00'
+          type: string
+      required:
+      - endDateTime
+      - startDateTime
       type: object
     SupplierStockAvailability:
       description: 'Live availability of one catalog product across every enabled stock-inquiry vendor, for one receiving location. Partial by design: each vendor answers (or fails) independently, carried as a per-vendor status. An empty vendors list means no vendor is configured for stock inquiry — a valid answer, not an error.'
