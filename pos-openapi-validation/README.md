@@ -71,6 +71,26 @@ Error-envelope conformance is a third, independent dimension on the same entry:
 
 When adding a new spec-producing module, register it at `STRICT`. That may surface real defects in the spec; the fix belongs in the controller annotations the spec is generated from, not in the inventory entry. If the module cannot be made `STRICT`-clean immediately, `REPORT_ONLY` is still better than absence.
 
+## Why a module-scoped run still validates the whole fleet
+
+`scripts/generate-openapi.sh pos-shop-manager` regenerates one module's spec and then runs this
+suite over **every** registered module, so a violation in an unrelated module fails the run and, in
+`API Artifacts Sync`, holds back all four delivery stages (issue #2088). That coupling is
+deliberate and stays:
+
+- The run's output is not one module's spec. It is also `pos-api-gateway/docs/openapi-aggregate.yaml`,
+  which `$ref`s every module spec, the Java SDK, the Angular SDK, and the frontend's SDK tarballs —
+  all generated from the whole fleet. Delivering "just the clean module" would still publish the
+  failing module's spec inside those artifacts.
+- Validation is cheap (it reads committed YAML; it does not regenerate anything), so scoping it
+  saves nothing and only narrows what the run can catch.
+- A held-back run is loud and recoverable; a delivered run carrying a spec that fails ADR-0042 is
+  neither, because the bad text reaches the SDKs and, for `pos-mcp-server`, the descriptions an
+  agent reads when choosing a tool.
+
+The consequence is the intended one: any module left violating its own declared enforcement mode is
+a fleet-wide blocker, and the fix belongs in that module's controller annotations.
+
 ## Commands
 
 Run the full module test suite:

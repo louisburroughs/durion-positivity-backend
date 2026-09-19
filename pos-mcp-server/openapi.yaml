@@ -260,17 +260,13 @@ paths:
 
         Preconditions: the agent''s tool set is selected from the caller''s granted permission codes and active workflow state, so the same message can produce different results for different callers.
 
-        Required inputs: message (non-blank text); the acting user is derived from the authenticated principal, not from the body.
+        Required inputs: message (non-blank text); conversationId is optional and, when omitted, starts a new persisted conversation with fresh memory, while a UUID owned by the caller continues that conversation and a non-UUID value is the deprecated ephemeral isolation key (#1735) that is never persisted.
 
-        Emits a MCP_CHAT_EXECUTE event; the agent may invoke permission-gated tools, RAG retrieval and web search while producing the answer.
+        Emits a MCP_CHAT_EXECUTE event and persists both the user and the assistant turn, so a caller must not re-append them with appendMcpConversationMessage; the agent may invoke permission-gated tools, RAG retrieval and web search while producing the answer.
 
-        Returns 200 with the full response text plus a parallel `blocks` array segmented from that same text, in source order (markdown/table/code today; chart/text/image/file/error are modeled for forward compatibility but not yet produced) — markdown runs interleave with table/code blocks wherever they occur, with no guarantee the first block is markdown. `blocks` is optional and may be empty; older clients may ignore it, and when it is empty or absent, render `response` instead.
+        Returns 200 with the full response text, the resolved conversationId to echo on every follow-up turn, the persisted assistant messageId (null on the ephemeral path, or when the conversation was deleted or purged mid-turn), and a parallel blocks array segmented from that same text in source order, which is optional, may be empty, and is safely ignored by older clients that render response instead.
 
-        Conversation persistence (#2073): an absent `conversationId` starts a new persisted conversation with fresh memory — the response always carries the resolved `conversationId`, and callers must echo it on every follow-up turn to continue that same conversation rather than starting a new one each time. A `conversationId` that is a UUID owned by the caller reuses that conversation; a UUID that does not exist or belongs to another subject answers 404 `CONVERSATION_NOT_FOUND` rather than silently starting a new conversation under a caller-chosen id. A non-UUID `conversationId` is the deprecated ephemeral isolation key (#1735): memory-only, never persisted, echoed back unchanged, and `messageId` is `null` in that case. `messageId` (the persisted assistant message id) is also `null` if the conversation was deleted or purged in the moment between the turn starting and finishing — the answer is still returned.
-
-        Turns on one persisted conversation are serialized: a second turn sent while one is still running on the same `conversationId` answers 409 `CONVERSATION_BUSY`; retry once the first has answered.
-
-        Returns 429 when the caller''s chat rate limit is exceeded.
+        Returns 404 when conversationId is a UUID that does not exist or belongs to another subject, 409 CONVERSATION_BUSY when a turn is already running on the same conversation, and 429 when the caller''s chat rate limit is exceeded.
 
         '
       operationId: executeMcpChat
@@ -372,11 +368,13 @@ paths:
       - mcp:chat:stream
   /v1/mcp/conversations:
     delete:
-      description: 'Deletes every conversation the caller owns.
+      description: 'Deletes every conversation the caller owns, in one call.
+
+        Use this tool for a deliberate clear-all-history action; do not use it to remove a single conversation, which deleteMcpConversation does.
 
         Preconditions: none; a caller with zero conversations still succeeds.
 
-        Required inputs: none; there is no request body.
+        Required inputs: none; there is no request body, and the owner comes from the authenticated principal.
 
         Emits a MCP_CONVERSATION_CLEAR_ALL event.
 
@@ -398,11 +396,13 @@ paths:
     get:
       description: 'Returns the caller''s own conversation history, pinned first then most-recently-updated first, capped at 200 rows (no pagination).
 
+        Use this tool to populate the assistant''s history rail; do not use it to read a conversation''s turns, which getMcpConversation returns.
+
         Preconditions: none; an empty list means the caller has no conversations yet.
 
         Required inputs: none; tenant and owner come from the authenticated principal, never from a request parameter.
 
-        Retention: unpinned conversations idle beyond the server''s retention window are purged; pinned conversations are exempt (see getMcpConversationPolicy).
+        Emits a MCP_CONVERSATION_LIST event; unpinned conversations idle beyond the server''s retention window are purged and pinned conversations are exempt, as reported by getMcpConversationPolicy.
 
         Returns 200 with the caller''s conversation summaries.
 
@@ -428,7 +428,7 @@ paths:
     post:
       description: 'Starts a new, empty conversation owned by the caller, optionally with an initial title.
 
-        Use this tool to start a conversation the caller can then append turns to; do not use it to continue an existing one, since POST /mcp/chat with an existing conversationId does that.
+        Use this tool to start a conversation the caller can then append turns to; do not use it to continue an existing one, since executeMcpChat with an existing conversationId does that.
 
         Preconditions: none.
 
@@ -436,15 +436,23 @@ paths:
 
         Emits a MCP_CONVERSATION_CREATE event.
 
-        Returns 201 with the created conversation (empty message list).
+        Returns 201 with the created conversation (empty message list), and 400 when title falls outside 1..120 characters after trimming.
 
         '
       operationId: createMcpConversation
       requestBody:
         content:
           application/json:
+            examples:
+              Titled conversation:
+                description: Titled conversation
+                value:
+                  title: Mechanic roster count
+              Untitled conversation:
+                description: Untitled conversation
             schema:
               $ref: '#/components/schemas/CreateConversationRequest'
+        description: Optional initial title for the new conversation; send an empty object to let the server derive one from the first appended message.
         required: true
       responses:
         '201':
@@ -471,13 +479,15 @@ paths:
     get:
       description: 'Returns the server-wide conversation retention policy, so the history rail''s footer can state it truthfully instead of the old per-browser wording.
 
+        Use this tool to render retention wording in a client; do not infer the window from listMcpConversations, whose row count says nothing about when a conversation is purged.
+
         Preconditions: none.
 
-        Required inputs: none.
+        Required inputs: none; the policy is server-wide rather than per-caller.
 
-        Retention: unpinned conversations idle beyond retentionDays are purged; pinned conversations are exempt when pinnedExempt is true.
+        No events are emitted; this is a read-only projection of configuration, under which unpinned conversations idle beyond retentionDays are purged while pinned conversations are exempt when pinnedExempt is true.
 
-        Returns 200 with the retention policy. No event is emitted for this read.
+        Returns 200 with the retention policy.
 
         '
       operationId: getMcpConversationPolicy
@@ -498,7 +508,9 @@ paths:
       - mcp:chat:execute
   /v1/mcp/conversations/{id}:
     delete:
-      description: 'Deletes one conversation and its messages.
+      description: 'Deletes one conversation and every message in it.
+
+        Use this tool to remove a single conversation the caller owns; do not use clearMcpConversations, which deletes every conversation the caller has.
 
         Preconditions: the conversation must exist and belong to the caller.
 
@@ -506,7 +518,7 @@ paths:
 
         Emits a MCP_CONVERSATION_DELETE event.
 
-        Returns 204 on success and 404 (never 403) when the id does not exist or belongs to another subject.
+        Returns 204 on success, and 404 (never 403) when the id does not exist or belongs to another subject.
 
         '
       operationId: deleteMcpConversation
@@ -543,13 +555,15 @@ paths:
     get:
       description: 'Returns a single conversation, including its full message history, so a reopened conversation renders identically to when it was live.
 
+        Use this tool when a conversation id is already known; do not use listMcpConversations for this, since its summaries carry no messages.
+
         Preconditions: the conversation must exist and belong to the caller.
 
-        Required inputs: id (conversation id) as a path parameter.
+        Required inputs: id (conversation id) as a path parameter; there is no request body.
 
         Emits a MCP_CONVERSATION_VIEW event.
 
-        Returns 404 (never 403) when the id does not exist or belongs to another subject — the two are indistinguishable on purpose.
+        Returns 404 (never 403) when the id does not exist or belongs to another subject, the two being indistinguishable on purpose.
 
         '
       operationId: getMcpConversation
@@ -588,11 +602,13 @@ paths:
       x-required-permissions:
       - mcp:chat:execute
     patch:
-      description: 'Applies a partial update to a conversation''s title and/or pinned state; either field may be omitted.
+      description: 'Applies a partial update to a conversation''s title and pinned state; either field may be omitted.
+
+        Use this tool to rename or pin a conversation the caller owns; do not use it to add turns, which appendMcpConversationMessage does.
 
         Preconditions: the conversation must exist and belong to the caller.
 
-        Required inputs: id (conversation id) as a path parameter; title (1..120 characters after trimming) and/or pinned in the body — a body with neither set is a no-op 200, not a 400.
+        Required inputs: id (conversation id) as a path parameter, plus title (1..120 characters after trimming) and pinned in the body, either of which may be omitted; a body with neither set is a no-op 200, not a 400.
 
         Emits a MCP_CONVERSATION_UPDATE event.
 
@@ -610,8 +626,18 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Pin:
+                description: Pin
+                value:
+                  pinned: true
+              Rename:
+                description: Rename
+                value:
+                  title: Mechanic roster (renamed)
             schema:
               $ref: '#/components/schemas/UpdateConversationRequest'
+        description: Fields to change on the conversation; an omitted field leaves the stored value untouched.
         required: true
       responses:
         '200':
@@ -642,13 +668,13 @@ paths:
       - mcp:chat:execute
   /v1/mcp/conversations/{id}/messages:
     post:
-      description: 'Appends a client-authored turn directly to a conversation (for example, a one-time import of previously browser-only history, or a non-chat caller).
+      description: 'Appends a client-authored turn directly to a conversation, for a one-time import of previously browser-only history or for a non-chat caller.
 
-        <strong>Do not call this for a turn POST /mcp/chat already returned</strong> — that endpoint persists its own user and assistant messages; re-appending them here would duplicate the conversation.
+        Use this tool only when the caller itself authored the turn; do not call it for a turn executeMcpChat already returned, which persists its own user and assistant messages, because re-appending them here duplicates the conversation.
 
         Preconditions: the conversation must exist and belong to the caller.
 
-        Required inputs: id (conversation id) as a path parameter; role ("user" or "assistant") and blocks (at most 64 entries, at most 256 KB serialized) in the body, plus an optional raw-text content fallback.
+        Required inputs: id (conversation id) as a path parameter, plus role (user or assistant) and blocks (at most 64 entries, at most 256 KB serialized) in the body, with an optional raw-text content fallback.
 
         Emits a MCP_CONVERSATION_MESSAGE_APPEND event.
 
@@ -666,8 +692,18 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Imported user turn:
+                description: Imported user turn
+                value:
+                  blocks:
+                  - kind: markdown
+                    markdown: How many mechanics do I have?
+                  content: How many mechanics do I have?
+                  role: user
             schema:
               $ref: '#/components/schemas/AppendMessageRequest'
+        description: The client-authored turn to store, never a turn executeMcpChat already persisted.
         required: true
       responses:
         '201':
@@ -698,15 +734,17 @@ paths:
       - mcp:chat:execute
   /v1/mcp/conversations/{id}/messages/{messageId}/feedback:
     delete:
-      description: 'Withdraws the caller''s rating of one assistant answer. Idempotent: it returns 204 even when the message was never rated.
+      description: 'Withdraws the caller''s rating of one assistant answer.
 
-        Preconditions: the conversation must exist and belong to the caller; messageId must address an assistant answer produced by a chat turn (POST /mcp/chat) within it — a client-appended assistant message (POST .../messages) cannot be rated, so there is nothing to withdraw and the call answers 404 instead of a silent 204.
+        Use this tool to retract a rating set by setMcpMessageFeedback; do not use it to change one, since setMcpMessageFeedback replaces a rating in full.
+
+        Preconditions: the conversation must exist and belong to the caller, and messageId must address an assistant answer produced by a chat turn within it; a client-appended assistant message cannot be rated, so there is nothing to withdraw and the call answers 404 rather than a silent 204.
 
         Required inputs: id (conversation id) and messageId as path parameters; there is no request body.
 
-        Emits a MCP_MESSAGE_FEEDBACK_CLEAR event.
+        Emits a MCP_MESSAGE_FEEDBACK_CLEAR event; the call is idempotent and answers 204 even when the message was never rated.
 
-        Returns 404 (never 403) when the message does not exist, is in another conversation, is not owned by the caller, belongs to another tenant, has role "user", was appended directly rather than produced by a chat turn, or was purged.
+        Returns 404 (never 403) when the message does not exist, is in another conversation, is not owned by the caller, belongs to another tenant, has role user, was appended directly rather than produced by a chat turn, or was purged.
 
         '
       operationId: clearMcpMessageFeedback
@@ -747,15 +785,17 @@ paths:
       x-required-permissions:
       - mcp:chat:execute
     post:
-      description: 'Rates one assistant answer helpful or not helpful, with an optional reason and free-text comment. A repeat call replaces the earlier rating in full — an omitted reason or comment clears the previously stored value rather than leaving it untouched.
+      description: 'Rates one assistant answer helpful or not helpful, with an optional reason and free-text comment.
 
-        Preconditions: the conversation must exist and belong to the caller; messageId must address an assistant answer produced by a chat turn (POST /mcp/chat) within it — a client-appended assistant message (POST .../messages) cannot be rated.
+        Use this tool to record a reader''s verdict on an answer; a repeat call replaces the earlier rating in full, so an omitted reason or comment clears the stored value rather than leaving it untouched.
 
-        Required inputs: id (conversation id) and messageId as path parameters — messageId is either the messageId POST /mcp/chat returned or a ConversationMessage.id from this conversation''s history — plus rating in the body (reason and comment optional).
+        Preconditions: the conversation must exist and belong to the caller, and messageId must address an assistant answer produced by a chat turn within it, since a client-appended assistant message cannot be rated.
+
+        Required inputs: id (conversation id) and messageId as path parameters, messageId being either the messageId executeMcpChat returned or a ConversationMessage id from this conversation''s history, plus rating in the body, with reason and comment optional.
 
         Emits a MCP_MESSAGE_FEEDBACK_SET event.
 
-        Returns 204 on success and 404 (never 403) when the message does not exist, is in another conversation, is not owned by the caller, belongs to another tenant, has role "user", was appended directly rather than produced by a chat turn, or was purged — the same body in every case.
+        Returns 204 on success, and 404 (never 403) with the same body when the message does not exist, is in another conversation, is not owned by the caller, belongs to another tenant, has role user, was appended directly rather than produced by a chat turn, or was purged.
 
         '
       operationId: setMcpMessageFeedback
@@ -775,8 +815,20 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Helpful:
+                description: Helpful
+                value:
+                  rating: helpful
+              Not helpful, with a reason:
+                description: Not helpful, with a reason
+                value:
+                  comment: The mechanic count excluded apprentices.
+                  rating: not_helpful
+                  reason: incorrect
             schema:
               $ref: '#/components/schemas/MessageFeedbackRequest'
+        description: The rating to store for this answer, replacing any rating the caller set earlier.
         required: true
       responses:
         '204':
@@ -893,23 +945,29 @@ paths:
       - mcp:document:ingest
   /v1/mcp/transcriptions:
     post:
-      description: 'Transcribes one short audio clip to text, for browsers where the in-browser SpeechRecognition API is unavailable.
+      description: 'Transcribes one short audio clip to text for the assistant composer, for browsers where the in-browser SpeechRecognition API is unavailable.
 
-        Preconditions: the clip is at most 5 MiB and at most 60 seconds long (both limits inclusive); its content type (ignoring parameters such as `;codecs=opus`) must be one of audio/webm, audio/ogg, audio/mp4.
+        Use this tool only as that fallback; do not use it for long-form or file-based transcription, which this endpoint rejects rather than queueing for later polling.
 
-        Required inputs: audio (the recorded clip, multipart file part, required) and language (optional BCP-47 tag, e.g. "en-US"); when language is omitted the request''s resolved Accept-Language locale is used, falling back to provider auto-detection when that locale is undetermined.
+        Preconditions: the clip is at most 5 MiB and at most 60 seconds long, both limits inclusive, and its content type, ignoring parameters such as codecs=opus, is one of audio/webm, audio/ogg, audio/mp4.
 
-        Retention: transcribe-and-discard — the audio is held in memory for this request only, forwarded to the configured speech-to-text provider, and never persisted, logged, or included in the emitted event. A hosted provider''s own retention policy applies to the copy it received. A self-hosted provider — infrastructure under our own control — keeps nothing beyond serving this one request.
+        Required inputs: audio, the recorded clip, as a required multipart file part, and language, an optional BCP-47 tag such as en-US; when language is omitted the request''s resolved Accept-Language locale is used, falling back to provider auto-detection when that locale is undetermined.
 
-        Emits an MCP_TRANSCRIPTION_EXECUTE event.
+        Emits an MCP_TRANSCRIPTION_EXECUTE event that carries no audio; the clip is transcribe-and-discard, held in memory for this request only, forwarded to the configured speech-to-text provider, and never persisted or logged.
 
-        Returns 200 with the transcript synchronously — clips this short never queue for later polling.
+        A hosted provider applies its own retention policy to the copy it received, while a self-hosted provider, being infrastructure under our own control, keeps nothing beyond serving this one request.
+
+        Returns 200 with the transcript synchronously, 413 when the clip is over 5 MiB or longer than 60 seconds, 415 when the audio part is missing or its content type is outside the allowed set, 422 when the clip yields no intelligible text, and 503 when the provider is unconfigured or unreachable.
 
         '
       operationId: transcribeMcpAudio
       requestBody:
         content:
           multipart/form-data:
+            examples:
+              Clip with an explicit language:
+                description: Clip with an explicit language
+                value: audio=@composer-clip.webm (binary content, audio/webm); language=en-US
             schema:
               properties:
                 audio:
@@ -923,6 +981,8 @@ paths:
               required:
               - audio
               type: object
+        description: Multipart form carrying the recorded clip in a part named audio, with an optional language part.
+        required: true
       responses:
         '200':
           content:

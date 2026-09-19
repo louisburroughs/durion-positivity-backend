@@ -955,10 +955,22 @@ paths:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1chat
   /v1/mcp/chat/stream:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1chat~1stream
+  /v1/mcp/conversations:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1conversations
+  /v1/mcp/conversations/policy:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1conversations~1policy
+  /v1/mcp/conversations/{id}:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1conversations~1{id}
+  /v1/mcp/conversations/{id}/messages:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1conversations~1{id}~1messages
+  /v1/mcp/conversations/{id}/messages/{messageId}/feedback:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1conversations~1{id}~1messages~1{messageId}~1feedback
   /v1/mcp/documents:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1documents
   /v1/mcp/documents/jobs/{jobId}:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1documents~1jobs~1{jobId}
+  /v1/mcp/transcriptions:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1mcp~1transcriptions
   /v1/nlt/audit:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1audit
   /v1/nlt/requests:

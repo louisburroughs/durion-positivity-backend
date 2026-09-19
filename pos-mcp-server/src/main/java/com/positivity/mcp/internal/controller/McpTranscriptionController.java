@@ -8,6 +8,7 @@ import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -60,25 +61,45 @@ class McpTranscriptionController {
     }
 
     @PostMapping(value = "/transcriptions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(operationId = "transcribeMcpAudio", summary = "Transcribe an Audio Clip", description = """
-                    Transcribes one short audio clip to text, for browsers where the in-browser \
-                    SpeechRecognition API is unavailable.
-                    Preconditions: the clip is at most 5 MiB and at most 60 seconds long (both limits \
-                    inclusive); its content type (ignoring parameters such as `;codecs=opus`) must be one of \
+    @Operation(
+            operationId = "transcribeMcpAudio",
+            summary = "Transcribe an Audio Clip",
+            description = """
+                    Transcribes one short audio clip to text for the assistant composer, for browsers where \
+                    the in-browser SpeechRecognition API is unavailable.
+                    Use this tool only as that fallback; do not use it for long-form or file-based \
+                    transcription, which this endpoint rejects rather than queueing for later polling.
+                    Preconditions: the clip is at most 5 MiB and at most 60 seconds long, both limits \
+                    inclusive, and its content type, ignoring parameters such as codecs=opus, is one of \
                     audio/webm, audio/ogg, audio/mp4.
-                    Required inputs: audio (the recorded clip, multipart file part, required) and language \
-                    (optional BCP-47 tag, e.g. "en-US"); when language is omitted the request's resolved \
-                    Accept-Language locale is used, falling back to provider auto-detection when that locale \
-                    is undetermined.
-                    Retention: transcribe-and-discard — the audio is held in memory for this request only, \
-                    forwarded to the configured speech-to-text provider, and never persisted, logged, or \
-                    included in the emitted event. A hosted provider's own retention policy applies to the \
-                    copy it received. A self-hosted provider — infrastructure under our own control — keeps \
-                    nothing beyond serving this one request.
-                    Emits an MCP_TRANSCRIPTION_EXECUTE event.
-                    Returns 200 with the transcript synchronously — clips this short never queue for later \
-                    polling.
-                    """)
+                    Required inputs: audio, the recorded clip, as a required multipart file part, and \
+                    language, an optional BCP-47 tag such as en-US; when language is omitted the request's \
+                    resolved Accept-Language locale is used, falling back to provider auto-detection when \
+                    that locale is undetermined.
+                    Emits an MCP_TRANSCRIPTION_EXECUTE event that carries no audio; the clip is \
+                    transcribe-and-discard, held in memory for this request only, forwarded to the \
+                    configured speech-to-text provider, and never persisted or logged.
+                    A hosted provider applies its own retention policy to the copy it received, while a \
+                    self-hosted provider, being infrastructure under our own control, keeps nothing beyond \
+                    serving this one request.
+                    Returns 200 with the transcript synchronously, 413 when the clip is over 5 MiB or longer \
+                    than 60 seconds, 415 when the audio part is missing or its content type is outside the \
+                    allowed set, 422 when the clip yields no intelligible text, and 503 when the provider is \
+                    unconfigured or unreachable.
+                    """,
+            requestBody =
+                    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Multipart form carrying the recorded clip in a part named audio, "
+                                    + "with an optional language part.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Clip with an explicit language",
+                                                            value = "audio=@composer-clip.webm (binary content, "
+                                                                    + "audio/webm); language=en-US"))))
     @ApiResponse(
             responseCode = "200",
             description = "Transcript returned",
