@@ -345,7 +345,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageVendorBillSummaryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid vendor ID
       security:
       - bearerAuth:
@@ -407,19 +407,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/APPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: 'Validation error: negative amounts, invalid bills, etc.'
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/APPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: 'Conflict: paymentRef exists with different payload'
         '500':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/APPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Payment gateway failure
       security:
       - bearerAuth:
@@ -464,10 +464,6 @@ paths:
                 $ref: '#/components/schemas/APPaymentResponse'
           description: Payment found
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APPaymentResponse'
           description: Payment not found
       security:
       - bearerAuth:
@@ -510,10 +506,6 @@ paths:
                 $ref: '#/components/schemas/APPaymentResponse'
           description: Payment found
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APPaymentResponse'
           description: Payment not found
       security:
       - bearerAuth:
@@ -576,25 +568,19 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invalid date range or actor ID
         '404':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Actor not found
         '500':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Internal server error
       security:
       - bearerAuth:
@@ -642,17 +628,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Order not found
         '500':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Internal server error
       security:
       - bearerAuth:
@@ -706,19 +688,19 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request parameters
         '404':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Source document not found
         '500':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Internal server error
       security:
       - bearerAuth:
@@ -766,17 +748,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invoice not found
         '500':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Internal server error
       security:
       - bearerAuth:
@@ -824,17 +802,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Order not found
         '500':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Internal server error
       security:
       - bearerAuth:
@@ -888,25 +862,25 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request parameters
         '403':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Authorization denied - insufficient privileges for override amount
         '422':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Policy validation failed
         '500':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Internal server error
       security:
       - bearerAuth:
@@ -962,17 +936,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invalid date range
         '500':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Internal server error
       security:
       - bearerAuth:
@@ -1025,25 +995,25 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request parameters
         '403':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Authorization denied - separate authorization required
         '422':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Refund policy validation failed
         '500':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Internal server error
       security:
       - bearerAuth:
@@ -1109,17 +1079,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invalid date range or exception type
         '500':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AuditTrailResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Internal server error
       security:
       - bearerAuth:
@@ -1208,7 +1174,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageCreditMemoResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid pagination or filter parameters
       security:
       - bearerAuth:
@@ -1259,19 +1225,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreditMemoResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - validation errors
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreditMemoResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invoice not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreditMemoResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Business rule violation - amount exceeds balance or invoice not finalized
       security:
       - bearerAuth:
@@ -1318,7 +1284,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreditMemoResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Credit memo not found
       security:
       - bearerAuth:
@@ -1703,7 +1669,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultGLMappingListResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -1755,13 +1721,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
         '404':
           content:
@@ -1812,9 +1778,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/DefaultGLMappingResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -1866,13 +1830,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
           description: No default mapping found
       security:
       - bearerAuth:
@@ -1925,9 +1885,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/DefaultGLMappingResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -1965,6 +1923,10 @@ paths:
         '204':
           description: Default mapping deactivated
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
         '404':
           content:
@@ -2014,7 +1976,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
         '404':
           content:
@@ -2079,7 +2041,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
         '404':
           content:
@@ -2214,7 +2176,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageAccountingEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -2268,7 +2230,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountingEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
       security:
       - bearerAuth:
@@ -2305,7 +2267,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EventEnvelopeContract'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -2352,7 +2314,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountingEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Event not found
       security:
       - bearerAuth:
@@ -2451,19 +2413,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountingEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountingEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Event not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountingEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Event already PROCESSED (idempotency violation)
       security:
       - bearerAuth:
@@ -2558,7 +2520,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountingEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Event not found
       security:
       - bearerAuth:
@@ -2611,13 +2573,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExportJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExportJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -2681,7 +2643,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageExportJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -2726,13 +2688,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExportJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExportJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Export job not found
       security:
       - bearerAuth:
@@ -2802,13 +2764,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLAccountListResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unsupported sort property or direction
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLAccountListResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -2862,7 +2824,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLAccountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
       security:
       - bearerAuth:
@@ -2907,7 +2869,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLAccountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: GL account not found
       security:
       - bearerAuth:
@@ -2966,7 +2928,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLAccountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: GL account not found
       security:
       - bearerAuth:
@@ -3023,7 +2985,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLAccountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: GL account not found
       security:
       - bearerAuth:
@@ -3077,7 +3039,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLAccountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: GL account not found
         '409':
           content:
@@ -3128,7 +3090,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLAccountBalanceResponse'
+                $ref: '#/components/schemas/ApiError'
           description: GL account not found
       security:
       - bearerAuth:
@@ -3182,7 +3144,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLAccountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: GL account not found
         '409':
           content:
@@ -3236,13 +3198,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvoiceRevenueReconcileResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid bounds (limit outside 1-5000)
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvoiceRevenueReconcileResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Caller lacks accounting:gl:reconcile
       security:
       - bearerAuth:
@@ -3298,19 +3260,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvoiceGenerationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvoiceGenerationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder is not in COMPLETED state
         '503':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvoiceGenerationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder service unavailable
       security:
       - bearerAuth:
@@ -3355,13 +3317,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRuleRefResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Customer not found
         '503':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRuleRefResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Customer service unavailable
       security:
       - bearerAuth:
@@ -3491,13 +3453,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagedResponseJournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unsupported sort property or direction
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagedResponseJournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -3553,7 +3515,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '404':
           content:
@@ -3943,7 +3905,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MappingKeyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or duplicate name
       security:
       - bearerAuth:
@@ -3988,7 +3950,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MappingKeyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Mapping key not found
       security:
       - bearerAuth:
@@ -4046,13 +4008,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MappingKeyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or duplicate name
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MappingKeyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Mapping key not found
       security:
       - bearerAuth:
@@ -4090,8 +4052,16 @@ paths:
         '204':
           description: Mapping key deactivated
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Mapping key not found
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Cannot deactivate - active mappings exist
       security:
       - bearerAuth:
@@ -4143,7 +4113,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLMappingCreateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
       security:
       - bearerAuth:
@@ -4194,7 +4164,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLMappingResolveResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
       security:
       - bearerAuth:
@@ -4345,7 +4315,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagePaymentApplicationListRow'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid date range or window too wide
       security:
       - bearerAuth:
@@ -4395,8 +4365,16 @@ paths:
         '204':
           description: Payment application reversed
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or already reversed
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Payment application not found
       security:
       - bearerAuth:
@@ -4459,19 +4437,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentApplicationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or insufficient funds
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentApplicationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Payment not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentApplicationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Currency mismatch or invoice not applicable
       security:
       - bearerAuth:
@@ -4521,8 +4499,16 @@ paths:
         '204':
           description: Payment applications reversed
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Payment not found
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Payment has no applications to reverse
       security:
       - bearerAuth:
@@ -4569,8 +4555,16 @@ paths:
         '204':
           description: Payment voided
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Payment not found
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Payment already applied; reverse applications first
       security:
       - bearerAuth:
@@ -4921,7 +4915,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingCategoryListResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -4971,7 +4965,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingCategoryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or duplicate name
       security:
       - bearerAuth:
@@ -5016,7 +5010,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingCategoryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Posting category not found
       security:
       - bearerAuth:
@@ -5074,13 +5068,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingCategoryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or duplicate name
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingCategoryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Posting category not found
       security:
       - bearerAuth:
@@ -5118,8 +5112,16 @@ paths:
         '204':
           description: Posting category deactivated
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Posting category not found
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Cannot deactivate - active mappings exist
       security:
       - bearerAuth:
@@ -5196,13 +5198,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MappingKeyListResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MappingKeyListResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Posting category not found
       security:
       - bearerAuth:
@@ -5266,13 +5268,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingRuleSetListResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unsupported sort property or direction
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingRuleSetListResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -5324,7 +5326,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingRuleSetResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
       security:
       - bearerAuth:
@@ -5434,7 +5436,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingRuleSetResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Cannot modify published rule set
       security:
       - bearerAuth:
@@ -6306,13 +6308,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageReportExportResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageReportExportResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing accounting:report:export
       security:
       - bearerAuth:
@@ -6363,19 +6365,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReportExportResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReportExportResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReportExportResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing accounting:report:export
       security:
       - bearerAuth:
@@ -6420,19 +6422,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReportExportResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReportExportResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing accounting:report:export
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReportExportResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Export job not found
       security:
       - bearerAuth:
@@ -6478,29 +6480,25 @@ paths:
           content:
             application/json:
               schema:
-                format: byte
-                type: string
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                format: byte
-                type: string
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing reporting:view:financial-statements
         '404':
           content:
             application/json:
               schema:
-                format: byte
-                type: string
+                $ref: '#/components/schemas/ApiError'
           description: Export job or artifact not found
         '409':
           content:
             application/json:
               schema:
-                format: byte
-                type: string
+                $ref: '#/components/schemas/ApiError'
           description: Export job is not COMPLETED
       security:
       - bearerAuth:
@@ -6666,19 +6664,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BalanceSheetReport'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid date
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BalanceSheetReport'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BalanceSheetReport'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing reporting:view:financial-statements
       security:
       - bearerAuth:
@@ -6742,25 +6740,19 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AccountDrilldownResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invalid statement line code or date range
         '401':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AccountDrilldownResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AccountDrilldownResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing reporting:view:financial-statements
       security:
       - bearerAuth:
@@ -6825,25 +6817,19 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/JournalLineDrilldownResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invalid account ID or date range
         '401':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/JournalLineDrilldownResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/JournalLineDrilldownResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing reporting:view:financial-statements
       security:
       - bearerAuth:
@@ -6971,19 +6957,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IncomeStatementReport'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid date range
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IncomeStatementReport'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IncomeStatementReport'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing reporting:view:financial-statements
       security:
       - bearerAuth:
@@ -7417,19 +7403,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LaborOverheadCostReport'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid locationId, fiscalYear, or asOfMonth
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LaborOverheadCostReport'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LaborOverheadCostReport'
+                $ref: '#/components/schemas/ApiError'
           description: FORBIDDEN when the caller lacks reporting:view:financial-statements; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover locationId (ADR-0061)
       security:
       - bearerAuth:
@@ -7738,7 +7724,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageVendorBillListRow'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid date range, window too wide, or unrecognized status
       security:
       - bearerAuth:
@@ -7796,7 +7782,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VendorBillResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
       security:
       - bearerAuth:
@@ -7839,10 +7825,6 @@ paths:
                 $ref: '#/components/schemas/VendorBillResponse'
           description: Vendor bill found
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VendorBillResponse'
           description: Vendor bill not found
       security:
       - bearerAuth:
@@ -7901,7 +7883,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VendorBillResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
       security:
       - bearerAuth:
@@ -7959,7 +7941,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VendorBillResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Candidate not found
       security:
       - bearerAuth:
@@ -8044,10 +8026,6 @@ paths:
                 $ref: '#/components/schemas/VendorBillResponse'
           description: Vendor bill found
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VendorBillResponse'
           description: Vendor bill not found
       security:
       - bearerAuth:
@@ -8107,7 +8085,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VendorBillResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Vendor bill not found
       security:
       - bearerAuth:
@@ -8200,10 +8178,6 @@ paths:
                 $ref: '#/components/schemas/VendorResponse'
           description: Vendor found
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VendorResponse'
           description: Vendor not found
       security:
       - bearerAuth:
