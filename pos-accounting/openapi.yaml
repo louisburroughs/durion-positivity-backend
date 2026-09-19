@@ -8779,6 +8779,11 @@ components:
           description: Machine-readable error code
           example: ORDER_NOT_FOUND
           type: string
+        conflicts:
+          description: Itemized conflicts behind a 409 whose cause is a set of named conflicts, such as SCHEDULING_CONFLICT (ADR-0017 §3). Present only on such a 409; absent otherwise
+          items:
+            $ref: '#/components/schemas/Conflict'
+          type: array
         correlationId:
           description: Unique correlation ID for distributed request tracing
           example: 550e8400-e29b-41d4-a716-446655440000
@@ -8805,6 +8810,11 @@ components:
           example: 404
           format: int32
           type: integer
+        suggestedAlternatives:
+          description: Alternatives the caller may retry with, accompanying conflicts when the service can compute them. Optional even when conflicts is present
+          items:
+            $ref: '#/components/schemas/SuggestedAlternative'
+          type: array
         supportAction:
           description: Support or admin investigation guidance, when applicable
           example: Contact support with the correlation ID for assistance
@@ -9507,6 +9517,35 @@ components:
       - refunded
       - settled
       - startDate
+      type: object
+    Conflict:
+      description: A single named conflict behind a 409 response
+      properties:
+        affectedResource:
+          description: Resource affected by the conflict
+          example: 'Mechanic: John Doe'
+          type: string
+        code:
+          description: Machine-readable conflict code
+          example: MECHANIC_UNAVAILABLE
+          type: string
+        message:
+          description: User-safe description of the conflict
+          example: The selected mechanic is already booked
+          type: string
+        overridable:
+          description: Whether the conflict can be overridden (HARD=false, SOFT=true)
+          example: true
+          type: boolean
+        severity:
+          description: Conflict severity (HARD or SOFT)
+          example: SOFT
+          type: string
+      required:
+      - code
+      - message
+      - overridable
+      - severity
       type: object
     ContractField:
       description: A single field definition in an event envelope contract
@@ -13324,6 +13363,25 @@ components:
           type: boolean
         unsorted:
           type: boolean
+      type: object
+    SuggestedAlternative:
+      description: A suggested alternative accompanying a 409 conflict
+      properties:
+        endDateTime:
+          description: Suggested end time (ISO-8601 with offset)
+          example: '2026-06-18T10:00:00-05:00'
+          type: string
+        reason:
+          description: Reason this alternative is suggested
+          example: Mechanic available
+          type: string
+        startDateTime:
+          description: Suggested start time (ISO-8601 with offset)
+          example: '2026-06-18T09:00:00-05:00'
+          type: string
+      required:
+      - endDateTime
+      - startDateTime
       type: object
     TaxLiabilityReconciliation:
       description: Reconciliation of report net tax against the Sales-Tax Payable (2200) GL account period activity
