@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 
 @DisplayName("ApiError factories (ADR-0017 §3)")
 class ApiErrorTest {
@@ -43,5 +44,30 @@ class ApiErrorTest {
         assertThat(error.suggestedAlternatives()).containsExactly(slot);
         assertThat(error.fieldErrors()).isNull();
         assertThat(error.referenceId()).isNull();
+    }
+
+    @Test
+    @DisplayName("optional fields are omitted from the JSON, including inside conflicts entries")
+    void omitsAbsentOptionalFields() throws Exception {
+        ApiError error = ApiError.withConflicts(
+                "SCHEDULING_CONFLICT",
+                "HARD conflicts cannot be overridden",
+                409,
+                "2026-09-19T12:00:00Z",
+                "corr-3",
+                List.of(new ApiError.Conflict("HARD", "BAY_DOUBLE_BOOKED", "Bay 1 is booked", false, null)),
+                List.of(new ApiError.SuggestedAlternative(
+                        "2026-06-18T09:00:00-05:00", "2026-06-18T10:00:00-05:00", null)));
+
+        String json = JsonMapper.builder().build().writeValueAsString(error);
+
+        assertThat(json)
+                .doesNotContain("affectedResource")
+                .doesNotContain("reason")
+                .doesNotContain("fieldErrors")
+                .doesNotContain("null")
+                .contains("\"code\":\"SCHEDULING_CONFLICT\"")
+                .contains("\"severity\":\"HARD\"")
+                .contains("\"startDateTime\"");
     }
 }

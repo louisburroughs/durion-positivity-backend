@@ -34,6 +34,13 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Jackson databind: test-only, to assert the envelope's NON_NULL JSON shape -->
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- UUID v7 Generator (ADR-0013) -->
         <dependency>
             <groupId>com.github.f4b6a3</groupId>

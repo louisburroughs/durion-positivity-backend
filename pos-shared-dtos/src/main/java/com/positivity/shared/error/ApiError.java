@@ -134,6 +134,7 @@ public record ApiError(
      * One named conflict within a 409 {@link ApiError} (ADR-0017 §3). {@code severity} decides whether
      * the caller may override it: HARD conflicts cannot be overridden, SOFT conflicts can.
      */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     @Schema(description = "A single named conflict behind a 409 response")
     public record Conflict(
             @Schema(description = "Conflict severity (HARD or SOFT)", example = "SOFT", requiredMode = REQUIRED)
@@ -167,6 +168,7 @@ public record ApiError(
             String affectedResource) {}
 
     /** An alternative the caller may retry with, accompanying {@link ApiError#conflicts()}. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     @Schema(description = "A suggested alternative accompanying a 409 conflict")
     public record SuggestedAlternative(
             @Schema(
