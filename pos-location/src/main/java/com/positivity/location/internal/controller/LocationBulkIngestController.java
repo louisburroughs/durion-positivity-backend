@@ -10,9 +10,11 @@ import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.LocationService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -75,7 +77,10 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
                     400 when the batch envelope itself is invalid.
                     """)
     @ApiResponse(responseCode = "200", description = "Batch processed (check per-record success/failure in response)")
-    @ApiResponse(responseCode = "400", description = "Invalid request payload")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @EmitEvent(id = "LOCATION_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(

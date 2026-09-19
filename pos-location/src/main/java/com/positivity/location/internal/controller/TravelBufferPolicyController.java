@@ -5,9 +5,11 @@ import com.positivity.location.internal.dto.TravelBufferPolicyRequest;
 import com.positivity.location.internal.dto.TravelBufferPolicyResponse;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.TravelBufferPolicyService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -54,7 +56,10 @@ public class TravelBufferPolicyController {
                     Returns 201 with the created policy and 409 when the name is already taken.
                     """)
     @ApiResponse(responseCode = "201", description = "Travel buffer policy created")
-    @ApiResponse(responseCode = "409", description = "Travel buffer policy name already taken")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Travel buffer policy name already taken",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_TRAVEL_BUFFER_POLICY_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.TRAVEL_BUFFER_POLICY_MANAGE + "')")
     @SecurityRequirement(
@@ -116,8 +121,14 @@ public class TravelBufferPolicyController {
                     Returns 400 when the id is not a valid UUID and 404 when no policy exists for it.
                     """)
     @ApiResponse(responseCode = "200", description = "Travel buffer policy patched")
-    @ApiResponse(responseCode = "400", description = "Invalid travel buffer policy id")
-    @ApiResponse(responseCode = "404", description = "Travel buffer policy not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid travel buffer policy id",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Travel buffer policy not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.TRAVEL_BUFFER_POLICY_MANAGE + "')")
     @EmitEvent(id = "LOCATION_TRAVEL_BUFFER_POLICY_PATCH", apiVersion = "1")
     @SecurityRequirement(

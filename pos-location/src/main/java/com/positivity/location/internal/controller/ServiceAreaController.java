@@ -6,9 +6,11 @@ import com.positivity.location.internal.dto.ServiceAreaRequest;
 import com.positivity.location.internal.dto.ServiceAreaResponse;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.ServiceAreaService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -68,8 +70,14 @@ public class ServiceAreaController {
                     Returns 201 with the created area and 409 when the name is already taken.
                     """)
     @ApiResponse(responseCode = "201", description = "Service area created")
-    @ApiResponse(responseCode = "400", description = "Empty postal code set, or an entry missing its countryCode")
-    @ApiResponse(responseCode = "409", description = "Service area name already taken")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Empty postal code set, or an entry missing its countryCode",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Service area name already taken",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_SERVICE_AREA_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
     @SecurityRequirement(
@@ -123,8 +131,14 @@ public class ServiceAreaController {
                     Returns 400 when the id is not a valid UUID and 404 when no service area exists for it.
                     """)
     @ApiResponse(responseCode = "200", description = "Service area patched")
-    @ApiResponse(responseCode = "400", description = "Invalid service area id")
-    @ApiResponse(responseCode = "404", description = "Service area not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid service area id",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Service area not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_PATCH", apiVersion = "1")
     @SecurityRequirement(
@@ -171,8 +185,14 @@ public class ServiceAreaController {
                     through them, so removing a code stops every mobile unit covering that address.
                     """)
     @ApiResponse(responseCode = "200", description = "Postal codes replaced")
-    @ApiResponse(responseCode = "400", description = "Invalid service area id, or an empty or incomplete set")
-    @ApiResponse(responseCode = "404", description = "Service area not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid service area id, or an empty or incomplete set",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Service area not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_POSTAL_CODES_REPLACE", apiVersion = "1")
     @SecurityRequirement(

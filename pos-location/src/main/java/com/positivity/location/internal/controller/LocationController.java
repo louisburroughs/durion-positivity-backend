@@ -174,7 +174,10 @@ public class LocationController {
                     Returns 404 when no location exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Location found and returned.")
-    @ApiResponse(responseCode = "404", description = "Location not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -203,7 +206,10 @@ public class LocationController {
                     Returns 404 when no active location exists.
                     """)
     @ApiResponse(responseCode = "200", description = "Top-level location resolved and returned.")
-    @ApiResponse(responseCode = "404", description = "No active location exists.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No active location exists.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -258,8 +264,14 @@ public class LocationController {
                     are invalid, and 400 when a referenced location type id is unknown.
                     """)
     @ApiResponse(responseCode = "201", description = "Location created successfully.")
-    @ApiResponse(responseCode = "409", description = "Location name or code already taken.")
-    @ApiResponse(responseCode = "422", description = "Invalid timezone or operating hours.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Location name or code already taken.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Invalid timezone or operating hours.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_LOCATION_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @SecurityRequirement(
@@ -301,9 +313,18 @@ public class LocationController {
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Location not found.")
-    @ApiResponse(responseCode = "409", description = "Location name or code already taken.")
-    @ApiResponse(responseCode = "422", description = "Invalid timezone or operating hours.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Location name or code already taken.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Invalid timezone or operating hours.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_LOCATION_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @SecurityRequirement(
@@ -360,9 +381,18 @@ public class LocationController {
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Location not found.")
-    @ApiResponse(responseCode = "409", description = "Location name already taken.")
-    @ApiResponse(responseCode = "422", description = "Invalid timezone or operating hours.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Location name already taken.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Invalid timezone or operating hours.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PatchMapping("/{locationId}")
     @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @EmitEvent(id = "LOCATION_PATCH", apiVersion = "1")
@@ -409,7 +439,10 @@ public class LocationController {
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Location not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @DeleteMapping("/{locationId}")
     @EmitEvent(id = "LOCATION_LOCATION_DELETE", apiVersion = "1")
@@ -527,7 +560,10 @@ public class LocationController {
                     Returns 400 when parentType is supplied but is not a recognized ParentType value.
                     """)
     @ApiResponse(responseCode = "200", description = "List of child locations returned successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid parentType value.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid parentType value.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -558,7 +594,10 @@ public class LocationController {
                     with the feed.
                     """)
     @ApiResponse(responseCode = "200", description = "Responsible person found and returned.")
-    @ApiResponse(responseCode = "404", description = "Responsible person not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Responsible person not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_RESPONSIBLE_PERSON_GET", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @SecurityRequirement(
@@ -598,8 +637,14 @@ public class LocationController {
                     ParentType value.
                     """)
     @ApiResponse(responseCode = "200", description = "List of descendant locations returned successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid parentType value.")
-    @ApiResponse(responseCode = "404", description = "Location not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid parentType value.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @EmitEvent(id = "LOCATION_DESCENDANTS_GET", apiVersion = "1")
     @SecurityRequirement(

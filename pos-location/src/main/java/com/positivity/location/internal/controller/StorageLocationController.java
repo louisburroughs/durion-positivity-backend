@@ -9,10 +9,12 @@ import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.StorageLocationService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -89,9 +91,18 @@ public class StorageLocationController {
                     site, and 400 when the parent storage location is unknown or belongs to a different site.
                     """)
     @ApiResponse(responseCode = "201", description = "Storage location created")
-    @ApiResponse(responseCode = "400", description = "Parent storage location unknown or in another site")
-    @ApiResponse(responseCode = "404", description = "Site not found")
-    @ApiResponse(responseCode = "409", description = "Duplicate name or barcode within the site")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Parent storage location unknown or in another site",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Site not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Duplicate name or barcode within the site",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:write"})
@@ -161,7 +172,10 @@ public class StorageLocationController {
                     Returns 404 when the site does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Storage location topology returned")
-    @ApiResponse(responseCode = "404", description = "Site not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Site not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})
@@ -185,7 +199,10 @@ public class StorageLocationController {
                     Returns 404 when no storage location with that id exists under the site.
                     """)
     @ApiResponse(responseCode = "200", description = "Storage location returned")
-    @ApiResponse(responseCode = "404", description = "Storage location not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Storage location not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})
@@ -220,10 +237,22 @@ public class StorageLocationController {
                     inactive or the node itself.
                     """)
     @ApiResponse(responseCode = "200", description = "Storage location updated")
-    @ApiResponse(responseCode = "400", description = "Parent storage location unknown or in another site")
-    @ApiResponse(responseCode = "404", description = "Storage location not found")
-    @ApiResponse(responseCode = "409", description = "Duplicate name or barcode, or reparenting would create a cycle")
-    @ApiResponse(responseCode = "422", description = "Deactivation destination missing, inactive or invalid")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Parent storage location unknown or in another site",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Storage location not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Duplicate name or barcode, or reparenting would create a cycle",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Deactivation destination missing, inactive or invalid",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:write"})

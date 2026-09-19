@@ -78,13 +78,22 @@ public class SiteDefaultsController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = SiteDefaultsResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request payload")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = WRITE_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Location not found")
-    @ApiResponse(responseCode = "422", description = "Default storage location does not belong to the site")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Default storage location does not belong to the site",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @EmitEvent(id = "LOCATION_SITE_DEFAULTS_PUT", apiVersion = "1")
     @SecurityRequirement(
@@ -135,7 +144,10 @@ public class SiteDefaultsController {
             responseCode = "403",
             description = READ_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Location not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @EmitEvent(id = "LOCATION_SITE_DEFAULTS_GET", apiVersion = "1")
     @SecurityRequirement(
