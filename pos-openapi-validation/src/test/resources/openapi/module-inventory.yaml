@@ -11,6 +11,7 @@ modules:
   pos-inventory:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-price:
     mode: STRICT
     annotationDepth: STRICT
