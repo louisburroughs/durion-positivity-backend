@@ -55,11 +55,12 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>the location replica row, for timezone/hours/closures;
  *   <li>the active bays at the location, in display order;
  *   <li>one appointment query spanning the entire assembly window — {@code [from -
- *       CARRY_OVER_LOOKBACK_DAYS, to]} on the planned columns, widened by an {@code EXISTS} arm over
- *       this module's own workorder-mapping and {@code ext_workorder} tables that also admits a job
- *       still running when the requested range began (see {@code
- *       AppointmentRepository#findAppointmentsForCapacity}). The {@code EXISTS} is a subquery of that
- *       same statement, not a second one;
+ *       CARRY_OVER_LOOKBACK_DAYS, to]} on the planned columns, disjoined with an {@code EXISTS} arm
+ *       over this module's own workorder-mapping and {@code ext_workorder} tables that admits a job
+ *       whose <em>actuals</em> reach the range whichever side its planned window sits on: one still
+ *       running when the range began (#2050), and one planned after the range that started early
+ *       (#2085). See {@code AppointmentRepository#findAppointmentsForCapacity}. The {@code EXISTS} is
+ *       a subquery of that same statement, not a second one;
  *   <li>one batch workorder-actuals query for every appointment fetched by (3) — issued only when
  *       (3) returned at least one row, so a location with nothing booked still costs 3.
  * </ol>
@@ -106,7 +107,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>The same precedence runs over the lookback days, which are never emitted but do gate carry-over.
  * A malformed hours entry on a <em>lookback</em> day makes that pre-range day {@code UNAVAILABLE}, so
- * pass 1 skips it entirely. Three outcomes are possible, and which one applies depends on the rest of
+ * pass 1 skips it entirely. Two outcomes are possible, and which one applies depends on the rest of
  * the appointment's effective window:
  *
  * <ul>
@@ -116,17 +117,48 @@ import org.springframework.transaction.annotation.Transactional;
  *       Monday are reported anyway.
  *   <li><em>Lost</em> — only when the appointment overlapped no {@code OK} day at all, so nothing
  *       ever seeds an {@code OverrunTracker} and there is no source day to overrun from.
- *   <li><em>Over-counted</em> — a job running Monday 15:00 to Tuesday 11:00 with <em>Tuesday</em>
- *       malformed and Monday/Wednesday/Thursday open: pass 1 skips Tuesday, so {@code lastOverlapDay}
- *       falls back to Monday and the overrun is measured from Monday's 17:00 close — 1080 minutes,
- *       which then saturate Wednesday and Thursday. One malformed hours entry turns a three-hour hold
- *       into two fully-booked days.
  * </ul>
  *
- * <p>The third is <em>pre-existing</em>, not introduced here: {@code origin/main} behaves the same way
- * for a malformed <em>in-range</em> day. The lookback widens the window over which it can be
- * triggered, not the defect itself; issue #2086 covers it. None of the three is ever an
- * exception.
+ * <p>Neither is ever an exception.
+ *
+ * <h2>An {@code UNAVAILABLE} day is an unknown, and it contains its own damage (#2086)</h2>
+ *
+ * A third outcome used to be possible and no longer is. A job running Monday 15:00 to Tuesday 11:00
+ * with <em>Tuesday</em> malformed and Monday/Wednesday/Thursday open was <em>over-counted</em>: pass 1
+ * skipped Tuesday, so {@code lastOverlapDay} fell back to Monday, the overrun was measured from
+ * Monday's 17:00 close — 1080 minutes — and pass 2 then saturated Wednesday and Thursday. One
+ * malformed hours entry turned a three-hour bay hold into two fully-booked days, on days reporting
+ * {@code OK} with no sign of any degradation. That was worse than the failure the degradation exists
+ * to avoid: #2023's {@code UNAVAILABLE} is a <em>partial</em>-failure marker, and a partial failure
+ * that silently rewrites two healthy neighbours is not partial.
+ *
+ * <p>The rule now, and the reason it differs from the one for a closure:
+ *
+ * <ul>
+ *   <li>{@code CLOSED}/{@code HOLIDAY} is a <em>known</em> fact — the shop had no operating window
+ *       that day, so it absorbed none of the job's time and the overrun really does roll on to the
+ *       next open day. Carry-over skips those days and continues, exactly as before (#2021 AC6,
+ *       #2023 F8).
+ *   <li>{@code UNAVAILABLE} is an <em>unknown</em> — not a closure, and not an idle bay. The shop was
+ *       most likely open, in which case it absorbed the job's remaining time as any open day would,
+ *       and the minutes that would land beyond it were never worked. So when the carry-over walk
+ *       reaches an {@code UNAVAILABLE} day that the job's effective window was still running through,
+ *       the walk stops and nothing is carried past it.
+ * </ul>
+ *
+ * <p>What that costs, stated rather than hidden: the minutes that day would have reported are not
+ * reported anywhere. They are not lost silently — the day they belong to is right there in the
+ * response saying {@code UNAVAILABLE}. A degraded read may withhold a number; it may not invent one,
+ * which is what clamping to an assumed window would have done, and it may not push one onto a day
+ * reporting {@code OK}.
+ *
+ * <p>The rule is deliberately narrow. It fires only on an {@code UNAVAILABLE} day <em>at or before</em>
+ * the effective end: one strictly after it cannot have absorbed anything, so it is skipped like a
+ * closure and the walk goes on. And it never touches pass 1, so a job that overruns into an {@code
+ * UNAVAILABLE} day and out the other side is reported in full on the far side by direct overlap —
+ * Monday 15:00 to Wednesday 22:00 with Tuesday malformed gives Monday 120, Tuesday {@code
+ * UNAVAILABLE}, Wednesday its full 540, and the real 300-minute overrun onto Thursday. Only what
+ * passes 1 could not reach is declined.
  *
  * <h2>Actual-vs-planned occupancy and carry-over (#2021 AC1-AC6, #2050)</h2>
  *
@@ -140,7 +172,8 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>When an appointment's effective window runs past the close of the last day it directly
  * overlaps, the excess is carried onto the next {@code OK} day for the same bay (AC4), skipping any
- * {@code CLOSED}/{@code HOLIDAY}/{@code UNAVAILABLE} days in between (AC6). The carry-over minutes
+ * {@code CLOSED}/{@code HOLIDAY} days in between (AC6) — and stopping at an {@code UNAVAILABLE} day
+ * the job was still running through, which carries nothing past it (#2086, above). The carry-over minutes
  * are added directly into that day's {@code occupiedMinutes}/{@code occupancy} — netted, not
  * annotated (AC5) — so a board can explain the number. A carry-over target beyond the requested
  * range has nothing to net against and is silently dropped rather than fabricating a day.
@@ -159,7 +192,7 @@ import org.springframework.transaction.annotation.Transactional;
  * to that day — direct overlap or re-anchored carry-over — in tenths of an hour. The two routes are
  * <em>disjoint by construction</em> and never both apply to the same appointment on the same bay-day:
  * pass 2 seeds its walk at {@code lastOverlapDay}, the chronologically last {@code OK} day the
- * appointment directly overlapped, and {@link #nextOpenDay} only ever returns a day strictly after the
+ * appointment directly overlapped, and {@link #nextCarryOverTarget} only ever returns a day strictly after the
  * cursor, so every hop target is strictly after every day that appointment directly overlapped.
  * {@code fromDate} is the local date the effective window began on (actual start when known, else
  * planned start). {@code occupiedMinutes} and {@code occupancy} are untouched by this: it is pure annotation
@@ -557,7 +590,7 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
         // the whole list from that ledger, so an appointment is reported once per bay-day whatever
         // route it arrived by (#2050 AC1). A re-anchored hop and a direct overlap cannot in fact land
         // on the same bay-day for the same appointment: cursorDay starts at lastOverlapDay, the
-        // chronologically last OK day with a direct overlap, and nextOpenDay only returns days
+        // chronologically last OK day with a direct overlap, and nextCarryOverTarget only returns days
         // strictly after the cursor, so hop targets are disjoint from direct-overlap days by
         // construction. The source day can itself be a pre-range lookback day, which is how a job
         // planned entirely before the range reaches it.
@@ -571,14 +604,17 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
             if (!tracker.effectiveEnd().isAfter(sourceDay.dayEndAt())) {
                 continue;
             }
+            AppointmentCarryOverContext context = carryOverContexts.get(entry.getKey());
+            LocalDate effectiveEndDate = context == null ? null : context.endedOn();
             long remainingMinutes = Duration.between(sourceDay.dayEndAt(), tracker.effectiveEnd())
                     .toMinutes();
             DayAssembly cursorDay = sourceDay;
             while (remainingMinutes > 0) {
-                DayAssembly targetDay = nextOpenDay(assemblies, cursorDay.date());
+                DayAssembly targetDay = nextCarryOverTarget(assemblies, cursorDay.date(), effectiveEndDate);
                 if (targetDay == null) {
-                    // The next open day is beyond the requested range; nothing visible to net
-                    // against for whatever remains.
+                    // Either the next open day is beyond the requested range, or an UNAVAILABLE day
+                    // the job was still running through stands in the way (#2086). Nothing visible
+                    // to net against for whatever remains, either way.
                     break;
                 }
                 BayDayAccumulator targetAccumulator = accumulatorsByDate
@@ -625,14 +661,20 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     }
 
     /**
-     * The per-appointment facts {@code carryOverIn} needs, resolved once for the whole read (#2050
-     * AC1): the local date its effective window began on, and the linked workorder when there is one.
+     * The per-appointment facts the two later steps need, resolved once for the whole read: the local
+     * dates its effective window began and ended on, and the linked workorder when there is one.
      *
-     * <p>The start date comes from the appointment's own effective start — actual when known, else
-     * planned — never from the last day its window happened to overlap. Two legal requests covering
+     * <p>The <em>start</em> date and the workorder are what {@code carryOverIn} reports (#2050 AC1).
+     * The <em>end</em> date is what pass 2 tests an {@code UNAVAILABLE} day against, to tell a day the
+     * job was still running through — which stops the carry-over walk — from one it had already
+     * finished before, which is skipped like a closure (#2086).
+     *
+     * <p>Both dates come from the appointment's own effective window — actual when known, else
+     * planned — never from the last day that window happened to overlap. Two legal requests covering
      * the same date must report the same {@code fromDate} for the same appointment (#2050 AC2), and
-     * only a fact derived from the row itself has that property; anything derived from the range
-     * being served does not.
+     * must agree about whether a job was running through an unknown day (#2086); only a fact derived
+     * from the row itself has that property, and anything derived from the range being served does
+     * not.
      */
     private Map<UUID, AppointmentCarryOverContext> buildCarryOverContexts(
             Map<UUID, List<Appointment>> appointmentsByBay,
@@ -646,6 +688,7 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
                         appointment.getAppointmentId(),
                         new AppointmentCarryOverContext(
                                 LocalDate.ofInstant(effectiveStart(appointment, actuals), zoneId),
+                                LocalDate.ofInstant(effectiveEnd(appointment, actuals), zoneId),
                                 actuals == null ? null : actuals.workOrderId()));
             }
         }
@@ -687,18 +730,43 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     }
 
     /**
-     * The first {@code OK} day strictly after {@code afterDate}, in assembly order; null if none
-     * (AC6).
+     * The day a carry-over hop lands on: the first {@code OK} day strictly after {@code afterDate},
+     * in assembly order (#2021 AC6) — or null when there is none, and null too when an {@code
+     * UNAVAILABLE} day the job was still running through is reached first (#2086).
+     *
+     * <p>{@code CLOSED} and {@code HOLIDAY} days are skipped and the walk continues past them, as it
+     * always has: those are <em>known</em> to have had no operating window, so they absorbed none of
+     * the job's time and the overrun genuinely does roll on to the next open day (#2023 F8 pins
+     * exactly that). An {@code UNAVAILABLE} day is a different fact — not a closure but an unknown
+     * (see the day-status precedence above) — and a day the shop was most likely open for. If it was,
+     * it absorbed the job's remaining time as an ordinary open day would, and the minutes that land
+     * beyond it were never worked. Since the day's window is precisely what this read does not know,
+     * it cannot say how much; it reports what it does know and carries nothing past.
+     *
+     * <p>{@code effectiveEndDate} is what distinguishes a day the job ran through from one it had
+     * already finished before: an {@code UNAVAILABLE} day strictly after the job's effective end
+     * cannot have absorbed anything, so it is skipped like a closure rather than stopping the walk.
+     * Null (no context for this appointment, which the callers make unreachable) skips the test
+     * entirely and preserves the pre-#2086 walk.
      *
      * <p>Unchanged by the lookback: the list is still in date order, so prepending pre-range dates is
      * already handled. It deliberately does <em>not</em> skip ahead to the first in-range day — for a
      * job whose overrun is absorbed by pre-range open days, those hops must consume the minutes, or
      * {@code from} would be credited with work that was really done before the range began.
      */
-    private @Nullable DayAssembly nextOpenDay(List<DayAssembly> assemblies, LocalDate afterDate) {
+    private @Nullable DayAssembly nextCarryOverTarget(
+            List<DayAssembly> assemblies, LocalDate afterDate, @Nullable LocalDate effectiveEndDate) {
         for (DayAssembly assembly : assemblies) {
-            if (assembly.date().isAfter(afterDate) && assembly.status() == ScheduleCapacityDayStatus.OK) {
+            if (!assembly.date().isAfter(afterDate)) {
+                continue;
+            }
+            if (assembly.status() == ScheduleCapacityDayStatus.OK) {
                 return assembly;
+            }
+            if (assembly.status() == ScheduleCapacityDayStatus.UNAVAILABLE
+                    && effectiveEndDate != null
+                    && !assembly.date().isAfter(effectiveEndDate)) {
+                return null;
             }
         }
         return null;
@@ -836,9 +904,16 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     private record OverrunTracker(DayAssembly lastOverlapDay, ExtBayReplica bay, Instant effectiveEnd) {}
 
     /**
-     * One appointment's carry-over identity: the local date its effective window began on, and the
-     * linked workorder when known. Range-independent by construction (#2050 AC2).
+     * One appointment's carry-over identity: the local dates its effective window began and ended
+     * on, and the linked workorder when known. Range-independent by construction (#2050 AC2) — every
+     * field is derived from the appointment row and its actuals, never from the range being served.
+     *
+     * <p>{@code startedOn} is what {@code carryOverIn} reports as {@code fromDate}; {@code endedOn} is
+     * what pass 2 tests an {@code UNAVAILABLE} day against, to tell a day the job was still running
+     * through from one it had already finished before (#2086).
      */
     private record AppointmentCarryOverContext(
-            LocalDate startedOn, @Nullable UUID workOrderId) {}
+            LocalDate startedOn,
+            LocalDate endedOn,
+            @Nullable UUID workOrderId) {}
 }

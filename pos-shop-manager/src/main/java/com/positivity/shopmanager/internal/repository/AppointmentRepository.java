@@ -87,28 +87,74 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
      * resolved the same way {@code /schedules/view} resolves it: by what the id actually names, not
      * by a field production never populates.
      *
-     * <p><strong>Two lower bounds, not one.</strong> The predicate matches on the <em>planned</em>
+     * <p><strong>Two whole windows, not one.</strong> The predicate matches on the <em>planned</em>
      * columns, but occupancy is computed from the effective window — the linked workorder's actuals
      * when known (#2021). A job planned entirely before the requested range can still be running
      * inside it, so a lower bound of {@code from} on {@code endAt} alone silently drops it and the
-     * overrun never appears (#2050). The lower edge is therefore a disjunction of two complementary
-     * arms, and a row is fetched when either holds:
+     * overrun never appears (#2050); a job planned entirely <em>after</em> the range can equally be
+     * running inside it, because nothing constrains {@code workStartedAt} to fall on or after the
+     * planned {@code startAt} (#2085). The whole time predicate is therefore a disjunction of two
+     * complementary arms — each one a complete window test of its own, neither one a bound on the
+     * other — and a row is fetched when either holds:
      *
      * <ul>
-     *   <li><em>Planned arm</em> — {@code appointment.endAt > :windowStart}, where the caller passes
-     *       {@code from - ScheduleCapacityServiceImpl.CARRY_OVER_LOOKBACK_DAYS} and discards the
-     *       pre-range days it assembles from the extra rows. This is the arm that still catches a job
-     *       which <em>completed before the range began</em> and whose overrun is being distributed
+     *   <li><em>Planned arm</em> — {@code appointment.startAt < :rangeEnd AND appointment.endAt >
+     *       :windowStart}, where the caller passes {@code from -
+     *       ScheduleCapacityServiceImpl.CARRY_OVER_LOOKBACK_DAYS} as {@code :windowStart} and discards
+     *       the pre-range days it assembles from the extra rows. This is the arm that still catches a
+     *       job which <em>completed before the range began</em> and whose overrun is being distributed
      *       forward: such a job's actuals end before {@code :rangeStart}, so the actuals arm rejects
-     *       it, and only its planned window can reach back far enough to find it.
+     *       it, and only its planned window can reach back far enough to find it. Its upper bound is
+     *       {@code :rangeEnd} exactly, with no lookahead, and that is not an omission — see below.
      *   <li><em>Actuals arm</em> — an {@code EXISTS} over this module's own {@code
      *       work_order_appointment_mapping} joined to its own {@code ext_workorder} replica, true when
-     *       the appointment's <em>current</em> mapping (see below) names a workorder that has actually
-     *       started ({@code workStartedAt IS NOT NULL}) and was still running when the range began
-     *       ({@code completedAt IS NULL}, or a {@code completedAt} after {@code :rangeStart}). This is
-     *       the arm that catches a job whose planned window is older than the lookback but whose
-     *       actuals reach into the requested range.
+     *       the appointment's <em>current</em> mapping (see below) names a workorder that actually
+     *       started before the range ended ({@code workStartedAt IS NOT NULL AND workStartedAt <
+     *       :rangeEnd}) and was still running when the range began ({@code completedAt IS NULL}, or a
+     *       {@code completedAt} after {@code :rangeStart}). This arm carries <em>both</em> edges of the
+     *       widening: a job whose planned window is older than the lookback but whose actuals reach
+     *       into the requested range (#2050), and a job planned after the range that has already
+     *       started (#2085).
      * </ul>
+     *
+     * <p><strong>Why the arms are disjoined whole, and why there is no day-count lookahead (#2085
+     * AC3).</strong> Before #2085 the planned upper bound {@code appointment.startAt < :rangeEnd} was
+     * {@code AND}-ed over both arms, which defeated the actuals arm at the top end: a bay held since
+     * Wednesday by a job planned for Friday read as free on Thursday whenever the client stopped its
+     * range at Thursday. Lifting that {@code AND} is the whole fix, and it needs no new constant,
+     * because the two ways a job can contribute to a day inside {@code [from, to]} are exhaustive:
+     *
+     * <ul>
+     *   <li><em>No actuals</em> — the effective window <em>is</em> the planned window, so the job
+     *       overlaps the range only if {@code plannedStart < rangeEnd}. The planned arm already has
+     *       that, and it is also #2085 AC5 for free: an appointment planned after the range whose work
+     *       has not started has {@code plannedStart >= rangeEnd}, fails both arms, and contributes
+     *       nothing — no extra filtering, and nothing for the caller to discard.
+     *   <li><em>Actuals exist</em> — the effective start is {@code workStartedAt}. For the job to
+     *       overlap the range while {@code plannedStart >= rangeEnd} it must have started before the
+     *       range ended and either still be running or have completed after {@code :rangeStart},
+     *       which is the actuals arm verbatim.
+     * </ul>
+     *
+     * <p>A lookahead measured in days on the planned column would therefore buy nothing a correct
+     * answer needs: every row it added beyond this arm is a row AC5 requires to contribute zero. It
+     * would also still be wrong at its own edge — a placeholder booked further out than the bound and
+     * started early is the very defect #2085 reports, just moved further away — whereas "has the work
+     * actually begun" is a fact about the job rather than about where the client put its range, so two
+     * legal requests sharing a date cannot disagree about it. That is the same request-independence
+     * the lower edge's actuals arm already claims, and it makes #2085 AC2 provable for a started job
+     * rather than merely widened.
+     *
+     * <p><strong>The bound, stated plainly (#2085 AC3).</strong> The arm is bounded in rows, not in
+     * days: {@code workStartedAt IS NOT NULL AND completedAt IS NULL} is the set of jobs in progress
+     * at one location, which a shop's bay count bounds and which does not grow with time (the same
+     * argument set out below for the lower edge, and the reason the arm is affordable at all). The
+     * residual limits it does <em>not</em> erase: a job planned after the range that really did start
+     * early is found only through its actuals, so one whose {@code ext_workorder} replica has not yet
+     * arrived — or which has no workorder mapping at all — is invisible to this read, exactly as it is
+     * to every other consumer of the replica; and a workorder left open by mistake keeps costing its
+     * handful of rows until the data is corrected. Both are data-quality defects with a bounded price,
+     * not unbounded scans.
      *
      * <p><strong>The actuals arm tests the current mapping, not any mapping.</strong> Appointment ->
      * mapping is one-to-many — a reopened workorder links a new mapping row without deleting the
@@ -161,11 +207,15 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
      * <p>What the arm buys is that it is <em>request-independent</em> for a job in progress — whether
      * a job has started and not yet finished does not depend on where the client put its range start,
      * so two legal requests sharing a date both fetch it and cannot disagree about that date on the
-     * strength of it. {@code :rangeStart} is the requested range's own start, <em>not</em> {@code
-     * :windowStart}: for a job that did finish, it asks "was the work still running when this range
-     * began". See {@code ScheduleCapacityServiceImpl#CARRY_OVER_LOOKBACK_DAYS} for what the pair of
-     * arms does and does not guarantee about two requests agreeing on a shared date — this narrows
-     * the residual, it does not erase it.
+     * strength of it. The arm's two request-relative instants are deliberately the <em>requested</em>
+     * range's own edges, not the assembly window's: {@code :rangeStart}, <em>not</em> {@code
+     * :windowStart}, asks of a job that did finish "was the work still running when this range
+     * began"; {@code :rangeEnd} asks "had the work begun before this range ended", which is what
+     * keeps a job whose work starts after every day on the board out of the result (#2085 AC5)
+     * without re-imposing a bound on where its planned window sits. See {@code
+     * ScheduleCapacityServiceImpl#CARRY_OVER_LOOKBACK_DAYS} for what the pair of arms does and does
+     * not guarantee about two requests agreeing on a shared date — this narrows the residual, it
+     * does not erase it.
      *
      * <p>This remains <em>one statement</em>. The {@code EXISTS} is a subquery of the same select,
      * not a second repository call, so the fixed statement budget of {@code GET
@@ -191,8 +241,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
                         FROM Appointment appointment
                         WHERE appointment.locationId = :locationId
                           AND appointment.status <> 'CANCELLED'
-                          AND appointment.startAt < :rangeEnd
-                          AND (appointment.endAt > :windowStart
+                          AND ((appointment.startAt < :rangeEnd
+                                AND appointment.endAt > :windowStart)
                                OR EXISTS (SELECT 1
                                           FROM WorkOrderAppointmentMapping mapping
                                           JOIN ExtWorkorderReplica workorder
@@ -205,6 +255,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
                                                             WHERE newerMapping.appointment = appointment
                                                               AND newerMapping.workOrderId > mapping.workOrderId)
                                             AND workorder.workStartedAt IS NOT NULL
+                                            AND workorder.workStartedAt < :rangeEnd
                                             AND (workorder.completedAt IS NULL
                                                  OR workorder.completedAt > :rangeStart)))
                         """)
