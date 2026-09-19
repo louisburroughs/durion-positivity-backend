@@ -1,9 +1,11 @@
 # ADR-0017 §3 error-envelope backlog (`errorSchema` gaps)
 
-Generated snapshot of every 4xx/5xx response in a committed `openapi.yaml` whose body is a
-success DTO rather than the `ApiError` envelope — the findings
+Generated snapshot of every 4xx/5xx response in a committed `openapi.yaml` whose body is a named
+schema other than the `ApiError` envelope — the findings
 `OpenApiErrorResponseSchemaValidator` raises and `module-inventory.yaml` currently keeps at
-`REPORT_ONLY` for all but one module.
+`REPORT_ONLY` for all but one module. Most are the endpoint's own success DTO; a few name some
+other type (`ProblemDetail` on two `pos-location` responses). Either way the published contract
+is wrong, and the generated SDKs carry it.
 
 ## Why this list exists
 
@@ -14,11 +16,20 @@ The whole gap is this backlog: **642 findings across 17 modules and 363 operatio
 `errorSchema: STRICT` module by module, and lets the `API Artifacts Sync` workflow run in strict
 mode without failing.
 
-Each finding means a `@ApiResponse` for an error status that carries no explicit
-`@Schema`/`content`: springdoc then infers the body, and infers it from the endpoint's success
-type (or from a `@ControllerAdvice` return type), so the published spec — and every generated
-SDK — tells clients an error returns the 200 DTO. See ADR-0017 §3, `docs/ERROR_ENVELOPE.md`,
-and issue #1720.
+The validator reads the generated spec, not the annotations, so a finding says only that the
+published error body is not `ApiError`. Two causes produce that, and the fix differs:
+
+- **Inferred (the common case).** The `@ApiResponse` for an error status carries no explicit
+  `@Schema`/`content`, so springdoc fills one in — from the endpoint's success type, or from a
+  `@ControllerAdvice` return type. The spec then tells clients the error returns the 200 DTO,
+  and it silently changes again if that advice moves. Fix: name `ApiError` explicitly.
+- **Explicit but wrong.** The response names a real schema that simply is not the platform
+  envelope — `ProblemDetail` (Spring's RFC 9457 type) on `POST /v1/locations/{childId}/parents/{parentId}`
+  is the only instance today. Fix: decide whether the endpoint should keep that body (and if so
+  record it as an exception) or move to `ApiError` like the rest of the fleet.
+
+The tables below name the schema each response actually publishes, so the two are
+distinguishable per row. See ADR-0017 §3, `docs/ERROR_ENVELOPE.md`, and issue #1720.
 
 ## How to regenerate this list
 
