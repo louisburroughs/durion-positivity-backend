@@ -6,6 +6,7 @@ import com.positivity.catalog.internal.dto.UomConversionUpdateRequestDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.UomConversionService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -62,7 +63,10 @@ public class UomConversionController {
             description = "Conversion created",
             content =
                     @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_UOM_CONVERSION_CREATE", apiVersion = "1")
     public ResponseEntity<UomConversionDto> create(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -130,7 +134,10 @@ public class UomConversionController {
             description = "Conversion found",
             content =
                     @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto.class)))
-    @ApiResponse(responseCode = "404", description = "Conversion not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Conversion not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<UomConversionDto> get(@Parameter(description = "Conversion ID") @PathVariable UUID id) {
         return ResponseEntity.ok(uomConversionService.getConversion(id));
     }
@@ -158,8 +165,14 @@ public class UomConversionController {
             description = "Conversion updated",
             content =
                     @Content(mediaType = "application/json", schema = @Schema(implementation = UomConversionDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "404", description = "Conversion not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Conversion not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_UOM_CONVERSION_UPDATE", apiVersion = "1")
     public ResponseEntity<UomConversionDto> update(
             @Parameter(description = "Conversion ID") @PathVariable UUID id,
@@ -197,7 +210,10 @@ public class UomConversionController {
             Returns 204 on success, and 404 when no conversion exists for the supplied id.
             """)
     @ApiResponse(responseCode = "204", description = "Conversion deactivated")
-    @ApiResponse(responseCode = "404", description = "Conversion not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Conversion not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_UOM_CONVERSION_DEACTIVATE", apiVersion = "1")
     public ResponseEntity<Void> deactivate(@Parameter(description = "Conversion ID") @PathVariable UUID id) {
         uomConversionService.deactivateConversion(id);

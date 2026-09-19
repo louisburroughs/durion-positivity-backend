@@ -4,6 +4,7 @@ import com.positivity.catalog.internal.dto.CatalogDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.CatalogService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -52,7 +53,10 @@ public class CatalogController {
             responseCode = "200",
             description = "Successfully retrieved catalog",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
-    @ApiResponse(responseCode = "404", description = "Catalog not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Catalog not found. The response has NO body.",
+            content = @Content(schema = @Schema(hidden = true)))
     public ResponseEntity<CatalogDto> getCatalogById(
             @Parameter(description = "ID of the catalog to be obtained") @PathVariable UUID catalogId) {
         return catalogService
@@ -105,7 +109,10 @@ public class CatalogController {
             responseCode = "201",
             description = "Catalog created successfully",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request body")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request body",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_CATALOG_CREATE", apiVersion = "1")
     public ResponseEntity<CatalogDto> addCatalog(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -151,8 +158,14 @@ public class CatalogController {
             responseCode = "200",
             description = "Catalog updated successfully",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request body")
-    @ApiResponse(responseCode = "404", description = "Catalog not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request body",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Catalog not found. The response has NO body.",
+            content = @Content(schema = @Schema(hidden = true)))
     @EmitEvent(id = "CATALOG_CATALOG_UPDATE", apiVersion = "1")
     public ResponseEntity<CatalogDto> updateCatalog(
             @Parameter(description = "ID of the catalog to update") @PathVariable UUID catalogId,
@@ -197,7 +210,10 @@ public class CatalogController {
             Returns 204 when the catalog is removed, and 404 when no catalog exists for the supplied id.
             """)
     @ApiResponse(responseCode = "204", description = "Catalog deleted successfully")
-    @ApiResponse(responseCode = "404", description = "Catalog not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Catalog not found. The response has NO body.",
+            content = @Content(schema = @Schema(hidden = true)))
     @EmitEvent(id = "CATALOG_CATALOG_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteCatalog(
             @Parameter(description = "ID of the catalog to delete") @PathVariable UUID catalogId) {

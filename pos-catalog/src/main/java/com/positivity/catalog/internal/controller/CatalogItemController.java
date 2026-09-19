@@ -69,7 +69,10 @@ public class CatalogItemController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CatalogItemResponseDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid item type or request body")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid item type or request body",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_ITEM_CREATE", apiVersion = "1")
     public ResponseEntity<CatalogItemResponseDto> addCatalogItem(
             @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
@@ -122,8 +125,14 @@ public class CatalogItemController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CatalogItemResponseDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid item type or request body")
-    @ApiResponse(responseCode = "404", description = "Catalog item not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid item type or request body",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Catalog item not found. The response has NO body.",
+            content = @Content(schema = @Schema(hidden = true)))
     @EmitEvent(id = "CATALOG_ITEM_UPDATE", apiVersion = "1")
     public ResponseEntity<CatalogItemResponseDto> updateCatalogItem(
             @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
@@ -175,8 +184,14 @@ public class CatalogItemController {
             the ADMIN role (unchanged pending a service_type delete permission).
             """)
     @ApiResponse(responseCode = "204", description = "Catalog item deleted successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid item type")
-    @ApiResponse(responseCode = "404", description = "Catalog item not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid item type",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Catalog item not found. The response has NO body.",
+            content = @Content(schema = @Schema(hidden = true)))
     @EmitEvent(id = "CATALOG_ITEM_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteCatalogItem(
             @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
