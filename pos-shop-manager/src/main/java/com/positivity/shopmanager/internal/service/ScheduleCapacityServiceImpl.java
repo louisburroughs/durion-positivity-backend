@@ -103,7 +103,9 @@ import org.springframework.transaction.annotation.Transactional;
  * wins over an otherwise-open weekday because it is the more specific, dated fact
  * (DECISION-SHOPMGMT-008); an empty hours list, or no entry for the date's day-of-week, is {@code
  * CLOSED}; anything else — including a malformed hours entry for that one date — is {@code OK} or,
- * failing that, {@code UNAVAILABLE} for that date alone, never omitted (AC4).
+ * failing that, {@code UNAVAILABLE} for that date alone, never omitted (AC4). The line between a
+ * known closure and an unknown window, and the per-date containment that goes with it, is
+ * DECISION-SHOPMGMT-018.
  *
  * <p>The same precedence runs over the lookback days, which are never emitted but do gate carry-over.
  * A malformed hours entry on a <em>lookback</em> day makes that pre-range day {@code UNAVAILABLE}, so
@@ -121,7 +123,8 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Neither is ever an exception.
  *
- * <h2>An {@code UNAVAILABLE} day is an unknown, and it contains its own damage (#2086)</h2>
+ * <h2>An {@code UNAVAILABLE} day is an unknown, and it contains its own damage (#2086,
+ * DECISION-SHOPMGMT-018)</h2>
  *
  * A third outcome used to be possible and no longer is. A job running Monday 15:00 to Tuesday 11:00
  * with <em>Tuesday</em> malformed and Monday/Wednesday/Thursday open was <em>over-counted</em>: pass 1
@@ -132,7 +135,8 @@ import org.springframework.transaction.annotation.Transactional;
  * to avoid: #2023's {@code UNAVAILABLE} is a <em>partial</em>-failure marker, and a partial failure
  * that silently rewrites two healthy neighbours is not partial.
  *
- * <p>The rule now, and the reason it differs from the one for a closure:
+ * <p>The rule now, and the reason it differs from the one for a closure. It is domain policy,
+ * not an implementation convenience: DECISION-SHOPMGMT-018 states it, and this class implements it.
  *
  * <ul>
  *   <li>{@code CLOSED}/{@code HOLIDAY} is a <em>known</em> fact — the shop had no operating window
