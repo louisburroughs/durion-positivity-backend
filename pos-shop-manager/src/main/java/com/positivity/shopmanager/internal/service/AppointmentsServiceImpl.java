@@ -1206,6 +1206,14 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      * com.positivity.shopmanager.internal.service.ScheduleCapacityServiceImpl} applies to its own
      * batch resolution (#2023 F3) — rather than taking whichever row the database happens to return
      * first, which is nondeterministic and can surface a stale workorder's actuals.
+     *
+     * <p>The mapping rows come from an inner join against the workorder replica, so while a
+     * reopened work order's replica is still in flight {@code mostCurrent} resolves the newest
+     * <em>replicated</em> mapping and this response carries the superseded run's actual times
+     * (#2089, option 1 — recorded on {@link WorkorderActuals#mostCurrent}). That matches what
+     * {@code ScheduleCapacityServiceImpl} reports for the same appointment, deliberately: both
+     * reduce the same query's rows through the same rule, so a caller comparing an appointment's
+     * detail with the capacity board never sees the two disagree.
      */
     private @Nullable WorkorderActuals resolveWorkorderActuals(@NonNull UUID appointmentId) {
         List<WorkorderActuals> actuals =

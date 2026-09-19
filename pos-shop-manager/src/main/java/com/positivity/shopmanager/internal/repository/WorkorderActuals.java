@@ -44,6 +44,26 @@ public record WorkorderActuals(
      * com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository
      * #findActualsByAppointmentIds} batch callers and any single-appointment lookup must resolve
      * duplicates through this method rather than defining their own precedence.
+     *
+     * <p><strong>When the current mapping has not replicated (issue #2089).</strong> The candidates
+     * handed to this method come from an inner join against {@code ExtWorkorderReplica}, so a
+     * mapping whose {@code workorder.events.v1} fact has not landed yet contributes no candidate at
+     * all. The rule above therefore resolves the greatest {@code workOrderId} <em>among the
+     * mappings that have replicated</em>, not among all mappings: while a reopened work order's
+     * replica is in flight, the superseded run's actuals are returned, and the caller cannot
+     * distinguish that from an appointment whose only work order is the older one.
+     *
+     * <p>That fallback is deliberate, not an accident of the join (#2089, option 1). The actuals it
+     * reports are real events that really happened on that appointment's bay, the exposure is
+     * bounded by replication lag on a single event, and the alternatives are worse: refusing to
+     * resolve anything until the newest mapping replicates would make a genuinely running job's
+     * overrun vanish from capacity during the lag window (the case #2050 added the actuals arm
+     * for), and flagging the staleness on this record needs a product decision about what each
+     * caller does with the flag. Readers that bill against these numbers should revisit the choice
+     * rather than assume freshness; both callers today
+     * ({@code ScheduleCapacityServiceImpl#resolveActuals} and {@code
+     * AppointmentsServiceImpl#resolveWorkorderActuals}) accept it identically, because both reduce
+     * the same query's rows through this method.
      */
     public static WorkorderActuals mostCurrent(WorkorderActuals a, WorkorderActuals b) {
         return a.workOrderId().compareTo(b.workOrderId()) >= 0 ? a : b;

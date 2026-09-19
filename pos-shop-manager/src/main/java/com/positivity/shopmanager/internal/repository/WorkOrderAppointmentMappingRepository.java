@@ -25,6 +25,14 @@ public interface WorkOrderAppointmentMappingRepository extends JpaRepository<Wor
      * join is expressed ad hoc on the shared workorder id rather than through a mapped association.
      * An appointment with no linked workorder, or one whose workorder has not yet replicated,
      * simply has no row in the result.
+     *
+     * <p>Because the join is an inner one, an appointment with several mappings (#2023 S1 — a
+     * reopened work order adds a row without deleting the earlier one) yields only the mappings
+     * whose replica has arrived. When the newest mapping is still in flight, the rows returned
+     * describe the superseded run, and {@link WorkorderActuals#mostCurrent} reduces them to the
+     * newest <em>replicated</em> mapping rather than to the newest mapping. That fallback is the
+     * recorded choice of issue #2089 (option 1); {@code mostCurrent}'s javadoc states why, and
+     * every caller of this method inherits it.
      */
     @Query("""
             SELECT new com.positivity.shopmanager.internal.repository.WorkorderActuals(
