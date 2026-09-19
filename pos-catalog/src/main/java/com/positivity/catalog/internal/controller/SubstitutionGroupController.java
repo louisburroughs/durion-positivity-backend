@@ -6,6 +6,7 @@ import com.positivity.catalog.internal.dto.SubstitutionGroupMemberRequestDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.SubstitutionGroupService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -64,7 +65,10 @@ public class SubstitutionGroupController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = SubstitutionGroupDto.class)))
-    @ApiResponse(responseCode = "400", description = "Validation error")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_SUBSTITUTION_GROUP_CREATE", apiVersion = "1")
     public ResponseEntity<SubstitutionGroupDto> createGroup(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -133,7 +137,10 @@ public class SubstitutionGroupController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = SubstitutionGroupDto.class)))
-    @ApiResponse(responseCode = "404", description = "Substitution group not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Substitution group not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<SubstitutionGroupDto> getGroup(
             @Parameter(description = "Substitution group ID", required = true) @PathVariable UUID groupId) {
         return ResponseEntity.ok(substitutionGroupService.getGroup(groupId));
@@ -156,7 +163,10 @@ public class SubstitutionGroupController {
             Returns 204 on success, and 404 when no substitution group exists for the supplied id.
             """)
     @ApiResponse(responseCode = "204", description = "Substitution group deleted")
-    @ApiResponse(responseCode = "404", description = "Substitution group not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Substitution group not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_SUBSTITUTION_GROUP_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteGroup(
             @Parameter(description = "Substitution group ID", required = true) @PathVariable UUID groupId) {
@@ -189,9 +199,18 @@ public class SubstitutionGroupController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = SubstitutionGroupDto.class)))
-    @ApiResponse(responseCode = "400", description = "Validation error")
-    @ApiResponse(responseCode = "404", description = "Substitution group or product not found")
-    @ApiResponse(responseCode = "409", description = "Product already belongs to a substitution group")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Substitution group or product not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Product already belongs to a substitution group",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_SUBSTITUTION_GROUP_MEMBER_ADD", apiVersion = "1")
     public ResponseEntity<SubstitutionGroupDto> addMember(
             @Parameter(description = "Substitution group ID", required = true) @PathVariable UUID groupId,
@@ -239,7 +258,10 @@ public class SubstitutionGroupController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = SubstitutionGroupDto.class)))
-    @ApiResponse(responseCode = "404", description = "Substitution group or membership not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Substitution group or membership not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_SUBSTITUTION_GROUP_MEMBER_REMOVE", apiVersion = "1")
     public ResponseEntity<SubstitutionGroupDto> removeMember(
             @Parameter(description = "Substitution group ID", required = true) @PathVariable UUID groupId,

@@ -6,6 +6,7 @@ import com.positivity.catalog.internal.dto.ServicePackageResponseDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.ServicePackageService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -70,10 +71,22 @@ public class ServicePackageController {
             storable as described.
             """)
     @ApiResponse(responseCode = "201", description = "Service package created.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
-    @ApiResponse(responseCode = "409", description = "A package already exists with that code.")
-    @ApiResponse(responseCode = "422", description = "The package cannot be stored as described.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "A package already exists with that code.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "The package cannot be stored as described.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ServicePackageResponseDto> createServicePackage(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "The package's identity, display name, ownership and authored hours."
@@ -125,8 +138,14 @@ public class ServicePackageController {
                     @Content(
                             mediaType = "application/json",
                             array = @ArraySchema(schema = @Schema(implementation = ServicePackageResponseDto.class))))
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<ServicePackageResponseDto>> listServicePackages(
             @Parameter(description = "Location whose packages to include alongside platform ones")
                     @RequestParam(required = false)
@@ -155,9 +174,18 @@ public class ServicePackageController {
             Returns 200 with the package, and 404 when no package has that id.
             """)
     @ApiResponse(responseCode = "200", description = "The package with its members.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
-    @ApiResponse(responseCode = "404", description = "No package has that id.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "No package has that id.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ServicePackageResponseDto> getServicePackage(@PathVariable UUID packageId) {
         return ResponseEntity.ok(servicePackageService.get(packageId));
     }
@@ -182,10 +210,22 @@ public class ServicePackageController {
             service does not exist, and 409 when the service is already a member.
             """)
     @ApiResponse(responseCode = "200", description = "The package with its updated members.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
-    @ApiResponse(responseCode = "404", description = "The package or the service does not exist.")
-    @ApiResponse(responseCode = "409", description = "That service is already a member.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "The package or the service does not exist.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "That service is already a member.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ServicePackageResponseDto> addServicePackageMember(
             @PathVariable UUID packageId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -228,9 +268,18 @@ public class ServicePackageController {
             does not exist in that package.
             """)
     @ApiResponse(responseCode = "200", description = "The package with its updated members.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
-    @ApiResponse(responseCode = "404", description = "That membership does not exist in that package.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "That membership does not exist in that package.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ServicePackageResponseDto> removeServicePackageMember(
             @PathVariable UUID packageId, @PathVariable UUID memberId) {
         return ResponseEntity.ok(servicePackageService.removeMember(packageId, memberId));

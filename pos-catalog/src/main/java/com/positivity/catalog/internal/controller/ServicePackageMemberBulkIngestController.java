@@ -12,9 +12,11 @@ import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.ServicePackageService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -74,6 +76,10 @@ public class ServicePackageMemberBulkIngestController
             reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote.
             """)
     @ApiResponse(responseCode = "200", description = "Batch processed; per-row verdicts are in the body")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request envelope.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_SERVICE_PACKAGE_MEMBER_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

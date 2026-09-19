@@ -7,6 +7,7 @@ import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.ProductMsrpService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -68,9 +69,18 @@ public class ProductMsrpController {
             responseCode = "201",
             description = "MSRP created",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductMsrpDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid payload")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
-    @ApiResponse(responseCode = "409", description = "Temporal overlap conflict")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Temporal overlap conflict",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_MSRP_CREATE", apiVersion = "1")
     public ResponseEntity<ProductMsrpDto> createMsrp(
             @Parameter(required = true) @PathVariable UUID productId,
@@ -117,10 +127,22 @@ public class ProductMsrpController {
             responseCode = "200",
             description = "MSRP updated",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductMsrpDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid payload")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
-    @ApiResponse(responseCode = "404", description = "MSRP record not found")
-    @ApiResponse(responseCode = "409", description = "Temporal overlap or optimistic locking conflict")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "MSRP record not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Temporal overlap or optimistic locking conflict",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_MSRP_UPDATE", apiVersion = "1")
     public ResponseEntity<ProductMsrpDto> updateMsrp(
             @Parameter(required = true) @PathVariable UUID productId,
@@ -166,7 +188,10 @@ public class ProductMsrpController {
             responseCode = "200",
             description = "Active MSRP returned",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductMsrpDto.class)))
-    @ApiResponse(responseCode = "404", description = "No active MSRP for date")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No active MSRP for date",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ProductMsrpDto> getActiveMsrp(
             @Parameter(required = true) @PathVariable UUID productId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf) {

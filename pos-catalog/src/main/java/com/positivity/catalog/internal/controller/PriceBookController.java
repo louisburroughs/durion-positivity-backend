@@ -9,6 +9,7 @@ import com.positivity.catalog.internal.dto.ResolvePriceResponseDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.PriceBookService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -65,7 +66,10 @@ public class PriceBookController {
             responseCode = "201",
             description = "Price book created",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = PriceBookDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid payload")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRICE_BOOK_CREATE", apiVersion = "1")
     public ResponseEntity<PriceBookDto> createPriceBook(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -106,7 +110,10 @@ public class PriceBookController {
             responseCode = "200",
             description = "Price book returned",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = PriceBookDto.class)))
-    @ApiResponse(responseCode = "404", description = "Price book not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Price book not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PriceBookDto> getPriceBook(@Parameter(required = true) @PathVariable UUID priceBookId) {
         return ResponseEntity.ok(priceBookService.getPriceBook(priceBookId));
     }
@@ -132,7 +139,10 @@ public class PriceBookController {
             responseCode = "200",
             description = "Price book updated",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = PriceBookDto.class)))
-    @ApiResponse(responseCode = "404", description = "Price book not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Price book not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRICE_BOOK_UPDATE", apiVersion = "1")
     public ResponseEntity<PriceBookDto> updatePriceBook(
             @Parameter(required = true) @PathVariable UUID priceBookId,
@@ -183,7 +193,10 @@ public class PriceBookController {
             description = "Price book rule created",
             content =
                     @Content(mediaType = "application/json", schema = @Schema(implementation = PriceBookRuleDto.class)))
-    @ApiResponse(responseCode = "409", description = "Rule conflict")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Rule conflict",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRICE_BOOK_RULE_CREATE", apiVersion = "1")
     public ResponseEntity<PriceBookRuleDto> createRule(
             @Parameter(required = true) @PathVariable UUID priceBookId,
@@ -234,7 +247,10 @@ public class PriceBookController {
             description = "Price book rule updated",
             content =
                     @Content(mediaType = "application/json", schema = @Schema(implementation = PriceBookRuleDto.class)))
-    @ApiResponse(responseCode = "409", description = "Rule conflict")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Rule conflict",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRICE_BOOK_RULE_UPDATE", apiVersion = "1")
     public ResponseEntity<PriceBookRuleDto> updateRule(
             @Parameter(required = true) @PathVariable UUID priceBookId,

@@ -6,6 +6,7 @@ import com.positivity.catalog.internal.dto.UpdateStandardCostRequestDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.ItemCostService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -60,7 +61,10 @@ public class ItemCostController {
             responseCode = "200",
             description = "Updated",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ItemCostsDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid payload")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_ITEM_COST_STANDARD_UPDATE", apiVersion = "1")
     public ResponseEntity<ItemCostsDto> updateStandardCost(
             @Parameter(required = true) @PathVariable UUID itemId,

@@ -6,6 +6,7 @@ import com.positivity.catalog.internal.dto.ProductUomUpdateRequestDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.ProductUomService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -64,9 +65,18 @@ public class ProductUomController {
             responseCode = "201",
             description = "Product UoM created",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductUomDto.class)))
-    @ApiResponse(responseCode = "400", description = "Validation error")
-    @ApiResponse(responseCode = "404", description = "Product not found")
-    @ApiResponse(responseCode = "409", description = "UoM code already defined for product")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "UoM code already defined for product",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRODUCT_UOM_CREATE", apiVersion = "1")
     public ResponseEntity<ProductUomDto> addProductUom(
             @Parameter(description = "Product ID", required = true) @PathVariable UUID productId,
@@ -111,7 +121,10 @@ public class ProductUomController {
                     @Content(
                             mediaType = "application/json",
                             array = @ArraySchema(schema = @Schema(implementation = ProductUomDto.class))))
-    @ApiResponse(responseCode = "404", description = "Product not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<ProductUomDto>> listProductUoms(
             @Parameter(description = "Product ID", required = true) @PathVariable UUID productId) {
         return ResponseEntity.ok(productUomService.listProductUoms(productId));
@@ -140,8 +153,14 @@ public class ProductUomController {
             responseCode = "200",
             description = "Product UoM updated",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductUomDto.class)))
-    @ApiResponse(responseCode = "400", description = "Validation error")
-    @ApiResponse(responseCode = "404", description = "Product or UoM not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product or UoM not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRODUCT_UOM_UPDATE", apiVersion = "1")
     public ResponseEntity<ProductUomDto> updateProductUom(
             @Parameter(description = "Product ID", required = true) @PathVariable UUID productId,
@@ -182,7 +201,10 @@ public class ProductUomController {
             product.
             """)
     @ApiResponse(responseCode = "204", description = "Product UoM deleted")
-    @ApiResponse(responseCode = "404", description = "Product or UoM not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product or UoM not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRODUCT_UOM_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteProductUom(
             @Parameter(description = "Product ID", required = true) @PathVariable UUID productId,

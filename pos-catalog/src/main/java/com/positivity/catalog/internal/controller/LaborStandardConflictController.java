@@ -4,6 +4,7 @@ import com.positivity.catalog.internal.dto.LaborStandardConflictDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.LaborStandardConflictService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -75,8 +76,14 @@ public class LaborStandardConflictController {
                     @Content(
                             mediaType = "application/json",
                             array = @ArraySchema(schema = @Schema(implementation = LaborStandardConflictDto.class))))
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<LaborStandardConflictDto>> listLaborStandardConflicts(
             @Parameter(
                             description = "Report a pair only when the two times differ by more than this many"

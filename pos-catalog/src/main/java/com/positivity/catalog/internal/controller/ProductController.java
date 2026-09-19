@@ -106,7 +106,10 @@ public class ProductController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid policy payload")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid policy payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_GUARDRAIL_POLICY_UPSERT", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> upsertLocationGuardrailPolicy(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -163,12 +166,16 @@ public class ProductController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
-    @ApiResponse(responseCode = "400", description = "Guardrail validation failed")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Guardrail validation failed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "FORBIDDEN when the caller lacks catalog:location_price_override:write;"
                     + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations"
-                    + " that do not cover the request's locationId (ADR-0061); no override is created")
+                    + " that do not cover the request's locationId (ADR-0061); no override is created",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_LOCATION_OVERRIDE_CREATE", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> createLocationPriceOverride(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -225,7 +232,10 @@ public class ProductController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = EffectiveLocationPriceResponseDto.class)))
-    @ApiResponse(responseCode = "404", description = "No pricing context found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No pricing context found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<EffectiveLocationPriceResponseDto> getEffectiveLocationPrice(
             @Parameter(description = "Location ID", required = true) @PathVariable UUID locationId,
             @Parameter(description = "Product ID", required = true) @PathVariable UUID productId) {
@@ -261,9 +271,18 @@ public class ProductController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid approval request")
-    @ApiResponse(responseCode = "404", description = "Override or approval request not found")
-    @ApiResponse(responseCode = "409", description = "Version conflict")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid approval request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Override or approval request not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Version conflict",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_LOCATION_OVERRIDE_APPROVE", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> approveLocationPriceOverride(
             @Parameter(description = "Override ID", required = true) @PathVariable UUID overrideId,
@@ -318,9 +337,18 @@ public class ProductController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid rejection request")
-    @ApiResponse(responseCode = "404", description = "Override or approval request not found")
-    @ApiResponse(responseCode = "409", description = "Version conflict")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid rejection request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Override or approval request not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Version conflict",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_LOCATION_OVERRIDE_REJECT", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> rejectLocationPriceOverride(
             @Parameter(description = "Override ID", required = true) @PathVariable UUID overrideId,
@@ -373,7 +401,10 @@ public class ProductController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CatalogSearchResultDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request parameter (e.g., non-numeric limit)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request parameter (e.g., non-numeric limit)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CatalogSearchResultDto> searchProducts(
             @Parameter(description = "Free-text search query (matches product name and description)")
                     @RequestParam(required = false)
@@ -432,8 +463,14 @@ public class ProductController {
             responseCode = "201",
             description = "Product created",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
-    @ApiResponse(responseCode = "400", description = "Validation error")
-    @ApiResponse(responseCode = "409", description = "Business conflict")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Business conflict",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRODUCT_CREATED", apiVersion = "1")
     public ResponseEntity<ProductDto> createProduct(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -486,9 +523,18 @@ public class ProductController {
             responseCode = "200",
             description = "Product updated",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
-    @ApiResponse(responseCode = "400", description = "Validation error")
-    @ApiResponse(responseCode = "404", description = "Product not found")
-    @ApiResponse(responseCode = "409", description = "Business conflict")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Business conflict",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRODUCT_UPDATED", apiVersion = "1")
     public ResponseEntity<ProductDto> updateProduct(
             @Parameter(description = "ID of the product to update", required = true) @PathVariable UUID productId,
@@ -540,8 +586,14 @@ public class ProductController {
             responseCode = "200",
             description = "Tracking level updated",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
-    @ApiResponse(responseCode = "400", description = "Validation error")
-    @ApiResponse(responseCode = "404", description = "Product not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRODUCT_TRACKING_LEVEL_UPDATE", apiVersion = "1")
     public ResponseEntity<ProductDto> updateTrackingLevel(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
@@ -583,7 +635,10 @@ public class ProductController {
             responseCode = "200",
             description = "Successfully retrieved product",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
-    @ApiResponse(responseCode = "404", description = "Product not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product not found. The response has NO body.",
+            content = @Content(schema = @Schema(hidden = true)))
     public ResponseEntity<ProductDto> getProductById(
             @Parameter(description = "ID of the product to be obtained") @PathVariable UUID productId) {
         return catalogService
@@ -767,9 +822,18 @@ public class ProductController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ProductDetailView.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid location ID")
-    @ApiResponse(responseCode = "404", description = "Product not found")
-    @ApiResponse(responseCode = "500", description = "Unexpected server error while retrieving product details")
+    @ApiResponse(
+            responseCode = "400",
+            description = "location_id is missing or not a UUID",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product not found. The response has NO body.",
+            content = @Content(schema = @Schema(hidden = true)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "Unexpected server error while retrieving product details",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ProductDetailView> getProductDetailView(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
             @Parameter(description = "Location/store ID for location-specific data", required = true)
@@ -777,10 +841,6 @@ public class ProductController {
                     UUID locationId) {
 
         log.info("Product detail view requested: productId={}, locationId={}", productId, locationId);
-        if (locationId == null) {
-            log.warn("Invalid location_id provided: {}", locationId);
-            return ResponseEntity.badRequest().build();
-        }
 
         ProductDetailView productDetail = productDetailService.getProductDetail(productId, locationId);
         if (productDetail == null) {
@@ -846,7 +906,10 @@ public class ProductController {
             responseCode = "200",
             description = "Successfully retrieved service",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ServiceDto.class)))
-    @ApiResponse(responseCode = "404", description = "Service not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Service not found. The response has NO body.",
+            content = @Content(schema = @Schema(hidden = true)))
     public ResponseEntity<ServiceDto> getServiceById(
             @Parameter(description = "ID of the service to be obtained") @PathVariable UUID serviceId) {
         return catalogService
@@ -904,7 +967,10 @@ public class ProductController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = NonInventoryProductDto.class)))
-    @ApiResponse(responseCode = "404", description = "Non-inventory product not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Non-inventory product not found. The response has NO body.",
+            content = @Content(schema = @Schema(hidden = true)))
     public ResponseEntity<NonInventoryProductDto> getNonInventoryProductById(
             @Parameter(description = "ID of the non-inventory product to be obtained") @PathVariable UUID productId) {
         return catalogService
@@ -967,7 +1033,10 @@ public class ProductController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ProductLifecycleResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Product not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRODUCT_LIFECYCLE_GET", apiVersion = "1")
     public ResponseEntity<ProductLifecycleResponse> getProductLifecycle(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId) {
@@ -1030,10 +1099,22 @@ public class ProductController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ProductLifecycleResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation error")
-    @ApiResponse(responseCode = "403", description = "Missing override permission")
-    @ApiResponse(responseCode = "404", description = "Product not found")
-    @ApiResponse(responseCode = "409", description = "Lifecycle business rule conflict")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Missing override permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Lifecycle business rule conflict",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRODUCT_LIFECYCLE_UPDATE", apiVersion = "1")
     public ResponseEntity<ProductLifecycleResponse> setLifecycleState(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
@@ -1077,8 +1158,14 @@ public class ProductController {
             is not positive.
             """)
     @ApiResponse(responseCode = "201", description = "Replacement added successfully")
-    @ApiResponse(responseCode = "400", description = "Validation error")
-    @ApiResponse(responseCode = "404", description = "Product not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "CATALOG_PRODUCT_REPLACEMENT_ADD", apiVersion = "1")
     public ResponseEntity<ProductLifecycleResponse.ReplacementOption> addReplacementProduct(
             @Parameter(description = "ID of discontinued product", required = true) @PathVariable UUID productId,
@@ -1125,7 +1212,10 @@ public class ProductController {
                     @Content(
                             mediaType = "application/json",
                             array = @ArraySchema(schema = @Schema(implementation = ProductDto.class))))
-    @ApiResponse(responseCode = "404", description = "Product not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<ProductDto>> getPartSubstitutes(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId) {
         List<ProductDto> substitutes = productLifecycleService.getReplacementProducts(productId).stream()
