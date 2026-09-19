@@ -30,7 +30,8 @@ public class BayStatus {
     @Schema(
             description = "Identifier of the workorder currently assigned to the bay, or null when idle",
             example = "550e8400-e29b-41d4-a716-446655440000",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     String assignedWorkorderId;
 
     @Schema(description = "Whether the bay is currently available", example = "false", requiredMode = REQUIRED)
