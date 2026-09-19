@@ -5,9 +5,11 @@ import com.positivity.invoice.internal.dto.ElevateResponse;
 import com.positivity.invoice.internal.exception.ElevationDeniedException;
 import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.ElevationService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -69,8 +71,11 @@ public class ElevationController {
                     is unknown or inactive or the person lacks the override authority.
                     """)
     @ApiResponse(responseCode = "200", description = "Elevation token minted")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "401", description = "Manager approval denied")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "401", description = "Manager approval denied; the body is empty.", content = @Content)
     public ResponseEntity<ElevateResponse> elevate(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Manager identification and the invoice the elevation token will authorize.",

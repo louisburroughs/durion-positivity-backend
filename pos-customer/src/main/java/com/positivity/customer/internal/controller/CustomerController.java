@@ -6,10 +6,12 @@ import com.positivity.customer.internal.service.CommercialPartyServiceImpl;
 import com.positivity.customer.internal.service.CustomerService;
 import com.positivity.customer.internal.service.PersonPartyServiceImpl;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
@@ -99,7 +101,10 @@ public class CustomerController {
                     Returns 404 when neither a commercial nor a person party exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Customer found and returned.")
-    @ApiResponse(responseCode = "404", description = "Customer not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Customer not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{id}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -175,7 +180,10 @@ public class CustomerController {
                     Returns 404 when no party of the selected type exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Customer updated successfully.")
-    @ApiResponse(responseCode = "404", description = "Customer not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Customer not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PutMapping("/{id}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -221,7 +229,10 @@ public class CustomerController {
                     Returns 404 when neither store holds a party for the supplied id.
                     """)
     @ApiResponse(responseCode = "204", description = "Customer deleted successfully.")
-    @ApiResponse(responseCode = "404", description = "Customer not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Customer not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @DeleteMapping("/{id}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

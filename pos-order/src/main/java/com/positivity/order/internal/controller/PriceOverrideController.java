@@ -13,6 +13,7 @@ import com.positivity.order.internal.service.model.PriceOverrideResult;
 import com.positivity.order.internal.service.model.RejectOverrideCommand;
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -83,8 +84,14 @@ public class PriceOverrideController {
             responseCode = "201",
             description = "Override created",
             content = @Content(schema = @Schema(implementation = PriceOverrideResult.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -146,9 +153,18 @@ public class PriceOverrideController {
             responseCode = "200",
             description = "Override approved",
             content = @Content(schema = @Schema(implementation = PriceOverrideDetail.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request or override not in pending state")
-    @ApiResponse(responseCode = "403", description = "Insufficient approval permissions")
-    @ApiResponse(responseCode = "404", description = "Override not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or override not in pending state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient approval permissions",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Override not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{overrideId}/approve")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -211,9 +227,18 @@ public class PriceOverrideController {
             responseCode = "200",
             description = "Override rejected",
             content = @Content(schema = @Schema(implementation = PriceOverrideDetail.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request or override not in pending state")
-    @ApiResponse(responseCode = "403", description = "Insufficient rejection permissions")
-    @ApiResponse(responseCode = "404", description = "Override not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or override not in pending state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient rejection permissions",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Override not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{overrideId}/reject")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -271,7 +296,10 @@ public class PriceOverrideController {
             responseCode = "200",
             description = "Override found",
             content = @Content(schema = @Schema(implementation = PriceOverrideDetail.class)))
-    @ApiResponse(responseCode = "404", description = "Override not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Override not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{overrideId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -311,7 +339,10 @@ public class PriceOverrideController {
                     """,
             tags = {"Price Overrides"})
     @ApiResponse(responseCode = "200", description = "Overrides retrieved")
-    @ApiResponse(responseCode = "400", description = "No filter parameter provided")
+    @ApiResponse(
+            responseCode = "400",
+            description = "No filter parameter provided",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

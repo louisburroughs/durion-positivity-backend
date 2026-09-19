@@ -1,7 +1,10 @@
 package com.positivity.invoice.internal.controller;
 
 import com.positivity.invoice.internal.service.InvoiceArtifactService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -49,8 +52,14 @@ public class InvoiceArtifactDownloadController {
                     404 when the invoice or artifact cannot be resolved.
                     """)
     @ApiResponse(responseCode = "200", description = "PDF returned")
-    @ApiResponse(responseCode = "403", description = "Missing, invalid, or expired token")
-    @ApiResponse(responseCode = "404", description = "Invoice or artifact not found")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Missing, invalid, or expired token",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Invoice or artifact not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     // Authorization is the signed download token (verified in the service), not a role/JWT — a
     // browser direct-download link cannot carry an Authorization header. permitAll keeps the
     // endpoint open at the method-security layer; the token is the actual guard.

@@ -63,10 +63,22 @@ public class OrderCancellationController {
                     """,
             tags = {"Order Cancellation"})
     @ApiResponse(responseCode = "201", description = "Cancellation initiated")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions")
-    @ApiResponse(responseCode = "404", description = "Order not found")
-    @ApiResponse(responseCode = "409", description = "Order cannot be cancelled in current state")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Order not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Order cannot be cancelled in current state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",
             description = "A workorder or payment-reversal leg failed downstream; the order is parked for review.",
@@ -122,9 +134,18 @@ public class OrderCancellationController {
                     """,
             tags = {"Order Cancellation"})
     @ApiResponse(responseCode = "200", description = "Retry accepted")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions")
-    @ApiResponse(responseCode = "404", description = "Order not found")
-    @ApiResponse(responseCode = "409", description = "Order not in retryable state")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Order not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Order not in retryable state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",
             description = "The reversal failed again; the order is parked at CANCEL_REQUIRES_MANUAL_REVIEW.",

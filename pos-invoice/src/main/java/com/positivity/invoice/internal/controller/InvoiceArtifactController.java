@@ -3,7 +3,10 @@ package com.positivity.invoice.internal.controller;
 import com.positivity.invoice.internal.dto.ArtifactDownloadTokenResponse;
 import com.positivity.invoice.internal.dto.InvoiceArtifactResponse;
 import com.positivity.invoice.internal.service.InvoiceArtifactService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.util.List;
@@ -49,7 +52,10 @@ public class InvoiceArtifactController {
                     Returns 404 when no invoice exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Artifacts listed")
-    @ApiResponse(responseCode = "404", description = "Invoice not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Invoice not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/{invoiceId}/artifacts")
     public ResponseEntity<List<InvoiceArtifactResponse>> listArtifacts(@PathVariable @NonNull UUID invoiceId) {
@@ -76,7 +82,10 @@ public class InvoiceArtifactController {
                     Returns 404 when the invoice does not exist or the artifact does not belong to it.
                     """)
     @ApiResponse(responseCode = "200", description = "Token issued")
-    @ApiResponse(responseCode = "404", description = "Invoice or artifact not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Invoice or artifact not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping("/{invoiceId}/artifacts/{artifactRefId}/download-token")
     public ResponseEntity<ArtifactDownloadTokenResponse> createDownloadToken(

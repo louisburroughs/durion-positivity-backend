@@ -21,6 +21,10 @@ import com.positivity.customer.internal.service.PartyService;
 import com.positivity.customer.internal.service.PersonService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.Clock;
@@ -89,6 +93,11 @@ public class CommercialBulkIngestController extends AbstractBulkIngestController
                         Returns 200 with per-row results including failures, and 400 when jobId, locationId, or the \
                         records list is missing or empty.
                         """)
+    @ApiResponse(responseCode = "200", description = "Batch processed (check per-record success/failure in response)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/bulk-ingest")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
     @EmitEvent(id = "CUSTOMER_COMMERCIAL_BULK_INGEST", apiVersion = "1")

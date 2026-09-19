@@ -7,6 +7,7 @@ import com.positivity.invoice.internal.dto.ReceiptResponse;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryStatus;
 import com.positivity.invoice.internal.service.Receipt;
 import com.positivity.invoice.internal.service.ReceiptService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -60,7 +61,10 @@ public class ReceiptController {
                     missing.
                     """)
     @ApiResponse(responseCode = "201", description = "Receipt generated")
-    @ApiResponse(responseCode = "404", description = "Invoice not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Invoice not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReceiptResponse> generateReceipt(
             @PathVariable @NonNull UUID invoiceId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -105,8 +109,14 @@ public class ReceiptController {
                     limit of 5 is exceeded without a supervisor override.
                     """)
     @ApiResponse(responseCode = "200", description = "Receipt reprinted")
-    @ApiResponse(responseCode = "404", description = "Receipt not found")
-    @ApiResponse(responseCode = "409", description = "Reprint limit exceeded")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Receipt not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Reprint limit exceeded",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReceiptResponse> reprintReceipt(
             @PathVariable @NonNull UUID invoiceId,
             @PathVariable @NonNull UUID receiptId,
@@ -146,7 +156,10 @@ public class ReceiptController {
                     Returns 200 with an empty body on success, and 404 when the receipt does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Print delivery recorded")
-    @ApiResponse(responseCode = "404", description = "Receipt not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Receipt not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> recordPrintDelivery(
             @PathVariable @NonNull UUID invoiceId,
             @PathVariable @NonNull UUID receiptId,
@@ -186,7 +199,10 @@ public class ReceiptController {
                     Returns 200 with an empty body on success, and 404 when the receipt does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Email delivery recorded")
-    @ApiResponse(responseCode = "404", description = "Receipt not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Receipt not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> sendEmailReceipt(
             @PathVariable @NonNull UUID invoiceId,
             @PathVariable @NonNull UUID receiptId,

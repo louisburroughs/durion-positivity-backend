@@ -6,6 +6,7 @@ import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.CrmVehicleService;
 import com.positivity.customer.internal.service.PartyService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -100,8 +101,14 @@ public class CrmSnapshotController {
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Billing rules returned"),
-                @ApiResponse(responseCode = "403", description = "Caller lacks PARTY_VIEW authority"),
-                @ApiResponse(responseCode = "404", description = "Party not found")
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Caller lacks PARTY_VIEW authority",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Party not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/party/{partyId}/billing-rules")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")

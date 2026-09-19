@@ -7,6 +7,7 @@ import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.PartyRelationshipService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -107,11 +108,26 @@ public class CrmPartyRelationshipController {
             responseCode = "201",
             description = "Relationship created successfully",
             content = @Content(schema = @Schema(implementation = CreatePartyRelationshipResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request - validation failed")
-    @ApiResponse(responseCode = "404", description = "Party or person not found")
-    @ApiResponse(responseCode = "409", description = "Conflict - overlapping relationship exists")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request - validation failed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Party or person not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Conflict - overlapping relationship exists",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing required permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CreatePartyRelationshipResponse> createRelationship(
             @Parameter(description = "The commercial account party ID") @PathVariable UUID partyId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -183,9 +199,18 @@ public class CrmPartyRelationshipController {
             responseCode = "200",
             description = "Contacts retrieved successfully",
             content = @Content(schema = @Schema(implementation = GetCommercialAccountContactsResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Party not found")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Party not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing required permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<GetCommercialAccountContactsResponse> getContacts(
             @Parameter(description = "The commercial account party ID") @PathVariable UUID partyId,
             @Parameter(description = "Filter by relationship roles") @RequestParam(required = false)
@@ -238,10 +263,22 @@ public class CrmPartyRelationshipController {
                     different party, lacks the BILLING role, or is no longer active.
                     """)
     @ApiResponse(responseCode = "204", description = "Primary billing contact updated")
-    @ApiResponse(responseCode = "400", description = "Invalid request - relationship must have BILLING role")
-    @ApiResponse(responseCode = "404", description = "Relationship not found")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request - relationship must have BILLING role",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Relationship not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing required permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> designatePrimaryBillingContact(
             @Parameter(description = "The commercial account party ID") @PathVariable UUID partyId,
             @Parameter(description = "The relationship ID to designate as primary") @PathVariable UUID relationshipId,
@@ -292,9 +329,18 @@ public class CrmPartyRelationshipController {
                     Returns 404 when no relationship exists for the supplied relationshipId.
                     """)
     @ApiResponse(responseCode = "204", description = "Relationship deactivated")
-    @ApiResponse(responseCode = "404", description = "Relationship not found")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Relationship not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing required permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> deactivateRelationship(
             @Parameter(description = "The commercial account party ID") @PathVariable UUID partyId,
             @Parameter(description = "The relationship ID to deactivate") @PathVariable UUID relationshipId,
