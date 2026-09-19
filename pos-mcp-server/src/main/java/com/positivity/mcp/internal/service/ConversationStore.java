@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.domain.TurnSummary;
 import com.positivity.mcp.internal.dto.ChatBlock;
 import com.positivity.mcp.internal.entity.McpConversation;
 import com.positivity.mcp.internal.entity.McpMessage;
@@ -53,6 +54,7 @@ public class ConversationStore implements ConversationMemoryHistory {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ConversationStore.class);
     private static final TypeReference<List<ChatBlock>> BLOCK_LIST = new TypeReference<>() {};
+    private static final TypeReference<List<String>> NAME_LIST = new TypeReference<>() {};
 
     private final McpConversationRepository conversations;
     private final McpMessageRepository messages;
@@ -176,7 +178,8 @@ public class ConversationStore implements ConversationMemoryHistory {
         if (role == ConversationMessageRole.USER) {
             deriveTitleFromFirstUserTurn(conversation, content);
         }
-        McpMessage stored = saveMessage(conversationId, role, ConversationMessageOrigin.CLIENT, content, blocksJson);
+        McpMessage stored =
+                saveMessage(null, conversationId, role, ConversationMessageOrigin.CLIENT, content, blocksJson, null);
         if (role == ConversationMessageRole.ASSISTANT) {
             updatePreview(conversation, content);
         }
@@ -188,20 +191,28 @@ public class ConversationStore implements ConversationMemoryHistory {
      * Persists one chat turn ({@code origin = CHAT}): the user message, then the assistant message, and
      * the conversation's title/preview/{@code updatedAt}, in one transaction.
      *
+     * <p>Both message ids are pre-assigned by the caller (UUID v7, user first), so the user row sorts
+     * before its answer even on a same-instant {@code created_at} tie, and the assistant id can be
+     * returned to the client and stamped on the eval trace before anything is written. Only the
+     * assistant row carries {@code turnSummary} (#2075).
+     *
      * @param newConversation {@code true} when {@code conversationId} was pre-assigned for this turn
      *     and the conversation row is inserted here; {@code false} to append to an existing one
-     * @return the assistant message id, or empty when an existing conversation is gone (deleted in
-     *     another tab, or purged) — the turn is then not persisted
+     * @return {@code assistantMessageId}, or empty when an existing conversation is gone (deleted in
+     *     another tab, or purged): the turn is then not persisted and nothing is written
      */
     @Transactional
     public @NonNull Optional<UUID> recordChatTurn(
             @NonNull UUID conversationId,
             boolean newConversation,
             @NonNull UUID ownerUserId,
+            @NonNull UUID userMessageId,
             @NonNull String userText,
             @NonNull List<ChatBlock> userBlocks,
+            @NonNull UUID assistantMessageId,
             @NonNull String assistantText,
-            @NonNull List<ChatBlock> assistantBlocks) {
+            @NonNull List<ChatBlock> assistantBlocks,
+            @NonNull TurnSummary turnSummary) {
         McpConversation conversation;
         if (newConversation) {
             conversation = new McpConversation();
@@ -225,18 +236,75 @@ public class ConversationStore implements ConversationMemoryHistory {
             touch(conversation);
         }
         saveMessage(
+                userMessageId,
                 conversationId,
                 ConversationMessageRole.USER,
                 ConversationMessageOrigin.CHAT,
                 userText,
-                serializeBlocks(userBlocks));
+                serializeBlocks(userBlocks),
+                null);
         McpMessage assistant = saveMessage(
+                assistantMessageId,
                 conversationId,
                 ConversationMessageRole.ASSISTANT,
                 ConversationMessageOrigin.CHAT,
                 assistantText,
-                serializeBlocks(assistantBlocks));
+                serializeBlocks(assistantBlocks),
+                turnSummary);
         return Optional.of(assistant.getId());
+    }
+
+    /**
+     * Sets the owner's rating of a chat-path ({@code origin = CHAT}) assistant message (#2075),
+     * replacing any prior rating in full (an absent reason or comment clears the stored one). One bulk
+     * {@code UPDATE}: concurrent ratings are last-write-wins. The conversation row is not touched.
+     *
+     * @return {@code false} when no chat-path assistant message {@code messageId} exists in a
+     *     conversation {@code conversationId} that {@code ownerUserId} owns within the bound tenant
+     */
+    @Transactional
+    public boolean setFeedback(
+            @NonNull UUID conversationId,
+            @NonNull UUID messageId,
+            @NonNull UUID ownerUserId,
+            @NonNull String rating,
+            @Nullable String reason,
+            @Nullable String comment) {
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        return messages.updateOwnedFeedback(
+                        conversationId,
+                        messageId,
+                        ownerUserId,
+                        ConversationMessageRole.ASSISTANT,
+                        ConversationMessageOrigin.CHAT,
+                        rating,
+                        reason,
+                        comment,
+                        now,
+                        now)
+                == 1;
+    }
+
+    /**
+     * Withdraws the owner's rating of an assistant message (#2075). Succeeds when the message is
+     * reachable even if it was never rated.
+     *
+     * @return {@code false} when the message is not reachable (same rule as {@link #setFeedback})
+     */
+    @Transactional
+    public boolean clearFeedback(@NonNull UUID conversationId, @NonNull UUID messageId, @NonNull UUID ownerUserId) {
+        return messages.updateOwnedFeedback(
+                        conversationId,
+                        messageId,
+                        ownerUserId,
+                        ConversationMessageRole.ASSISTANT,
+                        ConversationMessageOrigin.CHAT,
+                        null,
+                        null,
+                        null,
+                        null,
+                        OffsetDateTime.now(clock))
+                == 1;
     }
 
     /**
@@ -283,6 +351,16 @@ public class ConversationStore implements ConversationMemoryHistory {
             return objectMapper.writerFor(BLOCK_LIST).writeValueAsString(blocks);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Failed to serialize conversation message blocks", exception);
+        }
+    }
+
+    /** Serializes tool names for the {@code tools_called} jsonb column (a JSON array). */
+    @NonNull
+    String serializeToolNames(@NonNull List<String> toolNames) {
+        try {
+            return objectMapper.writerFor(NAME_LIST).writeValueAsString(toolNames);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Failed to serialize conversation message tool names", exception);
         }
     }
 
@@ -338,18 +416,31 @@ public class ConversationStore implements ConversationMemoryHistory {
         conversation.setUpdatedAt(OffsetDateTime.now(clock));
     }
 
+    /**
+     * @param id a pre-assigned message id, or {@code null} to let the UUID v7 generator assign one
+     * @param summary the turn summary (a chat-path assistant turn only), or {@code null}
+     */
     private @NonNull McpMessage saveMessage(
+            @Nullable UUID id,
             @NonNull UUID conversationId,
             @NonNull ConversationMessageRole role,
             @NonNull ConversationMessageOrigin origin,
             @NonNull String content,
-            @NonNull String blocksJson) {
+            @NonNull String blocksJson,
+            @Nullable TurnSummary summary) {
         McpMessage message = new McpMessage();
+        message.setId(id);
         message.setConversationId(conversationId);
         message.setRole(role);
         message.setOrigin(origin);
         message.setContent(content);
         message.setBlocks(blocksJson);
+        if (summary != null) {
+            message.setAnswerPath(summary.answerPath());
+            message.setAnswerSource(summary.answerSource());
+            message.setToolsCalled(serializeToolNames(summary.toolsCalled()));
+            message.setLatencyMs(summary.latencyMs());
+        }
         return messages.saveAndFlush(message);
     }
 }

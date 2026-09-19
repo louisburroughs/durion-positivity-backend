@@ -71,6 +71,12 @@ public final class EventTypes {
                         .build(),
                 // #2074: server-side audio transcription fallback for the assistant composer.
                 EventTypeRegistration.write("MCP_TRANSCRIPTION_EXECUTE", "Transcribe an audio clip to text")
+                        .build(),
+                // #2075: per-turn feedback on assistant answers.
+                EventTypeRegistration.write(
+                                "MCP_MESSAGE_FEEDBACK_SET", "Rate an assistant answer (replaces any prior rating)")
+                        .build(),
+                EventTypeRegistration.write("MCP_MESSAGE_FEEDBACK_CLEAR", "Withdraw the rating of an assistant answer")
                         .build());
     }
 }

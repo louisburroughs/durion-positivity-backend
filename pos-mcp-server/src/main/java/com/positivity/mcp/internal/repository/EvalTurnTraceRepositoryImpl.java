@@ -7,6 +7,8 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
@@ -28,10 +30,11 @@ public class EvalTurnTraceRepositoryImpl implements EvalTurnTraceRepository {
 
     @Override
     public void save(@NonNull EvalTurnTrace trace) {
-        jdbcTemplate.update("""
-            INSERT INTO mcp_eval_turn_trace (turn_id, created_at, expires_at, trace_payload)
-            VALUES (?, ?, ?, CAST(? AS jsonb))
-            """, trace.turnId(), at(trace.startedAt()), at(trace.expiresAt()), serialize(trace));
+        jdbcTemplate.update(
+                """
+            INSERT INTO mcp_eval_turn_trace (turn_id, created_at, expires_at, trace_payload, message_id)
+            VALUES (?, ?, ?, CAST(? AS jsonb), ?)
+            """, trace.turnId(), at(trace.startedAt()), at(trace.expiresAt()), serialize(trace), trace.messageId());
     }
 
     @Override
@@ -50,6 +53,17 @@ public class EvalTurnTraceRepositoryImpl implements EvalTurnTraceRepository {
                 ORDER BY created_at DESC
                 LIMIT ?
                 """, (rs, rowNum) -> deserialize(rs.getString("trace_payload")), at(since), Math.max(1, limit));
+    }
+
+    @Override
+    public @NonNull Optional<EvalTurnTrace> findByMessageId(@NonNull UUID messageId) {
+        return jdbcTemplate.query("""
+                SELECT trace_payload FROM mcp_eval_turn_trace
+                WHERE message_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """, (rs, rowNum) -> deserialize(rs.getString("trace_payload")), messageId).stream()
+                .findFirst();
     }
 
     private @NonNull EvalTurnTrace deserialize(@NonNull String payload) {

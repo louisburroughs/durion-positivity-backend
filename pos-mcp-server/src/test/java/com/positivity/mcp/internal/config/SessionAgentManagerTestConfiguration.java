@@ -2,11 +2,14 @@ package com.positivity.mcp.internal.config;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.domain.ChatOutcome;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +24,10 @@ public class SessionAgentManagerTestConfiguration {
     AgentOrchestrationService agentOrchestrationService() {
         AgentOrchestrationService service = mock(AgentOrchestrationService.class);
         when(service.chat(any(CurrentUserContext.class), anyString())).thenReturn("Test assistant response");
+        // #2075: Mockito does not run default interface methods, so chatTurn (which the controller
+        // now calls instead of chat) must be re-stubbed here or every caller of this bean NPEs.
+        when(service.chatTurn(any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
+                .thenReturn(ChatOutcome.of("Test assistant response"));
         return service;
     }
 

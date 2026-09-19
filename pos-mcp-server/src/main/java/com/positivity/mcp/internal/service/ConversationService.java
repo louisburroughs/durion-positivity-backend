@@ -6,8 +6,10 @@ import com.positivity.mcp.internal.dto.ConversationMessage;
 import com.positivity.mcp.internal.dto.ConversationPolicy;
 import com.positivity.mcp.internal.dto.ConversationSummary;
 import com.positivity.mcp.internal.dto.CreateConversationRequest;
+import com.positivity.mcp.internal.dto.MessageFeedbackRequest;
 import com.positivity.mcp.internal.dto.UpdateConversationRequest;
 import com.positivity.mcp.internal.exception.ConversationNotFoundException;
+import com.positivity.mcp.internal.exception.MessageNotFoundException;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -78,4 +80,23 @@ public interface ConversationService {
     /** Server-wide retention policy (days idle before purge; whether pinned conversations are exempt). */
     @NonNull
     ConversationPolicy policy();
+
+    /**
+     * Rates an assistant message the caller owns in {@code id}; a repeat call replaces any prior
+     * rating in full (#2075).
+     *
+     * @throws MessageNotFoundException when the message does not exist, is in another
+     *     conversation, is not owned by the caller, belongs to another tenant, has role
+     *     {@code user}, or was purged
+     */
+    void setFeedback(@NonNull UUID id, @NonNull UUID messageId, @NonNull MessageFeedbackRequest request);
+
+    /**
+     * Withdraws the rating of an assistant message the caller owns; succeeds (no-op) when none
+     * exists (#2075).
+     *
+     * @throws MessageNotFoundException when the message is not reachable, per the same rule as
+     *     {@link #setFeedback}
+     */
+    void clearFeedback(@NonNull UUID id, @NonNull UUID messageId);
 }

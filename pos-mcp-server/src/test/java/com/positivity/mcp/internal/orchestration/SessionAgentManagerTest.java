@@ -642,6 +642,103 @@ class SessionAgentManagerTest {
         verify(toolRegistry, times(2)).resolveDomainTools("ROLE_TECHNICIAN");
     }
 
+    // ─── #2075: chatTurn's profile-independent TurnSummary ─────────────────────────────────────
+
+    @Test
+    @DisplayName("chatTurn on the simple-chat path reports SIMPLE_CHAT with the extracted source and no tools (#2075)")
+    void chatTurn_simpleChatPath_reportsSimpleChatSourceNoTools() {
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Hello!"));
+        CurrentUserContext currentUser = userContext("user-1", USER_ID, "ROLE_ADMIN");
+
+        long beforeMillis = System.currentTimeMillis();
+        com.positivity.mcp.internal.domain.ChatOutcome outcome = manager.chatTurn(currentUser, "hello", null, null);
+        long observedElapsedMs = System.currentTimeMillis() - beforeMillis;
+
+        assertThat(outcome.text()).isEqualTo("Hello!");
+        assertThat(outcome.summary().answerPath())
+                .isEqualTo(com.positivity.mcp.internal.domain.TurnSummary.PATH_SIMPLE_CHAT);
+        assertThat(outcome.summary().answerSource()).isEqualTo("CONTENT");
+        assertThat(outcome.summary().toolsCalled()).isEmpty();
+        // #2075 (Wave 4 fix): latencyMs is now measured inside simpleChat at the same point as the
+        // path's own elapsedMs (before the audit log/telemetry), so it must fall within this test's
+        // own wall-clock bracket around the whole call — never negative, never past "now".
+        assertThat(outcome.summary().latencyMs())
+                .isGreaterThanOrEqualTo(0)
+                .isLessThanOrEqualTo((int) observedElapsedMs + 50);
+    }
+
+    @Test
+    @DisplayName("chatTurn on the agent path reports AGENT with the reply's source and tools (#2075)")
+    void chatTurn_agentPath_reportsAgentSourceAndTools() {
+        PosAssistant stubAgent = mock(PosAssistant.class);
+        when(stubAgent.reply(anyString(), eq("show stock for sku ABC"), anyString()))
+                .thenReturn(new PosAssistant.Reply("Stock found", "CONTENT", List.of("InventoryFacadeTool")));
+        seedRoleAgentCache("ROLE_ADMIN", stubAgent);
+
+        com.positivity.mcp.internal.domain.ChatOutcome outcome =
+                manager.chatTurn(userContext("user-1", USER_ID, "ROLE_ADMIN"), "show stock for sku ABC", null, null);
+
+        assertThat(outcome.text()).isEqualTo("Stock found");
+        assertThat(outcome.summary().answerPath()).isEqualTo(com.positivity.mcp.internal.domain.TurnSummary.PATH_AGENT);
+        assertThat(outcome.summary().answerSource()).isEqualTo("CONTENT");
+        assertThat(outcome.summary().toolsCalled()).containsExactly("InventoryFacadeTool");
+        assertThat(outcome.summary().latencyMs()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("chatTurn stamps the recorder with the parsed conversation id right after beginTurn (#2075)")
+    void chatTurn_recordsMessageAfterBeginTurn() {
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Hello!"));
+        UUID conversationId = UUID.randomUUID();
+        UUID assistantMessageId = UUID.randomUUID();
+        CurrentUserContext currentUser = userContext("user-1", USER_ID, "ROLE_ADMIN");
+
+        manager.chatTurn(currentUser, "hello", conversationId.toString(), assistantMessageId);
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(toolInvocationRecorder);
+        inOrder.verify(toolInvocationRecorder).beginTurn(currentUser, "hello");
+        inOrder.verify(toolInvocationRecorder).recordMessage(conversationId, assistantMessageId);
+    }
+
+    @Test
+    @DisplayName("chatTurn: a non-UUID (ephemeral #1735) conversationId records a null conversation id (#2075)")
+    void chatTurn_nonUuidConversationId_recordsNullConversationId() {
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Hello!"));
+        CurrentUserContext currentUser = userContext("user-1", USER_ID, "ROLE_ADMIN");
+
+        manager.chatTurn(currentUser, "hello", "gate-q07", null);
+
+        verify(toolInvocationRecorder).recordMessage(null, null);
+    }
+
+    @Test
+    @DisplayName("the 3-argument chat(user, message, conversationId) still returns just the text (#2075)")
+    void chat_threeArg_stillReturnsText() {
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Hello!"));
+
+        String response = manager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "hello", null);
+
+        assertThat(response).isEqualTo("Hello!");
+    }
+
+    /**
+     * Seeds {@code roleAgentCache} with a stub {@link PosAssistant} at exactly the key
+     * {@code chatTurn}'s agent path would compute for a message the default (unstubbed)
+     * {@code toolSelectionEngine} routes to empty role/fallback tool lists and no tier — so the
+     * agent path uses the stub instead of building a real {@code SpringAiPosAssistant}, letting
+     * the test control {@link PosAssistant.Reply} directly.
+     */
+    private void seedRoleAgentCache(String role, PosAssistant agent) {
+        List<Object> selectedTools = sharedOrchestrationSupport.mergeTools(List.of(), List.of());
+        String toolCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
+        String key = (String) ReflectionTestUtils.invokeMethod(manager, "agentCacheKey", role, toolCacheKey, null);
+        @SuppressWarnings("unchecked")
+        Cache<String, PosAssistant> cache =
+                (Cache<String, PosAssistant>) ReflectionTestUtils.getField(manager, "roleAgentCache");
+        assertThat(cache).isNotNull();
+        cache.put(key, agent);
+    }
+
     private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {
         return new CurrentUserContext(
                 username,

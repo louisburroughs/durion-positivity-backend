@@ -1,11 +1,14 @@
 package com.positivity.mcp.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One turn of a persisted conversation (#2073).
@@ -53,4 +56,12 @@ public record ConversationMessage(
                         + "renders whenever `blocks` is empty.",
                 example = "You have **26 mechanics**, all ACTIVE.")
         @NonNull
-        String content) {}
+        String content,
+
+        @Schema(
+                description = "The caller's current rating of this assistant message, absent (or null) when "
+                        + "the message is unrated. Always absent for user messages.",
+                nullable = true,
+                requiredMode = NOT_REQUIRED)
+        @Nullable
+        MessageFeedback feedback) {}

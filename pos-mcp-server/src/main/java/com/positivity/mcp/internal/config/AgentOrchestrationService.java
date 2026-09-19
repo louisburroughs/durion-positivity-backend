@@ -1,5 +1,10 @@
 package com.positivity.mcp.internal.config;
 
+import com.positivity.mcp.internal.domain.ChatOutcome;
+import com.positivity.mcp.internal.domain.TurnSummary;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -49,5 +54,28 @@ public interface AgentOrchestrationService {
      */
     default void evictConversation(@NonNull String conversationId) {
         // No conversation memory held by default.
+    }
+
+    /**
+     * #2075: one chat turn plus its profile-independent summary. {@code assistantMessageId} is
+     * the pre-assigned id of the assistant message the caller will persist (null on the
+     * ephemeral path); an implementation that records an eval trace stamps it there. The default
+     * wraps {@link #chat(CurrentUserContext, String, String)} and reports latency only — no
+     * answer path, no answer source, no tool names.
+     */
+    default @NonNull ChatOutcome chatTurn(
+            @NonNull CurrentUserContext currentUserContext,
+            @NonNull String message,
+            @Nullable String conversationId,
+            @Nullable UUID assistantMessageId) {
+        long startNanos = System.nanoTime();
+        String text = chat(currentUserContext, message, conversationId);
+        return new ChatOutcome(
+                text,
+                new TurnSummary(
+                        null,
+                        null,
+                        List.of(),
+                        TurnSummary.clampLatency(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos))));
     }
 }
