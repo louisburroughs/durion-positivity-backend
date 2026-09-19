@@ -133,6 +133,10 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: Invalid request data
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Product not found
       security:
       - bearerAuth: []
@@ -260,6 +264,10 @@ paths:
         '204':
           description: Hint deleted successfully
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Hint not found
       security:
       - bearerAuth: []
@@ -299,6 +307,10 @@ paths:
                 $ref: '#/components/schemas/HintResponse'
           description: Hint retrieved successfully
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Hint not found
       security:
       - bearerAuth: []
@@ -362,6 +374,10 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: Invalid request data
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Hint not found
       security:
       - bearerAuth: []

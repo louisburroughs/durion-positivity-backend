@@ -929,12 +929,12 @@ paths:
           format: uuid
           type: string
       responses:
-        '200':
+        '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DocumentIngestionJobResponse'
-          description: OK
+                $ref: '#/components/schemas/ApiError'
+          description: No ingestion job exists for the id
       security:
       - bearerAuth:
         - mcp:document:ingest
