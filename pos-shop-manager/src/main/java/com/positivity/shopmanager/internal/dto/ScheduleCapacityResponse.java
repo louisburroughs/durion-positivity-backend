@@ -138,14 +138,21 @@ public class ScheduleCapacityResponse {
                         + "prior open day's close or is simply still running — listed once each, sorted by "
                         + "(fromDate, appointmentId) (issues #2021 AC4/AC5/AC6, #2050). Already netted into "
                         + "occupiedMinutes and occupancy above — this list is the detail behind those "
-                        + "numbers, never an addition to them. Populated only when status is OK. The "
-                        + "lookback that finds these is bounded at 42 days, the same limit as the requested "
-                        + "range, and what it bounds is the planned window: an appointment whose planned "
-                        + "window ended more than that far before the range's first date is never fetched, "
-                        + "so it cannot be reported here. That bound does not carry over to fromDate, which "
-                        + "reports when the work actually began and can therefore be earlier than the "
-                        + "lookback reaches. Empty when this bay has no appointments on this date, or when "
-                        + "every appointment it does have began on this date.",
+                        + "numbers, never an addition to them. Populated only when status is OK. Two "
+                        + "independent arms fetch what is listed here, and only a job that escapes both "
+                        + "goes missing. The first is bounded at 42 days, the same limit as the requested "
+                        + "range, and what it bounds is the planned window: it reaches an appointment whose "
+                        + "planned window ended within that far of the range's first date. The second has "
+                        + "no lookback at all — an appointment whose linked workorder had actually started "
+                        + "and was either still running or completed after the range began is fetched "
+                        + "however old its planned window is, which is what makes two requests covering the "
+                        + "same date agree about it. So a job is absent here only when both fail: its "
+                        + "planned window ended more than 42 days before the range's first date and its "
+                        + "actuals did not reach the range either — no started workorder, or one that had "
+                        + "already completed before the range began. Neither bound carries over to "
+                        + "fromDate, which reports when the work actually began and can therefore be "
+                        + "earlier than the lookback reaches. Empty when this bay has no appointments on "
+                        + "this date, or when every appointment it does have began on this date.",
                 requiredMode = REQUIRED)
         private List<CarryOverView> carryOverIn = new ArrayList<>();
     }

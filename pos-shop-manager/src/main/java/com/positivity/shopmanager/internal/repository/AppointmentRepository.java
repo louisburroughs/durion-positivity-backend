@@ -103,11 +103,51 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
      *       it, and only its planned window can reach back far enough to find it.
      *   <li><em>Actuals arm</em> — an {@code EXISTS} over this module's own {@code
      *       work_order_appointment_mapping} joined to its own {@code ext_workorder} replica, true when
-     *       the linked workorder has actually started ({@code workStartedAt IS NOT NULL}) and was
-     *       still running when the range began ({@code completedAt IS NULL}, or a {@code completedAt}
-     *       after {@code :rangeStart}). This is the arm that catches a job whose planned window is
-     *       older than the lookback but whose actuals reach into the requested range.
+     *       the appointment's <em>current</em> mapping (see below) names a workorder that has actually
+     *       started ({@code workStartedAt IS NOT NULL}) and was still running when the range began
+     *       ({@code completedAt IS NULL}, or a {@code completedAt} after {@code :rangeStart}). This is
+     *       the arm that catches a job whose planned window is older than the lookback but whose
+     *       actuals reach into the requested range.
      * </ul>
+     *
+     * <p><strong>The actuals arm tests the current mapping, not any mapping.</strong> Appointment ->
+     * mapping is one-to-many — a reopened workorder links a new mapping row without deleting the
+     * earlier one, and only {@code work_order_id} is unique in the baseline schema (#2023 F3/S1) — so
+     * an unrestricted {@code EXISTS} would accept a row on the strength of a mapping that is not the
+     * one the caller will go on to resolve. {@link WorkorderActuals#mostCurrent} is this module's
+     * single mapping-selection rule and it forbids a reader defining its own precedence, so the
+     * subquery applies that rule instead of inventing one: the inner {@code NOT EXISTS} keeps only the
+     * mapping with no greater {@code workOrderId} for the same appointment, which is exactly the row
+     * {@code mostCurrent} reduces to. Eligibility and resolution therefore cannot disagree — an
+     * appointment is fetched by this arm if and only if the actuals {@code
+     * ScheduleCapacityServiceImpl#resolveActuals} will resolve for it satisfy the arm's time test.
+     *
+     * <p>The inner subquery <em>deliberately</em> repeats the {@code ExtWorkorderReplica} join. {@link
+     * WorkOrderAppointmentMappingRepository#findActualsByAppointmentIds} joins the replica too, so a
+     * mapping whose replica has not arrived yields no row there and can never win {@code mostCurrent};
+     * the batch's effective rule is "the greatest {@code workOrderId} among this appointment's
+     * mappings <em>that have a replica</em>", not the greatest among all of them. Dropping the join
+     * here would let an unreplicated newer mapping mask the older one this arm must judge, and the two
+     * sites would disagree again in the opposite direction.
+     *
+     * <p>Selecting by {@code NOT EXISTS ... workOrderId >} rather than by {@code MAX(workOrderId)} is
+     * deliberate on two counts: PostgreSQL has no {@code max(uuid)} aggregate (the comparison
+     * operators it does have are what the btree {@code uuid_ops} family provides), and a {@code >}
+     * predicate is the same comparison the database already uses to order this column.
+     *
+     * <p><strong>Ordering caveat — the two selection sites agree, but not for free.</strong> {@code
+     * mostCurrent} compares in Java with {@link java.util.UUID#compareTo}, which is a <em>signed</em>
+     * comparison of the two {@code long} halves; the database compares a {@code uuid} as 16
+     * <em>unsigned</em> big-endian bytes. Signed and unsigned comparison differ only when the two
+     * operands' top bits differ, so the two agree here because of two properties of a UUIDv7
+     * (ADR-0013/0027), not by construction: (1) the most-significant half begins with the 48-bit
+     * {@code unix_ts_ms}, whose top bit stays 0 until {@code 2^47} ms after the epoch — the year 6429
+     * — so for any realistic timestamp both operands' high halves are non-negative and compare
+     * identically either way; and (2) the least-significant half, which only decides ties within the
+     * same millisecond and random block, always carries the RFC 9562 variant bits {@code 10} in its
+     * top two bits, so both operands have that bit set and their signed and unsigned order again
+     * coincide. Should either property stop holding, these two sites would have to be reconciled
+     * explicitly.
      *
      * <p>The actuals arm was once rejected here, on the grounds that {@code completedAt IS NULL} has
      * no lower bound in time and so a workorder started and never closed would be refetched forever.
@@ -158,6 +198,12 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
                                           JOIN ExtWorkorderReplica workorder
                                             ON workorder.workorderId = mapping.workOrderId
                                           WHERE mapping.appointment = appointment
+                                            AND NOT EXISTS (SELECT 1
+                                                            FROM WorkOrderAppointmentMapping newerMapping
+                                                            JOIN ExtWorkorderReplica newerWorkorder
+                                                              ON newerWorkorder.workorderId = newerMapping.workOrderId
+                                                            WHERE newerMapping.appointment = appointment
+                                                              AND newerMapping.workOrderId > mapping.workOrderId)
                                             AND workorder.workStartedAt IS NOT NULL
                                             AND (workorder.completedAt IS NULL
                                                  OR workorder.completedAt > :rangeStart)))

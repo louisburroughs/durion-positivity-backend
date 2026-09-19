@@ -1664,4 +1664,168 @@ class ScheduleCapacityServiceTest {
         assertThat(bayViaWide.getCarryOverIn().get(0).getFromDate()).isEqualTo(ninetyDaysBefore);
         assertThat(bayViaWide.getCarryOverIn().get(0).getBayHours()).isEqualByComparingTo(new BigDecimal("7.0"));
     }
+
+    // -------------------------------------------------------------------------
+    // The actuals arm judges the CURRENT mapping, not any mapping (#2023 F3/S1)
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2050 / #2023 F3 - a stale mapping left behind by a reopen must not make an "
+            + "appointment eligible: the actuals arm judges the CURRENT mapping, which finished "
+            + "before the range began, so the day reports zero")
+    void staleMappingDoesNotMakeAppointmentEligibleWhenCurrentMappingFinishedBeforeTheRange() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID reopenedBayId = persistBay("Bay 1", locationId);
+        UUID controlBayId = persistBay("Bay 2", locationId);
+        // Planned 50 days before the range, so its planned window ends outside
+        // CARRY_OVER_LOOKBACK_DAYS (42) and the planned arm cannot reach either row: the actuals
+        // arm is the only route to both, which is what makes this a test of the arm and not of the
+        // lookback.
+        LocalDate fiftyDaysBefore = MONDAY.minusDays(50);
+        // The Saturday BEFORE the range (the SATURDAY constant is the one that follows it). It
+        // closes at 13:00, so work finishing at 20:00 that day overruns by 420 minutes, which pass
+        // 2 would distribute onto the next open day - Monday, the only day requested here. That is
+        // what makes a wrongly fetched row visible as 420 minutes rather than as a silent no-op.
+        LocalDate priorSaturday = MONDAY.minusDays(2);
+
+        // workOrderId ordering is load-bearing here - the arm keeps the mapping with no GREATER
+        // workOrderId - so the two ids are fixed rather than drawn from two successive
+        // UUIDv7Generator.generate() calls, and the order they encode is asserted rather than
+        // assumed. If a future generator or comparison change inverts it, this assertion fails
+        // loudly instead of the fixture silently testing the opposite mapping.
+        UUID staleWorkOrderId = UUID.fromString("00000000-0000-7000-8000-000000000011");
+        UUID currentWorkOrderId = UUID.fromString("00000000-0000-7000-8000-000000000012");
+        assertThat(currentWorkOrderId).isGreaterThan(staleWorkOrderId);
+
+        Appointment reopened = persistAppointment(
+                locationId,
+                reopenedBayId,
+                instant(fiftyDaysBefore, 10, 0),
+                instant(fiftyDaysBefore, 12, 0),
+                AppointmentStatus.SCHEDULED);
+        // The stale mapping: the original workorder, never closed out, so it still reads as in
+        // progress and satisfies the arm's time test for every request that ever asks.
+        persistWorkorderLink(staleWorkOrderId, reopened, instant(fiftyDaysBefore, 10, 0), null);
+        // The current mapping: the reopen that superseded it. Its replica HAS arrived - that is the
+        // whole point of this shape - and it finished at 20:00 on the Saturday before the range,
+        // i.e. it was not still running when the range began.
+        persistWorkorderLink(
+                currentWorkOrderId, reopened, instant(fiftyDaysBefore, 10, 0), instant(priorSaturday, 20, 0));
+
+        // The control, in its own bay: identical geometry and an identical stale mapping, differing
+        // only in that its current mapping WAS still running when the range began (it finished
+        // Monday 10:00). It must still be fetched, and its 120 minutes are what makes the zero
+        // above evidence of a refused fetch rather than of a fixture that could never contribute.
+        UUID controlStaleWorkOrderId = UUID.fromString("00000000-0000-7000-8000-000000000021");
+        UUID controlCurrentWorkOrderId = UUID.fromString("00000000-0000-7000-8000-000000000022");
+        assertThat(controlCurrentWorkOrderId).isGreaterThan(controlStaleWorkOrderId);
+        Appointment control = persistAppointment(
+                locationId,
+                controlBayId,
+                instant(fiftyDaysBefore, 10, 0),
+                instant(fiftyDaysBefore, 12, 0),
+                AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(controlStaleWorkOrderId, control, instant(fiftyDaysBefore, 10, 0), null);
+        persistWorkorderLink(
+                controlCurrentWorkOrderId, control, instant(fiftyDaysBefore, 10, 0), instant(MONDAY, 10, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse.DayCapacityView monday = scheduleCapacityService
+                .getCapacity(locationId, MONDAY, MONDAY)
+                .getDays()
+                .get(0);
+        assertThat(monday.getDate()).isEqualTo(MONDAY);
+        assertThat(monday.getBays()).hasSize(2);
+        ScheduleCapacityResponse.BayCapacityView reopenedBay = monday.getBays().get(0);
+        ScheduleCapacityResponse.BayCapacityView controlBay = monday.getBays().get(1);
+        assertThat(reopenedBay.getBayId()).isEqualTo(reopenedBayId);
+        assertThat(controlBay.getBayId()).isEqualTo(controlBayId);
+
+        // ELIGIBILITY AND RESOLUTION MUST AGREE, and that is the whole content of this test.
+        // WorkorderActuals#mostCurrent is this module's single mapping-selection rule (#2023
+        // F3/S1): appointment -> mapping is one-to-many, a reopen adds a row without deleting the
+        // earlier one, and every reader must take the greatest workOrderId "rather than defining
+        // their own precedence". The fetch predicate is a reader too. Because
+        // findActualsByAppointmentIds joins the replica, the rule it actually implements is "the
+        // greatest workOrderId among the mappings that have a replica" - here both are replicated,
+        // so the resolved mapping is the reopen, which finished before the range began and cannot
+        // put a minute into it. The arm must therefore refuse the row.
+        //
+        // The regression. While the arm accepted ANY mapping, the stale still-open workorder made
+        // this row eligible; the batch then resolved the reopen anyway, and the reopen's Saturday
+        // overrun (420 minutes, redistributed onto Monday) entered capacity on the strength of a
+        // workorder whose actuals were never used. Note that the more obvious scenario - a newer
+        // mapping whose replica has not arrived - does NOT discriminate: both the old and the new
+        // predicate drop an unreplicated mapping at the replica join, so both fetch on the older
+        // one and both resolve it. Replicas on BOTH mappings is what separates them.
+        assertThat(reopenedBay.getOccupiedMinutes())
+                .as("the current mapping finished before the range began, so the row is not eligible (#2023 F3/S1)")
+                .isZero();
+        assertThat(reopenedBay.getOccupancy()).containsOnly(0);
+        assertThat(reopenedBay.getCarryOverIn()).isEmpty();
+
+        assertThat(controlBay.getOccupiedMinutes())
+                .as("the same two-mapping shape whose CURRENT mapping was still running at the "
+                        + "range start is still fetched, so the zero above is a refused fetch")
+                .isEqualTo(120);
+        assertThat(controlBay.getOccupancy()).containsExactly(1, 1, 0, 0, 0, 0, 0, 0, 0);
+        assertThat(controlBay.getCarryOverIn()).hasSize(1);
+        ScheduleCapacityResponse.CarryOverView controlCarryOver =
+                controlBay.getCarryOverIn().get(0);
+        assertThat(controlCarryOver.getFromDate()).isEqualTo(fiftyDaysBefore);
+        assertThat(controlCarryOver.getWorkorderId())
+                .as("the reported workorder is the resolved current mapping, not the stale one")
+                .isEqualTo(controlCurrentWorkOrderId);
+        assertThat(controlCarryOver.getBayHours()).isEqualByComparingTo(new BigDecimal("2.0"));
+    }
+
+    @Test
+    @DisplayName("#2023 F3/S1 - the actuals arm selects the GREATEST mapping, not merely a "
+            + "consistent one: an older never-started mapping does not hide the current one")
+    void actualsArmSelectsTheGreatestMappingNotTheOldest() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        // Same 50-day-old planned window as above: outside CARRY_OVER_LOOKBACK_DAYS, so only the
+        // actuals arm can fetch this row.
+        LocalDate fiftyDaysBefore = MONDAY.minusDays(50);
+        // The sibling direction of the same rule, and the reason "greatest" is not interchangeable
+        // with "any consistent one": here it is the OLDER mapping that fails the arm's time test
+        // (a workorder opened and never started) and the current one that passes. A predicate that
+        // selected the least workOrderId would be just as deterministic as this one and would
+        // wrongly report zero.
+        UUID abandonedWorkOrderId = UUID.fromString("00000000-0000-7000-8000-000000000031");
+        UUID currentWorkOrderId = UUID.fromString("00000000-0000-7000-8000-000000000032");
+        assertThat(currentWorkOrderId).isGreaterThan(abandonedWorkOrderId);
+
+        Appointment appointment = persistAppointment(
+                locationId,
+                bayId,
+                instant(fiftyDaysBefore, 10, 0),
+                instant(fiftyDaysBefore, 12, 0),
+                AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(abandonedWorkOrderId, appointment, null, null);
+        persistWorkorderLink(currentWorkOrderId, appointment, instant(fiftyDaysBefore, 10, 0), instant(MONDAY, 10, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse.BayCapacityView mondayBay = scheduleCapacityService
+                .getCapacity(locationId, MONDAY, MONDAY)
+                .getDays()
+                .get(0)
+                .getBays()
+                .get(0);
+
+        // The job held the bay from Monday's 08:00 open until the reopen finished at 10:00.
+        assertThat(mondayBay.getOccupiedMinutes())
+                .as("the arm must judge the greatest mapping, which ran into the range (#2023 F3/S1)")
+                .isEqualTo(120);
+        assertThat(mondayBay.getOccupancy()).containsExactly(1, 1, 0, 0, 0, 0, 0, 0, 0);
+        assertThat(mondayBay.getCarryOverIn()).hasSize(1);
+        ScheduleCapacityResponse.CarryOverView carryOver =
+                mondayBay.getCarryOverIn().get(0);
+        assertThat(carryOver.getFromDate()).isEqualTo(fiftyDaysBefore);
+        assertThat(carryOver.getWorkorderId())
+                .as("fetched on, and resolved to, the greatest workOrderId - the same mapping at both sites")
+                .isEqualTo(currentWorkOrderId);
+        assertThat(carryOver.getBayHours()).isEqualByComparingTo(new BigDecimal("2.0"));
+    }
 }
