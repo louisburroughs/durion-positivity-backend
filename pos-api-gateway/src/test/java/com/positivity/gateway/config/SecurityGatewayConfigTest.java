@@ -6,6 +6,10 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.BitSet;
@@ -628,6 +632,67 @@ class SecurityGatewayConfigTest {
         filter.filter(exchange, ignored -> Mono.empty()).block();
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    /**
+     * #2082: under the accelerated profile the issuer stamps {@code exp} from a clock a year behind
+     * wall time. The gateway must judge expiry on that same clock, not the system clock.
+     */
+    @Nested
+    @DisplayName("#2082 token expiry is judged on the injected clock")
+    class InjectedClockExpiry {
+
+        private final Instant virtualIssuedAt = Instant.now().minus(Duration.ofDays(365));
+
+        private String tokenIssuedOnVirtualClock() {
+            return Jwts.builder()
+                    .subject("alice")
+                    .issuer(TEST_ISSUER)
+                    .audience()
+                    .add(TEST_AUDIENCE)
+                    .and()
+                    .claim("uid", "u1")
+                    .claim("perm_bits", "")
+                    .claim("perm_ver", GatewayPermissionCatalog.CATALOG_VERSION)
+                    .issuedAt(Date.from(virtualIssuedAt))
+                    .expiration(Date.from(virtualIssuedAt.plus(Duration.ofHours(1))))
+                    .signWith(TEST_KEY)
+                    .compact();
+        }
+
+        private HttpStatus statusAt(Instant gatewayNow) {
+            GlobalFilter filter = new SecurityGatewayConfig(
+                            TEST_SECRET,
+                            false,
+                            Set.of("HS256"),
+                            new GatewayAuthProperties(),
+                            new SimpleMeterRegistry(),
+                            TokenRevocationChecker.DISABLED,
+                            Clock.fixed(gatewayNow, ZoneOffset.UTC))
+                    .authFilter();
+            var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenIssuedOnVirtualClock())
+                    .build());
+
+            filter.filter(exchange, ignored -> Mono.empty()).block();
+
+            return (HttpStatus) exchange.getResponse().getStatusCode();
+        }
+
+        @Test
+        void tokenIsAccepted_beforeTheInjectedClockReachesExp() {
+            assertThat(statusAt(virtualIssuedAt.plus(Duration.ofMinutes(30)))).isNull();
+        }
+
+        @Test
+        void tokenIsRejected_afterTheInjectedClockPassesExp() {
+            assertThat(statusAt(virtualIssuedAt.plus(Duration.ofHours(2)))).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
+        @Test
+        void tokenIsRejected_onTheWallClock_whichIsWhatBrokeTheAcceleratedRun() {
+            assertThat(statusAt(Instant.now())).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
     }
 
     // ── PERM-009 — auth.token-identity-required feature flag ─────────────────
