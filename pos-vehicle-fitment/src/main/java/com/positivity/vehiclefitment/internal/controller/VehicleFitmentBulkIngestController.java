@@ -5,6 +5,7 @@ import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.bulkingest.BulkIngestResponse;
 import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.vehiclefitment.internal.dto.FitmentBulkIngestRecord;
 import com.positivity.vehiclefitment.internal.security.VehicleFitmentPermissions;
 import com.positivity.vehiclefitment.internal.service.VehicleFitmentService;
@@ -13,6 +14,8 @@ import com.positivity.vehiclefitment.internal.service.dto.PartFitmentResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
@@ -80,6 +83,21 @@ public class VehicleFitmentBulkIngestController extends AbstractBulkIngestContro
     @PostMapping("/bulk-ingest")
     @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_CREATE + "')")
     @EmitEvent(id = "VEHICLE_FITMENT_BULK_INGEST", apiVersion = "1")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Batch processed; inspect per-record results",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = BulkIngestResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =

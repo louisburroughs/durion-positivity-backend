@@ -3,6 +3,7 @@ package com.positivity.tax.internal.controller;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxProviderTransactionResult;
@@ -79,8 +80,14 @@ public class TaxController {
                     provider is unreachable in production mode.
                     """)
     @ApiResponse(responseCode = "200", description = "Tax calculated successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid tax calculation request")
-    @ApiResponse(responseCode = "500", description = "Tax calculation failed")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid tax calculation request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "Tax calculation failed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"tax:calculate"})

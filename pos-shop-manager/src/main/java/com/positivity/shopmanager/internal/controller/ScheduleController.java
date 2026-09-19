@@ -70,12 +70,18 @@ public class ScheduleController {
                     and 404 when the location is unknown or the resourceId filter matches no lane on that date.
                     """)
     @ApiResponse(responseCode = "200", description = "Schedule retrieved successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid input parameters")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid input parameters",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Location or resource not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location or resource not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/schedules/view")
     @EmitEvent(id = "SHOPMGR_SCHEDULE_VIEW", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + ShopPermissions.SCHEDULE_VIEW + "')")

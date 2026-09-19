@@ -1,6 +1,7 @@
 package com.positivity.tax.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.tax.internal.dto.ExemptionCertificateRequest;
 import com.positivity.tax.internal.dto.ExemptionCertificateResponse;
 import com.positivity.tax.internal.security.TaxPermissions;
@@ -8,6 +9,7 @@ import com.positivity.tax.internal.service.ExemptionCertificateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -92,7 +94,10 @@ public class ExemptionCertificateController {
                     Returns 404 when no certificate exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Certificate found")
-    @ApiResponse(responseCode = "404", description = "Certificate not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Certificate not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"tax:exemption:view"})
@@ -128,7 +133,10 @@ public class ExemptionCertificateController {
                     recognised value.
                     """)
     @ApiResponse(responseCode = "201", description = "Certificate created")
-    @ApiResponse(responseCode = "400", description = "Invalid certificate payload")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid certificate payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"tax:exemption:manage"})
@@ -182,7 +190,10 @@ public class ExemptionCertificateController {
                     effectiveFrom are missing from the body.
                     """)
     @ApiResponse(responseCode = "200", description = "Certificate updated")
-    @ApiResponse(responseCode = "404", description = "Certificate not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Certificate not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"tax:exemption:manage"})

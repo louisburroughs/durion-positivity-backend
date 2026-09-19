@@ -134,7 +134,10 @@ public class TechnicianController {
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "No technician links this person to this location.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No technician links this person to this location.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "SHOPMGR_TECHNICIAN_PERSON_GET", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

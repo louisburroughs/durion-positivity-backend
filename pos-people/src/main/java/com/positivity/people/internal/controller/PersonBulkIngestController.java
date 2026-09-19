@@ -16,9 +16,12 @@ import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.EmployeeService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -73,6 +76,21 @@ public class PersonBulkIngestController extends AbstractBulkIngestController<Per
                     to a server-side fault. Returns 400 when the envelope itself is invalid or the records list is \
                     empty.
                     """)
+    @ApiResponse(
+            responseCode = "200",
+            description = "Batch processed; inspect per-record results",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = BulkIngestResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Bulk ingest envelope: a job-scoped batch of person records to import as"

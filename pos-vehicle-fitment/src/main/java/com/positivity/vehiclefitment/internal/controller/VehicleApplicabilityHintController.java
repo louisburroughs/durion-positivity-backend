@@ -1,6 +1,7 @@
 package com.positivity.vehiclefitment.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.vehiclefitment.internal.dto.CreateHintRequest;
 import com.positivity.vehiclefitment.internal.dto.FilterProductsRequest;
 import com.positivity.vehiclefitment.internal.dto.FilterProductsResponse;
@@ -12,6 +13,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -63,8 +65,11 @@ public class VehicleApplicabilityHintController {
                     product id still returns 201 rather than 404.
                     """)
     @ApiResponse(responseCode = "201", description = "Hint created successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request data")
-    @ApiResponse(responseCode = "404", description = "Product not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request data",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "404", description = "Product not found", content = @Content())
     @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_CREATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -114,8 +119,11 @@ public class VehicleApplicabilityHintController {
                     Returns 200 with the updated hint, and 404 when no hint exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Hint updated successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request data")
-    @ApiResponse(responseCode = "404", description = "Hint not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request data",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "404", description = "Hint not found", content = @Content())
     @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_UPDATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -163,7 +171,7 @@ public class VehicleApplicabilityHintController {
                     Returns 204 on successful deletion, and 404 when no hint exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "204", description = "Hint deleted successfully")
-    @ApiResponse(responseCode = "404", description = "Hint not found")
+    @ApiResponse(responseCode = "404", description = "Hint not found", content = @Content())
     @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_DELETE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -191,7 +199,7 @@ public class VehicleApplicabilityHintController {
                     Returns 200 with the hint, and 404 when no hint exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Hint retrieved successfully")
-    @ApiResponse(responseCode = "404", description = "Hint not found")
+    @ApiResponse(responseCode = "404", description = "Hint not found", content = @Content())
     @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -251,7 +259,10 @@ public class VehicleApplicabilityHintController {
                     vehicleAttributes is missing, empty, or contains blank keys or values.
                     """)
     @ApiResponse(responseCode = "200", description = "Products filtered successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request data")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request data",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.CATALOG_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

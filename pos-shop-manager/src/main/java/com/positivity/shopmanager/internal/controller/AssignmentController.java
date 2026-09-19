@@ -136,7 +136,10 @@ public class AssignmentController {
             responseCode = "200",
             description = "Assignments returned",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = AssignmentResponse.class))))
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public @NonNull List<AssignmentResponse> listAssignments(
             @Parameter(description = "Appointment identifier", required = true) @PathVariable UUID appointmentId) {
         return assignmentService.getByAppointmentId(appointmentId);

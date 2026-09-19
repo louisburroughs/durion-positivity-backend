@@ -5,6 +5,7 @@ import com.positivity.mcp.internal.config.DocumentIngestionJob;
 import com.positivity.mcp.internal.config.DocumentIngestionJobStatus;
 import com.positivity.mcp.internal.config.DocumentIngestionService;
 import com.positivity.mcp.internal.security.McpPermissions;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -64,7 +65,10 @@ public class DocumentIngestionController {
                     """,
             tags = {"Document Ingestion"})
     @ApiResponse(responseCode = "202", description = "Ingestion job accepted")
-    @ApiResponse(responseCode = "400", description = "Document metadata is not JSON-serializable")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Document metadata is not JSON-serializable",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<DocumentIngestionJobResponse> ingestDocument(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Raw document text to embed, with optional identifying metadata.",
