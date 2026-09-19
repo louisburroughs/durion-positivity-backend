@@ -824,7 +824,7 @@ public class ProductController {
                             schema = @Schema(implementation = ProductDetailView.class)))
     @ApiResponse(
             responseCode = "400",
-            description = "Invalid location ID",
+            description = "location_id is missing or not a UUID",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -841,10 +841,6 @@ public class ProductController {
                     UUID locationId) {
 
         log.info("Product detail view requested: productId={}, locationId={}", productId, locationId);
-        if (locationId == null) {
-            log.warn("Invalid location_id provided: {}", locationId);
-            return ResponseEntity.badRequest().build();
-        }
 
         ProductDetailView productDetail = productDetailService.getProductDetail(productId, locationId);
         if (productDetail == null) {
