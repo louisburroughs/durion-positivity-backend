@@ -74,7 +74,10 @@ public class CycleCountToleranceController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CycleCountToleranceResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request or scope already configured")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or scope already configured",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CycleCountToleranceResponse> create(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Tolerance scope (product, storage location, or both) and its absolute"
@@ -134,7 +137,10 @@ public class CycleCountToleranceController {
             responseCode = "404",
             description = "Tolerance not found",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "400", description = "Reactivation would collide with an existing active scope")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Reactivation would collide with an existing active scope",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CycleCountToleranceResponse> update(
             @Parameter(description = "Tolerance ID", required = true) @PathVariable UUID toleranceId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

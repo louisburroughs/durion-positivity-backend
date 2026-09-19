@@ -76,7 +76,10 @@ public class CycleCountScheduleController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CycleCountScheduleResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "FORBIDDEN when the caller lacks inventory:cycle_count:initiate;"
@@ -195,7 +198,10 @@ public class CycleCountScheduleController {
                     + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
                     + " locations that do not cover the schedule's locationId (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Cycle count schedule not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Cycle count schedule not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CycleCountScheduleResponse> getSchedule(
             @Parameter(description = "Cycle count schedule identifier", required = true) @PathVariable
                     UUID scheduleId) {
@@ -234,9 +240,18 @@ public class CycleCountScheduleController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CycleCountScheduleResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure")
-    @ApiResponse(responseCode = "403", description = "User lacks required permission")
-    @ApiResponse(responseCode = "404", description = "Cycle count schedule not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Cycle count schedule not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CycleCountScheduleResponse> updateSchedule(
             @Parameter(description = "Cycle count schedule identifier", required = true) @PathVariable UUID scheduleId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -286,8 +301,14 @@ public class CycleCountScheduleController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CycleCountScheduleResponse.class)))
-    @ApiResponse(responseCode = "403", description = "User lacks required permission")
-    @ApiResponse(responseCode = "404", description = "Cycle count schedule not found")
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Cycle count schedule not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CycleCountScheduleResponse> deactivateSchedule(
             @Parameter(description = "Cycle count schedule identifier", required = true) @PathVariable
                     UUID scheduleId) {

@@ -68,7 +68,10 @@ public class LocationInventoryRollupController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = LocationInventoryRollupResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid parameters (unknown parentType, bad expand value)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid parameters (unknown parentType, bad expand value)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "FORBIDDEN when the caller lacks inventory:on_hand:view;"

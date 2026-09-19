@@ -100,7 +100,10 @@ public class InventoryAvailabilityController {
                     @Content(
                             mediaType = "application/json",
                             array = @ArraySchema(schema = @Schema(implementation = LocationAvailabilityDto.class))))
-    @ApiResponse(responseCode = "400", description = "Invalid product identifier")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid product identifier",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     // Issue #48: Expose on-hand and ATP grouped by location.
     public ResponseEntity<List<LocationAvailabilityDto>> queryInventoryAvailability(
             @Parameter(description = "Product identifier", required = true) @PathVariable UUID productId,
@@ -491,7 +494,10 @@ public class InventoryAvailabilityController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = InventoryAvailabilityResponse.class)))
-    @ApiResponse(responseCode = "501", description = "Not implemented")
+    @ApiResponse(
+            responseCode = "501",
+            description = "Not implemented. The response has NO body.",
+            content = @Content(schema = @Schema(hidden = true)))
     public ResponseEntity<InventoryAvailabilityResponse> updateInventoryAvailability(
             @Parameter(description = "Product identifier", required = true) @PathVariable UUID productId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

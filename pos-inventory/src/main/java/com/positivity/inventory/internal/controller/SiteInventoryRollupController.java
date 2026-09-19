@@ -63,7 +63,10 @@ public class SiteInventoryRollupController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = SiteInventoryRollupResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid parameters")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid parameters",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "User lacks required on-hand view authority",

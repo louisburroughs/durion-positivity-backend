@@ -153,7 +153,10 @@ public class ReplenishmentController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ReplenishmentPolicyResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "FORBIDDEN when the caller lacks inventory:replenishment:manage;"
@@ -216,8 +219,14 @@ public class ReplenishmentController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ReplenishmentPolicyResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure")
-    @ApiResponse(responseCode = "404", description = "Policy not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Policy not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReplenishmentPolicyResponse> updateReplenishmentPolicy(
             @io.swagger.v3.oas.annotations.Parameter(description = "Replenishment policy identifier") @PathVariable
                     UUID policyId,
@@ -270,8 +279,14 @@ public class ReplenishmentController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ReplenishmentPolicyResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Policy not found")
-    @ApiResponse(responseCode = "422", description = "snoozedUntil is not in the future")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Policy not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "snoozedUntil is not in the future",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReplenishmentPolicyResponse> snoozeReplenishmentPolicy(
             @io.swagger.v3.oas.annotations.Parameter(description = "Replenishment policy identifier") @PathVariable
                     UUID policyId,

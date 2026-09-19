@@ -76,7 +76,10 @@ public class PutawayController {
                     @Content(
                             mediaType = "application/json",
                             array = @ArraySchema(schema = @Schema(implementation = PutawayTaskResponse.class))))
-    @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Goods receipt not found",
@@ -178,7 +181,10 @@ public class PutawayController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = PutawayTaskResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Putaway task not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Putaway task not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PutawayTaskResponse> claimTask(
             @Parameter(description = "Putaway task identifier", required = true) @PathVariable String taskId) {
         String actor = SecurityContextHelper.getCurrentUsername()

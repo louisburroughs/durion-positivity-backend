@@ -100,7 +100,10 @@ public class CycleCountAdjustmentController {
                     """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "201", description = "Adjustment created successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request or no variance detected")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or no variance detected",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Referenced cycle count task not found",
@@ -175,8 +178,14 @@ public class CycleCountAdjustmentController {
                     """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "200", description = "Adjustment approved and posted")
-    @ApiResponse(responseCode = "400", description = "Adjustment not found or not in approvable state")
-    @ApiResponse(responseCode = "403", description = "User lacks required approval permission")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Adjustment not found or not in approvable state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required approval permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Adjustment not PENDING_APPROVAL, or conflict gate rejected the approval"
@@ -239,8 +248,14 @@ public class CycleCountAdjustmentController {
                     """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "200", description = "Adjustment rejected")
-    @ApiResponse(responseCode = "400", description = "Adjustment not found or not in rejectable state")
-    @ApiResponse(responseCode = "403", description = "User lacks required approval permission")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Adjustment not found or not in rejectable state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required approval permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Adjustment is not in PENDING_APPROVAL status",
@@ -293,7 +308,10 @@ public class CycleCountAdjustmentController {
                     """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "200", description = "Adjustment found")
-    @ApiResponse(responseCode = "404", description = "Adjustment not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Adjustment not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AdjustmentResponse> getAdjustment(
             @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId) {
         AdjustmentResponse response = adjustmentService.getAdjustment(adjustmentId);

@@ -74,8 +74,14 @@ public class StockMovementController {
                     """,
             tags = {"Stock Movements"})
     @ApiResponse(responseCode = "201", description = "Movement recorded")
-    @ApiResponse(responseCode = "400", description = "Validation failure")
-    @ApiResponse(responseCode = "422", description = "Insufficient stock")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Insufficient stock",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> recordMovement(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "The directional movement to post: SKU, source location, movement type"

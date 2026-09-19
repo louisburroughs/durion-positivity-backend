@@ -9,9 +9,12 @@ import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.InventoryBulkIngestRecord;
 import com.positivity.inventory.internal.movement.service.StockMovementService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
@@ -64,6 +67,11 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
                     the envelope itself is invalid because jobId, locationId or records are missing.
                     """,
             tags = {"Inventory Bulk Ingest API"})
+    @ApiResponse(responseCode = "200", description = "Batch processed (check per-record success/failure in response)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Batch envelope with the job, target location and the adjustment records"
