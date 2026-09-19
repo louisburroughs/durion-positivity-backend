@@ -1,8 +1,10 @@
 package com.positivity.customer.internal.controller;
 
+import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.CustomerRequirementsService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -55,8 +57,17 @@ public class CustomerRequirementsController {
                 @ApiResponse(
                         responseCode = "403",
                         description = "Caller lacks PARTY_VIEW authority",
-                        content = @Content),
-                @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Customer not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/{id}/requirements-met")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
@@ -66,6 +77,6 @@ public class CustomerRequirementsController {
         return customerRequirementsService
                 .requirementsMet(id)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new CrmResourceNotFoundException("Customer", id));
     }
 }

@@ -2,6 +2,7 @@ package com.positivity.customer.internal.controller;
 
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
 import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
+import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.CrmVehicleService;
 import com.positivity.customer.internal.service.PartyService;
@@ -68,8 +69,20 @@ public class CrmSnapshotController {
                         responseCode = "200",
                         description = "Success",
                         content = @Content(schema = @Schema(implementation = CrmSnapshotDTO.class))),
-                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content),
-                @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Party not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Access denied",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/party/{partyId}")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
@@ -80,10 +93,10 @@ public class CrmSnapshotController {
         log.info("Fetching snapshot by party: {}", partyId);
 
         CrmSnapshotDTO result = partyOps.buildSnapshotForParty(partyId);
-
-        return result != null
-                ? ResponseEntity.ok(result)
-                : ResponseEntity.notFound().build();
+        if (result == null) {
+            throw new CrmResourceNotFoundException("Party", partyId);
+        }
+        return ResponseEntity.ok(result);
     }
 
     @Operation(operationId = "getPartyBillingRules", summary = "Get Party Billing Rules", description = """
@@ -117,7 +130,7 @@ public class CrmSnapshotController {
             @Parameter(description = "Party ID (UUID)") @PathVariable UUID partyId) {
         BillingRuleRef rules = partyOps.getBillingRulesForParty(partyId);
         if (rules == null) {
-            return ResponseEntity.notFound().build();
+            throw new CrmResourceNotFoundException("Party", partyId);
         }
         return ResponseEntity.ok(rules);
     }
@@ -139,8 +152,20 @@ public class CrmSnapshotController {
                         responseCode = "200",
                         description = "Success",
                         content = @Content(schema = @Schema(implementation = CrmSnapshotDTO.class))),
-                @ApiResponse(responseCode = "404", description = "Vehicle or owner not found", content = @Content),
-                @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Vehicle or owner not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Access denied",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/vehicle/{vehicleId}")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
@@ -151,9 +176,9 @@ public class CrmSnapshotController {
         log.info("Fetching snapshot by vehicle: {}", vehicleId);
 
         CrmSnapshotDTO result = vehicleOps.buildSnapshotForVehicleOwner(vehicleId);
-
-        return result != null
-                ? ResponseEntity.ok(result)
-                : ResponseEntity.notFound().build();
+        if (result == null) {
+            throw new CrmResourceNotFoundException("Vehicle owner", vehicleId);
+        }
+        return ResponseEntity.ok(result);
     }
 }

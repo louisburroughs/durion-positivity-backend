@@ -97,11 +97,20 @@ public class CrmAccountsController {
                         responseCode = "200",
                         description = "Tier retrieved successfully",
                         content = @Content(schema = @Schema(implementation = GetAccountTierResponse.class))),
-                @ApiResponse(responseCode = "404", description = "Account not found", content = @Content),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Account not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/{accountId}/tier")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -139,12 +148,27 @@ public class CrmAccountsController {
                         responseCode = "200",
                         description = "Tier resolved successfully",
                         content = @Content(schema = @Schema(implementation = ResolveAccountTierResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
-                @ApiResponse(responseCode = "404", description = "Account not found", content = @Content),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid request",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Account not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/tierResolve")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -199,11 +223,20 @@ public class CrmAccountsController {
                         responseCode = "201",
                         description = "Account created successfully",
                         content = @Content(schema = @Schema(implementation = CreateCommercialAccountResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid request",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/parties")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -249,11 +282,20 @@ public class CrmAccountsController {
                         responseCode = "200",
                         description = "Party details retrieved successfully",
                         content = @Content(schema = @Schema(implementation = GetPartyResponse.class))),
-                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Party not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/parties/{partyId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -294,7 +336,10 @@ public class CrmAccountsController {
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/parties")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -355,11 +400,20 @@ public class CrmAccountsController {
                         responseCode = "200",
                         description = "Search results returned",
                         content = @Content(schema = @Schema(implementation = SearchPartiesResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid search criteria", content = @Content),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid search criteria",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/parties/search")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -405,11 +459,20 @@ public class CrmAccountsController {
                         description = "Resolved party id-to-name pairs",
                         content =
                                 @Content(array = @ArraySchema(schema = @Schema(implementation = PartyNameRef.class)))),
-                @ApiResponse(responseCode = "400", description = "Invalid resolve request", content = @Content),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid resolve request",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/parties:resolve")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -458,12 +521,27 @@ public class CrmAccountsController {
                         responseCode = "200",
                         description = "Parties merged successfully",
                         content = @Content(schema = @Schema(implementation = MergePartiesResponse.class))),
-                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content),
-                @ApiResponse(responseCode = "400", description = "Invalid merge request", content = @Content),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Party not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid merge request",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/parties/{partyId}/merge")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -514,11 +592,20 @@ public class CrmAccountsController {
                         description = "Preferences retrieved successfully",
                         content =
                                 @Content(schema = @Schema(implementation = GetCommunicationPreferencesResponse.class))),
-                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Party not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/parties/{partyId}/communicationPreferences")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -560,12 +647,27 @@ public class CrmAccountsController {
                                                 @Schema(
                                                         implementation =
                                                                 UpsertCommunicationPreferencesResponse.class))),
-                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content),
-                @ApiResponse(responseCode = "400", description = "Invalid preference data", content = @Content),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Party not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid preference data",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/parties/{partyId}/communicationPreferences")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -617,12 +719,27 @@ public class CrmAccountsController {
                         responseCode = "201",
                         description = "Vehicle created successfully",
                         content = @Content(schema = @Schema(implementation = CreateVehicleForPartyResponse.class))),
-                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content),
-                @ApiResponse(responseCode = "400", description = "Invalid vehicle data", content = @Content),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Party not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid vehicle data",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/parties/{partyId}/vehicles")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -675,11 +792,17 @@ public class CrmAccountsController {
                 @ApiResponse(
                         responseCode = "400",
                         description = "Invalid request - legalName too short or blank",
-                        content = @Content),
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/parties/duplicate-check")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -722,12 +845,27 @@ public class CrmAccountsController {
                         responseCode = "200",
                         description = "Billing rules updated successfully",
                         content = @Content(schema = @Schema(implementation = BillingRuleRef.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid request body", content = @Content),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid request body",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content),
-                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Party not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @PutMapping("/parties/{partyId}/billing-rules")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

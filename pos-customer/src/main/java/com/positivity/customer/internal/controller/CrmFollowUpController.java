@@ -9,6 +9,7 @@ import com.positivity.customer.internal.enums.FollowUpType;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.FollowUpTaskService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -65,7 +66,10 @@ public class CrmFollowUpController {
                 responseCode = "200",
                 description = "Queue returned",
                 content = @Content(schema = @Schema(implementation = PagedResponse.class))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/follow-ups")
     @SecurityRequirement(
@@ -97,8 +101,14 @@ public class CrmFollowUpController {
                 responseCode = "200",
                 description = "Task returned",
                 content = @Content(schema = @Schema(implementation = FollowUpTaskResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Task not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Task not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/follow-ups/{taskId}")
     @SecurityRequirement(
@@ -127,7 +137,10 @@ public class CrmFollowUpController {
                 responseCode = "200",
                 description = "Tasks returned",
                 content = @Content(schema = @Schema(implementation = PagedResponse.class))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/parties/{partyId}/follow-ups")
     @SecurityRequirement(
@@ -162,8 +175,14 @@ public class CrmFollowUpController {
                 responseCode = "201",
                 description = "Task raised",
                 content = @Content(schema = @Schema(implementation = FollowUpTaskResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Party not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Party not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/parties/{partyId}/follow-ups")
     @SecurityRequirement(
@@ -211,9 +230,18 @@ public class CrmFollowUpController {
                 responseCode = "200",
                 description = "Task assigned",
                 content = @Content(schema = @Schema(implementation = FollowUpTaskResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Task not found", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Task is already closed", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Task not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Task is already closed",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PutMapping("/follow-ups/{taskId}/assignee")
     @SecurityRequirement(
@@ -244,9 +272,18 @@ public class CrmFollowUpController {
                 responseCode = "200",
                 description = "Task completed",
                 content = @Content(schema = @Schema(implementation = FollowUpTaskResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Task not found", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Task is already closed", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Task not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Task is already closed",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/follow-ups/{taskId}/complete")
     @SecurityRequirement(
@@ -290,9 +327,18 @@ public class CrmFollowUpController {
                 responseCode = "200",
                 description = "Task dismissed",
                 content = @Content(schema = @Schema(implementation = FollowUpTaskResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Task not found", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Task is already closed", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Task not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Task is already closed",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/follow-ups/{taskId}/dismiss")
     @SecurityRequirement(

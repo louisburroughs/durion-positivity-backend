@@ -9,6 +9,7 @@ import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.MarketingConsentService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -60,8 +61,14 @@ public class CrmConsentController {
                 responseCode = "200",
                 description = "Consent returned",
                 content = @Content(schema = @Schema(implementation = MarketingConsentSummaryResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Party not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Party not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/marketing-consent")
     @SecurityRequirement(
@@ -95,8 +102,14 @@ public class CrmConsentController {
                 responseCode = "200",
                 description = "Consent updated",
                 content = @Content(schema = @Schema(implementation = MarketingConsentSummaryResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Party not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Party not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PutMapping("/marketing-consent")
     @SecurityRequirement(
@@ -143,8 +156,14 @@ public class CrmConsentController {
                 responseCode = "200",
                 description = "Gate updated",
                 content = @Content(schema = @Schema(implementation = MarketingConsentSummaryResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Commercial party not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Commercial party not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PutMapping("/marketing-consent/account-gate")
     @SecurityRequirement(
@@ -176,7 +195,10 @@ public class CrmConsentController {
                 responseCode = "200",
                 description = "History returned",
                 content = @Content(schema = @Schema(implementation = PagedResponse.class))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/consent-history")
     @SecurityRequirement(
@@ -212,7 +234,10 @@ public class CrmConsentController {
                 responseCode = "200",
                 description = "Decision returned",
                 content = @Content(schema = @Schema(implementation = MarketingConsentDecision.class))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/marketing-eligibility")
     @SecurityRequirement(

@@ -5,6 +5,7 @@ import com.positivity.customer.internal.dto.SubmitInquiryRequest;
 import com.positivity.customer.internal.enums.InquiryStatus;
 import com.positivity.customer.internal.service.InquiryService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -98,8 +99,14 @@ public class PublicInquiryController {
                 responseCode = "202",
                 description = "Inquiry accepted",
                 content = @Content(schema = @Schema(implementation = InquiryAcceptedResponse.class))),
-        @ApiResponse(responseCode = "400", description = "Validation failed", content = @Content),
-        @ApiResponse(responseCode = "429", description = "Too many submissions", content = @Content)
+        @ApiResponse(
+                responseCode = "400",
+                description = "Validation failed",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "429",
+                description = "Too many submissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping
     @PreAuthorize("permitAll()")

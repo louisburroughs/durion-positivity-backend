@@ -7,6 +7,7 @@ import com.positivity.customer.internal.dto.UpsertPartyTagRequest;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.PartyTagService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -64,7 +65,10 @@ public class CrmTagController {
                         @Content(
                                 mediaType = "application/json",
                                 array = @ArraySchema(schema = @Schema(implementation = PartyTagResponse.class)))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/tags")
     @SecurityRequirement(
@@ -92,8 +96,14 @@ public class CrmTagController {
                 responseCode = "200",
                 description = "Tag returned",
                 content = @Content(schema = @Schema(implementation = PartyTagResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Tag not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Tag not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/tags/{tagId}")
     @SecurityRequirement(
@@ -120,9 +130,18 @@ public class CrmTagController {
                 responseCode = "201",
                 description = "Tag created",
                 content = @Content(schema = @Schema(implementation = PartyTagResponse.class))),
-        @ApiResponse(responseCode = "409", description = "Tag name already exists", content = @Content),
-        @ApiResponse(responseCode = "400", description = "Validation failed", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "409",
+                description = "Tag name already exists",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "400",
+                description = "Validation failed",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/tags")
     @SecurityRequirement(
@@ -166,9 +185,18 @@ public class CrmTagController {
                 responseCode = "200",
                 description = "Tag updated",
                 content = @Content(schema = @Schema(implementation = PartyTagResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Tag not found", content = @Content),
-        @ApiResponse(responseCode = "409", description = "Tag name already exists", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Tag not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "Tag name already exists",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PutMapping("/tags/{tagId}")
     @SecurityRequirement(
@@ -207,8 +235,14 @@ public class CrmTagController {
                     """)
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Tag deleted", content = @Content),
-        @ApiResponse(responseCode = "404", description = "Tag not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Tag not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @DeleteMapping("/tags/{tagId}")
     @SecurityRequirement(
@@ -241,7 +275,10 @@ public class CrmTagController {
                                 array =
                                         @ArraySchema(
                                                 schema = @Schema(implementation = PartyTagAssignmentResponse.class)))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/parties/{partyId}/tags")
     @SecurityRequirement(
@@ -272,9 +309,18 @@ public class CrmTagController {
                 responseCode = "200",
                 description = "Tag assigned (or already present)",
                 content = @Content(schema = @Schema(implementation = PartyTagAssignmentResponse.class))),
-        @ApiResponse(responseCode = "422", description = "Tag is inactive", content = @Content),
-        @ApiResponse(responseCode = "404", description = "Tag not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "422",
+                description = "Tag is inactive",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "Tag not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/parties/{partyId}/tags")
     @SecurityRequirement(
@@ -312,7 +358,10 @@ public class CrmTagController {
                     """)
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Tag removed", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @DeleteMapping("/parties/{partyId}/tags/{tagId}")
     @SecurityRequirement(

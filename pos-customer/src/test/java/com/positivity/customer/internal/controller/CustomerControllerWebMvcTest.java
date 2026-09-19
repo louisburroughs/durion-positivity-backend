@@ -2,6 +2,7 @@ package com.positivity.customer.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -17,9 +18,12 @@ import com.positivity.customer.internal.config.CrmExceptionHandler;
 import com.positivity.customer.internal.dto.CustomerDTO;
 import com.positivity.customer.internal.service.CommercialPartyServiceImpl;
 import com.positivity.customer.internal.service.PersonPartyServiceImpl;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -84,6 +88,12 @@ class CustomerControllerWebMvcTest {
 
     @MockitoBean
     PersonPartyServiceImpl personService;
+
+    @BeforeEach
+    void setUpClock() {
+        lenient().when(clock.instant()).thenReturn(Instant.parse("2026-09-19T12:00:00Z"));
+        lenient().when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+    }
 
     private static CustomerDTO customer(String type) {
         return CustomerDTO.builder()
@@ -198,7 +208,40 @@ class CustomerControllerWebMvcTest {
         when(commercialService.getCustomerById(CUSTOMER_ID)).thenReturn(Optional.empty());
         when(personService.getCustomerById(CUSTOMER_ID)).thenReturn(Optional.empty());
 
-        mockMvc.perform(get(PATH + "/" + CUSTOMER_ID).header(AUTHORITIES, VIEW)).andExpect(status().isNotFound());
+        mockMvc.perform(get(PATH + "/" + CUSTOMER_ID).header(AUTHORITIES, VIEW))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("updating an unknown id is a 404 with the error envelope, not an empty body (#1720)")
+    void updateUnknownIdIsNotFoundWithTheEnvelope() throws Exception {
+        when(personService.updateCustomer(eq(CUSTOMER_ID), any())).thenReturn(Optional.empty());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                PATH + "/" + CUSTOMER_ID)
+                        .header(AUTHORITIES, EDIT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerType\":\"PERSON\",\"firstName\":\"Jane\",\"lastName\":\"Smith\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("deactivating an unknown id is a 404 with the error envelope, not an empty body (#1720)")
+    void deactivateUnknownIdIsNotFoundWithTheEnvelope() throws Exception {
+        when(commercialService.deleteCustomer(CUSTOMER_ID)).thenReturn(false);
+        when(personService.deleteCustomer(CUSTOMER_ID)).thenReturn(false);
+
+        mockMvc.perform(delete(PATH + "/" + CUSTOMER_ID).header(AUTHORITIES, DEACTIVATE))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     @Test

@@ -1,8 +1,10 @@
 package com.positivity.customer.internal.controller;
 
+import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.CrmVehicleService;
 import com.positivity.shared.dto.VehicleResponse;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -70,8 +72,17 @@ public class CrmVehiclesController {
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content),
-                @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Customer not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/{customerId}/vehicles")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -85,7 +96,7 @@ public class CrmVehiclesController {
         return crmVehicleService
                 .findVehiclesForCustomer(customerId)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new CrmResourceNotFoundException("Customer", customerId));
     }
 
     @Operation(operationId = "getVehicleForCustomer", summary = "Get Customer Vehicle", description = """
@@ -110,8 +121,17 @@ public class CrmVehiclesController {
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content),
-                @ApiResponse(responseCode = "404", description = "Customer or vehicle not found", content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Customer or vehicle not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/{customerId}/vehicles/{vehicleId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -125,6 +145,6 @@ public class CrmVehiclesController {
         return crmVehicleService
                 .getVehicleForCustomer(customerId, vehicleId)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new CrmResourceNotFoundException("Vehicle", vehicleId));
     }
 }

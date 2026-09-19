@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.controller;
 
 import com.positivity.customer.internal.dto.CustomerDTO;
+import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.CommercialPartyServiceImpl;
 import com.positivity.customer.internal.service.CustomerService;
@@ -120,7 +121,7 @@ public class CustomerController {
                 .getCustomerById(id)
                 .or(() -> personService.getCustomerById(id))
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new CrmResourceNotFoundException("Customer", id));
     }
 
     @Operation(operationId = "createCustomer", summary = "Create Customer Record", description = """
@@ -214,7 +215,7 @@ public class CustomerController {
                 COMMERCIAL.equalsIgnoreCase(customer.getCustomerType()) ? commercialService : personService;
         return service.updateCustomer(id, customer)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new CrmResourceNotFoundException("Customer", id));
     }
 
     @Operation(operationId = "deleteCustomer", summary = "Delete Customer Record", description = """
@@ -246,8 +247,7 @@ public class CustomerController {
         log.info("Deleting customer with id: {}", id);
         if (commercialService.deleteCustomer(id) || personService.deleteCustomer(id)) {
             return ResponseEntity.noContent().build();
-        } else {
-            return ResponseEntity.notFound().build();
         }
+        throw new CrmResourceNotFoundException("Customer", id);
     }
 }

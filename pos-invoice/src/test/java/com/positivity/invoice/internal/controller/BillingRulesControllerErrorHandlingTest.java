@@ -123,6 +123,19 @@ class BillingRulesControllerErrorHandlingTest {
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
+    @Test
+    @DisplayName("a party with no billing rules answers 404 with the envelope, not an empty body (#1720)")
+    void missingBillingRulesAnswers404WithTheEnvelope() throws Exception {
+        when(billingRulesService.getBillingRules(PARTY_ID)).thenReturn(Optional.empty());
+
+        mockMvc.perform(withAuth(get("/v1/billing/rules/{partyId}", PARTY_ID)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
     /**
      * The other half of the ADR-0056 §1 guarantee: the scoped advice must not become a new
      * blanket handler. A bare {@code IllegalArgumentException} — what Hibernate/JPA and {@code
