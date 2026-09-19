@@ -133,7 +133,8 @@ pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitse
   client-equivalent traffic, or direct `@LoadBalanced RestClient` to `http://<eureka-service-name>` for
   internal service-to-service calls. **Never** call another service's repository/DB directly.
 - Errors use a standard `ApiError` envelope (`code`, `message`, `status`, `timestamp`, `correlationId`,
-  optional `fieldErrors`/`referenceId`/`nextAction`/`supportAction`) — see `docs/ERROR_ENVELOPE.md`.
+  optional `fieldErrors`/`referenceId`/`nextAction`/`supportAction`, and `conflicts`/`suggestedAlternatives` on a
+  409 caused by named conflicts, ADR-0017 §3) — see `docs/ERROR_ENVELOPE.md`.
 - Profiles: `dev` (H2, local JVM), `docker` (Compose/Postgres), `alpha` (staging EC2), `prod`. Legacy `local`/`preprod`
   names are retired.
 
