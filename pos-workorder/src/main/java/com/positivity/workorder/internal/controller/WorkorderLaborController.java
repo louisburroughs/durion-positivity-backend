@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for labor tracking on workorders.
@@ -49,6 +50,8 @@ public class WorkorderLaborController {
     private final WorkorderLaborService laborService;
 
     private static final String SYSTEM_USERNAME = "system";
+    private static final String NOT_FOUND_CODE = "NOT_FOUND";
+    private static final String LABOR_SESSION_INVALID_STATE = "LABOR_SESSION_INVALID_STATE";
 
     /**
      * Start a labor session on a workorder service.
@@ -84,9 +87,16 @@ public class WorkorderLaborController {
                         content = @Content(schema = @Schema(implementation = WorkorderLaborEntryResponse.class))),
                 @ApiResponse(
                         responseCode = "400",
-                        description = "Invalid state - active session exists or invalid status"),
-                @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder or service not found")
+                        description = "Invalid state - active session exists or invalid status",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Workorder or service not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Technician performing the labor and optional starting notes.",
@@ -141,10 +151,10 @@ public class WorkorderLaborController {
 
         } catch (NoSuchElementException e) {
             log.warn("Start labor failed - not found: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_CODE, e);
         } catch (IllegalStateException e) {
             log.warn("Start labor failed - invalid state: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, LABOR_SESSION_INVALID_STATE, e);
         }
     }
 
@@ -172,9 +182,18 @@ public class WorkorderLaborController {
                         responseCode = "200",
                         description = "Labor session stopped successfully",
                         content = @Content(schema = @Schema(implementation = WorkorderLaborEntryResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Session already stopped"),
-                @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Labor entry not found")
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Session already stopped",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Labor entry not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/{workorderId}/labor/{entryId}/stop")
     @EmitEvent(id = "WORKORDER_LABOR_STOP", apiVersion = "1")
@@ -208,10 +227,10 @@ public class WorkorderLaborController {
 
         } catch (NoSuchElementException e) {
             log.warn("Stop labor failed - not found: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_CODE, e);
         } catch (IllegalStateException e) {
             log.warn("Stop labor failed - invalid state: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, LABOR_SESSION_INVALID_STATE, e);
         }
     }
 
@@ -233,7 +252,10 @@ public class WorkorderLaborController {
                     """,
             responses = {
                 @ApiResponse(responseCode = "200", description = "Labor history retrieved successfully"),
-                @ApiResponse(responseCode = "403", description = "Permission denied")
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/{workorderId}/labor")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -277,8 +299,14 @@ public class WorkorderLaborController {
                         responseCode = "200",
                         description = "Labor hours adjusted successfully",
                         content = @Content(schema = @Schema(implementation = WorkorderLaborEntryResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid hours value"),
-                @ApiResponse(responseCode = "403", description = "Permission denied"),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid hours value",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "404",
                         description = "Labor entry not found",

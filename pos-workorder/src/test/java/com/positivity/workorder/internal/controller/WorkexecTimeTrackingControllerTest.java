@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -16,6 +17,7 @@ import com.positivity.workorder.internal.dto.WorkexecLaborPerformedResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerEntryResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerStartRequest;
 import com.positivity.workorder.internal.dto.WorkexecTimerStopResponse;
+import com.positivity.workorder.internal.exception.WorkorderApiException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.service.LocationHierarchyService;
 import com.positivity.workorder.internal.service.WorkexecTimeTrackingService;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -168,19 +171,20 @@ class WorkexecTimeTrackingControllerTest {
 
         @Test
         void rejectsATimezoneThatIsNotAZoneId() {
-            ResponseEntity<Object> response =
-                    controller.getJobTimeTotals(START_DATE, END_DATE, "Mars/Olympus", null, null);
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(response.getBody().toString()).contains("Invalid timezone value");
+            assertApiError(
+                    () -> controller.getJobTimeTotals(START_DATE, END_DATE, "Mars/Olympus", null, null),
+                    HttpStatus.BAD_REQUEST,
+                    "WORKEXEC_INVALID_REQUEST",
+                    "Invalid timezone value");
         }
 
         @Test
         void rejectsAnInvertedDateRange() {
-            ResponseEntity<Object> response = controller.getJobTimeTotals(END_DATE, START_DATE, "UTC", null, null);
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(response.getBody().toString()).contains("endDate must be on or after startDate");
+            assertApiError(
+                    () -> controller.getJobTimeTotals(END_DATE, START_DATE, "UTC", null, null),
+                    HttpStatus.BAD_REQUEST,
+                    "WORKEXEC_INVALID_REQUEST",
+                    "endDate must be on or after startDate");
         }
     }
 
@@ -215,10 +219,11 @@ class WorkexecTimeTrackingControllerTest {
 
         @Test
         void requiresAnIdempotencyKey() {
-            ResponseEntity<Object> response = controller.createLaborPerformed(laborRequest(), "  ", null);
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(response.getBody().toString()).contains("Idempotency-Key header is required");
+            assertApiError(
+                    () -> controller.createLaborPerformed(laborRequest(), "  ", null),
+                    HttpStatus.BAD_REQUEST,
+                    "WORKEXEC_INVALID_REQUEST",
+                    "Idempotency-Key header is required");
             verify(service, never()).recordLaborPerformed(any(), anyString());
         }
 
@@ -227,26 +232,30 @@ class WorkexecTimeTrackingControllerTest {
             doThrow(new NoSuchElementException("Workorder not found"))
                     .when(service)
                     .recordLaborPerformed(any(), anyString());
-            assertThat(controller
-                            .createLaborPerformed(laborRequest(), IDEMPOTENCY_KEY, null)
-                            .getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertApiError(
+                    () -> controller.createLaborPerformed(laborRequest(), IDEMPOTENCY_KEY, null),
+                    HttpStatus.NOT_FOUND,
+                    "NOT_FOUND",
+                    "Workorder not found");
 
             doThrow(new WorkexecTimeTrackingService.WorkexecConflictException(
                             "WORKEXEC_CONFLICT_WORKORDER_STATE", "cancelled"))
                     .when(service)
                     .recordLaborPerformed(any(), anyString());
-            ResponseEntity<Object> conflict = controller.createLaborPerformed(laborRequest(), IDEMPOTENCY_KEY, null);
-            assertThat(conflict.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-            assertThat(conflict.getBody().toString()).contains("WORKEXEC_CONFLICT_WORKORDER_STATE");
+            assertApiError(
+                    () -> controller.createLaborPerformed(laborRequest(), IDEMPOTENCY_KEY, null),
+                    HttpStatus.CONFLICT,
+                    "WORKEXEC_CONFLICT_WORKORDER_STATE",
+                    "cancelled");
 
             doThrow(new WorkorderRequestValidationException("labor.unit must be HOURS"))
                     .when(service)
                     .recordLaborPerformed(any(), anyString());
-            assertThat(controller
-                            .createLaborPerformed(laborRequest(), IDEMPOTENCY_KEY, null)
-                            .getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertApiError(
+                    () -> controller.createLaborPerformed(laborRequest(), IDEMPOTENCY_KEY, null),
+                    HttpStatus.BAD_REQUEST,
+                    "WORKEXEC_INVALID_REQUEST",
+                    "labor.unit must be HOURS");
         }
     }
 
@@ -308,15 +317,21 @@ class WorkexecTimeTrackingControllerTest {
             doThrow(new NoSuchElementException("Workorder not found"))
                     .when(service)
                     .startTimer(any(), any(), any());
-            assertThat(controller.startTimer(null, request).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertApiError(
+                    () -> controller.startTimer(null, request),
+                    HttpStatus.NOT_FOUND,
+                    "NOT_FOUND",
+                    "Workorder not found");
 
             doThrow(new WorkexecTimeTrackingService.WorkexecConflictException(
                             "TIMER_ALREADY_ACTIVE", "already running"))
                     .when(service)
                     .startTimer(any(), any(), any());
-            ResponseEntity<Object> conflict = controller.startTimer(null, request);
-            assertThat(conflict.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-            assertThat(conflict.getBody().toString()).contains("TIMER_ALREADY_ACTIVE");
+            assertApiError(
+                    () -> controller.startTimer(null, request),
+                    HttpStatus.CONFLICT,
+                    "TIMER_ALREADY_ACTIVE",
+                    "already running");
         }
 
         @Test
@@ -336,10 +351,7 @@ class WorkexecTimeTrackingControllerTest {
                     .when(service)
                     .stopTimers(MECHANIC_ID);
 
-            ResponseEntity<Object> response = controller.stopTimers();
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-            assertThat(response.getBody().toString()).contains("NO_ACTIVE_TIMER");
+            assertApiError(controller::stopTimers, HttpStatus.CONFLICT, "NO_ACTIVE_TIMER", "nothing running");
         }
 
         @Test
@@ -353,20 +365,32 @@ class WorkexecTimeTrackingControllerTest {
                     .workorderId(WORKORDER_ID)
                     .build();
 
-            assertThat(controller.getActiveTimerEntries()).satisfies(this::isUserIdRequiredBadRequest);
-            assertThat(controller.startTimer(null, request)).satisfies(this::isUserIdRequiredBadRequest);
-            assertThat(controller.stopTimers()).satisfies(this::isUserIdRequiredBadRequest);
+            isUserIdRequiredBadRequest(controller::getActiveTimerEntries);
+            isUserIdRequiredBadRequest(() -> controller.startTimer(null, request));
+            isUserIdRequiredBadRequest(controller::stopTimers);
             verify(service, never()).getActiveTimers(any());
             verify(service, never()).startTimer(any(), any(), any());
             verify(service, never()).stopTimers(any());
         }
 
-        private void isUserIdRequiredBadRequest(ResponseEntity<Object> response) {
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(response.getBody())
-                    .isEqualTo(Map.of(
-                            "code", "WORKEXEC_INVALID_REQUEST",
-                            "message", "Authenticated user id must be a valid UUID"));
+        private void isUserIdRequiredBadRequest(ThrowingCallable call) {
+            assertApiError(
+                    call,
+                    HttpStatus.BAD_REQUEST,
+                    "WORKEXEC_INVALID_REQUEST",
+                    "Authenticated user id must be a valid UUID");
         }
+    }
+
+    /**
+     * #1720: the controller throws a {@link WorkorderApiException} that GlobalExceptionHandler
+     * renders as the ApiError envelope, instead of answering a {@code Map{code,message}} body.
+     */
+    private static void assertApiError(ThrowingCallable call, HttpStatus status, String code, String message) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(WorkorderApiException.class, e -> {
+            assertThat(e.getStatus()).isEqualTo(status);
+            assertThat(e.getCode()).isEqualTo(code);
+            assertThat(e.getMessage()).isEqualTo(message);
+        });
     }
 }

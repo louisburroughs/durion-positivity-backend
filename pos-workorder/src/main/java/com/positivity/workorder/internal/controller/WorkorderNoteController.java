@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.AddWorkorderNoteRequest;
 import com.positivity.workorder.internal.dto.WorkorderNoteResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
@@ -65,7 +66,10 @@ public class WorkorderNoteController {
             responseCode = "201",
             description = "Note recorded",
             content = @Content(schema = @Schema(implementation = WorkorderNoteResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Workorder not found", content = @Content)
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<WorkorderNoteResponse> addNote(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -109,7 +113,10 @@ public class WorkorderNoteController {
                     workorder does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Notes retrieved")
-    @ApiResponse(responseCode = "404", description = "Workorder not found", content = @Content)
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<WorkorderNoteResponse>> listNotes(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable

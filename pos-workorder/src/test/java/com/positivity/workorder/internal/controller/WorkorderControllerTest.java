@@ -45,6 +45,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Workorder endpoints: reads project the entity, writes delegate to the service, and each
@@ -114,8 +115,8 @@ class WorkorderControllerTest {
         void reportsNotFoundForAnUnknownWorkorder() {
             when(workorderService.getWorkorderById(WORKORDER_ID)).thenReturn(Optional.empty());
 
-            assertThat(controller.getWorkorderById(WORKORDER_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.getWorkorderById(WORKORDER_ID))
+                    .isInstanceOf(WorkorderNotFoundException.class);
         }
 
         @Test
@@ -411,10 +412,11 @@ class WorkorderControllerTest {
             doThrow(new IllegalStateException("line is cancelled"))
                     .when(workorderService)
                     .completeServiceItem(any(), any(), anyString());
-            assertThat(controller
-                            .completeServiceItem(WORKORDER_ID, SERVICE_LINE_ID)
-                            .getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.completeServiceItem(WORKORDER_ID, SERVICE_LINE_ID))
+                    .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                        assertThat(e.getReason()).isEqualTo("WORKORDER_ITEM_INVALID_STATE");
+                    });
         }
 
         @Test
@@ -444,8 +446,11 @@ class WorkorderControllerTest {
             doThrow(new IllegalStateException("part is cancelled"))
                     .when(workorderService)
                     .completePartItem(any(), any(), anyString());
-            assertThat(controller.completePartItem(WORKORDER_ID, PART_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.completePartItem(WORKORDER_ID, PART_ID))
+                    .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                        assertThat(e.getReason()).isEqualTo("WORKORDER_ITEM_INVALID_STATE");
+                    });
         }
     }
 }

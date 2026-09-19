@@ -22,9 +22,11 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for managing technician assignments to workorders.
@@ -42,6 +44,7 @@ public class TechnicianAssignmentController {
     private final TechnicianAssignmentService assignmentService;
 
     private static final String SYSTEM_USERNAME = "system";
+    private static final String NOT_FOUND_CODE = "NOT_FOUND";
 
     /**
      * Assign a technician to a workorder.
@@ -84,9 +87,18 @@ public class TechnicianAssignmentController {
                         responseCode = "200",
                         description = "Technician assigned successfully",
                         content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid state transition"),
-                @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder not found"),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid state transition",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Workorder not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "409",
                         description = "The workorder is closed (ApiError.code WORKORDER_CLOSED) or already has "
@@ -156,7 +168,7 @@ public class TechnicianAssignmentController {
 
         } catch (NoSuchElementException e) {
             log.warn("Assignment failed - not found: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_CODE, e);
         } catch (IllegalStateException e) {
             log.warn("Assignment failed - invalid state: {}", e.getMessage());
             // Surface the reason (e.g. workorder status not assignable) so the client can show
@@ -207,9 +219,18 @@ public class TechnicianAssignmentController {
                         responseCode = "200",
                         description = "Technician reassigned successfully",
                         content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid state transition"),
-                @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder not found"),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid state transition",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Workorder not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "409",
                         description = "The workorder is closed (ApiError.code WORKORDER_CLOSED) or has no current "
@@ -282,7 +303,7 @@ public class TechnicianAssignmentController {
 
         } catch (NoSuchElementException e) {
             log.warn("Reassignment failed - not found: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_CODE, e);
         } catch (IllegalStateException e) {
             log.warn("Reassignment failed - invalid state: {}", e.getMessage());
             return ResponseEntity.badRequest().body(errorResponse(workorderId, e.getMessage()));
@@ -313,7 +334,10 @@ public class TechnicianAssignmentController {
                         responseCode = "200",
                         description = "Assignment retrieved successfully",
                         content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
-                @ApiResponse(responseCode = "404", description = "Workorder not found or no assignment exists")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Workorder not found or no assignment exists",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/{workorderId}/technician")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -332,7 +356,7 @@ public class TechnicianAssignmentController {
 
             if (currentAssignment.isEmpty()) {
                 log.debug("No technician assignment found for workorder {}", workorderId);
-                return ResponseEntity.notFound().build();
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TECHNICIAN_ASSIGNMENT_NOT_FOUND");
             }
 
             var history = assignmentService.getAssignmentHistory(workorderId);
@@ -344,7 +368,7 @@ public class TechnicianAssignmentController {
 
         } catch (NoSuchElementException e) {
             log.warn("Get assignment failed - not found: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_CODE, e);
         }
     }
 
@@ -377,8 +401,14 @@ public class TechnicianAssignmentController {
                     """,
             responses = {
                 @ApiResponse(responseCode = "204", description = "Technician released, or none was assigned"),
-                @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder not found"),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Permission denied",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Workorder not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "409",
                         description = "Workorder is COMPLETED or CANCELLED (ApiError.code WORKORDER_CLOSED)",

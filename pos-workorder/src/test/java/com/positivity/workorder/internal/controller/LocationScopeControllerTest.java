@@ -546,9 +546,15 @@ class LocationScopeControllerTest {
 
             when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(Optional.of(estimateAt(SHOP_B)));
             // The denial is raised before the renderer's try/catch, so it is a 403 — never a 502.
-            mockMvc.perform(get(BASE + "/{estimateId}/pdf", ESTIMATE_ID))
+            // Asked for with the operation's own Accept: application/pdf, the ApiError is still
+            // written as JSON rather than failing negotiation (#1720).
+            mockMvc.perform(get(BASE + "/{estimateId}/pdf", ESTIMATE_ID)
+                            .accept(org.springframework.http.MediaType.APPLICATION_PDF))
                     .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                            .contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE))
+                    .andExpect(jsonPath("$.correlationId").isNotEmpty());
             verify(estimateService, org.mockito.Mockito.times(1)).generateEstimatePdf(ESTIMATE_ID);
         }
 

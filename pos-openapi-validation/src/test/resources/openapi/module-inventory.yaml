@@ -10,6 +10,7 @@ modules:
   pos-workorder:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-inventory:
     mode: STRICT
     annotationDepth: STRICT

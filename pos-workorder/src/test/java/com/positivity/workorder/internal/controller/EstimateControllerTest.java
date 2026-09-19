@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -157,7 +158,8 @@ class EstimateControllerTest {
         void reportsNotFoundForAnUnknownEstimate() {
             when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(Optional.empty());
 
-            assertThat(controller.getEstimateById(ESTIMATE_ID).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.getEstimateById(ESTIMATE_ID))
+                    .isInstanceOf(EstimateNotFoundException.class);
         }
 
         @Test
@@ -231,10 +233,8 @@ class EstimateControllerTest {
                     .thenReturn(Optional.of(ESTIMATE_ID));
             when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(Optional.empty());
 
-            ResponseEntity<Object> response = controller.createEstimate(createRequest(), IDEMPOTENCY_KEY);
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-            assertThat(response.getBody()).isEqualTo(Map.of("code", "CONFLICT"));
+            assertRejected(
+                    () -> controller.createEstimate(createRequest(), IDEMPOTENCY_KEY), HttpStatus.CONFLICT, "CONFLICT");
         }
 
         @Test
@@ -252,10 +252,8 @@ class EstimateControllerTest {
             when(estimateService.createEstimate(any(), anyString()))
                     .thenThrow(new WorkorderRequestValidationException("customerId is required"));
 
-            ResponseEntity<Object> response = controller.createEstimate(createRequest(), null);
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(response.getBody()).isEqualTo(Map.of("code", "VALIDATION_ERROR"));
+            assertRejected(
+                    () -> controller.createEstimate(createRequest(), null), HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
         }
 
         @Test
@@ -263,22 +261,23 @@ class EstimateControllerTest {
             doThrow(new IllegalStateException("totals do not add up"))
                     .when(estimateService)
                     .createEstimate(any(), anyString());
-            assertThat(controller.createEstimate(createRequest(), null).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            assertRejected(() -> controller.createEstimate(createRequest(), null), HttpStatus.CONFLICT, "CONFLICT");
 
             doThrow(new DataIntegrityViolationException("duplicate estimate number"))
                     .when(estimateService)
                     .createEstimate(any(), anyString());
-            assertThat(controller.createEstimate(createRequest(), null).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            assertRejected(() -> controller.createEstimate(createRequest(), null), HttpStatus.CONFLICT, "CONFLICT");
         }
 
         @Test
         void reportsAnInternalErrorForAnythingElse() {
             when(estimateService.createEstimate(any(), anyString())).thenThrow(new RuntimeException("boom"));
 
-            assertThat(controller.createEstimate(createRequest(), null).getStatusCode())
-                    .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThatThrownBy(() -> controller.createEstimate(createRequest(), null))
+                    .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+                        assertThat(e.getReason()).isEqualTo("INTERNAL_ERROR");
+                    });
         }
     }
 
@@ -308,33 +307,34 @@ class EstimateControllerTest {
 
         @Test
         void refusesAnyOtherTargetStatus() {
-            ResponseEntity<Object> response = controller.patchEstimateStatus(ESTIMATE_ID, Map.of("status", "APPROVED"));
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-            assertThat(response.getBody()).isEqualTo(Map.of("code", "CONFLICT"));
+            assertRejected(
+                    () -> controller.patchEstimateStatus(ESTIMATE_ID, Map.of("status", "APPROVED")),
+                    HttpStatus.CONFLICT,
+                    "CONFLICT");
         }
 
         @Test
         void rejectsAMissingOrNonStringStatus() {
-            assertThat(controller.patchEstimateStatus(ESTIMATE_ID, Map.of()).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(controller
-                            .patchEstimateStatus(ESTIMATE_ID, Map.of("status", 42))
-                            .getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(controller
-                            .patchEstimateStatus(ESTIMATE_ID, Map.of("status", "  "))
-                            .getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertRejected(
+                    () -> controller.patchEstimateStatus(ESTIMATE_ID, Map.of()),
+                    HttpStatus.BAD_REQUEST,
+                    "VALIDATION_ERROR");
+            assertRejected(
+                    () -> controller.patchEstimateStatus(ESTIMATE_ID, Map.of("status", 42)),
+                    HttpStatus.BAD_REQUEST,
+                    "VALIDATION_ERROR");
+            assertRejected(
+                    () -> controller.patchEstimateStatus(ESTIMATE_ID, Map.of("status", "  ")),
+                    HttpStatus.BAD_REQUEST,
+                    "VALIDATION_ERROR");
         }
 
         @Test
         void rejectsAStatusThatIsNotAKnownValue() {
-            ResponseEntity<Object> response =
-                    controller.patchEstimateStatus(ESTIMATE_ID, Map.of("status", "NOT_A_STATUS"));
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(response.getBody()).isEqualTo(Map.of("code", "VALIDATION_ERROR"));
+            assertRejected(
+                    () -> controller.patchEstimateStatus(ESTIMATE_ID, Map.of("status", "NOT_A_STATUS")),
+                    HttpStatus.BAD_REQUEST,
+                    "VALIDATION_ERROR");
         }
 
         @Test
@@ -346,10 +346,10 @@ class EstimateControllerTest {
                     .isInstanceOf(EstimateNotFoundException.class);
 
             doThrow(new IllegalStateException("expired")).when(estimateService).reopenEstimate(ESTIMATE_ID);
-            assertThat(controller
-                            .patchEstimateStatus(ESTIMATE_ID, Map.of("status", "DRAFT"))
-                            .getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            assertRejected(
+                    () -> controller.patchEstimateStatus(ESTIMATE_ID, Map.of("status", "DRAFT")),
+                    HttpStatus.CONFLICT,
+                    "CONFLICT");
         }
     }
 
@@ -370,8 +370,11 @@ class EstimateControllerTest {
             when(estimateService.declineEstimate(any(), any()))
                     .thenThrow(new IllegalStateException("already declined"));
 
-            assertThat(controller.declineEstimate(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.declineEstimate(ESTIMATE_ID, null))
+                    .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                        assertThat(e.getReason()).isEqualTo("ESTIMATE_INVALID_STATE");
+                    });
         }
 
         @Test
@@ -385,7 +388,11 @@ class EstimateControllerTest {
         void reportsBadRequestWhenAReopenIsNotAllowed() {
             when(estimateService.reopenEstimate(ESTIMATE_ID)).thenThrow(new IllegalStateException("expired"));
 
-            assertThat(controller.reopenEstimate(ESTIMATE_ID).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.reopenEstimate(ESTIMATE_ID))
+                    .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                        assertThat(e.getReason()).isEqualTo("ESTIMATE_INVALID_STATE");
+                    });
         }
 
         @Test
@@ -680,12 +687,11 @@ class EstimateControllerTest {
             assertThatThrownBy(() -> controller.addEstimateItem(ESTIMATE_ID, null))
                     .isInstanceOf(EstimateNotFoundException.class);
 
-            // The 400 branch is unchanged and still answers directly; it is out of #1713's scope.
-            doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "bad item"))
-                    .when(estimateService)
-                    .addEstimateItem(any(), any(), anyString());
-            assertThat(controller.addEstimateItem(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            // #1720: the 400 branch now propagates too, for the advice's ApiError envelope.
+            ResponseStatusException badItem = new ResponseStatusException(HttpStatus.BAD_REQUEST, "bad item");
+            doThrow(badItem).when(estimateService).addEstimateItem(any(), any(), anyString());
+            assertThatThrownBy(() -> controller.addEstimateItem(ESTIMATE_ID, null))
+                    .isSameAs(badItem);
         }
 
         @Test
@@ -706,8 +712,9 @@ class EstimateControllerTest {
             doThrow(new IllegalStateException("estimate is locked"))
                     .when(estimateService)
                     .addEstimateItem(any(), any(), anyString());
-            assertThat(controller.addEstimateItem(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            // #1720: rethrown for the module advice's enveloped 409 CONFLICT.
+            assertThatThrownBy(() -> controller.addEstimateItem(ESTIMATE_ID, null))
+                    .isInstanceOf(IllegalStateException.class);
         }
 
         @Test
@@ -738,8 +745,9 @@ class EstimateControllerTest {
             doThrow(new IllegalStateException("estimate is locked"))
                     .when(estimateService)
                     .updateEstimateItem(any(), any(), any());
-            assertThat(controller.updateEstimateItem(ESTIMATE_ID, ITEM_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            // #1720: rethrown for the module advice's enveloped 409 CONFLICT.
+            assertThatThrownBy(() -> controller.updateEstimateItem(ESTIMATE_ID, ITEM_ID, null))
+                    .isInstanceOf(IllegalStateException.class);
         }
 
         @Test
@@ -760,8 +768,9 @@ class EstimateControllerTest {
             doThrow(new IllegalStateException("estimate is locked"))
                     .when(estimateService)
                     .deleteEstimateItem(ESTIMATE_ID, ITEM_ID);
-            assertThat(controller.deleteEstimateItem(ESTIMATE_ID, ITEM_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            // #1720: rethrown for the module advice's enveloped 409 CONFLICT.
+            assertThatThrownBy(() -> controller.deleteEstimateItem(ESTIMATE_ID, ITEM_ID))
+                    .isInstanceOf(IllegalStateException.class);
         }
 
         @Test
@@ -790,8 +799,9 @@ class EstimateControllerTest {
             doThrow(new IllegalStateException("no items"))
                     .when(estimateService)
                     .calculateEstimateTaxesAndTotals(any(), anyString());
-            assertThat(controller.calculateEstimateTotals(ESTIMATE_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            // #1720: rethrown for the module advice's enveloped 409 CONFLICT.
+            assertThatThrownBy(() -> controller.calculateEstimateTotals(ESTIMATE_ID))
+                    .isInstanceOf(IllegalStateException.class);
         }
 
         @Test
@@ -826,16 +836,24 @@ class EstimateControllerTest {
 
         @Test
         void reportsNotFoundForAPdfOfAnUnknownEstimateAndBadGatewayOnRenderFailure() {
+            // #1720: both propagate for the advice to envelope as ApiError, not a bodiless status.
+            when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(Optional.empty());
+            assertThatThrownBy(() -> controller.generateEstimatePdf(ESTIMATE_ID))
+                    .isInstanceOf(EstimateNotFoundException.class);
+
+            when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(Optional.of(estimate()));
             doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .generateEstimatePdf(ESTIMATE_ID);
-            assertThat(controller.generateEstimatePdf(ESTIMATE_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.generateEstimatePdf(ESTIMATE_ID))
+                    .isInstanceOf(EstimateNotFoundException.class);
 
-            when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(Optional.of(estimate()));
             doThrow(new RuntimeException("renderer down")).when(estimateService).generateEstimatePdf(ESTIMATE_ID);
-            assertThat(controller.generateEstimatePdf(ESTIMATE_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_GATEWAY);
+            assertThatThrownBy(() -> controller.generateEstimatePdf(ESTIMATE_ID))
+                    .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+                        assertThat(e.getReason()).isEqualTo("DOCUMENT_SERVICE_UNAVAILABLE");
+                    });
         }
 
         @Test
@@ -866,5 +884,13 @@ class EstimateControllerTest {
             assertThatThrownBy(() -> controller.createEstimateSnapshot(ESTIMATE_ID, null))
                     .isSameAs(fault);
         }
+    }
+
+    /** #1720: a refusal propagates as a ResponseStatusException the advice renders as ApiError. */
+    private static void assertRejected(ThrowingCallable call, HttpStatus status, String code) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+            assertThat(e.getStatusCode()).isEqualTo(status);
+            assertThat(e.getReason()).isEqualTo(code);
+        });
     }
 }

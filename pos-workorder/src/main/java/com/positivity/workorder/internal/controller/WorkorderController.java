@@ -17,6 +17,7 @@ import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
 import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkorderCountService;
 import com.positivity.workorder.internal.service.WorkorderInvoiceService;
@@ -37,9 +38,11 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @Tag(name = "Work Order API", description = "Endpoints for work order management")
 @RestController
@@ -129,7 +132,10 @@ public class WorkorderController {
                     Returns 404 when no workorder exists for the id.
                     """)
     @ApiResponse(responseCode = "200", description = "Work order found and returned.")
-    @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work order not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{workorderId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -144,7 +150,7 @@ public class WorkorderController {
         return workorderService
                 .getWorkorderById(workorderId)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
     }
 
     @Operation(operationId = "createWorkorder", summary = "Create a New Workorder", description = """
@@ -351,8 +357,14 @@ public class WorkorderController {
                     workorder is already COMPLETED or CANCELLED, and 404 when the workorder does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Work order completed successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid state transition or work order already completed.")
-    @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid state transition or work order already completed.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work order not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Optional completion notes recorded on the finished workorder.",
             required = true,
@@ -423,8 +435,14 @@ public class WorkorderController {
             responseCode = "202",
             description = "Generation queued; poll the workorder for the linked invoiceId (status PENDING).")
     @ApiResponse(responseCode = "200", description = "Existing linked invoice returned for idempotent replay.")
-    @ApiResponse(responseCode = "404", description = "Work order not found.")
-    @ApiResponse(responseCode = "409", description = "Work order is not in COMPLETED state.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work order not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Work order is not in COMPLETED state.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{workorderId}/generate-invoice")
     @EmitEvent(id = "WORKORDER_INVOICE_GENERATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -464,7 +482,10 @@ public class WorkorderController {
                     Returns 404 when no workorder exists for the id.
                     """)
     @ApiResponse(responseCode = "200", description = "Completion preconditions evaluated successfully.")
-    @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work order not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{workorderId}/completion-preconditions")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -510,8 +531,14 @@ public class WorkorderController {
                     and 404 when the workorder does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Workorder reopened successfully.")
-    @ApiResponse(responseCode = "400", description = "Workorder cannot be reopened or reason missing.")
-    @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Workorder cannot be reopened or reason missing.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work order not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Mandatory reason justifying the reopen of the completed workorder.",
             required = true,
@@ -574,8 +601,14 @@ public class WorkorderController {
                     is CANCELLED or PENDING_APPROVAL.
                     """)
     @ApiResponse(responseCode = "200", description = "Service line completed.")
-    @ApiResponse(responseCode = "400", description = "Item not completable in its current status.")
-    @ApiResponse(responseCode = "404", description = "Workorder or service line not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Item not completable in its current status.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder or service line not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{workorderId}/services/{serviceLineId}/complete")
     @EmitEvent(id = "WORKORDER_SERVICE_ITEM_COMPLETE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -588,8 +621,8 @@ public class WorkorderController {
         try {
             return ResponseEntity.ok(
                     workorderService.completeServiceItem(workorderId, serviceLineId, resolveCurrentActorUserId()));
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "WORKORDER_ITEM_INVALID_STATE", e);
         }
     }
 
@@ -608,8 +641,14 @@ public class WorkorderController {
                     is CANCELLED or PENDING_APPROVAL.
                     """)
     @ApiResponse(responseCode = "200", description = "Part completed.")
-    @ApiResponse(responseCode = "400", description = "Item not completable in its current status.")
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Item not completable in its current status.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder or part not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{workorderId}/parts/{partId}/complete")
     @EmitEvent(id = "WORKORDER_PART_ITEM_COMPLETE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -622,8 +661,8 @@ public class WorkorderController {
         try {
             return ResponseEntity.ok(
                     workorderService.completePartItem(workorderId, partId, resolveCurrentActorUserId()));
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "WORKORDER_ITEM_INVALID_STATE", e);
         }
     }
 

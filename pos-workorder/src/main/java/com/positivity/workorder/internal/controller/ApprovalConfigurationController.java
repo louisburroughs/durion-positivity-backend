@@ -5,6 +5,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationRequest;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
+import com.positivity.workorder.internal.exception.ApprovalConfigurationNotFoundException;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.ApprovalConfigurationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,6 +17,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @Tag(
         name = "Approval Configuration API",
@@ -80,7 +83,10 @@ public class ApprovalConfigurationController {
                     Returns 404 when no configuration exists for the id.
                     """)
     @ApiResponse(responseCode = "200", description = "Configuration found and returned.")
-    @ApiResponse(responseCode = "404", description = "Configuration not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Configuration not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/approvalConfigurations/{approvalId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -95,7 +101,7 @@ public class ApprovalConfigurationController {
         return approvalConfigurationService
                 .getConfigurationById(approvalId)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ApprovalConfigurationNotFoundException(approvalId));
     }
 
     @Operation(
@@ -121,7 +127,10 @@ public class ApprovalConfigurationController {
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "No configuration found (default will be used).")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No configuration found (default will be used).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/approvalConfigurations/applicable")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -143,7 +152,8 @@ public class ApprovalConfigurationController {
         return approvalConfigurationService
                 .getApplicableConfiguration(locationId, customerId)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, ApprovalConfigurationNotFoundException.ERROR_CODE));
     }
 
     @Operation(
@@ -219,7 +229,10 @@ public class ApprovalConfigurationController {
             responseCode = "400",
             description = "approvalMethod is not one of the accepted values.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Configuration not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Configuration not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Full replacement values for the approval configuration.",
             required = true,
@@ -269,7 +282,10 @@ public class ApprovalConfigurationController {
                     Returns 204 regardless of whether the configuration previously existed.
                     """)
     @ApiResponse(responseCode = "204", description = "Configuration deleted successfully.")
-    @ApiResponse(responseCode = "404", description = "Configuration not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Configuration not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @DeleteMapping("/approvalConfigurations/{approvalId}")
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_DELETE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

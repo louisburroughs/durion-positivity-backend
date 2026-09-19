@@ -61,7 +61,8 @@ public class WorkSessionController {
     @ApiResponse(responseCode = "201", description = "Work session started successfully")
     @ApiResponse(
             responseCode = "400",
-            description = "Invalid request - missing required fields or work order not found")
+            description = "Invalid request - missing required fields or work order not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
@@ -113,8 +114,14 @@ public class WorkSessionController {
                     or is locked.
                     """)
     @ApiResponse(responseCode = "200", description = "Work session stopped successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request - work session not active or validation failed")
-    @ApiResponse(responseCode = "404", description = "Work session not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request - work session not active or validation failed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work session not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{workSessionId}/stop")
     @EmitEvent(id = "WORKORDER_WORK_SESSION_STOP", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -158,8 +165,14 @@ public class WorkSessionController {
                     the session is not IN_PROGRESS, is locked, or already has an open break.
                     """)
     @ApiResponse(responseCode = "201", description = "Break segment started successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request - work session not active or validation failed")
-    @ApiResponse(responseCode = "404", description = "Work session not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request - work session not active or validation failed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work session not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{workSessionId}/breaks")
     @EmitEvent(id = "WORKORDER_WORK_SESSION_BREAK_START", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -203,8 +216,14 @@ public class WorkSessionController {
                     already stopped or the session is locked.
                     """)
     @ApiResponse(responseCode = "200", description = "Break segment stopped successfully")
-    @ApiResponse(responseCode = "400", description = "Break segment not active or work session invalid")
-    @ApiResponse(responseCode = "404", description = "Work session or break segment not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Break segment not active or work session invalid",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work session or break segment not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{workSessionId}/breaks/{breakSegmentId}/stop")
     @EmitEvent(id = "WORKORDER_WORK_SESSION_BREAK_STOP", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

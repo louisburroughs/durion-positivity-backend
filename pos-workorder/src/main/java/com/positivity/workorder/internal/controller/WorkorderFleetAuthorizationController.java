@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Fleet payment authorization for a workorder (#1346).
@@ -78,7 +80,7 @@ public class WorkorderFleetAuthorizationController {
                 .find(workorderId)
                 .map(FleetAuthorizationView::from)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "FLEET_AUTHORIZATION_NOT_FOUND"));
     }
 
     @PostMapping("/requests")
@@ -119,7 +121,8 @@ public class WorkorderFleetAuthorizationController {
                 .requestAuthorization(workorderId)
                 .map(FleetAuthorizationView::from)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "FLEET_AUTHORIZATION_NOT_REQUIRED"));
     }
 
     @PostMapping("/resolution")

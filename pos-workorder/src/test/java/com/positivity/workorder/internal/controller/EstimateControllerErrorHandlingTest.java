@@ -3,7 +3,9 @@ package com.positivity.workorder.internal.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -214,6 +216,74 @@ class EstimateControllerErrorHandlingTest {
         mockMvc.perform(post(SNAPSHOT_URL, ESTIMATE_ID))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    // ---- #1720: sites that used to answer a bodiless error ----
+
+    private static final String PDF_URL = "/v1/workorders/estimates/{estimateId}/pdf";
+
+    /**
+     * The PDF operation produces {@code application/pdf}, so a client asks with that Accept
+     * header. The ApiError must still be written as JSON (the advice presets the content type)
+     * rather than failing negotiation into a 406 or an empty body.
+     */
+    @Test
+    @WithMockUser(authorities = "workorder:estimate:view")
+    @DisplayName("a PDF for a missing estimate answers a JSON ApiError 404 to an Accept: application/pdf caller")
+    void pdfOfAMissingEstimateAnswersJsonNotFound() throws Exception {
+        when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get(PDF_URL, ESTIMATE_ID).accept(MediaType.APPLICATION_PDF))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("ESTIMATE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "workorder:estimate:view")
+    @DisplayName("a renderer failure answers a JSON ApiError 502 to an Accept: application/pdf caller")
+    void pdfRendererFailureAnswersJsonBadGateway() throws Exception {
+        when(estimateService.getEstimateById(ESTIMATE_ID))
+                .thenReturn(java.util.Optional.of(new com.positivity.workorder.internal.dto.EstimateResponse()));
+        when(estimateService.generateEstimatePdf(ESTIMATE_ID)).thenThrow(new RuntimeException("renderer down"));
+
+        mockMvc.perform(get(PDF_URL, ESTIMATE_ID).accept(MediaType.APPLICATION_PDF))
+                .andExpect(status().isBadGateway())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("DOCUMENT_SERVICE_UNAVAILABLE"))
+                .andExpect(jsonPath("$.status").value(502))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "workorder:estimate:view")
+    @DisplayName("getEstimateById for a missing estimate answers an enveloped 404")
+    void gettingAMissingEstimateAnswersEnvelopedNotFound() throws Exception {
+        when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get("/v1/workorders/estimates/{estimateId}", ESTIMATE_ID))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ESTIMATE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    @WithMockUser(authorities = "workorder:estimate:decline")
+    @DisplayName("declining an estimate in the wrong state answers an enveloped 400")
+    void decliningInTheWrongStateAnswersEnvelopedBadRequest() throws Exception {
+        when(estimateService.declineEstimate(ESTIMATE_ID, null)).thenThrow(new IllegalStateException("not pending"));
+
+        mockMvc.perform(post("/v1/workorders/estimates/{estimateId}/decline", ESTIMATE_ID))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ESTIMATE_INVALID_STATE"))
+                .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(header().exists("X-Correlation-Id"));
     }
