@@ -254,7 +254,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                         .content(payload2)
                         .header("X-Correlation-Id", "00000000-0000-0000-0000-000000000007")))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.errorCode").value("SCHEDULING_CONFLICT"))
+                .andExpect(jsonPath("$.code").value("SCHEDULING_CONFLICT"))
                 .andExpect(jsonPath("$.conflicts[0].code").value("BAY_DOUBLE_BOOKED"))
                 .andExpect(jsonPath("$.conflicts[0].severity").value("HARD"));
     }

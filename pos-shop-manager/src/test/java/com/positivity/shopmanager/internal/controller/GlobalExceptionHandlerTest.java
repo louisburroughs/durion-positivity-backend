@@ -290,9 +290,9 @@ class GlobalExceptionHandlerTest {
 
         /**
          *
-         * Every handler answers with a body that carries the correlation id, but two shapes do:
+         * Every handler answers with the {@link ApiError} envelope, which carries the correlation id;
          *
-         * the {@link ApiError} envelope and DECISION-SHOPMGMT-002's {@link ConflictResponse}.
+         * DECISION-SHOPMGMT-002's conflicts ride in {@link ApiError#conflicts()} (ADR-0017 §3).
          *
          */
         private static String bodyCorrelationId(Object body) {
@@ -300,11 +300,6 @@ class GlobalExceptionHandlerTest {
             if (body instanceof ApiError apiError) {
 
                 return apiError.correlationId();
-            }
-
-            if (body instanceof ConflictResponse envelope) {
-
-                return envelope.getCorrelationId();
             }
 
             throw new AssertionError("unexpected response body " + body);
