@@ -159,15 +159,18 @@ class ConversationTurnServiceImplTest {
         when(store.isOwned(otherId, USER_ID)).thenReturn(true);
         CountDownLatch firstTurnInModel = new CountDownLatch(1);
         CountDownLatch releaseFirstTurn = new CountDownLatch(1);
-        when(agentOrchestrationService.chat(USER, "first", busyId.toString())).thenAnswer(invocation -> {
-            firstTurnInModel.countDown();
-            if (!releaseFirstTurn.await(10, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("first turn was never released");
-            }
-            return "first answer";
-        });
-        when(agentOrchestrationService.chat(USER, "other", otherId.toString())).thenReturn("other answer");
-        when(store.recordChatTurn(any(), eq(false), eq(USER_ID), any(), anyList(), any(), anyList()))
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("first"), eq(busyId.toString()), any()))
+                .thenAnswer(invocation -> {
+                    firstTurnInModel.countDown();
+                    if (!releaseFirstTurn.await(10, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("first turn was never released");
+                    }
+                    return ChatOutcome.of("first answer");
+                });
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("other"), eq(otherId.toString()), any()))
+                .thenReturn(ChatOutcome.of("other answer"));
+        when(store.recordChatTurn(
+                        any(), eq(false), eq(USER_ID), any(), any(), anyList(), any(), any(), anyList(), any()))
                 .thenReturn(Optional.of(UUID.randomUUID()));
         Authentication caller = SecurityContextHolder.getContext().getAuthentication();
 
@@ -195,10 +198,13 @@ class ConversationTurnServiceImplTest {
             executor.shutdownNow();
         }
 
-        verify(agentOrchestrationService, never()).chat(USER, "second", busyId.toString());
-        verify(store, never()).recordChatTurn(any(), anyBoolean(), any(), eq("second"), anyList(), any(), anyList());
+        verify(agentOrchestrationService, never()).chatTurn(eq(USER), eq("second"), eq(busyId.toString()), any());
+        verify(store, never())
+                .recordChatTurn(
+                        any(), anyBoolean(), any(), any(), eq("second"), anyList(), any(), any(), anyList(), any());
         // The first turn released the lock on success: the next turn on the conversation runs.
-        when(agentOrchestrationService.chat(USER, "third", busyId.toString())).thenReturn("third answer");
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("third"), eq(busyId.toString()), any()))
+                .thenReturn(ChatOutcome.of("third answer"));
         assertThat(turnService.runTurn(busyId.toString(), "third").response()).isEqualTo("third answer");
     }
 
@@ -207,11 +213,12 @@ class ConversationTurnServiceImplTest {
     void runTurn_modelThrows_releasesConversationLock() {
         UUID conversationId = UUID.randomUUID();
         when(store.isOwned(conversationId, USER_ID)).thenReturn(true);
-        when(agentOrchestrationService.chat(USER, "boom", conversationId.toString()))
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("boom"), eq(conversationId.toString()), any()))
                 .thenThrow(new IllegalStateException("model failed"));
-        when(agentOrchestrationService.chat(USER, "retry", conversationId.toString()))
-                .thenReturn("answer");
-        when(store.recordChatTurn(any(), eq(false), eq(USER_ID), eq("retry"), anyList(), any(), anyList()))
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("retry"), eq(conversationId.toString()), any()))
+                .thenReturn(ChatOutcome.of("answer"));
+        when(store.recordChatTurn(
+                        any(), eq(false), eq(USER_ID), any(), eq("retry"), anyList(), any(), any(), anyList(), any()))
                 .thenReturn(Optional.of(UUID.randomUUID()));
 
         assertThatThrownBy(() -> turnService.runTurn(conversationId.toString(), "boom"))

@@ -479,16 +479,26 @@ class McpChatControllerTest {
         when(conversationStore.isOwned(conversationId, userId)).thenReturn(true);
         CountDownLatch firstTurnInModel = new CountDownLatch(1);
         CountDownLatch releaseFirstTurn = new CountDownLatch(1);
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+        when(agentOrchestrationService.chatTurn(
+                        any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
                 .thenAnswer(invocation -> {
                     firstTurnInModel.countDown();
                     if (!releaseFirstTurn.await(10, TimeUnit.SECONDS)) {
                         throw new IllegalStateException("first turn was never released");
                     }
-                    return "first answer";
+                    return ChatOutcome.of("first answer");
                 });
         when(conversationStore.recordChatTurn(
-                        eq(conversationId), eq(false), eq(userId), anyString(), anyList(), anyString(), anyList()))
+                        eq(conversationId),
+                        eq(false),
+                        eq(userId),
+                        any(UUID.class),
+                        anyString(),
+                        anyList(),
+                        any(UUID.class),
+                        anyString(),
+                        anyList(),
+                        any(TurnSummary.class)))
                 .thenReturn(Optional.of(UUID.randomUUID()));
         var caller = new UsernamePasswordAuthenticationToken(
                 "test-user",
