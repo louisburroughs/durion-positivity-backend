@@ -1023,17 +1023,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/BillingTermsRef'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required
         '403':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/BillingTermsRef'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing authority crm:party:view
       security:
       - bearerAuth:
@@ -1099,19 +1095,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetCommercialAccountContactsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetCommercialAccountContactsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetCommercialAccountContactsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -1173,31 +1169,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - validation failed
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Party or person not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Conflict - overlapping relationship exists
       security:
       - bearerAuth:
@@ -1242,10 +1238,22 @@ paths:
         '204':
           description: Relationship deactivated
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Relationship not found
       security:
       - bearerAuth:
@@ -1290,12 +1298,28 @@ paths:
         '204':
           description: Primary billing contact updated
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - relationship must have BILLING role
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Relationship not found
       security:
       - bearerAuth:
@@ -2802,17 +2826,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/GetPersonResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/GetPersonResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
       security:
       - bearerAuth:
@@ -2871,19 +2891,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - validation failed
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
         '409':
           content:
@@ -2934,19 +2954,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetPersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetPersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetPersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Person not found
       security:
       - bearerAuth:
@@ -3522,13 +3542,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRuleRef'
+                $ref: '#/components/schemas/ApiError'
           description: Caller lacks PARTY_VIEW authority
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRuleRef'
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -4125,6 +4145,10 @@ paths:
         '204':
           description: Customer deleted successfully.
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Customer not found.
       security:
       - bearerAuth:
@@ -4169,7 +4193,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Customer not found.
       security:
       - bearerAuth:
@@ -4229,7 +4253,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Customer not found.
       security:
       - bearerAuth:
@@ -4289,7 +4313,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
       security:
       - bearerAuth:
@@ -4351,7 +4375,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
       security:
       - bearerAuth:
@@ -8020,6 +8044,26 @@ components:
         description:
           description: Human-readable vehicle description.
           example: 2024 Ford F-150 XL
+          type: string
+        dutyCategory:
+          description: 'Duty category derived from gvwrClass: LIGHT (1-3), MEDIUM (4-6), HEAVY (7-8). Never stored; null when the class is undetermined.'
+          enum:
+          - LIGHT
+          - MEDIUM
+          - HEAVY
+          example: LIGHT
+          type: string
+        gvwrClass:
+          description: FHWA GVWR class 1-8 (CAP-327); null when undetermined.
+          example: 2
+          format: int32
+          type: integer
+        gvwrClassSource:
+          description: 'Where the current gvwrClass came from: OPERATOR_SET or DECODED. Null when undetermined.'
+          enum:
+          - OPERATOR_SET
+          - DECODED
+          example: OPERATOR_SET
           type: string
         isActive:
           description: Whether vehicle is active.

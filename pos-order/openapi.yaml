@@ -268,25 +268,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CancellationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CancellationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CancellationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Order not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CancellationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Order cannot be cancelled in current state
         '500':
           content:
@@ -341,19 +341,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CancellationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CancellationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Order not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CancellationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Order not in retryable state
         '500':
           content:
@@ -811,9 +811,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/PriceOverrideDetail'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: No filter parameter provided
       security:
       - bearerAuth:
@@ -868,13 +866,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceOverrideResult'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceOverrideResult'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions
       security:
       - bearerAuth:
@@ -953,7 +951,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceOverrideDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Override not found
       security:
       - bearerAuth:
@@ -1011,19 +1009,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceOverrideDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or override not in pending state
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceOverrideDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient approval permissions
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceOverrideDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Override not found
       security:
       - bearerAuth:
@@ -1082,19 +1080,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceOverrideDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or override not in pending state
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceOverrideDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient rejection permissions
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceOverrideDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Override not found
       security:
       - bearerAuth:

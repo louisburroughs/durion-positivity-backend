@@ -67,14 +67,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ElevateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ElevateResponse'
-          description: Manager approval denied
+          description: Manager approval denied; the body is empty.
       security:
       - bearerAuth:
         - invoice:finalize
@@ -943,9 +939,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/InvoiceArtifact'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invoice not found
       security:
       - bearerAuth: []
@@ -999,15 +993,13 @@ paths:
           content:
             application/json:
               schema:
-                format: byte
-                type: string
+                $ref: '#/components/schemas/ApiError'
           description: Missing, invalid, or expired token
         '404':
           content:
             application/json:
               schema:
-                format: byte
-                type: string
+                $ref: '#/components/schemas/ApiError'
           description: Invoice or artifact not found
       summary: Download Invoice Artifact as PDF
       tags:
@@ -1051,7 +1043,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ArtifactDownloadToken'
+                $ref: '#/components/schemas/ApiError'
           description: Invoice or artifact not found
       security:
       - bearerAuth: []
@@ -1094,7 +1086,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrderInvoiceResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invoice not cancellable in its current state
       security:
       - bearerAuth:
@@ -1210,25 +1202,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid or missing required fields
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Payment method declined
         '503':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Payment gateway unavailable
       security:
       - bearerAuth: []
@@ -1290,13 +1282,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Payment intent not found
       security:
       - bearerAuth: []
@@ -1360,19 +1352,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Payment intent not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid payment state
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Refund window expired or insufficient refundable amount
       security:
       - bearerAuth: []
@@ -1427,10 +1419,22 @@ paths:
         '200':
           description: Payment voided
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Payment intent not found
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid payment state
         '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Void window expired
       security:
       - bearerAuth: []
@@ -1488,7 +1492,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReceiptResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invoice not found
       security:
       - bearerAuth: []
@@ -1543,6 +1547,10 @@ paths:
         '200':
           description: Email delivery recorded
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Receipt not found
       security:
       - bearerAuth: []
@@ -1596,6 +1604,10 @@ paths:
         '200':
           description: Print delivery recorded
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Receipt not found
       security:
       - bearerAuth: []
@@ -1656,13 +1668,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReceiptResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Receipt not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReceiptResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Reprint limit exceeded
       security:
       - bearerAuth: []
@@ -1707,9 +1719,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/InvoiceRefundResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invoice not found
       security:
       - bearerAuth: []
@@ -1766,13 +1776,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invoice not found
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient refundable amount
       security:
       - bearerAuth: []
@@ -1881,7 +1891,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Missing party anchor
       security:
       - bearerAuth: []
