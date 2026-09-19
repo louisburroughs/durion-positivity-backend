@@ -5,10 +5,12 @@ import com.positivity.accounting.internal.dto.ExportJobResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.TimekeepingExportService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -65,8 +67,14 @@ public class TimekeepingExportController {
                     """,
             tags = {"Accounting Exports"})
     @ApiResponse(responseCode = "202", description = "Export job accepted")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ExportJobResponse> requestExport(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Export job definition with type, format and optional filters.",
@@ -105,8 +113,14 @@ public class TimekeepingExportController {
                     """,
             tags = {"Accounting Exports"})
     @ApiResponse(responseCode = "200", description = "Export job status returned")
-    @ApiResponse(responseCode = "404", description = "Export job not found")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Export job not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ExportJobResponse> getExportStatus(
             @Parameter(description = "Export job identifier") @PathVariable UUID jobId) {
         ExportJobResponse response = timekeepingExportService.getExportStatus(jobId);
@@ -133,7 +147,10 @@ public class TimekeepingExportController {
                     """,
             tags = {"Accounting Exports"})
     @ApiResponse(responseCode = "200", description = "Export history returned")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<ExportJobResponse>> listExportHistory(
             @ParameterObject @PageableDefault(size = 20, sort = "requestedAt", direction = Sort.Direction.DESC)
                     Pageable pageable) {

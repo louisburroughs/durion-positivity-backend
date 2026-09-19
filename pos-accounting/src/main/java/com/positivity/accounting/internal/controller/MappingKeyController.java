@@ -8,10 +8,12 @@ import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.MappingKeyService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.LogSanitizer;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -75,7 +77,10 @@ public class MappingKeyController {
                     """,
             tags = {"Mapping Keys"})
     @ApiResponse(responseCode = "201", description = "Mapping key created")
-    @ApiResponse(responseCode = "400", description = "Invalid request or duplicate name")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or duplicate name",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_MAPPING_KEY_CREATE", apiVersion = "1")
     public ResponseEntity<MappingKeyResponse> createMappingKey(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -117,7 +122,10 @@ public class MappingKeyController {
                     """,
             tags = {"Mapping Keys"})
     @ApiResponse(responseCode = "200", description = "Mapping key returned")
-    @ApiResponse(responseCode = "404", description = "Mapping key not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Mapping key not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<MappingKeyResponse> getMappingKey(
             @Parameter(description = "Mapping key identifier") @PathVariable @NonNull UUID mappingKeyId) {
         log.info("Get mapping key");
@@ -147,8 +155,14 @@ public class MappingKeyController {
                     """,
             tags = {"Mapping Keys"})
     @ApiResponse(responseCode = "200", description = "Mapping key updated")
-    @ApiResponse(responseCode = "404", description = "Mapping key not found")
-    @ApiResponse(responseCode = "400", description = "Invalid request or duplicate name")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Mapping key not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or duplicate name",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_MAPPING_KEY_UPDATE", apiVersion = "1")
     public ResponseEntity<MappingKeyResponse> updateMappingKey(
             @Parameter(description = "Mapping key identifier") @PathVariable @NonNull UUID mappingKeyId,
@@ -193,8 +207,14 @@ public class MappingKeyController {
                     """,
             tags = {"Mapping Keys"})
     @ApiResponse(responseCode = "200", description = "Mapping keys listed")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
-    @ApiResponse(responseCode = "404", description = "Posting category not found")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Posting category not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_MAPPING_KEY_LIST", apiVersion = "1")
     public ResponseEntity<MappingKeyListResponse> listMappingKeysByCategory(
             @Parameter(description = "Posting category identifier") @PathVariable @NonNull UUID postingCategoryId,
@@ -236,8 +256,14 @@ public class MappingKeyController {
                     """,
             tags = {"Mapping Keys"})
     @ApiResponse(responseCode = "204", description = "Mapping key deactivated")
-    @ApiResponse(responseCode = "404", description = "Mapping key not found")
-    @ApiResponse(responseCode = "409", description = "Cannot deactivate - active mappings exist")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Mapping key not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Cannot deactivate - active mappings exist",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_MAPPING_KEY_DEACTIVATE", apiVersion = "1")
     public ResponseEntity<Void> deactivateMappingKey(
             @Parameter(description = "Mapping key identifier") @PathVariable @NonNull UUID mappingKeyId) {

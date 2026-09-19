@@ -8,10 +8,12 @@ import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.PostingCategoryService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.LogSanitizer;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -71,7 +73,10 @@ public class PostingCategoryController {
                     """,
             tags = {"Posting Categories"})
     @ApiResponse(responseCode = "201", description = "Posting category created")
-    @ApiResponse(responseCode = "400", description = "Invalid request or duplicate name")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or duplicate name",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_POSTING_CATEGORY_CREATE", apiVersion = "1")
     public ResponseEntity<PostingCategoryResponse> createPostingCategory(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -112,7 +117,10 @@ public class PostingCategoryController {
                     """,
             tags = {"Posting Categories"})
     @ApiResponse(responseCode = "200", description = "Posting category returned")
-    @ApiResponse(responseCode = "404", description = "Posting category not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Posting category not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PostingCategoryResponse> getPostingCategory(
             @Parameter(description = "Posting category identifier") @PathVariable UUID postingCategoryId) {
         log.info("Get posting category");
@@ -142,8 +150,14 @@ public class PostingCategoryController {
                     """,
             tags = {"Posting Categories"})
     @ApiResponse(responseCode = "200", description = "Posting category updated")
-    @ApiResponse(responseCode = "404", description = "Posting category not found")
-    @ApiResponse(responseCode = "400", description = "Invalid request or duplicate name")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Posting category not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or duplicate name",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_POSTING_CATEGORY_UPDATE", apiVersion = "1")
     public ResponseEntity<PostingCategoryResponse> updatePostingCategory(
             @Parameter(description = "Posting category identifier") @PathVariable UUID postingCategoryId,
@@ -187,7 +201,10 @@ public class PostingCategoryController {
                     """,
             tags = {"Posting Categories"})
     @ApiResponse(responseCode = "200", description = "Posting categories listed")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_POSTING_CATEGORY_LIST", apiVersion = "1")
     public ResponseEntity<PostingCategoryListResponse> listPostingCategories(
             @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
@@ -228,8 +245,14 @@ public class PostingCategoryController {
                     """,
             tags = {"Posting Categories"})
     @ApiResponse(responseCode = "204", description = "Posting category deactivated")
-    @ApiResponse(responseCode = "404", description = "Posting category not found")
-    @ApiResponse(responseCode = "409", description = "Cannot deactivate - active mappings exist")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Posting category not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Cannot deactivate - active mappings exist",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_POSTING_CATEGORY_DEACTIVATE", apiVersion = "1")
     public ResponseEntity<Void> deactivatePostingCategory(
             @Parameter(description = "Posting category identifier") @PathVariable UUID postingCategoryId) {

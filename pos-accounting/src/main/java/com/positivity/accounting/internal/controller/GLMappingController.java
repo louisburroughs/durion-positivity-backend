@@ -77,7 +77,10 @@ public class GLMappingController {
             responseCode = "201",
             description = "GL mapping created",
             content = @Content(schema = @Schema(implementation = GLMappingCreateResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request payload")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<GLMappingCreateResponse> createGLMapping(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Date-effective external-code-to-GL-account mapping to create.",
@@ -138,7 +141,10 @@ public class GLMappingController {
             responseCode = "200",
             description = "GL mapping resolved",
             content = @Content(schema = @Schema(implementation = GLMappingResolveResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request payload")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<GLMappingResolveResponse> resolveGLMapping(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "External code and transaction date to resolve against effective mappings.",
