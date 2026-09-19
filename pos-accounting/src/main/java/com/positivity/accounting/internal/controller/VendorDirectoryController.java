@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.VendorResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.VendorDirectoryService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -18,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for the AP vendor directory (Issue #816).
@@ -129,7 +132,10 @@ public class VendorDirectoryController {
             responseCode = "200",
             description = "Vendor found",
             content = @Content(schema = @Schema(implementation = VendorResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Vendor not found", content = @Content())
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vendor not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorResponse> getVendorById(
             @Parameter(description = "Vendor identifier", example = "550e8400-e29b-41d4-a716-446655440001")
                     @NonNull
@@ -140,6 +146,6 @@ public class VendorDirectoryController {
         return vendorDirectoryService
                 .getVendorById(vendorId)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendor not found"));
     }
 }

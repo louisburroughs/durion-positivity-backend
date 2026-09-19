@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.DefaultGLMappingListResponse;
 import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
+import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.DefaultGLMappingService;
 import com.positivity.events.EmitEvent;
@@ -393,7 +394,10 @@ public class DefaultGLMappingController {
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Default mapping resolved")
-    @ApiResponse(responseCode = "404", description = "No default mapping found", content = @Content())
+    @ApiResponse(
+            responseCode = "404",
+            description = "No default mapping found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Forbidden",
@@ -407,7 +411,7 @@ public class DefaultGLMappingController {
         DefaultGLMappingResponse response =
                 defaultGLMappingService.findActiveDefaultForEvent(eventType, organizationId);
         if (response == null) {
-            return ResponseEntity.notFound().build();
+            throw new DefaultGLMappingNotFoundException("No active default GL mapping for the event type");
         }
 
         return ResponseEntity.ok(response);

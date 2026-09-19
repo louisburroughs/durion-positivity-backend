@@ -43,6 +43,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST Controller for Vendor Bill lifecycle management.
@@ -319,7 +320,10 @@ public class VendorBillController {
             responseCode = "200",
             description = "Vendor bill found",
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Vendor bill not found", content = @Content())
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vendor bill not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> getBillById(
             @Parameter(description = "Vendor bill identifier", example = "550e8400-e29b-41d4-a716-446655440001")
                     @NonNull
@@ -330,7 +334,7 @@ public class VendorBillController {
         return vendorBillService
                 .getBillById(billId)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendor bill not found"));
     }
 
     /**
@@ -366,7 +370,10 @@ public class VendorBillController {
             responseCode = "200",
             description = "Vendor bill found",
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Vendor bill not found", content = @Content())
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vendor bill not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> getBillByOriginEventId(
             @Parameter(description = "Origin event identifier", example = "550e8400-e29b-41d4-a716-446655440010")
                     @NonNull
@@ -377,7 +384,7 @@ public class VendorBillController {
         return vendorBillService
                 .getBillByOriginEventId(eventId)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendor bill not found"));
     }
 
     /**

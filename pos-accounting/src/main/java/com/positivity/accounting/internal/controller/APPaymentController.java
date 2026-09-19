@@ -41,6 +41,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for AP (Accounts Payable) payment operations.
@@ -171,7 +172,10 @@ public class APPaymentController {
                     """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Payment found")
-    @ApiResponse(responseCode = "404", description = "Payment not found", content = @Content())
+    @ApiResponse(
+            responseCode = "404",
+            description = "Payment not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
@@ -185,7 +189,7 @@ public class APPaymentController {
         return apPaymentService
                 .getPaymentById(paymentId)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "AP payment not found"));
     }
 
     @GetMapping("/payments/by-ref/{paymentRef}")
@@ -205,7 +209,10 @@ public class APPaymentController {
                     """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Payment found")
-    @ApiResponse(responseCode = "404", description = "Payment not found", content = @Content())
+    @ApiResponse(
+            responseCode = "404",
+            description = "Payment not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
@@ -224,7 +231,7 @@ public class APPaymentController {
         return apPaymentService
                 .getPaymentByRef(paymentRef)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "AP payment not found"));
     }
 
     @GetMapping("/bills")
