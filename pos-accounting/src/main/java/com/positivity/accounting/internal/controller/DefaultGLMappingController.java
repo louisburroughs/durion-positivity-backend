@@ -85,8 +85,14 @@ public class DefaultGLMappingController {
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "201", description = "Default mapping created")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Referenced GL account not found (GL_ACCOUNT_NOT_FOUND)",
@@ -149,7 +155,10 @@ public class DefaultGLMappingController {
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Default mapping updated")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND), or a"
@@ -204,7 +213,10 @@ public class DefaultGLMappingController {
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "204", description = "Default mapping deactivated")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)",
@@ -238,7 +250,10 @@ public class DefaultGLMappingController {
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Default mapping returned")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)",
@@ -270,7 +285,10 @@ public class DefaultGLMappingController {
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Default mappings listed")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_DEFAULT_MAPPING_LIST", apiVersion = "1")
     public ResponseEntity<DefaultGLMappingListResponse> listDefaultMappings(
             @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
@@ -300,7 +318,10 @@ public class DefaultGLMappingController {
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Matching default mappings returned")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<DefaultGLMappingResponse>> searchDefaultMappings(
             @Parameter(description = "Filter by event type") @RequestParam(required = false) @Nullable String eventType,
             @Parameter(description = "Filter by organization ID") @RequestParam(required = false) @Nullable
@@ -340,7 +361,10 @@ public class DefaultGLMappingController {
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Global default mappings returned")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<DefaultGLMappingResponse>> listGlobalDefaults() {
         log.info("List global default GL mappings");
         List<DefaultGLMappingResponse> response = defaultGLMappingService.findAllGlobalDefaults();
@@ -369,8 +393,11 @@ public class DefaultGLMappingController {
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Default mapping resolved")
-    @ApiResponse(responseCode = "404", description = "No default mapping found")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(responseCode = "404", description = "No default mapping found", content = @Content())
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<DefaultGLMappingResponse> resolveDefaultMapping(
             @Parameter(description = "Event type") @NotBlank @RequestParam String eventType,
             @Parameter(description = "Organization ID (optional)") @RequestParam(required = false) @Nullable

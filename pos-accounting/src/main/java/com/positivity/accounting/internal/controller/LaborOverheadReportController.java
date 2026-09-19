@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.service.LaborOverheadReportService;
 import com.positivity.accounting.internal.service.LocationHierarchyService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -88,13 +89,20 @@ public class LaborOverheadReportController {
             responseCode = "200",
             description = "Report generated successfully",
             content = @Content(schema = @Schema(implementation = LaborOverheadCostReport.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid locationId, fiscalYear, or asOfMonth")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid locationId, fiscalYear, or asOfMonth",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "FORBIDDEN when the caller lacks reporting:view:financial-statements;"
                     + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations"
-                    + " that do not cover locationId (ADR-0061)")
+                    + " that do not cover locationId (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LaborOverheadCostReport> generateLaborOverheadReport(
             @Parameter(
                             description = "Location/dealer identifier (accounting locationId dimension)",

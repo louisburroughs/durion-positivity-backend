@@ -129,7 +129,7 @@ public class VendorDirectoryController {
             responseCode = "200",
             description = "Vendor found",
             content = @Content(schema = @Schema(implementation = VendorResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Vendor not found")
+    @ApiResponse(responseCode = "404", description = "Vendor not found", content = @Content())
     public ResponseEntity<VendorResponse> getVendorById(
             @Parameter(description = "Vendor identifier", example = "550e8400-e29b-41d4-a716-446655440001")
                     @NonNull

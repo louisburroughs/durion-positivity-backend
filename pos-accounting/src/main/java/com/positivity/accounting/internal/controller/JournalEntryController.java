@@ -111,8 +111,14 @@ public class JournalEntryController {
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal entries listed")
-    @ApiResponse(responseCode = "400", description = "Unsupported sort property or direction")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Unsupported sort property or direction",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_LIST", apiVersion = "1")
     public ResponseEntity<PagedResponse<JournalEntryResponse>> listJournalEntries(
             @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
@@ -234,7 +240,10 @@ public class JournalEntryController {
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "201", description = "Journal entry created")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "GL account not found (GL_ACCOUNT_NOT_FOUND)",

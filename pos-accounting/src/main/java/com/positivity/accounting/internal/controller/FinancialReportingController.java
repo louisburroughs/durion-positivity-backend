@@ -89,9 +89,18 @@ public class FinancialReportingController {
             responseCode = "200",
             description = "Income statement generated successfully",
             content = @Content(schema = @Schema(implementation = IncomeStatementReport.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid date range")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid date range",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing reporting:view:financial-statements",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<IncomeStatementReport> generateIncomeStatement(
             @Parameter(description = "Period start date (YYYY-MM-DD)", required = true, example = "2024-01-01")
                     @RequestParam
@@ -140,9 +149,18 @@ public class FinancialReportingController {
             responseCode = "200",
             description = "Balance sheet generated successfully",
             content = @Content(schema = @Schema(implementation = BalanceSheetReport.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid date")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid date",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing reporting:view:financial-statements",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BalanceSheetReport> generateBalanceSheet(
             @Parameter(description = "As-of date (YYYY-MM-DD)", required = true, example = "2024-12-31")
                     @RequestParam
@@ -232,9 +250,18 @@ public class FinancialReportingController {
             responseCode = "200",
             description = "Account drilldown successful",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = AccountDrilldownResponse.class))))
-    @ApiResponse(responseCode = "400", description = "Invalid statement line code or date range")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid statement line code or date range",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing reporting:view:financial-statements",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<AccountDrilldownResponse>> drilldownToAccounts(
             @Parameter(description = "Statement line code (e.g., REVENUE_SALES)", required = true)
                     @PathVariable
@@ -298,9 +325,18 @@ public class FinancialReportingController {
                             array =
                                     @ArraySchema(
                                             schema = @Schema(implementation = JournalLineDrilldownResponse.class))))
-    @ApiResponse(responseCode = "400", description = "Invalid account ID or date range")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid account ID or date range",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing reporting:view:financial-statements",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<JournalLineDrilldownResponse>> drilldownToJournalLines(
             @Parameter(
                             description = "GL Account ID (UUID)",

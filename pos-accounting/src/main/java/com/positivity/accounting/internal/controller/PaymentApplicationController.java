@@ -8,10 +8,12 @@ import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.PaymentApplicationQueryService;
 import com.positivity.accounting.internal.service.PaymentApplicationService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -92,8 +94,14 @@ public class PaymentApplicationController {
                     """,
             tags = {"Payment Applications"})
     @ApiResponse(responseCode = "204", description = "Payment voided")
-    @ApiResponse(responseCode = "404", description = "Payment not found")
-    @ApiResponse(responseCode = "409", description = "Payment already applied; reverse applications first")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Payment not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Payment already applied; reverse applications first",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_PAYMENT_VOID", apiVersion = "1")
     public ResponseEntity<Void> voidPaymentApplication(
             @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
@@ -136,8 +144,14 @@ public class PaymentApplicationController {
                     """,
             tags = {"Payment Applications"})
     @ApiResponse(responseCode = "204", description = "Payment applications reversed")
-    @ApiResponse(responseCode = "404", description = "Payment not found")
-    @ApiResponse(responseCode = "409", description = "Payment has no applications to reverse")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Payment not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Payment has no applications to reverse",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_PAYMENT_REVERSE", apiVersion = "1")
     public ResponseEntity<Void> reversePayment(
             @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
@@ -207,9 +221,18 @@ public class PaymentApplicationController {
                     """,
             tags = {"Payment Applications"})
     @ApiResponse(responseCode = "201", description = "Payment applied successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request or insufficient funds")
-    @ApiResponse(responseCode = "404", description = "Payment not found")
-    @ApiResponse(responseCode = "409", description = "Currency mismatch or invoice not applicable")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or insufficient funds",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Payment not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Currency mismatch or invoice not applicable",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_PAYMENT_APPLY", apiVersion = "1")
     public ResponseEntity<PaymentApplicationResponse> applyPayment(
             @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
@@ -291,8 +314,14 @@ public class PaymentApplicationController {
                     """,
             tags = {"Payment Applications"})
     @ApiResponse(responseCode = "204", description = "Payment application reversed")
-    @ApiResponse(responseCode = "400", description = "Invalid request or already reversed")
-    @ApiResponse(responseCode = "404", description = "Payment application not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or already reversed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Payment application not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_PAYMENT_APPLICATION_REVERSE", apiVersion = "1")
     public ResponseEntity<Void> reversePaymentApplication(
             @Parameter(description = "Payment application identifier") @PathVariable UUID applicationId,
@@ -364,7 +393,10 @@ public class PaymentApplicationController {
                     """,
             tags = {"Payment Applications"})
     @ApiResponse(responseCode = "200", description = "Payment applications retrieved successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid date range or window too wide")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid date range or window too wide",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<PaymentApplicationListRow>> listPaymentApplications(
             @Parameter(description = "Applied-date window start (YYYY-MM-DD)", required = true, example = "2026-06-01")
                     @RequestParam

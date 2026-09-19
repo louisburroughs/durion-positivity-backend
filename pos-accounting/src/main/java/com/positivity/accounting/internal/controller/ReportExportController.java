@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.ReportExportService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -93,9 +94,18 @@ public class ReportExportController {
             responseCode = "201",
             description = "Export job created",
             content = @Content(schema = @Schema(implementation = ReportExportResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request payload")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing accounting:report:export")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing accounting:report:export",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReportExportResponse> requestExport(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Report type, format and date range to render asynchronously.",
@@ -144,9 +154,18 @@ public class ReportExportController {
             responseCode = "200",
             description = "Export status retrieved",
             content = @Content(schema = @Schema(implementation = ReportExportResponse.class)))
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing accounting:report:export")
-    @ApiResponse(responseCode = "404", description = "Export job not found")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing accounting:report:export",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Export job not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReportExportResponse> getExportStatus(
             @Parameter(description = "Export job UUID", required = true) @PathVariable UUID exportId) {
 
@@ -192,10 +211,22 @@ public class ReportExportController {
                     @Content(
                             mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE,
                             schema = @Schema(type = "string", format = "binary")))
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
-    @ApiResponse(responseCode = "404", description = "Export job or artifact not found")
-    @ApiResponse(responseCode = "409", description = "Export job is not COMPLETED")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing reporting:view:financial-statements",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Export job or artifact not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Export job is not COMPLETED",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<byte[]> downloadExport(
             @Parameter(description = "Export job UUID", required = true) @PathVariable UUID exportId) {
 
@@ -231,8 +262,14 @@ public class ReportExportController {
                     """,
             tags = {"Financial Reporting"})
     @ApiResponse(responseCode = "200", description = "Export history returned")
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing accounting:report:export")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing accounting:report:export",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<ReportExportResponse>> getExportHistory(
             @ParameterObject @PageableDefault(size = 20, sort = "requestedAt", direction = Sort.Direction.DESC)
                     Pageable pageable) {

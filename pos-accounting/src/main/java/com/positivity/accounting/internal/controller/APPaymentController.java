@@ -6,10 +6,12 @@ import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.APPaymentService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -91,9 +93,18 @@ public class APPaymentController {
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Idempotent replay: existing payment returned")
     @ApiResponse(responseCode = "201", description = "Payment executed successfully (new payment created)")
-    @ApiResponse(responseCode = "400", description = "Validation error: negative amounts, invalid bills, etc.")
-    @ApiResponse(responseCode = "409", description = "Conflict: paymentRef exists with different payload")
-    @ApiResponse(responseCode = "500", description = "Payment gateway failure")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation error: negative amounts, invalid bills, etc.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Conflict: paymentRef exists with different payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "Payment gateway failure",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:pay"})
@@ -160,7 +171,7 @@ public class APPaymentController {
                     """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Payment found")
-    @ApiResponse(responseCode = "404", description = "Payment not found")
+    @ApiResponse(responseCode = "404", description = "Payment not found", content = @Content())
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
@@ -194,7 +205,7 @@ public class APPaymentController {
                     """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Payment found")
-    @ApiResponse(responseCode = "404", description = "Payment not found")
+    @ApiResponse(responseCode = "404", description = "Payment not found", content = @Content())
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
@@ -233,7 +244,10 @@ public class APPaymentController {
                     """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Bills retrieved successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid vendor ID")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid vendor ID",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
