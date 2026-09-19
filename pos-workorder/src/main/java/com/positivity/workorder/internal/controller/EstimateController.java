@@ -327,8 +327,7 @@ public class EstimateController {
                             .getEstimateById(existingEstimateId.get())
                             .<ResponseEntity<Object>>map(existing ->
                                     ResponseEntity.status(HttpStatus.CREATED).body(existing))
-                            .orElseGet(() ->
-                                    ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT)));
+                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, CONFLICT));
                 }
             }
 
@@ -343,16 +342,18 @@ public class EstimateController {
 
         } catch (WorkorderRequestValidationException e) {
             log.warn("Validation error creating estimate: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, VALIDATION_ERROR);
 
         } catch (IllegalStateException e) {
             log.warn("Conflict creating estimate: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
+            throw new ResponseStatusException(HttpStatus.CONFLICT, CONFLICT);
 
         } catch (DataIntegrityViolationException e) {
             log.warn("Conflict creating estimate: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
+            throw new ResponseStatusException(HttpStatus.CONFLICT, CONFLICT);
 
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Unexpected error creating estimate", e);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", e);
@@ -421,24 +422,24 @@ public class EstimateController {
                     Map<String, Object> patchRequest) {
         Object rawStatus = patchRequest.get("status");
         if (!(rawStatus instanceof String statusValue) || statusValue.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, VALIDATION_ERROR);
         }
 
         final EstimateStatus targetStatus;
         try {
             targetStatus = EstimateStatus.valueOf(statusValue);
         } catch (IllegalArgumentException _) {
-            return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, VALIDATION_ERROR);
         }
 
         try {
             return switch (targetStatus) {
                 case DECLINED -> ResponseEntity.ok(estimateService.declineEstimate(estimateId, null));
                 case DRAFT -> ResponseEntity.ok(estimateService.reopenEstimate(estimateId));
-                default -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
+                default -> throw new ResponseStatusException(HttpStatus.CONFLICT, CONFLICT);
             };
         } catch (IllegalStateException _) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
+            throw new ResponseStatusException(HttpStatus.CONFLICT, CONFLICT);
         }
     }
 

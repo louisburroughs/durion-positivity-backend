@@ -11,6 +11,7 @@ import com.positivity.workorder.internal.dto.WorkexecLaborPerformedResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerEntryResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerStartRequest;
 import com.positivity.workorder.internal.dto.WorkexecTimerStopResponse;
+import com.positivity.workorder.internal.exception.WorkorderApiException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.LocationHierarchyService;
@@ -28,7 +29,6 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
@@ -56,8 +56,6 @@ import org.springframework.web.bind.annotation.RestController;
         description = "Endpoints for timer operations, labor entry creation, and job time totals")
 public class WorkexecTimeTrackingController {
 
-    private static final String ERROR_CODE_KEY = "code";
-    private static final String ERROR_MESSAGE_KEY = "message";
     private static final String ERROR_INVALID_REQUEST = "WORKEXEC_INVALID_REQUEST";
     private static final String USER_ID_REQUIRED_MESSAGE = "Authenticated user id must be a valid UUID";
     private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
@@ -451,18 +449,19 @@ public class WorkexecTimeTrackingController {
         }
     }
 
+    /** Throws a 400 rendered as ApiError; typed as a response so call sites can {@code return} it. */
     private ResponseEntity<Object> badRequest(String code, String message) {
-        return ResponseEntity.badRequest().body(Map.of(ERROR_CODE_KEY, code, ERROR_MESSAGE_KEY, message));
+        throw new WorkorderApiException(HttpStatus.BAD_REQUEST, code, message);
     }
 
+    /** Throws a 409 rendered as ApiError; typed as a response so call sites can {@code return} it. */
     private ResponseEntity<Object> conflict(String code, String message) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of(ERROR_CODE_KEY, code, ERROR_MESSAGE_KEY, message));
+        throw new WorkorderApiException(HttpStatus.CONFLICT, code, message);
     }
 
+    /** Throws a 404 rendered as ApiError; typed as a response so call sites can {@code return} it. */
     private ResponseEntity<Object> notFound(String code, String message) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of(ERROR_CODE_KEY, code, ERROR_MESSAGE_KEY, message));
+        throw new WorkorderApiException(HttpStatus.NOT_FOUND, code, message);
     }
 
     private WorkexecJobTimeTotalResponse toJobTimeTotalResponse(WorkexecTimeTrackingService.JobTimeTotal response) {

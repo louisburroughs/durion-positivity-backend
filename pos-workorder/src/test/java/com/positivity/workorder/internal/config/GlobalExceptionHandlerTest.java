@@ -38,6 +38,7 @@ import com.positivity.workorder.internal.exception.TravelSegmentNotFoundExceptio
 import com.positivity.workorder.internal.exception.UomConversionUndefinedException;
 import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
 import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
+import com.positivity.workorder.internal.exception.WorkorderApiException;
 import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
@@ -256,6 +257,9 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleConstraintViolation", (HandlerInvocation)
                             request -> handler.handleConstraintViolation(
                                     new ConstraintViolationException(Set.<ConstraintViolation<?>>of()), request)),
+                    Named.of("handleWorkorderApi", (HandlerInvocation) request -> handler.handleWorkorderApi(
+                            new WorkorderApiException(HttpStatus.CONFLICT, "TIMER_ALREADY_ACTIVE", "already running"),
+                            request)),
                     Named.of("handleResponseStatus", (HandlerInvocation) request -> handler.handleResponseStatus(
                             new ResponseStatusException(HttpStatus.NOT_FOUND, "TECHNICIAN_ASSIGNMENT_NOT_FOUND"),
                             request)),

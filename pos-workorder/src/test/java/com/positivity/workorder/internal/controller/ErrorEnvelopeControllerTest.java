@@ -19,6 +19,7 @@ import com.positivity.workorder.internal.service.FleetAuthorizationService;
 import com.positivity.workorder.internal.service.IdempotencyService;
 import com.positivity.workorder.internal.service.LocationHierarchyService;
 import com.positivity.workorder.internal.service.TechnicianAssignmentService;
+import com.positivity.workorder.internal.service.WorkexecTimeTrackingService;
 import com.positivity.workorder.internal.service.WorkorderCountService;
 import com.positivity.workorder.internal.service.WorkorderInvoiceService;
 import com.positivity.workorder.internal.service.WorkorderLaborService;
@@ -53,6 +54,7 @@ import org.springframework.test.web.servlet.ResultActions;
     TechnicianAssignmentController.class,
     WorkorderController.class,
     EstimateController.class,
+    WorkexecTimeTrackingController.class,
     WorkorderFleetAuthorizationController.class,
     WorkorderLaborController.class,
     WorkorderPartAdjustmentController.class
@@ -105,6 +107,9 @@ class ErrorEnvelopeControllerTest {
 
     @MockitoBean
     private LocationHierarchyService locationHierarchyService;
+
+    @MockitoBean
+    private WorkexecTimeTrackingService workexecTimeTrackingService;
 
     private static void expectEnvelope(ResultActions result, int status, String code) throws Exception {
         result.andExpect(status().is(status))
@@ -244,6 +249,33 @@ class ErrorEnvelopeControllerTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"))
                 .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    /** Formerly a {@code Map{code,message}} body; now the full envelope, code and message kept. */
+    @Test
+    @WithMockUser(authorities = "workorder:labor:add")
+    void laborPerformedConflictAnswersApiError() throws Exception {
+        when(workexecTimeTrackingService.recordLaborPerformed(any(), anyString()))
+                .thenThrow(new WorkexecTimeTrackingService.WorkexecConflictException(
+                        "WORKEXEC_CONFLICT_WORKORDER_STATE", "Workorder is cancelled"));
+        mockMvc.perform(post("/v1/workexec/labor-performed")
+                        .header("Idempotency-Key", "labor-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"workorderId":"019200aa-0000-7000-8000-000000000401",
+                                 "technicianId":"019200aa-0000-7000-8000-000000000402",
+                                 "performedAt":"2026-08-13T16:30:00Z",
+                                 "labor":{"quantity":1.5,"unit":"HOURS"},
+                                 "source":{"system":"MOBILE_APP","sourceReferenceId":"job-4711"}}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("WORKEXEC_CONFLICT_WORKORDER_STATE"))
+                .andExpect(jsonPath("$.message").value("Workorder is cancelled"))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(header().exists("X-Correlation-Id"));
     }

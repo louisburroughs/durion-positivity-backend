@@ -35,6 +35,7 @@ import com.positivity.workorder.internal.exception.WorkSessionLockedException;
 import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
 import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
 import com.positivity.workorder.internal.exception.WorkSessionStateException;
+import com.positivity.workorder.internal.exception.WorkorderApiException;
 import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
@@ -266,6 +267,11 @@ public class GlobalExceptionHandler {
         headers.add(X_CORRELATION_ID, correlationId);
         headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(WorkorderApiException.class)
+    public ResponseEntity<ApiError> handleWorkorderApi(WorkorderApiException ex, HttpServletRequest request) {
+        return buildErrorResponse(ex.getStatus(), ex.getCode(), ex.getMessage(), request);
     }
 
     @ExceptionHandler(IllegalStateException.class)
