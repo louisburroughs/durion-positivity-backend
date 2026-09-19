@@ -661,14 +661,20 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     }
 
     /**
-     * The per-appointment facts {@code carryOverIn} needs, resolved once for the whole read (#2050
-     * AC1): the local date its effective window began on, and the linked workorder when there is one.
+     * The per-appointment facts the two later steps need, resolved once for the whole read: the local
+     * dates its effective window began and ended on, and the linked workorder when there is one.
      *
-     * <p>The start date comes from the appointment's own effective start — actual when known, else
-     * planned — never from the last day its window happened to overlap. Two legal requests covering
+     * <p>The <em>start</em> date and the workorder are what {@code carryOverIn} reports (#2050 AC1).
+     * The <em>end</em> date is what pass 2 tests an {@code UNAVAILABLE} day against, to tell a day the
+     * job was still running through — which stops the carry-over walk — from one it had already
+     * finished before, which is skipped like a closure (#2086).
+     *
+     * <p>Both dates come from the appointment's own effective window — actual when known, else
+     * planned — never from the last day that window happened to overlap. Two legal requests covering
      * the same date must report the same {@code fromDate} for the same appointment (#2050 AC2), and
-     * only a fact derived from the row itself has that property; anything derived from the range
-     * being served does not.
+     * must agree about whether a job was running through an unknown day (#2086); only a fact derived
+     * from the row itself has that property, and anything derived from the range being served does
+     * not.
      */
     private Map<UUID, AppointmentCarryOverContext> buildCarryOverContexts(
             Map<UUID, List<Appointment>> appointmentsByBay,
