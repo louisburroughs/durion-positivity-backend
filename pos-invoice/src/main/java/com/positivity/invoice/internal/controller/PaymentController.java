@@ -6,6 +6,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.internal.service.PaymentService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -78,10 +79,22 @@ public class PaymentController {
                     required payment authority is missing.
                     """)
     @ApiResponse(responseCode = "201", description = "Payment intent created")
-    @ApiResponse(responseCode = "400", description = "Invalid or missing required fields")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions")
-    @ApiResponse(responseCode = "422", description = "Payment method declined")
-    @ApiResponse(responseCode = "503", description = "Payment gateway unavailable")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid or missing required fields",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Payment method declined",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "Payment gateway unavailable",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public InitiatePaymentResponse initiatePayment(
             @PathVariable @NonNull UUID invoiceId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -130,8 +143,14 @@ public class PaymentController {
                     MANUAL_CAPTURE authority is missing.
                     """)
     @ApiResponse(responseCode = "200", description = "Payment captured")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions")
-    @ApiResponse(responseCode = "404", description = "Payment intent not found")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Payment intent not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public InitiatePaymentResponse capturePayment(
             @PathVariable @NonNull UUID invoiceId,
             @PathVariable @NonNull UUID paymentId,

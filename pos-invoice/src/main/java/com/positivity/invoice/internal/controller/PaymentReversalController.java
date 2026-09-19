@@ -11,6 +11,7 @@ import com.positivity.invoice.internal.enums.VoidReason;
 import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.PaymentReversalService;
 import com.positivity.invoice.internal.service.RefundPaymentResult;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -67,9 +68,18 @@ public class PaymentReversalController {
                     when the gateway rejects the void.
                     """)
     @ApiResponse(responseCode = "200", description = "Payment voided")
-    @ApiResponse(responseCode = "404", description = "Payment intent not found")
-    @ApiResponse(responseCode = "409", description = "Invalid payment state")
-    @ApiResponse(responseCode = "422", description = "Void window expired")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Payment intent not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Invalid payment state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Void window expired",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> voidPayment(
             @PathVariable @NonNull UUID invoiceId,
             @PathVariable @NonNull UUID paymentId,
@@ -113,9 +123,18 @@ public class PaymentReversalController {
                     exceeds the remaining refundable balance.
                     """)
     @ApiResponse(responseCode = "201", description = "Refund created")
-    @ApiResponse(responseCode = "404", description = "Payment intent not found")
-    @ApiResponse(responseCode = "409", description = "Invalid payment state")
-    @ApiResponse(responseCode = "422", description = "Refund window expired or insufficient refundable amount")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Payment intent not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Invalid payment state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Refund window expired or insufficient refundable amount",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<RefundPaymentResponse> refundPayment(
             @PathVariable @NonNull UUID invoiceId,
             @PathVariable @NonNull UUID paymentId,
@@ -167,7 +186,10 @@ public class PaymentReversalController {
                     Returns 404 when no invoice exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Refund records returned")
-    @ApiResponse(responseCode = "404", description = "Invoice not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Invoice not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public List<InvoiceRefundResponse> listRefunds(@PathVariable @NonNull UUID invoiceId) {
         return paymentReversalService.listRefundsForInvoice(invoiceId).stream()
                 .map(PaymentReversalController::toRefundListEntry)

@@ -8,6 +8,7 @@ import com.positivity.invoice.internal.dto.RefundPaymentResponse;
 import com.positivity.invoice.internal.enums.RefundReason;
 import com.positivity.invoice.internal.service.PaymentReversalService;
 import com.positivity.invoice.internal.service.RefundPaymentResult;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -77,8 +78,14 @@ public class StandaloneRefundController {
                     amount exceeds the invoice's remaining refundable balance.
                     """)
     @ApiResponse(responseCode = "201", description = "Refund recorded")
-    @ApiResponse(responseCode = "404", description = "Invoice not found")
-    @ApiResponse(responseCode = "422", description = "Insufficient refundable amount")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Invoice not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Insufficient refundable amount",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<RefundPaymentResponse> refundInvoiceStandalone(
             @PathVariable @NonNull UUID invoiceId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -122,7 +129,10 @@ public class StandaloneRefundController {
                     Returns 201 with the refund record, and 400 when partyId is blank.
                     """)
     @ApiResponse(responseCode = "201", description = "Refund recorded")
-    @ApiResponse(responseCode = "400", description = "Missing party anchor")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing party anchor",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<RefundPaymentResponse> refundPartyStandalone(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =

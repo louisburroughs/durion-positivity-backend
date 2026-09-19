@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for billing rules management.
@@ -77,8 +78,8 @@ public class BillingRulesController {
                     defaulted when the commercial account was provisioned.
                     Required inputs: partyId (UUID) as a path parameter; there is no request body.
                     Emits a BILLING_RULES_GET audit event; no state changes — this is a read-only projection.
-                    Returns 404 with an empty body when no billing rules are configured for the party, and 400 \
-                    with a VALIDATION_ERROR ApiError when partyId is not a well-formed UUID.
+                    Returns 404 with a NOT_FOUND ApiError when no billing rules are configured for the party, and \
+                    400 with a VALIDATION_ERROR ApiError when partyId is not a well-formed UUID.
                     """)
     @ApiResponse(responseCode = "200", description = "Billing rules found")
     @ApiResponse(
@@ -87,8 +88,8 @@ public class BillingRulesController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "No billing rules configured for this party; the body is empty.",
-            content = @Content)
+            description = "No billing rules configured for this party.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BillingRulesDTO> getBillingRules(@PathVariable @NonNull String partyId) {
         // Validate partyId format
         if (!VALID_UUID_PATTERN.matcher(partyId).matches()) {
@@ -101,7 +102,7 @@ public class BillingRulesController {
         return billingRulesService
                 .getBillingRules(partyId)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "BILLING_RULES_NOT_FOUND"));
     }
 
     @PutMapping("/{partyId}")

@@ -39,7 +39,7 @@ paths:
 
         No events are emitted; the token is signed and stateless, and the grant is audit-logged with the approving manager''s person id.
 
-        Returns 200 with the token and its expiry, and 401 with an empty body when the employee number is unknown or inactive or the person lacks the override authority.
+        Returns 200 with the token and its expiry, and 401 with an ELEVATION_DENIED ApiError when the employee number is unknown or inactive or the person lacks the override authority; the error is the same for every reason, so it does not reveal which check failed.
 
         '
       operationId: elevateManagerApproval
@@ -67,14 +67,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ElevateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ElevateResponse'
-          description: Manager approval denied
+                $ref: '#/components/schemas/ApiError'
+          description: Manager approval denied (ELEVATION_DENIED); the same error for every denial reason.
       security:
       - bearerAuth:
         - invoice:finalize
@@ -95,7 +95,7 @@ paths:
 
         Emits a BILLING_RULES_GET audit event; no state changes — this is a read-only projection.
 
-        Returns 404 with an empty body when no billing rules are configured for the party, and 400 with a VALIDATION_ERROR ApiError when partyId is not a well-formed UUID.
+        Returns 404 with a NOT_FOUND ApiError when no billing rules are configured for the party, and 400 with a VALIDATION_ERROR ApiError when partyId is not a well-formed UUID.
 
         '
       operationId: getBillingRules
@@ -119,7 +119,11 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: partyId is not a well-formed UUID.
         '404':
-          description: No billing rules configured for this party; the body is empty.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No billing rules configured for this party.
       security:
       - bearerAuth:
         - invoice:billing-rules
@@ -943,9 +947,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/InvoiceArtifact'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invoice not found
       security:
       - bearerAuth: []
@@ -999,15 +1001,13 @@ paths:
           content:
             application/json:
               schema:
-                format: byte
-                type: string
+                $ref: '#/components/schemas/ApiError'
           description: Missing, invalid, or expired token
         '404':
           content:
             application/json:
               schema:
-                format: byte
-                type: string
+                $ref: '#/components/schemas/ApiError'
           description: Invoice or artifact not found
       summary: Download Invoice Artifact as PDF
       tags:
@@ -1051,7 +1051,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ArtifactDownloadToken'
+                $ref: '#/components/schemas/ApiError'
           description: Invoice or artifact not found
       security:
       - bearerAuth: []
@@ -1094,7 +1094,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrderInvoiceResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invoice not cancellable in its current state
       security:
       - bearerAuth:
@@ -1210,25 +1210,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid or missing required fields
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Payment method declined
         '503':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Payment gateway unavailable
       security:
       - bearerAuth: []
@@ -1290,13 +1290,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InitiatePaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Payment intent not found
       security:
       - bearerAuth: []
@@ -1360,19 +1360,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Payment intent not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid payment state
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Refund window expired or insufficient refundable amount
       security:
       - bearerAuth: []
@@ -1427,10 +1427,22 @@ paths:
         '200':
           description: Payment voided
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Payment intent not found
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid payment state
         '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Void window expired
       security:
       - bearerAuth: []
@@ -1488,7 +1500,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReceiptResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invoice not found
       security:
       - bearerAuth: []
@@ -1543,6 +1555,10 @@ paths:
         '200':
           description: Email delivery recorded
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Receipt not found
       security:
       - bearerAuth: []
@@ -1596,6 +1612,10 @@ paths:
         '200':
           description: Print delivery recorded
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Receipt not found
       security:
       - bearerAuth: []
@@ -1656,13 +1676,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReceiptResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Receipt not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReceiptResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Reprint limit exceeded
       security:
       - bearerAuth: []
@@ -1707,9 +1727,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/InvoiceRefundResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invoice not found
       security:
       - bearerAuth: []
@@ -1766,13 +1784,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invoice not found
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient refundable amount
       security:
       - bearerAuth: []
@@ -1881,7 +1899,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundPaymentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Missing party anchor
       security:
       - bearerAuth: []

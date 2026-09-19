@@ -335,6 +335,10 @@ paths:
                 $ref: '#/components/schemas/SearchPartiesResponse'
           description: Browse results returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -384,8 +388,16 @@ paths:
                 $ref: '#/components/schemas/CreateCommercialAccountResponse'
           description: Account created successfully
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -429,8 +441,16 @@ paths:
                 $ref: '#/components/schemas/DuplicateCheckResponse'
           description: Duplicate check completed successfully
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - legalName too short or blank
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -477,8 +497,16 @@ paths:
                 $ref: '#/components/schemas/SearchPartiesResponse'
           description: Search results returned
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid search criteria
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -520,8 +548,16 @@ paths:
                 $ref: '#/components/schemas/GetPartyResponse'
           description: Party details retrieved successfully
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -584,10 +620,22 @@ paths:
                 $ref: '#/components/schemas/BillingRuleRef'
           description: Billing rules updated successfully
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request body
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -629,8 +677,16 @@ paths:
                 $ref: '#/components/schemas/GetCommunicationPreferencesResponse'
           description: Preferences retrieved successfully
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -686,10 +742,22 @@ paths:
                 $ref: '#/components/schemas/UpsertCommunicationPreferencesResponse'
           description: Preferences updated successfully
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid preference data
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -744,10 +812,22 @@ paths:
                 $ref: '#/components/schemas/MergePartiesResponse'
           description: Parties merged successfully
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid merge request
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -805,10 +885,22 @@ paths:
                 $ref: '#/components/schemas/CreateVehicleForPartyResponse'
           description: Vehicle created successfully
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid vehicle data
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -858,8 +950,16 @@ paths:
                 type: array
           description: Resolved party id-to-name pairs
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid resolve request
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -910,10 +1010,22 @@ paths:
                 $ref: '#/components/schemas/ResolveAccountTierResponse'
           description: Tier resolved successfully
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Account not found
       security:
       - bearerAuth:
@@ -955,8 +1067,16 @@ paths:
                 $ref: '#/components/schemas/GetAccountTierResponse'
           description: Tier retrieved successfully
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Account not found
       security:
       - bearerAuth:
@@ -1023,17 +1143,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/BillingTermsRef'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required
         '403':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/BillingTermsRef'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing authority crm:party:view
       security:
       - bearerAuth:
@@ -1099,19 +1215,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetCommercialAccountContactsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetCommercialAccountContactsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetCommercialAccountContactsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -1173,31 +1289,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - validation failed
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Party or person not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePartyRelationshipResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Conflict - overlapping relationship exists
       security:
       - bearerAuth:
@@ -1242,10 +1358,22 @@ paths:
         '204':
           description: Relationship deactivated
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Relationship not found
       security:
       - bearerAuth:
@@ -1290,12 +1418,28 @@ paths:
         '204':
           description: Primary billing contact updated
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - relationship must have BILLING role
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Relationship not found
       security:
       - bearerAuth:
@@ -1369,6 +1513,10 @@ paths:
                 $ref: '#/components/schemas/PagedResponse'
           description: Queue returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -1409,8 +1557,16 @@ paths:
                 $ref: '#/components/schemas/FollowUpTaskResponse'
           description: Task returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Task not found
       security:
       - bearerAuth:
@@ -1456,10 +1612,22 @@ paths:
                 $ref: '#/components/schemas/FollowUpTaskResponse'
           description: Task assigned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Task not found
         '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Task is already closed
       security:
       - bearerAuth:
@@ -1513,10 +1681,22 @@ paths:
                 $ref: '#/components/schemas/FollowUpTaskResponse'
           description: Task completed
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Task not found
         '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Task is already closed
       security:
       - bearerAuth:
@@ -1569,10 +1749,22 @@ paths:
                 $ref: '#/components/schemas/FollowUpTaskResponse'
           description: Task dismissed
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Task not found
         '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Task is already closed
       security:
       - bearerAuth:
@@ -1631,6 +1823,10 @@ paths:
                 $ref: '#/components/schemas/PagedResponse'
           description: Inquiries returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -1681,8 +1877,16 @@ paths:
                 $ref: '#/components/schemas/InquiryResponse'
           description: Inquiry captured
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Validation failed
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -1723,8 +1927,16 @@ paths:
                 $ref: '#/components/schemas/InquiryResponse'
           description: Inquiry returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Inquiry not found
       security:
       - bearerAuth:
@@ -1770,8 +1982,16 @@ paths:
                 $ref: '#/components/schemas/InquiryResponse'
           description: Inquiry assigned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Inquiry not found
       security:
       - bearerAuth:
@@ -1818,10 +2038,22 @@ paths:
                 $ref: '#/components/schemas/InquiryResponse'
           description: Inquiry converted
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Inquiry or party not found
         '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Illegal transition, or an individual inquiry with no party to link
       security:
       - bearerAuth:
@@ -1877,10 +2109,22 @@ paths:
                 $ref: '#/components/schemas/InquiryResponse'
           description: Status updated
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Inquiry not found
         '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Illegal transition, or CONVERTED was requested directly
       security:
       - bearerAuth:
@@ -1922,8 +2166,16 @@ paths:
                 $ref: '#/components/schemas/GetCommunicationPreferencesResponse'
           description: Preferences retrieved successfully
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -1984,10 +2236,22 @@ paths:
                 $ref: '#/components/schemas/UpsertCommunicationPreferencesResponse'
           description: Preferences updated successfully
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -2042,6 +2306,10 @@ paths:
                 $ref: '#/components/schemas/PagedResponse'
           description: History returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -2083,8 +2351,16 @@ paths:
                 $ref: '#/components/schemas/GetContactsWithRolesResponse'
           description: Contacts retrieved successfully
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -2149,10 +2425,22 @@ paths:
                 $ref: '#/components/schemas/UpdateContactRolesResponse'
           description: Roles updated successfully
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party or contact not found
       security:
       - bearerAuth:
@@ -2216,6 +2504,10 @@ paths:
                 $ref: '#/components/schemas/PagedResponse'
           description: Tasks returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -2271,8 +2563,16 @@ paths:
                 $ref: '#/components/schemas/FollowUpTaskResponse'
           description: Task raised
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -2340,6 +2640,10 @@ paths:
                 $ref: '#/components/schemas/PagedResponse'
           description: Interactions returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -2395,8 +2699,16 @@ paths:
                 $ref: '#/components/schemas/CustomerInteractionResponse'
           description: Interaction recorded
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Validation failed
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -2437,8 +2749,16 @@ paths:
                 $ref: '#/components/schemas/MarketingConsentSummaryResponse'
           description: Consent returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -2492,8 +2812,16 @@ paths:
                 $ref: '#/components/schemas/MarketingConsentSummaryResponse'
           description: Consent updated
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -2539,8 +2867,16 @@ paths:
                 $ref: '#/components/schemas/MarketingConsentSummaryResponse'
           description: Gate updated
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Commercial party not found
       security:
       - bearerAuth:
@@ -2589,6 +2925,10 @@ paths:
                 $ref: '#/components/schemas/MarketingConsentDecision'
           description: Decision returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -2631,6 +2971,10 @@ paths:
                 type: array
           description: Party tags returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -2683,10 +3027,22 @@ paths:
                 $ref: '#/components/schemas/PartyTagAssignmentResponse'
           description: Tag assigned (or already present)
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Tag not found
         '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Tag is inactive
       security:
       - bearerAuth:
@@ -2729,6 +3085,10 @@ paths:
         '204':
           description: Tag removed
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -2802,17 +3162,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/GetPersonResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/GetPersonResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
       security:
       - bearerAuth:
@@ -2871,19 +3227,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - validation failed
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatePersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
         '409':
           content:
@@ -2934,19 +3290,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetPersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetPersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing required permission
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetPersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Person not found
       security:
       - bearerAuth:
@@ -2998,8 +3354,16 @@ paths:
                 $ref: '#/components/schemas/InquiryAcceptedResponse'
           description: Inquiry accepted
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Validation failed
         '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Too many submissions
       summary: Submit Public Inquiry
       tags:
@@ -3039,6 +3403,10 @@ paths:
                 type: array
           description: Segments returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -3094,10 +3462,22 @@ paths:
                 $ref: '#/components/schemas/SegmentResponse'
           description: Segment created
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Segment name already exists
         '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Predicate is not valid for this catalog
       security:
       - bearerAuth:
@@ -3133,6 +3513,10 @@ paths:
                 type: array
           description: Attribute catalog returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -3169,8 +3553,16 @@ paths:
         '204':
           description: Segment deleted
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Segment not found
       security:
       - bearerAuth:
@@ -3210,8 +3602,16 @@ paths:
                 $ref: '#/components/schemas/SegmentResponse'
           description: Segment returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Segment not found
       security:
       - bearerAuth:
@@ -3272,12 +3672,28 @@ paths:
                 $ref: '#/components/schemas/SegmentResponse'
           description: Segment updated
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Segment not found
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Segment name already exists
         '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Predicate invalid, or an immutable field was changed
       security:
       - bearerAuth:
@@ -3332,10 +3748,22 @@ paths:
                 $ref: '#/components/schemas/SegmentResponse'
           description: Members added
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Segment not found
         '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Segment is dynamic
       security:
       - bearerAuth:
@@ -3378,6 +3806,10 @@ paths:
         '204':
           description: Member removed
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -3433,8 +3865,16 @@ paths:
                 $ref: '#/components/schemas/SegmentResolutionResponse'
           description: Resolution returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Segment not found
       security:
       - bearerAuth:
@@ -3476,8 +3916,16 @@ paths:
                 $ref: '#/components/schemas/CrmSnapshotDTO'
           description: Success
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Access denied
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -3522,13 +3970,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRuleRef'
+                $ref: '#/components/schemas/ApiError'
           description: Caller lacks PARTY_VIEW authority
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRuleRef'
+                $ref: '#/components/schemas/ApiError'
           description: Party not found
       security:
       - bearerAuth:
@@ -3570,8 +4018,16 @@ paths:
                 $ref: '#/components/schemas/CrmSnapshotDTO'
           description: Success
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Access denied
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Vehicle or owner not found
       security:
       - bearerAuth:
@@ -3628,6 +4084,10 @@ paths:
                 $ref: '#/components/schemas/PagedResponse'
           description: Entries returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -3676,8 +4136,16 @@ paths:
                 $ref: '#/components/schemas/SuppressionEntryResponse'
           description: Address suppressed
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Validation failed
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -3725,6 +4193,10 @@ paths:
                 type: boolean
           description: Result returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -3761,8 +4233,16 @@ paths:
         '204':
           description: Suppression lifted
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Suppression entry not found
       security:
       - bearerAuth:
@@ -3805,6 +4285,10 @@ paths:
                 type: array
           description: Tags returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -3852,10 +4336,22 @@ paths:
                 $ref: '#/components/schemas/PartyTagResponse'
           description: Tag created
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Validation failed
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Tag name already exists
       security:
       - bearerAuth:
@@ -3892,8 +4388,16 @@ paths:
         '204':
           description: Tag deleted
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Tag not found
       security:
       - bearerAuth:
@@ -3933,8 +4437,16 @@ paths:
                 $ref: '#/components/schemas/PartyTagResponse'
           description: Tag returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Tag not found
       security:
       - bearerAuth:
@@ -3988,10 +4500,22 @@ paths:
                 $ref: '#/components/schemas/PartyTagResponse'
           description: Tag updated
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Tag not found
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Tag name already exists
       security:
       - bearerAuth:
@@ -4035,8 +4559,16 @@ paths:
                 type: array
           description: Vehicles listed (possibly empty)
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Customer not found
       security:
       - bearerAuth:
@@ -4085,8 +4617,16 @@ paths:
                 $ref: '#/components/schemas/VehicleResponse'
           description: Vehicle found
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Customer or vehicle not found
       security:
       - bearerAuth:
@@ -4125,6 +4665,10 @@ paths:
         '204':
           description: Customer deleted successfully.
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Customer not found.
       security:
       - bearerAuth:
@@ -4169,7 +4713,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Customer not found.
       security:
       - bearerAuth:
@@ -4229,7 +4773,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Customer not found.
       security:
       - bearerAuth:
@@ -4289,7 +4833,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
       security:
       - bearerAuth:
@@ -4351,7 +4895,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
       security:
       - bearerAuth:
@@ -4395,8 +4939,16 @@ paths:
         '401':
           description: Authentication required
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Caller lacks PARTY_VIEW authority
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Customer not found
       security:
       - bearerAuth:
@@ -4448,8 +5000,16 @@ paths:
                 $ref: '#/components/schemas/PromotionRedemptionResponse'
           description: Promotion redemption recorded
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Duplicate redemption
       security:
       - bearerAuth:
@@ -4492,6 +5052,10 @@ paths:
                 type: array
           description: Promotion redemptions returned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
@@ -8020,6 +8584,26 @@ components:
         description:
           description: Human-readable vehicle description.
           example: 2024 Ford F-150 XL
+          type: string
+        dutyCategory:
+          description: 'Duty category derived from gvwrClass: LIGHT (1-3), MEDIUM (4-6), HEAVY (7-8). Never stored; null when the class is undetermined.'
+          enum:
+          - LIGHT
+          - MEDIUM
+          - HEAVY
+          example: LIGHT
+          type: string
+        gvwrClass:
+          description: FHWA GVWR class 1-8 (CAP-327); null when undetermined.
+          example: 2
+          format: int32
+          type: integer
+        gvwrClassSource:
+          description: 'Where the current gvwrClass came from: OPERATOR_SET or DECODED. Null when undetermined.'
+          enum:
+          - OPERATOR_SET
+          - DECODED
+          example: OPERATOR_SET
           type: string
         isActive:
           description: Whether vehicle is active.

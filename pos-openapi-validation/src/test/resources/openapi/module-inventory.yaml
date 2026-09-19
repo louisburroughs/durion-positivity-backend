@@ -5,6 +5,7 @@ modules:
   pos-order:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-workorder:
     mode: STRICT
     annotationDepth: STRICT
@@ -19,12 +20,14 @@ modules:
   pos-customer:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-location:
     mode: STRICT
     annotationDepth: STRICT
   pos-tenant:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-people:
     mode: STRICT
     annotationDepth: STRICT
@@ -38,6 +41,7 @@ modules:
   pos-invoice:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-bulk-loader:
     mode: STRICT
     annotationDepth: STRICT

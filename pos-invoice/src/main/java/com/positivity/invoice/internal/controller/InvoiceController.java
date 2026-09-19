@@ -211,7 +211,10 @@ public class InvoiceController {
                     an authorized/captured payment, and 404 when the invoice does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Invoice cancelled (or already cancelled)")
-    @ApiResponse(responseCode = "409", description = "Invoice not cancellable in its current state")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Invoice not cancellable in its current state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"invoice:manage"})

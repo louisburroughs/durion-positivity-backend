@@ -90,7 +90,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Legal name already taken
       security:
       - bearerAuth:
@@ -134,7 +134,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Account not found
       security:
       - bearerAuth:
@@ -190,13 +190,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Account not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Legal name already taken
       security:
       - bearerAuth:
@@ -259,7 +259,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingProfileResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Account not found
       security:
       - bearerAuth:
@@ -318,7 +318,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountContactResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Account not found
       security:
       - bearerAuth:
@@ -361,6 +361,10 @@ paths:
         '204':
           description: Contact removed
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Account or contact not found
       security:
       - bearerAuth:
@@ -424,7 +428,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountContactResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Account or contact not found
       security:
       - bearerAuth:
@@ -521,13 +525,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TenantResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Account not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TenantResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Slug or display name already taken
       security:
       - bearerAuth:
@@ -571,7 +575,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TenantResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Tenant not found
       security:
       - bearerAuth:
@@ -627,13 +631,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TenantResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Tenant not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TenantResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Tenant is decommissioned, or the display name is taken
       security:
       - bearerAuth:
@@ -677,13 +681,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TenantResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Tenant not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TenantResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Tenant already decommissioned
       security:
       - bearerAuth:
@@ -727,13 +731,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TenantResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Tenant not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TenantResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Tenant is not SUSPENDED
       security:
       - bearerAuth:
@@ -777,13 +781,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TenantResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Tenant not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TenantResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Tenant is not ACTIVE
       security:
       - bearerAuth:
@@ -1006,6 +1010,54 @@ components:
           minLength: 0
           type: string
       type: object
+    ApiError:
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+          type: string
+        correlationId:
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
+        fieldErrors:
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
+          items:
+            $ref: '#/components/schemas/FieldError'
+          type: array
+        message:
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+          type: string
+        nextAction:
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+          type: string
+        referenceId:
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+          type: string
+        status:
+          description: HTTP status code
+          example: 404
+          format: int32
+          type: integer
+        supportAction:
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+          type: string
+        timestamp:
+          description: ISO 8601 UTC timestamp of the error
+          example: '2026-03-17T14:30:00.000Z'
+          type: string
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+      type: object
     BillingProfileRequest:
       description: Request payload for an account's billing profile
       properties:
@@ -1126,6 +1178,21 @@ components:
       - paymentProcessorCustomerTokenPresent
       - paymentTerms
       - updatedAt
+      type: object
+    FieldError:
+      description: Validation error for a specific request field
+      properties:
+        field:
+          description: Field name
+          example: quantity
+          type: string
+        message:
+          description: Validation failure message
+          example: must be greater than 0
+          type: string
+      required:
+      - field
+      - message
       type: object
     TenantCreateRequest:
       description: Request payload for registering a tenant

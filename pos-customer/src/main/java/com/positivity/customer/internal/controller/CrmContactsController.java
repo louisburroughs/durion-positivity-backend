@@ -6,6 +6,7 @@ import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.ContactRoleService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -73,8 +74,17 @@ public class CrmContactsController {
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content),
-                @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Party not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/{partyId}/contacts")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -122,12 +132,27 @@ public class CrmContactsController {
                         responseCode = "200",
                         description = "Roles updated successfully",
                         content = @Content(schema = @Schema(implementation = UpdateContactRolesResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid request",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content),
-                @ApiResponse(responseCode = "404", description = "Party or contact not found", content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Party or contact not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @PutMapping("/{partyId}/contacts/{contactId}/roles")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

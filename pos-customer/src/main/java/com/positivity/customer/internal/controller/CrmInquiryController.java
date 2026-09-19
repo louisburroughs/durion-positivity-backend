@@ -7,6 +7,7 @@ import com.positivity.customer.internal.enums.InquiryStatus;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.InquiryService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -57,7 +58,10 @@ public class CrmInquiryController {
                 responseCode = "200",
                 description = "Inquiries returned",
                 content = @Content(schema = @Schema(implementation = PagedResponse.class))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping
     @SecurityRequirement(
@@ -87,8 +91,14 @@ public class CrmInquiryController {
                 responseCode = "200",
                 description = "Inquiry returned",
                 content = @Content(schema = @Schema(implementation = InquiryResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Inquiry not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Inquiry not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/{inquiryId}")
     @SecurityRequirement(
@@ -119,8 +129,14 @@ public class CrmInquiryController {
                 responseCode = "201",
                 description = "Inquiry captured",
                 content = @Content(schema = @Schema(implementation = InquiryResponse.class))),
-        @ApiResponse(responseCode = "400", description = "Validation failed", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "400",
+                description = "Validation failed",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping
     @SecurityRequirement(
@@ -167,8 +183,14 @@ public class CrmInquiryController {
                 responseCode = "200",
                 description = "Inquiry assigned",
                 content = @Content(schema = @Schema(implementation = InquiryResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Inquiry not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Inquiry not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PutMapping("/{inquiryId}/assignee")
     @SecurityRequirement(
@@ -200,12 +222,18 @@ public class CrmInquiryController {
                 responseCode = "200",
                 description = "Status updated",
                 content = @Content(schema = @Schema(implementation = InquiryResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Inquiry not found", content = @Content),
+        @ApiResponse(
+                responseCode = "404",
+                description = "Inquiry not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(
                 responseCode = "422",
                 description = "Illegal transition, or CONVERTED was requested directly",
-                content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PutMapping("/{inquiryId}/status")
     @SecurityRequirement(
@@ -243,12 +271,18 @@ public class CrmInquiryController {
                 responseCode = "200",
                 description = "Inquiry converted",
                 content = @Content(schema = @Schema(implementation = InquiryResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Inquiry or party not found", content = @Content),
+        @ApiResponse(
+                responseCode = "404",
+                description = "Inquiry or party not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(
                 responseCode = "422",
                 description = "Illegal transition, or an individual inquiry with no party to link",
-                content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/{inquiryId}/convert")
     @SecurityRequirement(

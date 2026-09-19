@@ -1,6 +1,7 @@
 package com.positivity.tenant.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.tenant.internal.dto.AccountContactRequest;
 import com.positivity.tenant.internal.dto.AccountContactResponse;
 import com.positivity.tenant.internal.dto.AccountCreateRequest;
@@ -13,6 +14,7 @@ import com.positivity.tenant.internal.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -75,7 +77,10 @@ public class PlatformAccountController {
             Returns 201 with the account and 409 when the legal name is taken.
             """)
     @ApiResponse(responseCode = "201", description = "Account created")
-    @ApiResponse(responseCode = "409", description = "Legal name already taken")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Legal name already taken",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNT_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.ACCOUNT_CREATE + "')")
     @SecurityRequirement(
@@ -128,7 +133,10 @@ public class PlatformAccountController {
             Returns 200 with the account and 404 when it does not exist.
             """)
     @ApiResponse(responseCode = "200", description = "Account found")
-    @ApiResponse(responseCode = "404", description = "Account not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Account not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNT_GET", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.ACCOUNT_READ + "')")
     @SecurityRequirement(
@@ -151,8 +159,14 @@ public class PlatformAccountController {
             Returns 200 with the account, 404 when it does not exist and 409 when the legal name is taken.
             """)
     @ApiResponse(responseCode = "200", description = "Account updated")
-    @ApiResponse(responseCode = "404", description = "Account not found")
-    @ApiResponse(responseCode = "409", description = "Legal name already taken")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Account not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Legal name already taken",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.ACCOUNT_UPDATE + "')")
     @SecurityRequirement(
@@ -187,7 +201,10 @@ public class PlatformAccountController {
             Returns 201 with the contact and 404 when the account does not exist.
             """)
     @ApiResponse(responseCode = "201", description = "Contact added")
-    @ApiResponse(responseCode = "404", description = "Account not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Account not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNT_CONTACT_ADD", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.ACCOUNT_UPDATE + "')")
     @SecurityRequirement(
@@ -221,7 +238,10 @@ public class PlatformAccountController {
             Returns 200 with the contact and 404 when the account or contact does not exist.
             """)
     @ApiResponse(responseCode = "200", description = "Contact updated")
-    @ApiResponse(responseCode = "404", description = "Account or contact not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Account or contact not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNT_CONTACT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.ACCOUNT_UPDATE + "')")
     @SecurityRequirement(
@@ -256,7 +276,10 @@ public class PlatformAccountController {
             Returns 204 and 404 when the account or contact does not exist.
             """)
     @ApiResponse(responseCode = "204", description = "Contact removed")
-    @ApiResponse(responseCode = "404", description = "Account or contact not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Account or contact not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNT_CONTACT_REMOVE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.ACCOUNT_UPDATE + "')")
     @SecurityRequirement(
@@ -283,7 +306,10 @@ public class PlatformAccountController {
             Returns 200 with the billing profile and 404 when the account does not exist.
             """)
     @ApiResponse(responseCode = "200", description = "Billing profile stored")
-    @ApiResponse(responseCode = "404", description = "Account not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Account not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNT_BILLING_PROFILE_PUT", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.ACCOUNT_UPDATE + "')")
     @SecurityRequirement(

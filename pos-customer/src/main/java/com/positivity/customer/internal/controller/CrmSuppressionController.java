@@ -7,6 +7,7 @@ import com.positivity.customer.internal.dto.SuppressionEntryResponse;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -62,7 +63,10 @@ public class CrmSuppressionController {
                 responseCode = "200",
                 description = "Entries returned",
                 content = @Content(schema = @Schema(implementation = PagedResponse.class))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping
     @SecurityRequirement(
@@ -93,7 +97,10 @@ public class CrmSuppressionController {
                     """)
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Result returned"),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/check")
     @SecurityRequirement(
@@ -127,8 +134,14 @@ public class CrmSuppressionController {
                 responseCode = "201",
                 description = "Address suppressed",
                 content = @Content(schema = @Schema(implementation = SuppressionEntryResponse.class))),
-        @ApiResponse(responseCode = "400", description = "Validation failed", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "400",
+                description = "Validation failed",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping
     @SecurityRequirement(
@@ -170,8 +183,14 @@ public class CrmSuppressionController {
                     """)
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Suppression lifted", content = @Content),
-        @ApiResponse(responseCode = "404", description = "Suppression entry not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Suppression entry not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @DeleteMapping("/{suppressionId}")
     @SecurityRequirement(

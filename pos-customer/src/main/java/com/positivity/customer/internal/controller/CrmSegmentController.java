@@ -10,6 +10,7 @@ import com.positivity.customer.internal.enums.AudienceType;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -71,7 +72,10 @@ public class CrmSegmentController {
                         @Content(
                                 mediaType = "application/json",
                                 array = @ArraySchema(schema = @Schema(implementation = SegmentResponse.class)))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping
     @SecurityRequirement(
@@ -105,7 +109,10 @@ public class CrmSegmentController {
                                 array =
                                         @ArraySchema(
                                                 schema = @Schema(implementation = SegmentAttributeResponse.class)))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/attributes")
     @SecurityRequirement(
@@ -132,8 +139,14 @@ public class CrmSegmentController {
                 responseCode = "200",
                 description = "Segment returned",
                 content = @Content(schema = @Schema(implementation = SegmentResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Segment not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Segment not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/{segmentId}")
     @SecurityRequirement(
@@ -163,9 +176,18 @@ public class CrmSegmentController {
                 responseCode = "201",
                 description = "Segment created",
                 content = @Content(schema = @Schema(implementation = SegmentResponse.class))),
-        @ApiResponse(responseCode = "409", description = "Segment name already exists", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Predicate is not valid for this catalog", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "409",
+                description = "Segment name already exists",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Predicate is not valid for this catalog",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping
     @SecurityRequirement(
@@ -218,13 +240,22 @@ public class CrmSegmentController {
                 responseCode = "200",
                 description = "Segment updated",
                 content = @Content(schema = @Schema(implementation = SegmentResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Segment not found", content = @Content),
-        @ApiResponse(responseCode = "409", description = "Segment name already exists", content = @Content),
+        @ApiResponse(
+                responseCode = "404",
+                description = "Segment not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "Segment name already exists",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(
                 responseCode = "422",
                 description = "Predicate invalid, or an immutable field was changed",
-                content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PutMapping("/{segmentId}")
     @SecurityRequirement(
@@ -269,8 +300,14 @@ public class CrmSegmentController {
                     """)
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Segment deleted", content = @Content),
-        @ApiResponse(responseCode = "404", description = "Segment not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Segment not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @DeleteMapping("/{segmentId}")
     @SecurityRequirement(
@@ -299,9 +336,18 @@ public class CrmSegmentController {
                 responseCode = "200",
                 description = "Members added",
                 content = @Content(schema = @Schema(implementation = SegmentResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Segment not found", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Segment is dynamic", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Segment not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Segment is dynamic",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/{segmentId}/members")
     @SecurityRequirement(
@@ -340,7 +386,10 @@ public class CrmSegmentController {
                     """)
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Member removed", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @DeleteMapping("/{segmentId}/members/{partyId}")
     @SecurityRequirement(
@@ -372,8 +421,14 @@ public class CrmSegmentController {
                 responseCode = "200",
                 description = "Resolution returned",
                 content = @Content(schema = @Schema(implementation = SegmentResolutionResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Segment not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Segment not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/{segmentId}/resolve")
     @SecurityRequirement(

@@ -1,6 +1,7 @@
 package com.positivity.tenant.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.tenant.internal.dto.TenantCreateRequest;
 import com.positivity.tenant.internal.dto.TenantResponse;
 import com.positivity.tenant.internal.dto.TenantUpdateRequest;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -68,8 +70,14 @@ public class PlatformTenantController {
             is taken.
             """)
     @ApiResponse(responseCode = "201", description = "Tenant registered")
-    @ApiResponse(responseCode = "404", description = "Account not found")
-    @ApiResponse(responseCode = "409", description = "Slug or display name already taken")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Account not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Slug or display name already taken",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TENANT_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.TENANT_CREATE + "')")
     @SecurityRequirement(
@@ -124,7 +132,10 @@ public class PlatformTenantController {
             Returns 200 with the tenant and 404 when it does not exist.
             """)
     @ApiResponse(responseCode = "200", description = "Tenant found")
-    @ApiResponse(responseCode = "404", description = "Tenant not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Tenant not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TENANT_GET", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.TENANT_READ + "')")
     @SecurityRequirement(
@@ -149,8 +160,14 @@ public class PlatformTenantController {
             display name is taken.
             """)
     @ApiResponse(responseCode = "200", description = "Tenant updated")
-    @ApiResponse(responseCode = "404", description = "Tenant not found")
-    @ApiResponse(responseCode = "409", description = "Tenant is decommissioned, or the display name is taken")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Tenant not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Tenant is decommissioned, or the display name is taken",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TENANT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.TENANT_UPDATE + "')")
     @SecurityRequirement(
@@ -185,8 +202,14 @@ public class PlatformTenantController {
             Returns 200 with the tenant, 404 when it does not exist and 409 when it is not ACTIVE.
             """)
     @ApiResponse(responseCode = "200", description = "Tenant suspended")
-    @ApiResponse(responseCode = "404", description = "Tenant not found")
-    @ApiResponse(responseCode = "409", description = "Tenant is not ACTIVE")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Tenant not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Tenant is not ACTIVE",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TENANT_SUSPEND", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.TENANT_SUSPEND + "')")
     @SecurityRequirement(
@@ -207,8 +230,14 @@ public class PlatformTenantController {
             Returns 200 with the tenant, 404 when it does not exist and 409 when it is not SUSPENDED.
             """)
     @ApiResponse(responseCode = "200", description = "Tenant reactivated")
-    @ApiResponse(responseCode = "404", description = "Tenant not found")
-    @ApiResponse(responseCode = "409", description = "Tenant is not SUSPENDED")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Tenant not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Tenant is not SUSPENDED",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TENANT_REACTIVATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.TENANT_REACTIVATE + "')")
     @SecurityRequirement(
@@ -229,8 +258,14 @@ public class PlatformTenantController {
             Returns 200 with the tenant, 404 when it does not exist and 409 when it is already decommissioned.
             """)
     @ApiResponse(responseCode = "200", description = "Tenant decommissioned")
-    @ApiResponse(responseCode = "404", description = "Tenant not found")
-    @ApiResponse(responseCode = "409", description = "Tenant already decommissioned")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Tenant not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Tenant already decommissioned",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TENANT_DECOMMISSION", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.TENANT_DECOMMISSION + "')")
     @SecurityRequirement(

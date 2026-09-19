@@ -2,7 +2,10 @@ package com.positivity.customer.internal.controller;
 
 import com.positivity.customer.internal.dto.BillingTermsRef;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -56,10 +59,14 @@ public class CrmBillingTermsController {
                     business error responses.
                     """)
     @ApiResponse(responseCode = "200", description = "Billing terms retrieved successfully")
-    @ApiResponse(responseCode = "401", description = "Authentication required")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "Forbidden - missing authority " + CrmPermissionRegistry.PARTY_VIEW)
+            description = "Forbidden - missing authority " + CrmPermissionRegistry.PARTY_VIEW,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/billing-terms")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

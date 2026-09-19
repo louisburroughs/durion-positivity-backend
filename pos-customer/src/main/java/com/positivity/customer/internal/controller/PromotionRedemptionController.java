@@ -5,6 +5,7 @@ import com.positivity.customer.internal.dto.RecordRedemptionRequest;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.PromotionRedemptionService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -61,11 +62,20 @@ public class PromotionRedemptionController {
                         responseCode = "201",
                         description = "Promotion redemption recorded",
                         content = @Content(schema = @Schema(implementation = PromotionRedemptionResponse.class))),
-                @ApiResponse(responseCode = "409", description = "Duplicate redemption", content = @Content),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "Duplicate redemption",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
                         description = "Forbidden - insufficient permissions",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -118,7 +128,10 @@ public class PromotionRedemptionController {
                     @Content(
                             mediaType = "application/json",
                             array = @ArraySchema(schema = @Schema(implementation = PromotionRedemptionResponse.class))))
-    @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - insufficient permissions",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/by-customer/{customerId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

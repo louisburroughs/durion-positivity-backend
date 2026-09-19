@@ -136,4 +136,27 @@ class CrmContactsControllerErrorHandlingTest {
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
+
+    /**
+     * PR #2106 review: the 403 this controller documents is rendered by {@link
+     * CrmExceptionHandler#handleAccessDenied} from the method-security denial, so it carries the
+     * envelope too — which is what the operation now declares.
+     */
+    @Test
+    @DisplayName("a caller without the assign authority answers 403 PERMISSION_DENIED with the envelope")
+    void aCallerWithoutTheAuthorityAnswers403WithTheEnvelope() throws Exception {
+        mockMvc.perform(put(ROLES_PATH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"roles":[{"roleCode":"BILLING","isPrimary":true}]}
+                                """)
+                        .header("X-Authorities", "crm:contact:view"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"))
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+
+        verify(contactRoleService, never()).updateContactRoles(any(), any(), any());
+    }
 }

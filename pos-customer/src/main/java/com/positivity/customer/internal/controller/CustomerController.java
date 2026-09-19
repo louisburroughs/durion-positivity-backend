@@ -1,15 +1,18 @@
 package com.positivity.customer.internal.controller;
 
 import com.positivity.customer.internal.dto.CustomerDTO;
+import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.CommercialPartyServiceImpl;
 import com.positivity.customer.internal.service.CustomerService;
 import com.positivity.customer.internal.service.PersonPartyServiceImpl;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
@@ -99,7 +102,10 @@ public class CustomerController {
                     Returns 404 when neither a commercial nor a person party exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Customer found and returned.")
-    @ApiResponse(responseCode = "404", description = "Customer not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Customer not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{id}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -115,7 +121,7 @@ public class CustomerController {
                 .getCustomerById(id)
                 .or(() -> personService.getCustomerById(id))
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new CrmResourceNotFoundException("Customer", id));
     }
 
     @Operation(operationId = "createCustomer", summary = "Create Customer Record", description = """
@@ -175,7 +181,10 @@ public class CustomerController {
                     Returns 404 when no party of the selected type exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Customer updated successfully.")
-    @ApiResponse(responseCode = "404", description = "Customer not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Customer not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PutMapping("/{id}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -206,7 +215,7 @@ public class CustomerController {
                 COMMERCIAL.equalsIgnoreCase(customer.getCustomerType()) ? commercialService : personService;
         return service.updateCustomer(id, customer)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new CrmResourceNotFoundException("Customer", id));
     }
 
     @Operation(operationId = "deleteCustomer", summary = "Delete Customer Record", description = """
@@ -221,7 +230,10 @@ public class CustomerController {
                     Returns 404 when neither store holds a party for the supplied id.
                     """)
     @ApiResponse(responseCode = "204", description = "Customer deleted successfully.")
-    @ApiResponse(responseCode = "404", description = "Customer not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Customer not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @DeleteMapping("/{id}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -235,8 +247,7 @@ public class CustomerController {
         log.info("Deleting customer with id: {}", id);
         if (commercialService.deleteCustomer(id) || personService.deleteCustomer(id)) {
             return ResponseEntity.noContent().build();
-        } else {
-            return ResponseEntity.notFound().build();
         }
+        throw new CrmResourceNotFoundException("Customer", id);
     }
 }
