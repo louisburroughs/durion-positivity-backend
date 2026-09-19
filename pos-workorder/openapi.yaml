@@ -8489,9 +8489,11 @@ components:
       description: Current availability and status of a mechanic
       properties:
         assignedWorkorderId:
-          description: Identifier of the workorder the mechanic is currently assigned to
+          description: Identifier of the workorder this mechanic currently holds as its technician of record. Null when they hold none. A mechanic only planned onto a job does not appear here.
           example: 01960003-0000-7000-8000-000000000002
-          type: string
+          type:
+          - string
+          - 'null'
         breakExpectedReturn:
           description: Expected return time when the mechanic is on break
           example: '2026-01-15T09:30:00Z'
@@ -11143,9 +11145,11 @@ components:
           - number
           - 'null'
         assignedMechanicId:
-          description: Identifier of the assigned mechanic
+          description: Identifier of the technician of record - the person who currently holds this workorder. Null when nobody holds it. Non-null means exactly that a current technician assignment exists, which is one half of the ASSIGNED status and not ASSIGNED itself, so an APPROVED workorder may carry one. Key assignTechnician vs reassignTechnician off this field, never off plannedMechanicIds.
           example: 01960003-0000-7000-8000-000000000002
-          type: string
+          type:
+          - string
+          - 'null'
         assignedResourceId:
           description: Identifier of the resource assigned to the workorder; read together with resourceType, which says whether it is a bay or a mobile unit
           example: 01960003-0000-7000-8000-000000000003
@@ -11165,6 +11169,11 @@ components:
           description: Estimated labor hours for the workorder
           example: 2.5
           type: number
+        plannedMechanicIds:
+          description: 'Mechanics planned onto this workorder by scheduling or a dispatch override. Display and conflict-detection only: it confers no technician of record and must not decide assign vs reassign. Empty when the job carries no plan.'
+          items:
+            type: string
+          type: array
         resourceType:
           description: Kind of resource assignedResourceId points at. Null exactly when assignedResourceId is null
           enum:
