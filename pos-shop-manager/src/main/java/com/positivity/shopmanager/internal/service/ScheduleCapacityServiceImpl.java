@@ -55,7 +55,11 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>the location replica row, for timezone/hours/closures;
  *   <li>the active bays at the location, in display order;
  *   <li>one appointment query spanning the entire assembly window — {@code [from -
- *       CARRY_OVER_LOOKBACK_DAYS, to]}, see below;
+ *       CARRY_OVER_LOOKBACK_DAYS, to]} on the planned columns, widened by an {@code EXISTS} arm over
+ *       this module's own workorder-mapping and {@code ext_workorder} tables that also admits a job
+ *       still running when the requested range began (see {@code
+ *       AppointmentRepository#findAppointmentsForCapacity}). The {@code EXISTS} is a subquery of that
+ *       same statement, not a second one;
  *   <li>one batch workorder-actuals query for every appointment fetched by (3) — issued only when
  *       (3) returned at least one row, so a location with nothing booked still costs 3.
  * </ol>
@@ -224,17 +228,25 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
      * fetches at least every appointment whose planned window ends inside that common window, and two
      * of them cannot disagree about D on the strength of one of those.
      *
-     * <p>The residual, stated plainly: two requests <em>can</em> still disagree about D for a job whose
-     * planned window ended earlier than that common window but whose actuals still reach D. This is
-     * not fixable here, and the reason is worth writing down so nobody attempts it: the appointment
-     * query's predicate bounds the <em>planned</em> window ({@code endAt > :windowStart}), while
-     * whether a job contributes to a day depends on its <em>effective</em> window, which lives in the
-     * {@code ext_workorder} replica and is resolved in a separate batch afterwards. Any lower bound
-     * measured from {@code from} therefore hands two legal requests different assembly windows for a
-     * date they share, whatever constant it uses. Capping the pass-2 walk does not rescue it either —
-     * a job whose effective window begins recently enough to survive a cap can still have a planned
-     * {@code endAt} old enough that the narrower request never fetched it. A job running more than
-     * {@code MAX_RANGE_DAYS} past its planned finish is outside what this read claims to explain.
+     * <p>A second, independent guarantee comes from the query's other lower-bound arm, and it is not
+     * measured from either request's {@code from} at all: a job whose linked workorder had actually
+     * started and was still running when the requested range began is fetched by the {@code EXISTS}
+     * arm on this module's {@code ext_workorder} replica, however old its planned window is. "In
+     * progress, or completed after the range began" is a fact about the job, not about where the
+     * client put its range start, so for such a job two requests containing D both fetch it and both
+     * see the same effective window over D. That covers the case this lookback alone could not: a job
+     * planned far outside the lookback whose actuals run into D.
+     *
+     * <p>The residual, stated plainly and no wider than it is: two requests can still disagree about
+     * D for a job that <em>completed before the range began</em>, whose planned window ended earlier
+     * than the common window above, and whose overrun is still being distributed forward onto D. Such
+     * a job fails the actuals arm — its {@code completedAt} precedes the requested {@code from} — so
+     * it is reachable only through the planned arm, which is {@code from}-relative, and the wider
+     * request finds it where the narrower one does not. Capping the pass-2 walk does not rescue that
+     * case either: a job whose effective window ends recently enough to survive a cap can still have
+     * a planned {@code endAt} old enough that the narrower request never fetched it. A job whose
+     * planned finish is more than {@code MAX_RANGE_DAYS} behind the day its overrun is still landing
+     * on is outside what this read claims to explain.
      *
      * <p>{@link #MAX_RANGE_DAYS} is the bound chosen because it makes that common window as wide as the
      * policy maximum range itself — the widest bound that needs no new number justified, since the
@@ -246,8 +258,10 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
      * MAX_RANGE_DAYS} extra days of appointment rows fetched on a query that was already issued, and
      * then discarded. It adds no statement (see the class-level query budget).
      *
-     * <p>Degradation: an overrun whose planned window ended more than {@code CARRY_OVER_LOOKBACK_DAYS}
-     * before {@code from} is never fetched, so it is not reported.
+     * <p>Degradation: an overrun from an <em>already completed</em> job whose planned window ended
+     * more than {@code CARRY_OVER_LOOKBACK_DAYS} before {@code from} is never fetched, so it is not
+     * reported. A job still in progress, or one that completed inside the requested range, is fetched
+     * by the actuals arm regardless of how old its planned window is.
      */
     static final int CARRY_OVER_LOOKBACK_DAYS = MAX_RANGE_DAYS;
 
@@ -294,6 +308,10 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
         // above: Appointment.resourceType is never written by any production create path (#2023
         // F1), so the SQL only narrows by locationId/range/status and this grouping step is what
         // actually decides which rows occupy a bay.
+        // Three instants, not two: the query's lower edge is a disjunction. assemblyFrom bounds the
+        // planned window (the lookback), while `from` bounds the workorder actuals - a job still
+        // running when the requested range began is fetched however old its planned window is, and
+        // that arm is the same for every request containing the date (see the repository javadoc).
         Set<UUID> activeBayIds = bays.stream().map(ExtBayReplica::getBayId).collect(Collectors.toSet());
         Map<UUID, List<Appointment>> appointmentsByBay = zoneId == null
                 ? Map.of()
@@ -301,7 +319,8 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
                         appointmentRepository.findAppointmentsForCapacity(
                                 locationId,
                                 to.plusDays(1).atStartOfDay(zoneId).toInstant(),
-                                assemblyFrom.atStartOfDay(zoneId).toInstant()),
+                                assemblyFrom.atStartOfDay(zoneId).toInstant(),
+                                from.atStartOfDay(zoneId).toInstant()),
                         activeBayIds);
 
         // One more query (#2021), only when there is something to resolve: the workorder

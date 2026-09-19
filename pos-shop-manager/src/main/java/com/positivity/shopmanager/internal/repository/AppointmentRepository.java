@@ -87,30 +87,64 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
      * resolved the same way {@code /schedules/view} resolves it: by what the id actually names, not
      * by a field production never populates.
      *
-     * <p><strong>{@code windowStart} is not the requested range start.</strong> The predicate matches
-     * on the <em>planned</em> columns, but occupancy is computed from the effective window — the
-     * linked workorder's actuals when known (#2021). A job planned entirely before the requested
-     * range can still be running inside it, so a lower bound of {@code from} silently drops it and
-     * the overrun never appears (#2050). The caller therefore passes {@code from -
-     * ScheduleCapacityServiceImpl.CARRY_OVER_LOOKBACK_DAYS} here, and discards the pre-range days it
-     * assembles from the extra rows.
+     * <p><strong>Two lower bounds, not one.</strong> The predicate matches on the <em>planned</em>
+     * columns, but occupancy is computed from the effective window — the linked workorder's actuals
+     * when known (#2021). A job planned entirely before the requested range can still be running
+     * inside it, so a lower bound of {@code from} on {@code endAt} alone silently drops it and the
+     * overrun never appears (#2050). The lower edge is therefore a disjunction of two complementary
+     * arms, and a row is fetched when either holds:
      *
-     * <p>A bounded constant rather than an {@code OR} arm on the {@code ext_workorder} actuals, which
-     * is the obvious alternative: the useful arm of such a predicate is "started before the range and
-     * not yet completed", and {@code completedAt IS NULL} has no lower bound in time. A workorder
-     * started and never closed would match forever — refetched on every capacity read, at every
-     * location, until someone closes it. That is the opposite of the bounded lookback #2050 AC3 asks
-     * for, and it makes the cost of the read a function of data hygiene rather than of the request.
+     * <ul>
+     *   <li><em>Planned arm</em> — {@code appointment.endAt > :windowStart}, where the caller passes
+     *       {@code from - ScheduleCapacityServiceImpl.CARRY_OVER_LOOKBACK_DAYS} and discards the
+     *       pre-range days it assembles from the extra rows. This is the arm that still catches a job
+     *       which <em>completed before the range began</em> and whose overrun is being distributed
+     *       forward: such a job's actuals end before {@code :rangeStart}, so the actuals arm rejects
+     *       it, and only its planned window can reach back far enough to find it.
+     *   <li><em>Actuals arm</em> — an {@code EXISTS} over this module's own {@code
+     *       work_order_appointment_mapping} joined to its own {@code ext_workorder} replica, true when
+     *       the linked workorder has actually started ({@code workStartedAt IS NOT NULL}) and was
+     *       still running when the range began ({@code completedAt IS NULL}, or a {@code completedAt}
+     *       after {@code :rangeStart}). This is the arm that catches a job whose planned window is
+     *       older than the lookback but whose actuals reach into the requested range.
+     * </ul>
      *
-     * <p>The access path is unchanged by the widening. {@code appointment} has one explicitly created
-     * index, {@code appointment_tenant_idx ON public.appointment USING btree (tenant_id)}
-     * ({@code V1__baseline_shop_manager.sql:662}); its only other indexes are constraint-backed —
-     * {@code appointment_pkey} on {@code (appointment_id)}, {@code appointment_tenant_key} on
-     * {@code (tenant_id, appointment_id)}, and V8's GiST exclusion index, which needs a {@code
-     * resource_id} equality this predicate does not have. There is no {@code (location_id, start_at,
-     * end_at)} index, so this was a tenant-index scan with a time filter before and it is a
-     * tenant-index scan with a time filter after: the widening changes the rows returned, not the
-     * plan.
+     * <p>The actuals arm was once rejected here, on the grounds that {@code completedAt IS NULL} has
+     * no lower bound in time and so a workorder started and never closed would be refetched forever.
+     * That reasoning is wrong, and it is worth correcting explicitly rather than deleting: it
+     * conflated "no bound in time" with "unbounded rows". {@code workStartedAt IS NOT NULL AND
+     * completedAt IS NULL} is precisely the set of jobs <em>in progress</em> at the location, which
+     * is bounded by how many bays and open jobs a shop has — operationally small, and it does not
+     * grow with time. A workorder left open by mistake costs a handful of rows: a data-quality defect
+     * with a bounded price, not an unbounded scan.
+     *
+     * <p>What the arm buys is that it is <em>request-independent</em> for a job in progress — whether
+     * a job has started and not yet finished does not depend on where the client put its range start,
+     * so two legal requests sharing a date both fetch it and cannot disagree about that date on the
+     * strength of it. {@code :rangeStart} is the requested range's own start, <em>not</em> {@code
+     * :windowStart}: for a job that did finish, it asks "was the work still running when this range
+     * began". See {@code ScheduleCapacityServiceImpl#CARRY_OVER_LOOKBACK_DAYS} for what the pair of
+     * arms does and does not guarantee about two requests agreeing on a shared date — this narrows
+     * the residual, it does not erase it.
+     *
+     * <p>This remains <em>one statement</em>. The {@code EXISTS} is a subquery of the same select,
+     * not a second repository call, so the fixed statement budget of {@code GET
+     * /v1/schedules/capacity} is unchanged.
+     *
+     * <p>Access path. {@code appointment} has one explicitly created index, {@code
+     * appointment_tenant_idx ON public.appointment USING btree (tenant_id)} ({@code
+     * V1__baseline_shop_manager.sql:662}); its only other indexes are constraint-backed — {@code
+     * appointment_pkey} on {@code (appointment_id)}, {@code appointment_tenant_key} on {@code
+     * (tenant_id, appointment_id)}, and V8's GiST exclusion index, which needs a {@code resource_id}
+     * equality this predicate does not have. V2-V10 add no further index on this table. There is no
+     * {@code (location_id, start_at, end_at)} index, so this was a tenant-index scan with a time
+     * filter before the disjunction and it is a tenant-index scan with a time filter after: the
+     * {@code OR} changes which rows come back, not what drives the scan. The {@code EXISTS} adds a
+     * semi-join over {@code work_order_appointment_mapping}, whose {@code appointment_id} carries a
+     * foreign key but no index of its own (PostgreSQL does not index a referencing column
+     * automatically), so the planner is free to hash the mapping side once rather than probe it per
+     * row — that table holds one row per workorder link, the same order of magnitude as the
+     * appointments it is being joined to.
      */
     @Query("""
                         SELECT appointment
@@ -118,9 +152,20 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
                         WHERE appointment.locationId = :locationId
                           AND appointment.status <> 'CANCELLED'
                           AND appointment.startAt < :rangeEnd
-                          AND appointment.endAt > :windowStart
+                          AND (appointment.endAt > :windowStart
+                               OR EXISTS (SELECT 1
+                                          FROM WorkOrderAppointmentMapping mapping
+                                          JOIN ExtWorkorderReplica workorder
+                                            ON workorder.workorderId = mapping.workOrderId
+                                          WHERE mapping.appointment = appointment
+                                            AND workorder.workStartedAt IS NOT NULL
+                                            AND (workorder.completedAt IS NULL
+                                                 OR workorder.completedAt > :rangeStart)))
                         """)
     @NonNull
     List<Appointment> findAppointmentsForCapacity(
-            @NonNull UUID locationId, @NonNull Instant rangeEnd, @NonNull Instant windowStart);
+            @NonNull UUID locationId,
+            @NonNull Instant rangeEnd,
+            @NonNull Instant windowStart,
+            @NonNull Instant rangeStart);
 }

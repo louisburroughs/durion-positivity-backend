@@ -1075,8 +1075,9 @@ class ScheduleCapacityServiceTest {
     }
 
     @Test
-    @DisplayName("#2050 AC3 - the lookback is bounded: a job originating more than 42 days before "
-            + "the range is NOT reported (accepted degradation, not a desirable outcome)")
+    @DisplayName("#2050 AC3 - the lookback is bounded: a job that COMPLETED before the range and "
+            + "originated more than 42 days before it is NOT reported (accepted degradation, not a "
+            + "desirable outcome)")
     void jobOriginatingBeyondTheLookbackBoundIsNotReported() {
         UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
         UUID bayId = persistBay("Bay 1", locationId);
@@ -1085,10 +1086,17 @@ class ScheduleCapacityServiceTest {
         // as a literal rather than the constant so this test states the boundary it asserts in the
         // same terms the issue does. 2026-08-21 is a Friday, so it has operating hours of its own.
         LocalDate longBefore = MONDAY.minusDays(45);
+        // The job is COMPLETE before the range begins - this is the whole point of the fixture. It
+        // ran from 2026-08-21 15:00 to Saturday 2026-10-03 20:00, seven hours past that short
+        // Saturday's 13:00 close, so an overrun is still being distributed forward when Monday
+        // arrives. completedAt sits 28 hours before the requested range's own start, so the query's
+        // actuals arm ("still running when the range began") is false with margin and the planned
+        // arm - the arm CARRY_OVER_LOOKBACK_DAYS bounds - is the only route to this row.
+        LocalDate priorSaturday = MONDAY.minusDays(2);
         Appointment appointment = persistAppointment(
                 locationId, bayId, instant(longBefore, 15, 0), instant(longBefore, 17, 0), AppointmentStatus.SCHEDULED);
         persistWorkorderLink(
-                UUIDv7Generator.generate(), appointment, instant(longBefore, 15, 0), instant(MONDAY, 11, 0));
+                UUIDv7Generator.generate(), appointment, instant(longBefore, 15, 0), instant(priorSaturday, 20, 0));
         flushAndClear();
 
         ScheduleCapacityResponse.BayCapacityView mondayBay = scheduleCapacityService
@@ -1098,11 +1106,18 @@ class ScheduleCapacityServiceTest {
                 .getBays()
                 .get(0);
 
-        // This documents an ACCEPTED DEGRADATION, not a desirable outcome. #2050 AC3 requires the
-        // lookback to be bounded and the bound to be stated; a job that has been running longer
-        // than the policy maximum range is outside what this read claims to explain. The test
-        // exists so that widening the bound is a deliberate decision with a failing test attached,
-        // rather than an accident - it is not an assertion that missing the job is correct.
+        // This documents an ACCEPTED DEGRADATION, not a desirable outcome - and the degradation it
+        // documents is now NARROWER than it was. Until the appointment query grew its actuals arm,
+        // every job whose planned window predated the lookback was missed, including one still
+        // running inside the range; Copilot's PR #2087 finding was exactly that shape, and it is
+        // now pinned positively by jobRunningIntoTheRangeIsFetchedHoweverOldItsPlannedWindowIs. What
+        // remains missed is only the residual above: an ALREADY COMPLETED job, finished before the
+        // range began, whose overrun is still being distributed forward onto a day inside it. #2050
+        // AC3 requires the lookback to be bounded and the bound to be stated, and a job whose
+        // planned finish is further behind the day its overrun lands on than the policy maximum
+        // range is outside what this read claims to explain. The test exists so that widening the
+        // bound stays a deliberate decision with a failing test attached rather than an accident -
+        // it is not an assertion that missing the job is desirable.
         assertThat(mondayBay.getOccupiedMinutes()).isZero();
         assertThat(mondayBay.getOccupancy()).containsOnly(0);
         assertThat(mondayBay.getCarryOverIn()).isEmpty();
@@ -1271,14 +1286,14 @@ class ScheduleCapacityServiceTest {
     }
 
     @Test
-    @DisplayName("#2050 AC3 - the lookback bound is pinned from below too: a job originating 40 "
-            + "days before the range and still running inside it IS reported")
+    @DisplayName("#2050 AC3 - a job originating 40 days before the range and still running inside "
+            + "it IS reported (via the actuals arm, which is why this one no longer pins the "
+            + "constant)")
     void jobOriginatingJustInsideTheLookbackBoundIsReported() {
         UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
         UUID bayId = persistBay("Bay 1", locationId);
         // 2026-08-26, a Wednesday, so it has operating hours of its own. Forty days before the
-        // range start: comfortably inside ScheduleCapacityServiceImpl.CARRY_OVER_LOOKBACK_DAYS (42)
-        // and comfortably outside every smaller value anyone might "simplify" it to.
+        // range start: inside ScheduleCapacityServiceImpl.CARRY_OVER_LOOKBACK_DAYS (42).
         LocalDate fortyDaysBefore = MONDAY.minusDays(40);
         // A job still running deep into the range, rather than one that finished long ago: pass 2
         // distributes an overrun at roughly one operating window per open day, so a 40-day-old job
@@ -1303,13 +1318,19 @@ class ScheduleCapacityServiceTest {
                 .getBays()
                 .get(0);
 
-        // The companion to jobOriginatingBeyondTheLookbackBoundIsNotReported (45 days, not
-        // reported): that one reddens if the constant is RAISED, this one reddens if it is LOWERED.
-        // Together they pin CARRY_OVER_LOOKBACK_DAYS = 42 from both sides, so the fourteen lines of
-        // javadoc justifying the value are backed by executable expectations rather than prose
-        // alone.
+        // THIS TEST NO LONGER PINS THE CONSTANT, and saying so is the point of the comment. It was
+        // written as the lower companion to jobOriginatingBeyondTheLookbackBoundIsNotReported, on
+        // the reasoning that a 40-day-old planned window only survives because the lookback is 42.
+        // Since the appointment query grew its actuals arm that reasoning is false: this job was
+        // still running when the range began (completedAt = Monday 11:00 > the range start), so the
+        // EXISTS arm fetches it however small CARRY_OVER_LOOKBACK_DAYS is - verified by mutation,
+        // the assertions below still pass at a constant of 14. What it pins now is the actuals
+        // arm's reach, which is worth keeping: a job whose planned window is 40 days old must still
+        // hold the bay it is physically occupying. The constant itself is pinned from below by
+        // completedJobReachableOnlyThroughThePlannedArmPinsTheLookbackFromBelow, whose fixture the
+        // actuals arm cannot reach.
         assertThat(mondayBay.getOccupiedMinutes())
-                .as("a job originating 40 days back and still running must be inside the 42-day lookback")
+                .as("a job originating 40 days back and still running must hold the bay it occupies")
                 .isEqualTo(180);
         assertThat(mondayBay.getOccupancy()).containsExactly(1, 1, 1, 0, 0, 0, 0, 0, 0);
         assertThat(mondayBay.getCarryOverIn()).hasSize(1);
@@ -1358,17 +1379,20 @@ class ScheduleCapacityServiceTest {
         ScheduleCapacityResponse.BayCapacityView bayViaNarrow =
                 mondayViaNarrow.getBays().get(0);
 
-        // This test sits INSIDE the guarantee the code actually offers, deliberately. That
-        // guarantee is: two legal requests containing a date D agree about D for every job whose
-        // planned window ends within CARRY_OVER_LOOKBACK_DAYS of D - because the narrowest assembly
-        // window either request can have is [D-42, D], reached when from = D. Forty days is inside
-        // that; forty-THREE is not, and a 43-day origin genuinely disagrees between these two
-        // requests. That disagreement is a documented limit of the design, not a bug to be caught
-        // here: the SQL predicate bounds the PLANNED window while contribution depends on the
-        // EFFECTIVE one, so any lower bound measured from `from` necessarily gives two legal
-        // requests different assembly windows. Do not "strengthen" this test to 43 days and file
-        // the resulting failure as a regression - widening the guarantee needs a different
-        // predicate, not a different test.
+        // This test sits INSIDE the guarantee the code actually offers, deliberately - but the
+        // guarantee is wider than the comment that used to stand here said, and the widening is
+        // load-bearing enough to restate. The planned arm still gives: two legal requests
+        // containing D agree about D for every job whose planned window ends within
+        // CARRY_OVER_LOOKBACK_DAYS of D, because the narrowest assembly window either request can
+        // have is [D-42, D]. Forty days is inside that. Since Copilot's PR #2087 finding the query
+        // also has an actuals arm, which covers this fixture independently of any constant: the job
+        // was still running when either range began, so both requests fetch it whatever the
+        // lookback is. That means THIS TEST NO LONGER REDDENS AT A REDUCED CONSTANT either -
+        // verified by mutation at 14 - and a 43-day origin of the same shape would now agree too.
+        // The residual disagreement that survives both arms is a job that COMPLETED between the two
+        // requests' start dates with a planned window older than either lookback; that shape is
+        // pinned, as a documented residual rather than as agreement, by
+        // completionBetweenTwoRequestStartsIsADocumentedResidual.
         assertThat(bayViaNarrow.getOccupiedMinutes())
                 .as("a 42-day request and a 1-day request must agree about the day they share (#2050 AC2)")
                 .isEqualTo(bayViaWide.getOccupiedMinutes());
@@ -1383,5 +1407,261 @@ class ScheduleCapacityServiceTest {
                         ScheduleCapacityResponse.CarryOverView::getBayHours)
                 .containsExactlyElementsOf(carryOverTuples(bayViaWide));
         assertThat(bayViaNarrow.getCarryOverIn().get(0).getFromDate()).isEqualTo(fortyDaysBefore);
+    }
+
+    // -------------------------------------------------------------------------
+    // Copilot PR #2087: the query's second lower-bound arm, on the workorder
+    // actuals. What it guarantees, what still pins the lookback constant now
+    // that it does not, and the residual it deliberately leaves behind.
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2050 AC3 - the lookback bound is pinned from below: a COMPLETED job reachable "
+            + "only through the planned arm, originating 40 days before the range, still lands "
+            + "inside it")
+    void completedJobReachableOnlyThroughThePlannedArmPinsTheLookbackFromBelow() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        // The deliberate twin of jobOriginatingBeyondTheLookbackBoundIsNotReported: the same
+        // geometry, five days newer. 2026-08-26 is a Wednesday, forty days before the range start -
+        // inside CARRY_OVER_LOOKBACK_DAYS (42) and outside every smaller value anyone might
+        // "simplify" it to. The pair straddles the bound, which is what pins it.
+        LocalDate fortyDaysBefore = MONDAY.minusDays(40);
+        // Reachable ONLY through the planned arm, which is the entire reason this fixture exists.
+        // The job completed on Saturday 2026-10-03 at 20:00 - 28 hours before the requested range
+        // starts - so the actuals arm ("still running when the range began") is false with margin,
+        // and the row can only be fetched by appointment.endAt > windowStart, the arm the constant
+        // bounds. Every other lookback fixture in this class is now rescued by the actuals arm and
+        // therefore passes at any constant; this one is not.
+        LocalDate priorSaturday = MONDAY.minusDays(2);
+        Appointment appointment = persistAppointment(
+                locationId,
+                bayId,
+                instant(fortyDaysBefore, 15, 0),
+                instant(fortyDaysBefore, 17, 0),
+                AppointmentStatus.SCHEDULED);
+        UUID workOrderId = UUIDv7Generator.generate();
+        persistWorkorderLink(workOrderId, appointment, instant(fortyDaysBefore, 15, 0), instant(priorSaturday, 20, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse.BayCapacityView mondayBay = scheduleCapacityService
+                .getCapacity(locationId, MONDAY, MONDAY)
+                .getDays()
+                .get(0)
+                .getBays()
+                .get(0);
+
+        // The arithmetic, spelled out so the numbers are not folklore. Pass 1 gives the effective
+        // window (2026-08-26 15:00 -> 2026-10-03 20:00) a direct overlap on every open day it
+        // crosses; the last of them is Saturday 2026-10-03, which closes at 13:00. Pass 2 therefore
+        // carries 20:00 - 13:00 = 420 minutes forward. Sunday is CLOSED, so the next open day is
+        // Monday, the range's only day, whose own window is 540 minutes - the 420 land inside it
+        // with 120 minutes to spare rather than clipping at the day boundary, so the expectation is
+        // not sitting on a cliff edge.
+        assertThat(mondayBay.getOccupiedMinutes())
+                .as("a completed job originating 40 days back must still be inside the 42-day lookback")
+                .isEqualTo(420);
+        assertThat(mondayBay.getOccupancy()).containsExactly(1, 1, 1, 1, 1, 1, 1, 0, 0);
+        assertThat(mondayBay.getCarryOverIn()).hasSize(1);
+        ScheduleCapacityResponse.CarryOverView carryOver =
+                mondayBay.getCarryOverIn().get(0);
+        assertThat(carryOver.getFromDate()).isEqualTo(fortyDaysBefore);
+        assertThat(carryOver.getWorkorderId()).isEqualTo(workOrderId);
+        assertThat(carryOver.getBayHours()).isEqualByComparingTo(new BigDecimal("7.0"));
+    }
+
+    @Test
+    @DisplayName("#2050 AC2 - Copilot PR #2087 counterexample: a job planned 50 days before the "
+            + "range whose work ran into it is fetched however old its planned window is, so "
+            + "[D-41, D] and [D, D] agree about D")
+    void jobRunningIntoTheRangeIsFetchedHoweverOldItsPlannedWindowIs() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        // Copilot's counterexample on PR #2087, verbatim: planned D-50 10:00-12:00, work actually
+        // started D-50 10:00 and finished D 10:00. Fifty days is outside CARRY_OVER_LOOKBACK_DAYS,
+        // so the single-day request's planned arm cannot reach this row (windowStart = D-42) while
+        // the 42-day request's can (windowStart = D-83). Before the actuals arm existed the two
+        // requests answered 0 and 120 for the same date, which is exactly the AC2 violation the
+        // lookback was supposed to prevent.
+        LocalDate fiftyDaysBefore = MONDAY.minusDays(50);
+        Appointment appointment = persistAppointment(
+                locationId,
+                bayId,
+                instant(fiftyDaysBefore, 10, 0),
+                instant(fiftyDaysBefore, 12, 0),
+                AppointmentStatus.SCHEDULED);
+        UUID workOrderId = UUIDv7Generator.generate();
+        persistWorkorderLink(workOrderId, appointment, instant(fiftyDaysBefore, 10, 0), instant(MONDAY, 10, 0));
+        flushAndClear();
+
+        LocalDate wideFrom = MONDAY.minusDays(41);
+        ScheduleCapacityResponse wide = scheduleCapacityService.getCapacity(locationId, wideFrom, MONDAY);
+        ScheduleCapacityResponse narrow = scheduleCapacityService.getCapacity(locationId, MONDAY, MONDAY);
+
+        assertThat(wide.getDays()).hasSize(42);
+        ScheduleCapacityResponse.DayCapacityView mondayViaWide = wide.getDays().get(41);
+        ScheduleCapacityResponse.DayCapacityView mondayViaNarrow =
+                narrow.getDays().get(0);
+        assertThat(mondayViaWide.getDate()).isEqualTo(MONDAY);
+        assertThat(mondayViaNarrow.getDate()).isEqualTo(MONDAY);
+        ScheduleCapacityResponse.BayCapacityView bayViaWide =
+                mondayViaWide.getBays().get(0);
+        ScheduleCapacityResponse.BayCapacityView bayViaNarrow =
+                mondayViaNarrow.getBays().get(0);
+
+        // The guarantee, pinned on all three observable fields rather than on the minute total
+        // alone: an agreement that held for occupiedMinutes while occupancy or carryOverIn diverged
+        // would be no agreement at all to a client rendering the day.
+        assertThat(bayViaNarrow.getOccupiedMinutes())
+                .as("a 42-day request and a 1-day request must agree about the day they share (#2050 AC2)")
+                .isEqualTo(bayViaWide.getOccupiedMinutes());
+        // The job physically held the bay from Monday's 08:00 open until it finished at 10:00.
+        assertThat(bayViaNarrow.getOccupiedMinutes()).isEqualTo(120);
+        assertThat(bayViaNarrow.getOccupancy()).isEqualTo(bayViaWide.getOccupancy());
+        assertThat(bayViaNarrow.getOccupancy()).containsExactly(1, 1, 0, 0, 0, 0, 0, 0, 0);
+        assertThat(bayViaNarrow.getCarryOverIn())
+                .extracting(
+                        ScheduleCapacityResponse.CarryOverView::getFromDate,
+                        ScheduleCapacityResponse.CarryOverView::getAppointmentId,
+                        ScheduleCapacityResponse.CarryOverView::getWorkorderId,
+                        ScheduleCapacityResponse.CarryOverView::getBayHours)
+                .containsExactlyElementsOf(carryOverTuples(bayViaWide));
+        assertThat(bayViaNarrow.getCarryOverIn()).hasSize(1);
+        ScheduleCapacityResponse.CarryOverView carryOver =
+                bayViaNarrow.getCarryOverIn().get(0);
+        assertThat(carryOver.getFromDate()).isEqualTo(fiftyDaysBefore);
+        assertThat(carryOver.getWorkorderId()).isEqualTo(workOrderId);
+        assertThat(carryOver.getBayHours()).isEqualByComparingTo(new BigDecimal("2.0"));
+    }
+
+    @Test
+    @DisplayName("#2050 / #2021 F5 - a STILL-RUNNING job is fetched by the actuals arm however old "
+            + "its planned window is, but F5 gives it its PLANNED end, so it contributes nothing")
+    void stillRunningJobIsFetchedByTheActualsArmButFallsBackToItsPlannedEnd() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        // Two bays, identical planned geometry, differing only in whether the workorder has a
+        // recorded finish. That is what makes the zero below evidence rather than a tautology: if
+        // the row simply were not fetched, Bay 2 would read zero too.
+        UUID stillRunningBayId = persistBay("Bay 1", locationId);
+        UUID finishedBayId = persistBay("Bay 2", locationId);
+        // 2026-08-17, a Monday, 49 days before the range: outside CARRY_OVER_LOOKBACK_DAYS, so
+        // neither row is reachable through the planned arm and the EXISTS arm is the only route to
+        // either of them.
+        LocalDate fortyNineDaysBefore = MONDAY.minusDays(49);
+        Appointment stillRunning = persistAppointment(
+                locationId,
+                stillRunningBayId,
+                instant(fortyNineDaysBefore, 10, 0),
+                instant(fortyNineDaysBefore, 12, 0),
+                AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(UUIDv7Generator.generate(), stillRunning, instant(fortyNineDaysBefore, 10, 0), null);
+        Appointment finished = persistAppointment(
+                locationId,
+                finishedBayId,
+                instant(fortyNineDaysBefore, 10, 0),
+                instant(fortyNineDaysBefore, 12, 0),
+                AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(
+                UUIDv7Generator.generate(), finished, instant(fortyNineDaysBefore, 10, 0), instant(MONDAY, 10, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse.DayCapacityView monday = scheduleCapacityService
+                .getCapacity(locationId, MONDAY, MONDAY)
+                .getDays()
+                .get(0);
+        assertThat(monday.getBays()).hasSize(2);
+        ScheduleCapacityResponse.BayCapacityView stillRunningBay =
+                monday.getBays().get(0);
+        ScheduleCapacityResponse.BayCapacityView finishedBay = monday.getBays().get(1);
+        assertThat(stillRunningBay.getBayId()).isEqualTo(stillRunningBayId);
+        assertThat(finishedBay.getBayId()).isEqualTo(finishedBayId);
+
+        // The interaction this test exists to pin, and it is not the one the arm's name suggests.
+        // "completedAt IS NULL" is the genuinely request-independent half of the actuals arm: a job
+        // in progress is fetched by every request, whatever its range start. But being FETCHED and
+        // CONTRIBUTING are different things, because #2021 F5 refuses to synthesise a finish for a
+        // still-running job - effectiveEnd falls back to the appointment's PLANNED end, which here
+        // is 49 days old. So the row is read, joined and grouped, and then its effective window
+        // (2026-08-17 10:00-12:00) overlaps no day in the requested range and overruns no open
+        // day's close. It contributes nothing. That is the documented behaviour of the two rules
+        // composed, not a defect in either: the alternative - treating "started, never finished" as
+        // "still occupying the bay right now" - is precisely the synthesis F5 rejects, and it would
+        // let one stale workorder hold a bay forever.
+        assertThat(stillRunningBay.getOccupiedMinutes())
+                .as("F5: a still-running job falls back to its planned end, 49 days ago")
+                .isZero();
+        assertThat(stillRunningBay.getOccupancy()).containsOnly(0);
+        assertThat(stillRunningBay.getCarryOverIn()).isEmpty();
+
+        // The control. Same planned window, same 49-day age, same unreachable-by-the-planned-arm
+        // row - only completedAt differs, and it is what turns a fetched row into occupied minutes.
+        assertThat(finishedBay.getOccupiedMinutes())
+                .as(
+                        "the same row WITH a recorded finish does reach the range, so the zero above is F5, not a missed fetch")
+                .isEqualTo(120);
+    }
+
+    @Test
+    @DisplayName("#2050 - DOCUMENTED RESIDUAL, not a bug: a job that completed strictly between two "
+            + "requests' start dates is seen by the wider request and not by the narrower one, and "
+            + "they disagree about the day they share")
+    void completionBetweenTwoRequestStartsIsADocumentedResidual() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        // 2026-07-07, a Tuesday, ninety days before the range: older than BOTH requests' planned
+        // lookbacks below (D-42 for the single-day request, D-83 for the 42-day one), so the
+        // planned arm is false for both and the actuals arm is the only thing that can differ.
+        LocalDate ninetyDaysBefore = MONDAY.minusDays(90);
+        // Completed on Saturday 2026-10-03 at 20:00 - strictly between the wide request's start
+        // (D-41) and the narrow request's start (D). "Completed after the range began" is therefore
+        // TRUE for the wide request and FALSE for the narrow one, and that is the whole asymmetry.
+        LocalDate priorSaturday = MONDAY.minusDays(2);
+        Appointment appointment = persistAppointment(
+                locationId,
+                bayId,
+                instant(ninetyDaysBefore, 15, 0),
+                instant(ninetyDaysBefore, 17, 0),
+                AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(
+                UUIDv7Generator.generate(),
+                appointment,
+                instant(ninetyDaysBefore, 15, 0),
+                instant(priorSaturday, 20, 0));
+        flushAndClear();
+
+        LocalDate wideFrom = MONDAY.minusDays(41);
+        ScheduleCapacityResponse wide = scheduleCapacityService.getCapacity(locationId, wideFrom, MONDAY);
+        ScheduleCapacityResponse narrow = scheduleCapacityService.getCapacity(locationId, MONDAY, MONDAY);
+        ScheduleCapacityResponse.BayCapacityView bayViaWide =
+                wide.getDays().get(41).getBays().get(0);
+        ScheduleCapacityResponse.BayCapacityView bayViaNarrow =
+                narrow.getDays().get(0).getBays().get(0);
+        assertThat(wide.getDays().get(41).getDate()).isEqualTo(MONDAY);
+        assertThat(narrow.getDays().get(0).getDate()).isEqualTo(MONDAY);
+
+        // THIS TEST DELIBERATELY ASSERTS A DISAGREEMENT. Do not "fix" it into an equality: the two
+        // requests really do answer differently about Monday for this shape, the difference is
+        // understood, and the point of pinning it is that a future reader meets it as recorded
+        // intent rather than discovering it in production.
+        //
+        // Why it is not fixable here. Only the completedAt IS NULL half of the actuals arm is
+        // strictly request-independent; the other half asks "did the work finish after THIS range
+        // began", which is a question about the request as well as about the job. For a job that
+        // finished strictly between two requests' start dates the two get opposite answers, and
+        // when the planned window is also older than either lookback - as here - there is no second
+        // route to rescue the narrower one. Closing it would need a lower bound that is neither
+        // from-relative nor completion-relative, i.e. a different predicate, not a different
+        // constant: see ScheduleCapacityServiceImpl#CARRY_OVER_LOOKBACK_DAYS, which states the same
+        // residual in prose.
+        assertThat(bayViaWide.getOccupiedMinutes())
+                .as("the wide request's range began before the job finished, so its actuals arm fetches the row")
+                .isEqualTo(420);
+        assertThat(bayViaNarrow.getOccupiedMinutes())
+                .as("the narrow request's range began after the job finished, and 90 days is outside its planned arm")
+                .isZero();
+        assertThat(bayViaNarrow.getCarryOverIn()).isEmpty();
+        assertThat(bayViaWide.getCarryOverIn()).hasSize(1);
+        assertThat(bayViaWide.getCarryOverIn().get(0).getFromDate()).isEqualTo(ninetyDaysBefore);
+        assertThat(bayViaWide.getCarryOverIn().get(0).getBayHours()).isEqualByComparingTo(new BigDecimal("7.0"));
     }
 }
