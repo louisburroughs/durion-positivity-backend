@@ -55,7 +55,7 @@ public class BayController {
     /**
      * Documented on every operation that gates on the caller's location scope (ADR-0061, #1872).
      * The body is the {@code ApiError} envelope rendered by pos-security-common's
-     * highest-precedence advice, not this module's ProblemDetail.
+     * highest-precedence advice, ahead of this module's LocationGlobalExceptionHandler.
      */
     static final String BAY_READ_SCOPE_DENIED_DESCRIPTION =
             "Caller lacks location:bay:read, or holds it but its location scope does not cover locationId"
@@ -85,12 +85,18 @@ public class BayController {
                     request rather than returning an empty page.
                     """)
     @ApiResponse(responseCode = "200", description = "Bays retrieved successfully.")
-    @ApiResponse(responseCode = "400", description = "locationId is not a UUID.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "locationId is not a UUID.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = BAY_READ_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Location not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -120,12 +126,18 @@ public class BayController {
                     the location does not exist or the bay is not found under that location.
                     """)
     @ApiResponse(responseCode = "200", description = "Bay retrieved successfully.")
-    @ApiResponse(responseCode = "400", description = "locationId or bayId is not a UUID.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "locationId or bayId is not a UUID.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = BAY_READ_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Bay not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Bay not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -156,13 +168,22 @@ public class BayController {
                     the location does not exist and 409 when the bay name is already taken at that location.
                     """)
     @ApiResponse(responseCode = "201", description = "Bay created successfully.")
-    @ApiResponse(responseCode = "400", description = "locationId is not a UUID, or the payload is invalid.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "locationId is not a UUID, or the payload is invalid.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = BAY_MANAGE_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Location not found.")
-    @ApiResponse(responseCode = "409", description = "Bay name already taken at this location.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Bay name already taken at this location.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_BAY_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_MANAGE + "')")
     @SecurityRequirement(
@@ -205,15 +226,22 @@ public class BayController {
                     location.
                     """)
     @ApiResponse(responseCode = "200", description = "Bay updated successfully.")
-    @ApiResponse(responseCode = "400", description = "locationId or bayId is not a UUID.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "locationId or bayId is not a UUID.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = BAY_MANAGE_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Location or bay not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location or bay not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Bay name already taken at this location, or a concurrent update won the version race.")
+            description = "Bay name already taken at this location, or a concurrent update won the version race.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_BAY_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_MANAGE + "')")
     @SecurityRequirement(
@@ -255,13 +283,22 @@ public class BayController {
                     locationId (ADR-0061), and 404 when the location or bay does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "Bay deleted successfully.")
-    @ApiResponse(responseCode = "400", description = "locationId or bayId is not a UUID.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "locationId or bayId is not a UUID.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = BAY_MANAGE_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Location or bay not found.")
-    @ApiResponse(responseCode = "409", description = "A concurrent update won the version race.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location or bay not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "A concurrent update won the version race.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_BAY_DELETE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_MANAGE + "')")
     @SecurityRequirement(

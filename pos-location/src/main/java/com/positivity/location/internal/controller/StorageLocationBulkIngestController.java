@@ -13,6 +13,7 @@ import com.positivity.location.internal.dto.StorageLocationTopologyResponse;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.StorageLocationService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -99,8 +100,14 @@ public class StorageLocationBulkIngestController extends AbstractBulkIngestContr
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = BulkIngestResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request payload")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Storage locations to create, parents before their children.",

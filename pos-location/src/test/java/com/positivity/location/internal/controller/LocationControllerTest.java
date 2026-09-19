@@ -2,6 +2,7 @@ package com.positivity.location.internal.controller;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -32,7 +33,7 @@ import org.springframework.web.server.ResponseStatusException;
  * {@code LocationServiceImpl.addParentInternal} rejects a self-parent (and any edge that would close a
  * cycle on the requested {@code parentType}) with
  * {@code ResponseStatusException(CONFLICT, "CYCLE_DETECTED")}, and {@link LocationGlobalExceptionHandler}
- * renders that as an RFC 9457 ProblemDetail carrying the correlation id (ADR-0017 §4). The service is
+ * renders that as the ApiError envelope with code CYCLE_DETECTED and the correlation id (ADR-0017 §3/§4). The service is
  * mocked with exactly that exception so the test exercises the controller-to-advice rendering, not the
  * cycle walk itself (covered by {@code LocationServiceCycleGuardIT}).
  */
@@ -56,8 +57,8 @@ class LocationControllerTest {
     LocationRosterService locationRosterService;
 
     @Test
-    @DisplayName("addParent self-parent renders 409 ProblemDetail with detail CYCLE_DETECTED and correlation id")
-    void addParent_selfParent_returns409CycleDetectedProblemDetail() throws Exception {
+    @DisplayName("addParent self-parent renders 409 ApiError with code CYCLE_DETECTED and correlation id")
+    void addParent_selfParent_returns409CycleDetectedApiError() throws Exception {
         when(locationService.addParent(eq(LOCATION_ID), eq(LOCATION_ID), eq("PHYSICAL")))
                 .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, CYCLE_DETECTED));
 
@@ -66,14 +67,14 @@ class LocationControllerTest {
                         .header(LocationGlobalExceptionHandler.X_CORRELATION_ID, "corr-cycle-409")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isConflict())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(header().string(LocationGlobalExceptionHandler.X_CORRELATION_ID, "corr-cycle-409"))
                 .andExpect(jsonPath("$.status").value(409))
-                .andExpect(jsonPath("$.title").value("Conflict"))
-                .andExpect(jsonPath("$.detail").value(CYCLE_DETECTED))
-                .andExpect(jsonPath("$.instance").value("/v1/locations/" + LOCATION_ID + "/parents/" + LOCATION_ID))
+                .andExpect(jsonPath("$.code").value(CYCLE_DETECTED))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
                 .andExpect(jsonPath("$.correlationId").value("corr-cycle-409"))
-                .andExpect(jsonPath("$.code").doesNotExist());
+                .andExpect(jsonPath("$.detail").doesNotExist());
     }
 
     @Test
@@ -94,5 +95,20 @@ class LocationControllerTest {
                 .andExpect(jsonPath("$.childId").value(LOCATION_ID.toString()))
                 .andExpect(jsonPath("$.parentId").value(PARENT_ID.toString()))
                 .andExpect(jsonPath("$.parentType").value("PHYSICAL"));
+    }
+
+    @Test
+    @DisplayName("getLocationById for an unknown id renders 404 ApiError LOCATION_NOT_FOUND, not an empty body")
+    void getLocationById_unknown_returns404ApiError() throws Exception {
+        when(locationService.getLocationByIdDto(LOCATION_ID)).thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get("/v1/locations/{locationId}", LOCATION_ID)
+                        .header(LocationGlobalExceptionHandler.X_CORRELATION_ID, "corr-missing-404")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value(LocationController.LOCATION_NOT_FOUND))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").value("corr-missing-404"));
     }
 }

@@ -4,8 +4,11 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.StorageLocationService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -48,8 +51,14 @@ public class StorageLocationValidationController {
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Validation payload returned"),
-                @ApiResponse(responseCode = "400", description = "Invalid storageLocationId format"),
-                @ApiResponse(responseCode = "403", description = "Forbidden - missing location:read authority")
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid storageLocationId format",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Forbidden - missing location:read authority",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_VALIDATE", apiVersion = "1")

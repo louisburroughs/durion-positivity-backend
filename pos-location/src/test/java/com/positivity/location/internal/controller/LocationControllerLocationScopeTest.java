@@ -267,7 +267,7 @@ class LocationControllerLocationScopeTest {
         }
 
         @Test
-        @DisplayName("a location inside the caller's reach that does not exist still answers the 404 ProblemDetail")
+        @DisplayName("a location inside the caller's reach that does not exist still answers the 404 ApiError")
         void missingLocationInReachIs404() throws Exception {
             missing(SITE_IN_REACH);
             when(locationService.patchLocation(eq(SITE_IN_REACH), any(LocationPatchRequest.class)))

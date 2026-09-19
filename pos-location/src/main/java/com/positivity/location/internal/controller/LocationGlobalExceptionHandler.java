@@ -1,52 +1,95 @@
 package com.positivity.location.internal.controller;
 
+import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
-import org.jspecify.annotations.Nullable;
-import org.springframework.http.HttpHeaders;
+import jakarta.servlet.http.HttpServletRequest;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.regex.Pattern;
+import org.jspecify.annotations.NonNull;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.WebRequest;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Module-wide exception advice rendering RFC 9457 ProblemDetail bodies for
- * {@code ResponseStatusException} and standard Spring MVC exceptions.
+ * Renders the {@link ResponseStatusException}s this module's services throw as the platform
+ * {@link ApiError} envelope (ADR-0017 §3, #1720), with the correlation id in both the
+ * {@code X-Correlation-Id} response header and the body (ADR-0017 §4, #1729): an inbound
+ * {@code X-Correlation-Id} is echoed, otherwise a UUIDv7 is generated.
  *
- * <p>Without an advice, MockMvc-observed error responses have empty bodies
- * (the servlet /error dispatch is not followed in tests) and runtime bodies
- * fall back to the Boot default error JSON. Consumers such as the
- * pos-inventory rollup client rely on a deterministic error envelope
- * (CAP-214 #655 — "404 ProblemDetail"; PR #661 review finding 1).
+ * <p>The services put the machine-readable error in the exception's reason
+ * ({@code CYCLE_DETECTED}, {@code SITE_NOT_FOUND}, ...). A reason in that shape becomes
+ * {@link ApiError#code()}, so a client branches on the same value it read from the RFC 9457
+ * {@code detail} before this advice replaced the module's ProblemDetail rendering. Any other
+ * reason is free text: the code falls back to the status and the text becomes the message.
  *
- * <p>Every response the inherited handlers build passes through
- * {@link #createResponseEntity}, which is overridden so that each one carries the
- * correlation id in the {@code X-Correlation-Id} response header and, on a
- * {@link ProblemDetail} body, as the {@code correlationId} property (ADR-0017 §4,
- * issue #1729): an inbound {@code X-Correlation-Id} is echoed, otherwise a UUIDv7 is
- * generated. The body shape is unchanged.
+ * <p>Everything else — Spring MVC's own web exceptions, validation failures, the catch-all — is
+ * left to pos-web-common's {@code GlobalApiExceptionHandler} (ADR-0056), which answers with the
+ * same envelope. This advice is ordered just ahead of that catch-all so a
+ * {@code ResponseStatusException} reaches it first; pos-security-common's highest-precedence
+ * advice still answers {@code LOCATION_SCOPE_DENIED} before either.
  */
 @RestControllerAdvice
-public class LocationGlobalExceptionHandler extends ResponseEntityExceptionHandler {
+@Order(Ordered.LOWEST_PRECEDENCE - 1)
+public class LocationGlobalExceptionHandler {
 
     static final String X_CORRELATION_ID = "X-Correlation-Id";
 
-    @Override
-    protected ResponseEntity<Object> createResponseEntity(
-            @Nullable Object body, HttpHeaders headers, HttpStatusCode statusCode, WebRequest request) {
-        String correlationId = resolveCorrelationId(request);
-        HttpHeaders correlated = new HttpHeaders();
-        correlated.putAll(headers);
-        correlated.set(X_CORRELATION_ID, correlationId);
-        if (body instanceof ProblemDetail problem) {
-            problem.setProperty("correlationId", correlationId);
-        }
-        return super.createResponseEntity(body, correlated, statusCode, request);
+    private static final Pattern MACHINE_CODE = Pattern.compile("[A-Z][A-Z0-9_]*");
+
+    private final Clock clock;
+
+    public LocationGlobalExceptionHandler(@NonNull Clock clock) {
+        this.clock = clock;
     }
 
-    private static String resolveCorrelationId(WebRequest request) {
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiError> handleResponseStatus(
+            @NonNull ResponseStatusException ex, @NonNull HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpStatusCode status = ex.getStatusCode();
+        String reason = ex.getReason();
+        String code;
+        String message;
+        if (reason != null && MACHINE_CODE.matcher(reason).matches()) {
+            code = reason;
+            message = defaultMessage(status);
+        } else {
+            code = statusCode(status);
+            message = reason == null || reason.isBlank() ? defaultMessage(status) : reason;
+        }
+        return ResponseEntity.status(status)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        code, message, status.value(), Instant.now(clock).toString(), correlationId));
+    }
+
+    private static String resolveCorrelationId(HttpServletRequest request) {
         String inbound = request.getHeader(X_CORRELATION_ID);
         return inbound == null || inbound.isBlank() ? UUIDv7Generator.generate().toString() : inbound.trim();
+    }
+
+    private static String statusCode(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 400 -> "VALIDATION_ERROR";
+            case 404 -> "NOT_FOUND";
+            case 409 -> "CONFLICT";
+            case 422 -> "UNPROCESSABLE_CONTENT";
+            default -> status.is5xxServerError() ? "INTERNAL_ERROR" : "REQUEST_REJECTED";
+        };
+    }
+
+    private static String defaultMessage(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 400 -> "Request was rejected";
+            case 404 -> "Requested resource was not found";
+            case 409 -> "Request conflicts with the current state of the resource";
+            case 422 -> "Request could not be processed";
+            default -> status.is5xxServerError() ? "Unexpected error occurred" : "Request rejected";
+        };
     }
 }

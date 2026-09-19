@@ -7,10 +7,12 @@ import com.positivity.location.internal.dto.MobileUnitResponse;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.MobileUnitService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -82,7 +84,10 @@ public class MobileUnitController {
                     location.
                     """)
     @ApiResponse(responseCode = "201", description = "Mobile unit created successfully.")
-    @ApiResponse(responseCode = "409", description = "Mobile unit name already taken at the base location.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Mobile unit name already taken at the base location.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
     @SecurityRequirement(
@@ -139,7 +144,10 @@ public class MobileUnitController {
                     Returns 404 when no mobile unit exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Mobile unit returned.")
-    @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Mobile unit not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -168,11 +176,15 @@ public class MobileUnitController {
                     collides with another unit at the same base location.
                     """)
     @ApiResponse(responseCode = "200", description = "Mobile units managed successfully.")
-    @ApiResponse(responseCode = "403", description = "Caller lacks location:mobile-unit:manage.")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks location:mobile-unit:manage.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description =
-                    "Mobile unit name already taken at the base location, or a concurrent update won the version race.")
+                    "Mobile unit name already taken at the base location, or a concurrent update won the version race.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
     @SecurityRequirement(
@@ -213,9 +225,18 @@ public class MobileUnitController {
                     Returns 204 on success and 404 when the mobile unit does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "Mobile unit deleted successfully.")
-    @ApiResponse(responseCode = "403", description = "Caller lacks location:mobile-unit:manage.")
-    @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
-    @ApiResponse(responseCode = "409", description = "A concurrent update won the version race.")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks location:mobile-unit:manage.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Mobile unit not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "A concurrent update won the version race.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_DELETE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
     @SecurityRequirement(
@@ -255,7 +276,10 @@ public class MobileUnitController {
                     coverage.
                     """)
     @ApiResponse(responseCode = "200", description = "Coverage rules replaced successfully.")
-    @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Mobile unit not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_COVERAGE_RULES_REPLACE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
     @SecurityRequirement(

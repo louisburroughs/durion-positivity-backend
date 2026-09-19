@@ -56,7 +56,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * the service is called. Also pins the strict UUID parse: a malformed id is a 400 for every caller.
  *
  * <p>The slice carries the three advices that meet in production (shared scope handler, this
- * module's ProblemDetail handler, pos-web-common's catch-all) so the {@code LOCATION_SCOPE_DENIED}
+ * module's ResponseStatusException handler, pos-web-common's catch-all) so the {@code LOCATION_SCOPE_DENIED}
  * assertion proves precedence, not just presence.
  */
 @WebMvcTest(BayController.class)
