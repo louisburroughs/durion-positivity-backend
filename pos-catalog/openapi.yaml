@@ -3921,7 +3921,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Invalid location ID
+          description: location_id is missing or not a UUID
         '404':
           description: Product not found. The response has NO body.
         '500':
