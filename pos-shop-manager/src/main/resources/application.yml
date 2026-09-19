@@ -90,6 +90,13 @@ pos:
   customer:
     service-id: ${POS_CUSTOMER_SERVICE_ID:customer}
   shop-manager:
+    booking:
+      # How far ahead an appointment may be booked, in facility-local days
+      # (DECISION-SHOPMGMT-019). Deliberately NOT the opening-search horizon (30 days) or the
+      # capacity range limit (42 days): those bound reads, this bounds writes. Raise it for a
+      # shop that books seasonal work further out; a non-positive value fails startup, since
+      # the horizon's existence is not optional.
+      max-advance-days: ${POS_SHOP_MANAGER_BOOKING_MAX_ADVANCE_DAYS:180}
     kafka:
       # Staffing-assignment replica feed + reconciliation (ADR-0044 §6, #877; manifest listener #1537)
       enabled: ${POS_SHOP_MANAGER_KAFKA_ENABLED:false}

@@ -134,7 +134,8 @@ class AppointmentsServiceImplStory12Test {
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                 mock(WorkOrderAppointmentMappingRepository.class),
                 conflictEvaluator,
-                conflictRecorder);
+                conflictRecorder,
+                new BookingHorizonPolicy(180));
 
         // Stub CRM clients for tests that reach the CRM call path (before source
         // validation)

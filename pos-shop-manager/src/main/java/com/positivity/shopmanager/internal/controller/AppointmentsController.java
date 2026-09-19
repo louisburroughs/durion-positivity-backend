@@ -96,7 +96,7 @@ public class AppointmentsController {
                     request, or sourceId is missing for a supplied sourceType; 403 LOCATION_SCOPE_DENIED when the \
                     caller's location scope does not cover locationId; 404 when the customer or vehicle is \
                     unknown; 409 when the vehicle does not belong to the customer; and 422 when the source estimate \
-                    or work order is not eligible for scheduling.
+                    or work order is not eligible for scheduling or the start lies beyond the booking horizon.
                     """)
     @ApiResponse(responseCode = "201", description = "Appointment created successfully.")
     @ApiResponse(
@@ -122,7 +122,9 @@ public class AppointmentsController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "Source not eligible — estimate or work order cannot be scheduled (ineligible status).",
+            description = "Policy failure — SOURCE_NOT_ELIGIBLE when the estimate or work order cannot be scheduled"
+                    + " (ineligible status), or BOOKING_HORIZON_EXCEEDED when startAt lies beyond the configured"
+                    + " booking horizon (DECISION-SHOPMGMT-019; 180 facility-local days by default).",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "501", description = "Not implemented.")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_CREATE", apiVersion = "1")
@@ -266,7 +268,8 @@ public class AppointmentsController {
                     location within reach (ADR-0061).
                     Returns 400 when the time window is invalid or notes are missing for reason OTHER, 404 when the \
                     appointment does not exist, 403 LOCATION_SCOPE_DENIED when it exists but its location is outside \
-                    the caller's scope, and 409 when the appointment status does not permit rescheduling.
+                    the caller's scope, 409 when the appointment status does not permit rescheduling, and 422 \
+                    BOOKING_HORIZON_EXCEEDED when newStartAt lies beyond the configured booking horizon.
                     """)
     @ApiResponse(responseCode = "200", description = "Appointment rescheduled successfully.")
     @ApiResponse(
@@ -285,6 +288,12 @@ public class AppointmentsController {
     @ApiResponse(
             responseCode = "409",
             description = "Appointment state conflict — appointment is not in a reschedulable status.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "BOOKING_HORIZON_EXCEEDED — newStartAt lies beyond the configured booking horizon"
+                    + " (DECISION-SHOPMGMT-019; 180 facility-local days by default). The appointment keeps its"
+                    + " previous window and no reschedule is recorded.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PutMapping("/appointments/{appointmentId}/reschedule")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

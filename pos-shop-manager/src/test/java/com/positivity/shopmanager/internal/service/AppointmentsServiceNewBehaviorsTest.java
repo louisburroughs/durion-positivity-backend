@@ -124,7 +124,8 @@ class AppointmentsServiceNewBehaviorsTest {
                 Clock.fixed(Instant.parse("2025-06-01T10:00:00Z"), ZoneOffset.UTC),
                 mock(WorkOrderAppointmentMappingRepository.class),
                 conflictEvaluator,
-                conflictRecorder);
+                conflictRecorder,
+                new BookingHorizonPolicy(180));
 
         appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         appointment = new Appointment();

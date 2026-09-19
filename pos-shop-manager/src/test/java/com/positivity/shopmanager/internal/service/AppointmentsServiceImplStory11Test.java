@@ -122,7 +122,8 @@ class AppointmentsServiceImplStory11Test {
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                 mock(WorkOrderAppointmentMappingRepository.class),
                 conflictEvaluator,
-                conflictRecorder);
+                conflictRecorder,
+                new BookingHorizonPolicy(180));
     }
 
     // ─── AC: Expanded eligibility — allowed statuses ──────────────────────────

@@ -106,6 +106,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final WorkOrderAppointmentMappingRepository workOrderAppointmentMappingRepository;
     private final SchedulingConflictEvaluator conflictEvaluator;
     private final SchedulingConflictRecorder conflictRecorder;
+    private final BookingHorizonPolicy bookingHorizonPolicy;
 
     /**
      * Creates an appointment from an Estimate or Workorder.
@@ -143,6 +144,10 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 normalizedIdempotencyKey);
 
         validateTimeRange(request.getStartAt(), request.getEndAt());
+        // The booking horizon (DECISION-SHOPMGMT-019): refused here, before anything is written, so
+        // an out-of-horizon appointment never reaches the database.
+        bookingHorizonPolicy.verifyWithinHorizon(
+                request.getStartAt(), resolveZoneId(request.getLocationId()), Instant.now(clock));
         validateServiceRequestIdsPresent(request.getServiceRequestIds());
         validateCrmIdentifiers(request.getCrmCustomerId(), request.getCrmVehicleId());
 
@@ -415,6 +420,13 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                         || request.getRescheduleReasonNotes().isBlank())) {
             throw new AppointmentValidationException("rescheduleReasonNotes is required when reason is OTHER");
         }
+
+        // A reschedule is a write too, so the booking horizon binds it exactly as it binds a create
+        // (DECISION-SHOPMGMT-019). Checked after the required fields and before the appointment is
+        // touched: a refused reschedule leaves the previous window in place and records no history
+        // row against the reschedule allowance (DECISION-SHOPMGMT-004).
+        bookingHorizonPolicy.verifyWithinHorizon(
+                request.getNewStartAt(), resolveZoneId(appointment.getLocationId()), Instant.now(clock));
 
         Instant previousStartAt = appointment.getStartAt();
         Instant previousEndAt = appointment.getEndAt();
