@@ -121,13 +121,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Location name or code already taken.
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid timezone or operating hours.
       security:
       - bearerAuth:
@@ -187,13 +187,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -256,7 +256,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
       security:
       - bearerAuth:
@@ -422,13 +422,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -465,7 +465,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: '#/components/schemas/ApiError'
           description: No active location exists.
       security:
       - bearerAuth:
@@ -588,6 +588,10 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: Caller holds location:write but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Location not found.
       security:
       - bearerAuth:
@@ -632,7 +636,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Location not found.
       security:
       - bearerAuth:
@@ -695,19 +699,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Location not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Location name already taken.
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid timezone or operating hours.
       security:
       - bearerAuth:
@@ -787,19 +791,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Location not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Location name or code already taken.
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationResponseDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid timezone or operating hours.
       security:
       - bearerAuth:
@@ -867,7 +871,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageBayResponse'
+                $ref: '#/components/schemas/ApiError'
           description: locationId is not a UUID.
         '403':
           content:
@@ -879,7 +883,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageBayResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Location not found.
       security:
       - bearerAuth:
@@ -941,7 +945,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BayResponse'
+                $ref: '#/components/schemas/ApiError'
           description: locationId is not a UUID, or the payload is invalid.
         '403':
           content:
@@ -953,13 +957,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BayResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Location not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BayResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Bay name already taken at this location.
       security:
       - bearerAuth:
@@ -1004,6 +1008,10 @@ paths:
         '204':
           description: Bay deleted successfully.
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: locationId or bayId is not a UUID.
         '403':
           content:
@@ -1012,8 +1020,16 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: Caller lacks location:bay:manage, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Location or bay not found.
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: A concurrent update won the version race.
       security:
       - bearerAuth:
@@ -1062,7 +1078,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BayResponse'
+                $ref: '#/components/schemas/ApiError'
           description: locationId or bayId is not a UUID.
         '403':
           content:
@@ -1074,7 +1090,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BayResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Bay not found.
       security:
       - bearerAuth:
@@ -1133,7 +1149,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BayResponse'
+                $ref: '#/components/schemas/ApiError'
           description: locationId or bayId is not a UUID.
         '403':
           content:
@@ -1145,13 +1161,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BayResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Location or bay not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BayResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Bay name already taken at this location, or a concurrent update won the version race.
       security:
       - bearerAuth:
@@ -1205,9 +1221,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/LocationResponseDTO'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invalid parentType value.
       security:
       - bearerAuth:
@@ -1258,7 +1272,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Location not found
       security:
       - bearerAuth:
@@ -1315,7 +1329,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
         '403':
           content:
@@ -1327,13 +1341,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Location not found
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Default storage location does not belong to the site
       security:
       - bearerAuth:
@@ -1388,17 +1402,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/LocationDescendantResponseDTO'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invalid parentType value.
         '404':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/LocationDescendantResponseDTO'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Location not found.
       security:
       - bearerAuth:
@@ -1444,7 +1454,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PersonDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Responsible person not found.
       security:
       - bearerAuth:
@@ -1636,19 +1646,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Parent storage location unknown or in another site
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Site not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Duplicate name or barcode within the site
       security:
       - bearerAuth:
@@ -1695,9 +1705,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/StorageLocationTopologyResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Site not found
       security:
       - bearerAuth:
@@ -1747,7 +1755,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Storage location not found
       security:
       - bearerAuth:
@@ -1809,25 +1817,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Parent storage location unknown or in another site
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Storage location not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Duplicate name or barcode, or reparenting would create a cycle
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Deactivation destination missing, inactive or invalid
       security:
       - bearerAuth:
@@ -1933,7 +1941,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MobileUnitResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Mobile unit name already taken at the base location.
       security:
       - bearerAuth:
@@ -1992,13 +2000,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -2037,10 +2045,22 @@ paths:
         '204':
           description: Mobile unit deleted successfully.
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Caller lacks location:mobile-unit:manage.
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Mobile unit not found.
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: A concurrent update won the version race.
       security:
       - bearerAuth:
@@ -2084,7 +2104,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MobileUnitResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Mobile unit not found.
       security:
       - bearerAuth:
@@ -2140,13 +2160,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MobileUnitResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Caller lacks location:mobile-unit:manage.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MobileUnitResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Mobile unit name already taken at the base location, or a concurrent update won the version race.
       security:
       - bearerAuth:
@@ -2248,9 +2268,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/CoverageRuleResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Mobile unit not found.
       security:
       - bearerAuth:
@@ -2388,13 +2406,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceAreaResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Empty postal code set, or an entry missing its countryCode
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceAreaResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Service area name already taken
       security:
       - bearerAuth:
@@ -2450,13 +2468,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceAreaResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid service area id
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceAreaResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Service area not found
       security:
       - bearerAuth:
@@ -2519,13 +2537,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceAreaResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid service area id, or an empty or incomplete set
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceAreaResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Service area not found
       security:
       - bearerAuth:
@@ -2570,13 +2588,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationValidationResponseDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid storageLocationId format
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageLocationValidationResponseDTO'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing location:read authority
       security:
       - bearerAuth:
@@ -2660,7 +2678,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TravelBufferPolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Travel buffer policy name already taken
       security:
       - bearerAuth:
@@ -2715,13 +2733,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TravelBufferPolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid travel buffer policy id
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TravelBufferPolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Travel buffer policy not found
       security:
       - bearerAuth:
