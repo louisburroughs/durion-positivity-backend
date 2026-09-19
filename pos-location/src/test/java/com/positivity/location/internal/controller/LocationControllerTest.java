@@ -2,6 +2,7 @@ package com.positivity.location.internal.controller;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -94,5 +95,20 @@ class LocationControllerTest {
                 .andExpect(jsonPath("$.childId").value(LOCATION_ID.toString()))
                 .andExpect(jsonPath("$.parentId").value(PARENT_ID.toString()))
                 .andExpect(jsonPath("$.parentType").value("PHYSICAL"));
+    }
+
+    @Test
+    @DisplayName("getLocationById for an unknown id renders 404 ApiError LOCATION_NOT_FOUND, not an empty body")
+    void getLocationById_unknown_returns404ApiError() throws Exception {
+        when(locationService.getLocationByIdDto(LOCATION_ID)).thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get("/v1/locations/{locationId}", LOCATION_ID)
+                        .header(LocationGlobalExceptionHandler.X_CORRELATION_ID, "corr-missing-404")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value(LocationController.LOCATION_NOT_FOUND))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").value("corr-missing-404"));
     }
 }

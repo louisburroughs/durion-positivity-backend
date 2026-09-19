@@ -45,6 +45,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
 @Tag(name = "Location API", description = "Operations related to locations and their relationships")
@@ -86,6 +87,12 @@ public class LocationController {
     static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
             "Caller holds location:write but its location scope does not cover the requested location"
                     + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).";
+
+    /** ApiError.code for a location that does not exist (rendered by LocationGlobalExceptionHandler). */
+    static final String LOCATION_NOT_FOUND = "LOCATION_NOT_FOUND";
+
+    /** ApiError.code when the location, or its responsible person, cannot be found. */
+    static final String RESPONSIBLE_PERSON_NOT_FOUND = "RESPONSIBLE_PERSON_NOT_FOUND";
 
     private final LocationService locationService;
     private final LocationRosterService locationRosterService;
@@ -188,7 +195,7 @@ public class LocationController {
         return locationService
                 .getLocationByIdDto(locationId)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, LOCATION_NOT_FOUND));
     }
 
     @Operation(operationId = "getTopLevelLocation", summary = "Get Top-Level Default Location", description = """
@@ -217,7 +224,7 @@ public class LocationController {
         return locationService
                 .getTopLevelLocationDto()
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, LOCATION_NOT_FOUND));
     }
 
     @Operation(
@@ -357,7 +364,7 @@ public class LocationController {
         return locationService
                 .updateLocation(locationId, location)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, LOCATION_NOT_FOUND));
     }
 
     @Operation(operationId = "patchLocation", summary = "Patch Selected Fields of a Location", description = """
@@ -452,7 +459,7 @@ public class LocationController {
                     @PathVariable
                     UUID locationId) {
         if (locationService.getLocationByIdDto(locationId).isEmpty()) {
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, LOCATION_NOT_FOUND);
         }
         // Existence above, scope here (ADR-0061 §3): the 404 stays first for every caller.
         SecurityContextHelper.locationScope().require(LocationPermissions.WRITE, locationId);
@@ -604,7 +611,7 @@ public class LocationController {
                     UUID locationId) {
         PersonDTO person = locationService.getResponsiblePerson(locationId);
         if (person == null) {
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, RESPONSIBLE_PERSON_NOT_FOUND);
         }
         return ResponseEntity.ok(person);
     }
