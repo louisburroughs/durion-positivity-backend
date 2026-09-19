@@ -552,7 +552,11 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: Internal server error.
         '501':
-          description: Not yet implemented.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not yet implemented (code NOT_IMPLEMENTED).
       security:
       - bearerAuth:
         - pricing:normalization:edit
