@@ -2,7 +2,10 @@ package com.positivity.price.internal.controller;
 
 import com.positivity.price.internal.dto.PricingSnapshotResponse;
 import com.positivity.price.internal.service.PricingSnapshotService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
@@ -50,8 +53,14 @@ public class PricingSnapshotController {
                     Returns 404 with code SNAPSHOT_NOT_FOUND when no snapshot exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Pricing snapshot returned.")
-    @ApiResponse(responseCode = "404", description = "Pricing snapshot not found.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Pricing snapshot not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PricingSnapshotResponse> getSnapshot(@PathVariable UUID snapshotId) {
         return ResponseEntity.ok(pricingSnapshotService.getSnapshot(snapshotId));
     }

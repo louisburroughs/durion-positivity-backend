@@ -37,14 +37,23 @@ public class PriceNormalizationController {
                     changes.
                     Returns 501 unconditionally until the operation is implemented.
                     """)
-    @ApiResponse(responseCode = "501", description = "Not yet implemented.")
-    @ApiResponse(responseCode = "400", description = "Invalid request body.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
+    @ApiResponse(responseCode = "501", description = "Not yet implemented.", content = @Content())
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request body.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Insufficient permissions.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "500", description = "Internal server error.")
+    @ApiResponse(
+            responseCode = "500",
+            description = "Internal server error.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PRICE_NORMALIZATION_NORMALIZE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

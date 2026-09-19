@@ -9,9 +9,11 @@ import com.positivity.price.internal.dto.BasePriceBulkIngestRecord;
 import com.positivity.price.internal.exception.BasePriceWindowConflictException;
 import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.internal.service.BasePriceService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -77,8 +79,14 @@ public class BasePriceBulkIngestController extends AbstractBulkIngestController<
                     invalid.
                     """)
     @ApiResponse(responseCode = "200", description = "Batch processed; check per-record success and failure results.")
-    @ApiResponse(responseCode = "400", description = "Invalid batch envelope.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid batch envelope.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =

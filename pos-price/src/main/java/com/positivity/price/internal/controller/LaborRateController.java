@@ -7,6 +7,7 @@ import com.positivity.price.internal.dto.LaborRateRequest;
 import com.positivity.price.internal.dto.LaborRateResponse;
 import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.internal.service.LaborRateAdminService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -54,9 +55,18 @@ public class LaborRateController {
             already opens the same scope at the same instant.
             """)
     @ApiResponse(responseCode = "201", description = "Labor rate created.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
-    @ApiResponse(responseCode = "422", description = "The rate cannot be stored as described.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "The rate cannot be stored as described.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PRICE_LABOR_RATE_CREATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -97,8 +107,14 @@ public class LaborRateController {
             Returns 200 with the rates, and an empty list when none are stored.
             """)
     @ApiResponse(responseCode = "200", description = "The stored labor rates.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PRICE_LABOR_RATE_LIST", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -124,9 +140,18 @@ public class LaborRateController {
             code already opens the same scope at the same instant.
             """)
     @ApiResponse(responseCode = "201", description = "Labor matrix step created.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
-    @ApiResponse(responseCode = "422", description = "The step cannot be stored as described.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "The step cannot be stored as described.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PRICE_LABOR_RATE_ADJUSTMENT_CREATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -166,8 +191,14 @@ public class LaborRateController {
             Returns 200 with the steps, and an empty list when none are stored.
             """)
     @ApiResponse(responseCode = "200", description = "The stored labor matrix steps.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PRICE_LABOR_RATE_ADJUSTMENT_LIST", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

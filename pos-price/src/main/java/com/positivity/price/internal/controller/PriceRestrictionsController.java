@@ -62,13 +62,22 @@ public class PriceRestrictionsController {
                     RESTRICTION_UNKNOWN decision instead of an error.
                     """)
     @ApiResponse(responseCode = "200", description = "Evaluation results per product.")
-    @ApiResponse(responseCode = "400", description = "Invalid request body.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request body.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Insufficient permissions.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "503", description = "Restriction evaluation service unavailable (commit path only).")
+    @ApiResponse(
+            responseCode = "503",
+            description = "Restriction evaluation service unavailable (commit path only).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PRICE_RESTRICTIONS_EVALUATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -114,10 +123,22 @@ public class PriceRestrictionsController {
                     Returns 404 when the referenced restriction rule does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Override issued. Returns overrideId and expiresAt.")
-    @ApiResponse(responseCode = "400", description = "Invalid request body.")
-    @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions to override restrictions.")
-    @ApiResponse(responseCode = "404", description = "Restriction rule not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request body.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions to override restrictions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Restriction rule not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PRICE_RESTRICTIONS_OVERRIDE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

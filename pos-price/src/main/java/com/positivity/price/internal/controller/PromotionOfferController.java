@@ -7,9 +7,11 @@ import com.positivity.price.internal.dto.CreatePromotionOfferRequest;
 import com.positivity.price.internal.dto.PromotionOfferResponse;
 import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.internal.service.PromotionOfferService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -69,10 +71,22 @@ public class PromotionOfferController {
                     Returns 409 when the promoCode already exists, and 422 when startDate is after endDate.
                     """)
     @ApiResponse(responseCode = "201", description = "Promotion offer created.")
-    @ApiResponse(responseCode = "400", description = "Invalid promotion offer request.")
-    @ApiResponse(responseCode = "409", description = "Promotion code already exists.")
-    @ApiResponse(responseCode = "422", description = "startDate is after endDate.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid promotion offer request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Promotion code already exists.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "startDate is after endDate.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PromotionOfferResponse> createOffer(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
@@ -116,8 +130,14 @@ public class PromotionOfferController {
                     Returns 404 when no promotion offer exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Promotion offer returned.")
-    @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Promotion offer not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PromotionOfferResponse> getOfferById(@PathVariable("id") UUID promotionOfferId) {
         return ResponseEntity.ok(promotionOfferService.getOfferById(promotionOfferId));
     }
@@ -138,8 +158,14 @@ public class PromotionOfferController {
                     Returns 404 when no promotion offer exists for the supplied code.
                     """)
     @ApiResponse(responseCode = "200", description = "Promotion offer returned.")
-    @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Promotion offer not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PromotionOfferResponse> getOfferByCode(@PathVariable("promoCode") String promoCode) {
         return ResponseEntity.ok(promotionOfferService.getOfferByCode(promoCode));
     }
@@ -163,9 +189,18 @@ public class PromotionOfferController {
                     already passed.
                     """)
     @ApiResponse(responseCode = "200", description = "Promotion offer activated.")
-    @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
-    @ApiResponse(responseCode = "422", description = "Promotion offer cannot be activated in current state.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Promotion offer not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Promotion offer cannot be activated in current state.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PromotionOfferResponse> activateOffer(@PathVariable("id") UUID promotionOfferId) {
         return ResponseEntity.ok(promotionOfferService.activateOffer(promotionOfferId));
     }
@@ -189,9 +224,18 @@ public class PromotionOfferController {
                     Returns 404 when the offer does not exist, and 422 when the offer is not currently ACTIVE.
                     """)
     @ApiResponse(responseCode = "200", description = "Promotion offer deactivated.")
-    @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
-    @ApiResponse(responseCode = "422", description = "Promotion offer is not currently ACTIVE.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Promotion offer not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Promotion offer is not currently ACTIVE.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PromotionOfferResponse> deactivateOffer(@PathVariable("id") UUID promotionOfferId) {
         return ResponseEntity.ok(promotionOfferService.deactivateOffer(promotionOfferId));
     }
@@ -225,8 +269,12 @@ public class PromotionOfferController {
     @ApiResponse(
             responseCode = "400",
             description =
-                    "Invalid request, unknown promo code, promotion not applicable, or promotion already applied.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
+                    "Invalid request, unknown promo code, promotion not applicable, or promotion already applied.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ApplyPromotionResponse> applyPromotion(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =

@@ -8,9 +8,11 @@ import com.positivity.price.internal.dto.EligibilityRuleResponse;
 import com.positivity.price.internal.dto.PromotionEligibilityRuleMapper;
 import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.internal.service.EligibilityEvaluationService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -66,9 +68,18 @@ public class PromotionEligibilityRuleController {
                     is missing or invalid.
                     """)
     @ApiResponse(responseCode = "201", description = "Eligibility rule created.")
-    @ApiResponse(responseCode = "400", description = "Invalid eligibility rule request.")
-    @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid eligibility rule request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Promotion offer not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<EligibilityRuleResponse> addRule(
             @PathVariable("promotionId") UUID promotionId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -114,7 +125,10 @@ public class PromotionEligibilityRuleController {
                     matches no offer, so this operation cannot verify that a promotion exists.
                     """)
     @ApiResponse(responseCode = "200", description = "Eligibility rules returned.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<EligibilityRuleResponse>> getRules(@PathVariable("promotionId") UUID promotionId) {
         return ResponseEntity.ok(eligibilityEvaluationService.getRules(promotionId));
     }
@@ -140,8 +154,14 @@ public class PromotionEligibilityRuleController {
                     to a different offer.
                     """)
     @ApiResponse(responseCode = "204", description = "Eligibility rule deleted.")
-    @ApiResponse(responseCode = "404", description = "Promotion offer or rule not found.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Promotion offer or rule not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> deleteRule(
             @PathVariable("promotionId") UUID promotionId, @PathVariable("ruleId") UUID ruleId) {
         eligibilityEvaluationService.deleteRule(promotionId, ruleId);
@@ -173,8 +193,14 @@ public class PromotionEligibilityRuleController {
                     FLEET_SIZE_TOO_SMALL, or VEHICLE_TAG_NOT_PRESENT; 400 occurs only for an unparseable body.
                     """)
     @ApiResponse(responseCode = "200", description = "Eligibility evaluation result returned.")
-    @ApiResponse(responseCode = "400", description = "Invalid evaluation request.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid evaluation request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<EligibilityDecisionResponse> evaluateEligibility(
             @PathVariable("promotionId") UUID promotionId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
