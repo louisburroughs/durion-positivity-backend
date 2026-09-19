@@ -15,6 +15,7 @@ import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.ScheduleCapacityDayStatus;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
+import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.math.BigDecimal;
@@ -68,8 +69,24 @@ class ScheduleCapacityServiceTest {
              {"dayOfWeek":"FRIDAY","openTime":"08:00:00","closeTime":"17:00:00"},
              {"dayOfWeek":"SATURDAY","openTime":"08:00:00","closeTime":"13:00:00"}]""";
 
+    /**
+     * {@link #WEEKDAY_HOURS} with Tuesday's entry malformed (a missing {@code closeTime}), the shape
+     * #2086 reproduces: Tuesday alone fails to assemble and reports {@code UNAVAILABLE}, while every
+     * other weekday is untouched. An unrecognised {@code dayOfWeek} would be a different fact — that
+     * makes the whole location {@code UNAVAILABLE} (#2023 F7) and would not exercise this at all.
+     */
+    private static final String HOURS_WITH_MALFORMED_TUESDAY = """
+            [{"dayOfWeek":"MONDAY","openTime":"08:00:00","closeTime":"17:00:00"},
+             {"dayOfWeek":"TUESDAY","openTime":"08:00:00","closeTime":null},
+             {"dayOfWeek":"WEDNESDAY","openTime":"08:00:00","closeTime":"17:00:00"},
+             {"dayOfWeek":"THURSDAY","openTime":"08:00:00","closeTime":"17:00:00"},
+             {"dayOfWeek":"FRIDAY","openTime":"08:00:00","closeTime":"17:00:00"}]""";
+
     @Autowired
     private ScheduleCapacityService scheduleCapacityService;
+
+    @Autowired
+    private AppointmentRepository appointmentRepository;
 
     @Autowired
     private EntityManager em;
@@ -1827,5 +1844,381 @@ class ScheduleCapacityServiceTest {
                 .as("fetched on, and resolved to, the greatest workOrderId - the same mapping at both sites")
                 .isEqualTo(currentWorkOrderId);
         assertThat(carryOver.getBayHours()).isEqualByComparingTo(new BigDecimal("2.0"));
+    }
+
+    // -------------------------------------------------------------------------
+    // #2086 - a malformed hours entry must not inflate carry-over on later days
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2086 AC1/AC2 - a job finishing on a malformed-hours day carries nothing onto the "
+            + "open days after it, and the malformed day is still UNAVAILABLE")
+    void jobFinishingOnAnUnavailableDayCarriesNothingPastIt() {
+        // The reproduction: open 08:00-17:00 Mon-Fri with TUESDAY's entry malformed, and a job in
+        // Bay 1 whose effective window runs Monday 15:00 -> Tuesday 11:00. Before #2086 pass 1
+        // skipped Tuesday, so lastOverlapDay fell back to Monday, the overrun was measured from
+        // Monday's 17:00 close (1080 minutes) and pass 2 saturated Wednesday and Thursday.
+        UUID locationId = persistLocation(UTC, HOURS_WITH_MALFORMED_TUESDAY, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        Appointment appointment = persistAppointment(
+                locationId, bayId, instant(MONDAY, 15, 0), instant(MONDAY, 17, 0), AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(UUIDv7Generator.generate(), appointment, instant(MONDAY, 15, 0), instant(TUESDAY, 11, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, MONDAY, THURSDAY);
+
+        assertThat(response.getDays())
+                .extracting(ScheduleCapacityResponse.DayCapacityView::getStatus)
+                .containsExactly(
+                        ScheduleCapacityDayStatus.OK,
+                        ScheduleCapacityDayStatus.UNAVAILABLE,
+                        ScheduleCapacityDayStatus.OK,
+                        ScheduleCapacityDayStatus.OK);
+
+        // AC2 - the existing degradation is preserved, not traded away: Monday keeps its own
+        // 120 minutes and Tuesday is still UNAVAILABLE with no bays.
+        ScheduleCapacityResponse.BayCapacityView mondayBay =
+                response.getDays().get(0).getBays().get(0);
+        assertThat(mondayBay.getOccupiedMinutes()).isEqualTo(120);
+        assertThat(response.getDays().get(1).getBays()).isEmpty();
+
+        // AC1 - the days after the unknown one report the bay free, because it is: the job
+        // finished Tuesday morning.
+        ScheduleCapacityResponse.BayCapacityView wednesdayBay =
+                response.getDays().get(2).getBays().get(0);
+        ScheduleCapacityResponse.BayCapacityView thursdayBay =
+                response.getDays().get(3).getBays().get(0);
+        assertThat(wednesdayBay.getOccupiedMinutes())
+                .as("a malformed Tuesday must not book out Wednesday")
+                .isZero();
+        assertThat(wednesdayBay.getOccupancy()).containsOnly(0);
+        assertThat(wednesdayBay.getCarryOverIn()).isEmpty();
+        assertThat(thursdayBay.getOccupiedMinutes())
+                .as("a malformed Tuesday must not book out Thursday either")
+                .isZero();
+        assertThat(thursdayBay.getOccupancy()).containsOnly(0);
+        assertThat(thursdayBay.getCarryOverIn()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2086 AC3 - the same job with Tuesday's hours well-formed is unchanged: the "
+            + "normal path is not disturbed")
+    void sameJobWithWellFormedTuesdayIsUnchanged() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        Appointment appointment = persistAppointment(
+                locationId, bayId, instant(MONDAY, 15, 0), instant(MONDAY, 17, 0), AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(UUIDv7Generator.generate(), appointment, instant(MONDAY, 15, 0), instant(TUESDAY, 11, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, MONDAY, THURSDAY);
+
+        // Tuesday assembles, so the job is reported there by direct overlap (08:00-11:00) and
+        // nothing is carried at all - which is what makes the malformed-Tuesday answer above the
+        // right one: the 1080 minutes were never work, only an artefact of the skipped anchor.
+        assertThat(response.getDays().get(0).getBays().get(0).getOccupiedMinutes())
+                .isEqualTo(120);
+        ScheduleCapacityResponse.BayCapacityView tuesdayBay =
+                response.getDays().get(1).getBays().get(0);
+        assertThat(tuesdayBay.getOccupiedMinutes()).isEqualTo(180);
+        assertThat(tuesdayBay.getCarryOverIn()).hasSize(1);
+        assertThat(tuesdayBay.getCarryOverIn().get(0).getFromDate()).isEqualTo(MONDAY);
+        assertThat(response.getDays().get(2).getBays().get(0).getOccupiedMinutes())
+                .isZero();
+        assertThat(response.getDays().get(3).getBays().get(0).getOccupiedMinutes())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("#2086 AC4 - a job running through the malformed day and out the other side is "
+            + "reported in full on the far side, and its real overrun still carries")
+    void jobRunningThroughAnUnavailableDayIsReportedOnTheFarSide() {
+        // Monday 15:00 -> Wednesday 22:00 with Tuesday malformed. Pass 1 is untouched by the new
+        // rule, so Wednesday is a direct overlap (its whole 540-minute window) and the 300 minutes
+        // past Wednesday's close are a genuine overrun measured from a day that did assemble.
+        UUID locationId = persistLocation(UTC, HOURS_WITH_MALFORMED_TUESDAY, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        Appointment appointment = persistAppointment(
+                locationId, bayId, instant(MONDAY, 15, 0), instant(MONDAY, 17, 0), AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(
+                UUIDv7Generator.generate(), appointment, instant(MONDAY, 15, 0), instant(WEDNESDAY, 22, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, MONDAY, THURSDAY);
+
+        assertThat(response.getDays().get(0).getBays().get(0).getOccupiedMinutes())
+                .isEqualTo(120);
+        assertThat(response.getDays().get(1).getStatus()).isEqualTo(ScheduleCapacityDayStatus.UNAVAILABLE);
+        ScheduleCapacityResponse.BayCapacityView wednesdayBay =
+                response.getDays().get(2).getBays().get(0);
+        assertThat(wednesdayBay.getOccupiedMinutes())
+                .as("the far side of an unknown day is ordinary direct overlap, never declined")
+                .isEqualTo(540);
+        assertThat(wednesdayBay.getOccupancy()).containsOnly(1);
+        ScheduleCapacityResponse.BayCapacityView thursdayBay =
+                response.getDays().get(3).getBays().get(0);
+        assertThat(thursdayBay.getOccupiedMinutes())
+                .as("22:00 is five hours past Wednesday's close, measured from a day that assembled")
+                .isEqualTo(300);
+        assertThat(thursdayBay.getCarryOverIn()).hasSize(1);
+        assertThat(thursdayBay.getCarryOverIn().get(0).getFromDate()).isEqualTo(MONDAY);
+    }
+
+    @Test
+    @DisplayName("#2086 - an UNAVAILABLE day the job had already finished before is skipped like a "
+            + "closure, not treated as having absorbed anything")
+    void unavailableDayAfterTheJobFinishedStillSkipsLikeAClosure() {
+        // The job ends Monday 20:00, three hours past close, and never reaches Tuesday at all.
+        // Tuesday cannot have absorbed time from a job that was already done, so the rule must not
+        // fire: the overrun carries to Wednesday exactly as it did before #2086.
+        UUID locationId = persistLocation(UTC, HOURS_WITH_MALFORMED_TUESDAY, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        Appointment appointment = persistAppointment(
+                locationId, bayId, instant(MONDAY, 15, 0), instant(MONDAY, 17, 0), AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(UUIDv7Generator.generate(), appointment, instant(MONDAY, 15, 0), instant(MONDAY, 20, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, MONDAY, THURSDAY);
+
+        ScheduleCapacityResponse.BayCapacityView wednesdayBay =
+                response.getDays().get(2).getBays().get(0);
+        assertThat(wednesdayBay.getOccupiedMinutes())
+                .as("a closure-like skip, because the job was not running through the unknown day")
+                .isEqualTo(180);
+        assertThat(wednesdayBay.getCarryOverIn()).hasSize(1);
+        assertThat(wednesdayBay.getCarryOverIn().get(0).getFromDate()).isEqualTo(MONDAY);
+        assertThat(response.getDays().get(3).getBays().get(0).getOccupiedMinutes())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("#2086 AC5 - the malformed-day fix is in-memory only: the statement count is "
+            + "unchanged at 3, and 4 with actuals, constant in the number of days")
+    void malformedDayFixDoesNotCostAStatement() {
+        UUID locationId = persistLocation(UTC, HOURS_WITH_MALFORMED_TUESDAY, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        Appointment appointment = persistAppointment(
+                locationId, bayId, instant(MONDAY, 15, 0), instant(MONDAY, 17, 0), AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(UUIDv7Generator.generate(), appointment, instant(MONDAY, 15, 0), instant(TUESDAY, 11, 0));
+        flushAndClear();
+
+        Statistics statistics =
+                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true);
+
+        long queriesForFourDays = measureCapacityStatements(statistics, locationId, MONDAY, THURSDAY);
+        long queriesForFortyTwoDays = measureCapacityStatements(statistics, locationId, MONDAY, MONDAY.plusDays(41));
+
+        assertThat(queriesForFourDays)
+                .as("location replica, active bays, appointments, workorder actuals: four statements")
+                .isEqualTo(4L);
+        assertThat(queriesForFortyTwoDays)
+                .as("constant in the number of days, malformed entries and all")
+                .isEqualTo(queriesForFourDays);
+    }
+
+    // -------------------------------------------------------------------------
+    // #2085 - a job planned after the range that actually started before it ends
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2085 AC1 - a job planned after the range that started early holds its bay on the "
+            + "days it is really occupying, though its planned window is outside the range")
+    void jobPlannedAfterTheRangeThatStartedEarlyHoldsTheBay() {
+        // The reproduction: planned FRIDAY 09:00-11:00 in Bay 1, actually started WEDNESDAY 14:00,
+        // requested Monday..Thursday - a range that does not include Friday. Before #2085 the
+        // planned upper bound was ANDed over both arms, so the row was never fetched and Thursday
+        // reported the bay free all day.
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        Appointment appointment = persistAppointment(
+                locationId, bayId, instant(FRIDAY, 9, 0), instant(FRIDAY, 11, 0), AppointmentStatus.SCHEDULED);
+        UUID workOrderId = UUIDv7Generator.generate();
+        // Still running: #2021 F5 forbids synthesising a finish, so the effective window is the
+        // actual start with the planned end - Wednesday 14:00 -> Friday 11:00.
+        persistWorkorderLink(workOrderId, appointment, instant(WEDNESDAY, 14, 0), null);
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, MONDAY, THURSDAY);
+
+        ScheduleCapacityResponse.BayCapacityView wednesdayBay =
+                response.getDays().get(2).getBays().get(0);
+        assertThat(wednesdayBay.getOccupiedMinutes())
+                .as("14:00 to Wednesday's 17:00 close")
+                .isEqualTo(180);
+        ScheduleCapacityResponse.BayCapacityView thursdayBay =
+                response.getDays().get(3).getBays().get(0);
+        assertThat(thursdayBay.getOccupiedMinutes())
+                .as("the bay has been held since Wednesday afternoon; Thursday is not free")
+                .isEqualTo(540);
+        assertThat(thursdayBay.getOccupancy()).containsOnly(1);
+        assertThat(thursdayBay.getCarryOverIn()).hasSize(1);
+        ScheduleCapacityResponse.CarryOverView carryOver =
+                thursdayBay.getCarryOverIn().get(0);
+        assertThat(carryOver.getFromDate())
+                .as("the date the work began, not the date it was planned for")
+                .isEqualTo(WEDNESDAY);
+        assertThat(carryOver.getWorkorderId()).isEqualTo(workOrderId);
+    }
+
+    @Test
+    @DisplayName("#2085 AC2 - to=Thursday and to=Friday agree about Thursday's free bay-hours")
+    void rangeEndDoesNotChangeTheAnswerForADateInsideBothRanges() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        Appointment appointment = persistAppointment(
+                locationId, bayId, instant(FRIDAY, 9, 0), instant(FRIDAY, 11, 0), AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(UUIDv7Generator.generate(), appointment, instant(WEDNESDAY, 14, 0), null);
+        flushAndClear();
+
+        ScheduleCapacityResponse toThursday = scheduleCapacityService.getCapacity(locationId, MONDAY, THURSDAY);
+        ScheduleCapacityResponse toFriday = scheduleCapacityService.getCapacity(locationId, MONDAY, FRIDAY);
+
+        ScheduleCapacityResponse.BayCapacityView thursdayInShortRange =
+                toThursday.getDays().get(3).getBays().get(0);
+        ScheduleCapacityResponse.BayCapacityView thursdayInLongRange =
+                toFriday.getDays().get(3).getBays().get(0);
+        assertThat(toThursday.getDays().get(3).getDate()).isEqualTo(THURSDAY);
+        assertThat(toFriday.getDays().get(3).getDate()).isEqualTo(THURSDAY);
+        assertThat(thursdayInShortRange.getOccupiedMinutes())
+                .as("where the client stops the range must not change what Thursday reports")
+                .isEqualTo(thursdayInLongRange.getOccupiedMinutes());
+        assertThat(thursdayInShortRange.getOccupancy()).isEqualTo(thursdayInLongRange.getOccupancy());
+        assertThat(thursdayInShortRange.getCarryOverIn())
+                .extracting(
+                        ScheduleCapacityResponse.CarryOverView::getFromDate,
+                        ScheduleCapacityResponse.CarryOverView::getAppointmentId,
+                        ScheduleCapacityResponse.CarryOverView::getBayHours)
+                .isEqualTo(thursdayInLongRange.getCarryOverIn().stream()
+                        .map(view -> tuple(view.getFromDate(), view.getAppointmentId(), view.getBayHours()))
+                        .toList());
+        // Friday itself, visible only to the longer request, is the planned window's own overlap.
+        assertThat(toFriday.getDays().get(4).getBays().get(0).getOccupiedMinutes())
+                .isEqualTo(180);
+    }
+
+    @Test
+    @DisplayName("#2085 AC5 - an appointment planned after the range whose work has not started "
+            + "contributes nothing, whether or not a workorder is linked")
+    void appointmentPlannedAfterTheRangeThatHasNotStartedContributesNothing() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        // No workorder at all - the effective window is the planned one, entirely after the range.
+        persistAppointment(
+                locationId, bayId, instant(FRIDAY, 9, 0), instant(FRIDAY, 11, 0), AppointmentStatus.SCHEDULED);
+        // A workorder that exists but has not started: the actuals arm requires workStartedAt, so
+        // the widened upper bound must not start counting work that has not begun.
+        Appointment notStarted = persistAppointment(
+                locationId, bayId, instant(FRIDAY, 13, 0), instant(FRIDAY, 15, 0), AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(UUIDv7Generator.generate(), notStarted, null, null);
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, MONDAY, THURSDAY);
+
+        assertThat(response.getDays())
+                .extracting(day -> day.getBays().get(0).getOccupiedMinutes())
+                .as("nothing has begun, so no day in the range is occupied")
+                .containsOnly(0);
+        assertThat(response.getDays())
+                .flatExtracting(ScheduleCapacityResponse.DayCapacityView::getBays)
+                .flatExtracting(ScheduleCapacityResponse.BayCapacityView::getCarryOverIn)
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2085 AC4 - the widened upper bound costs no statement: still 3, and 4 with "
+            + "actuals, constant in the number of days")
+    void wideningTheUpperBoundDoesNotCostAStatement() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        Appointment appointment = persistAppointment(
+                locationId, bayId, instant(FRIDAY, 9, 0), instant(FRIDAY, 11, 0), AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(UUIDv7Generator.generate(), appointment, instant(WEDNESDAY, 14, 0), null);
+        flushAndClear();
+
+        Statistics statistics =
+                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true);
+
+        long queriesForFourDays = measureCapacityStatements(statistics, locationId, MONDAY, THURSDAY);
+        long queriesForFortyTwoDays = measureCapacityStatements(statistics, locationId, MONDAY, MONDAY.plusDays(41));
+
+        assertThat(queriesForFourDays)
+                .as("location replica, active bays, appointments, workorder actuals: four statements")
+                .isEqualTo(4L);
+        assertThat(queriesForFortyTwoDays)
+                .as("the disjunction changes which rows come back, never how many statements")
+                .isEqualTo(queriesForFourDays);
+    }
+
+    @Test
+    @DisplayName("#2085 AC6 - the combined lookback and lookahead row volume is measured: the "
+            + "planned arm's 42 days plus the actuals arm's in-progress jobs, and nothing else")
+    void combinedLookbackAndLookaheadRowVolumeIsMeasured() {
+        // Row volume, not statement count, is the cost that moves. This measures it directly off
+        // the query rather than asserting it: the numbers below are what the PR reports.
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+
+        // The lookback: two appointments a day for the 42 days before the range, none of them
+        // linked to a workorder, so only the planned arm can reach them. 84 rows.
+        int lookbackAppointments = 0;
+        for (int day = 1; day <= 42; day++) {
+            LocalDate date = MONDAY.minusDays(day);
+            persistAppointment(
+                    locationId, bayId, instant(date, 9, 0), instant(date, 10, 0), AppointmentStatus.SCHEDULED);
+            persistAppointment(
+                    locationId, bayId, instant(date, 11, 0), instant(date, 12, 0), AppointmentStatus.SCHEDULED);
+            lookbackAppointments += 2;
+        }
+        // One day further back than the lookback reaches: outside the bound, and it must stay out.
+        persistAppointment(
+                locationId,
+                bayId,
+                instant(MONDAY.minusDays(43), 9, 0),
+                instant(MONDAY.minusDays(43), 10, 0),
+                AppointmentStatus.SCHEDULED);
+
+        // The lookahead: three jobs planned well after the range that are actually in progress
+        // inside it. This is the whole set the widened upper bound adds - bounded by how many jobs
+        // a shop can have open at once, not by how far ahead its book runs.
+        int inProgressAfterTheRange = 3;
+        for (int job = 0; job < inProgressAfterTheRange; job++) {
+            LocalDate plannedFor = MONDAY.plusDays(60L + job);
+            Appointment early = persistAppointment(
+                    locationId,
+                    bayId,
+                    instant(plannedFor, 9, 0),
+                    instant(plannedFor, 11, 0),
+                    AppointmentStatus.SCHEDULED);
+            persistWorkorderLink(UUIDv7Generator.generate(), early, instant(WEDNESDAY, 14, 0), null);
+        }
+        // Fifty more planned after the range that have NOT started: the arm must exclude every one,
+        // which is why a day-count lookahead on the planned column would be pure waste (AC5).
+        for (int booking = 0; booking < 50; booking++) {
+            LocalDate plannedFor = MONDAY.plusDays(60L + booking);
+            persistAppointment(
+                    locationId,
+                    bayId,
+                    instant(plannedFor, 14, 0),
+                    instant(plannedFor, 15, 0),
+                    AppointmentStatus.SCHEDULED);
+        }
+        flushAndClear();
+
+        // The same three instants ScheduleCapacityServiceImpl passes for from=MONDAY, to=THURSDAY.
+        List<Appointment> fetched = appointmentRepository.findAppointmentsForCapacity(
+                locationId,
+                THURSDAY.plusDays(1).atStartOfDay(ZoneId.of(UTC)).toInstant(),
+                MONDAY.minusDays(42).atStartOfDay(ZoneId.of(UTC)).toInstant(),
+                MONDAY.atStartOfDay(ZoneId.of(UTC)).toInstant());
+
+        assertThat(fetched)
+                .as("42 lookback days at two appointments each, plus the three jobs in progress")
+                .hasSize(lookbackAppointments + inProgressAfterTheRange);
+        assertThat(fetched)
+                .as("nothing from beyond the lookback, and nothing planned ahead that has not begun")
+                .allSatisfy(appointment ->
+                        assertThat(appointment.getStartAt()).isNotEqualTo(instant(MONDAY.minusDays(43), 9, 0)));
     }
 }
