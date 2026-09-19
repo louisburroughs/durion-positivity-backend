@@ -10,10 +10,14 @@ import com.positivity.shopmanager.PosShopManagerApplication;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
+import com.positivity.shopmanager.internal.entity.ExtWorkorderReplica;
+import com.positivity.shopmanager.internal.entity.WorkOrderAppointmentMapping;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtWorkorderReplicaRepository;
+import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,6 +66,9 @@ class ScheduleCapacityContractBehaviorIT extends BaseContractIntegrationTest {
     /** A Monday, so weekday operating hours below apply without further arithmetic. */
     private static final String MONDAY_DATE = "2026-10-05";
 
+    /** The Tuesday after {@link #MONDAY_DATE}, for the #2050 pre-range carry-over scenario. */
+    private static final String TUESDAY_DATE = "2026-10-06";
+
     private static final String WEEKDAY_HOURS = """
             [{"dayOfWeek":"MONDAY","openTime":"08:00:00","closeTime":"17:00:00"},
              {"dayOfWeek":"TUESDAY","openTime":"08:00:00","closeTime":"17:00:00"},
@@ -81,12 +88,21 @@ class ScheduleCapacityContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private AppointmentRepository appointmentRepository;
 
+    @Autowired
+    private WorkOrderAppointmentMappingRepository workOrderAppointmentMappingRepository;
+
+    @Autowired
+    private ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
+
     // Mocked to prevent context-startup failures; not invoked by capacity operations.
     @MockitoBean
     private com.positivity.shopmanager.internal.service.CrmSnapshotService crmSnapshotService;
 
     @BeforeEach
     void cleanDatabase() {
+        // Mappings first: work_order_appointment_mapping carries the FK onto appointment.
+        workOrderAppointmentMappingRepository.deleteAll();
+        extWorkorderReplicaRepository.deleteAll();
         appointmentRepository.deleteAll();
         extBayReplicaRepository.deleteAll();
         extLocationReplicaRepository.deleteAll();
@@ -235,5 +251,61 @@ class ScheduleCapacityContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.days[0].status").value("CLOSED"))
                 .andExpect(jsonPath("$.days[0].bays").isArray())
                 .andExpect(jsonPath("$.days[0].bays").isEmpty());
+    }
+
+    // ─── SC8: a job planned before the range whose actuals overrun into it (#2050) ──
+
+    @Test
+    @DisplayName("SC8: a job planned before the range whose actuals overrun into it holds the bay on "
+            + "the range's first day, and carryOverIn names the earlier date (#2050 AC1)")
+    void should_return_200_with_carry_over_from_a_job_planned_before_the_range() throws Exception {
+        UUID bayId = UUIDv7Generator.generate();
+        extBayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(bayId)
+                .locationId(LOCATION_ID)
+                .name("Bay 1")
+                .active(true)
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .build());
+        // Planned Monday 15:00-17:00 — entirely before the Tuesday-only range requested below.
+        Appointment appointment = appointmentRepository.save(Appointment.builder()
+                .status(AppointmentStatus.SCHEDULED)
+                .locationId(LOCATION_ID)
+                .resourceId(bayId.toString())
+                .crmCustomerId(CUSTOMER_ID)
+                .crmVehicleId(VEHICLE_ID)
+                .startAt(Instant.parse("2026-10-05T15:00:00Z"))
+                .endAt(Instant.parse("2026-10-05T17:00:00Z"))
+                .build());
+        // ...but actually running from Monday 15:00 until Tuesday 11:00, per the ext_workorder
+        // replica this module reads instead of calling pos-workorder (ADR-0044 §6).
+        WorkOrderAppointmentMapping mapping = workOrderAppointmentMappingRepository.save(
+                WorkOrderAppointmentMapping.builder().appointment(appointment).build());
+        extWorkorderReplicaRepository.save(ExtWorkorderReplica.builder()
+                .workorderId(mapping.getWorkOrderId())
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .workStartedAt(Instant.parse("2026-10-05T15:00:00Z"))
+                .completedAt(Instant.parse("2026-10-06T11:00:00Z"))
+                .build());
+
+        mockMvc.perform(withGatewayAuth(get("/v1/schedules/capacity")
+                        .param("locationId", LOCATION_ID.toString())
+                        .param("from", TUESDAY_DATE)
+                        .param("to", TUESDAY_DATE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.days.length()").value(1))
+                .andExpect(jsonPath("$.days[0].date").value(TUESDAY_DATE))
+                .andExpect(jsonPath("$.days[0].status").value("OK"))
+                // Tuesday 08:00-11:00 is held by Monday's overrun, not free.
+                .andExpect(jsonPath("$.days[0].bays[0].occupiedMinutes").value(180))
+                .andExpect(jsonPath("$.days[0].bays[0].carryOverIn.length()").value(1))
+                .andExpect(jsonPath("$.days[0].bays[0].carryOverIn[0].fromDate").value(MONDAY_DATE))
+                .andExpect(jsonPath("$.days[0].bays[0].carryOverIn[0].appointmentId")
+                        .value(appointment.getAppointmentId().toString()))
+                .andExpect(jsonPath("$.days[0].bays[0].carryOverIn[0].workorderId")
+                        .value(mapping.getWorkOrderId().toString()))
+                .andExpect(jsonPath("$.days[0].bays[0].carryOverIn[0].bayHours").value(3.0));
     }
 }
