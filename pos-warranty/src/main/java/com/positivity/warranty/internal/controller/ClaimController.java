@@ -140,7 +140,10 @@ public class ClaimController {
                     second claim.
                     """)
     @ApiResponse(responseCode = "201", description = "Claim created.")
-    @ApiResponse(responseCode = "400", description = "Invalid request.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_CREATE + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_CREATE", apiVersion = "1")
     @PostMapping
@@ -243,7 +246,10 @@ public class ClaimController {
                     Returns 404 when no claim exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Claim returned.")
-    @ApiResponse(responseCode = "404", description = "Claim not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_VIEW + "')")
     @GetMapping("/{id}")
     public ResponseEntity<ClaimResponse> getClaim(
@@ -269,8 +275,14 @@ public class ClaimController {
                     claim is not DRAFT or INFO_NEEDED.
                     """)
     @ApiResponse(responseCode = "200", description = "Claim updated.")
-    @ApiResponse(responseCode = "404", description = "Claim not found.")
-    @ApiResponse(responseCode = "409", description = "Claim is not editable in its current status.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Claim is not editable in its current status.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_CREATE + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_UPDATE", apiVersion = "1")
     @PutMapping("/{id}")
@@ -309,8 +321,14 @@ public class ClaimController {
                     current status.
                     """)
     @ApiResponse(responseCode = "200", description = "Line added.")
-    @ApiResponse(responseCode = "404", description = "Claim not found.")
-    @ApiResponse(responseCode = "409", description = "Claim is not editable in its current status.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Claim is not editable in its current status.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_CREATE + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_UPDATE", apiVersion = "1")
     @PostMapping("/{id}/lines")
@@ -346,8 +364,14 @@ public class ClaimController {
                     claim is not editable in its current status.
                     """)
     @ApiResponse(responseCode = "200", description = "Line removed.")
-    @ApiResponse(responseCode = "404", description = "Claim or line not found.")
-    @ApiResponse(responseCode = "409", description = "Claim is not editable in its current status.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim or line not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Claim is not editable in its current status.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_CREATE + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_UPDATE", apiVersion = "1")
     @DeleteMapping("/{id}/lines/{lineId}")
@@ -371,8 +395,14 @@ public class ClaimController {
                     current status.
                     """)
     @ApiResponse(responseCode = "200", description = "Photo attached.")
-    @ApiResponse(responseCode = "404", description = "Claim not found.")
-    @ApiResponse(responseCode = "409", description = "Claim is not editable in its current status.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Claim is not editable in its current status.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_CREATE + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_UPDATE", apiVersion = "1")
     @PostMapping("/{id}/photos")
@@ -409,8 +439,14 @@ public class ClaimController {
                     is not editable in its current status.
                     """)
     @ApiResponse(responseCode = "200", description = "Photo detached.")
-    @ApiResponse(responseCode = "404", description = "Claim or photo not found.")
-    @ApiResponse(responseCode = "409", description = "Claim is not editable in its current status.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim or photo not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Claim is not editable in its current status.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_CREATE + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_UPDATE", apiVersion = "1")
     @DeleteMapping("/{id}/photos")
@@ -442,9 +478,16 @@ public class ClaimController {
     @ApiResponse(
             responseCode = "422",
             description = "Intake incomplete: no claim line (WARRANTY_CLAIM_MISSING_LINES) or the winning policy"
-                    + " requires photo evidence that is missing (WARRANTY_CLAIM_PHOTO_EVIDENCE_REQUIRED).")
-    @ApiResponse(responseCode = "404", description = "Claim not found.")
-    @ApiResponse(responseCode = "409", description = "Illegal transition; nextAction lists legal moves.")
+                    + " requires photo evidence that is missing (WARRANTY_CLAIM_PHOTO_EVIDENCE_REQUIRED).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Illegal transition; nextAction lists legal moves.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_SUBMIT + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_SUBMIT", apiVersion = "1")
     @PostMapping("/{id}/submit")
@@ -469,8 +512,14 @@ public class ClaimController {
                     terminal.
                     """)
     @ApiResponse(responseCode = "200", description = "Eligibility recomputed.")
-    @ApiResponse(responseCode = "404", description = "Claim not found.")
-    @ApiResponse(responseCode = "409", description = "Claim already decided or terminal.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Claim already decided or terminal.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_VIEW + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_UPDATE", apiVersion = "1")
     @PostMapping("/{id}/eligibility")
@@ -500,9 +549,18 @@ public class ClaimController {
                     status does not allow the move (nextAction lists the legal moves).
                     """)
     @ApiResponse(responseCode = "200", description = "Decision applied.")
-    @ApiResponse(responseCode = "400", description = "Missing required reason.")
-    @ApiResponse(responseCode = "404", description = "Claim not found.")
-    @ApiResponse(responseCode = "409", description = "Illegal transition; nextAction lists legal moves.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing required reason.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Illegal transition; nextAction lists legal moves.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_DECIDE + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_DECIDE", apiVersion = "1")
     @PostMapping("/{id}/decision")
@@ -541,8 +599,14 @@ public class ClaimController {
                     cancellation (nextAction lists the legal moves).
                     """)
     @ApiResponse(responseCode = "200", description = "Claim cancelled.")
-    @ApiResponse(responseCode = "404", description = "Claim not found.")
-    @ApiResponse(responseCode = "409", description = "Illegal transition; nextAction lists legal moves.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Illegal transition; nextAction lists legal moves.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_CANCEL + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_CANCEL", apiVersion = "1")
     @PostMapping("/{id}/cancel")
@@ -581,8 +645,14 @@ public class ClaimController {
                     resolve).
                     """)
     @ApiResponse(responseCode = "200", description = "Claim closed.")
-    @ApiResponse(responseCode = "404", description = "Claim not found.")
-    @ApiResponse(responseCode = "409", description = "Illegal transition or open child records; see nextAction.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Illegal transition or open child records; see nextAction.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_CLOSE + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_CLOSE", apiVersion = "1")
     @PostMapping("/{id}/close")
@@ -616,7 +686,10 @@ public class ClaimController {
                     exist.
                     """)
     @ApiResponse(responseCode = "201", description = "Note appended.")
-    @ApiResponse(responseCode = "404", description = "Claim not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_CREATE + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_UPDATE", apiVersion = "1")
     @PostMapping("/{id}/notes")
