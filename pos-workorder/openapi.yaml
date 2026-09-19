@@ -199,7 +199,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApprovalConfigurationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: No configuration found (default will be used).
       security:
       - bearerAuth:
@@ -238,6 +238,10 @@ paths:
         '204':
           description: Configuration deleted successfully.
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Configuration not found.
       security:
       - bearerAuth:
@@ -282,7 +286,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApprovalConfigurationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Configuration not found.
       security:
       - bearerAuth:
@@ -349,7 +353,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApprovalConfigurationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Configuration not found.
       security:
       - bearerAuth:
@@ -564,7 +568,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request parameters
         '403':
           content:
@@ -648,19 +652,19 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '404':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Related resource not found
         '409':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Conflict while recording labor
       security:
       - bearerAuth:
@@ -699,7 +703,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Missing or invalid authenticated user id
       security:
       - bearerAuth:
@@ -764,25 +768,25 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Missing or invalid authenticated user id, or missing reason
         '403':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Attributing labor to another technician without workorder:labor:add_on_behalf
         '404':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Referenced resource not found
         '409':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Conflict while starting timer
       security:
       - bearerAuth:
@@ -821,13 +825,13 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Missing or invalid authenticated user id
         '409':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Conflict while stopping timers
       security:
       - bearerAuth:
@@ -1089,13 +1093,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OpenWorkordersByCustomerResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OpenWorkordersByCustomerResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing workorder:analytics:view
       security:
       - bearerAuth:
@@ -1179,13 +1183,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReopenedWorkorderAnalyticsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReopenedWorkorderAnalyticsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing workorder:analytics:view
       security:
       - bearerAuth:
@@ -1257,13 +1261,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TechnicianLaborAnalyticsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TechnicianLaborAnalyticsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing workorder:analytics:view
       security:
       - bearerAuth:
@@ -1309,7 +1313,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChangeRequestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Change request not found
       security:
       - bearerAuth:
@@ -1348,8 +1352,16 @@ paths:
         '204':
           description: Acknowledgment recorded successfully
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Not an emergency request or invalid state
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Change request not found
       security:
       - bearerAuth: []
@@ -1407,13 +1419,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChangeRequestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Cannot approve - invalid state or missing approval note
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChangeRequestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Change request not found
       security:
       - bearerAuth:
@@ -1471,13 +1483,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChangeRequestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Cannot decline - invalid state or missing note
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChangeRequestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Change request not found
       security:
       - bearerAuth:
@@ -1536,19 +1548,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChangeRequestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Cannot apply override - invalid state or missing reason
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChangeRequestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions - Manager role required
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChangeRequestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Change request not found
       security:
       - bearerAuth:
@@ -1700,25 +1712,25 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - missing required fields.
         '403':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - user does not have ESTIMATE_CREATE permission.
         '409':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Conflict - estimate could not be created due to state or integrity constraints.
         '500':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Internal server error - unexpected estimate creation failure.
       security:
       - bearerAuth:
@@ -1822,13 +1834,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreateEstimateFromAppointmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Missing or invalid required fields
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreateEstimateFromAppointmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthenticated
         '403':
           content:
@@ -1968,6 +1980,10 @@ paths:
         '204':
           description: Estimate deleted successfully.
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Estimate not found.
       security:
       - bearerAuth:
@@ -2018,7 +2034,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Estimate not found.
       security:
       - bearerAuth:
@@ -2073,7 +2089,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Estimate patch request is invalid
         '404':
           content:
@@ -2085,7 +2101,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Estimate transition is not allowed
       security:
       - bearerAuth:
@@ -2212,13 +2228,13 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Estimate not found
         '409':
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Estimate not in DRAFT status (INVALID_STATE)
       security:
       - bearerAuth:
@@ -2271,13 +2287,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Estimate cannot be declined in current state.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Estimate not found.
       security:
       - bearerAuth:
@@ -2339,7 +2355,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateItemResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Validation error or invalid request
         '404':
           content:
@@ -2351,13 +2367,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateItemResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Estimate not in DRAFT status (INVALID_STATE)
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateItemResponse'
+                $ref: '#/components/schemas/ApiError'
           description: uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the converted quantity exceeds the product's declared decimal scale (FRACTIONAL_QUANTITY_NOT_ALLOWED)
       security:
       - bearerAuth:
@@ -2404,8 +2420,16 @@ paths:
         '204':
           description: Line item removed successfully
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Estimate or item not found
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Estimate not in DRAFT status (INVALID_STATE)
       security:
       - bearerAuth:
@@ -2473,7 +2497,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateItemResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Validation error or invalid request
         '404':
           content:
@@ -2485,13 +2509,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateItemResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Estimate not in DRAFT status (INVALID_STATE)
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateItemResponse'
+                $ref: '#/components/schemas/ApiError'
           description: uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the converted quantity exceeds the product's declared decimal scale (FRACTIONAL_QUANTITY_NOT_ALLOWED)
       security:
       - bearerAuth:
@@ -2544,15 +2568,13 @@ paths:
           content:
             application/pdf:
               schema:
-                format: byte
-                type: string
+                $ref: '#/components/schemas/ApiError'
           description: Estimate not found
         '502':
           content:
             application/pdf:
               schema:
-                format: byte
-                type: string
+                $ref: '#/components/schemas/ApiError'
           description: Document service unavailable
       security:
       - bearerAuth:
@@ -2665,13 +2687,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Estimate cannot be reopened (not declined or expired).
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Estimate not found.
       security:
       - bearerAuth:
@@ -2840,7 +2862,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateSummaryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Estimate not found
       security:
       - bearerAuth:
@@ -3084,7 +3106,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageWorkorderSearchResult'
+                $ref: '#/components/schemas/ApiError'
           description: status is not a valid WorkorderStatus value.
       security:
       - bearerAuth:
@@ -3193,13 +3215,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderStatusTransitionsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Unauthorized
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderStatusTransitionsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - missing workorder:analytics:view
       security:
       - bearerAuth:
@@ -3453,7 +3475,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkSessionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - missing required fields or work order not found
         '403':
           content:
@@ -3518,13 +3540,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BreakSegmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - work session not active or validation failed
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BreakSegmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work session not found
       security:
       - bearerAuth:
@@ -3578,13 +3600,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BreakSegmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Break segment not active or work session invalid
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BreakSegmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work session or break segment not found
       security:
       - bearerAuth:
@@ -3642,13 +3664,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkSessionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - work session not active or validation failed
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkSessionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work session not found
       security:
       - bearerAuth:
@@ -3729,7 +3751,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work order not found.
       security:
       - bearerAuth:
@@ -3954,13 +3976,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChangeRequestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request - missing description, no items, or validation failed
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChangeRequestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work order not found
       security:
       - bearerAuth:
@@ -4018,13 +4040,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompleteWorkorderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid state transition or work order already completed.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompleteWorkorderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work order not found.
       security:
       - bearerAuth:
@@ -4070,7 +4092,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompletionPreconditionsResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work order not found.
       security:
       - bearerAuth:
@@ -4116,7 +4138,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderDetailResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
       security:
       - bearerAuth: []
@@ -4328,13 +4350,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvoiceGenerationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work order not found.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvoiceGenerationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work order is not in COMPLETED state.
       security:
       - bearerAuth:
@@ -4382,9 +4404,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/WorkorderLaborEntryResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Permission denied
       security:
       - bearerAuth:
@@ -4458,13 +4478,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid hours value
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Permission denied
         '404':
           content:
@@ -4531,19 +4551,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Session already stopped
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Permission denied
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Labor entry not found
       security:
       - bearerAuth:
@@ -4685,7 +4705,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationalContextResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
       security:
       - bearerAuth: []
@@ -4752,13 +4772,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationalContextResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationalContextResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Context locked (work started)
       security:
       - bearerAuth:
@@ -4812,9 +4832,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Workorder or part not found
       security:
       - bearerAuth:
@@ -4882,7 +4900,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder or part not found
         '409':
           content:
@@ -4894,7 +4912,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the converted quantity exceeds the product's declared decimal scale (FRACTIONAL_QUANTITY_NOT_ALLOWED)
       security:
       - bearerAuth:
@@ -4964,7 +4982,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder or part not found
         '409':
           content:
@@ -4976,7 +4994,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the converted quantity exceeds the product's declared decimal scale (FRACTIONAL_QUANTITY_NOT_ALLOWED)
       security:
       - bearerAuth:
@@ -5038,25 +5056,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request (negative quantity, etc.)
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder or part not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Idempotency conflict (duplicate key)
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the converted quantity exceeds the product's declared decimal scale (FRACTIONAL_QUANTITY_NOT_ALLOWED)
       security:
       - bearerAuth:
@@ -5124,7 +5142,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder or part not found
         '409':
           content:
@@ -5136,7 +5154,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the converted quantity exceeds the product's declared decimal scale (FRACTIONAL_QUANTITY_NOT_ALLOWED)
       security:
       - bearerAuth:
@@ -5206,7 +5224,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder or part not found
         '409':
           content:
@@ -5282,7 +5300,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder or part not found
         '409':
           content:
@@ -5342,9 +5360,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Workorder or part not found
       security:
       - bearerAuth:
@@ -5396,13 +5412,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderItemCompletionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Item not completable in its current status.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderItemCompletionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder or part not found.
       security:
       - bearerAuth:
@@ -5933,7 +5949,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePositionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
         '409':
           content:
@@ -5984,7 +6000,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePositionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
       security:
       - bearerAuth:
@@ -6056,7 +6072,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePositionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
         '409':
           content:
@@ -6126,13 +6142,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReopenWorkorderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder cannot be reopened or reason missing.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReopenWorkorderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work order not found.
       security:
       - bearerAuth:
@@ -6212,19 +6228,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid state - active session exists or invalid status
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Permission denied
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder or service not found
       security:
       - bearerAuth:
@@ -6276,13 +6292,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderItemCompletionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Item not completable in its current status.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderItemCompletionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder or service line not found.
       security:
       - bearerAuth:
@@ -6379,19 +6395,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderStartResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Cannot start workorder due to pending change requests
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderStartResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderStartResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work already started, or the workorder is not ASSIGNED — an APPROVED workorder is missing a technician, a bay or mobile unit, or both, and the message names which
       security:
       - bearerAuth:
@@ -6487,8 +6503,16 @@ paths:
         '204':
           description: Technician released, or none was assigned
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Permission denied
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
         '409':
           content:
@@ -6539,7 +6563,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found or no assignment exists
       security:
       - bearerAuth:
@@ -6605,19 +6629,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid state transition
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Permission denied
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
         '409':
           content:
@@ -6696,19 +6720,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid state transition
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Permission denied
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TechnicianAssignmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
         '409':
           content:
