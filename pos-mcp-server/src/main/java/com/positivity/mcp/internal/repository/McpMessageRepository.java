@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -79,14 +80,14 @@ public interface McpMessageRepository extends JpaRepository<McpMessage, UUID> {
                             where c.id = m.conversationId and c.ownerUserId = :ownerUserId)
             """)
     int updateOwnedFeedback(
-            @Param("conversationId") UUID conversationId,
-            @Param("messageId") UUID messageId,
-            @Param("ownerUserId") UUID ownerUserId,
-            @Param("role") ConversationMessageRole role,
-            @Param("origin") ConversationMessageOrigin origin,
+            @Param("conversationId") @NonNull UUID conversationId,
+            @Param("messageId") @NonNull UUID messageId,
+            @Param("ownerUserId") @NonNull UUID ownerUserId,
+            @Param("role") @NonNull ConversationMessageRole role,
+            @Param("origin") @NonNull ConversationMessageOrigin origin,
             @Param("rating") @Nullable String rating,
             @Param("reason") @Nullable String reason,
             @Param("comment") @Nullable String comment,
             @Param("ratedAt") @Nullable OffsetDateTime ratedAt,
-            @Param("now") OffsetDateTime now);
+            @Param("now") @NonNull OffsetDateTime now);
 }

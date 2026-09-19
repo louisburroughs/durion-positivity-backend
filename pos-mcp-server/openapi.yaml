@@ -2377,6 +2377,9 @@ components:
           type:
           - string
           - 'null'
+      required:
+      - ratedAt
+      - rating
       type: object
     MessageFeedbackRequest:
       description: The caller's rating of one assistant answer. A repeat POST replaces it.

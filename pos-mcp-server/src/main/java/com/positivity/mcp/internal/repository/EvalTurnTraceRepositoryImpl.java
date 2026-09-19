@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.repository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.domain.EvalTurnTrace;
+import com.positivity.tenancy.TenantAudited;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -18,6 +19,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 @Profile("alpha")
 @ConditionalOnProperty(name = "mcp.eval.turn-trace.enabled", havingValue = "true")
+@TenantAudited(
+        reason = "mcp_eval_turn_trace is read and written through the bound connection only; every"
+                + " statement leaves tenant_id to row-level security and the column default")
 public class EvalTurnTraceRepositoryImpl implements EvalTurnTraceRepository {
 
     private final JdbcTemplate jdbcTemplate;

@@ -262,6 +262,7 @@ FROM mcp_message m
 LEFT JOIN LATERAL (
     SELECT u.content FROM mcp_message u
     WHERE u.tenant_id = m.tenant_id AND u.conversation_id = m.conversation_id AND u.role = 'user'
+      AND u.origin = 'CHAT'
       AND (u.created_at, u.id) < (m.created_at, m.id)
     ORDER BY u.created_at DESC, u.id DESC LIMIT 1) q ON true
 LEFT JOIN mcp_eval_turn_trace t ON t.tenant_id = m.tenant_id AND t.message_id = m.id

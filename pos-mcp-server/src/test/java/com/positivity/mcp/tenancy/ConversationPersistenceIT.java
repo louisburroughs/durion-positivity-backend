@@ -975,6 +975,41 @@ class ConversationPersistenceIT extends PostgresTenancyTestBase {
     }
 
     @Test
+    @DisplayName("gradingQuery: a CLIENT-origin user message appended after a rated turn is not picked up as "
+            + "the question")
+    void gradingQuery_clientOriginUserMessageAppendedAfter_questionStaysTheChatQuestion() {
+        asTenant(TENANT_A, (Runnable) () -> {
+            UUID owner = UUID.randomUUID();
+            authenticateAs(owner);
+            UUID assistantMessageId = recordSimpleTurn(owner);
+            UUID conversationId = currentConversationId();
+            conversationStore.setFeedback(conversationId, assistantMessageId, owner, "helpful", null, null);
+
+            // A caller can append their own turns to the history (#2073); a CLIENT-origin user row
+            // sorts after the rated answer but must never be picked up by the LATERAL lookup as "the"
+            // question — only a CHAT-origin user row the server itself exchanged with the model can be.
+            conversationService.appendMessage(
+                    conversationId,
+                    new AppendMessageRequest(
+                            "user", List.of(new ChatBlock.TextBlock("imported follow-up question")), null));
+
+            org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate namedJdbc =
+                    new org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate(dataSource);
+            List<Map<String, Object>> rows = namedJdbc.queryForList(
+                    GRADING_QUERY, Map.of("since", OffsetDateTime.now().minusDays(1)));
+
+            Map<String, Object> row = rows.stream()
+                    .filter(candidate -> assistantMessageId.equals(candidate.get("message_id")))
+                    .findFirst()
+                    .orElseThrow(
+                            () -> new AssertionError("no grading row for assistant message " + assistantMessageId));
+            assertThat(row.get("question"))
+                    .as("the chat question, not the later CLIENT-origin import")
+                    .isEqualTo("how many mechanics do we have");
+        });
+    }
+
+    @Test
     @DisplayName("deleting the conversation removes the rated message (feedback gone with it)")
     void conversationDelete_ratedMessageGoneWithIt() {
         asTenant(TENANT_A, (Runnable) () -> {
@@ -1081,6 +1116,7 @@ class ConversationPersistenceIT extends PostgresTenancyTestBase {
             LEFT JOIN LATERAL (
                 SELECT u.content FROM mcp_message u
                 WHERE u.tenant_id = m.tenant_id AND u.conversation_id = m.conversation_id AND u.role = 'user'
+                  AND u.origin = 'CHAT'
                   AND (u.created_at, u.id) < (m.created_at, m.id)
                 ORDER BY u.created_at DESC, u.id DESC LIMIT 1) q ON true
             LEFT JOIN mcp_eval_turn_trace t ON t.tenant_id = m.tenant_id AND t.message_id = m.id
