@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.warranty.internal.dto.ReimbursementResponse;
 import com.positivity.warranty.internal.dto.ReimbursementSubmitRequest;
 import com.positivity.warranty.internal.dto.ReimbursementUpdateRequest;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -66,8 +68,14 @@ public class ReimbursementController {
                     reimbursement was already submitted (including a concurrent submit).
                     """)
     @ApiResponse(responseCode = "200", description = "Reimbursement submitted.")
-    @ApiResponse(responseCode = "404", description = "Claim or provider not found.")
-    @ApiResponse(responseCode = "409", description = "Claim state or reimbursement state does not allow submission.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim or provider not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Claim state or reimbursement state does not allow submission.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.REIMBURSEMENT_MANAGE + "')")
     @EmitEvent(id = "WARRANTY_REIMBURSEMENT_SUBMIT", apiVersion = "1")
     @PostMapping("/claims/{id}/reimbursement/submit")
@@ -115,9 +123,16 @@ public class ReimbursementController {
     @ApiResponse(responseCode = "200", description = "Reimbursement updated.")
     @ApiResponse(
             responseCode = "400",
-            description = "Target status outside the updatable set, or amountApproved missing when required.")
-    @ApiResponse(responseCode = "404", description = "Claim or reimbursement not found.")
-    @ApiResponse(responseCode = "409", description = "Illegal reimbursement transition.")
+            description = "Target status outside the updatable set, or amountApproved missing when required.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim or reimbursement not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Illegal reimbursement transition.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.REIMBURSEMENT_MANAGE + "')")
     @EmitEvent(id = "WARRANTY_REIMBURSEMENT_UPDATE", apiVersion = "1")
     @PutMapping("/claims/{id}/reimbursement")

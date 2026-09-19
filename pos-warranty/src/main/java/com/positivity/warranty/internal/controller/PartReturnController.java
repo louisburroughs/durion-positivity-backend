@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.warranty.internal.dto.PartReturnCreateRequest;
 import com.positivity.warranty.internal.dto.PartReturnResponse;
 import com.positivity.warranty.internal.dto.PartReturnUpdateRequest;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -66,8 +68,14 @@ public class PartReturnController {
                     part return or the claim is terminal.
                     """)
     @ApiResponse(responseCode = "201", description = "Part return created.")
-    @ApiResponse(responseCode = "404", description = "Claim or claim line not found.")
-    @ApiResponse(responseCode = "409", description = "Line already has a part return, or claim is terminal.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Claim or claim line not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Line already has a part return, or claim is terminal.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.PART_RETURN_MANAGE + "')")
     @EmitEvent(id = "WARRANTY_PART_RETURN_CREATE", apiVersion = "1")
     @PostMapping("/claims/{id}/part-returns")
@@ -110,8 +118,14 @@ public class PartReturnController {
                     disposition does not permit the target status, or the return is already terminal.
                     """)
     @ApiResponse(responseCode = "200", description = "Part return updated.")
-    @ApiResponse(responseCode = "404", description = "Part return not found.")
-    @ApiResponse(responseCode = "409", description = "Illegal part-return transition.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Part return not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Illegal part-return transition.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.PART_RETURN_MANAGE + "')")
     @EmitEvent(id = "WARRANTY_PART_RETURN_UPDATE", apiVersion = "1")
     @PutMapping("/part-returns/{id}")

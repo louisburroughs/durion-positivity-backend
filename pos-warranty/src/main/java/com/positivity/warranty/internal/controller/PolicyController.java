@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.warranty.internal.dto.PolicyRequest;
 import com.positivity.warranty.internal.dto.PolicyResponse;
 import com.positivity.warranty.internal.enums.CoverageType;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -99,7 +101,10 @@ public class PolicyController {
                     saleDate is missing or malformed.
                     """)
     @ApiResponse(responseCode = "200", description = "Matching policies returned, most specific first.")
-    @ApiResponse(responseCode = "400", description = "Missing or invalid parameters.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or invalid parameters.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.POLICY_VIEW + "')")
     @GetMapping("/applicable")
     public ResponseEntity<List<PolicyResponse>> findApplicablePolicies(
@@ -131,7 +136,10 @@ public class PolicyController {
                     Returns 404 when no policy exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Policy returned.")
-    @ApiResponse(responseCode = "404", description = "Policy not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Policy not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.POLICY_VIEW + "')")
     @GetMapping("/{id}")
     public ResponseEntity<PolicyResponse> getPolicy(
@@ -158,8 +166,14 @@ public class PolicyController {
                     keys or the effective window are inconsistent.
                     """)
     @ApiResponse(responseCode = "201", description = "Policy created.")
-    @ApiResponse(responseCode = "400", description = "Invalid request.")
-    @ApiResponse(responseCode = "404", description = "Referenced provider not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Referenced provider not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.POLICY_MANAGE + "')")
     @EmitEvent(id = "WARRANTY_POLICY_CREATE", apiVersion = "1")
     @PostMapping
@@ -197,8 +211,14 @@ public class PolicyController {
                     appliesTo scope keys or the effective window are inconsistent.
                     """)
     @ApiResponse(responseCode = "200", description = "Policy updated.")
-    @ApiResponse(responseCode = "400", description = "Invalid request.")
-    @ApiResponse(responseCode = "404", description = "Policy or referenced provider not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Policy or referenced provider not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.POLICY_MANAGE + "')")
     @EmitEvent(id = "WARRANTY_POLICY_UPDATE", apiVersion = "1")
     @PutMapping("/{id}")
