@@ -2560,19 +2560,19 @@ paths:
           description: PDF generated successfully
         '403':
           content:
-            application/pdf:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
-            application/pdf:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Estimate not found
         '502':
           content:
-            application/pdf:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Document service unavailable
@@ -4608,6 +4608,10 @@ paths:
                 type: array
           description: Notes retrieved
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
       security:
       - bearerAuth:
@@ -4662,6 +4666,10 @@ paths:
                 $ref: '#/components/schemas/WorkorderNoteResponse'
           description: Note recorded
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
       security:
       - bearerAuth:
