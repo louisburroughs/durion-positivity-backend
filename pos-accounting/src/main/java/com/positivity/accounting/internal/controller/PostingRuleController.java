@@ -75,8 +75,14 @@ public class PostingRuleController {
                     """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule sets listed")
-    @ApiResponse(responseCode = "400", description = "Unsupported sort property or direction")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Unsupported sort property or direction",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_POSTING_RULE_LIST", apiVersion = "1")
     public ResponseEntity<PostingRuleSetListResponse> listPostingRuleSets(
             @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
@@ -148,7 +154,10 @@ public class PostingRuleController {
                     """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "201", description = "Posting rule set created")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_POSTING_RULE_CREATE", apiVersion = "1")
     public ResponseEntity<PostingRuleSetResponse> createPostingRuleSet(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -241,7 +250,10 @@ public class PostingRuleController {
             responseCode = "404",
             description = "No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "409", description = "Cannot modify published rule set")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Cannot modify published rule set",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_POSTING_RULE_UPDATE", apiVersion = "1")
     public ResponseEntity<PostingRuleSetResponse> updatePostingRuleSet(
             @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,

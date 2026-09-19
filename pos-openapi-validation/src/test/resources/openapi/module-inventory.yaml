@@ -2,6 +2,7 @@ modules:
   pos-accounting:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-order:
     mode: STRICT
     annotationDepth: STRICT

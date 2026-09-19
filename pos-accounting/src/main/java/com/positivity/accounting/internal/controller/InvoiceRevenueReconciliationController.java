@@ -5,9 +5,11 @@ import com.positivity.accounting.internal.dto.InvoiceRevenueReconcileResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.InvoiceRevenueReconciliationService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -63,8 +65,14 @@ public class InvoiceRevenueReconciliationController {
                     """,
             tags = {"Accounting GL"})
     @ApiResponse(responseCode = "200", description = "Reconciliation run completed; see per-invoice outcomes")
-    @ApiResponse(responseCode = "400", description = "Invalid bounds (limit outside 1-5000)")
-    @ApiResponse(responseCode = "403", description = "Caller lacks accounting:gl:reconcile")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid bounds (limit outside 1-5000)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks accounting:gl:reconcile",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_INVOICE_REVENUE_RECONCILE", apiVersion = "1")
     public ResponseEntity<InvoiceRevenueReconcileResponse> reconcile(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

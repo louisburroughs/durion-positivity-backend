@@ -11,10 +11,12 @@ import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.EventIngestionService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -85,7 +87,10 @@ public class EventIngestionController {
                     """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "200", description = "Events listed")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_EVENT_LIST", apiVersion = "1")
     public ResponseEntity<Page<AccountingEventResponse>> listAccountingEvents(
             @Parameter(description = "Filter by event type") @RequestParam(required = false) String eventType,
@@ -159,7 +164,10 @@ public class EventIngestionController {
                     """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "200", description = "Event returned")
-    @ApiResponse(responseCode = "404", description = "Event not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Event not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AccountingEventResponse> getEvent(
             @Parameter(description = "Event identifier") @PathVariable UUID eventId) {
         log.debug("Getting accounting event: {}", eventId);
@@ -193,7 +201,10 @@ public class EventIngestionController {
                     """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "202", description = "Event accepted for processing")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_EVENT_SUBMIT", apiVersion = "1")
     public ResponseEntity<AccountingEventResponse> submitEvent(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -239,7 +250,10 @@ public class EventIngestionController {
                     """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "202", description = "Retry requested")
-    @ApiResponse(responseCode = "404", description = "Event not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Event not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_EVENT_RETRY", apiVersion = "1")
     public ResponseEntity<AccountingEventResponse> retryEventProcessing(
             @Parameter(description = "Event identifier") @PathVariable UUID eventId,
@@ -281,9 +295,18 @@ public class EventIngestionController {
                     """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "202", description = "Reprocessing accepted")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "404", description = "Event not found")
-    @ApiResponse(responseCode = "409", description = "Event already PROCESSED (idempotency violation)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Event not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Event already PROCESSED (idempotency violation)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_EVENT_REPROCESS", apiVersion = "1")
     public ResponseEntity<AccountingEventResponse> reprocessSuspendedEvent(
             @Parameter(description = "Event identifier") @PathVariable UUID eventId,
@@ -381,7 +404,10 @@ public class EventIngestionController {
                     """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "200", description = "Contract returned")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<EventEnvelopeContract> getEventContract() {
         EventEnvelopeContract contract = eventIngestionService.getEventContract();
         return ResponseEntity.ok(contract);

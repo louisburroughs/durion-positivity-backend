@@ -78,12 +78,22 @@ public class AuditTrailController {
                                 @Content(
                                         mediaType = "application/json",
                                         schema = @Schema(implementation = AuditTrailResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid request parameters",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
-                        description = "Authorization denied - insufficient privileges for override amount"),
-                @ApiResponse(responseCode = "422", description = "Policy validation failed"),
-                @ApiResponse(responseCode = "500", description = "Internal server error")
+                        description = "Authorization denied - insufficient privileges for override amount",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "422",
+                        description = "Policy validation failed",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "500",
+                        description = "Internal server error",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/price-override")
     @EmitEvent(id = "ACCOUNTING_AUDIT_PRICE_OVERRIDE", apiVersion = "1")
@@ -155,12 +165,22 @@ public class AuditTrailController {
                                 @Content(
                                         mediaType = "application/json",
                                         schema = @Schema(implementation = AuditTrailResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid request parameters",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
-                        description = "Authorization denied - separate authorization required"),
-                @ApiResponse(responseCode = "422", description = "Refund policy validation failed"),
-                @ApiResponse(responseCode = "500", description = "Internal server error")
+                        description = "Authorization denied - separate authorization required",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "422",
+                        description = "Refund policy validation failed",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "500",
+                        description = "Internal server error",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/refund")
     @EmitEvent(id = "ACCOUNTING_AUDIT_REFUND", apiVersion = "1")
@@ -230,9 +250,18 @@ public class AuditTrailController {
                                 @Content(
                                         mediaType = "application/json",
                                         schema = @Schema(implementation = AuditTrailResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
-                @ApiResponse(responseCode = "404", description = "Source document not found"),
-                @ApiResponse(responseCode = "500", description = "Internal server error")
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid request parameters",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Source document not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "500",
+                        description = "Internal server error",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/cancellation")
     @EmitEvent(id = "ACCOUNTING_AUDIT_CANCELLATION", apiVersion = "1")
@@ -297,8 +326,14 @@ public class AuditTrailController {
                                         array =
                                                 @ArraySchema(
                                                         schema = @Schema(implementation = AuditTrailResponse.class)))),
-                @ApiResponse(responseCode = "404", description = "Order not found"),
-                @ApiResponse(responseCode = "500", description = "Internal server error")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Order not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "500",
+                        description = "Internal server error",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping({"/order/{orderId}", "/by-order/{orderId}"})
     @SecurityRequirement(
@@ -337,8 +372,14 @@ public class AuditTrailController {
                                         array =
                                                 @ArraySchema(
                                                         schema = @Schema(implementation = AuditTrailResponse.class)))),
-                @ApiResponse(responseCode = "404", description = "Invoice not found"),
-                @ApiResponse(responseCode = "500", description = "Internal server error")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Invoice not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "500",
+                        description = "Internal server error",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/invoice/{invoiceId}")
     @SecurityRequirement(
@@ -378,8 +419,14 @@ public class AuditTrailController {
                                         array =
                                                 @ArraySchema(
                                                         schema = @Schema(implementation = AuditTrailResponse.class)))),
-                @ApiResponse(responseCode = "400", description = "Invalid date range or exception type"),
-                @ApiResponse(responseCode = "500", description = "Internal server error")
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid date range or exception type",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "500",
+                        description = "Internal server error",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/type/{type}")
     @SecurityRequirement(
@@ -425,9 +472,18 @@ public class AuditTrailController {
                                         array =
                                                 @ArraySchema(
                                                         schema = @Schema(implementation = AuditTrailResponse.class)))),
-                @ApiResponse(responseCode = "400", description = "Invalid date range or actor ID"),
-                @ApiResponse(responseCode = "404", description = "Actor not found"),
-                @ApiResponse(responseCode = "500", description = "Internal server error")
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid date range or actor ID",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Actor not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "500",
+                        description = "Internal server error",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/actor/{actorId}")
     @SecurityRequirement(
@@ -472,8 +528,14 @@ public class AuditTrailController {
                                         array =
                                                 @ArraySchema(
                                                         schema = @Schema(implementation = AuditTrailResponse.class)))),
-                @ApiResponse(responseCode = "400", description = "Invalid date range"),
-                @ApiResponse(responseCode = "500", description = "Internal server error")
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid date range",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "500",
+                        description = "Internal server error",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/range")
     @SecurityRequirement(

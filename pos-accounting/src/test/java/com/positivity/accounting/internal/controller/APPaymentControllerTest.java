@@ -46,8 +46,12 @@ class APPaymentControllerTest extends BaseIntegrationTest {
             mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", validRef)
                             .header("X-Authorities", "accounting:ap:view")
                             .header("X-User", "test-user"))
-                    // Then: Should succeed (404 because no payment found, but validation passed)
-                    .andExpect(status().isNotFound());
+                    // Then: Should succeed (404 because no payment found, but validation passed),
+                    // and the 404 carries the ApiError envelope rather than an empty body
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.status").value(404))
+                    .andExpect(jsonPath("$.message").value("AP payment not found"))
+                    .andExpect(jsonPath("$.correlationId").isNotEmpty());
 
             verify(apPaymentService).getPaymentByRef(validRef);
         }

@@ -128,9 +128,18 @@ public class InvoicePaymentController {
     @ApiResponse(
             responseCode = "202",
             description = "Regeneration command accepted (ADR-0044 async path); invoice arrives via invoice.events.v1")
-    @ApiResponse(responseCode = "404", description = "Workorder not found")
-    @ApiResponse(responseCode = "409", description = "Workorder is not in COMPLETED state")
-    @ApiResponse(responseCode = "503", description = "Workorder service unavailable")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Workorder is not in COMPLETED state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "Workorder service unavailable",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_INVOICE_REGENERATE", apiVersion = "1")
     public ResponseEntity<InvoiceGenerationResponse> regenerateInvoiceFromWorkorder(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -175,8 +184,14 @@ public class InvoicePaymentController {
                     """,
             tags = {"Invoice Payments"})
     @ApiResponse(responseCode = "200", description = "Billing rules returned")
-    @ApiResponse(responseCode = "404", description = "Customer not found")
-    @ApiResponse(responseCode = "503", description = "Customer service unavailable")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Customer not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "Customer service unavailable",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BillingRuleRefResponse> getAccountingBillingRules(
             @Parameter(description = "Customer identifier") @PathVariable UUID customerId) {
         log.info("Fetching billing rules for customer {}", customerId);

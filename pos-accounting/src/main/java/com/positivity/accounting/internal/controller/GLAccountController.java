@@ -76,8 +76,14 @@ public class GLAccountController {
                     """,
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL accounts listed")
-    @ApiResponse(responseCode = "400", description = "Unsupported sort property or direction")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Unsupported sort property or direction",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_LIST", apiVersion = "1")
     public ResponseEntity<GLAccountListResponse> listGLAccounts(
             @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,
@@ -116,7 +122,10 @@ public class GLAccountController {
                     """,
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account returned")
-    @ApiResponse(responseCode = "404", description = "GL account not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "GL account not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<GLAccountResponse> getGLAccount(
             @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId) {
         log.info("Get GL account");
@@ -149,7 +158,10 @@ public class GLAccountController {
                     """,
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "201", description = "GL account created")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_CREATE", apiVersion = "1")
     public ResponseEntity<GLAccountResponse> createGLAccount(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -198,7 +210,10 @@ public class GLAccountController {
                     """,
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account updated")
-    @ApiResponse(responseCode = "404", description = "GL account not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "GL account not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_UPDATE", apiVersion = "1")
     public ResponseEntity<GLAccountResponse> updateGLAccount(
             @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
@@ -246,7 +261,10 @@ public class GLAccountController {
                     """,
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account activated")
-    @ApiResponse(responseCode = "404", description = "GL account not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "GL account not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_ACTIVATE", apiVersion = "1")
     public ResponseEntity<GLAccountResponse> activateGLAccount(
             @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
@@ -292,7 +310,10 @@ public class GLAccountController {
                     """,
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account deactivated")
-    @ApiResponse(responseCode = "404", description = "GL account not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "GL account not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Account balance is not zero (ACCOUNT_NOT_ZERO_BALANCE)",
@@ -336,7 +357,10 @@ public class GLAccountController {
                     """,
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account archived")
-    @ApiResponse(responseCode = "404", description = "GL account not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "GL account not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Account is not INACTIVE (ACCOUNT_NOT_INACTIVE)",
@@ -379,7 +403,10 @@ public class GLAccountController {
                     """,
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "Balance returned")
-    @ApiResponse(responseCode = "404", description = "GL account not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "GL account not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<GLAccountBalanceResponse> getAccountBalance(
             @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId) {
         log.info("Get GL account balance");

@@ -97,11 +97,18 @@ public class CreditMemoController {
                     """,
             tags = {"Credit Memos"})
     @ApiResponse(responseCode = "201", description = "Credit memo created successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request - validation errors")
-    @ApiResponse(responseCode = "404", description = "Invoice not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request - validation errors",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Invoice not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Business rule violation - amount exceeds balance or invoice not finalized")
+            description = "Business rule violation - amount exceeds balance or invoice not finalized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_CREDIT_MEMO_CREATE", apiVersion = "1")
     public ResponseEntity<CreditMemoResponse> createCreditMemo(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -249,7 +256,10 @@ public class CreditMemoController {
                     """,
             tags = {"Credit Memos"})
     @ApiResponse(responseCode = "200", description = "Credit memos retrieved successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid pagination or filter parameters")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid pagination or filter parameters",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_CREDIT_MEMO_LIST", apiVersion = "1")
     public ResponseEntity<Page<CreditMemoResponse>> listCreditMemos(
             @Parameter(description = "Filter by customer ID") @RequestParam(required = false) UUID customerId,
@@ -302,7 +312,10 @@ public class CreditMemoController {
                     """,
             tags = {"Credit Memos"})
     @ApiResponse(responseCode = "200", description = "Credit memo retrieved successfully")
-    @ApiResponse(responseCode = "404", description = "Credit memo not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Credit memo not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_CREDIT_MEMO_GET", apiVersion = "1")
     public ResponseEntity<CreditMemoResponse> getCreditMemo(
             @Parameter(description = "Credit Memo ID", required = true) @PathVariable UUID creditMemoId) {

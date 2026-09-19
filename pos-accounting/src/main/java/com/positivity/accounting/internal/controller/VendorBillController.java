@@ -9,6 +9,7 @@ import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.VendorBillService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -42,6 +43,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST Controller for Vendor Bill lifecycle management.
@@ -99,7 +101,10 @@ public class VendorBillController {
             responseCode = "201",
             description = "Vendor bill created",
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request payload")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> createBillFromGoodsReceivedEvent(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Goods-received event payload that seeds a pending vendor bill.",
@@ -173,7 +178,10 @@ public class VendorBillController {
             responseCode = "201",
             description = "Invoice matched and bill created/updated",
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request payload")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> matchVendorInvoice(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Vendor invoice payload to three-way match against pending receipt bills.",
@@ -245,7 +253,10 @@ public class VendorBillController {
             responseCode = "200",
             description = "Exception resolved",
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Vendor bill not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vendor bill not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> resolveMatchException(
             @Parameter(description = "Vendor bill identifier", example = "550e8400-e29b-41d4-a716-446655440001")
                     @NonNull
@@ -309,7 +320,10 @@ public class VendorBillController {
             responseCode = "200",
             description = "Vendor bill found",
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Vendor bill not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vendor bill not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> getBillById(
             @Parameter(description = "Vendor bill identifier", example = "550e8400-e29b-41d4-a716-446655440001")
                     @NonNull
@@ -320,7 +334,7 @@ public class VendorBillController {
         return vendorBillService
                 .getBillById(billId)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendor bill not found"));
     }
 
     /**
@@ -356,7 +370,10 @@ public class VendorBillController {
             responseCode = "200",
             description = "Vendor bill found",
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Vendor bill not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vendor bill not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> getBillByOriginEventId(
             @Parameter(description = "Origin event identifier", example = "550e8400-e29b-41d4-a716-446655440010")
                     @NonNull
@@ -367,7 +384,7 @@ public class VendorBillController {
         return vendorBillService
                 .getBillByOriginEventId(eventId)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendor bill not found"));
     }
 
     /**
@@ -458,7 +475,10 @@ public class VendorBillController {
                     """,
             tags = {"Vendor Bill API"})
     @ApiResponse(responseCode = "200", description = "Vendor bills retrieved successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid date range, window too wide, or unrecognized status")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid date range, window too wide, or unrecognized status",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<VendorBillListRow>> listVendorBills(
             @Parameter(description = "Due-date window start (YYYY-MM-DD)", required = true, example = "2026-06-01")
                     @RequestParam
@@ -514,7 +534,10 @@ public class VendorBillController {
             responseCode = "200",
             description = "Candidate selected",
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Candidate not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Candidate not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> selectMatchCandidate(
             @Parameter(description = "Match candidate identifier", example = "550e8400-e29b-41d4-a716-446655440030")
                     @NonNull
