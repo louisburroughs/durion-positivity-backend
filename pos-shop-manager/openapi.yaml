@@ -415,7 +415,7 @@ paths:
 
         Emits a SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE event.
 
-        Returns 400 when a conflictId is not recorded against this appointment or the body is invalid, 403 when the caller lacks the authority or the location is out of scope, 404 when the appointment cannot be resolved, and 409 either with the scheduling-conflict envelope (a named conflict is HARD; nothing is written) or with code CONFLICT_ALREADY_OVERRIDDEN.
+        Returns 400 when a conflictId is not recorded against this appointment or the body is invalid, 403 when the caller lacks the authority or the location is out of scope, 404 when the appointment cannot be resolved, and 409 either with code SCHEDULING_CONFLICT and the HARD conflicts in conflicts[] (nothing is written) or with code CONFLICT_ALREADY_OVERRIDDEN.
 
         '
       operationId: executeConflictOverride
@@ -470,8 +470,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConflictResponse'
-          description: A named conflict is HARD (scheduling-conflict envelope, nothing written) or already overridden (ApiError CONFLICT_ALREADY_OVERRIDDEN).
+                $ref: '#/components/schemas/ApiError'
+          description: A named conflict is HARD (code SCHEDULING_CONFLICT with conflicts[], nothing written) or already overridden (code CONFLICT_ALREADY_OVERRIDDEN).
       security:
       - bearerAuth:
         - shop:conflict:override
@@ -1432,6 +1432,11 @@ components:
           description: Machine-readable error code
           example: ORDER_NOT_FOUND
           type: string
+        conflicts:
+          description: Itemized conflicts behind a 409 whose cause is a set of named conflicts, such as SCHEDULING_CONFLICT (ADR-0017 §3). Present only on such a 409; absent otherwise
+          items:
+            $ref: '#/components/schemas/Conflict'
+          type: array
         correlationId:
           description: Unique correlation ID for distributed request tracing
           example: 550e8400-e29b-41d4-a716-446655440000
@@ -1458,6 +1463,11 @@ components:
           example: 404
           format: int32
           type: integer
+        suggestedAlternatives:
+          description: Alternatives the caller may retry with, accompanying conflicts when the service can compute them. Optional even when conflicts is present
+          items:
+            $ref: '#/components/schemas/SuggestedAlternative'
+          type: array
         supportAction:
           description: Support or admin investigation guidance, when applicable
           example: Contact support with the correlation ID for assistance
@@ -1869,7 +1879,7 @@ components:
       - fromDate
       type: object
     Conflict:
-      description: A single detected scheduling conflict
+      description: A single named conflict behind a 409 response
       properties:
         affectedResource:
           description: Resource affected by the conflict
@@ -1912,7 +1922,7 @@ components:
       description: Manager override of SOFT scheduling conflicts recorded against an appointment
       properties:
         conflictIds:
-          description: Ids of the scheduling conflicts being accepted. Each must be recorded against the appointment in the path (400 otherwise), be SOFT (409 with the conflict envelope otherwise) and not already overridden (409 CONFLICT_ALREADY_OVERRIDDEN).
+          description: Ids of the scheduling conflicts being accepted. Each must be recorded against the appointment in the path (400 otherwise), be SOFT (409 SCHEDULING_CONFLICT with conflicts[] otherwise) and not already overridden (409 CONFLICT_ALREADY_OVERRIDDEN).
           example:
           - 01960003-0000-7000-8000-000000000010
           items:
@@ -1959,43 +1969,6 @@ components:
       - overriddenBy
       - overrideReason
       - overrides
-      type: object
-    ConflictResponse:
-      description: Error envelope returned when an appointment scheduling conflict is detected (HTTP 409)
-      properties:
-        conflicts:
-          description: List of specific detected conflicts
-          items:
-            $ref: '#/components/schemas/Conflict'
-          type: array
-        correlationId:
-          description: Correlation/trace identifier for the request
-          example: 01960003-0000-7000-8000-0000000000ff
-          type: string
-        errorCode:
-          description: Machine-readable error code
-          example: SCHEDULING_CONFLICT
-          type: string
-        message:
-          description: User-friendly conflict summary
-          example: The selected time conflicts with an existing booking
-          type: string
-        suggestedAlternatives:
-          description: Optional suggested alternative slots (may be null or empty)
-          items:
-            $ref: '#/components/schemas/SuggestedAlternative'
-          type: array
-        timestamp:
-          description: Timestamp the error was generated in UTC (ISO-8601)
-          example: '2026-06-18T08:00:00Z'
-          format: date-time
-          type: string
-      required:
-      - conflicts
-      - correlationId
-      - errorCode
-      - message
-      - timestamp
       type: object
     CreateAssignmentRequest:
       description: Request to assign mechanics and an optional resource to an appointment
@@ -2895,11 +2868,11 @@ components:
       - missingSkillCodes
       type: object
     SuggestedAlternative:
-      description: A suggested alternative appointment slot that avoids detected conflicts
+      description: A suggested alternative accompanying a 409 conflict
       properties:
         endDateTime:
           description: Suggested end time (ISO-8601 with offset)
-          example: '2026-06-18T13:00:00-04:00'
+          example: '2026-06-18T10:00:00-05:00'
           type: string
         reason:
           description: Reason this alternative is suggested
@@ -2907,7 +2880,7 @@ components:
           type: string
         startDateTime:
           description: Suggested start time (ISO-8601 with offset)
-          example: '2026-06-18T11:00:00-04:00'
+          example: '2026-06-18T09:00:00-05:00'
           type: string
       required:
       - endDateTime

@@ -27,6 +27,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -129,24 +130,53 @@ public class GlobalExceptionHandler {
 
     /**
      * DECISION-SHOPMGMT-002's conflict envelope (CAP-326, spec D17/§9.2): a HARD conflict at
-     * create, reschedule or override answers 409 with the conflicts themselves, not an {@link
-     * ApiError}. The service fills the conflicts and the timestamp; the correlation id is the
-     * request's, resolved here like every other envelope.
+     * create, reschedule or override answers 409 with the conflicts themselves. Since ADR-0017 §3's
+     * itemized-conflict extension the body is the platform {@link ApiError}, carrying the service's
+     * code and message plus {@code conflicts[]} and any {@code suggestedAlternatives[]}. The
+     * timestamp is the service's when it set one; the correlation id is the request's, resolved here
+     * like every other envelope.
      */
     @ExceptionHandler(SchedulingConflictException.class)
-    public ResponseEntity<ConflictResponse> handleSchedulingConflict(
+    public ResponseEntity<ApiError> handleSchedulingConflict(
             SchedulingConflictException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        ConflictResponse body = exception.getConflictResponse();
-        if (body.getCorrelationId() == null) {
-            body.setCorrelationId(correlationId.toString());
-        }
-        if (body.getTimestamp() == null) {
-            body.setTimestamp(Instant.now(clock));
-        }
+        ConflictResponse conflict = exception.getConflictResponse();
+        Instant timestamp = conflict.getTimestamp() != null ? conflict.getTimestamp() : Instant.now(clock);
+        ApiError body = ApiError.withConflicts(
+                conflict.getErrorCode(),
+                conflict.getMessage(),
+                HttpStatus.CONFLICT.value(),
+                timestamp.toString(),
+                correlationId.toString(),
+                toApiConflicts(conflict.getConflicts()),
+                toApiAlternatives(conflict.getSuggestedAlternatives()));
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .header(CORRELATION_ID_HEADER, correlationId.toString())
                 .body(body);
+    }
+
+    private static List<ApiError.Conflict> toApiConflicts(List<ConflictResponse.Conflict> conflicts) {
+        if (conflicts == null) {
+            return List.of();
+        }
+        return conflicts.stream()
+                .map(c -> new ApiError.Conflict(
+                        c.getSeverity(),
+                        c.getCode(),
+                        c.getMessage(),
+                        Boolean.TRUE.equals(c.getOverridable()),
+                        c.getAffectedResource()))
+                .toList();
+    }
+
+    private static @Nullable List<ApiError.SuggestedAlternative> toApiAlternatives(
+            @Nullable List<ConflictResponse.SuggestedAlternative> alternatives) {
+        if (alternatives == null || alternatives.isEmpty()) {
+            return null;
+        }
+        return alternatives.stream()
+                .map(a -> new ApiError.SuggestedAlternative(a.getStartDateTime(), a.getEndDateTime(), a.getReason()))
+                .toList();
     }
 
     /** A conflict that already carries an override cannot take a second one (CAP-326). */

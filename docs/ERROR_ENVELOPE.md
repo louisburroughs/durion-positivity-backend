@@ -19,7 +19,23 @@ All Durion backend REST APIs return a consistent `ApiError` JSON object for non-
   ],
   "referenceId": "string",
   "nextAction": "string",
-  "supportAction": "string"
+  "supportAction": "string",
+  "conflicts": [
+    {
+      "severity": "HARD",
+      "code": "string",
+      "message": "string",
+      "overridable": false,
+      "affectedResource": "string"
+    }
+  ],
+  "suggestedAlternatives": [
+    {
+      "startDateTime": "string",
+      "endDateTime": "string",
+      "reason": "string"
+    }
+  ]
 }
 ```
 
@@ -36,6 +52,8 @@ All Durion backend REST APIs return a consistent `ApiError` JSON object for non-
 | `referenceId` | `string\|null`   | ❌ Conditional  | Reference to a workflow case, review request, or external audit record. Present for guided error flows such as self-registration review. |
 | `nextAction`  | `string\|null`   | ❌ Conditional  | Recommended next step for the caller to resolve the error (e.g. "Sign in with the existing account"). May appear with or without `referenceId` — guided flows such as self-registration review pair it with a `referenceId`, while authorization refusals such as `USER_HAS_NO_ROLES` and `MANAGER_APPROVAL_REQUIRED` carry it alone. |
 | `supportAction` | `string\|null` | ❌ Conditional  | Investigation guidance for operations or support staff. Not intended for end-user display. |
+| `conflicts`   | `array\|null`    | ❌ Conditional  | Itemized conflicts behind a `409` whose cause is a set of named conflicts (ADR-0017 §3), e.g. `SCHEDULING_CONFLICT` from pos-shop-manager (DECISION-SHOPMGMT-002/-011). Each entry has `severity` (`HARD` cannot be overridden, `SOFT` can), `code`, `message`, `overridable` and an optional `affectedResource`. Omitted on every other error. |
+| `suggestedAlternatives` | `array\|null` | ❌ Conditional | Alternatives the caller may retry with (`startDateTime`, `endDateTime`, optional `reason`), sent alongside `conflicts` when the service can compute them. |
 
 > **Note:** Fields that are `null` or absent are omitted from the JSON payload entirely (Jackson `@JsonInclude(NON_NULL)`). Clients should treat a missing field as `null`, not as an error.
 
@@ -86,6 +104,34 @@ All Durion backend REST APIs return a consistent `ApiError` JSON object for non-
   "status": 409,
   "timestamp": "2026-03-17T14:30:00.123456789Z",
   "correlationId": "019507b4-1f3a-7001-8e04-5c9d3a4f6e12"
+}
+```
+
+### HTTP 409 — Itemized conflicts
+
+```json
+{
+  "code": "SCHEDULING_CONFLICT",
+  "message": "HARD conflicts cannot be overridden",
+  "status": 409,
+  "timestamp": "2026-03-17T14:30:00.123456789Z",
+  "correlationId": "019507b4-1f3a-7003-8e04-5c9d3a4f6e12",
+  "conflicts": [
+    {
+      "severity": "HARD",
+      "code": "BAY_DOUBLE_BOOKED",
+      "message": "Bay 1 is already booked for that window",
+      "overridable": false,
+      "affectedResource": "Bay 1"
+    }
+  ],
+  "suggestedAlternatives": [
+    {
+      "startDateTime": "2026-06-18T10:00:00-05:00",
+      "endDateTime": "2026-06-18T11:00:00-05:00",
+      "reason": "Bay 1 free"
+    }
+  ]
 }
 ```
 

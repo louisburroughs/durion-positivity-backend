@@ -39,6 +39,7 @@ modules:
   pos-shop-manager:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-invoice:
     mode: STRICT
     annotationDepth: STRICT

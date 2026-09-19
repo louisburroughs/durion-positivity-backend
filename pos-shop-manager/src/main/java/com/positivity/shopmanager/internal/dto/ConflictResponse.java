@@ -10,12 +10,12 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Conflict response DTO for appointment scheduling conflicts (HTTP 409).
- * Includes list of detected conflicts and optional suggested alternatives.
- * Follows error envelope pattern with errorCode, message, correlationId,
- * timestamp.
+ * Service-side carrier for appointment scheduling conflicts (HTTP 409): the detected conflicts and
+ * optional suggested alternatives a {@code SchedulingConflictException} holds. It is not the wire
+ * shape: {@code GlobalExceptionHandler#handleSchedulingConflict} renders it as the platform
+ * {@code ApiError} with {@code conflicts[]} and {@code suggestedAlternatives[]} (ADR-0017 §3).
  */
-@Schema(description = "Error envelope returned when an appointment scheduling conflict is detected (HTTP 409)")
+@Schema(description = "Service-side scheduling-conflict carrier, rendered on the wire as ApiError with conflicts")
 public class ConflictResponse implements Serializable {
 
     @Serial
