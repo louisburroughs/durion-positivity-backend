@@ -3,12 +3,16 @@ package com.positivity.mcp.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.config.AgentOrchestrationService;
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.dto.ChatBlock;
 import com.positivity.mcp.internal.security.McpPermissions;
+import com.positivity.mcp.internal.service.ChatBlockSegmenter;
 import com.positivity.mcp.internal.service.CurrentUserContextResolver;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -56,7 +60,13 @@ public class McpChatController {
                     principal, not from the body.
                     Emits a MCP_CHAT_EXECUTE event; the agent may invoke permission-gated tools, RAG retrieval and \
                     web search while producing the answer.
-                    Returns 200 with the full response text, and 429 when the caller's chat rate limit is exceeded.
+                    Returns 200 with the full response text plus a parallel `blocks` array segmented from that \
+                    same text, in source order (markdown/table/code today; chart/text/image/file/error are \
+                    modeled for forward compatibility but not yet produced) — markdown runs interleave with \
+                    table/code blocks wherever they occur, with no guarantee the first block is markdown. \
+                    `blocks` is optional and may be empty; older clients may ignore it, and when it is empty or \
+                    absent, render `response` instead.
+                    Returns 429 when the caller's chat rate limit is exceeded.
                     """)
     @PostMapping("/chat")
     @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_EXECUTE + "')")
@@ -90,7 +100,8 @@ public class McpChatController {
                 "ROLE_USER".equals(currentUserContext.primaryRole()));
         String response =
                 agentOrchestrationService.chat(currentUserContext, request.message(), request.conversationId());
-        return ResponseEntity.ok(new ChatResponse(response));
+        List<ChatBlock> blocks = ChatBlockSegmenter.segment(response);
+        return ResponseEntity.ok(new ChatResponse(response, blocks));
     }
 
     @Schema(name = "ChatRequest", description = "Chat request payload", example = "{\"message\":\"Hello\"}")
@@ -113,12 +124,28 @@ public class McpChatController {
             @Nullable
             String conversationId) {}
 
-    @Schema(name = "ChatResponse", description = "Chat response payload", example = "{\"response\":\"Hi!\"}")
+    @Schema(
+            name = "ChatResponse",
+            description = "Chat response payload",
+            example = "{\"response\":\"Hi!\",\"blocks\":[{\"kind\":\"markdown\",\"markdown\":\"Hi!\"}]}")
     public record ChatResponse(
             @Schema(
                     description = "Full agent response text",
                     example = "Hi!",
                     requiredMode = Schema.RequiredMode.REQUIRED)
             @NonNull
-            String response) {}
+            String response,
+
+            @ArraySchema(
+                    schema = @Schema(implementation = ChatBlock.class),
+                    arraySchema =
+                            @Schema(
+                                    description = "Typed rendering units segmented from `response`, in source "
+                                            + "order; markdown runs interleave with table/code blocks wherever "
+                                            + "they occur in the answer, so the first block is not guaranteed "
+                                            + "to be markdown. Optional; older clients may ignore it. When "
+                                            + "empty or absent, render `response` instead.",
+                                    requiredMode = Schema.RequiredMode.NOT_REQUIRED))
+            @NonNull
+            List<ChatBlock> blocks) {}
 }

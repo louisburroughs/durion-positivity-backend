@@ -250,6 +250,148 @@ class McpChatControllerTest {
                 .andExpect(jsonPath("$.timestamp").isNotEmpty());
     }
 
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName("POST /v1/mcp/chat: prose + table answer segments into markdown/table/markdown blocks (#2072)")
+    void chat_proseAndTableAnswer_segmentsIntoBlocks() throws Exception {
+        String agentMarkdown = "Here is the report:\n\n| Name | Status |\n| --- | --- |\n| Alpha | ACTIVE |\n\nThanks.";
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+                .thenReturn(agentMarkdown);
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+
+        mockMvc.perform(post("/v1/mcp/chat")
+                        .principal(authentication)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.response").value(agentMarkdown))
+                .andExpect(jsonPath("$.blocks[0].kind").value("markdown"))
+                .andExpect(jsonPath("$.blocks[0].markdown").value("Here is the report:"))
+                .andExpect(jsonPath("$.blocks[1].kind").value("table"))
+                .andExpect(jsonPath("$.blocks[1].title").doesNotExist())
+                .andExpect(jsonPath("$.blocks[1].columns[0].label").value("Name"))
+                .andExpect(jsonPath("$.blocks[1].columns[0].align").value("start"))
+                .andExpect(jsonPath("$.blocks[1].columns[1].label").value("Status"))
+                .andExpect(jsonPath("$.blocks[1].columns[1].align").value("start"))
+                .andExpect(jsonPath("$.blocks[1].rows[0][0]").value("Alpha"))
+                .andExpect(jsonPath("$.blocks[1].rows[0][1]").value("ACTIVE"))
+                .andExpect(jsonPath("$.blocks[2].kind").value("markdown"))
+                .andExpect(jsonPath("$.blocks[2].markdown").value("Thanks."));
+    }
+
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName("POST /v1/mcp/chat: tool-free prose answer segments into a single markdown block (#2072)")
+    void chat_toolFreeProseAnswer_singleMarkdownBlock() throws Exception {
+        String agentMarkdown = "Just a simple prose answer with no tables or code.";
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+                .thenReturn(agentMarkdown);
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+
+        mockMvc.perform(post("/v1/mcp/chat")
+                        .principal(authentication)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.response").value(agentMarkdown))
+                .andExpect(jsonPath("$.blocks.length()").value(1))
+                .andExpect(jsonPath("$.blocks[0].kind").value("markdown"))
+                .andExpect(jsonPath("$.blocks[0].markdown").value(agentMarkdown));
+    }
+
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName("POST /v1/mcp/chat: fenced sql answer segments into markdown/code blocks (#2072)")
+    void chat_fencedSqlAnswer_segmentsIntoCodeBlock() throws Exception {
+        String agentMarkdown = "Here is the query:\n\n```sql\nSELECT 1;\n```";
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+                .thenReturn(agentMarkdown);
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+
+        mockMvc.perform(post("/v1/mcp/chat")
+                        .principal(authentication)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocks[0].kind").value("markdown"))
+                .andExpect(jsonPath("$.blocks[1].kind").value("code"))
+                .andExpect(jsonPath("$.blocks[1].language").value("sql"))
+                .andExpect(jsonPath("$.blocks[1].code").value("SELECT 1;"));
+    }
+
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName("POST /v1/mcp/chat: bare fence (no language) has no language field on the code block (#2072)")
+    void chat_bareFenceAnswer_languageAbsent() throws Exception {
+        String agentMarkdown = "```\nplain output\n```";
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+                .thenReturn(agentMarkdown);
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+
+        mockMvc.perform(post("/v1/mcp/chat")
+                        .principal(authentication)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocks[0].kind").value("code"))
+                .andExpect(jsonPath("$.blocks[0].language").doesNotExist())
+                .andExpect(jsonPath("$.blocks[0].code").value("plain output"));
+    }
+
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName("POST /v1/mcp/chat: a table nested in a list item degrades to an empty blocks array (O1, #2072)")
+    void chat_nestedTableAnswer_emptyBlocksArrayResponseUnchanged() throws Exception {
+        // blocks is either a faithful segmentation or EMPTY — never a partial one carrying raw
+        // pipes the frontend cannot render. The GFM table extension forms no Table node for a
+        // table directly after a list item's first line, so the table stays paragraph text; the
+        // segmenter's final safety net (a delimiter row inside an emitted markdown block) is what
+        // turns this answer into []. The client then parses `response` itself.
+        String agentMarkdown = "- item one\n  | A | B |\n  | --- | --- |\n  | 1 | 2 |";
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+                .thenReturn(agentMarkdown);
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+
+        mockMvc.perform(post("/v1/mcp/chat")
+                        .principal(authentication)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.response").value(agentMarkdown))
+                .andExpect(jsonPath("$.blocks").isArray())
+                .andExpect(jsonPath("$.blocks.length()").value(0));
+    }
+
     @TestConfiguration
     @EnableMethodSecurity(prePostEnabled = true)
     static class SliceTestConfig {

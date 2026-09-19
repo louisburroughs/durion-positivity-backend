@@ -45,6 +45,8 @@ operator needs to build, configure and run the module.
 | `GET/PUT/DELETE /v1/prompts/{id}`     | `mcp:system_prompt:*` | System prompt CRUD                   |
 | `GET/POST/PUT/DELETE /v1/llm-apis`    | `mcp:llm_api:*`       | LLM API config CRUD                  |
 
+**Chat response blocks:** `POST /v1/mcp/chat` carries an optional `blocks` array alongside `response`. Blocks are typed rendering units (markdown, table, code, and forward-compatible schema for chart/image/file/error) segmented server-side from the final markdown answer in source order. Older clients may ignore `blocks` and parse `response` instead; when `blocks` is empty or absent, render `response` as before.
+
 Permission constants are defined in `McpPermissions`. Errors use the standard `ApiError` envelope.
 
 ## Configuration

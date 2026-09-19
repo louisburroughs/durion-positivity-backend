@@ -260,7 +260,9 @@ paths:
 
         Emits a MCP_CHAT_EXECUTE event; the agent may invoke permission-gated tools, RAG retrieval and web search while producing the answer.
 
-        Returns 200 with the full response text, and 429 when the caller''s chat rate limit is exceeded.
+        Returns 200 with the full response text plus a parallel `blocks` array segmented from that same text, in source order (markdown/table/code today; chart/text/image/file/error are modeled for forward compatibility but not yet produced) — markdown runs interleave with table/code blocks wherever they occur, with no guarantee the first block is markdown. `blocks` is optional and may be empty; older clients may ignore it, and when it is empty or absent, render `response` instead.
+
+        Returns 429 when the caller''s chat rate limit is exceeded.
 
         '
       operationId: executeMcpChat
@@ -1132,6 +1134,209 @@ components:
       - eventType
       - timestamp
       type: object
+    ChatBlock:
+      description: Typed rendering unit of an assistant chat answer. `kind` selects the variant; a `kind` this schema does not list should degrade to prose on the client rather than fail, since new kinds may be added without a version bump.
+      discriminator:
+        mapping:
+          chart: '#/components/schemas/ChatChartBlock'
+          code: '#/components/schemas/ChatCodeBlock'
+          error: '#/components/schemas/ChatErrorBlock'
+          file: '#/components/schemas/ChatFileBlock'
+          image: '#/components/schemas/ChatImageBlock'
+          markdown: '#/components/schemas/ChatMarkdownBlock'
+          table: '#/components/schemas/ChatTableBlock'
+          text: '#/components/schemas/ChatTextBlock'
+        propertyName: kind
+      oneOf:
+      - $ref: '#/components/schemas/ChatMarkdownBlock'
+      - $ref: '#/components/schemas/ChatTableBlock'
+      - $ref: '#/components/schemas/ChatChartBlock'
+      - $ref: '#/components/schemas/ChatCodeBlock'
+      - $ref: '#/components/schemas/ChatTextBlock'
+      - $ref: '#/components/schemas/ChatImageBlock'
+      - $ref: '#/components/schemas/ChatFileBlock'
+      - $ref: '#/components/schemas/ChatErrorBlock'
+      properties:
+        kind:
+          type: string
+      required:
+      - kind
+    ChatChartBlock:
+      allOf:
+      - $ref: '#/components/schemas/ChatBlock'
+      - properties:
+          kind:
+            enum:
+            - chart
+            type: string
+          series:
+            description: Chart series; a datum with no label or a non-finite value is dropped by the client.
+            items:
+              $ref: '#/components/schemas/ChatChartSeries'
+            type: array
+          title:
+            description: Optional chart caption.
+            example: Open workorders by bay
+            type:
+            - string
+            - 'null'
+        type: object
+      description: Single-series bar chart. Not yet produced by any tool in this module (schema-only).
+      required:
+      - kind
+      - series
+    ChatChartSeries:
+      properties:
+        label:
+          description: Datum label.
+          example: Bay 1
+          type: string
+        value:
+          description: Datum value; must be finite.
+          example: 12.0
+          format: double
+          type: number
+      required:
+      - label
+      - value
+      type: object
+    ChatCodeBlock:
+      allOf:
+      - $ref: '#/components/schemas/ChatBlock'
+      - properties:
+          code:
+            description: Code source for this fence.
+            type: string
+          kind:
+            enum:
+            - code
+            type: string
+          language:
+            description: Fence info string, lower-cased, or omitted when the fence carried none.
+            example: sql
+            type:
+            - string
+            - 'null'
+        type: object
+      description: Fenced code segment of the answer.
+      required:
+      - code
+      - kind
+    ChatErrorBlock:
+      allOf:
+      - $ref: '#/components/schemas/ChatBlock'
+      - properties:
+          correlationId:
+            description: Optional correlation id for support/troubleshooting.
+            type:
+            - string
+            - 'null'
+          detailKey:
+            description: Optional client i18n key for additional detail.
+            type:
+            - string
+            - 'null'
+          detailParams:
+            description: Optional interpolation parameters for detailKey; values are string or number.
+            type:
+            - object
+            - 'null'
+          kind:
+            enum:
+            - error
+            type: string
+          messageKey:
+            description: Client i18n key for the error message.
+            example: chat.error.toolFailed
+            type: string
+          retryable:
+            description: Whether the client should offer a retry action. Defaults to false.
+            type: boolean
+        type: object
+      description: Typed error block. Not yet produced by any tool in this module (schema-only).
+      required:
+      - kind
+      - messageKey
+    ChatFileBlock:
+      allOf:
+      - $ref: '#/components/schemas/ChatBlock'
+      - properties:
+          kind:
+            enum:
+            - file
+            type: string
+          mimeType:
+            description: MIME type, when known.
+            example: application/pdf
+            type:
+            - string
+            - 'null'
+          name:
+            description: Display file name.
+            example: bulletin.pdf
+            type: string
+          sizeBytes:
+            description: File size in bytes, when known.
+            example: 840000
+            format: int64
+            type:
+            - integer
+            - 'null'
+          url:
+            description: File location.
+            example: /mcp-server/v1/mcp/blobs/<id>
+            type: string
+        type: object
+      description: File attachment reference. Not yet produced by any tool in this module (schema-only).
+      required:
+      - kind
+      - name
+      - url
+    ChatImageBlock:
+      allOf:
+      - $ref: '#/components/schemas/ChatBlock'
+      - properties:
+          alt:
+            description: Text alternative. Required — an image without one is dropped by the client rather than rendered inaccessibly.
+            example: tyre wear
+            type: string
+          caption:
+            description: Optional caption.
+            example: Attached to WO-10432
+            type:
+            - string
+            - 'null'
+          kind:
+            enum:
+            - image
+            type: string
+          url:
+            description: Image location.
+            example: /mcp-server/v1/mcp/blobs/<id>
+            type: string
+        type: object
+      description: Inline image reference. Not yet produced by any tool in this module (schema-only).
+      required:
+      - alt
+      - kind
+      - url
+    ChatMarkdownBlock:
+      allOf:
+      - $ref: '#/components/schemas/ChatBlock'
+      - properties:
+          kind:
+            enum:
+            - markdown
+            type: string
+          markdown:
+            description: Markdown source for this segment.
+            example: You have **26 mechanics**, all ACTIVE.
+            type: string
+        type: object
+      description: Prose markdown segment of the answer.
+      required:
+      - kind
+      - markdown
     ChatRequest:
       description: Chat request payload
       example:
@@ -1152,8 +1357,16 @@ components:
     ChatResponse:
       description: Chat response payload
       example:
+        blocks:
+        - kind: markdown
+          markdown: Hi!
         response: Hi!
       properties:
+        blocks:
+          description: Typed rendering units segmented from `response`, in source order; markdown runs interleave with table/code blocks wherever they occur in the answer, so the first block is not guaranteed to be markdown. Optional; older clients may ignore it. When empty or absent, render `response` instead.
+          items:
+            $ref: '#/components/schemas/ChatBlock'
+          type: array
         response:
           description: Full agent response text
           example: Hi!
@@ -1161,6 +1374,71 @@ components:
       required:
       - response
       type: object
+    ChatTableBlock:
+      allOf:
+      - $ref: '#/components/schemas/ChatBlock'
+      - properties:
+          columns:
+            description: Column headers in source order.
+            items:
+              $ref: '#/components/schemas/ChatTableColumn'
+            type: array
+          kind:
+            enum:
+            - table
+            type: string
+          rows:
+            description: Row cell values, in column order, padded/trimmed to the header width.
+            items:
+              items:
+                type: string
+              type: array
+            type: array
+          title:
+            description: Optional table caption.
+            example: Mechanics by status
+            type:
+            - string
+            - 'null'
+        type: object
+      description: Tabular segment of the answer, rendered as a table rather than markdown pipes.
+      required:
+      - columns
+      - kind
+      - rows
+    ChatTableColumn:
+      properties:
+        align:
+          description: Column alignment; "end" marks a numeric column.
+          enum:
+          - start
+          - end
+          example: end
+          type: string
+        label:
+          description: Column header text.
+          example: Status
+          type: string
+      required:
+      - align
+      - label
+      type: object
+    ChatTextBlock:
+      allOf:
+      - $ref: '#/components/schemas/ChatBlock'
+      - properties:
+          kind:
+            enum:
+            - text
+            type: string
+          text:
+            description: Plain text content.
+            type: string
+        type: object
+      description: Plain prose segment with no markdown syntax. Not yet produced by this module (schema-only).
+      required:
+      - kind
+      - text
     ConfirmWritePlanRequest:
       description: Optional confirmation payload
       properties:
