@@ -154,13 +154,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkIngestResponse'
-          description: Batch processed (check per-record success/failure in response)
+          description: Batch processed; inspect per-record results
         '400':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
       security:
       - bearerAuth:
         - people:employee:create

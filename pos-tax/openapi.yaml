@@ -85,13 +85,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TaxCalculationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid tax calculation request
         '500':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TaxCalculationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Tax calculation failed
       security:
       - bearerAuth:
@@ -206,7 +206,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExemptionCertificateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid certificate payload
       security:
       - bearerAuth:
@@ -252,7 +252,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExemptionCertificateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Certificate not found
       security:
       - bearerAuth:
@@ -325,7 +325,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExemptionCertificateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Certificate not found
       security:
       - bearerAuth:

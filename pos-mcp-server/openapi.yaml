@@ -895,7 +895,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DocumentIngestionJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Document metadata is not JSON-serializable
       security:
       - bearerAuth:
@@ -1387,7 +1387,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SystemPromptResponse'
+                $ref: '#/components/schemas/ApiError'
           description: A system prompt with the requested name already exists
       security:
       - bearerAuth:
@@ -1424,6 +1424,10 @@ paths:
         '204':
           description: System prompt deleted
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: System prompt not found
       security:
       - bearerAuth:
@@ -1466,7 +1470,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SystemPromptResponse'
+                $ref: '#/components/schemas/ApiError'
           description: System prompt not found
       security:
       - bearerAuth:
@@ -1522,13 +1526,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SystemPromptResponse'
+                $ref: '#/components/schemas/ApiError'
           description: System prompt not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SystemPromptResponse'
+                $ref: '#/components/schemas/ApiError'
           description: A system prompt with the requested name already exists
       security:
       - bearerAuth:
