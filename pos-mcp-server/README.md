@@ -48,6 +48,7 @@ operator needs to build, configure and run the module.
 | `GET /v1/mcp/conversations/policy`    | `mcp:chat:execute`    | Get retention policy                 |
 | `POST /v1/mcp/documents`              | `mcp:document:ingest` | Ingest a document into the RAG store |
 | `GET  /v1/mcp/documents/jobs/{jobId}` | `mcp:document:ingest` | Check ingestion job status           |
+| `POST /v1/mcp/transcriptions`         | `mcp:chat:execute`    | Transcribe an audio clip (#2074)     |
 | `POST /v1/nlt/requests`               | `nlti:request:submit` | Submit an NLTI request               |
 | `GET  /v1/nlt/audit`                  | `nlti:audit:read`     | Query the NLTI audit log             |
 | `GET/PUT/DELETE /v1/prompts/{id}`     | `mcp:system_prompt:*` | System prompt CRUD                   |
@@ -149,6 +150,55 @@ into a turn that outlived the client's 180s timeout and read as a hang. Declarin
 supersedes `spring.ai.retry.*` for the module. The fallback model (`mcp.model.fallback.*`) shares it.
 Environment: `MCP_MODEL_RETRY_MAX_RETRIES`, `MCP_MODEL_RETRY_INITIAL_DELAY`, `MCP_MODEL_RETRY_MULTIPLIER`,
 `MCP_MODEL_RETRY_MAX_DELAY`.
+
+## Audio transcription (#2074)
+
+`POST /v1/mcp/transcriptions` (`multipart/form-data`) is a server-side speech-to-text fallback for browsers
+without the in-browser `SpeechRecognition` API (notably Firefox). Parts:
+
+- `audio` (required) — the recorded clip; content type must be `audio/webm`, `audio/ogg`, or `audio/mp4`
+  (`;codecs=` parameters are ignored when matching).
+- `language` (optional) — a BCP-47 tag, e.g. `en-US`, sent as a multipart field, **not** a query parameter.
+  Defaults to the request's resolved `Accept-Language` locale, then to provider auto-detection.
+
+Limits: 5 MiB and 60 seconds, both inclusive. Duration is provider-reported via `response_format=verbose_json`;
+models that don't support `verbose_json` (for example OpenAI's `gpt-4o-transcribe`/`gpt-4o-mini-transcribe`) are
+unsupported — use `whisper-1` or a self-hosted equivalent that returns it.
+
+| Status | Meaning                                                                          |
+| ------ | --------------------------------------------------------------------------------- |
+| 200    | Transcript returned (`text`, `language`, `durationSeconds` — omitted if unreported) |
+| 400    | `language` is not a well-formed BCP-47 tag                                        |
+| 413    | Clip over 5 MiB, or provider-reported duration over 60 seconds                    |
+| 415    | Not multipart, `audio` missing/empty, or an unsupported content type              |
+| 422    | Nothing intelligible in the clip, or the provider rejected it as undecodable      |
+| 503    | Provider not configured, unreachable, or erroring — never a bare 500. Carries `Retry-After: 30` for transient failures; omitted when the provider is simply not configured, since retrying can't help |
+
+**Retention: transcribe-and-discard.** Audio is held in memory for the request only — never written to disk,
+persisted, logged, or included in the `MCP_TRANSCRIPTION_EXECUTE` event. It is forwarded to the configured
+provider to produce the transcript; a hosted provider's (e.g. OpenAI's) own retention policy applies to the copy
+it received. A self-hosted provider — infrastructure under our own control — keeps nothing beyond serving this
+one request.
+
+| Property                          | Env / Default                     | Description                                                       |
+| ---------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
+| `mcp.transcription.base-url`      | `MCP_TRANSCRIPTION_BASE_URL` _(blank)_ | Any OpenAI-compatible `/audio/transcriptions` endpoint (OpenAI or self-hosted faster-whisper/speaches). Blank disables transcription — the endpoint answers 503 |
+| `mcp.transcription.api-key`       | `MCP_TRANSCRIPTION_API_KEY` _(blank)_  | Blank sends no `Authorization` header                             |
+| `mcp.transcription.model`         | `MCP_TRANSCRIPTION_MODEL` `whisper-1`  | Must support `response_format=verbose_json`                       |
+| `mcp.transcription.timeout`       | `MCP_TRANSCRIPTION_TIMEOUT` `30s`      | Provider call timeout                                              |
+| `mcp.transcription.max-bytes`     | `5MB`                              | Server-enforced clip size cap                                     |
+| `mcp.transcription.max-duration-seconds` | `60`                         | Server-enforced clip duration cap                                 |
+
+Operator notes:
+
+- Never set `OPENAI_LOG=debug` in any environment — the `openai-java` SDK would then log request/response
+  bodies, i.e. the audio and the transcript.
+- Any reverse proxy in front of the gateway must allow request bodies of at least 6 MB (this module's
+  `spring.servlet.multipart.max-request-size`), or oversize handling happens there instead of here.
+- `server.tomcat.max-swallow-size` is set to `10MB`: Tomcat's 2 MB default resets the connection before the 413
+  response body can be written for an oversize clip, so the client would see a network error instead of the
+  documented `AUDIO_TOO_LARGE`.
+
 ## Dependencies
 
 - `pos-security-common` — JWT-based security filter.

@@ -14,6 +14,8 @@ tags:
   name: MCP Conversations
 - description: RAG document ingestion job management
   name: Document Ingestion
+- description: Server-side audio transcription fallback for the assistant composer
+  name: MCP Transcription
 - description: NLTI Audit Ledger Query
   name: NLTI Audit
 - description: Manage the permission codes that gate discovered OpenAPI tools
@@ -784,6 +786,95 @@ paths:
       - Document Ingestion
       x-required-permissions:
       - mcp:document:ingest
+  /v1/mcp/transcriptions:
+    post:
+      description: 'Transcribes one short audio clip to text, for browsers where the in-browser SpeechRecognition API is unavailable.
+
+        Preconditions: the clip is at most 5 MiB and at most 60 seconds long (both limits inclusive); its content type (ignoring parameters such as `;codecs=opus`) must be one of audio/webm, audio/ogg, audio/mp4.
+
+        Required inputs: audio (the recorded clip, multipart file part, required) and language (optional BCP-47 tag, e.g. "en-US"); when language is omitted the request''s resolved Accept-Language locale is used, falling back to provider auto-detection when that locale is undetermined.
+
+        Retention: transcribe-and-discard — the audio is held in memory for this request only, forwarded to the configured speech-to-text provider, and never persisted, logged, or included in the emitted event. A hosted provider''s own retention policy applies to the copy it received. A self-hosted provider — infrastructure under our own control — keeps nothing beyond serving this one request.
+
+        Emits an MCP_TRANSCRIPTION_EXECUTE event.
+
+        Returns 200 with the transcript synchronously — clips this short never queue for later polling.
+
+        '
+      operationId: transcribeMcpAudio
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              properties:
+                audio:
+                  description: The recorded clip. At most 5 MiB, at most 60 seconds. Content type (ignoring `;codecs=` parameters) must be audio/webm, audio/ogg, or audio/mp4.
+                  format: binary
+                  type: string
+                language:
+                  description: Optional BCP-47 language tag, e.g. "en-US". Falls back to the request's resolved locale, then to provider auto-detection.
+                  example: en-US
+                  type: string
+              required:
+              - audio
+              type: object
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranscriptionResponse'
+          description: Transcript returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: language is not a well-formed BCP-47 tag, or the multipart request body is malformed/truncated (a bad boundary, or the client aborting mid-upload)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Authentication is required
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks mcp:chat:execute
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Clip over 5 MiB, or provider-reported duration over 60 seconds
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request is not multipart, the audio part is missing/empty, or its content type is outside audio/webm, audio/ogg, audio/mp4
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Nothing intelligible in the clip (blank transcript), or the provider rejected it as undecodable
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Speech-to-text provider not configured, unreachable, or erroring — never a bare 500
+      security:
+      - bearerAuth:
+        - mcp:chat:execute
+      summary: Transcribe an Audio Clip
+      tags:
+      - MCP Transcription
+      x-required-permissions:
+      - mcp:chat:execute
   /v1/nlt/audit:
     get:
       description: 'Returns a page of NLTI audit ledger entries recording request, intent, plan, confirmation and execution events.
@@ -2364,6 +2455,26 @@ components:
           description: Unique tool name
           example: event-receiver_getactiveeventtypes
           type: string
+      type: object
+    TranscriptionResponse:
+      description: Transcript produced from one audio clip. The audio itself is never returned or stored.
+      properties:
+        durationSeconds:
+          description: Clip duration in seconds as reported by the speech-to-text provider. Omitted when the provider does not report it — length is then bounded only by the request's size limit, not returned to the caller.
+          example: 7.2
+          format: double
+          type: number
+        language:
+          description: 'BCP-47 language tag for the transcript: the requested `language`, else the provider-detected language, else "und" (undetermined) when neither is known.'
+          example: en-US
+          type: string
+        text:
+          description: The transcribed text, trimmed. Never blank — a clip with nothing intelligible in it fails the request (422) rather than returning an empty transcript.
+          example: how many mechanics do i have
+          type: string
+      required:
+      - language
+      - text
       type: object
     UpdateConversationRequest:
       description: Partial update for a conversation's title and/or pinned state.
