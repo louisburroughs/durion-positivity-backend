@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.dto.UpdateStaffingAssignmentRequest;
+import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.StaffingAssignmentService;
 import com.positivity.shared.error.ApiError;
@@ -196,7 +197,7 @@ public class StaffingAssignmentController {
         return staffingAssignmentService
                 .findById(assignmentId)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new NotFoundException("Staffing assignment not found"));
     }
 
     @Operation(
@@ -270,7 +271,7 @@ public class StaffingAssignmentController {
         return staffingAssignmentService
                 .update(assignmentId, request, actor != null ? actor : "system")
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new NotFoundException("Staffing assignment not found"));
     }
 
     @Operation(operationId = "endStaffingAssignment", summary = "End An Active Staffing Assignment", description = """

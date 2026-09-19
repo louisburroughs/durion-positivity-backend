@@ -129,7 +129,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AppointmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Not implemented.
       security:
       - bearerAuth:
@@ -203,7 +203,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AppointmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Not implemented.
       security:
       - bearerAuth:
@@ -252,9 +252,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/AssignmentResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -850,7 +848,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ScheduleViewResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid input parameters
         '403':
           content:
@@ -862,7 +860,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ScheduleViewResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Location or resource not found
       security:
       - bearerAuth:
@@ -1173,7 +1171,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PersonDTO'
+                $ref: '#/components/schemas/ApiError'
           description: No technician links this person to this location.
       security:
       - bearerAuth:

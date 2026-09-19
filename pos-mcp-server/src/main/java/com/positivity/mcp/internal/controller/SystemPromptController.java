@@ -5,9 +5,11 @@ import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.internal.service.SystemPromptService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -67,7 +69,10 @@ class SystemPromptController {
                     Returns 404 when no system prompt exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "System prompt returned")
-    @ApiResponse(responseCode = "404", description = "System prompt not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "System prompt not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"mcp:system_prompt:view"})
@@ -89,7 +94,10 @@ class SystemPromptController {
                     Returns 201 with the stored prompt, and 409 when a prompt with the same name already exists.
                     """)
     @ApiResponse(responseCode = "201", description = "System prompt created")
-    @ApiResponse(responseCode = "409", description = "A system prompt with the requested name already exists")
+    @ApiResponse(
+            responseCode = "409",
+            description = "A system prompt with the requested name already exists",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"mcp:system_prompt:create"})
@@ -129,8 +137,14 @@ class SystemPromptController {
                     new name is already used by another prompt.
                     """)
     @ApiResponse(responseCode = "200", description = "System prompt updated")
-    @ApiResponse(responseCode = "404", description = "System prompt not found")
-    @ApiResponse(responseCode = "409", description = "A system prompt with the requested name already exists")
+    @ApiResponse(
+            responseCode = "404",
+            description = "System prompt not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "A system prompt with the requested name already exists",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"mcp:system_prompt:update"})
@@ -167,7 +181,10 @@ class SystemPromptController {
                     Returns 204 whether or not the prompt existed, making the call idempotent.
                     """)
     @ApiResponse(responseCode = "204", description = "System prompt deleted")
-    @ApiResponse(responseCode = "404", description = "System prompt not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "System prompt not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"mcp:system_prompt:delete"})

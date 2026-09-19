@@ -396,7 +396,8 @@ class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
         mockMvc.perform(withAuth(put(STAFFING_BASE + "/" + nonExistentId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updatePayload)))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
 
     // ========== VALIDATION / EDGE CASES ==========

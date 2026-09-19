@@ -8,6 +8,7 @@ import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
+import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.EmployeeService;
 import com.positivity.shared.error.ApiError;
@@ -266,7 +267,7 @@ public class EmployeeController {
         return employeeService
                 .resolveByEmployeeNumber(employeeNumber)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new NotFoundException("Employee not found for employee number"));
     }
 
     @PostMapping("/{employeeId}/disable")

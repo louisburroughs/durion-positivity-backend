@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -14,6 +15,8 @@ import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -96,6 +99,24 @@ class NltiExceptionHandlerErrorHandlingTest {
                 .doesNotContain(leakCanary)
                 .doesNotContain("UnknownPathException")
                 .doesNotContain("documentId");
+    }
+
+    /**
+     * Issue #1720: {@code getDocumentIngestionJob} documents its 404 as the ApiError envelope, so an
+     * unknown job id must answer with that envelope rather than the empty body it used to return.
+     */
+    @Test
+    @WithMockUser(authorities = "mcp:document:ingest")
+    void anUnknownIngestionJobAnswers404WithTheApiErrorEnvelope() throws Exception {
+        when(documentIngestionService.getIngestionJob(any(UUID.class))).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/v1/mcp/documents/jobs/{jobId}", UUID.randomUUID()))
+                .andExpect(status().isNotFound())
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").value("2026-09-03T12:00:00Z"));
     }
 
     @TestConfiguration

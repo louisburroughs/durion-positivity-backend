@@ -87,7 +87,7 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: '#/components/schemas/EventTypeResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request parameters
       summary: Create a new event type
       tags:
@@ -152,11 +152,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/EventTypeResponse'
           description: Event type found and returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Event type code is malformed
         '404':
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: '#/components/schemas/EventTypeResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Event type not found
       summary: Get an event type by code
       tags:
@@ -214,7 +220,7 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: '#/components/schemas/EventTypeResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request parameters
       summary: Create or update event type by code
       tags:
@@ -247,7 +253,17 @@ paths:
       responses:
         '204':
           description: Event type deleted successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request parameters
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Event type not found
       summary: Delete an event type by id
       tags:
@@ -285,9 +301,9 @@ paths:
           description: Event type found and returned
         '404':
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: '#/components/schemas/EventTypeResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Event type not found
       summary: Get an event type by id
       tags:
@@ -340,11 +356,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/EventTypeResponse'
           description: Event type updated successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request parameters
         '404':
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: '#/components/schemas/EventTypeResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Event type not found
       summary: Update an existing event type
       tags:
@@ -412,6 +434,10 @@ paths:
                 $ref: '#/components/schemas/PagedResponseEmittedEventResponse'
           description: Page of matching events returned
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: since is out of the allowed range, or page/size are invalid
       summary: Query recorded events for one entity
       tags:
@@ -456,10 +482,10 @@ paths:
           description: Event stored successfully
         '400':
           content:
-            '*/*':
+            application/json:
               schema:
-                type: string
-          description: Event type ID is not preregistered
+                $ref: '#/components/schemas/ApiError'
+          description: Event type ID is not preregistered, or a field fails validation
       summary: Receive and store an emitted event
       tags:
       - Event Emission

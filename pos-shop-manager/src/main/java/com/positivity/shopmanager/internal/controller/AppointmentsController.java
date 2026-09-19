@@ -126,7 +126,10 @@ public class AppointmentsController {
                     + " (ineligible status), or BOOKING_HORIZON_EXCEEDED when startAt lies beyond the configured"
                     + " booking horizon (DECISION-SHOPMGMT-019; 180 facility-local days by default).",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "501", description = "Not implemented.")
+    @ApiResponse(
+            responseCode = "501",
+            description = "Not implemented.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_CREATE", apiVersion = "1")
     @PostMapping("/appointments")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -220,7 +223,10 @@ public class AppointmentsController {
             responseCode = "404",
             description = "Appointment not found.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "501", description = "Not implemented.")
+    @ApiResponse(
+            responseCode = "501",
+            description = "Not implemented.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/appointments/{appointmentId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

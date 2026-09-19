@@ -1,6 +1,7 @@
 package com.positivity.poseventreceiver.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -13,6 +14,7 @@ import com.positivity.poseventreceiver.internal.service.EventTypeService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Unit tests for {@link EventTypeController}.
@@ -39,9 +42,11 @@ import org.springframework.test.util.ReflectionTestUtils;
  * than 200-with-null — so they are asserted directly here.
  *
  * <p>
- * Tested without a Spring context on purpose. Every method returns a
- * {@code ResponseEntity} it builds itself, so a mocked service reaches all of
- * them, including the error branches; a {@code @WebMvcTest} slice would add the
+ * Tested without a Spring context on purpose: a mocked service reaches every
+ * branch. Success branches return a {@code ResponseEntity}; error branches throw
+ * a {@code ResponseStatusException} carrying the status, which pos-web-common's
+ * advice renders as the ApiError envelope — {@code EventReceiverErrorEnvelopeTest}
+ * pins that rendered body. A {@code @WebMvcTest} slice would add the
  * {@code @EmitEvent} aspect and the shared-secret filter without covering any
  * additional controller logic.
  */
@@ -58,6 +63,17 @@ class EventTypeControllerTest {
     private static EventTypeResponse response(String typeCode) {
         return new EventTypeResponse(
                 UUID.randomUUID(), typeCode, "a description", true, "1", 200_000L, 1_000_000L, 3_000_000L);
+    }
+
+    /**
+     * Error branches throw a {@link ResponseStatusException} so pos-web-common's advice renders the
+     * ApiError envelope (issue #1720); {@code EventReceiverErrorEnvelopeTest} pins the body.
+     */
+    private static void assertStatus(ThrowingCallable call, HttpStatus expected) {
+        assertThatThrownBy(call)
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(expected));
     }
 
     private static EventTypeRequest request() {
@@ -120,7 +136,7 @@ class EventTypeControllerTest {
             UUID id = UUID.randomUUID();
             when(eventTypeService.getEventTypeById(id)).thenReturn(Optional.empty());
 
-            assertThat(sut.getEventTypeById(id).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertStatus(() -> sut.getEventTypeById(id), HttpStatus.NOT_FOUND);
         }
 
         @Test
@@ -139,7 +155,7 @@ class EventTypeControllerTest {
         void getByCode_whenAbsent_returnsNotFound() {
             when(eventTypeService.getEventTypeByCode("NOPE")).thenReturn(Optional.empty());
 
-            assertThat(sut.getEventTypeByCode("NOPE").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertStatus(() -> sut.getEventTypeByCode("NOPE"), HttpStatus.NOT_FOUND);
         }
 
         @Test
@@ -148,7 +164,7 @@ class EventTypeControllerTest {
             when(eventTypeService.getEventTypeByCode(anyString()))
                     .thenThrow(new IllegalArgumentException("typeCode must contain only uppercase letters"));
 
-            assertThat(sut.getEventTypeByCode("bad code!").getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertStatus(() -> sut.getEventTypeByCode("bad code!"), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -175,10 +191,7 @@ class EventTypeControllerTest {
             // must not let that surface as a 200 with no body.
             when(eventTypeService.createEventType(any())).thenReturn(Optional.empty());
 
-            ResponseEntity<EventTypeResponse> result = sut.createEventType(request());
-
-            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(result.getBody()).isNull();
+            assertStatus(() -> sut.createEventType(request()), HttpStatus.BAD_REQUEST);
         }
 
         @Test
@@ -187,7 +200,7 @@ class EventTypeControllerTest {
             when(eventTypeService.createEventType(any()))
                     .thenThrow(new IllegalArgumentException("description is required"));
 
-            assertThat(sut.createEventType(request()).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertStatus(() -> sut.createEventType(request()), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -212,8 +225,7 @@ class EventTypeControllerTest {
             when(eventTypeService.upsertEventType(anyString(), any()))
                     .thenThrow(new IllegalArgumentException("Path typeCode must match request typeCode when provided"));
 
-            assertThat(sut.upsertEventType("ORDER_CREATE", request()).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertStatus(() -> sut.upsertEventType("ORDER_CREATE", request()), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -238,8 +250,7 @@ class EventTypeControllerTest {
         void update_whenAbsent_returnsNotFound() {
             when(eventTypeService.updateEventType(any(), any())).thenReturn(Optional.empty());
 
-            assertThat(sut.updateEventType(UUID.randomUUID(), request()).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertStatus(() -> sut.updateEventType(UUID.randomUUID(), request()), HttpStatus.NOT_FOUND);
         }
 
         @Test
@@ -248,8 +259,7 @@ class EventTypeControllerTest {
             when(eventTypeService.updateEventType(any(), any()))
                     .thenThrow(new IllegalArgumentException("p50Micros must be positive"));
 
-            assertThat(sut.updateEventType(UUID.randomUUID(), request()).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertStatus(() -> sut.updateEventType(UUID.randomUUID(), request()), HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -274,7 +284,7 @@ class EventTypeControllerTest {
         void delete_whenAbsent_returnsNotFound() {
             when(eventTypeService.deleteEventType(any())).thenReturn(false);
 
-            assertThat(sut.deleteEventType(UUID.randomUUID()).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertStatus(() -> sut.deleteEventType(UUID.randomUUID()), HttpStatus.NOT_FOUND);
         }
 
         @Test
@@ -282,7 +292,7 @@ class EventTypeControllerTest {
         void delete_whenValidationFails_returnsBadRequest() {
             when(eventTypeService.deleteEventType(any())).thenThrow(new IllegalArgumentException("id is required"));
 
-            assertThat(sut.deleteEventType(UUID.randomUUID()).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertStatus(() -> sut.deleteEventType(UUID.randomUUID()), HttpStatus.BAD_REQUEST);
         }
     }
 

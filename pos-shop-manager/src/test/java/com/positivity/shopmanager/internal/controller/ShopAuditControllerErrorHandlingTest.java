@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,6 +14,8 @@ import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -110,6 +113,25 @@ class ShopAuditControllerErrorHandlingTest {
                 .getContentAsString();
 
         assertThat(body).doesNotContain(leakCanary).doesNotContain("shop_audit_entry_pkey");
+    }
+
+    /**
+     * Issue #1720: {@code getShopAuditEntry} documents its 404 as the ApiError envelope, so an unknown
+     * id must answer with that envelope rather than the empty body it used to return.
+     */
+    @Test
+    @WithMockUser(authorities = "shop:schedule:view")
+    void anUnknownAuditEntryAnswers404WithTheApiErrorEnvelope() throws Exception {
+        UUID unknownId = UUID.randomUUID();
+        when(shopAuditService.findById(unknownId)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/v1/shop/audit/{id}", unknownId))
+                .andExpect(status().isNotFound())
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").value("2026-09-03T12:00:00Z"));
     }
 
     /** Clock for {@link GlobalExceptionHandler} and {@code pos-web-common}'s advice, plus method security. */

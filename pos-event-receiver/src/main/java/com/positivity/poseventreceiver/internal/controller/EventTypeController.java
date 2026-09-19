@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.poseventreceiver.internal.dto.EventTypeRequest;
 import com.positivity.poseventreceiver.internal.dto.EventTypeResponse;
 import com.positivity.poseventreceiver.internal.service.EventTypeService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -30,6 +32,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for managing EventTypes used by preregistered events.
@@ -114,7 +117,10 @@ public class EventTypeController {
             responseCode = "200",
             description = "Event type found and returned",
             content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Event type not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Event type not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<EventTypeResponse> getEventTypeById(
             @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
                     @PathVariable
@@ -124,7 +130,7 @@ public class EventTypeController {
         return eventTypeService
                 .getEventTypeById(id)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(EventTypeController::eventTypeNotFound);
     }
 
     @GetMapping("/code/{typeCode}")
@@ -149,7 +155,14 @@ public class EventTypeController {
             responseCode = "200",
             description = "Event type found and returned",
             content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Event type not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Event type code is malformed",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Event type not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<EventTypeResponse> getEventTypeByCode(
             @Parameter(description = "Event type code", required = true, example = "ORDER_CREATED")
                     @PathVariable
@@ -157,11 +170,11 @@ public class EventTypeController {
                     String typeCode) {
         log.info("Fetching event type with code(mask): {}", maskForLog(typeCode));
         try {
-            // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
-            return ResponseEntity.of(eventTypeService.getEventTypeByCode(typeCode));
+            return ResponseEntity.ok(
+                    eventTypeService.getEventTypeByCode(typeCode).orElseThrow(EventTypeController::eventTypeNotFound));
         } catch (IllegalArgumentException e) {
             log.warn("Invalid event type code lookup(mask) '{}': {}", maskForLog(typeCode), e.getMessage());
-            return ResponseEntity.badRequest().build();
+            throw invalidRequest(e);
         }
     }
 
@@ -191,7 +204,10 @@ public class EventTypeController {
             responseCode = "201",
             description = "Event type created successfully",
             content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request parameters")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request parameters",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<EventTypeResponse> createEventType(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Event type registration to create, naming the code, description and optional"
@@ -219,7 +235,7 @@ public class EventTypeController {
             var created = eventTypeService.createEventType(request);
             if (created.isEmpty()) {
                 log.warn("Event type with code(mask) already exists: {}", maskForLog(request.getTypeCode()));
-                return ResponseEntity.badRequest().build();
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EVENT_TYPE_ALREADY_EXISTS");
             }
             var response = created.get();
             log.info(
@@ -232,7 +248,7 @@ public class EventTypeController {
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IllegalArgumentException e) {
             log.warn("Invalid create event type request: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
+            throw invalidRequest(e);
         }
     }
 
@@ -263,7 +279,10 @@ public class EventTypeController {
             responseCode = "200",
             description = "Event type created or updated successfully",
             content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request parameters")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request parameters",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<EventTypeResponse> upsertEventType(
             @Parameter(description = "Event type code", required = true, example = "ORDER_ORDER_CREATE")
                     @PathVariable
@@ -304,7 +323,7 @@ public class EventTypeController {
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             log.warn("Invalid upsert event type request for code(mask) {}: {}", maskForLog(typeCode), e.getMessage());
-            return ResponseEntity.badRequest().build();
+            throw invalidRequest(e);
         }
     }
 
@@ -333,7 +352,14 @@ public class EventTypeController {
             responseCode = "200",
             description = "Event type updated successfully",
             content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Event type not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request parameters",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Event type not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<EventTypeResponse> updateEventType(
             @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
                     @PathVariable
@@ -364,7 +390,7 @@ public class EventTypeController {
         try {
             var updated = eventTypeService.updateEventType(id, request);
             if (updated.isEmpty()) {
-                return ResponseEntity.notFound().build();
+                throw eventTypeNotFound();
             }
             EventTypeResponse response = updated.get();
             log.info(
@@ -377,7 +403,7 @@ public class EventTypeController {
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             log.warn("Invalid update event type request for id(mask) {}: {}", maskForLog(id), e.getMessage());
-            return ResponseEntity.badRequest().build();
+            throw invalidRequest(e);
         }
     }
 
@@ -402,7 +428,14 @@ public class EventTypeController {
                     """,
             tags = {"Event Types"})
     @ApiResponse(responseCode = "204", description = "Event type deleted successfully")
-    @ApiResponse(responseCode = "404", description = "Event type not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request parameters",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Event type not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> deleteEventType(
             @Parameter(
                             description = "EventType ID to delete",
@@ -415,14 +448,22 @@ public class EventTypeController {
         try {
             if (!eventTypeService.deleteEventType(id)) {
                 log.warn("Event type not found: id(mask)={}", maskForLog(id));
-                return ResponseEntity.notFound().build();
+                throw eventTypeNotFound();
             }
             log.info("Event type deleted successfully: id(mask)={}", maskForLog(id));
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             log.warn("Invalid delete event type request for id(mask) {}: {}", maskForLog(id), e.getMessage());
-            return ResponseEntity.badRequest().build();
+            throw invalidRequest(e);
         }
+    }
+
+    private static @NonNull ResponseStatusException eventTypeNotFound() {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "EVENT_TYPE_NOT_FOUND");
+    }
+
+    private static @NonNull ResponseStatusException invalidRequest(@NonNull IllegalArgumentException cause) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "EVENT_TYPE_INVALID_REQUEST", cause);
     }
 
     private String maskForLog(Object value) {

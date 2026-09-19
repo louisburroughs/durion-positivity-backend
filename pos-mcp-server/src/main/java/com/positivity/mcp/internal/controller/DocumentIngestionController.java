@@ -5,6 +5,7 @@ import com.positivity.mcp.internal.config.DocumentIngestionJob;
 import com.positivity.mcp.internal.config.DocumentIngestionJobStatus;
 import com.positivity.mcp.internal.config.DocumentIngestionService;
 import com.positivity.mcp.internal.security.McpPermissions;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -18,6 +19,7 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -64,7 +67,10 @@ public class DocumentIngestionController {
                     """,
             tags = {"Document Ingestion"})
     @ApiResponse(responseCode = "202", description = "Ingestion job accepted")
-    @ApiResponse(responseCode = "400", description = "Document metadata is not JSON-serializable")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Document metadata is not JSON-serializable",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<DocumentIngestionJobResponse> ingestDocument(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Raw document text to embed, with optional identifying metadata.",
@@ -102,12 +108,17 @@ public class DocumentIngestionController {
                     exists for the id.
                     """,
             tags = {"Document Ingestion"})
+    @ApiResponse(
+            responseCode = "404",
+            description = "No ingestion job exists for the id",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<DocumentIngestionJobResponse> getIngestionJob(@PathVariable @NonNull UUID jobId) {
         return documentIngestionService
                 .getIngestionJob(jobId)
                 .map(DocumentIngestionJobResponse::from)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "DOCUMENT_INGESTION_JOB_NOT_FOUND"));
     }
 
     @Schema(

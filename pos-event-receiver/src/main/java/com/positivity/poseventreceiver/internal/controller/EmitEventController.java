@@ -2,6 +2,7 @@ package com.positivity.poseventreceiver.internal.controller;
 
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 import com.positivity.poseventreceiver.internal.service.EmitEventService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -12,9 +13,11 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Event receiver controller for storing emitted events from other services.
@@ -88,7 +91,10 @@ public class EmitEventController {
                     """,
             tags = {"Event Emission"})
     @ApiResponse(responseCode = "200", description = "Event stored successfully")
-    @ApiResponse(responseCode = "400", description = "Event type ID is not preregistered")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Event type ID is not preregistered, or a field fails validation",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     // @EmitEvent - FORBIDDEN: See warning above. Would cause infinite recursion.
     public ResponseEntity<String> receiveEvent(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -113,12 +119,12 @@ public class EmitEventController {
                     EmitEventRequest request) {
         try {
             if (!emitEventService.receiveEvent(request)) {
-                return ResponseEntity.badRequest().body("ID not preregistered");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EVENT_ID_NOT_PREREGISTERED");
             }
             return ResponseEntity.ok("Event stored");
         } catch (IllegalArgumentException e) {
             log.warn("Rejected emitted event payload: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EVENT_PAYLOAD_INVALID", e);
         }
     }
 }
