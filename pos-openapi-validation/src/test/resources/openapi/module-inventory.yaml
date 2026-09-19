@@ -50,6 +50,7 @@ modules:
   pos-warranty:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-supplier:
     mode: STRICT
     annotationDepth: STRICT
