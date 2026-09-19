@@ -1058,11 +1058,20 @@ class ScheduleCapacityServiceTest {
         // same 180 minutes rather than a second helping of them.
         assertThat(tuesdayBay.getOccupiedMinutes()).isEqualTo(180);
         assertThat(tuesdayBay.getCarryOverIn()).hasSize(1);
-        BigDecimal carriedMinutes =
-                tuesdayBay.getCarryOverIn().get(0).getBayHours().multiply(new BigDecimal("60"));
-        assertThat(carriedMinutes)
-                .as("carryOverIn is the detail behind occupiedMinutes, never an addition to it")
-                .isEqualByComparingTo(BigDecimal.valueOf(tuesdayBay.getOccupiedMinutes()));
+        assertThat(tuesdayBay.getCarryOverIn().get(0).getBayHours()).isEqualByComparingTo(new BigDecimal("3.0"));
+
+        // Cross-checked against the occupancy array rather than against carryOverIn. Comparing
+        // bayHours to occupiedMinutes proves nothing for a single-appointment bay: recordContribution
+        // is fed the very value that increments occupiedMinutes, on both write paths, so a
+        // double-add would inflate both sides equally and the comparison would still hold. The
+        // occupancy slots are marked by a separate call that clamps to the day's own window, so a
+        // second helping of the same overrun raises the minute total without raising the slot
+        // count - which is exactly the failure this assertion is here to catch.
+        int minutesRepresentedBySlots =
+                tuesdayBay.getOccupancy().stream().mapToInt(Integer::intValue).sum() * 60;
+        assertThat(tuesdayBay.getOccupiedMinutes())
+                .as("occupiedMinutes must equal what the independently-marked occupancy slots represent")
+                .isEqualTo(minutesRepresentedBySlots);
     }
 
     @Test
@@ -1190,5 +1199,189 @@ class ScheduleCapacityServiceTest {
         // 60 (Saturday's job, 08:00-09:00) + 180 (15:00 job, 08:00-11:00) + 120 (14:00 job,
         // 08:00-10:00) - each counted once.
         assertThat(tuesdayBay.getOccupiedMinutes()).isEqualTo(360);
+    }
+
+    // -------------------------------------------------------------------------
+    // #2050 adversarial-review follow-ups: what fromDate means on a plain
+    // multi-day job, and CARRY_OVER_LOOKBACK_DAYS pinned from below as well as
+    // from above
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2050 AC1 - DELIBERATE BEHAVIOUR CHANGE: for a job that directly overlapped two "
+            + "open days before overrunning the second, carryOverIn names the date its window BEGAN "
+            + "(Monday), not the date whose close it overran (Tuesday)")
+    void twoDayJobReportsTheDateItsWindowBeganNotTheDateItOverran() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        // An ordinary two-day booking that needs no lookback at all: planned Monday 15:00-17:00,
+        // actually run from Monday 15:00 straight through to Tuesday 20:00.
+        Appointment appointment = persistAppointment(
+                locationId, bayId, instant(MONDAY, 15, 0), instant(MONDAY, 17, 0), AppointmentStatus.SCHEDULED);
+        UUID workOrderId = UUIDv7Generator.generate();
+        persistWorkorderLink(workOrderId, appointment, instant(MONDAY, 15, 0), instant(TUESDAY, 20, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, MONDAY, WEDNESDAY);
+
+        assertThat(response.getDays())
+                .extracting(ScheduleCapacityResponse.DayCapacityView::getDate)
+                .containsExactly(MONDAY, TUESDAY, WEDNESDAY);
+        ScheduleCapacityResponse.BayCapacityView mondayBay =
+                response.getDays().get(0).getBays().get(0);
+        ScheduleCapacityResponse.BayCapacityView tuesdayBay =
+                response.getDays().get(1).getBays().get(0);
+        ScheduleCapacityResponse.BayCapacityView wednesdayBay =
+                response.getDays().get(2).getBays().get(0);
+
+        // The shape, stated unambiguously so the fromDate assertion below cannot be read as
+        // covering some other geometry: pass 1 finds DIRECT real-clock overlap on Monday
+        // (15:00-17:00 = 120) and on Tuesday (the whole 08:00-17:00 window = 540), so the last
+        // directly-overlapped day is TUESDAY. Only the 180 minutes past Tuesday's 17:00 close are
+        // re-anchored by pass 2, onto Wednesday.
+        assertThat(mondayBay.getOccupiedMinutes()).isEqualTo(120);
+        assertThat(tuesdayBay.getOccupiedMinutes()).isEqualTo(540);
+        assertThat(wednesdayBay.getOccupiedMinutes()).isEqualTo(180);
+
+        // THE CHANGE, asserted on purpose. origin/main defined fromDate as "the date whose close
+        // the job overran" and emitted TUESDAY for this Wednesday view. #2050 redefines it as "the
+        // date the job's effective window began", because only a fact derived from the row itself
+        // is range-independent (AC2) - a date derived from which day happened to be the last one
+        // overlapped is not. The two definitions diverge for EVERY job that directly overlapped two
+        // or more open days before overrunning the last of them, which is an ordinary two-day
+        // booking, not an exotic case. This test exists so that divergence is recorded intent with
+        // a named expectation, rather than something a future reader discovers by diffing output.
+        assertThat(wednesdayBay.getCarryOverIn()).hasSize(1);
+        ScheduleCapacityResponse.CarryOverView wednesdayCarryOver =
+                wednesdayBay.getCarryOverIn().get(0);
+        assertThat(wednesdayCarryOver.getFromDate())
+                .as("fromDate is the date the effective window began (Monday), not the date whose "
+                        + "close was overrun (Tuesday)")
+                .isEqualTo(MONDAY);
+        assertThat(wednesdayCarryOver.getBayHours()).isEqualByComparingTo(new BigDecimal("3.0"));
+        assertThat(wednesdayCarryOver.getAppointmentId()).isEqualTo(appointment.getAppointmentId());
+        assertThat(wednesdayCarryOver.getWorkorderId()).isEqualTo(workOrderId);
+
+        // Tuesday is annotated by the same rule and for the same reason - its 540 minutes also came
+        // from a window that began on Monday - while Monday, the day that window began on, is not.
+        assertThat(tuesdayBay.getCarryOverIn()).hasSize(1);
+        assertThat(tuesdayBay.getCarryOverIn().get(0).getFromDate()).isEqualTo(MONDAY);
+        assertThat(tuesdayBay.getCarryOverIn().get(0).getBayHours()).isEqualByComparingTo(new BigDecimal("9.0"));
+        assertThat(mondayBay.getCarryOverIn()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2050 AC3 - the lookback bound is pinned from below too: a job originating 40 "
+            + "days before the range and still running inside it IS reported")
+    void jobOriginatingJustInsideTheLookbackBoundIsReported() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        // 2026-08-26, a Wednesday, so it has operating hours of its own. Forty days before the
+        // range start: comfortably inside ScheduleCapacityServiceImpl.CARRY_OVER_LOOKBACK_DAYS (42)
+        // and comfortably outside every smaller value anyone might "simplify" it to.
+        LocalDate fortyDaysBefore = MONDAY.minusDays(40);
+        // A job still running deep into the range, rather than one that finished long ago: pass 2
+        // distributes an overrun at roughly one operating window per open day, so a 40-day-old job
+        // that had already finished would have exhausted itself long before Monday and would prove
+        // nothing about the bound. This one's effective window is open the whole way, so it reaches
+        // Monday by plain direct overlap - the SQL predicate's windowStart is then the only thing
+        // that decides whether the row is seen at all.
+        Appointment appointment = persistAppointment(
+                locationId,
+                bayId,
+                instant(fortyDaysBefore, 15, 0),
+                instant(fortyDaysBefore, 17, 0),
+                AppointmentStatus.SCHEDULED);
+        UUID workOrderId = UUIDv7Generator.generate();
+        persistWorkorderLink(workOrderId, appointment, instant(fortyDaysBefore, 15, 0), instant(MONDAY, 11, 0));
+        flushAndClear();
+
+        ScheduleCapacityResponse.BayCapacityView mondayBay = scheduleCapacityService
+                .getCapacity(locationId, MONDAY, MONDAY)
+                .getDays()
+                .get(0)
+                .getBays()
+                .get(0);
+
+        // The companion to jobOriginatingBeyondTheLookbackBoundIsNotReported (45 days, not
+        // reported): that one reddens if the constant is RAISED, this one reddens if it is LOWERED.
+        // Together they pin CARRY_OVER_LOOKBACK_DAYS = 42 from both sides, so the fourteen lines of
+        // javadoc justifying the value are backed by executable expectations rather than prose
+        // alone.
+        assertThat(mondayBay.getOccupiedMinutes())
+                .as("a job originating 40 days back and still running must be inside the 42-day lookback")
+                .isEqualTo(180);
+        assertThat(mondayBay.getOccupancy()).containsExactly(1, 1, 1, 0, 0, 0, 0, 0, 0);
+        assertThat(mondayBay.getCarryOverIn()).hasSize(1);
+        ScheduleCapacityResponse.CarryOverView carryOver =
+                mondayBay.getCarryOverIn().get(0);
+        assertThat(carryOver.getFromDate()).isEqualTo(fortyDaysBefore);
+        assertThat(carryOver.getWorkorderId()).isEqualTo(workOrderId);
+        assertThat(carryOver.getBayHours()).isEqualByComparingTo(new BigDecimal("3.0"));
+    }
+
+    @Test
+    @DisplayName("#2050 AC2 - a wide [D-41, D] request and a single-day [D, D] request agree about "
+            + "D for a job originating 40 days before it, at the edge of the narrower request's own "
+            + "lookback window")
+    void wideRangeAndSingleDayRequestAgreeAboutTheSharedDateAtTheLookbackBoundary() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        LocalDate fortyDaysBefore = MONDAY.minusDays(40);
+        Appointment appointment = persistAppointment(
+                locationId,
+                bayId,
+                instant(fortyDaysBefore, 15, 0),
+                instant(fortyDaysBefore, 17, 0),
+                AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(
+                UUIDv7Generator.generate(), appointment, instant(fortyDaysBefore, 15, 0), instant(MONDAY, 11, 0));
+        flushAndClear();
+
+        // The widest and the narrowest legal request that both contain MONDAY: [D-41, D] is exactly
+        // the 42-day policy maximum ending on D, and [D, D] is a single day. Their lookback windows
+        // differ by 41 days - which is the thing rangeStartDoesNotChangeTheAnswerForADateInsideBothRanges
+        // does NOT exercise, since a one-day-old origin sits inside both windows however narrow they get.
+        LocalDate wideFrom = MONDAY.minusDays(41);
+        ScheduleCapacityResponse wide = scheduleCapacityService.getCapacity(locationId, wideFrom, MONDAY);
+        ScheduleCapacityResponse narrow = scheduleCapacityService.getCapacity(locationId, MONDAY, MONDAY);
+
+        assertThat(wide.getDays()).hasSize(42);
+        ScheduleCapacityResponse.DayCapacityView mondayViaWide = wide.getDays().get(41);
+        ScheduleCapacityResponse.DayCapacityView mondayViaNarrow =
+                narrow.getDays().get(0);
+        assertThat(mondayViaWide.getDate()).isEqualTo(MONDAY);
+        assertThat(mondayViaNarrow.getDate()).isEqualTo(MONDAY);
+
+        ScheduleCapacityResponse.BayCapacityView bayViaWide =
+                mondayViaWide.getBays().get(0);
+        ScheduleCapacityResponse.BayCapacityView bayViaNarrow =
+                mondayViaNarrow.getBays().get(0);
+
+        // This test sits INSIDE the guarantee the code actually offers, deliberately. That
+        // guarantee is: two legal requests containing a date D agree about D for every job whose
+        // planned window ends within CARRY_OVER_LOOKBACK_DAYS of D - because the narrowest assembly
+        // window either request can have is [D-42, D], reached when from = D. Forty days is inside
+        // that; forty-THREE is not, and a 43-day origin genuinely disagrees between these two
+        // requests. That disagreement is a documented limit of the design, not a bug to be caught
+        // here: the SQL predicate bounds the PLANNED window while contribution depends on the
+        // EFFECTIVE one, so any lower bound measured from `from` necessarily gives two legal
+        // requests different assembly windows. Do not "strengthen" this test to 43 days and file
+        // the resulting failure as a regression - widening the guarantee needs a different
+        // predicate, not a different test.
+        assertThat(bayViaNarrow.getOccupiedMinutes())
+                .as("a 42-day request and a 1-day request must agree about the day they share (#2050 AC2)")
+                .isEqualTo(bayViaWide.getOccupiedMinutes());
+        assertThat(bayViaNarrow.getOccupiedMinutes()).isEqualTo(180);
+        assertThat(bayViaNarrow.getOccupancy()).isEqualTo(bayViaWide.getOccupancy());
+        assertThat(bayViaNarrow.getCarryOverIn()).hasSameSizeAs(bayViaWide.getCarryOverIn());
+        assertThat(bayViaNarrow.getCarryOverIn())
+                .extracting(
+                        ScheduleCapacityResponse.CarryOverView::getFromDate,
+                        ScheduleCapacityResponse.CarryOverView::getAppointmentId,
+                        ScheduleCapacityResponse.CarryOverView::getWorkorderId,
+                        ScheduleCapacityResponse.CarryOverView::getBayHours)
+                .containsExactlyElementsOf(carryOverTuples(bayViaWide));
+        assertThat(bayViaNarrow.getCarryOverIn().get(0).getFromDate()).isEqualTo(fortyDaysBefore);
     }
 }

@@ -139,9 +139,13 @@ public class ScheduleCapacityResponse {
                         + "(fromDate, appointmentId) (issues #2021 AC4/AC5/AC6, #2050). Already netted into "
                         + "occupiedMinutes and occupancy above — this list is the detail behind those "
                         + "numbers, never an addition to them. Populated only when status is OK. The "
-                        + "lookback is bounded at 42 days, the same limit as the requested range: work whose "
-                        + "window began more than that far before the range's first date is not reported "
-                        + "here. Empty when every appointment in this bay began on this date.",
+                        + "lookback that finds these is bounded at 42 days, the same limit as the requested "
+                        + "range, and what it bounds is the planned window: an appointment whose planned "
+                        + "window ended more than that far before the range's first date is never fetched, "
+                        + "so it cannot be reported here. That bound does not carry over to fromDate, which "
+                        + "reports when the work actually began and can therefore be earlier than the "
+                        + "lookback reaches. Empty when this bay has no appointments on this date, or when "
+                        + "every appointment it does have began on this date.",
                 requiredMode = REQUIRED)
         private List<CarryOverView> carryOverIn = new ArrayList<>();
     }
@@ -178,9 +182,11 @@ public class ScheduleCapacityResponse {
 
         @Schema(
                 description = "Bay-hours of this date that this appointment accounts for, in tenths of an "
-                        + "hour: its real-clock overlap with this day's window, the minutes re-anchored onto "
-                        + "this day from a prior open day's overrun, or both together when it is both "
-                        + "(#2050)",
+                        + "hour, whichever of two ways they reached it: either its real-clock overlap with "
+                        + "this day's window, or the minutes re-anchored onto this day from a prior open "
+                        + "day's overrun. The two sources are disjoint by construction — re-anchoring only "
+                        + "ever targets days after the last day the appointment directly overlapped — so "
+                        + "exactly one of them produced this number (#2050)",
                 example = "1.5",
                 requiredMode = REQUIRED)
         private BigDecimal bayHours;
