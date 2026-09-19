@@ -742,9 +742,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/LocationAvailabilityDto'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Invalid product identifier
       security:
       - bearerAuth:
@@ -794,11 +792,7 @@ paths:
                 $ref: '#/components/schemas/InventoryAvailabilityResponse'
           description: Availability updated
         '501':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InventoryAvailabilityResponse'
-          description: Not implemented
+          description: Not implemented. The response has NO body.
       security:
       - bearerAuth:
         - inventory:adjustment:create
@@ -983,7 +977,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
       security:
       - bearerAuth:
@@ -1143,19 +1137,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or recount limit exceeded
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permission
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Task not found
       security:
       - bearerAuth:
@@ -1207,13 +1201,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or quantity
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Task not found
         '409':
           content:
@@ -1265,7 +1259,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountTaskResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Task not found
       security:
       - bearerAuth:
@@ -1459,7 +1453,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdjustmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or no variance detected
         '404':
           content:
@@ -1585,7 +1579,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdjustmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Adjustment not found
       security:
       - bearerAuth:
@@ -1649,13 +1643,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdjustmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Adjustment not found or not in approvable state
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdjustmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: User lacks required approval permission
         '409':
           content:
@@ -1719,13 +1713,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdjustmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Adjustment not found or not in rejectable state
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdjustmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: User lacks required approval permission
         '409':
           content:
@@ -1861,7 +1855,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountPlanResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Validation failure
         '403':
           content:
@@ -1926,13 +1920,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -1983,7 +1977,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountPlanResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Cycle count plan not found
       security:
       - bearerAuth:
@@ -2040,25 +2034,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountPlanResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Validation failure
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountPlanResponse'
+                $ref: '#/components/schemas/ApiError'
           description: User lacks required permission
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountPlanResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Cycle count plan not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountPlanResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid status transition
       security:
       - bearerAuth:
@@ -2105,17 +2099,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/CycleCountTaskResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: User lacks required permission
         '404':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/CycleCountTaskResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Cycle count plan not found
       security:
       - bearerAuth:
@@ -2171,25 +2161,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountTaskGenerationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Validation failure
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountTaskGenerationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: User lacks required permission
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountTaskGenerationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Cycle count plan not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountTaskGenerationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Plan status does not accept task generation
       security:
       - bearerAuth:
@@ -2320,7 +2310,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountScheduleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Validation failure
         '403':
           content:
@@ -2371,13 +2361,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountScheduleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: User lacks required permission
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountScheduleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Cycle count schedule not found
       security:
       - bearerAuth:
@@ -2427,7 +2417,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountScheduleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Cycle count schedule not found
       security:
       - bearerAuth:
@@ -2485,19 +2475,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountScheduleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Validation failure
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountScheduleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: User lacks required permission
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountScheduleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Cycle count schedule not found
       security:
       - bearerAuth:
@@ -2582,7 +2572,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountToleranceResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or scope already configured
       security:
       - bearerAuth:
@@ -2725,7 +2715,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountToleranceResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Reactivation would collide with an existing active scope
         '404':
           content:
@@ -3266,7 +3256,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeactivateLocationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Bad request - invalid parameters or destination required
         '403':
           content:
@@ -3278,13 +3268,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeactivateLocationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Location not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeactivateLocationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Conflict - business rule violation
       security:
       - bearerAuth:
@@ -3342,7 +3332,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationInventoryInquiryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid location identifier
         '403':
           content:
@@ -3484,7 +3474,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationInventoryRollupResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid parameters (unknown parentType, bad expand value)
         '403':
           content:
@@ -3909,13 +3899,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -4826,13 +4816,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request payload
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
       security:
       - bearerAuth:
@@ -5189,9 +5179,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/PutawayTaskResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Validation failure
         '404':
           content:
@@ -5247,7 +5235,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PutawayTaskResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Putaway task not found
       security:
       - bearerAuth:
@@ -5306,25 +5294,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PutawayExecutionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Bad request - invalid task ID or request payload
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PutawayExecutionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden - insufficient authority
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PutawayExecutionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Putaway task not found
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PutawayExecutionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Validation failed for putaway execution
       security:
       - bearerAuth:
@@ -5758,7 +5746,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Validation failure
         '403':
           content:
@@ -5825,13 +5813,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Validation failure
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Policy not found
       security:
       - bearerAuth:
@@ -5888,13 +5876,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Policy not found
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: snoozedUntil is not in the future
       security:
       - bearerAuth:
@@ -7177,7 +7165,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteInventoryRollupResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid parameters
         '403':
           content:
@@ -7388,8 +7376,16 @@ paths:
         '201':
           description: Movement recorded
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Validation failure
         '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient stock
       security:
       - bearerAuth:
