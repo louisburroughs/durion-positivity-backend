@@ -786,9 +786,9 @@ paths:
 
         Required inputs: audio (the recorded clip, multipart file part, required) and language (optional BCP-47 tag, e.g. "en-US"); when language is omitted the request''s resolved Accept-Language locale is used, falling back to provider auto-detection when that locale is undetermined.
 
-        Retention: transcribe-and-discard — the audio is held in memory for this request only, forwarded to the configured speech-to-text provider, and never persisted, logged, or included in the emitted event. A hosted provider''s own retention policy applies to the copy it received; a self-hosted provider retains nothing.
+        Retention: transcribe-and-discard — the audio is held in memory for this request only, forwarded to the configured speech-to-text provider, and never persisted, logged, or included in the emitted event. A hosted provider''s own retention policy applies to the copy it received. A self-hosted provider — infrastructure under our own control — keeps nothing beyond serving this one request.
 
-        Emits a MCP_TRANSCRIPTION_EXECUTE event.
+        Emits an MCP_TRANSCRIPTION_EXECUTE event.
 
         Returns 200 with the transcript synchronously — clips this short never queue for later polling.
 
@@ -822,7 +822,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: language is not a well-formed BCP-47 tag
+          description: language is not a well-formed BCP-47 tag, or the multipart request body is malformed/truncated (a bad boundary, or the client aborting mid-upload)
         '401':
           content:
             application/json:

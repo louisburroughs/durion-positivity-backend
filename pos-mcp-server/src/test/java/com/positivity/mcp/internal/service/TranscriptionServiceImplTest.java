@@ -221,6 +221,18 @@ class TranscriptionServiceImplTest {
     }
 
     @Test
+    @DisplayName("a blank transcript for a clip over the duration max raises AudioTooLargeException (413), "
+            + "not UnintelligibleAudioException (422) — the size/duration rejection wins over the "
+            + "content-quality one")
+    void transcribe_blankTranscriptOverDurationMax_throwsAudioTooLargeNotUnintelligible() {
+        when(client.transcribe(any(), any(), any(), any())).thenReturn(new SpeechToTextResult("   ", "en", 61.0));
+        MultipartFile clip = audio(new byte[] {1}, "audio/webm");
+
+        assertThatThrownBy(() -> service.transcribe(clip, null, Locale.ROOT))
+                .isInstanceOf(AudioTooLargeException.class);
+    }
+
+    @Test
     @DisplayName("response language: the client-reported language wins")
     void transcribe_responseLanguage_prefersClientReported() {
         when(client.transcribe(any(), any(), any(), any())).thenReturn(new SpeechToTextResult("hi", "de-DE", null));

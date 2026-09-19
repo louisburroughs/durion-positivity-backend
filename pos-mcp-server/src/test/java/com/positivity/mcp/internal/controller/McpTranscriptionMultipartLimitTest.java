@@ -73,6 +73,16 @@ class McpTranscriptionMultipartLimitTest {
                 .header("Authorization", "Bearer " + unsignedJwtWithUid());
     }
 
+    /** Authenticated (the gateway headers are present) but without {@code mcp:chat:execute}. */
+    private HttpRequest.Builder authenticatedRequestWithoutChatExecuteAuthority(URI uri) {
+        return HttpRequest.newBuilder()
+                .uri(uri)
+                .timeout(Duration.ofSeconds(30))
+                .header("X-Authorities", "mcp:llm_api:view")
+                .header("X-User", "transcribe-user")
+                .header("Authorization", "Bearer " + unsignedJwtWithUid());
+    }
+
     private static byte[] multipartBodyWithAudioPart(int audioBytes) {
         StringBuilder head = new StringBuilder();
         head.append("--").append(BOUNDARY).append("\r\n");
@@ -120,6 +130,22 @@ class McpTranscriptionMultipartLimitTest {
 
         assertThat(response.statusCode()).isEqualTo(413);
         assertThat(response.body()).contains("\"code\":\"AUDIO_TOO_LARGE\"");
+    }
+
+    @Test
+    @DisplayName("#2074: an oversize upload without mcp:chat:execute is denied 403 by the filter chain, "
+            + "before multipart parsing ever produces 413")
+    void transcribe_oversizeClipWithoutChatExecuteAuthority_returns403NotPayloadTooLarge() throws Exception {
+        HttpRequest request = authenticatedRequestWithoutChatExecuteAuthority(
+                        URI.create("http://127.0.0.1:" + port + "/v1/mcp/transcriptions"))
+                .header("Content-Type", "multipart/form-data; boundary=" + BOUNDARY)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBodyWithAudioPart(FIVE_MIB + 1)))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(response.body()).contains("\"code\":\"FORBIDDEN\"");
     }
 
     @Test
