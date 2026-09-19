@@ -23,6 +23,7 @@ import com.positivity.tenant.internal.exception.InvalidStatusTransitionException
 import com.positivity.tenant.internal.exception.ResourceNotFoundException;
 import com.positivity.tenant.internal.service.AccountService;
 import com.positivity.tenant.internal.service.TenantService;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -46,7 +47,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * map to.
  */
 @WebMvcTest({PlatformTenantController.class, PlatformAccountController.class})
-@Import({SecurityConfig.class, PlatformControllersWebMvcTest.SliceConfig.class})
+@Import({SecurityConfig.class, WebCommonErrorAutoConfiguration.class, PlatformControllersWebMvcTest.SliceConfig.class})
 class PlatformControllersWebMvcTest {
 
     private static final UUID TENANT_ID = UUID.fromString("01990000-0000-7000-8000-000000000123");
@@ -134,7 +135,24 @@ class PlatformControllersWebMvcTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(body),
                         "platform:tenant:create"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(jsonPath("$.detail").doesNotExist());
+    }
+
+    @Test
+    void malformedJsonAnswersTheApiErrorEnvelope() throws Exception {
+        mockMvc.perform(authed(
+                        post("/v1/platform/tenants")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{not json"),
+                        "platform:tenant:create"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.code").isNotEmpty())
+                .andExpect(jsonPath("$.detail").doesNotExist());
     }
 
     @Test
