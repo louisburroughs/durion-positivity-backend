@@ -5,6 +5,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -46,6 +49,12 @@ public class TestSecurityConfig {
             // Bay domain authorities
             new SimpleGrantedAuthority("location:bay:manage"),
             new SimpleGrantedAuthority("location:bay:read"));
+
+    /** The fixed clock {@code LocationGlobalExceptionHandler} stamps ApiError timestamps with (ADR-0024). */
+    @Bean
+    public Clock testClock() {
+        return Clock.fixed(Instant.parse("2026-09-19T12:00:00Z"), ZoneOffset.UTC);
+    }
 
     @Bean(name = "gatewaySecurityFilterChain")
     @Primary

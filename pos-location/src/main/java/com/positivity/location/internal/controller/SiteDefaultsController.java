@@ -40,7 +40,7 @@ public class SiteDefaultsController {
     /**
      * Documented on both operations, which gate on the caller's location scope (ADR-0061, #1872).
      * The body is the {@code ApiError} envelope rendered by pos-security-common's
-     * highest-precedence advice, not this module's ProblemDetail.
+     * highest-precedence advice, ahead of this module's LocationGlobalExceptionHandler.
      */
     static final String WRITE_SCOPE_DENIED_DESCRIPTION =
             "Caller lacks location:write, or holds it but its location scope does not cover locationId"

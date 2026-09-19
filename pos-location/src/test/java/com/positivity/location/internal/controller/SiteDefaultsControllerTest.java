@@ -145,7 +145,7 @@ class SiteDefaultsControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(BODY))
                     .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.detail").value("SITE_NOT_FOUND"));
+                    .andExpect(jsonPath("$.code").value("SITE_NOT_FOUND"));
         }
     }
 

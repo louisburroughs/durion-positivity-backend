@@ -2,80 +2,96 @@ package com.positivity.location.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.shared.error.ApiError;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Proves the inherited Spring MVC handlers of {@link LocationGlobalExceptionHandler} answer with
- * the correlation id in both the {@code X-Correlation-Id} header and the ProblemDetail body
- * (ADR-0017 §4, issue #1729) while keeping the RFC 9457 body shape the module documents.
+ * Pins how {@link LocationGlobalExceptionHandler} renders the module's
+ * {@link ResponseStatusException}s: the ApiError envelope (ADR-0017 §3, #1720) with a machine-code
+ * reason as {@code code}, and the correlation id in both the {@code X-Correlation-Id} header and the
+ * body (ADR-0017 §4, #1729).
  */
-@DisplayName("LocationGlobalExceptionHandler X-Correlation-Id header (ADR-0017 §4, #1729)")
+@DisplayName("LocationGlobalExceptionHandler ApiError rendering (ADR-0017 §3/§4)")
 class LocationGlobalExceptionHandlerTest {
 
-    private final LocationGlobalExceptionHandler handler = new LocationGlobalExceptionHandler();
+    private static final Instant NOW = Instant.parse("2026-09-19T12:00:00Z");
+
+    private final LocationGlobalExceptionHandler handler =
+            new LocationGlobalExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
-    @DisplayName("echoes the inbound X-Correlation-Id in header and ProblemDetail body")
-    void echoesInboundCorrelationId() throws Exception {
-        MockHttpServletRequest servletRequest = new MockHttpServletRequest("POST", "/v1/locations");
-        servletRequest.addHeader(LocationGlobalExceptionHandler.X_CORRELATION_ID, "corr-location-405");
+    @DisplayName("a machine-code reason becomes the code; the inbound correlation id is echoed")
+    void machineCodeReasonBecomesCode() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/locations/a/parents/a");
+        request.addHeader(LocationGlobalExceptionHandler.X_CORRELATION_ID, "corr-location-409");
 
-        ResponseEntity<Object> response = handler.handleException(
-                new HttpRequestMethodNotSupportedException("POST"), new ServletWebRequest(servletRequest));
+        ResponseEntity<ApiError> response = handler.handleResponseStatus(
+                new ResponseStatusException(HttpStatus.CONFLICT, "CYCLE_DETECTED"), request);
 
-        assertThat(response).isNotNull();
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getHeaders().getFirst(LocationGlobalExceptionHandler.X_CORRELATION_ID))
-                .isEqualTo("corr-location-405");
-        assertThat(response.getBody()).isInstanceOf(ProblemDetail.class);
-        ProblemDetail problem = (ProblemDetail) response.getBody();
-        assertThat(problem.getProperties()).containsEntry("correlationId", "corr-location-405");
+                .isEqualTo("corr-location-409");
+        ApiError body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.code()).isEqualTo("CYCLE_DETECTED");
+        assertThat(body.message()).isEqualTo("Request conflicts with the current state of the resource");
+        assertThat(body.status()).isEqualTo(409);
+        assertThat(body.timestamp()).isEqualTo(NOW.toString());
+        assertThat(body.correlationId()).isEqualTo("corr-location-409");
     }
 
     @Test
-    @DisplayName("generates a non-blank id, identical in header and body, when none is inbound")
-    void generatesCorrelationIdWhenAbsent() throws Exception {
-        MockHttpServletRequest servletRequest = new MockHttpServletRequest("GET", "/v1/locations/missing");
+    @DisplayName("a free-text reason becomes the message under a status code")
+    void freeTextReasonBecomesMessage() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/locations");
 
-        ResponseEntity<Object> response = handler.handleException(
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found"),
-                new ServletWebRequest(servletRequest));
+        ResponseEntity<ApiError> response = handler.handleResponseStatus(
+                new ResponseStatusException(HttpStatus.BAD_REQUEST, "type is required"), request);
 
-        assertThat(response).isNotNull();
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        String header = response.getHeaders().getFirst(LocationGlobalExceptionHandler.X_CORRELATION_ID);
-        assertThat(header).isNotBlank();
-        ProblemDetail problem = (ProblemDetail) response.getBody();
-        assertThat(problem).isNotNull();
-        assertThat(problem.getProperties()).containsEntry("correlationId", header);
-        assertThat(problem.getDetail()).isEqualTo("Location not found");
+        ApiError body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.code()).isEqualTo("VALIDATION_ERROR");
+        assertThat(body.message()).isEqualTo("type is required");
+        assertThat(body.status()).isEqualTo(400);
     }
 
     @Test
-    @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
-    void generatesCorrelationIdWhenInboundIsBlank() throws Exception {
-        MockHttpServletRequest servletRequest = new MockHttpServletRequest("GET", "/v1/locations/missing");
-        servletRequest.addHeader(LocationGlobalExceptionHandler.X_CORRELATION_ID, "   ");
+    @DisplayName("no reason: status code and default message; a fresh id, identical in header and body")
+    void noReasonGeneratesCorrelationId() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/v1/locations/missing");
 
-        ResponseEntity<Object> response = handler.handleException(
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found"),
-                new ServletWebRequest(servletRequest));
+        ResponseEntity<ApiError> response =
+                handler.handleResponseStatus(new ResponseStatusException(HttpStatus.NOT_FOUND), request);
 
-        assertThat(response).isNotNull();
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         String header = response.getHeaders().getFirst(LocationGlobalExceptionHandler.X_CORRELATION_ID);
         assertThat(header).isNotBlank();
-        assertThat(header).isNotEqualTo("   ");
-        ProblemDetail problem = (ProblemDetail) response.getBody();
-        assertThat(problem).isNotNull();
-        assertThat(problem.getProperties()).containsEntry("correlationId", header);
+        ApiError body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.code()).isEqualTo("NOT_FOUND");
+        assertThat(body.message()).isEqualTo("Requested resource was not found");
+        assertThat(body.correlationId()).isEqualTo(header);
+    }
+
+    @Test
+    @DisplayName("a blank inbound X-Correlation-Id is replaced by a generated one")
+    void blankInboundCorrelationIdIsReplaced() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/v1/locations/missing");
+        request.addHeader(LocationGlobalExceptionHandler.X_CORRELATION_ID, "   ");
+
+        ResponseEntity<ApiError> response = handler.handleResponseStatus(
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "LOCATION_NOT_FOUND"), request);
+
+        String header = response.getHeaders().getFirst(LocationGlobalExceptionHandler.X_CORRELATION_ID);
+        assertThat(header).isNotBlank().isNotEqualTo("   ");
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().correlationId()).isEqualTo(header);
     }
 }

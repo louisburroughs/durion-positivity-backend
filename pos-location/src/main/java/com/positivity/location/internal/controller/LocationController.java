@@ -33,7 +33,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -72,18 +71,17 @@ public class LocationController {
             """;
 
     private static final String CYCLE_DETECTED_EXAMPLE = """
-            {"type":"about:blank",
-             "title":"Conflict",
+            {"code":"CYCLE_DETECTED",
+             "message":"Request conflicts with the current state of the resource",
              "status":409,
-             "detail":"CYCLE_DETECTED",
-             "instance":"/v1/locations/018e1c9f-6b5a-7890-abcd-1234567890ab/parents/018e1c9f-0000-7890-abcd-1234567890ab",
+             "timestamp":"2026-09-19T14:00:00Z",
              "correlationId":"019507b4-1f3a-7000-8e04-5c9d3a4f6e12"}
             """;
 
     /**
      * Documented on every operation that gates on the caller's location scope (ADR-0061, #1872).
      * The body is the {@code ApiError} envelope rendered by pos-security-common's
-     * highest-precedence advice, not this module's {@link ProblemDetail}.
+     * highest-precedence advice, ahead of this module's {@link LocationGlobalExceptionHandler}.
      */
     static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
             "Caller holds location:write but its location scope does not cover the requested location"
@@ -484,18 +482,14 @@ public class LocationController {
                     Returns 400 when parentType is not a recognized value, and 409 CYCLE_DETECTED when childId \
                     equals parentId or when the edge would close a cycle on the requested parentType; \
                     duplicate and inverse relationships are rejected before the edge is written.
-                    Error responses carry an RFC 9457 ProblemDetail body (application/problem+json) whose \
-                    detail holds the machine-readable code and whose correlationId matches the \
-                    X-Correlation-Id response header.
+                    Error responses carry the ApiError envelope, whose code holds the machine-readable \
+                    error and whose correlationId matches the X-Correlation-Id response header.
                     """)
     @ApiResponse(responseCode = "200", description = "Parent relationship added successfully.")
     @ApiResponse(
             responseCode = "400",
             description = "Invalid parentType value.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "CYCLE_DETECTED: childId equals parentId, or the edge would close a cycle on the requested"
@@ -503,8 +497,8 @@ public class LocationController {
                     + " legal.",
             content =
                     @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class),
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class),
                             examples = @ExampleObject(name = "cycleDetected", value = CYCLE_DETECTED_EXAMPLE)))
     @EmitEvent(id = "LOCATION_PARENT_ADD", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
