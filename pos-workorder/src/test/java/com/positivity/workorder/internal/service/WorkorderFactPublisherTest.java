@@ -380,6 +380,39 @@ class WorkorderFactPublisherTest {
                 .containsExactly(currentTechnicianId, legacyOnlyId);
     }
 
+    /**
+     * #2058: the dashboard's {@code assignedMechanicId} was narrowed to the technician aggregate
+     * because a singular field cannot honestly carry a planned mechanic. The fact's
+     * {@code mechanicIds} is plural and stays the union of both sources — a planned mechanic on a
+     * workorder nobody holds is still published, so a consumer's shop dashboard keeps showing the
+     * plan. Consumers must not read position 0 of this list as the technician of record.
+     */
+    @Test
+    @DisplayName("#2058 - the fact still carries planned mechanics when no current technician exists")
+    void publishesPlannedMechanicsWithoutCurrentTechnician() {
+        UUID workorderId = UUID.randomUUID();
+        UUID plannedMechanicId = UUID.randomUUID();
+        Workorder workorder = Workorder.builder()
+                .id(workorderId)
+                .workorderNumber("WO-2026-2058")
+                .status(WorkorderStatus.APPROVED)
+                .mechanicIds("[\"" + plannedMechanicId + "\"]")
+                .version(1L)
+                .build();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(technicianAssignmentRepository.findCurrentTechnicians(Set.of(workorderId)))
+                .thenReturn(List.of());
+
+        publisher.markChanged(workorderId);
+        fireBeforeCommit();
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        assertThat(((WorkorderUpdatedV1) payloadCaptor.getValue()).mechanicIds())
+                .containsExactly(plannedMechanicId);
+    }
+
     @Test
     @DisplayName("No-op when Kafka publishing is disabled")
     void noopWhenWriterAbsent() {

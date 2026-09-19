@@ -127,14 +127,18 @@ public class DashboardServiceImpl implements DashboardService {
         // occupied resource with no job attached to it. Both panels now answer from one set.
         List<Workorder> workorders = mergeRoster(scheduledForDate, resourceHolders);
 
-        Map<Workorder, List<String>> mechanicsByWorkorder = assignedMechanics(workorders);
+        Map<Workorder, String> currentTechnicianByWorkorder = currentTechnicians(workorders);
+        Map<Workorder, List<String>> plannedMechanicsByWorkorder = plannedMechanics(workorders);
+        Map<Workorder, List<String>> mechanicsByWorkorder =
+                assignedMechanics(workorders, currentTechnicianByWorkorder, plannedMechanicsByWorkorder);
         List<WorkorderSummary> workorderSummaries = buildWorkorderSummaries(
                 workorders,
-                mechanicsByWorkorder,
+                currentTechnicianByWorkorder,
+                plannedMechanicsByWorkorder,
                 vehicleDescriptions(workorders),
                 customerNames(workorders),
                 synopses(workorders));
-        List<MechanicStatus> mechanicStatuses = buildMechanicStatuses(workorders, people, mechanicsByWorkorder);
+        List<MechanicStatus> mechanicStatuses = buildMechanicStatuses(workorders, people, currentTechnicianByWorkorder);
         List<BayStatus> bayStatuses = buildBayStatuses(locationUuid, resourceHolders);
         List<MobileUnitStatus> mobileUnitStatuses = buildMobileUnitStatuses(locationUuid, resourceHolders);
 
@@ -225,41 +229,86 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     /**
-     * The mechanics on each roster workorder: its current {@code technician_assignment} first, then
-     * any {@code mechanic_ids} entry not already named.
+     * The technician of record on each roster workorder: the current {@code technician_assignment}
+     * row, or absent when the aggregate holds nobody (#1985). One batched query covers the roster.
      *
-     * <p>Both are live writers. The technician assign API records only {@code technician_assignment}
-     * (#1985), while the assignment-context event and the dispatch override still write
-     * {@code mechanic_ids}. Reading the column alone left every technician-assigned workorder
-     * "Unassigned" on the board and invisible to the mechanic conflict checks. One batched query
-     * covers the roster.
+     * <p>This is the only source the board may answer "who holds this job?" with (#2058,
+     * DECISION-INVENTORY-021). The legacy {@code mechanic_ids} column is a plan — see
+     * {@link #plannedMechanics(List)} — and never promotes into it.
      *
-     * <p>Keyed by identity rather than id so a row without an id still carries its column value.
+     * <p>Keyed by identity rather than id so a row without an id is simply unheld.
      */
-    private Map<Workorder, List<String>> assignedMechanics(List<Workorder> workorders) {
+    private Map<Workorder, String> currentTechnicians(List<Workorder> workorders) {
         Set<UUID> workorderIds = workorders.stream()
                 .map(Workorder::getId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        Map<UUID, String> currentTechnicianByWorkorder = new HashMap<>();
+        Map<UUID, String> byId = new HashMap<>();
         if (!workorderIds.isEmpty()) {
             for (TechnicianAssignmentRepository.CurrentTechnician current :
                     technicianAssignmentRepository.findCurrentTechnicians(workorderIds)) {
                 if (current.getWorkorderId() != null && current.getTechnicianId() != null) {
-                    currentTechnicianByWorkorder.putIfAbsent(
+                    byId.putIfAbsent(
                             current.getWorkorderId(), current.getTechnicianId().toString());
                 }
             }
         }
 
+        Map<Workorder, String> byWorkorder = new IdentityHashMap<>();
+        for (Workorder wo : workorders) {
+            String currentTechnician = wo.getId() != null ? byId.get(wo.getId()) : null;
+            if (currentTechnician != null) {
+                byWorkorder.put(wo, currentTechnician);
+            }
+        }
+        return byWorkorder;
+    }
+
+    /**
+     * The planned mechanics on each roster workorder: the legacy {@code mechanic_ids} column
+     * (#1658), verbatim and de-duplicated.
+     *
+     * <p>Written by the shopmgmt-sourced assignment-context event and by
+     * {@code overrideOperationalContext}, neither of which touches {@code technician_assignment}.
+     * It is scheduling intention, not custody: it confers no technician of record (#2058,
+     * DECISION-INVENTORY-021/022) and must never decide assign-vs-reassign. It stays on the board
+     * because a mechanic who is planned onto a job while on PTO, at the wrong site, or without a
+     * required certification is worth flagging before the job is handed over.
+     *
+     * <p>Keyed by identity rather than id so a row without an id still carries its column value.
+     */
+    private Map<Workorder, List<String>> plannedMechanics(List<Workorder> workorders) {
+        Map<Workorder, List<String>> plannedByWorkorder = new IdentityHashMap<>();
+        for (Workorder wo : workorders) {
+            plannedByWorkorder.put(wo, List.copyOf(new LinkedHashSet<>(parseMechanicIds(wo.getMechanicIds()))));
+        }
+        return plannedByWorkorder;
+    }
+
+    /**
+     * Every mechanic named on each roster workorder by either source: its current
+     * {@code technician_assignment} first, then any planned {@code mechanic_ids} entry not already
+     * named.
+     *
+     * <p>This union feeds the conflict detectors and nothing else. Reading the column alone left
+     * every technician-assigned workorder invisible to the mechanic conflict checks (#2014);
+     * reading it into a singular field let the board name a mechanic the aggregate does not hold
+     * (#2058). Both sources belong in a conflict check; only one of them answers who holds the job.
+     *
+     * <p>Keyed by identity rather than id so a row without an id still carries its column value.
+     */
+    private Map<Workorder, List<String>> assignedMechanics(
+            List<Workorder> workorders,
+            Map<Workorder, String> currentTechnicianByWorkorder,
+            Map<Workorder, List<String>> plannedMechanicsByWorkorder) {
         Map<Workorder, List<String>> mechanicsByWorkorder = new IdentityHashMap<>();
         for (Workorder wo : workorders) {
             Set<String> mechanicIds = new LinkedHashSet<>();
-            String currentTechnician = wo.getId() != null ? currentTechnicianByWorkorder.get(wo.getId()) : null;
+            String currentTechnician = currentTechnicianByWorkorder.get(wo);
             if (currentTechnician != null) {
                 mechanicIds.add(currentTechnician);
             }
-            mechanicIds.addAll(parseMechanicIds(wo.getMechanicIds()));
+            mechanicIds.addAll(plannedMechanicsByWorkorder.getOrDefault(wo, List.of()));
             mechanicsByWorkorder.put(wo, List.copyOf(mechanicIds));
         }
         return mechanicsByWorkorder;
@@ -385,14 +434,16 @@ public class DashboardServiceImpl implements DashboardService {
 
     private List<WorkorderSummary> buildWorkorderSummaries(
             List<Workorder> workorders,
-            Map<Workorder, List<String>> mechanicsByWorkorder,
+            Map<Workorder, String> currentTechnicianByWorkorder,
+            Map<Workorder, List<String>> plannedMechanicsByWorkorder,
             Map<UUID, String> vehicleDescriptions,
             Map<UUID, String> customerNames,
             Map<UUID, WorkSynopsis> synopses) {
         return workorders.stream()
                 .map(wo -> buildWorkorderSummary(
                         wo,
-                        mechanicsByWorkorder,
+                        currentTechnicianByWorkorder,
+                        plannedMechanicsByWorkorder,
                         vehicleDescriptions,
                         customerNames,
                         wo.getId() != null ? synopses.getOrDefault(wo.getId(), WorkSynopsis.NONE) : WorkSynopsis.NONE))
@@ -401,7 +452,8 @@ public class DashboardServiceImpl implements DashboardService {
 
     private WorkorderSummary buildWorkorderSummary(
             Workorder wo,
-            Map<Workorder, List<String>> mechanicsByWorkorder,
+            Map<Workorder, String> currentTechnicianByWorkorder,
+            Map<Workorder, List<String>> plannedMechanicsByWorkorder,
             Map<UUID, String> vehicleDescriptions,
             Map<UUID, String> customerNames,
             WorkSynopsis synopsis) {
@@ -414,9 +466,17 @@ public class DashboardServiceImpl implements DashboardService {
                 .status(wo.getStatus() != null ? wo.getStatus().name() : null)
                 .scheduledDate(wo.getScheduledDate())
                 .vehicleDescription(wo.getVehicleId() != null ? vehicleDescriptions.get(wo.getVehicleId()) : null)
-                .assignedMechanicId(mechanicsOf(wo, mechanicsByWorkorder).stream()
-                        .findFirst()
-                        .orElse(null))
+                // #2058: the technician of record, or null when the aggregate holds nobody.
+                // It used to fall back to the first planned mechanic_ids entry, which named a
+                // mechanic no technician endpoint recognised: the board showed the row as held,
+                // then reassignTechnician answered 409 TECHNICIAN_NOT_ASSIGNED. Non-null here
+                // means exactly "a current technician_assignment exists" — one half of ASSIGNED,
+                // not ASSIGNED itself, so an APPROVED row may legitimately carry one.
+                .assignedMechanicId(currentTechnicianByWorkorder.get(wo))
+                // The legacy plan, kept but clearly named (#1658, #2058). It confers no
+                // technician of record; WorkorderUpdatedV1.mechanicIds is this list unioned
+                // with assignedMechanicId.
+                .plannedMechanicIds(plannedMechanicsByWorkorder.getOrDefault(wo, List.of()))
                 // #1656: id and type ship together. The retired assignedBayId key put a
                 // mobile unit's id under a bay-named field that joined to nothing in bays[].
                 .assignedResourceId(
@@ -435,15 +495,23 @@ public class DashboardServiceImpl implements DashboardService {
                 .build();
     }
 
+    /**
+     * The people panel. {@code assignedWorkorderId} is the workorder this person is the current
+     * technician of, and nothing else (#2058): it used to be filled from the union, so the panel
+     * told a dispatcher that a mechanic merely planned onto a job was working it, while the
+     * workorder panel on the same screen said the job was unheld. Both panels now answer from the
+     * technician aggregate.
+     */
     private List<MechanicStatus> buildMechanicStatuses(
             List<Workorder> workorders,
             List<PersonAvailability> people,
-            Map<Workorder, List<String>> mechanicsByWorkorder) {
+            Map<Workorder, String> currentTechnicianByWorkorder) {
         Map<String, String> workorderByMechanicId = new LinkedHashMap<>();
         for (Workorder wo : workorders) {
-            for (String mId : mechanicsOf(wo, mechanicsByWorkorder)) {
+            String currentTechnician = currentTechnicianByWorkorder.get(wo);
+            if (currentTechnician != null) {
                 workorderByMechanicId.putIfAbsent(
-                        mId, wo.getId() != null ? wo.getId().toString() : null);
+                        currentTechnician, wo.getId() != null ? wo.getId().toString() : null);
             }
         }
 

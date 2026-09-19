@@ -785,19 +785,22 @@ class DashboardServiceTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("F5: MechanicStatus.assignedWorkorderId is populated for assigned mechanic")
+    @DisplayName("F5: MechanicStatus.assignedWorkorderId is populated for the technician of record")
     void getDashboard_assignedMechanic_populatesAssignedWorkorderId() {
-        // Arrange
+        // Arrange — #2058: the panel answers from technician_assignment, so the mechanic holding
+        // the job is the one the row points at.
         UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000c030");
         Workorder wo = Workorder.builder()
                 .id(workorderId)
                 .locationId(LOCATION_UUID)
-                .mechanicIds("[\"MECH-030\"]")
                 .status(WorkorderStatus.WORK_IN_PROGRESS)
                 .build();
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        when(technicianAssignmentRepository.findCurrentTechnicians(any()))
+                .thenReturn(List.of(currentTechnician(wo, technicianId)));
         PersonAvailability mech = PersonAvailability.builder()
-                .personId("MECH-030")
+                .personId(technicianId.toString())
                 .firstName("Dana")
                 .lastName("White")
                 .currentStatus("ON_JOB")
@@ -812,8 +815,89 @@ class DashboardServiceTest {
 
         // Assert
         assertThat(response.getMechanics()).anySatisfy(m -> {
-            assertThat(m.getPersonId()).isEqualTo("MECH-030");
+            assertThat(m.getPersonId()).isEqualTo(technicianId.toString());
             assertThat(m.getAssignedWorkorderId()).isEqualTo(workorderId.toString());
+        });
+    }
+
+    // -----------------------------------------------------------------------
+    // #2058: a planned mechanic_ids entry is not a technician of record
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2058: mechanic_ids with no current technician leaves assignedMechanicId null")
+    void getDashboard_plannedMechanicWithoutCurrentTechnician_leavesAssignedMechanicIdNull() {
+        // Arrange — a workorder whose only mechanic arrived through the appointment/override path:
+        // mechanic_ids is populated and technician_assignment holds nobody.
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-00000000d001");
+        UUID plannedMechanicId = UUID.fromString("00000000-0000-0000-0000-00000000e001");
+        Workorder wo = buildWorkorder(workorderId, plannedMechanicId.toString(), null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        when(technicianAssignmentRepository.findCurrentTechnicians(any())).thenReturn(List.of());
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(personAvailability(plannedMechanicId.toString(), "Sam", "AVAILABLE")))
+                        .build());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert — the board must not name a mechanic the technician endpoints do not recognise:
+        // reassignTechnician would answer 409 TECHNICIAN_NOT_ASSIGNED for this row.
+        assertThat(response.getWorkorders()).singleElement().satisfies(summary -> {
+            assertThat(summary.getAssignedMechanicId()).isNull();
+            assertThat(summary.getPlannedMechanicIds()).containsExactly(plannedMechanicId.toString());
+        });
+        // The people panel agrees with the workorder panel: nobody holds this job.
+        assertThat(response.getMechanics())
+                .singleElement()
+                .satisfies(m -> assertThat(m.getAssignedWorkorderId()).isNull());
+    }
+
+    @Test
+    @DisplayName("#2058: plannedMechanicIds carries the plan alongside the technician of record")
+    void getDashboard_currentTechnicianAndPlannedMechanic_reportsBothSeparately() {
+        // Arrange — one workorder held by a technician and penciled in for somebody else.
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-00000000d002");
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000e002");
+        UUID plannedMechanicId = UUID.fromString("00000000-0000-0000-0000-00000000e003");
+        Workorder wo = buildWorkorder(workorderId, plannedMechanicId.toString(), null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        when(technicianAssignmentRepository.findCurrentTechnicians(any()))
+                .thenReturn(List.of(currentTechnician(wo, technicianId)));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert — the plan never displaces the holder, and the holder never swallows the plan.
+        assertThat(response.getWorkorders()).singleElement().satisfies(summary -> {
+            assertThat(summary.getAssignedMechanicId()).isEqualTo(technicianId.toString());
+            assertThat(summary.getPlannedMechanicIds()).containsExactly(plannedMechanicId.toString());
+        });
+    }
+
+    @Test
+    @DisplayName("#2058: a planned-only mechanic is still seen by the conflict checks")
+    void getDashboard_plannedMechanicOnTwoWorkorders_stillFlagsDoubleBooking() {
+        // Arrange — narrowing assignedMechanicId must not narrow the conflict detectors: a mechanic
+        // penciled onto two jobs is a dispatcher problem whether or not either job is held.
+        UUID plannedMechanicId = UUID.fromString("00000000-0000-0000-0000-00000000e004");
+        Workorder first = buildWorkorder(
+                UUID.fromString("00000000-0000-0000-0000-00000000d003"), plannedMechanicId.toString(), null);
+        Workorder second = buildWorkorder(
+                UUID.fromString("00000000-0000-0000-0000-00000000d004"), plannedMechanicId.toString(), null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(first, second));
+        when(technicianAssignmentRepository.findCurrentTechnicians(any())).thenReturn(List.of());
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getConflicts()).anySatisfy(c -> {
+            assertThat(c.getConflictType()).isEqualTo("DOUBLE_BOOKED_MECHANIC");
+            assertThat(c.getAffectedResourceId()).isEqualTo(plannedMechanicId.toString());
         });
     }
 
