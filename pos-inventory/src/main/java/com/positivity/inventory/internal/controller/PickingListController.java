@@ -1,16 +1,18 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.exception.OperationNotImplementedException;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -46,7 +48,10 @@ public class PickingListController {
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Picking list confirmed"),
-                @ApiResponse(responseCode = "501", description = "Not implemented")
+                @ApiResponse(
+                        responseCode = "501",
+                        description = "Not implemented (code NOT_IMPLEMENTED)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     public ResponseEntity<Void> confirmPickingList(
             @Parameter(description = "Picking list identifier", required = true) @PathVariable String id,
@@ -60,6 +65,6 @@ public class PickingListController {
                     @RequestBody(required = false)
                     Object requestBody) {
         log.info("POST /v1/inventory/pickingLists/{}/confirm", id);
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        throw new OperationNotImplementedException("Picking-list confirmation is not implemented");
     }
 }

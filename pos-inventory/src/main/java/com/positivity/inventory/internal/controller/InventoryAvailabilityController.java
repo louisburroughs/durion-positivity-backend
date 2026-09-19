@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.dto.LeadTimeView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.enums.InventorySourceType;
 import com.positivity.inventory.internal.exception.InvalidParamCombinationException;
+import com.positivity.inventory.internal.exception.OperationNotImplementedException;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.InventoryAvailabilityService;
 import com.positivity.inventory.internal.service.InventoryLeadTimeService;
@@ -496,8 +497,8 @@ public class InventoryAvailabilityController {
                             schema = @Schema(implementation = InventoryAvailabilityResponse.class)))
     @ApiResponse(
             responseCode = "501",
-            description = "Not implemented. The response has NO body.",
-            content = @Content(schema = @Schema(hidden = true)))
+            description = "Not implemented (code NOT_IMPLEMENTED)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<InventoryAvailabilityResponse> updateInventoryAvailability(
             @Parameter(description = "Product identifier", required = true) @PathVariable UUID productId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -510,7 +511,6 @@ public class InventoryAvailabilityController {
                     @RequestBody(required = false)
                     Object requestBody) {
         log.info("POST /v1/inventory/availability/{}", productId);
-        return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_IMPLEMENTED)
-                .build();
+        throw new OperationNotImplementedException("Direct availability writes are not supported");
     }
 }

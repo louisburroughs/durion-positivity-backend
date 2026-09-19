@@ -1,7 +1,9 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.exception.OperationNotImplementedException;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -14,7 +16,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -57,12 +58,15 @@ public class InventorySiteDefaultLocationsController {
                                 @Content(
                                         mediaType = "application/json",
                                         array = @ArraySchema(schema = @Schema(implementation = UUID.class)))),
-                @ApiResponse(responseCode = "501", description = "Not implemented")
+                @ApiResponse(
+                        responseCode = "501",
+                        description = "Not implemented (code NOT_IMPLEMENTED)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     public ResponseEntity<List<UUID>> getSiteDefaultLocations(
             @Parameter(description = "Site identifier", required = true) @PathVariable UUID siteId) {
         log.info("GET /v1/inventory/sites/{}/defaultLocations", siteId);
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        throw new OperationNotImplementedException("Site default locations are not implemented");
     }
 
     @PutMapping("/{siteId}/defaultLocations")
@@ -90,7 +94,10 @@ public class InventorySiteDefaultLocationsController {
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Default locations replaced"),
-                @ApiResponse(responseCode = "501", description = "Not implemented")
+                @ApiResponse(
+                        responseCode = "501",
+                        description = "Not implemented (code NOT_IMPLEMENTED)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     public ResponseEntity<Void> putSiteDefaultLocations(
             @Parameter(description = "Site identifier", required = true) @PathVariable UUID siteId,
@@ -108,6 +115,6 @@ public class InventorySiteDefaultLocationsController {
                     @RequestBody(required = false)
                     List<UUID> defaultLocationIds) {
         log.info("PUT /v1/inventory/sites/{}/defaultLocations", siteId);
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        throw new OperationNotImplementedException("Site default locations are not implemented");
     }
 }

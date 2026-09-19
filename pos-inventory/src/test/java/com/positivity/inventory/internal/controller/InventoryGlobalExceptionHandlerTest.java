@@ -23,6 +23,7 @@ import com.positivity.inventory.internal.exception.LotNotAvailableException;
 import com.positivity.inventory.internal.exception.LotNumberRequiredException;
 import com.positivity.inventory.internal.exception.LotUnknownException;
 import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
+import com.positivity.inventory.internal.exception.OperationNotImplementedException;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.PickScanMismatchException;
@@ -160,6 +161,8 @@ class InventoryGlobalExceptionHandlerTest {
             InventoryGlobalExceptionHandler handler = new InventoryGlobalExceptionHandler(TEST_CLOCK);
 
             return Stream.of(
+                    Named.of("handleNotImplemented", (HandlerInvocation)
+                            () -> handler.handleNotImplemented(new OperationNotImplementedException("not yet"))),
                     Named.of("handleValidationError", (HandlerInvocation)
                             () -> handler.handleValidationError(validationException())),
                     Named.of("handleBadRequest", (HandlerInvocation)
@@ -351,5 +354,17 @@ class InventoryGlobalExceptionHandlerTest {
                             + " contract stays proven for every handler")
                     .isEqualTo(handlerMethodCount);
         }
+    }
+
+    @Test
+    @DisplayName("handleNotImplemented returns 501 NOT_IMPLEMENTED ApiError")
+    void handleNotImplemented_returns501ApiError() {
+        ResponseEntity<ApiError> response = sut.handleNotImplemented(
+                new OperationNotImplementedException("Picking-list confirmation is not implemented"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_IMPLEMENTED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("NOT_IMPLEMENTED");
+        assertThat(response.getBody().status()).isEqualTo(501);
     }
 }
