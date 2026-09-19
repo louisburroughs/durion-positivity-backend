@@ -42,12 +42,10 @@ class OpenApiValidationInventoryLoaderTest {
                 OpenApiValidationInventoryLoader.load(Path.of("src/test/resources/openapi/module-inventory.yaml"));
 
         // pos-vehicle-inventory is the reference conversion for ADR-0017 §3's error-envelope rule
-        // (#1720); every other module has no errorSchema key and exercises the REPORT_ONLY default,
-        // so a default-mode run stays green while -Dopenapi.validation.mode=STRICT reports the gap.
+        // (#1720). Modules are ratcheted to STRICT one by one; pos-api-gateway publishes no domain
+        // spec and has no errorSchema key, so it exercises the REPORT_ONLY default.
         assertThat(inventory.policyFor("pos-vehicle-inventory").errorSchema())
                 .isEqualTo(OpenApiModulePolicy.ErrorSchemaMode.STRICT);
-        assertThat(inventory.policyFor("pos-accounting").errorSchema())
-                .isEqualTo(OpenApiModulePolicy.ErrorSchemaMode.REPORT_ONLY);
         assertThat(inventory.policyFor("pos-api-gateway").errorSchema())
                 .isEqualTo(OpenApiModulePolicy.ErrorSchemaMode.REPORT_ONLY);
     }
