@@ -12,6 +12,16 @@ spring:
     # written, i.e. across the model call. Every read here completes inside a service transaction
     # and maps to DTOs there, so nothing relies on lazy loading in the web layer.
     open-in-view: false
+  # #2074: POST /v1/mcp/transcriptions takes one audio clip of at most 5 MiB (mcp.transcription.max-bytes).
+  # The file limit matches it so an oversize upload is refused while it is read (413 AUDIO_TOO_LARGE)
+  # rather than buffered; the request limit leaves room for the multipart envelope and the language part.
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+      # Keep parts in memory: the default threshold (0B) spools every uploaded part to a temp file on
+      # disk, which would break the transcribe-and-discard promise.
+      file-size-threshold: 6MB
   ai:
     ollama:
       base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
@@ -317,6 +327,23 @@ mcp:
   conversation:
     retention-days: ${MCP_CONVERSATION_RETENTION_DAYS:30}
     purge-interval: ${MCP_CONVERSATION_PURGE_INTERVAL:1h}
+  # #2074: speech-to-text for the composer's voice input. Any OpenAI-compatible /audio/transcriptions
+  # endpoint: OpenAI (https://api.openai.com/v1) or self-hosted faster-whisper / speaches
+  # (http://<host>:8000/v1). Blank base-url disables transcription (the endpoint answers 503). A blank
+  # api-key sends no Authorization header. The model must support response_format=verbose_json, which
+  # carries the clip duration. Audio is transcribed and discarded, never stored; a hosted provider's own
+  # retention policy applies to what it receives.
+  # Never set OPENAI_LOG=debug in any environment: the openai-java SDK would then log request and
+  # response bodies, i.e. the audio and the transcript. Any reverse proxy in front of the gateway must
+  # allow request bodies of at least 6 MB (the multipart request limit above), or oversize handling
+  # happens there instead of here.
+  transcription:
+    base-url: ${MCP_TRANSCRIPTION_BASE_URL:}
+    api-key: ${MCP_TRANSCRIPTION_API_KEY:}
+    model: ${MCP_TRANSCRIPTION_MODEL:whisper-1}
+    timeout: ${MCP_TRANSCRIPTION_TIMEOUT:30s}
+    max-bytes: 5MB
+    max-duration-seconds: 60
   # Answer resolution ladder: on a turn that produced no direct answer, fall through to a
   # deep link (rung 3) or an honest hand-off (rung 4) instead of surfacing the thinking channel.
   ladder:
@@ -390,6 +417,12 @@ server:
   port: 8086
   tomcat:
     max-http-header-size: 65536
+    # #2074: Tomcat's 2MB default max-swallow-size resets the connection before the 413
+    # AUDIO_TOO_LARGE response body can be written for an oversize /v1/mcp/transcriptions clip
+    # (proved against a real server, not just MockMvc) — Tomcat gives up swallowing the unread
+    # request body and closes the connection instead of letting the servlet finish the response.
+    # 10MB covers this module's largest upload (5MB clip + multipart envelope) with headroom.
+    max-swallow-size: 10MB
   max-http-request-header-size: 32KB
   servlet:
     context-path: /

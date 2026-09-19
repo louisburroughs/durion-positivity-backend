@@ -68,6 +68,9 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write(
                                 "MCP_CONVERSATION_MESSAGE_APPEND", "Append a client-authored message to a conversation")
+                        .build(),
+                // #2074: server-side audio transcription fallback for the assistant composer.
+                EventTypeRegistration.write("MCP_TRANSCRIPTION_EXECUTE", "Transcribe an audio clip to text")
                         .build());
     }
 }
