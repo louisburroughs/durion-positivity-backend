@@ -45,35 +45,26 @@ public class McpChatController {
     @Operation(operationId = "executeMcpChat", summary = "Execute a Blocking MCP Chat Turn", description = """
                     Executes a single chat message against the caller's permission-scoped assistant agent and \
                     returns the complete response text in one blocking call.
-                    Use this tool for a simple request-response chat turn; do not use streamMcpChat, which returns \
-                    the same answer incrementally as Server-Sent Events.
-                    Preconditions: the agent's tool set is selected from the caller's granted permission codes and \
-                    active workflow state, so the same message can produce different results for different callers.
-                    Required inputs: message (non-blank text); the acting user is derived from the authenticated \
-                    principal, not from the body.
-                    Emits a MCP_CHAT_EXECUTE event; the agent may invoke permission-gated tools, RAG retrieval and \
-                    web search while producing the answer.
-                    Returns 200 with the full response text plus a parallel `blocks` array segmented from that \
-                    same text, in source order (markdown/table/code today; chart/text/image/file/error are \
-                    modeled for forward compatibility but not yet produced) — markdown runs interleave with \
-                    table/code blocks wherever they occur, with no guarantee the first block is markdown. \
-                    `blocks` is optional and may be empty; older clients may ignore it, and when it is empty or \
-                    absent, render `response` instead.
-                    Conversation persistence (#2073): an absent `conversationId` starts a new persisted \
-                    conversation with fresh memory — the response always carries the resolved \
-                    `conversationId`, and callers must echo it on every follow-up turn to continue that same \
-                    conversation rather than starting a new one each time. A `conversationId` that is a UUID \
-                    owned by the caller reuses that conversation; a UUID that does not exist or belongs to \
-                    another subject answers 404 `CONVERSATION_NOT_FOUND` rather than silently starting a new \
-                    conversation under a caller-chosen id. A non-UUID `conversationId` is the deprecated \
-                    ephemeral isolation key (#1735): memory-only, never persisted, echoed back unchanged, and \
-                    `messageId` is `null` in that case. `messageId` (the persisted assistant message id) is \
-                    also `null` if the conversation was deleted or purged in the moment between the turn \
-                    starting and finishing — the answer is still returned.
-                    Turns on one persisted conversation are serialized: a second turn sent while one is \
-                    still running on the same `conversationId` answers 409 `CONVERSATION_BUSY`; retry once \
-                    the first has answered.
-                    Returns 429 when the caller's chat rate limit is exceeded.
+                    Use this tool for a simple request-response chat turn; do not use streamMcpChat, which \
+                    returns the same answer incrementally as Server-Sent Events.
+                    Preconditions: the agent's tool set is selected from the caller's granted permission codes \
+                    and active workflow state, so the same message can produce different results for \
+                    different callers.
+                    Required inputs: message (non-blank text); conversationId is optional and, when omitted, \
+                    starts a new persisted conversation with fresh memory, while a UUID owned by the caller \
+                    continues that conversation and a non-UUID value is the deprecated ephemeral isolation \
+                    key (#1735) that is never persisted.
+                    Emits a MCP_CHAT_EXECUTE event and persists both the user and the assistant turn, so a \
+                    caller must not re-append them with appendMcpConversationMessage; the agent may invoke \
+                    permission-gated tools, RAG retrieval and web search while producing the answer.
+                    Returns 200 with the full response text, the resolved conversationId to echo on every \
+                    follow-up turn, the persisted assistant messageId (null on the ephemeral path, or when \
+                    the conversation was deleted or purged mid-turn), and a parallel blocks array segmented \
+                    from that same text in source order, which is optional, may be empty, and is safely \
+                    ignored by older clients that render response instead.
+                    Returns 404 when conversationId is a UUID that does not exist or belongs to another \
+                    subject, 409 CONVERSATION_BUSY when a turn is already running on the same conversation, \
+                    and 429 when the caller's chat rate limit is exceeded.
                     """)
     @ApiResponse(responseCode = "200", description = "Chat turn answered")
     @ApiResponse(
