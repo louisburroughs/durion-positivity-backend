@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration;
 
 import com.positivity.mcp.internal.domain.EvalTurnTrace.ToolDefinitionTrace;
+import com.positivity.mcp.internal.domain.TurnSummary;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
@@ -8,6 +9,7 @@ import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -94,6 +96,15 @@ final class SpringAiPosAssistant implements PosAssistant {
 
     @Override
     public @NonNull String chat(@NonNull String memoryId, @NonNull String userMessage, @NonNull String userContext) {
+        return reply(memoryId, userMessage, userContext).text();
+    }
+
+    /**
+     * One turn: the answer, how it was resolved ({@link Resolution#answerSource()}) and the tools the
+     * model called, in call order with duplicates (#2075).
+     */
+    @Override
+    public @NonNull Reply reply(@NonNull String memoryId, @NonNull String userMessage, @NonNull String userContext) {
         ChatMemory chatMemory = chatMemoryProvider.apply(memoryId);
         // Tools are resolved BEFORE the system prompt so the per-request WRITE-GATE
         // signal
@@ -107,6 +118,16 @@ final class SpringAiPosAssistant implements PosAssistant {
         // Bind the caller and tenant per request: facade callbacks were wrapped once in the constructor
         // and this agent is cached per role, so the recorder must not read either at execution time.
         toolCallbacks = RequestBoundToolCallback.bindCurrentRequest(toolCallbacks, requestScopedUserContext);
+        // Per call, never on the cached agent: the list is this turn's alone. Synchronized because the
+        // tool-calling loop may run a tool on another thread; the capture holds no thread-local.
+        List<String> toolsCalled = Collections.synchronizedList(new ArrayList<>());
+        toolCallbacks = ToolCallCapture.wrap(toolCallbacks, name -> {
+            synchronized (toolsCalled) {
+                if (toolsCalled.size() < TurnSummary.MAX_TOOLS_CALLED) {
+                    toolsCalled.add(name);
+                }
+            }
+        });
         String systemPrompt = buildSystemPrompt(userMessage, userContext);
         if (invocationRecorder != null) {
             List<ToolDefinitionTrace> toolDefinitions = toolCallbacks.stream()
@@ -141,7 +162,11 @@ final class SpringAiPosAssistant implements PosAssistant {
         }
         String response = resolution.text();
         chatMemory.add(memoryId, List.of(new UserMessage(userMessage), new AssistantMessage(response)));
-        return response;
+        List<String> calledSnapshot;
+        synchronized (toolsCalled) {
+            calledSnapshot = List.copyOf(toolsCalled);
+        }
+        return new Reply(response, resolution.answerSource(), calledSnapshot);
     }
 
     /**

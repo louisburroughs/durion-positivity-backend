@@ -9,11 +9,14 @@ import com.positivity.mcp.internal.dto.ConversationMessage;
 import com.positivity.mcp.internal.dto.ConversationPolicy;
 import com.positivity.mcp.internal.dto.ConversationSummary;
 import com.positivity.mcp.internal.dto.CreateConversationRequest;
+import com.positivity.mcp.internal.dto.MessageFeedback;
+import com.positivity.mcp.internal.dto.MessageFeedbackRequest;
 import com.positivity.mcp.internal.dto.UpdateConversationRequest;
 import com.positivity.mcp.internal.entity.McpConversation;
 import com.positivity.mcp.internal.entity.McpMessage;
 import com.positivity.mcp.internal.enums.ConversationMessageRole;
 import com.positivity.mcp.internal.exception.ConversationNotFoundException;
+import com.positivity.mcp.internal.exception.MessageNotFoundException;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.validation.ConstraintViolationException;
 import java.nio.charset.StandardCharsets;
@@ -119,6 +122,20 @@ public class ConversationServiceImpl implements ConversationService {
     }
 
     @Override
+    public void setFeedback(@NonNull UUID id, @NonNull UUID messageId, @NonNull MessageFeedbackRequest request) {
+        if (!store.setFeedback(id, messageId, currentOwner(), request.rating(), request.reason(), request.comment())) {
+            throw messageNotFound(messageId);
+        }
+    }
+
+    @Override
+    public void clearFeedback(@NonNull UUID id, @NonNull UUID messageId) {
+        if (!store.clearFeedback(id, messageId, currentOwner())) {
+            throw messageNotFound(messageId);
+        }
+    }
+
+    @Override
     public @NonNull ConversationPolicy policy() {
         return new ConversationPolicy(properties.retentionDays(), true);
     }
@@ -168,6 +185,14 @@ public class ConversationServiceImpl implements ConversationService {
         return new ConversationNotFoundException("Conversation not found: " + id);
     }
 
+    /**
+     * The same message for every unreachable case (unknown, another conversation, another owner or
+     * tenant, a user-role message, purged), so the 404 reveals nothing.
+     */
+    private static @NonNull MessageNotFoundException messageNotFound(@NonNull UUID messageId) {
+        return new MessageNotFoundException("Message not found: " + messageId);
+    }
+
     private static @NonNull ConversationSummary toSummary(@NonNull McpConversation conversation) {
         return new ConversationSummary(
                 conversation.getId(),
@@ -200,7 +225,18 @@ public class ConversationServiceImpl implements ConversationService {
                 message.getRole().wireValue(),
                 instant(message.getCreatedAt()),
                 blocks,
-                message.getContent());
+                message.getContent(),
+                toFeedback(message));
+    }
+
+    /** The owner's current rating, or {@code null} when the message is unrated (#2075). */
+    private static @Nullable MessageFeedback toFeedback(@NonNull McpMessage message) {
+        String rating = message.getFeedbackRating();
+        OffsetDateTime ratedAt = message.getFeedbackAt();
+        if (rating == null || ratedAt == null) {
+            return null;
+        }
+        return new MessageFeedback(rating, message.getFeedbackReason(), message.getFeedbackComment(), instant(ratedAt));
     }
 
     private static @NonNull Instant instant(@NonNull OffsetDateTime timestamp) {

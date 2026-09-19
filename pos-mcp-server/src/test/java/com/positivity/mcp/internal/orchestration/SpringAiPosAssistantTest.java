@@ -795,4 +795,196 @@ class SpringAiPosAssistantTest {
         assertThat(perRequest).isNotInstanceOf(OllamaChatOptions.class);
         assertThat(perRequest.getModel()).isEqualTo("some-model");
     }
+
+    // ─── #2075: reply() exposes the answer source and the tools actually called ───────────────
+
+    @Test
+    @DisplayName("reply() reports answerSource=CONTENT for a direct answer, with no tools called (#2075)")
+    void reply_reportsContentSourceAndNoTools() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Direct answer."));
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        PosAssistant.Reply reply = assistant.reply("user-1::ROLE_ADMIN", "q", "ctx");
+
+        assertThat(reply.text()).isEqualTo("Direct answer.");
+        assertThat(reply.answerSource()).isEqualTo("CONTENT");
+        assertThat(reply.toolsCalled()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("reply() reports answerSource=RE_RENDERED for the #1708 re-render path (#2075)")
+    void reply_reportsReRenderedSource() {
+        ChatModel chatModel = mock(ChatModel.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(chatResponse(PAYLOAD))
+                .thenReturn(chatResponse(PROSE));
+        SpringAiPosAssistant assistant = payloadAssistant(chatModel, chatMemory, ladder);
+
+        PosAssistant.Reply reply = assistant.reply("user-1::ROLE_ADMIN", "who is past due", "ctx");
+
+        assertThat(reply.text()).isEqualTo(PROSE);
+        assertThat(reply.answerSource()).isEqualTo("RE_RENDERED");
+    }
+
+    @Test
+    @DisplayName("reply() reports answerSource=LADDER for a deflected turn (#2075)")
+    void reply_reportsLadderSource() {
+        ChatModel chatModel = mock(ChatModel.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(chatResponse(PAYLOAD))
+                .thenReturn(chatResponse(PAYLOAD));
+        SpringAiPosAssistant assistant = payloadAssistant(chatModel, chatMemory, ladder);
+
+        PosAssistant.Reply reply = assistant.reply("user-1::ROLE_ADMIN", "who is past due", "ctx");
+
+        assertThat(reply.text()).isEqualTo("View it here — People: /app/people");
+        assertThat(reply.answerSource()).isEqualTo("LADDER");
+    }
+
+    @Test
+    @DisplayName("chat() returns exactly reply().text() (#2075)")
+    void chat_equalsReplyText() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Direct answer."));
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        String viaChat = assistant.chat("user-1::ROLE_ADMIN", "q1", "ctx");
+        String viaReply = assistant.reply("user-1::ROLE_ADMIN", "q2", "ctx").text();
+
+        assertThat(viaChat).isEqualTo(viaReply).isEqualTo("Direct answer.");
+    }
+
+    @Test
+    @DisplayName(
+            "reply() lists tools in call order, keeping duplicates, and counts a call whose delegate throws (#2075)")
+    void reply_listsToolsInCallOrderWithDuplicatesAndAThrowingTool() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        AtomicInteger invocations = new AtomicInteger();
+        // Turn 1: model calls ping. Turn 2: model calls ping again (duplicate). Turn 3: model calls
+        // the always-throwing tool — its call() throws, but the name must already be recorded
+        // before that; the framework's default tool-execution-exception handling turns the failure
+        // into an error tool response rather than aborting the loop, so a 4th turn still answers.
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(toolCallResponse("ping"))
+                .thenReturn(toolCallResponse("ping"))
+                .thenReturn(toolCallResponse("boom"))
+                .thenReturn(chatResponse("Done, ignoring the tool error."));
+
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(new CountingPingTool(invocations), new ThrowingTool()),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        PosAssistant.Reply reply = assistant.reply("user-1::ROLE_ADMIN", "do things", "ctx");
+
+        assertThat(reply.toolsCalled()).containsExactly("ping", "ping", "boom");
+        assertThat(invocations.get()).as("both ping calls actually ran").isEqualTo(2);
+        assertThat(reply.text()).isEqualTo("Done, ignoring the tool error.");
+    }
+
+    @Test
+    @DisplayName("reply() builds a fresh tools-called list per call: a later turn's list carries none of an "
+            + "earlier turn's tool names (#2075)")
+    void reply_twoCallsOnSameInstance_secondListHasNoToolsFromTheFirst() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        // First reply() calls "ping" then answers; second calls "echo" then answers. Both tools are
+        // offered on every turn (the static tool list is fixed at construction), but only one is
+        // actually invoked per turn.
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(toolCallResponse("ping"))
+                .thenReturn(chatResponse("First answer."))
+                .thenReturn(toolCallResponse("echo"))
+                .thenReturn(chatResponse("Second answer."));
+
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(new PingTool(), new EchoTool()),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        PosAssistant.Reply first = assistant.reply("user-1::ROLE_ADMIN", "turn one", "ctx");
+        PosAssistant.Reply second = assistant.reply("user-1::ROLE_ADMIN", "turn two", "ctx");
+
+        assertThat(first.toolsCalled()).containsExactly("ping");
+        assertThat(second.toolsCalled())
+                .as("a later turn's captured list starts empty; it never carries an earlier turn's names")
+                .containsExactly("echo")
+                .doesNotContain("ping");
+    }
+
+    static final class EchoTool {
+        @org.springframework.ai.tool.annotation.Tool(description = "Echoes back")
+        public String echo() {
+            return "echo";
+        }
+    }
+
+    static final class ThrowingTool {
+        @org.springframework.ai.tool.annotation.Tool(description = "Always fails")
+        public String boom() {
+            throw new IllegalStateException("boom failed");
+        }
+    }
 }

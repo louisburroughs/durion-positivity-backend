@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -100,6 +101,14 @@ public class AlphaEvalTurnTraceRecorder {
      */
     public void recordAnswerSource(@NonNull String answerSource) {
         current(builder -> builder.answerSource = answerSource);
+    }
+
+    /** #2075: the conversation and the assistant message this turn produces (null when not persisted). */
+    public void recordMessage(@Nullable UUID conversationId, @Nullable UUID messageId) {
+        current(builder -> {
+            builder.conversationId = conversationId;
+            builder.messageId = messageId;
+        });
     }
 
     public void complete(@NonNull String response) {
@@ -217,6 +226,8 @@ public class AlphaEvalTurnTraceRecorder {
         private String modelTier;
         private String workflowState;
         private String answerSource;
+        private UUID conversationId;
+        private UUID messageId;
         private List<String> selectedTools = List.of();
         private String systemPrompt;
         private List<EvalTurnTrace.ToolDefinitionTrace> offeredTools = List.of();
@@ -253,7 +264,9 @@ public class AlphaEvalTurnTraceRecorder {
                     response,
                     error,
                     buildId,
-                    answerSource);
+                    answerSource,
+                    conversationId,
+                    messageId);
         }
     }
 }

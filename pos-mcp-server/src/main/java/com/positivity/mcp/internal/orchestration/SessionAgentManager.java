@@ -8,7 +8,9 @@ import com.positivity.mcp.internal.config.AgentOrchestrationService;
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.config.SessionAgentCacheMetrics;
 import com.positivity.mcp.internal.config.TieredChatModelResolver;
+import com.positivity.mcp.internal.domain.ChatOutcome;
 import com.positivity.mcp.internal.domain.ModelTier;
+import com.positivity.mcp.internal.domain.TurnSummary;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
@@ -223,6 +225,22 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     @Override
     public @NonNull String chat(
             @NonNull CurrentUserContext currentUserContext, @NonNull String message, @Nullable String conversationId) {
+        return chatTurn(currentUserContext, message, conversationId, null).text();
+    }
+
+    /**
+     * One chat turn plus its turn summary (#2075): the path taken ({@code SIMPLE_CHAT} or {@code
+     * AGENT}), how the answer was resolved, the tools the model called and the latency from just
+     * before {@code beginTurn} to the reply in hand (the eval trace's and telemetry's window;
+     * segmentation and persistence excluded). {@code assistantMessageId} is stamped on the eval trace
+     * so a rating can be joined to it.
+     */
+    @Override
+    public @NonNull ChatOutcome chatTurn(
+            @NonNull CurrentUserContext currentUserContext,
+            @NonNull String message,
+            @Nullable String conversationId,
+            @Nullable UUID assistantMessageId) {
         String username = currentUserContext.username();
         String role = currentUserContext.primaryRole();
         // ADR-0062 plan WS6 (R-B6): conversation memory and the rate counter are keyed beneath the
@@ -243,6 +261,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         try {
             if (toolInvocationRecorder != null) {
                 toolInvocationRecorder.beginTurn(currentUserContext, message);
+                // A non-UUID (ephemeral #1735) key parses to null: that turn has no persisted conversation.
+                toolInvocationRecorder.recordMessage(
+                        ConversationIds.parseCanonical(conversationId), assistantMessageId);
             }
             boolean simpleChat = simpleChatFastPath.isSimpleChat(message);
             if (toolInvocationRecorder != null) {
@@ -264,11 +285,18 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 String messagePreview = sharedOrchestrationSupport.preview(message);
                 LOGGER.debug(
                         "MCP simple chat dispatch username={} role={} preview=\"{}\"", username, role, messagePreview);
-                String response = simpleChat(currentUserContext, message, startMs);
+                SimpleChatReply simple = simpleChat(currentUserContext, message, startMs);
+                PosAssistant.Reply reply = simple.reply();
                 if (toolInvocationRecorder != null) {
-                    toolInvocationRecorder.completeTurn(response);
+                    toolInvocationRecorder.completeTurn(reply.text());
                 }
-                return response;
+                return new ChatOutcome(
+                        reply.text(),
+                        new TurnSummary(
+                                TurnSummary.PATH_SIMPLE_CHAT,
+                                reply.answerSource(),
+                                reply.toolsCalled(),
+                                simple.latencyMs()));
             }
 
             // Gate 4 (#1192): classify the request with the T1 router (temperature 0) and select the
@@ -332,11 +360,14 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 requestScopedUserContext.recordUserMessage(message);
             }
             long agentStartNanos = System.nanoTime();
-            String response = agent.chat(
+            PosAssistant.Reply reply = agent.reply(
                     memoryKey(tenantId, username, role, conversationId),
                     message,
                     formatUserContext(currentUserContext));
-            int elapsedMs = (int) (System.currentTimeMillis() - startMs);
+            // One clock read for both, so the turn summary and the telemetry/audit share a window.
+            long turnElapsedMs = System.currentTimeMillis() - startMs;
+            int latencyMs = TurnSummary.clampLatency(turnElapsedMs);
+            int elapsedMs = (int) turnElapsedMs;
             LOGGER.info(
                     "MCP agent chat completed role={} selectedTools={} modelElapsedMs={} totalElapsedMs={}",
                     role,
@@ -366,9 +397,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     tierRoutingOf(routingDecision),
                     writeCapableToolsPresent);
             if (toolInvocationRecorder != null) {
-                toolInvocationRecorder.completeTurn(response);
+                toolInvocationRecorder.completeTurn(reply.text());
             }
-            return response;
+            return new ChatOutcome(
+                    reply.text(),
+                    new TurnSummary(TurnSummary.PATH_AGENT, reply.answerSource(), reply.toolsCalled(), latencyMs));
         } catch (RuntimeException exception) {
             if (toolInvocationRecorder != null) {
                 toolInvocationRecorder.failTurn(exception);
@@ -714,7 +747,13 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         chatMemoryCache.asMap().keySet().removeIf(key -> key.startsWith(tenantPrefix) && key.endsWith(suffix));
     }
 
-    private @NonNull String simpleChat(
+    /**
+     * The fast path's reply and its turn-summary latency, measured at the same point as the path's
+     * {@code totalElapsedMs} (before the audit log and telemetry), like the agent path (#2075).
+     */
+    private record SimpleChatReply(PosAssistant.@NonNull Reply reply, int latencyMs) {}
+
+    private @NonNull SimpleChatReply simpleChat(
             @NonNull CurrentUserContext currentUserContext, @NonNull String message, long requestStartMs) {
         long simpleStartNanos = System.nanoTime();
         ChatResponseText.Extracted extracted = ChatResponseText.extractDetailed(chatModel
@@ -727,7 +766,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             // non-content source, never re-rendered or laddered.
             toolInvocationRecorder.recordAnswerSource(extracted.source().name());
         }
-        int elapsedMs = (int) (System.currentTimeMillis() - requestStartMs);
+        long turnElapsedMs = System.currentTimeMillis() - requestStartMs;
+        int elapsedMs = (int) turnElapsedMs;
         LOGGER.info(
                 "MCP simple chat completed role={} modelElapsedMs={} totalElapsedMs={}",
                 currentUserContext.primaryRole(),
@@ -739,7 +779,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         }
         emitChatTelemetry(
                 currentUserContext, List.of(), List.of(), true, null, null, elapsedMs, "SUCCESS", null, null, false);
-        return response;
+        // The fast path offers no tools; its answer source is the raw extraction source (#1816).
+        return new SimpleChatReply(
+                new PosAssistant.Reply(response, extracted.source().name(), List.of()),
+                TurnSummary.clampLatency(turnElapsedMs));
     }
 
     /**

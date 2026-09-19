@@ -14,7 +14,9 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
@@ -41,7 +43,8 @@ class EvalTurnTraceRepositoryImplTest {
                         any(UUID.class),
                         any(OffsetDateTime.class),
                         any(OffsetDateTime.class),
-                        anyString());
+                        anyString(),
+                        ArgumentMatchers.<UUID>isNull());
         assertThat(sql.getValue()).contains("INSERT INTO mcp_eval_turn_trace").contains("CAST(? AS jsonb)");
     }
 
@@ -57,6 +60,8 @@ class EvalTurnTraceRepositoryImplTest {
     }
 
     private static EvalTurnTrace trace() {
+        // The pre-#2075 shape (via the backward-compatible constructor): conversationId/messageId
+        // both null.
         Instant started = Instant.parse("2026-09-03T20:00:00Z");
         return new EvalTurnTrace(
                 UUID.fromString("0199b1be-7080-7000-8000-000000000001"),
@@ -79,6 +84,101 @@ class EvalTurnTraceRepositoryImplTest {
                 null,
                 "sha-test0000",
                 "CONTENT");
+    }
+
+    @Test
+    @DisplayName("save: a trace with a message id (#2075) binds it as the 5th INSERT parameter")
+    void saveBindsTheMessageIdWhenPresent() throws Exception {
+        UUID messageId = UUID.fromString("0199b1be-7080-7000-8000-00000000beef");
+        EvalTurnTrace traceWithMessage = traceWithMessageId(messageId);
+        when(objectMapper.writeValueAsString(traceWithMessage)).thenReturn("{\"turnId\":\"trace\"}");
+
+        repository.save(traceWithMessage);
+
+        verify(jdbcTemplate)
+                .update(
+                        anyString(),
+                        any(UUID.class),
+                        any(OffsetDateTime.class),
+                        any(OffsetDateTime.class),
+                        anyString(),
+                        eq(messageId));
+    }
+
+    private static EvalTurnTrace traceWithMessageId(UUID messageId) {
+        Instant started = Instant.parse("2026-09-03T20:00:00Z");
+        return new EvalTurnTrace(
+                UUID.fromString("0199b1be-7080-7000-8000-000000000001"),
+                started,
+                started.plusSeconds(5),
+                started.plusSeconds(86400),
+                UUID.fromString("01960010-0000-7000-8000-000000000002"),
+                "diana.rowe",
+                "LOCATION_MANAGER",
+                "question",
+                false,
+                "ANALYTICS",
+                "T2_COMPLEX",
+                "IDLE",
+                List.of("AccountingFacadeTool"),
+                "prompt",
+                List.of(),
+                List.of(),
+                "answer",
+                null,
+                "sha-test0000",
+                "CONTENT",
+                UUID.fromString("0199b1be-7080-7000-8000-000000000abc"),
+                messageId);
+    }
+
+    // ── findByMessageId (#2075) ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("findByMessageId: filters on message_id, newest first, capped at one row")
+    void findByMessageId_filtersOnMessageIdNewestFirstLimitOne() {
+        UUID messageId = UUID.randomUUID();
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+
+        repository.findByMessageId(messageId);
+
+        verify(jdbcTemplate).query(sql.capture(), ArgumentMatchers.<RowMapper<EvalTurnTrace>>any(), eq(messageId));
+        assertThat(sql.getValue())
+                .contains("message_id = ?")
+                .contains("ORDER BY created_at DESC")
+                .contains("LIMIT 1");
+    }
+
+    @Test
+    @DisplayName("findByMessageId: no matching row yields an empty Optional")
+    void findByMessageId_noMatch_returnsEmptyOptional() {
+        UUID messageId = UUID.randomUUID();
+        when(jdbcTemplate.query(anyString(), ArgumentMatchers.<RowMapper<EvalTurnTrace>>any(), eq(messageId)))
+                .thenReturn(List.of());
+
+        Optional<EvalTurnTrace> result = repository.findByMessageId(messageId);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findByMessageId: a matching row is deserialized and returned")
+    void findByMessageId_match_returnsDeserializedTrace() throws Exception {
+        UUID messageId = UUID.randomUUID();
+        EvalTurnTrace expected = trace();
+        when(jdbcTemplate.query(anyString(), ArgumentMatchers.<RowMapper<EvalTurnTrace>>any(), eq(messageId)))
+                .thenAnswer(invocation -> {
+                    RowMapper<EvalTurnTrace> mapper = invocation.getArgument(1);
+                    java.sql.ResultSet resultSet = mock(java.sql.ResultSet.class);
+                    when(resultSet.getString("trace_payload")).thenReturn("{\"turnId\":\"trace\"}");
+                    when(objectMapper.readValue("{\"turnId\":\"trace\"}", EvalTurnTrace.class))
+                            .thenReturn(expected);
+                    return List.of(mapper.mapRow(resultSet, 1));
+                });
+
+        Optional<EvalTurnTrace> result = repository.findByMessageId(messageId);
+
+        assertThat(result).contains(expected);
     }
 
     @Test
@@ -125,7 +225,8 @@ class EvalTurnTraceRepositoryImplTest {
 
         repository.save(trace());
 
-        verify(jdbcTemplate).update(anyString(), args.capture(), args.capture(), args.capture(), args.capture());
+        verify(jdbcTemplate)
+                .update(anyString(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture());
         assertThat(args.getAllValues())
                 .as("no argument bound to JDBC may be a java.time.Instant")
                 .noneMatch(Instant.class::isInstance);

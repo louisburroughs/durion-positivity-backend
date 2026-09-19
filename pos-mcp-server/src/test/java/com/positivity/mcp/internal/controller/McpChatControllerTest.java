@@ -19,6 +19,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.mcp.internal.config.AgentOrchestrationService;
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.domain.ChatOutcome;
+import com.positivity.mcp.internal.domain.TurnSummary;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.internal.service.ConversationStore;
 import com.positivity.mcp.internal.service.ConversationTurnServiceImpl;
@@ -104,8 +106,9 @@ class McpChatControllerTest {
     @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat with message returns 200 and response payload")
     void chat_withMessage_returns200() throws Exception {
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
-                .thenReturn("assistant reply");
+        when(agentOrchestrationService.chatTurn(
+                        any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
+                .thenReturn(ChatOutcome.of("assistant reply"));
         var authentication = new UsernamePasswordAuthenticationToken(
                 "test-user",
                 "n/a",
@@ -135,8 +138,9 @@ class McpChatControllerTest {
                 Set.of("ROLE_ADMIN", McpPermissions.MCP_CHAT_EXECUTE),
                 Set.of(McpPermissions.MCP_CHAT_EXECUTE, "AUTHENTICATED"));
         when(currentUserContextResolver.resolve(any(Authentication.class))).thenReturn(adminContext);
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
-                .thenReturn("assistant reply");
+        when(agentOrchestrationService.chatTurn(
+                        any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
+                .thenReturn(ChatOutcome.of("assistant reply"));
         var authentication = new UsernamePasswordAuthenticationToken(
                 "admin.alpha",
                 "n/a",
@@ -153,19 +157,21 @@ class McpChatControllerTest {
                 .andExpect(jsonPath("$.response").value("assistant reply"));
 
         verify(agentOrchestrationService)
-                .chat(
+                .chatTurn(
                         argThat(context -> context.username().equals("admin.alpha")
                                 && context.userId().equals(adminContext.userId())
                                 && context.primaryRole().equals("ROLE_ADMIN")),
                         org.mockito.ArgumentMatchers.eq("test"),
-                        nullable(String.class));
+                        nullable(String.class),
+                        nullable(UUID.class));
     }
 
     @Test
     @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat orchestration failure returns 500 ApiError envelope")
     void chat_orchestrationFailure_returns500ApiError() throws Exception {
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+        when(agentOrchestrationService.chatTurn(
+                        any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
                 .thenThrow(new RuntimeException("boom"));
 
         // #1694: NltiExceptionHandler no longer carries a blanket @ExceptionHandler(Exception.class),
@@ -195,15 +201,17 @@ class McpChatControllerTest {
 
         // #1711: the 500 envelope is identical whether the failure came from orchestration or from
         // an NPE earlier in the controller, so without this the test passes while covering neither.
-        verify(agentOrchestrationService).chat(any(CurrentUserContext.class), anyString(), nullable(String.class));
+        verify(agentOrchestrationService)
+                .chatTurn(any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class));
     }
 
     @Test
     @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat forwards conversationId to the orchestrator (#1735)")
     void chat_forwardsConversationId() throws Exception {
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
-                .thenReturn("assistant reply");
+        when(agentOrchestrationService.chatTurn(
+                        any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
+                .thenReturn(ChatOutcome.of("assistant reply"));
         var authentication = new UsernamePasswordAuthenticationToken(
                 "test-user",
                 "n/a",
@@ -221,10 +229,11 @@ class McpChatControllerTest {
         // Without this the field could be accepted, documented and silently dropped, which reads
         // as a working feature from outside and changes nothing about the shared memory.
         verify(agentOrchestrationService)
-                .chat(
+                .chatTurn(
                         any(CurrentUserContext.class),
                         org.mockito.ArgumentMatchers.eq("test"),
-                        org.mockito.ArgumentMatchers.eq("gate-q07"));
+                        org.mockito.ArgumentMatchers.eq("gate-q07"),
+                        nullable(UUID.class));
     }
 
     @Test
@@ -278,8 +287,9 @@ class McpChatControllerTest {
     @DisplayName("POST /v1/mcp/chat: prose + table answer segments into markdown/table/markdown blocks (#2072)")
     void chat_proseAndTableAnswer_segmentsIntoBlocks() throws Exception {
         String agentMarkdown = "Here is the report:\n\n| Name | Status |\n| --- | --- |\n| Alpha | ACTIVE |\n\nThanks.";
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
-                .thenReturn(agentMarkdown);
+        when(agentOrchestrationService.chatTurn(
+                        any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
+                .thenReturn(ChatOutcome.of(agentMarkdown));
         var authentication = new UsernamePasswordAuthenticationToken(
                 "test-user",
                 "n/a",
@@ -313,8 +323,9 @@ class McpChatControllerTest {
     @DisplayName("POST /v1/mcp/chat: tool-free prose answer segments into a single markdown block (#2072)")
     void chat_toolFreeProseAnswer_singleMarkdownBlock() throws Exception {
         String agentMarkdown = "Just a simple prose answer with no tables or code.";
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
-                .thenReturn(agentMarkdown);
+        when(agentOrchestrationService.chatTurn(
+                        any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
+                .thenReturn(ChatOutcome.of(agentMarkdown));
         var authentication = new UsernamePasswordAuthenticationToken(
                 "test-user",
                 "n/a",
@@ -339,8 +350,9 @@ class McpChatControllerTest {
     @DisplayName("POST /v1/mcp/chat: fenced sql answer segments into markdown/code blocks (#2072)")
     void chat_fencedSqlAnswer_segmentsIntoCodeBlock() throws Exception {
         String agentMarkdown = "Here is the query:\n\n```sql\nSELECT 1;\n```";
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
-                .thenReturn(agentMarkdown);
+        when(agentOrchestrationService.chatTurn(
+                        any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
+                .thenReturn(ChatOutcome.of(agentMarkdown));
         var authentication = new UsernamePasswordAuthenticationToken(
                 "test-user",
                 "n/a",
@@ -365,8 +377,9 @@ class McpChatControllerTest {
     @DisplayName("POST /v1/mcp/chat: bare fence (no language) has no language field on the code block (#2072)")
     void chat_bareFenceAnswer_languageAbsent() throws Exception {
         String agentMarkdown = "```\nplain output\n```";
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
-                .thenReturn(agentMarkdown);
+        when(agentOrchestrationService.chatTurn(
+                        any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
+                .thenReturn(ChatOutcome.of(agentMarkdown));
         var authentication = new UsernamePasswordAuthenticationToken(
                 "test-user",
                 "n/a",
@@ -395,8 +408,9 @@ class McpChatControllerTest {
         // segmenter's final safety net (a delimiter row inside an emitted markdown block) is what
         // turns this answer into []. The client then parses `response` itself.
         String agentMarkdown = "- item one\n  | A | B |\n  | --- | --- |\n  | 1 | 2 |";
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
-                .thenReturn(agentMarkdown);
+        when(agentOrchestrationService.chatTurn(
+                        any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
+                .thenReturn(ChatOutcome.of(agentMarkdown));
         var authentication = new UsernamePasswordAuthenticationToken(
                 "test-user",
                 "n/a",
@@ -423,16 +437,20 @@ class McpChatControllerTest {
         UUID userId = defaultUserContext().userId();
         UUID assistantMessageId = UUID.randomUUID();
         when(conversationStore.isOwned(existingConversationId, userId)).thenReturn(true);
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
-                .thenReturn("assistant reply");
+        when(agentOrchestrationService.chatTurn(
+                        any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
+                .thenReturn(ChatOutcome.of("assistant reply"));
         when(conversationStore.recordChatTurn(
                         eq(existingConversationId),
                         eq(false),
                         eq(userId),
+                        any(UUID.class),
                         anyString(),
                         anyList(),
+                        any(UUID.class),
                         anyString(),
-                        anyList()))
+                        anyList(),
+                        any(TurnSummary.class)))
                 .thenReturn(Optional.of(assistantMessageId));
         var authentication = new UsernamePasswordAuthenticationToken(
                 "test-user",
@@ -461,16 +479,26 @@ class McpChatControllerTest {
         when(conversationStore.isOwned(conversationId, userId)).thenReturn(true);
         CountDownLatch firstTurnInModel = new CountDownLatch(1);
         CountDownLatch releaseFirstTurn = new CountDownLatch(1);
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+        when(agentOrchestrationService.chatTurn(
+                        any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
                 .thenAnswer(invocation -> {
                     firstTurnInModel.countDown();
                     if (!releaseFirstTurn.await(10, TimeUnit.SECONDS)) {
                         throw new IllegalStateException("first turn was never released");
                     }
-                    return "first answer";
+                    return ChatOutcome.of("first answer");
                 });
         when(conversationStore.recordChatTurn(
-                        eq(conversationId), eq(false), eq(userId), anyString(), anyList(), anyString(), anyList()))
+                        eq(conversationId),
+                        eq(false),
+                        eq(userId),
+                        any(UUID.class),
+                        anyString(),
+                        anyList(),
+                        any(UUID.class),
+                        anyString(),
+                        anyList(),
+                        any(TurnSummary.class)))
                 .thenReturn(Optional.of(UUID.randomUUID()));
         var caller = new UsernamePasswordAuthenticationToken(
                 "test-user",
@@ -550,7 +578,7 @@ class McpChatControllerTest {
 
         // The server must never silently start a new conversation under a caller-chosen id.
         verify(agentOrchestrationService, never())
-                .chat(any(CurrentUserContext.class), anyString(), nullable(String.class));
+                .chatTurn(any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class));
     }
 
     @Test
@@ -573,7 +601,7 @@ class McpChatControllerTest {
                 .andExpect(jsonPath("$.timestamp").isNotEmpty());
 
         verify(agentOrchestrationService, never())
-                .chat(any(CurrentUserContext.class), anyString(), nullable(String.class));
+                .chatTurn(any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class));
     }
 
     @TestConfiguration

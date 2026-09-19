@@ -97,6 +97,34 @@ class AlphaEvalTurnTraceRecorderTest {
     }
 
     @Test
+    @DisplayName("#2075: recordMessage stamps the conversation and message id onto the saved trace")
+    void recordMessageStampsConversationAndMessageIdOntoTheSavedTrace() {
+        UUID conversationId = UUID.fromString("0199b1be-7080-7000-8000-000000000abc");
+        UUID messageId = UUID.fromString("0199b1be-7080-7000-8000-000000000def");
+        recorder.begin(USER, "how many mechanics");
+        recorder.recordMessage(conversationId, messageId);
+
+        recorder.complete("26 mechanics");
+
+        EvalTurnTrace trace = savedTrace();
+        assertThat(trace.conversationId()).isEqualTo(conversationId);
+        assertThat(trace.messageId()).isEqualTo(messageId);
+    }
+
+    @Test
+    @DisplayName("#2075: the ephemeral path (both ids null) still records a trace with both null")
+    void recordMessageWithNullIds_savesTraceWithNullIds() {
+        recorder.begin(USER, "ephemeral question");
+        recorder.recordMessage(null, null);
+
+        recorder.complete("answer");
+
+        EvalTurnTrace trace = savedTrace();
+        assertThat(trace.conversationId()).isNull();
+        assertThat(trace.messageId()).isNull();
+    }
+
+    @Test
     void answerSourceIsPerTurnAndNotCarriedIntoTheNext() {
         // #1816: the builder is created at begin(), so a source recorded on one turn cannot leak
         // into the next — asserted rather than assumed, because the gate fails a run on it.

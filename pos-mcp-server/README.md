@@ -45,6 +45,8 @@ operator needs to build, configure and run the module.
 | `DELETE /v1/mcp/conversations/{id}`   | `mcp:chat:execute`    | Delete a conversation                |
 | `DELETE /v1/mcp/conversations`        | `mcp:chat:execute`    | Clear all conversations              |
 | `POST /v1/mcp/conversations/{id}/messages` | `mcp:chat:execute` | Append a message to conversation     |
+| `POST /v1/mcp/conversations/{id}/messages/{messageId}/feedback` | `mcp:chat:execute` | Rate an assistant answer (#2075) |
+| `DELETE /v1/mcp/conversations/{id}/messages/{messageId}/feedback` | `mcp:chat:execute` | Withdraw a rating (#2075) |
 | `GET /v1/mcp/conversations/policy`    | `mcp:chat:execute`    | Get retention policy                 |
 | `POST /v1/mcp/documents`              | `mcp:document:ingest` | Ingest a document into the RAG store |
 | `GET  /v1/mcp/documents/jobs/{jobId}` | `mcp:document:ingest` | Check ingestion job status           |
@@ -198,6 +200,90 @@ Operator notes:
 - `server.tomcat.max-swallow-size` is set to `10MB`: Tomcat's 2 MB default resets the connection before the 413
   response body can be written for an oversize clip, so the client would see a network error instead of the
   documented `AUDIO_TOO_LARGE`.
+
+## Per-turn feedback (#2075)
+
+`POST /v1/mcp/conversations/{id}/messages/{messageId}/feedback` and
+`DELETE /v1/mcp/conversations/{id}/messages/{messageId}/feedback` (both `mcp:chat:execute`, both emitting
+`MCP_MESSAGE_FEEDBACK_SET` / `MCP_MESSAGE_FEEDBACK_CLEAR`) let the caller rate one assistant answer helpful or
+not helpful. `messageId` is either the `messageId` `POST /mcp/chat` returned for that turn, or a
+`ConversationMessage.id` from `GET /v1/mcp/conversations/{id}`.
+
+**Request body (`POST`).**
+
+| Field     | Required | Values                                                          |
+| --------- | -------- | ---------------------------------------------------------------- |
+| `rating`  | yes      | `helpful` \| `not_helpful`                                       |
+| `reason`  | no       | `incorrect` \| `incomplete` \| `not_relevant` \| `other`; `""` is invalid, not "absent" |
+| `comment` | no       | Free text, trimmed; blank after trimming is treated as absent; at most 1000 characters after trimming |
+
+An unrecognized `rating`, a missing `rating`, an unrecognized `reason`, `reason: ""`, or a comment over 1000
+characters after trimming all answer 400 `VALIDATION_ERROR` with a `fieldErrors[].field` of `rating`, `reason`
+or `comment`.
+
+**Semantics.**
+
+- A repeat `POST` replaces the stored rating **in full** — an omitted `reason` or `comment` clears the
+  previously stored value, it does not leave it untouched. Concurrent `POST`s are last-write-wins.
+- There is one rating per message (the message is already owner-scoped, so there is no separate per-subject
+  key). `DELETE` returns 204 whether or not the message was rated, so it is safe to call unconditionally.
+- Only the conversation's owner can rate, and only an **assistant answer produced by a chat turn**
+  (`POST /mcp/chat`) — a client-appended assistant message (`POST .../messages`) cannot be rated, and neither
+  can a `user`-role message. **Streamed turns are not persisted at all (#2073), so they cannot be rated.**
+- Every failure to reach a ratable message — the message doesn't exist, is in another conversation, is not
+  owned by the caller, belongs to another tenant, is a `user`-role message, is a client-appended message, or
+  was purged — answers 404 `MESSAGE_NOT_FOUND` with the same body in every case. It is **never** 403, so a
+  caller cannot use the status code to enumerate other subjects' messages.
+- Rating a message does not touch `mcp_conversation`: it does not reorder the history rail and does not reset
+  the conversation's retention clock.
+
+**Turn summary (`answer_path`, `answer_source`, `tools_called`, `latency_ms`).** Written once, on the assistant
+row of every persisted `CHAT`-origin turn, in every environment (not just alpha) — not exposed by any API,
+internal grading data only:
+
+| Column         | Meaning                                                                                          |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| `answer_path`  | `AGENT` or `SIMPLE_CHAT`, which orchestration path produced the answer. `NULL` means unreported (a pre-#2075 row, or a non-`CHAT` row) |
+| `answer_source`| `CONTENT` \| `RE_RENDERED` \| `LADDER` (agent path) or the raw `ChatResponseText.Source` name (both paths when no ladder bean is wired) |
+| `tools_called` | JSON array of tool names in call order, duplicates kept, capped at 64                             |
+| `latency_ms`   | Wall time from after the rate-limit check to the reply in hand — the same window as the eval trace's `startedAt → completedAt`; excludes segmentation and persistence |
+
+**Grading join.** Run as the tenant (RLS scopes it automatically) or as the DB owner role for a cross-tenant
+sweep. No SQL view is created for this: a view bypasses row-level security unless declared with
+`security_invoker`, and it would add a relation `TenancySchemaConformanceIT` would have to reason about — a
+plain query has neither problem.
+
+```sql
+SELECT m.tenant_id, m.conversation_id, m.id AS message_id, m.created_at AS answered_at,
+       q.content AS question,
+       m.answer_path, m.answer_source, m.tools_called, m.latency_ms,
+       m.feedback_rating, m.feedback_reason, m.feedback_comment, m.feedback_at,
+       t.turn_id, t.trace_payload
+FROM mcp_message m
+LEFT JOIN LATERAL (
+    SELECT u.content FROM mcp_message u
+    WHERE u.tenant_id = m.tenant_id AND u.conversation_id = m.conversation_id AND u.role = 'user'
+      AND u.origin = 'CHAT'
+      AND (u.created_at, u.id) < (m.created_at, m.id)
+    ORDER BY u.created_at DESC, u.id DESC LIMIT 1) q ON true
+LEFT JOIN mcp_eval_turn_trace t ON t.tenant_id = m.tenant_id AND t.message_id = m.id
+WHERE m.feedback_rating IS NOT NULL
+  AND m.role = 'assistant' AND m.origin = 'CHAT'
+  AND m.feedback_at >= :since
+ORDER BY m.feedback_at DESC
+```
+
+This is the same query `tenancy/ConversationPersistenceIT` executes verbatim (`GRADING_QUERY`) — keep the two
+in sync.
+
+**Alpha trace caveat.** `t.turn_id` / `t.trace_payload` only populate when the `alpha` profile is running with
+`mcp.eval.turn-trace.enabled=true` (the alpha default) — every other environment, and alpha with the trace
+disabled, always shows `NULL` there even for a rated turn. The trace itself retains for only
+`mcp.eval.turn-trace.retention` (24h on alpha), while the turn summary on `mcp_message` lasts as long as the
+message (30-day conversation retention, pinned-exempt). There is deliberately no foreign key from
+`mcp_eval_turn_trace.message_id` to `mcp_message.id` — the trace is written before the message row exists, the
+message may never be persisted (conversation deleted mid-turn), and the two retentions differ — so the join
+always includes `tenant_id` alongside `message_id`, not `message_id` alone.
 
 ## Dependencies
 

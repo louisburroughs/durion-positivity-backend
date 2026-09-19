@@ -49,6 +49,10 @@ class McpOpenApiContractTest {
         assertOperationSummaryAndDescription(paths, "/v1/tools/{toolName}/permissions", "get");
         assertOperationSummaryAndDescription(paths, "/v1/tools/{toolName}/permissions", "post");
         assertOperationSummaryAndDescription(paths, "/v1/tools/{toolName}/permissions", "delete");
+        // #2075
+        assertOperationSummaryAndDescription(paths, "/v1/mcp/conversations/{id}/messages/{messageId}/feedback", "post");
+        assertOperationSummaryAndDescription(
+                paths, "/v1/mcp/conversations/{id}/messages/{messageId}/feedback", "delete");
     }
 
     @SuppressWarnings("unchecked")

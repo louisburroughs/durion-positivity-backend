@@ -7,6 +7,7 @@ import com.positivity.mcp.internal.dto.ConversationMessage;
 import com.positivity.mcp.internal.dto.ConversationPolicy;
 import com.positivity.mcp.internal.dto.ConversationSummary;
 import com.positivity.mcp.internal.dto.CreateConversationRequest;
+import com.positivity.mcp.internal.dto.MessageFeedbackRequest;
 import com.positivity.mcp.internal.dto.UpdateConversationRequest;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.internal.service.ConversationService;
@@ -265,5 +266,83 @@ class McpConversationController {
     ResponseEntity<ConversationMessage> appendMessage(
             @PathVariable @NonNull UUID id, @RequestBody @Valid @NonNull AppendMessageRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(conversationService.appendMessage(id, request));
+    }
+
+    @PostMapping("/{id}/messages/{messageId}/feedback")
+    @Operation(operationId = "setMcpMessageFeedback", summary = "Rate an Assistant Answer", description = """
+                    Rates one assistant answer helpful or not helpful, with an optional reason and free-text \
+                    comment. A repeat call replaces the earlier rating in full — an omitted reason or comment \
+                    clears the previously stored value rather than leaving it untouched.
+                    Preconditions: the conversation must exist and belong to the caller; messageId must \
+                    address an assistant answer produced by a chat turn (POST /mcp/chat) within it — a \
+                    client-appended assistant message (POST .../messages) cannot be rated.
+                    Required inputs: id (conversation id) and messageId as path parameters — messageId is \
+                    either the messageId POST /mcp/chat returned or a ConversationMessage.id from this \
+                    conversation's history — plus rating in the body (reason and comment optional).
+                    Emits a MCP_MESSAGE_FEEDBACK_SET event.
+                    Returns 204 on success and 404 (never 403) when the message does not exist, is in \
+                    another conversation, is not owned by the caller, belongs to another tenant, has role \
+                    "user", was appended directly rather than produced by a chat turn, or was purged — the \
+                    same body in every case.
+                    """)
+    @ApiResponse(responseCode = "204", description = "Rating stored (replaces any prior rating)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: rating missing/blank/unknown, reason unknown or empty, or "
+                    + "comment over 1000 characters after trimming; also a non-UUID id or messageId",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "MESSAGE_NOT_FOUND: no ratable assistant message with this id in a conversation "
+                    + "the caller owns (also covers a client-appended assistant message, which is not a "
+                    + "chat-turn answer)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"mcp:chat:execute"})
+    @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_EXECUTE + "')")
+    @EmitEvent(id = "MCP_MESSAGE_FEEDBACK_SET", apiVersion = "1")
+    ResponseEntity<Void> setFeedback(
+            @PathVariable @NonNull UUID id,
+            @PathVariable @NonNull UUID messageId,
+            @RequestBody @Valid @NonNull MessageFeedbackRequest request) {
+        conversationService.setFeedback(id, messageId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/messages/{messageId}/feedback")
+    @Operation(operationId = "clearMcpMessageFeedback", summary = "Withdraw a Rating", description = """
+                    Withdraws the caller's rating of one assistant answer. Idempotent: it returns 204 even \
+                    when the message was never rated.
+                    Preconditions: the conversation must exist and belong to the caller; messageId must \
+                    address an assistant answer produced by a chat turn (POST /mcp/chat) within it — a \
+                    client-appended assistant message (POST .../messages) cannot be rated, so there is \
+                    nothing to withdraw and the call answers 404 instead of a silent 204.
+                    Required inputs: id (conversation id) and messageId as path parameters; there is no \
+                    request body.
+                    Emits a MCP_MESSAGE_FEEDBACK_CLEAR event.
+                    Returns 404 (never 403) when the message does not exist, is in another conversation, is \
+                    not owned by the caller, belongs to another tenant, has role "user", was appended \
+                    directly rather than produced by a chat turn, or was purged.
+                    """)
+    @ApiResponse(responseCode = "204", description = "Rating cleared, or there was nothing to clear")
+    @ApiResponse(
+            responseCode = "400",
+            description = "id or messageId path parameter is not a valid UUID",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "MESSAGE_NOT_FOUND: no ratable assistant message with this id in a conversation "
+                    + "the caller owns (also covers a client-appended assistant message, which is not a "
+                    + "chat-turn answer)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"mcp:chat:execute"})
+    @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_EXECUTE + "')")
+    @EmitEvent(id = "MCP_MESSAGE_FEEDBACK_CLEAR", apiVersion = "1")
+    ResponseEntity<Void> clearFeedback(@PathVariable @NonNull UUID id, @PathVariable @NonNull UUID messageId) {
+        conversationService.clearFeedback(id, messageId);
+        return ResponseEntity.noContent().build();
     }
 }

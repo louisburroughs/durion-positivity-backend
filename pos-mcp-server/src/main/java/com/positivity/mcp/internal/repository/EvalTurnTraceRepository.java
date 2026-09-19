@@ -3,6 +3,8 @@ package com.positivity.mcp.internal.repository;
 import com.positivity.mcp.internal.domain.EvalTurnTrace;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 public interface EvalTurnTraceRepository {
@@ -21,4 +23,11 @@ public interface EvalTurnTraceRepository {
      */
     @NonNull
     List<EvalTurnTrace> findRecorded(@NonNull Instant since, int limit);
+
+    /**
+     * The newest trace of the turn that produced assistant message {@code messageId} (#2075), within
+     * the bound tenant and the trace retention window; empty when none is retained.
+     */
+    @NonNull
+    Optional<EvalTurnTrace> findByMessageId(@NonNull UUID messageId);
 }

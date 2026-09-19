@@ -696,6 +696,111 @@ paths:
       - MCP Conversations
       x-required-permissions:
       - mcp:chat:execute
+  /v1/mcp/conversations/{id}/messages/{messageId}/feedback:
+    delete:
+      description: 'Withdraws the caller''s rating of one assistant answer. Idempotent: it returns 204 even when the message was never rated.
+
+        Preconditions: the conversation must exist and belong to the caller; messageId must address an assistant answer produced by a chat turn (POST /mcp/chat) within it — a client-appended assistant message (POST .../messages) cannot be rated, so there is nothing to withdraw and the call answers 404 instead of a silent 204.
+
+        Required inputs: id (conversation id) and messageId as path parameters; there is no request body.
+
+        Emits a MCP_MESSAGE_FEEDBACK_CLEAR event.
+
+        Returns 404 (never 403) when the message does not exist, is in another conversation, is not owned by the caller, belongs to another tenant, has role "user", was appended directly rather than produced by a chat turn, or was purged.
+
+        '
+      operationId: clearMcpMessageFeedback
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: messageId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: Rating cleared, or there was nothing to clear
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: id or messageId path parameter is not a valid UUID
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'MESSAGE_NOT_FOUND: no ratable assistant message with this id in a conversation the caller owns (also covers a client-appended assistant message, which is not a chat-turn answer)'
+      security:
+      - bearerAuth:
+        - mcp:chat:execute
+      summary: Withdraw a Rating
+      tags:
+      - MCP Conversations
+      x-required-permissions:
+      - mcp:chat:execute
+    post:
+      description: 'Rates one assistant answer helpful or not helpful, with an optional reason and free-text comment. A repeat call replaces the earlier rating in full — an omitted reason or comment clears the previously stored value rather than leaving it untouched.
+
+        Preconditions: the conversation must exist and belong to the caller; messageId must address an assistant answer produced by a chat turn (POST /mcp/chat) within it — a client-appended assistant message (POST .../messages) cannot be rated.
+
+        Required inputs: id (conversation id) and messageId as path parameters — messageId is either the messageId POST /mcp/chat returned or a ConversationMessage.id from this conversation''s history — plus rating in the body (reason and comment optional).
+
+        Emits a MCP_MESSAGE_FEEDBACK_SET event.
+
+        Returns 204 on success and 404 (never 403) when the message does not exist, is in another conversation, is not owned by the caller, belongs to another tenant, has role "user", was appended directly rather than produced by a chat turn, or was purged — the same body in every case.
+
+        '
+      operationId: setMcpMessageFeedback
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: messageId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageFeedbackRequest'
+        required: true
+      responses:
+        '204':
+          description: Rating stored (replaces any prior rating)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: rating missing/blank/unknown, reason unknown or empty, or comment over 1000 characters after trimming; also a non-UUID id or messageId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'MESSAGE_NOT_FOUND: no ratable assistant message with this id in a conversation the caller owns (also covers a client-appended assistant message, which is not a chat-turn answer)'
+      security:
+      - bearerAuth:
+        - mcp:chat:execute
+      summary: Rate an Assistant Answer
+      tags:
+      - MCP Conversations
+      x-required-permissions:
+      - mcp:chat:execute
   /v1/mcp/documents:
     post:
       description: 'Queues a text document for asynchronous ingestion into the RAG vector store and returns a trackable job.
@@ -1988,6 +2093,8 @@ components:
           description: Raw text/markdown for this turn. Always populated; the fallback a client renders whenever `blocks` is empty.
           example: You have **26 mechanics**, all ACTIVE.
           type: string
+        feedback:
+          $ref: '#/components/schemas/MessageFeedback'
         id:
           description: Message id.
           example: 0198f2b1-7a10-7b21-9c00-abcdef123456
@@ -2253,6 +2360,67 @@ components:
       - id
       - model
       - updatedAt
+      type: object
+    MessageFeedback:
+      description: The caller's current rating of this assistant message.
+      properties:
+        comment:
+          type:
+          - string
+          - 'null'
+        ratedAt:
+          format: date-time
+          type: string
+        rating:
+          enum:
+          - helpful
+          - not_helpful
+          type: string
+        reason:
+          enum:
+          - incorrect
+          - incomplete
+          - not_relevant
+          - other
+          type:
+          - string
+          - 'null'
+      required:
+      - ratedAt
+      - rating
+      type: object
+    MessageFeedbackRequest:
+      description: The caller's rating of one assistant answer. A repeat POST replaces it.
+      properties:
+        comment:
+          description: Optional free text, trimmed; blank is treated as absent. At most 1000 characters after trimming.
+          maxLength: 1000
+          minLength: 0
+          type:
+          - string
+          - 'null'
+        rating:
+          description: helpful or not_helpful.
+          enum:
+          - helpful
+          - not_helpful
+          example: not_helpful
+          minLength: 1
+          pattern: helpful|not_helpful
+          type: string
+        reason:
+          description: Optional reason. Omit to leave/clear it (a repeat POST without reason clears any previously stored reason).
+          enum:
+          - incorrect
+          - incomplete
+          - not_relevant
+          - other
+          pattern: incorrect|incomplete|not_relevant|other
+          type:
+          - string
+          - 'null'
+      required:
+      - rating
       type: object
     NltiRequestDTO:
       description: Natural-language task interpretation request submitted by a client

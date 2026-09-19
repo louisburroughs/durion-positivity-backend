@@ -317,6 +317,99 @@ class ConversationServiceImplTest {
         verifyNoInteractions(store);
     }
 
+    // -- feedback (#2075) --------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("setFeedback: the owner and the request's values pass through to the store")
+    void setFeedback_passesOwnerAndValuesThrough() {
+        UUID id = UUID.randomUUID();
+        UUID messageId = UUID.randomUUID();
+        when(store.setFeedback(id, messageId, OWNER, "not_helpful", "incorrect", "wrong total"))
+                .thenReturn(true);
+
+        service.setFeedback(
+                id,
+                messageId,
+                new com.positivity.mcp.internal.dto.MessageFeedbackRequest("not_helpful", "incorrect", "wrong total"));
+
+        verify(store).setFeedback(id, messageId, OWNER, "not_helpful", "incorrect", "wrong total");
+    }
+
+    @Test
+    @DisplayName("setFeedback: the store returning false is MessageNotFoundException")
+    void setFeedback_storeReturnsFalse_throwsMessageNotFound() {
+        UUID id = UUID.randomUUID();
+        UUID messageId = UUID.randomUUID();
+        when(store.setFeedback(eq(id), eq(messageId), eq(OWNER), any(), any(), any()))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> service.setFeedback(
+                        id,
+                        messageId,
+                        new com.positivity.mcp.internal.dto.MessageFeedbackRequest("helpful", null, null)))
+                .isInstanceOf(com.positivity.mcp.internal.exception.MessageNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("clearFeedback: the owner passes through to the store")
+    void clearFeedback_passesOwnerThrough() {
+        UUID id = UUID.randomUUID();
+        UUID messageId = UUID.randomUUID();
+        when(store.clearFeedback(id, messageId, OWNER)).thenReturn(true);
+
+        service.clearFeedback(id, messageId);
+
+        verify(store).clearFeedback(id, messageId, OWNER);
+    }
+
+    @Test
+    @DisplayName("clearFeedback: the store returning false is MessageNotFoundException")
+    void clearFeedback_storeReturnsFalse_throwsMessageNotFound() {
+        UUID id = UUID.randomUUID();
+        UUID messageId = UUID.randomUUID();
+        when(store.clearFeedback(id, messageId, OWNER)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.clearFeedback(id, messageId))
+                .isInstanceOf(com.positivity.mcp.internal.exception.MessageNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("get: an unrated assistant message maps feedback to null")
+    void get_unratedMessage_feedbackIsNull() {
+        UUID id = UUID.randomUUID();
+        McpConversation conv = conversation("Roster", false, null);
+        McpMessage assistantMessage = message(ConversationMessageRole.ASSISTANT, "answer");
+        when(store.findWithMessages(id, OWNER))
+                .thenReturn(Optional.of(new ConversationWithMessages(conv, List.of(assistantMessage))));
+
+        ConversationDetail detail = service.get(id);
+
+        assertThat(detail.messages().get(0).feedback()).isNull();
+    }
+
+    @Test
+    @DisplayName("get: a rated assistant message maps feedback with rating/reason/comment/ratedAt")
+    void get_ratedMessage_feedbackMapped() {
+        UUID id = UUID.randomUUID();
+        McpConversation conv = conversation("Roster", false, null);
+        McpMessage assistantMessage = message(ConversationMessageRole.ASSISTANT, "answer");
+        assistantMessage.setFeedbackRating("helpful");
+        assistantMessage.setFeedbackReason("other");
+        assistantMessage.setFeedbackComment("great answer");
+        assistantMessage.setFeedbackAt(UPDATED_AT);
+        when(store.findWithMessages(id, OWNER))
+                .thenReturn(Optional.of(new ConversationWithMessages(conv, List.of(assistantMessage))));
+
+        ConversationDetail detail = service.get(id);
+
+        var feedback = detail.messages().get(0).feedback();
+        assertThat(feedback).isNotNull();
+        assertThat(feedback.rating()).isEqualTo("helpful");
+        assertThat(feedback.reason()).isEqualTo("other");
+        assertThat(feedback.comment()).isEqualTo("great answer");
+        assertThat(feedback.ratedAt()).isEqualTo(UPDATED_AT.toInstant());
+    }
+
     // -- policy / list -----------------------------------------------------------------------------
 
     @Test

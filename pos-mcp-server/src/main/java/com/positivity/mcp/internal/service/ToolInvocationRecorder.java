@@ -106,6 +106,14 @@ public class ToolInvocationRecorder {
         recordTrace(recorder -> recorder.recordAnswerSource(answerSource), "record answer source");
     }
 
+    /**
+     * #2075: stamps the conversation and the pre-assigned assistant message id on the active turn's
+     * trace, so a rating can be joined to it. Both are null on the ephemeral path.
+     */
+    public void recordMessage(@Nullable UUID conversationId, @Nullable UUID messageId) {
+        recordTrace(recorder -> recorder.recordMessage(conversationId, messageId), "record message id");
+    }
+
     public void completeTurn(@NonNull String response) {
         recordTrace(recorder -> recorder.complete(response), "complete turn");
     }

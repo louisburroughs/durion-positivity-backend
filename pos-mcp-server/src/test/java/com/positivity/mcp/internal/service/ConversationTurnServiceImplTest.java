@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -13,6 +14,8 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.config.AgentOrchestrationService;
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.domain.ChatOutcome;
+import com.positivity.mcp.internal.domain.TurnSummary;
 import com.positivity.mcp.internal.dto.ChatBlock;
 import com.positivity.mcp.internal.exception.ConversationBusyException;
 import com.positivity.mcp.internal.exception.ConversationNotFoundException;
@@ -81,9 +84,20 @@ class ConversationTurnServiceImplTest {
     @Test
     @DisplayName("null conversationId starts a new conversation; a fresh UUID is returned and persisted")
     void runTurn_nullId_startsNewConversationAndReturnsIds() {
-        when(agentOrchestrationService.chat(eq(USER), eq("hi"), any())).thenReturn("answer");
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("hi"), any(), any()))
+                .thenReturn(ChatOutcome.of("answer"));
         UUID assistantMessageId = UUID.randomUUID();
-        when(store.recordChatTurn(any(), eq(true), eq(USER_ID), eq("hi"), anyList(), eq("answer"), anyList()))
+        when(store.recordChatTurn(
+                        any(),
+                        eq(true),
+                        eq(USER_ID),
+                        any(),
+                        eq("hi"),
+                        anyList(),
+                        any(),
+                        eq("answer"),
+                        anyList(),
+                        any()))
                 .thenReturn(Optional.of(assistantMessageId));
 
         ChatTurnResult result = turnService.runTurn(null, "hi");
@@ -94,9 +108,19 @@ class ConversationTurnServiceImplTest {
         ArgumentCaptor<UUID> idCaptor = ArgumentCaptor.forClass(UUID.class);
         verify(store)
                 .recordChatTurn(
-                        idCaptor.capture(), eq(true), eq(USER_ID), eq("hi"), anyList(), eq("answer"), anyList());
+                        idCaptor.capture(),
+                        eq(true),
+                        eq(USER_ID),
+                        any(),
+                        eq("hi"),
+                        anyList(),
+                        any(),
+                        eq("answer"),
+                        anyList(),
+                        any());
         assertThat(idCaptor.getValue().toString()).isEqualTo(result.conversationId());
-        verify(agentOrchestrationService).chat(USER, "hi", idCaptor.getValue().toString());
+        verify(agentOrchestrationService)
+                .chatTurn(eq(USER), eq("hi"), eq(idCaptor.getValue().toString()), any());
     }
 
     @Test
@@ -104,16 +128,20 @@ class ConversationTurnServiceImplTest {
     void runTurn_ownedUuid_reusesConversation() {
         UUID existingId = UUID.randomUUID();
         when(store.isOwned(existingId, USER_ID)).thenReturn(true);
-        when(agentOrchestrationService.chat(USER, "hi", existingId.toString())).thenReturn("answer");
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("hi"), eq(existingId.toString()), any()))
+                .thenReturn(ChatOutcome.of("answer"));
         UUID assistantMessageId = UUID.randomUUID();
         when(store.recordChatTurn(
-                        existingId,
-                        false,
-                        USER_ID,
-                        "hi",
-                        List.of(new ChatBlock.TextBlock("hi")),
-                        "answer",
-                        List.of(new ChatBlock.MarkdownBlock("answer"))))
+                        eq(existingId),
+                        eq(false),
+                        eq(USER_ID),
+                        any(UUID.class),
+                        eq("hi"),
+                        eq(List.of(new ChatBlock.TextBlock("hi"))),
+                        any(UUID.class),
+                        eq("answer"),
+                        eq(List.of(new ChatBlock.MarkdownBlock("answer"))),
+                        any(TurnSummary.class)))
                 .thenReturn(Optional.of(assistantMessageId));
 
         ChatTurnResult result = turnService.runTurn(existingId.toString(), "hi");
@@ -131,15 +159,18 @@ class ConversationTurnServiceImplTest {
         when(store.isOwned(otherId, USER_ID)).thenReturn(true);
         CountDownLatch firstTurnInModel = new CountDownLatch(1);
         CountDownLatch releaseFirstTurn = new CountDownLatch(1);
-        when(agentOrchestrationService.chat(USER, "first", busyId.toString())).thenAnswer(invocation -> {
-            firstTurnInModel.countDown();
-            if (!releaseFirstTurn.await(10, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("first turn was never released");
-            }
-            return "first answer";
-        });
-        when(agentOrchestrationService.chat(USER, "other", otherId.toString())).thenReturn("other answer");
-        when(store.recordChatTurn(any(), eq(false), eq(USER_ID), any(), anyList(), any(), anyList()))
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("first"), eq(busyId.toString()), any()))
+                .thenAnswer(invocation -> {
+                    firstTurnInModel.countDown();
+                    if (!releaseFirstTurn.await(10, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("first turn was never released");
+                    }
+                    return ChatOutcome.of("first answer");
+                });
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("other"), eq(otherId.toString()), any()))
+                .thenReturn(ChatOutcome.of("other answer"));
+        when(store.recordChatTurn(
+                        any(), eq(false), eq(USER_ID), any(), any(), anyList(), any(), any(), anyList(), any()))
                 .thenReturn(Optional.of(UUID.randomUUID()));
         Authentication caller = SecurityContextHolder.getContext().getAuthentication();
 
@@ -167,10 +198,13 @@ class ConversationTurnServiceImplTest {
             executor.shutdownNow();
         }
 
-        verify(agentOrchestrationService, never()).chat(USER, "second", busyId.toString());
-        verify(store, never()).recordChatTurn(any(), anyBoolean(), any(), eq("second"), anyList(), any(), anyList());
+        verify(agentOrchestrationService, never()).chatTurn(eq(USER), eq("second"), eq(busyId.toString()), any());
+        verify(store, never())
+                .recordChatTurn(
+                        any(), anyBoolean(), any(), any(), eq("second"), anyList(), any(), any(), anyList(), any());
         // The first turn released the lock on success: the next turn on the conversation runs.
-        when(agentOrchestrationService.chat(USER, "third", busyId.toString())).thenReturn("third answer");
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("third"), eq(busyId.toString()), any()))
+                .thenReturn(ChatOutcome.of("third answer"));
         assertThat(turnService.runTurn(busyId.toString(), "third").response()).isEqualTo("third answer");
     }
 
@@ -179,11 +213,12 @@ class ConversationTurnServiceImplTest {
     void runTurn_modelThrows_releasesConversationLock() {
         UUID conversationId = UUID.randomUUID();
         when(store.isOwned(conversationId, USER_ID)).thenReturn(true);
-        when(agentOrchestrationService.chat(USER, "boom", conversationId.toString()))
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("boom"), eq(conversationId.toString()), any()))
                 .thenThrow(new IllegalStateException("model failed"));
-        when(agentOrchestrationService.chat(USER, "retry", conversationId.toString()))
-                .thenReturn("answer");
-        when(store.recordChatTurn(any(), eq(false), eq(USER_ID), eq("retry"), anyList(), any(), anyList()))
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("retry"), eq(conversationId.toString()), any()))
+                .thenReturn(ChatOutcome.of("answer"));
+        when(store.recordChatTurn(
+                        any(), eq(false), eq(USER_ID), any(), eq("retry"), anyList(), any(), any(), anyList(), any()))
                 .thenReturn(Optional.of(UUID.randomUUID()));
 
         assertThatThrownBy(() -> turnService.runTurn(conversationId.toString(), "boom"))
@@ -203,13 +238,15 @@ class ConversationTurnServiceImplTest {
                 .isInstanceOf(ConversationNotFoundException.class);
 
         verifyNoInteractions(agentOrchestrationService);
-        verify(store, never()).recordChatTurn(any(), anyBoolean(), any(), any(), anyList(), any(), anyList());
+        verify(store, never())
+                .recordChatTurn(any(), anyBoolean(), any(), any(), any(), anyList(), any(), any(), anyList(), any());
     }
 
     @Test
     @DisplayName("a non-UUID conversationId is the deprecated ephemeral path: memory-only, messageId null")
     void runTurn_nonUuid_ephemeral_messageIdNullNothingPersisted() {
-        when(agentOrchestrationService.chat(USER, "hi", "gate-q07")).thenReturn("answer");
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("hi"), eq("gate-q07"), isNull()))
+                .thenReturn(ChatOutcome.of("answer"));
 
         ChatTurnResult result = turnService.runTurn("gate-q07", "hi");
 
@@ -221,12 +258,13 @@ class ConversationTurnServiceImplTest {
     @Test
     @DisplayName("a model failure (including the 429 rate limit) persists nothing")
     void runTurn_modelException_nothingPersisted() {
-        when(agentOrchestrationService.chat(eq(USER), eq("hi"), any()))
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("hi"), any(), any()))
                 .thenThrow(new RateLimitExceededException("Rate limit exceeded"));
 
         assertThatThrownBy(() -> turnService.runTurn(null, "hi")).isInstanceOf(RateLimitExceededException.class);
 
-        verify(store, never()).recordChatTurn(any(), anyBoolean(), any(), any(), anyList(), any(), anyList());
+        verify(store, never())
+                .recordChatTurn(any(), anyBoolean(), any(), any(), any(), anyList(), any(), any(), anyList(), any());
     }
 
     @Test
@@ -234,8 +272,19 @@ class ConversationTurnServiceImplTest {
     void runTurn_conversationDeletedMidTurn_answerReturnedMessageIdNull() {
         UUID existingId = UUID.randomUUID();
         when(store.isOwned(existingId, USER_ID)).thenReturn(true);
-        when(agentOrchestrationService.chat(USER, "hi", existingId.toString())).thenReturn("answer");
-        when(store.recordChatTurn(eq(existingId), eq(false), eq(USER_ID), eq("hi"), anyList(), eq("answer"), anyList()))
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("hi"), eq(existingId.toString()), any()))
+                .thenReturn(ChatOutcome.of("answer"));
+        when(store.recordChatTurn(
+                        eq(existingId),
+                        eq(false),
+                        eq(USER_ID),
+                        any(),
+                        eq("hi"),
+                        anyList(),
+                        any(),
+                        eq("answer"),
+                        anyList(),
+                        any()))
                 .thenReturn(Optional.empty());
 
         ChatTurnResult result = turnService.runTurn(existingId.toString(), "hi");
@@ -253,9 +302,19 @@ class ConversationTurnServiceImplTest {
         // directly following a list item's first line (no blank line) forms no top-level GFM Table
         // node, so the segmenter's safety net yields an empty list rather than a partial one.
         String nestedTableMarkdown = "- item one\n  | A | B |\n  | --- | --- |\n  | 1 | 2 |";
-        when(agentOrchestrationService.chat(eq(USER), eq("hi"), any())).thenReturn(nestedTableMarkdown);
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("hi"), any(), any()))
+                .thenReturn(ChatOutcome.of(nestedTableMarkdown));
         when(store.recordChatTurn(
-                        any(), eq(true), eq(USER_ID), eq("hi"), anyList(), eq(nestedTableMarkdown), anyList()))
+                        any(),
+                        eq(true),
+                        eq(USER_ID),
+                        any(),
+                        eq("hi"),
+                        anyList(),
+                        any(),
+                        eq(nestedTableMarkdown),
+                        anyList(),
+                        any()))
                 .thenReturn(Optional.of(UUID.randomUUID()));
 
         ChatTurnResult result = turnService.runTurn(null, "hi");
@@ -268,10 +327,131 @@ class ConversationTurnServiceImplTest {
                         any(),
                         eq(true),
                         eq(USER_ID),
+                        any(),
                         eq("hi"),
                         anyList(),
+                        any(),
                         eq(nestedTableMarkdown),
-                        assistantBlocksCaptor.capture());
+                        assistantBlocksCaptor.capture(),
+                        any());
         assertThat(assistantBlocksCaptor.getValue()).isEmpty();
+    }
+
+    // -- #2075: the pre-assigned assistant id, ordering, and the summary passthrough -------------
+
+    @Test
+    @DisplayName("the assistant id passed to chatTurn equals the one passed to recordChatTurn and to "
+            + "ChatTurnResult.messageId (#2075)")
+    void runTurn_assistantMessageId_consistentAcrossOrchestrationPersistenceAndResult() {
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("hi"), any(), any()))
+                .thenReturn(ChatOutcome.of("answer"));
+        when(store.recordChatTurn(
+                        any(),
+                        eq(true),
+                        eq(USER_ID),
+                        any(),
+                        eq("hi"),
+                        anyList(),
+                        any(),
+                        eq("answer"),
+                        anyList(),
+                        any()))
+                .thenAnswer(invocation -> Optional.of(invocation.getArgument(6, UUID.class)));
+
+        ChatTurnResult result = turnService.runTurn(null, "hi");
+
+        ArgumentCaptor<UUID> chatTurnAssistantId = ArgumentCaptor.forClass(UUID.class);
+        verify(agentOrchestrationService).chatTurn(eq(USER), eq("hi"), any(), chatTurnAssistantId.capture());
+        ArgumentCaptor<UUID> recordChatTurnAssistantId = ArgumentCaptor.forClass(UUID.class);
+        verify(store)
+                .recordChatTurn(
+                        any(),
+                        eq(true),
+                        eq(USER_ID),
+                        any(),
+                        eq("hi"),
+                        anyList(),
+                        recordChatTurnAssistantId.capture(),
+                        eq("answer"),
+                        anyList(),
+                        any());
+
+        assertThat(chatTurnAssistantId.getValue())
+                .as("the id chatTurn used to stamp the eval trace")
+                .isEqualTo(recordChatTurnAssistantId.getValue())
+                .isEqualTo(result.messageId());
+    }
+
+    @Test
+    @DisplayName("userMessageId sorts before assistantMessageId — both are UUID v7, user generated first (#2075)")
+    void runTurn_userMessageIdSortsBeforeAssistantMessageId() {
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("hi"), any(), any()))
+                .thenReturn(ChatOutcome.of("answer"));
+        when(store.recordChatTurn(
+                        any(),
+                        eq(true),
+                        eq(USER_ID),
+                        any(),
+                        eq("hi"),
+                        anyList(),
+                        any(),
+                        eq("answer"),
+                        anyList(),
+                        any()))
+                .thenReturn(Optional.of(UUID.randomUUID()));
+
+        turnService.runTurn(null, "hi");
+
+        ArgumentCaptor<UUID> userMessageId = ArgumentCaptor.forClass(UUID.class);
+        ArgumentCaptor<UUID> assistantMessageId = ArgumentCaptor.forClass(UUID.class);
+        verify(store)
+                .recordChatTurn(
+                        any(),
+                        eq(true),
+                        eq(USER_ID),
+                        userMessageId.capture(),
+                        eq("hi"),
+                        anyList(),
+                        assistantMessageId.capture(),
+                        eq("answer"),
+                        anyList(),
+                        any());
+
+        assertThat(userMessageId.getValue()).isLessThan(assistantMessageId.getValue());
+    }
+
+    @Test
+    @DisplayName("the model's TurnSummary passes through to recordChatTurn unchanged (#2075)")
+    void runTurn_summaryPassedThroughUnchanged() {
+        TurnSummary summary = new TurnSummary(TurnSummary.PATH_AGENT, "CONTENT", List.of("InventoryFacadeTool"), 42);
+        when(agentOrchestrationService.chatTurn(eq(USER), eq("hi"), any(), any()))
+                .thenReturn(new ChatOutcome("answer", summary));
+        when(store.recordChatTurn(
+                        any(),
+                        eq(true),
+                        eq(USER_ID),
+                        any(),
+                        eq("hi"),
+                        anyList(),
+                        any(),
+                        eq("answer"),
+                        anyList(),
+                        eq(summary)))
+                .thenReturn(Optional.of(UUID.randomUUID()));
+
+        turnService.runTurn(null, "hi");
+
+        verify(store)
+                .recordChatTurn(
+                        any(),
+                        eq(true),
+                        eq(USER_ID),
+                        any(),
+                        eq("hi"),
+                        anyList(),
+                        any(),
+                        eq("answer"),
+                        anyList(),
+                        eq(summary));
     }
 }
