@@ -29,6 +29,7 @@ modules:
   pos-catalog:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-shop-manager:
     mode: STRICT
     annotationDepth: STRICT
