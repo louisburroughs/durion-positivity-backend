@@ -86,6 +86,31 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
      * statement, and the resource-type ambiguity (bay id, technician id, or {@code UNASSIGNED}) is
      * resolved the same way {@code /schedules/view} resolves it: by what the id actually names, not
      * by a field production never populates.
+     *
+     * <p><strong>{@code windowStart} is not the requested range start.</strong> The predicate matches
+     * on the <em>planned</em> columns, but occupancy is computed from the effective window — the
+     * linked workorder's actuals when known (#2021). A job planned entirely before the requested
+     * range can still be running inside it, so a lower bound of {@code from} silently drops it and
+     * the overrun never appears (#2050). The caller therefore passes {@code from -
+     * ScheduleCapacityServiceImpl.CARRY_OVER_LOOKBACK_DAYS} here, and discards the pre-range days it
+     * assembles from the extra rows.
+     *
+     * <p>A bounded constant rather than an {@code OR} arm on the {@code ext_workorder} actuals, which
+     * is the obvious alternative: the useful arm of such a predicate is "started before the range and
+     * not yet completed", and {@code completedAt IS NULL} has no lower bound in time. A workorder
+     * started and never closed would match forever — refetched on every capacity read, at every
+     * location, until someone closes it. That is the opposite of the bounded lookback #2050 AC3 asks
+     * for, and it makes the cost of the read a function of data hygiene rather than of the request.
+     *
+     * <p>The access path is unchanged by the widening. {@code appointment} has one explicitly created
+     * index, {@code appointment_tenant_idx ON public.appointment USING btree (tenant_id)}
+     * ({@code V1__baseline_shop_manager.sql:662}); its only other indexes are constraint-backed —
+     * {@code appointment_pkey} on {@code (appointment_id)}, {@code appointment_tenant_key} on
+     * {@code (tenant_id, appointment_id)}, and V8's GiST exclusion index, which needs a {@code
+     * resource_id} equality this predicate does not have. There is no {@code (location_id, start_at,
+     * end_at)} index, so this was a tenant-index scan with a time filter before and it is a
+     * tenant-index scan with a time filter after: the widening changes the rows returned, not the
+     * plan.
      */
     @Query("""
                         SELECT appointment
@@ -93,9 +118,9 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
                         WHERE appointment.locationId = :locationId
                           AND appointment.status <> 'CANCELLED'
                           AND appointment.startAt < :rangeEnd
-                          AND appointment.endAt > :rangeStart
+                          AND appointment.endAt > :windowStart
                         """)
     @NonNull
     List<Appointment> findAppointmentsForCapacity(
-            @NonNull UUID locationId, @NonNull Instant rangeEnd, @NonNull Instant rangeStart);
+            @NonNull UUID locationId, @NonNull Instant rangeEnd, @NonNull Instant windowStart);
 }

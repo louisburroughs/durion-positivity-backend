@@ -122,47 +122,65 @@ public class ScheduleCapacityResponse {
         @Schema(
                 description = "One slot per hour of the day's window (a partial trailing hour still gets a "
                         + "slot); each value is the count of appointments overlapping that hour, so a "
-                        + "double-booking reads greater than 1. Carry-over from a prior open day (below) is "
-                        + "already reflected here, marked from the start of the window (issue #2021 AC5).",
+                        + "double-booking reads greater than 1. Work that began on an earlier date (listed "
+                        + "in carryOverIn below) is already reflected here, but not always in the same "
+                        + "slots: an appointment whose effective window simply runs on into this day marks "
+                        + "the hours it really occupies on the clock, while minutes re-anchored from a prior "
+                        + "open day's overrun have no clock position of their own and are marked from the "
+                        + "start of this day's window (issues #2021 AC5, #2050).",
                 example = "[0,0,1,1,1,0]",
                 requiredMode = REQUIRED)
         private List<Integer> occupancy;
 
         @Schema(
-                description = "Bay-hours carried into this day from an appointment that overran a prior "
-                        + "open day's close (issue #2021 AC4/AC5/AC6). Already netted into occupiedMinutes "
-                        + "and occupancy above — this list is the detail behind that number, not an addition "
-                        + "to it. Empty when nothing carried over.",
+                description = "Every appointment holding this bay on this date that did not begin on this "
+                        + "date — its effective window opened on an earlier local date, whether it overran a "
+                        + "prior open day's close or is simply still running — listed once each, sorted by "
+                        + "(fromDate, appointmentId) (issues #2021 AC4/AC5/AC6, #2050). Already netted into "
+                        + "occupiedMinutes and occupancy above — this list is the detail behind those "
+                        + "numbers, never an addition to them. Populated only when status is OK. The "
+                        + "lookback is bounded at 42 days, the same limit as the requested range: work whose "
+                        + "window began more than that far before the range's first date is not reported "
+                        + "here. Empty when every appointment in this bay began on this date.",
                 requiredMode = REQUIRED)
         private List<CarryOverView> carryOverIn = new ArrayList<>();
     }
 
     @Data
     @Schema(
-            description = "One appointment's overrun, carried from a prior open day into this bay's "
-                    + "capacity on this date (issue #2021 AC4/AC5/AC6)")
+            description = "One earlier-starting appointment's contribution to this bay's capacity on this "
+                    + "date — the minutes it holds here because its work began before this date, however "
+                    + "those minutes reached the day (issues #2021 AC4/AC5/AC6, #2050)")
     public static class CarryOverView {
 
         @Schema(
-                description = "The date the appointment actually overran its own operating-day close",
+                description = "The local date this appointment's effective window began — the linked "
+                        + "workorder's actual start when known, else the appointment's planned start. It "
+                        + "names when the work started, which is what lets a board say what is still "
+                        + "holding the bay; it is not necessarily the date of an overrun, nor necessarily "
+                        + "an open day (#2050).",
                 example = "2026-10-10",
                 requiredMode = REQUIRED)
         private LocalDate fromDate;
 
         @Schema(
-                description = "The overrunning appointment's identifier",
+                description = "The identifier of the appointment holding the bay",
                 example = "01960003-0000-7000-8000-000000000001",
                 requiredMode = REQUIRED)
         private UUID appointmentId;
 
         @Schema(
-                description = "The linked workorder identifier the overrun comes from, when known",
+                description = "The linked workorder identifier this contribution's effective window came "
+                        + "from, when known",
                 example = "01960003-0000-7000-8000-000000000005",
                 requiredMode = NOT_REQUIRED)
         private UUID workorderId;
 
         @Schema(
-                description = "Bay-hours carried into this date from the overrun above, in tenths of an hour",
+                description = "Bay-hours of this date that this appointment accounts for, in tenths of an "
+                        + "hour: its real-clock overlap with this day's window, the minutes re-anchored onto "
+                        + "this day from a prior open day's overrun, or both together when it is both "
+                        + "(#2050)",
                 example = "1.5",
                 requiredMode = REQUIRED)
         private BigDecimal bayHours;
