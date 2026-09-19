@@ -38,6 +38,7 @@ modules:
   pos-bulk-loader:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-vehicle-inventory:
     mode: STRICT
     annotationDepth: STRICT
@@ -52,6 +53,7 @@ modules:
   pos-supplier:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-event-receiver:
     mode: STRICT
     annotationDepth: STRICT
@@ -61,12 +63,15 @@ modules:
   pos-image:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-documents:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-security-service:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-api-gateway:
     mode: EXCEPTION
     reason: aggregate producer without module paths
@@ -76,9 +81,11 @@ modules:
   pos-marketing:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-people-contact:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-tax:
     mode: STRICT
     annotationDepth: STRICT
