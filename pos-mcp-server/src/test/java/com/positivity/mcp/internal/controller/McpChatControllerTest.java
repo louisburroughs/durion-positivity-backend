@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -30,6 +31,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,10 +52,13 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextImpl;
+import org.springframework.security.test.context.TestSecurityContextHolder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -440,6 +449,76 @@ class McpChatControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.conversationId").value(existingConversationId.toString()))
                 .andExpect(jsonPath("$.messageId").value(assistantMessageId.toString()));
+    }
+
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName(
+            "POST /v1/mcp/chat: a second turn while one runs on the same conversation returns 409 CONVERSATION_BUSY")
+    void chat_concurrentTurnOnSameConversation_returns409() throws Exception {
+        UUID conversationId = UUID.fromString("0198f2b1-6c2a-7c3e-8f00-1234567890ac");
+        UUID userId = defaultUserContext().userId();
+        when(conversationStore.isOwned(conversationId, userId)).thenReturn(true);
+        CountDownLatch firstTurnInModel = new CountDownLatch(1);
+        CountDownLatch releaseFirstTurn = new CountDownLatch(1);
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+                .thenAnswer(invocation -> {
+                    firstTurnInModel.countDown();
+                    if (!releaseFirstTurn.await(10, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("first turn was never released");
+                    }
+                    return "first answer";
+                });
+        when(conversationStore.recordChatTurn(
+                        eq(conversationId), eq(false), eq(userId), anyString(), anyList(), anyString(), anyList()))
+                .thenReturn(Optional.of(UUID.randomUUID()));
+        var caller = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+        String body = "{\"message\":\"test\",\"conversationId\":\"" + conversationId + "\"}";
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            // The worker thread inherits the test thread's context object; bind a fresh one so the
+            // first turn's request lifecycle cannot clear the authentication the test thread relies on.
+            Future<MvcResult> firstTurn = executor.submit(() -> {
+                TestSecurityContextHolder.setContext(new SecurityContextImpl(caller));
+                try {
+                    return mockMvc.perform(post("/v1/mcp/chat")
+                                    .principal(caller)
+                                    .with(csrf())
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(body))
+                            .andReturn();
+                } finally {
+                    TestSecurityContextHolder.clearContext();
+                }
+            });
+            assertThat(firstTurnInModel.await(10, TimeUnit.SECONDS)).isTrue();
+
+            mockMvc.perform(post("/v1/mcp/chat")
+                            .principal(caller)
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isConflict())
+                    .andExpect(header().exists("X-Correlation-Id"))
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.code").value("CONVERSATION_BUSY"))
+                    .andExpect(jsonPath("$.status").value(409))
+                    .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                    .andExpect(jsonPath("$.timestamp").isNotEmpty());
+
+            releaseFirstTurn.countDown();
+            assertThat(firstTurn.get(10, TimeUnit.SECONDS).getResponse().getStatus())
+                    .isEqualTo(200);
+        } finally {
+            releaseFirstTurn.countDown();
+            executor.shutdownNow();
+        }
     }
 
     @Test
