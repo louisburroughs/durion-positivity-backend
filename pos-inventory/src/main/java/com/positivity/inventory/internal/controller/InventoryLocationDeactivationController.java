@@ -71,7 +71,10 @@ public class InventoryLocationDeactivationController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = DeactivateLocationResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Bad request - invalid parameters or destination required")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Bad request - invalid parameters or destination required",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description =
@@ -79,8 +82,14 @@ public class InventoryLocationDeactivationController {
                             + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
                             + " locations that do not cover the locationId being deactivated or the destinationLocationId (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Location not found")
-    @ApiResponse(responseCode = "409", description = "Conflict - business rule violation")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Conflict - business rule violation",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<DeactivateLocationResponse> deactivate(
             @Parameter(description = "Location ID to deactivate", required = true) @PathVariable("locationId")
                     UUID locationId,

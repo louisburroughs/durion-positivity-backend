@@ -25,6 +25,7 @@ import com.positivity.inventory.internal.exception.LotNumberRequiredException;
 import com.positivity.inventory.internal.exception.LotUnknownException;
 import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
+import com.positivity.inventory.internal.exception.OperationNotImplementedException;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.PickScanMismatchException;
@@ -90,6 +91,11 @@ public class InventoryGlobalExceptionHandler {
     private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private final Clock clock;
+
+    @ExceptionHandler(OperationNotImplementedException.class)
+    public ResponseEntity<ApiError> handleNotImplemented(OperationNotImplementedException ex) {
+        return build(HttpStatus.NOT_IMPLEMENTED, "NOT_IMPLEMENTED", ex.getMessage());
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidationError(MethodArgumentNotValidException ex) {

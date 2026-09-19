@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayExecutionResponse;
 import com.positivity.inventory.internal.putaway.service.PutawayExecuteService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -71,10 +72,22 @@ public class PutawayExecuteController {
                                 @Content(
                                         mediaType = "application/json",
                                         schema = @Schema(implementation = PutawayExecutionResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Bad request - invalid task ID or request payload"),
-                @ApiResponse(responseCode = "403", description = "Forbidden - insufficient authority"),
-                @ApiResponse(responseCode = "404", description = "Putaway task not found"),
-                @ApiResponse(responseCode = "422", description = "Validation failed for putaway execution")
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Bad request - invalid task ID or request payload",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = "Forbidden - insufficient authority",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Putaway task not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "422",
+                        description = "Validation failed for putaway execution",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     public ResponseEntity<PutawayExecutionResponse> executePutaway(
             @Parameter(description = "Putaway task identifier", required = true) @PathVariable String taskId,

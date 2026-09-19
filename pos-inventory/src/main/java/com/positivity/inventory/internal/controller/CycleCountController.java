@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.dto.cyclecount.InterferingMovementRespo
 import com.positivity.inventory.internal.dto.cyclecount.SubmitCountRequest;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -84,8 +85,14 @@ public class CycleCountController {
             responseCode = "200",
             description = "Count submitted successfully",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = CountResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request or quantity")
-    @ApiResponse(responseCode = "404", description = "Task not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or quantity",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Task not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Task is not in ASSIGNED status",
@@ -149,9 +156,18 @@ public class CycleCountController {
             responseCode = "200",
             description = "Recount submitted successfully",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = CountResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request or recount limit exceeded")
-    @ApiResponse(responseCode = "403", description = "Insufficient permission")
-    @ApiResponse(responseCode = "404", description = "Task not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or recount limit exceeded",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Task not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CountResponse> submitRecount(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Recount submission carrying the task, the auditor, the newly counted"
@@ -203,7 +219,10 @@ public class CycleCountController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CycleCountTaskResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Task not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Task not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CycleCountTaskResponse> getTask(
             @Parameter(description = "Task ID") @PathVariable UUID taskId) {
         CycleCountTaskResponse task = cycleCountService.getTask(taskId);

@@ -3,6 +3,7 @@ package com.positivity.inventory;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.inventory.contract.BaseContractIntegrationTest;
@@ -61,7 +62,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-001")))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isNotImplemented())
+                .andExpect(jsonPath("$.code").value("NOT_IMPLEMENTED"))
+                .andExpect(jsonPath("$.status").value(501));
     }
 
     @Test

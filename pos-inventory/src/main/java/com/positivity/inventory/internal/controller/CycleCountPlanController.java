@@ -80,7 +80,10 @@ public class CycleCountPlanController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CycleCountPlanResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "FORBIDDEN when the caller lacks inventory:cycle_count:initiate;"
@@ -193,7 +196,10 @@ public class CycleCountPlanController {
                     + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
                     + " locations that do not cover the plan's locationId (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Cycle count plan not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Cycle count plan not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CycleCountPlanResponse> getPlan(
             @Parameter(description = "Cycle count plan identifier", required = true) @PathVariable UUID planId) {
         return ResponseEntity.ok(cycleCountPlanService.getPlan(planId));
@@ -232,10 +238,22 @@ public class CycleCountPlanController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CycleCountPlanResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure")
-    @ApiResponse(responseCode = "403", description = "User lacks required permission")
-    @ApiResponse(responseCode = "404", description = "Cycle count plan not found")
-    @ApiResponse(responseCode = "409", description = "Invalid status transition")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Cycle count plan not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Invalid status transition",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CycleCountPlanResponse> updatePlanStatus(
             @Parameter(description = "Cycle count plan identifier", required = true) @PathVariable UUID planId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -291,10 +309,22 @@ public class CycleCountPlanController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CycleCountTaskGenerationResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failure")
-    @ApiResponse(responseCode = "403", description = "User lacks required permission")
-    @ApiResponse(responseCode = "404", description = "Cycle count plan not found")
-    @ApiResponse(responseCode = "409", description = "Plan status does not accept task generation")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation failure",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Cycle count plan not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Plan status does not accept task generation",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CycleCountTaskGenerationResponse> generateTasks(
             @Parameter(description = "Cycle count plan identifier", required = true) @PathVariable UUID planId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -340,8 +370,14 @@ public class CycleCountPlanController {
                     @Content(
                             mediaType = "application/json",
                             array = @ArraySchema(schema = @Schema(implementation = CycleCountTaskResponse.class))))
-    @ApiResponse(responseCode = "403", description = "User lacks required permission")
-    @ApiResponse(responseCode = "404", description = "Cycle count plan not found")
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Cycle count plan not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<CycleCountTaskResponse>> listPlanTasks(
             @Parameter(description = "Cycle count plan identifier", required = true) @PathVariable UUID planId) {
         return ResponseEntity.ok(cycleCountTaskGenerationService.getTasksForPlan(planId));
