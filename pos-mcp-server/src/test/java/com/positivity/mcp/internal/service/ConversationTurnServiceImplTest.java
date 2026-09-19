@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.mcp.internal.config.AgentOrchestrationService;
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.dto.ChatBlock;
+import com.positivity.mcp.internal.exception.ConversationBusyException;
 import com.positivity.mcp.internal.exception.ConversationNotFoundException;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.service.ConversationTurnService.ChatTurnResult;
@@ -21,6 +22,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +38,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextImpl;
 
 /**
  * Unit tests for {@link ConversationTurnServiceImpl} (#2073, anvil decisions 8-10, user decision
@@ -113,6 +120,77 @@ class ConversationTurnServiceImplTest {
 
         assertThat(result.conversationId()).isEqualTo(existingId.toString());
         assertThat(result.messageId()).isEqualTo(assistantMessageId);
+    }
+
+    @Test
+    @DisplayName("a second concurrent turn on the same conversation is rejected busy; another conversation proceeds")
+    void runTurn_concurrentTurnOnSameConversation_throwsBusy_otherConversationProceeds() throws Exception {
+        UUID busyId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        when(store.isOwned(busyId, USER_ID)).thenReturn(true);
+        when(store.isOwned(otherId, USER_ID)).thenReturn(true);
+        CountDownLatch firstTurnInModel = new CountDownLatch(1);
+        CountDownLatch releaseFirstTurn = new CountDownLatch(1);
+        when(agentOrchestrationService.chat(USER, "first", busyId.toString())).thenAnswer(invocation -> {
+            firstTurnInModel.countDown();
+            if (!releaseFirstTurn.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("first turn was never released");
+            }
+            return "first answer";
+        });
+        when(agentOrchestrationService.chat(USER, "other", otherId.toString())).thenReturn("other answer");
+        when(store.recordChatTurn(any(), eq(false), eq(USER_ID), any(), anyList(), any(), anyList()))
+                .thenReturn(Optional.of(UUID.randomUUID()));
+        Authentication caller = SecurityContextHolder.getContext().getAuthentication();
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<ChatTurnResult> firstTurn = executor.submit(() -> {
+                SecurityContextHolder.setContext(new SecurityContextImpl(caller));
+                try {
+                    return turnService.runTurn(busyId.toString(), "first");
+                } finally {
+                    SecurityContextHolder.clearContext();
+                }
+            });
+            assertThat(firstTurnInModel.await(10, TimeUnit.SECONDS)).isTrue();
+
+            assertThatThrownBy(() -> turnService.runTurn(busyId.toString(), "second"))
+                    .isInstanceOf(ConversationBusyException.class);
+            assertThat(turnService.runTurn(otherId.toString(), "other").response())
+                    .isEqualTo("other answer");
+
+            releaseFirstTurn.countDown();
+            assertThat(firstTurn.get(10, TimeUnit.SECONDS).response()).isEqualTo("first answer");
+        } finally {
+            releaseFirstTurn.countDown();
+            executor.shutdownNow();
+        }
+
+        verify(agentOrchestrationService, never()).chat(USER, "second", busyId.toString());
+        verify(store, never()).recordChatTurn(any(), anyBoolean(), any(), eq("second"), anyList(), any(), anyList());
+        // The first turn released the lock on success: the next turn on the conversation runs.
+        when(agentOrchestrationService.chat(USER, "third", busyId.toString())).thenReturn("third answer");
+        assertThat(turnService.runTurn(busyId.toString(), "third").response()).isEqualTo("third answer");
+    }
+
+    @Test
+    @DisplayName("the conversation lock is released when the model call throws, so the next turn runs")
+    void runTurn_modelThrows_releasesConversationLock() {
+        UUID conversationId = UUID.randomUUID();
+        when(store.isOwned(conversationId, USER_ID)).thenReturn(true);
+        when(agentOrchestrationService.chat(USER, "boom", conversationId.toString()))
+                .thenThrow(new IllegalStateException("model failed"));
+        when(agentOrchestrationService.chat(USER, "retry", conversationId.toString()))
+                .thenReturn("answer");
+        when(store.recordChatTurn(any(), eq(false), eq(USER_ID), eq("retry"), anyList(), any(), anyList()))
+                .thenReturn(Optional.of(UUID.randomUUID()));
+
+        assertThatThrownBy(() -> turnService.runTurn(conversationId.toString(), "boom"))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(turnService.runTurn(conversationId.toString(), "retry").response())
+                .isEqualTo("answer");
     }
 
     @Test

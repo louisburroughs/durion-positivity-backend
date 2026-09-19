@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -27,11 +28,12 @@ public interface McpConversationRepository extends JpaRepository<McpConversation
             where c.ownerUserId = :ownerUserId
             order by c.pinned desc, c.updatedAt desc, c.id desc
             """)
-    List<McpConversation> findRail(@Param("ownerUserId") UUID ownerUserId, Limit limit);
+    @NonNull
+    List<McpConversation> findRail(@Param("ownerUserId") @NonNull UUID ownerUserId, @NonNull Limit limit);
 
-    Optional<McpConversation> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
+    Optional<McpConversation> findByIdAndOwnerUserId(@NonNull UUID id, @NonNull UUID ownerUserId);
 
-    boolean existsByIdAndOwnerUserId(UUID id, UUID ownerUserId);
+    boolean existsByIdAndOwnerUserId(@NonNull UUID id, @NonNull UUID ownerUserId);
 
     /**
      * The owner's conversation, row-locked for the rest of the transaction so a concurrent turn,
@@ -39,7 +41,8 @@ public interface McpConversationRepository extends JpaRepository<McpConversation
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from McpConversation c where c.id = :id and c.ownerUserId = :ownerUserId")
-    Optional<McpConversation> findOwnedForUpdate(@Param("id") UUID id, @Param("ownerUserId") UUID ownerUserId);
+    Optional<McpConversation> findOwnedForUpdate(
+            @Param("id") @NonNull UUID id, @Param("ownerUserId") @NonNull UUID ownerUserId);
 
     /**
      * Every conversation the owner holds, row-locked (clear-all). Locks in the same order as {@link
@@ -52,7 +55,8 @@ public interface McpConversationRepository extends JpaRepository<McpConversation
             where c.ownerUserId = :ownerUserId
             order by c.updatedAt asc, c.id asc
             """)
-    List<McpConversation> findAllOwnedForUpdate(@Param("ownerUserId") UUID ownerUserId);
+    @NonNull
+    List<McpConversation> findAllOwnedForUpdate(@Param("ownerUserId") @NonNull UUID ownerUserId);
 
     /**
      * Up to {@code limit} unpinned conversations idle since before {@code cutoff}, oldest first,
@@ -66,9 +70,10 @@ public interface McpConversationRepository extends JpaRepository<McpConversation
             where c.pinned = false and c.updatedAt < :cutoff
             order by c.updatedAt asc, c.id asc
             """)
-    List<McpConversation> findPurgeableForUpdate(@Param("cutoff") OffsetDateTime cutoff, Limit limit);
+    @NonNull
+    List<McpConversation> findPurgeableForUpdate(@Param("cutoff") @NonNull OffsetDateTime cutoff, @NonNull Limit limit);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("delete from McpConversation c where c.id in :ids")
-    int deleteByIdIn(@Param("ids") Collection<UUID> ids);
+    int deleteByIdIn(@Param("ids") @NonNull Collection<UUID> ids);
 }

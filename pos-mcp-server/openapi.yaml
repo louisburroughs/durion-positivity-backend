@@ -268,6 +268,8 @@ paths:
 
         Conversation persistence (#2073): an absent `conversationId` starts a new persisted conversation with fresh memory — the response always carries the resolved `conversationId`, and callers must echo it on every follow-up turn to continue that same conversation rather than starting a new one each time. A `conversationId` that is a UUID owned by the caller reuses that conversation; a UUID that does not exist or belongs to another subject answers 404 `CONVERSATION_NOT_FOUND` rather than silently starting a new conversation under a caller-chosen id. A non-UUID `conversationId` is the deprecated ephemeral isolation key (#1735): memory-only, never persisted, echoed back unchanged, and `messageId` is `null` in that case. `messageId` (the persisted assistant message id) is also `null` if the conversation was deleted or purged in the moment between the turn starting and finishing — the answer is still returned.
 
+        Turns on one persisted conversation are serialized: a second turn sent while one is still running on the same `conversationId` answers 409 `CONVERSATION_BUSY`; retry once the first has answered.
+
         Returns 429 when the caller''s chat rate limit is exceeded.
 
         '
@@ -303,6 +305,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: conversationId is a UUID not found, or owned by another subject
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A turn is already running on this conversation (CONVERSATION_BUSY)
         '429':
           content:
             application/json:
@@ -1816,7 +1824,7 @@ components:
           description: User chat message to send to the agent. At most 32000 characters.
           example: Hello
           maxLength: 32000
-          minLength: 0
+          minLength: 1
           type: string
       required:
       - message
