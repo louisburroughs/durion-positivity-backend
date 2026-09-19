@@ -87,7 +87,10 @@ public class ServicePositionController {
             description = "Caller's location scope does not cover the workorder's shop (ApiError.code "
                     + "LOCATION_SCOPE_DENIED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Workorder not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Position already holds another open workorder (ApiError.code RESOURCE_OCCUPIED, with "
@@ -163,7 +166,10 @@ public class ServicePositionController {
             description = "Caller's location scope does not cover the workorder's shop (ApiError.code "
                     + "LOCATION_SCOPE_DENIED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Workorder not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Workorder is COMPLETED or CANCELLED (ApiError.code WORKORDER_CLOSED)",
@@ -204,7 +210,10 @@ public class ServicePositionController {
             responseCode = "200",
             description = "Current position and technician returned",
             content = @Content(schema = @Schema(implementation = ServicePositionResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Workorder not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ServicePositionResponse> getServicePosition(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
                     @PathVariable

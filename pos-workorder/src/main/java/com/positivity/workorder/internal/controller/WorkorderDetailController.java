@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.controller;
 
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.WorkorderDetailResponse;
 import com.positivity.workorder.internal.service.WorkorderDetailService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -62,7 +63,10 @@ public class WorkorderDetailController {
                         responseCode = "200",
                         description = "Workorder detail retrieved successfully",
                         content = @Content(schema = @Schema(implementation = WorkorderDetailResponse.class))),
-                @ApiResponse(responseCode = "404", description = "Workorder not found")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Workorder not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     public ResponseEntity<WorkorderDetailResponse> getWorkorderDetail(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")

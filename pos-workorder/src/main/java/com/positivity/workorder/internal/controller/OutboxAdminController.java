@@ -1,10 +1,12 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.OutboxReplayService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -50,9 +52,18 @@ public class OutboxAdminController {
                     the since timestamp is malformed.
                     """)
     @ApiResponse(responseCode = "200", description = "Replay queued; body reports how many events were re-queued")
-    @ApiResponse(responseCode = "400", description = "Malformed 'since' timestamp")
-    @ApiResponse(responseCode = "401", description = "Missing or invalid authentication")
-    @ApiResponse(responseCode = "403", description = "Caller lacks workorder:events:replay")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Malformed 'since' timestamp",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Missing or invalid authentication",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks workorder:events:replay",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<OutboxReplayResponse> replay(
             @Parameter(
                             description = "Re-emit events created at or after this instant (ISO-8601)."

@@ -35,6 +35,7 @@ import com.positivity.workorder.internal.exception.WorkSessionLockedException;
 import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
 import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
 import com.positivity.workorder.internal.exception.WorkSessionStateException;
+import com.positivity.workorder.internal.exception.WorkorderApiException;
 import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
@@ -43,20 +44,29 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.regex.Pattern;
+import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private final Clock clock;
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final Pattern MACHINE_CODE = Pattern.compile("[A-Z][A-Z0-9_]*");
 
     /**
      * How long a caller should wait before retrying a promotion blocked by a
@@ -94,6 +104,7 @@ public class GlobalExceptionHandler {
                 null);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
     }
 
@@ -124,6 +135,7 @@ public class GlobalExceptionHandler {
                 null);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
@@ -172,6 +184,7 @@ public class GlobalExceptionHandler {
                 null);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         if (ex.isRetryable()) {
             headers.add(HttpHeaders.RETRY_AFTER, String.valueOf(REQUIREMENTS_RETRY_AFTER_SECONDS));
         }
@@ -197,6 +210,7 @@ public class GlobalExceptionHandler {
                 null);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
     }
 
@@ -227,6 +241,7 @@ public class GlobalExceptionHandler {
                 null);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, status);
     }
 
@@ -250,7 +265,13 @@ public class GlobalExceptionHandler {
                 PromotionIdempotencyInconsistencyException.SUPPORT_ACTION);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(WorkorderApiException.class)
+    public ResponseEntity<ApiError> handleWorkorderApi(WorkorderApiException ex, HttpServletRequest request) {
+        return buildErrorResponse(ex.getStatus(), ex.getCode(), ex.getMessage(), request);
     }
 
     @ExceptionHandler(IllegalStateException.class)
@@ -349,6 +370,7 @@ public class GlobalExceptionHandler {
                 null);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
     }
 
@@ -416,6 +438,7 @@ public class GlobalExceptionHandler {
                 null);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
     }
 
@@ -459,6 +482,7 @@ public class GlobalExceptionHandler {
                 TechnicianNotStaffedAtSiteException.SUPPORT_ACTION);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
@@ -478,6 +502,7 @@ public class GlobalExceptionHandler {
                 null);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
     }
 
@@ -581,6 +606,7 @@ public class GlobalExceptionHandler {
                 fieldErrors);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, HttpStatus.BAD_REQUEST);
     }
 
@@ -620,7 +646,83 @@ public class GlobalExceptionHandler {
                 fieldErrors);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * A {@link ResponseStatusException} whose reason is a machine code
+     * ({@code new ResponseStatusException(NOT_FOUND, "TECHNICIAN_ASSIGNMENT_NOT_FOUND")}) answers
+     * that code under its own status, 5xx included (#1720) — pos-web-common's catch-all would drop
+     * the code and collapse a 502 to a generic 500.
+     *
+     * <p>Any other reason is free text that may embed a caller-supplied id, so it is never
+     * reflected (S5131): those answer exactly as the platform catch-all does — a generic code and
+     * message for the 4xx status, a generic 500 for a 5xx.
+     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiError> handleResponseStatus(
+            @NonNull ResponseStatusException ex, @NonNull HttpServletRequest request) {
+        HttpStatusCode status = ex.getStatusCode();
+        String reason = ex.getReason();
+        boolean reasonIsCode = reason != null && MACHINE_CODE.matcher(reason).matches();
+        String code;
+        if (reasonIsCode) {
+            code = reason;
+        } else if (status.is5xxServerError()) {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+            code = "INTERNAL_ERROR";
+        } else {
+            code = genericCode(status);
+        }
+        String correlationId = resolveCorrelationId(request);
+        if (status.is5xxServerError()) {
+            log.error(
+                    "{} {} on {} [correlationId={}]",
+                    ex.getStatusCode().value(),
+                    code,
+                    request.getRequestURI(),
+                    correlationId,
+                    ex);
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return new ResponseEntity<>(
+                ApiError.of(
+                        code,
+                        genericMessage(status),
+                        status.value(),
+                        Instant.now(clock).toString(),
+                        correlationId),
+                headers,
+                status);
+    }
+
+    /** The codes pos-web-common's catch-all gives a status-only rejection. */
+    private static String genericCode(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 400 -> "VALIDATION_ERROR";
+            case 403 -> "FORBIDDEN";
+            case 404 -> "NOT_FOUND";
+            case 409 -> "CONFLICT";
+            case 422 -> "UNPROCESSABLE_CONTENT";
+            default -> "REQUEST_REJECTED";
+        };
+    }
+
+    /** The messages pos-web-common's catch-all gives a status-only rejection. */
+    private static String genericMessage(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 400 -> "Request was rejected";
+            case 403 -> "Access is denied";
+            case 404 -> "Requested resource was not found";
+            case 409 -> "Request conflicts with the current state of the resource";
+            case 422 -> "Request could not be processed";
+            case 502 -> "An upstream service failed";
+            case 503 -> "Service temporarily unavailable";
+            default -> status.is5xxServerError() ? "Unexpected error occurred" : "Request rejected";
+        };
     }
 
     private ResponseEntity<ApiError> buildErrorResponse(
@@ -630,6 +732,7 @@ public class GlobalExceptionHandler {
                 ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body, headers, status);
     }
 

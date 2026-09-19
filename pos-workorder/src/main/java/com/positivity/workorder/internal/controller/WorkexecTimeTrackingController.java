@@ -11,6 +11,7 @@ import com.positivity.workorder.internal.dto.WorkexecLaborPerformedResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerEntryResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerStartRequest;
 import com.positivity.workorder.internal.dto.WorkexecTimerStopResponse;
+import com.positivity.workorder.internal.exception.WorkorderApiException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.LocationHierarchyService;
@@ -28,7 +29,6 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
@@ -56,8 +56,6 @@ import org.springframework.web.bind.annotation.RestController;
         description = "Endpoints for timer operations, labor entry creation, and job time totals")
 public class WorkexecTimeTrackingController {
 
-    private static final String ERROR_CODE_KEY = "code";
-    private static final String ERROR_MESSAGE_KEY = "message";
     private static final String ERROR_INVALID_REQUEST = "WORKEXEC_INVALID_REQUEST";
     private static final String USER_ID_REQUIRED_MESSAGE = "Authenticated user id must be a valid UUID";
     private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
@@ -89,7 +87,10 @@ public class WorkexecTimeTrackingController {
                     locationId, and 200 with an empty list when no time was tracked in the range.
                     """)
     @ApiResponse(responseCode = "200", description = "Job time totals returned successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request parameters")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request parameters",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
@@ -186,9 +187,18 @@ public class WorkexecTimeTrackingController {
             responseCode = "200",
             description = "Idempotent replay returned existing labor entry",
             content = @Content(schema = @Schema(implementation = WorkexecLaborPerformedResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "404", description = "Related resource not found")
-    @ApiResponse(responseCode = "409", description = "Conflict while recording labor")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Related resource not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Conflict while recording labor",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Completed labor quantity with its source-system provenance.",
             required = true,
@@ -263,7 +273,10 @@ public class WorkexecTimeTrackingController {
             description = "Active timers returned successfully",
             content =
                     @Content(array = @ArraySchema(schema = @Schema(implementation = WorkexecTimerEntryResponse.class))))
-    @ApiResponse(responseCode = "400", description = "Missing or invalid authenticated user id")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or invalid authenticated user id",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Object> getActiveTimerEntries() {
 
         UUID mechanicId = resolveAuthenticatedMechanicId();
@@ -310,12 +323,22 @@ public class WorkexecTimeTrackingController {
             responseCode = "200",
             description = "Idempotent replay returned existing timer",
             content = @Content(schema = @Schema(implementation = WorkexecTimerEntryResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Missing or invalid authenticated user id, or missing reason")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or invalid authenticated user id, or missing reason",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "Attributing labor to another technician without workorder:labor:add_on_behalf")
-    @ApiResponse(responseCode = "404", description = "Referenced resource not found")
-    @ApiResponse(responseCode = "409", description = "Conflict while starting timer")
+            description = "Attributing labor to another technician without workorder:labor:add_on_behalf",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Referenced resource not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Conflict while starting timer",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Workorder to time against, with optional item, labor code, and attribution target.",
             required = true,
@@ -379,8 +402,14 @@ public class WorkexecTimeTrackingController {
             responseCode = "200",
             description = "Timers stopped successfully",
             content = @Content(schema = @Schema(implementation = WorkexecTimerStopResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Missing or invalid authenticated user id")
-    @ApiResponse(responseCode = "409", description = "Conflict while stopping timers")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or invalid authenticated user id",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Conflict while stopping timers",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Object> stopTimers() {
 
         UUID mechanicId = resolveAuthenticatedMechanicId();
@@ -409,7 +438,7 @@ public class WorkexecTimeTrackingController {
      * propagate, both are caught by the module's {@code IllegalStateException} advice and surface as
      * 409 CONFLICT, which contradicts the 400 these endpoints document and leaks the internal
      * message. Catching here keeps the null-return contract that the callers — and the
-     * {@code @ApiResponse(responseCode = "400")} annotations — are written against.
+     * {@code @ApiResponse(responseCode = "400", content = @Content(schema = @Schema(implementation = ApiError.class)))} annotations — are written against.
      */
     private UUID resolveAuthenticatedMechanicId() {
         try {
@@ -420,18 +449,19 @@ public class WorkexecTimeTrackingController {
         }
     }
 
+    /** Throws a 400 rendered as ApiError; typed as a response so call sites can {@code return} it. */
     private ResponseEntity<Object> badRequest(String code, String message) {
-        return ResponseEntity.badRequest().body(Map.of(ERROR_CODE_KEY, code, ERROR_MESSAGE_KEY, message));
+        throw new WorkorderApiException(HttpStatus.BAD_REQUEST, code, message);
     }
 
+    /** Throws a 409 rendered as ApiError; typed as a response so call sites can {@code return} it. */
     private ResponseEntity<Object> conflict(String code, String message) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of(ERROR_CODE_KEY, code, ERROR_MESSAGE_KEY, message));
+        throw new WorkorderApiException(HttpStatus.CONFLICT, code, message);
     }
 
+    /** Throws a 404 rendered as ApiError; typed as a response so call sites can {@code return} it. */
     private ResponseEntity<Object> notFound(String code, String message) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of(ERROR_CODE_KEY, code, ERROR_MESSAGE_KEY, message));
+        throw new WorkorderApiException(HttpStatus.NOT_FOUND, code, message);
     }
 
     private WorkexecJobTimeTotalResponse toJobTimeTotalResponse(WorkexecTimeTrackingService.JobTimeTotal response) {

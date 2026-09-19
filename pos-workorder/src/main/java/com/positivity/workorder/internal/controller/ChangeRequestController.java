@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.ApproveChangeRequestDTO;
 import com.positivity.workorder.internal.dto.ChangeRequestResponse;
 import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
@@ -18,6 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @Tag(name = "Change Request API", description = "Endpoints for managing additional work requests and approvals")
 @RestController
@@ -61,8 +64,12 @@ public class ChangeRequestController {
                     "Change request created successfully, or existing change request returned if idempotency key was previously processed")
     @ApiResponse(
             responseCode = "400",
-            description = "Invalid request - missing description, no items, or validation failed")
-    @ApiResponse(responseCode = "404", description = "Work order not found")
+            description = "Invalid request - missing description, no items, or validation failed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work order not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Requested additional work: description plus the service and part items needing approval.",
             required = true,
@@ -95,8 +102,8 @@ public class ChangeRequestController {
             dto.setWorkorderId(workorderId);
             var created = changeRequestService.createChangeRequestWithIdempotency(dto, idempotencyKey);
             return ResponseEntity.ok(created);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CHANGE_REQUEST_INVALID_STATE", e);
         }
     }
 
@@ -114,8 +121,14 @@ public class ChangeRequestController {
                     when the change request does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Change request approved successfully")
-    @ApiResponse(responseCode = "400", description = "Cannot approve - invalid state or missing approval note")
-    @ApiResponse(responseCode = "404", description = "Change request not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Cannot approve - invalid state or missing approval note",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Change request not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Advisor's approval note recorded as the approval artifact.",
             required = true,
@@ -143,8 +156,8 @@ public class ChangeRequestController {
             var approved =
                     changeRequestService.approveChangeRequest(changeId, dto.getApprovedBy(), dto.getApprovalNote());
             return ResponseEntity.ok(approved);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CHANGE_REQUEST_INVALID_STATE", e);
         }
     }
 
@@ -164,8 +177,14 @@ public class ChangeRequestController {
                     when the change request does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Change request declined successfully")
-    @ApiResponse(responseCode = "400", description = "Cannot decline - invalid state or missing note")
-    @ApiResponse(responseCode = "404", description = "Change request not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Cannot decline - invalid state or missing note",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Change request not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Advisor's note recording why the change request was declined.",
             required = true,
@@ -190,8 +209,8 @@ public class ChangeRequestController {
         try {
             var declined = changeRequestService.declineChangeRequest(changeId, dto.getApprovalNote());
             return ResponseEntity.ok(declined);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CHANGE_REQUEST_INVALID_STATE", e);
         }
     }
 
@@ -211,8 +230,14 @@ public class ChangeRequestController {
                     not declined, and 404 when the change request does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "Acknowledgment recorded successfully")
-    @ApiResponse(responseCode = "400", description = "Not an emergency request or invalid state")
-    @ApiResponse(responseCode = "404", description = "Change request not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Not an emergency request or invalid state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Change request not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/changeRequests/{changeId}/acknowledgeDenial")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_DENIAL_ACKNOWLEDGE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
@@ -224,8 +249,8 @@ public class ChangeRequestController {
         try {
             changeRequestService.recordCustomerDenialAcknowledgment(changeId);
             return ResponseEntity.noContent().build();
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CHANGE_REQUEST_INVALID_STATE", e);
         }
     }
 
@@ -249,9 +274,18 @@ public class ChangeRequestController {
                     404 when the change request does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Emergency override applied successfully")
-    @ApiResponse(responseCode = "400", description = "Cannot apply override - invalid state or missing reason")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions - Manager role required")
-    @ApiResponse(responseCode = "404", description = "Change request not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Cannot apply override - invalid state or missing reason",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions - Manager role required",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Change request not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Reason justifying the manager's emergency exception approval.",
             required = true,
@@ -278,8 +312,8 @@ public class ChangeRequestController {
         try {
             var overridden = changeRequestService.applyEmergencyOverride(changeId, dto.getExceptionReason());
             return ResponseEntity.ok(overridden);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CHANGE_REQUEST_INVALID_STATE", e);
         }
     }
 
@@ -294,7 +328,10 @@ public class ChangeRequestController {
                     Returns 404 when no change request exists for the id.
                     """)
     @ApiResponse(responseCode = "200", description = "Change request found")
-    @ApiResponse(responseCode = "404", description = "Change request not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Change request not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/changeRequests/{changeId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

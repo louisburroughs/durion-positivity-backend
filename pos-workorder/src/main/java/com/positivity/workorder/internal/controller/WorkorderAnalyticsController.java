@@ -90,8 +90,14 @@ public class WorkorderAnalyticsController {
             responseCode = "400",
             description = "Ambiguous/incomplete parameter combination, or endDate before startDate",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing workorder:analytics:view")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing workorder:analytics:view",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public WorkorderStatusTransitionsResponse getWorkorderStatusTransitions(
             @Parameter(description = "Single workorder id — mutually exclusive with the range params below")
                     @RequestParam(required = false)
@@ -161,8 +167,14 @@ public class WorkorderAnalyticsController {
             responseCode = "400",
             description = "Invalid date range or withinDays out of bounds",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing workorder:analytics:view")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing workorder:analytics:view",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ReopenedWorkorderAnalyticsResponse getReopenedWorkorderAnalytics(
             @Parameter(
                             description = "Completion-date range start (YYYY-MM-DD), inclusive",
@@ -226,8 +238,14 @@ public class WorkorderAnalyticsController {
             responseCode = "400",
             description = "Invalid date range",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing workorder:analytics:view")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing workorder:analytics:view",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public TechnicianLaborAnalyticsResponse getTechnicianLaborAnalytics(
             @Parameter(
                             description = "Window start date (YYYY-MM-DD), inclusive",
@@ -281,8 +299,14 @@ public class WorkorderAnalyticsController {
             responseCode = "200",
             description = "Open work-order counts by customer returned successfully",
             content = @Content(schema = @Schema(implementation = OpenWorkordersByCustomerResponse.class)))
-    @ApiResponse(responseCode = "401", description = "Unauthorized")
-    @ApiResponse(responseCode = "403", description = "Forbidden - missing workorder:analytics:view")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing workorder:analytics:view",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public OpenWorkordersByCustomerResponse getOpenWorkordersByCustomer(
             @Parameter(description = "Maximum customers to return (default 100, capped at 500)")
                     @RequestParam(required = false, defaultValue = "100")

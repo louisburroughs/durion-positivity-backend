@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -68,7 +69,10 @@ public class LocationScopeDeniedExceptionHandler {
                 correlationId,
                 ex.permission(),
                 LogSanitizer.forLog(ex.locationId()));
+        // Content type preset: an operation that produces a non-JSON type (a PDF) would otherwise
+        // negotiate the ApiError against the caller's Accept header and fail with a 406 (#1720).
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .contentType(MediaType.APPLICATION_JSON)
                 .body(ApiError.of(
                         LocationScopeDeniedException.ERROR_CODE,
                         MESSAGE,

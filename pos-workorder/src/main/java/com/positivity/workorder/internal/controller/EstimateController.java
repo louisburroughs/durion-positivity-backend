@@ -55,6 +55,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @Tag(name = "Estimate API", description = "Endpoints for estimate management and approval workflow")
 @RestController
@@ -64,6 +65,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class EstimateController {
     private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
     private static final String CONFLICT = "CONFLICT";
+    private static final String ESTIMATE_INVALID_STATE = "ESTIMATE_INVALID_STATE";
     private static final String SYSTEM = "SYSTEM";
     private static final String IDEMPOTENCY_OPERATION_ESTIMATE_CREATE = "estimate.create";
     private static final String IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE = "estimate.promote";
@@ -127,7 +129,10 @@ public class EstimateController {
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Estimate not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Estimate not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{estimateId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -144,7 +149,7 @@ public class EstimateController {
         // cover.
         Optional<EstimateResponse> estimate = estimateService.getEstimateById(estimateId);
         if (estimate.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            throw new EstimateNotFoundException(estimateId);
         }
         SecurityContextHelper.locationScope()
                 .require(
@@ -263,12 +268,22 @@ public class EstimateController {
                     constraint fails.
                     """)
     @ApiResponse(responseCode = "201", description = "Estimate created successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid request - missing required fields.")
-    @ApiResponse(responseCode = "403", description = "Forbidden - user does not have ESTIMATE_CREATE permission.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request - missing required fields.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - user does not have ESTIMATE_CREATE permission.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Conflict - estimate could not be created due to state or integrity constraints.")
-    @ApiResponse(responseCode = "500", description = "Internal server error - unexpected estimate creation failure.")
+            description = "Conflict - estimate could not be created due to state or integrity constraints.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "Internal server error - unexpected estimate creation failure.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Customer, vehicle, and CRM references the draft estimate is opened for.",
             required = true,
@@ -312,8 +327,7 @@ public class EstimateController {
                             .getEstimateById(existingEstimateId.get())
                             .<ResponseEntity<Object>>map(existing ->
                                     ResponseEntity.status(HttpStatus.CREATED).body(existing))
-                            .orElseGet(() ->
-                                    ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT)));
+                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, CONFLICT));
                 }
             }
 
@@ -328,19 +342,21 @@ public class EstimateController {
 
         } catch (WorkorderRequestValidationException e) {
             log.warn("Validation error creating estimate: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, VALIDATION_ERROR);
 
         } catch (IllegalStateException e) {
             log.warn("Conflict creating estimate: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
+            throw new ResponseStatusException(HttpStatus.CONFLICT, CONFLICT);
 
         } catch (DataIntegrityViolationException e) {
             log.warn("Conflict creating estimate: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
+            throw new ResponseStatusException(HttpStatus.CONFLICT, CONFLICT);
 
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Unexpected error creating estimate", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", e);
         }
     }
 
@@ -375,12 +391,18 @@ public class EstimateController {
                     transition is not allowed from the current state.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate status updated")
-    @ApiResponse(responseCode = "400", description = "Estimate patch request is invalid")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Estimate patch request is invalid",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Estimate not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "409", description = "Estimate transition is not allowed")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Estimate transition is not allowed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:edit"})
@@ -400,24 +422,24 @@ public class EstimateController {
                     Map<String, Object> patchRequest) {
         Object rawStatus = patchRequest.get("status");
         if (!(rawStatus instanceof String statusValue) || statusValue.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, VALIDATION_ERROR);
         }
 
         final EstimateStatus targetStatus;
         try {
             targetStatus = EstimateStatus.valueOf(statusValue);
         } catch (IllegalArgumentException _) {
-            return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, VALIDATION_ERROR);
         }
 
         try {
             return switch (targetStatus) {
                 case DECLINED -> ResponseEntity.ok(estimateService.declineEstimate(estimateId, null));
                 case DRAFT -> ResponseEntity.ok(estimateService.reopenEstimate(estimateId));
-                default -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
+                default -> throw new ResponseStatusException(HttpStatus.CONFLICT, CONFLICT);
             };
         } catch (IllegalStateException _) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
+            throw new ResponseStatusException(HttpStatus.CONFLICT, CONFLICT);
         }
     }
 
@@ -435,8 +457,14 @@ public class EstimateController {
                     estimate does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate declined successfully.")
-    @ApiResponse(responseCode = "400", description = "Estimate cannot be declined in current state.")
-    @ApiResponse(responseCode = "404", description = "Estimate not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Estimate cannot be declined in current state.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Estimate not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{estimateId}/decline")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DECLINE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -453,8 +481,8 @@ public class EstimateController {
         try {
             EstimateResponse declined = estimateService.declineEstimate(estimateId, reason);
             return ResponseEntity.ok(declined);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ESTIMATE_INVALID_STATE, e);
         }
     }
 
@@ -471,8 +499,14 @@ public class EstimateController {
                     the estimate does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate reopened successfully.")
-    @ApiResponse(responseCode = "400", description = "Estimate cannot be reopened (not declined or expired).")
-    @ApiResponse(responseCode = "404", description = "Estimate not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Estimate cannot be reopened (not declined or expired).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Estimate not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{estimateId}/reopen")
     @EmitEvent(id = "WORKORDER_ESTIMATE_REOPEN", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -486,8 +520,8 @@ public class EstimateController {
         try {
             EstimateResponse reopened = estimateService.reopenEstimate(estimateId);
             return ResponseEntity.ok(reopened);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ESTIMATE_INVALID_STATE, e);
         }
     }
 
@@ -809,7 +843,10 @@ public class EstimateController {
                     Returns 204 regardless of whether the estimate previously existed.
                     """)
     @ApiResponse(responseCode = "204", description = "Estimate deleted successfully.")
-    @ApiResponse(responseCode = "404", description = "Estimate not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Estimate not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @DeleteMapping("/{estimateId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DELETE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -847,7 +884,10 @@ public class EstimateController {
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Line item added successfully"),
-                @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Validation error or invalid request",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "404",
                         description = "Estimate not found (ESTIMATE_NOT_FOUND)",
@@ -856,8 +896,12 @@ public class EstimateController {
                         responseCode = "422",
                         description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), "
                                 + "or the converted quantity exceeds the product's declared decimal scale "
-                                + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)"),
-                @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+                                + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "Estimate not in DRAFT status (INVALID_STATE)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Part or labor line being added to the draft estimate.",
@@ -896,12 +940,11 @@ public class EstimateController {
             }
             if (e.getStatusCode() == HttpStatus.BAD_REQUEST) {
                 log.warn("Validation error adding item to estimate {}: {}", estimateId, e.getReason());
-                return ResponseEntity.badRequest().build();
             }
             throw e;
         } catch (IllegalStateException e) {
             log.warn("State error adding item to estimate {}: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            throw e;
         }
     }
 
@@ -925,7 +968,10 @@ public class EstimateController {
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Line item updated successfully"),
-                @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Validation error or invalid request",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "404",
                         description = "Estimate or item not found (ESTIMATE_NOT_FOUND / ESTIMATE_ITEM_NOT_FOUND)",
@@ -934,8 +980,12 @@ public class EstimateController {
                         responseCode = "422",
                         description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), "
                                 + "or the converted quantity exceeds the product's declared decimal scale "
-                                + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)"),
-                @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+                                + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "Estimate not in DRAFT status (INVALID_STATE)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Fields to change on the line item; omitted fields stay as they are.",
@@ -968,7 +1018,7 @@ public class EstimateController {
             return ResponseEntity.ok(item);
         } catch (IllegalStateException e) {
             log.warn("State error updating item {} on estimate {}: {}", itemId, estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            throw e;
         }
     }
 
@@ -988,8 +1038,14 @@ public class EstimateController {
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "204", description = "Line item removed successfully"),
-                @ApiResponse(responseCode = "404", description = "Estimate or item not found"),
-                @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Estimate or item not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "Estimate not in DRAFT status (INVALID_STATE)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @DeleteMapping("/{estimateId}/items/{itemId}")
     @EmitEvent(id = "ESTIMATE_ITEM_DELETE", apiVersion = "1")
@@ -1009,7 +1065,7 @@ public class EstimateController {
             return ResponseEntity.noContent().build();
         } catch (IllegalStateException e) {
             log.warn("State error deleting item {} from estimate {}: {}", itemId, estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            throw e;
         }
     }
 
@@ -1035,8 +1091,14 @@ public class EstimateController {
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Totals calculated successfully"),
-                @ApiResponse(responseCode = "404", description = "Estimate not found"),
-                @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Estimate not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "Estimate not in DRAFT status (INVALID_STATE)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/{estimateId}/calculate")
     @EmitEvent(id = "ESTIMATE_CALCULATE", apiVersion = "1")
@@ -1059,7 +1121,7 @@ public class EstimateController {
             return ResponseEntity.ok(response);
         } catch (IllegalStateException e) {
             log.warn("State error calculating estimate {}: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            throw e;
         }
     }
 
@@ -1087,7 +1149,10 @@ public class EstimateController {
                         responseCode = "403",
                         description = LOCATION_SCOPE_DENIED_DESCRIPTION,
                         content = @Content(schema = @Schema(implementation = ApiError.class))),
-                @ApiResponse(responseCode = "404", description = "Estimate not found")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Estimate not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping("/{estimateId}/summary")
     @EmitEvent(id = "ESTIMATE_SUMMARY_VIEW", apiVersion = "1")
@@ -1138,9 +1203,24 @@ public class EstimateController {
                 @ApiResponse(
                         responseCode = "403",
                         description = LOCATION_SCOPE_DENIED_DESCRIPTION,
-                        content = @Content(schema = @Schema(implementation = ApiError.class))),
-                @ApiResponse(responseCode = "404", description = "Estimate not found"),
-                @ApiResponse(responseCode = "502", description = "Document service unavailable")
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Estimate not found",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "502",
+                        description = "Document service unavailable",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping(value = "/{estimateId}/pdf", produces = "application/pdf")
     @EmitEvent(id = "ESTIMATE_PDF_GENERATE", apiVersion = "1")
@@ -1157,7 +1237,7 @@ public class EstimateController {
         // into the renderer's 502.
         Optional<EstimateResponse> estimate = estimateService.getEstimateById(estimateId);
         if (estimate.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new EstimateNotFoundException(estimateId);
         }
         SecurityContextHelper.locationScope()
                 .require(
@@ -1171,10 +1251,10 @@ public class EstimateController {
                     .body(pdfBytes);
         } catch (EstimateNotFoundException e) {
             log.warn("Estimate {} not found for PDF generation: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw e;
         } catch (Exception e) {
             log.error("Failed to generate PDF for estimate {}: {}", estimateId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).build();
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "DOCUMENT_SERVICE_UNAVAILABLE", e);
         }
     }
 

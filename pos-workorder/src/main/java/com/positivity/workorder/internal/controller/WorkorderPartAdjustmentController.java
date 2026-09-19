@@ -24,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for workorder part adjustments (substitutions, returns,
@@ -85,7 +86,10 @@ public class WorkorderPartAdjustmentController {
             responseCode = "400",
             description = "Invalid request (substitute part equals original)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder or part not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Part already consumed, part belongs to a different workorder, or idempotency conflict",
@@ -117,8 +121,8 @@ public class WorkorderPartAdjustmentController {
                     request.getNotes());
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (NoSuchElementException _) {
-            return ResponseEntity.notFound().build();
+        } catch (NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "NOT_FOUND", e);
         }
     }
 
@@ -154,7 +158,10 @@ public class WorkorderPartAdjustmentController {
             responseCode = "400",
             description = "Invalid request (quantity not positive)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder or part not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Return exceeds available quantity, or the part belongs to a different workorder",
@@ -185,8 +192,8 @@ public class WorkorderPartAdjustmentController {
                     request.getNotes());
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (NoSuchElementException _) {
-            return ResponseEntity.notFound().build();
+        } catch (NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "NOT_FOUND", e);
         }
     }
 
@@ -223,7 +230,10 @@ public class WorkorderPartAdjustmentController {
             responseCode = "400",
             description = "Invalid request (newQuantity not positive)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder or part not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Part belongs to a different workorder",
@@ -232,7 +242,8 @@ public class WorkorderPartAdjustmentController {
             responseCode = "422",
             description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the "
                     + "converted quantity exceeds the product's declared decimal scale "
-                    + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)")
+                    + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Part line, corrected quantity, and the reason for the administrative fix.",
             required = true,
@@ -260,8 +271,8 @@ public class WorkorderPartAdjustmentController {
                     request.getNotes());
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (NoSuchElementException _) {
-            return ResponseEntity.notFound().build();
+        } catch (NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "NOT_FOUND", e);
         }
     }
 
@@ -297,7 +308,10 @@ public class WorkorderPartAdjustmentController {
                                                     @Schema(
                                                             implementation =
                                                                     WorkorderPartAdjustmentEventResponse.class))))
-    @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Workorder or part not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<WorkorderPartAdjustmentEventResponse>> getAdjustmentHistory(
             @PathVariable @NonNull UUID workorderId,
             @RequestParam(required = false)
