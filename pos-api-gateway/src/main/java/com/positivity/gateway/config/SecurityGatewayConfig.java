@@ -168,31 +168,16 @@ public class SecurityGatewayConfig {
             boolean strictJwtHeaderValidation,
             Set<String> allowedJwtAlgorithms,
             @NonNull GatewayAuthProperties authProperties,
-            @NonNull MeterRegistry meterRegistry) {
-        this(
-                jwtSecret,
-                strictJwtHeaderValidation,
-                allowedJwtAlgorithms,
-                authProperties,
-                meterRegistry,
-                TokenRevocationChecker.DISABLED);
-    }
-
-    SecurityGatewayConfig(
-            @NonNull String jwtSecret,
-            boolean strictJwtHeaderValidation,
-            Set<String> allowedJwtAlgorithms,
-            @NonNull GatewayAuthProperties authProperties,
             @NonNull MeterRegistry meterRegistry,
-            @NonNull TokenRevocationChecker revocationChecker) {
+            @NonNull Clock clock) {
         this(
                 jwtSecret,
                 strictJwtHeaderValidation,
                 allowedJwtAlgorithms,
                 authProperties,
                 meterRegistry,
-                revocationChecker,
-                Clock.systemUTC());
+                TokenRevocationChecker.DISABLED,
+                clock);
     }
 
     SecurityGatewayConfig(

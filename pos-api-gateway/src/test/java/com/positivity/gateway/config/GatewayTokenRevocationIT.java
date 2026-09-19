@@ -6,7 +6,10 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.BitSet;
 import java.util.Date;
@@ -55,6 +58,7 @@ class GatewayTokenRevocationIT {
 
     private static final String TEST_SECRET = "test-jwt-secret-key-01234567890123456789";
     private static final SecretKey TEST_KEY = Keys.hmacShaKeyFor(TEST_SECRET.getBytes(StandardCharsets.UTF_8));
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.now(), ZoneOffset.UTC);
     private static final String REVOCATION_KEY_PREFIX = "jwt:revoked:";
 
     private static GenericContainer<?> redis;
@@ -134,7 +138,8 @@ class GatewayTokenRevocationIT {
                         Set.of("HS256"),
                         new GatewayAuthProperties(),
                         new SimpleMeterRegistry(),
-                        checker)
+                        checker,
+                        TEST_CLOCK)
                 .authFilter();
     }
 

@@ -13,6 +13,11 @@
 -- Only ever moves a start earlier, never later, and never touches a row that has ended. Safe to
 -- re-run: a second run finds nothing left to move.
 --
+-- updated_at is left alone on purpose. ADR-0024 keeps database time out of the write half of an
+-- UPDATE: now() is wall time, and run while the accelerated profile is on it would stamp these rows
+-- a year ahead of everything the application writes. This is a data correction, not an application
+-- write, so there is no application clock to take a value from.
+--
 -- Not covered here, deliberately:
 --   * base prices, GL mappings and the seeded admin role assignments: their R__ seeds now write an
 --     early date and back-date the stored row, so the next deploy moves them;
@@ -47,7 +52,7 @@ WHERE ela.status = 'ACTIVE'
 SELECT count(*) AS staffing_rows_to_backdate FROM staffing_backdate;
 
 UPDATE employee_location_assignment ela
-SET effective_from = b.new_from, updated_at = now()
+SET effective_from = b.new_from
 FROM staffing_backdate b
 WHERE ela.tenant_id = b.tenant_id AND ela.id = b.id;
 
@@ -84,7 +89,7 @@ BEGIN;
 -- The fixtures loaded these at 2026-01-01; they now say 2024-01-01. Skip a row whose scope already
 -- holds a 2024-01-01 start, which a re-seed with the new fixtures would have created.
 UPDATE labor_rate r
-SET effective_from = TIMESTAMPTZ '2024-01-01 00:00:00+00', updated_at = now()
+SET effective_from = TIMESTAMPTZ '2024-01-01 00:00:00+00'
 WHERE r.effective_from = TIMESTAMPTZ '2026-01-01 00:00:00+00'
   AND r.effective_to IS NULL
   AND NOT EXISTS (
@@ -95,7 +100,7 @@ WHERE r.effective_from = TIMESTAMPTZ '2026-01-01 00:00:00+00'
         AND o.effective_from = TIMESTAMPTZ '2024-01-01 00:00:00+00');
 
 UPDATE labor_rate_adjustment a
-SET effective_from = TIMESTAMPTZ '2024-01-01 00:00:00+00', updated_at = now()
+SET effective_from = TIMESTAMPTZ '2024-01-01 00:00:00+00'
 WHERE a.effective_from = TIMESTAMPTZ '2026-01-01 00:00:00+00'
   AND a.effective_to IS NULL
   AND NOT EXISTS (
