@@ -421,7 +421,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogItemResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid item type or request body
       security:
       - bearerAuth:
@@ -466,9 +466,13 @@ paths:
         '204':
           description: Catalog item deleted successfully
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Invalid item type
         '404':
-          description: Catalog item not found
+          description: Catalog item not found. The response has NO body.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -532,14 +536,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogItemResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid item type or request body
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CatalogItemResponseDto'
-          description: Catalog item not found
+          description: Catalog item not found. The response has NO body.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -592,13 +592,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkIngestResponse'
-          description: Batch processed (check per-record success/failure in response)
+          description: Batch processed; per-row verdicts are in the body
         '400':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-          description: Invalid request payload
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request envelope.
       security:
       - bearerAuth:
         - catalog:product:create
@@ -798,8 +798,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-          description: Invalid request payload
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request envelope.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -847,17 +847,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/LaborStandardConflictDto'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/LaborStandardConflictDto'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
       security:
       - bearerAuth:
@@ -978,8 +974,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-          description: Invalid request payload
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request envelope.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1572,7 +1568,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request body
       security:
       - bearerAuth:
@@ -1650,7 +1646,7 @@ paths:
         '204':
           description: Catalog deleted successfully
         '404':
-          description: Catalog not found
+          description: Catalog not found. The response has NO body.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1691,11 +1687,7 @@ paths:
                 $ref: '#/components/schemas/CatalogDto'
           description: Successfully retrieved catalog
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CatalogDto'
-          description: Catalog not found
+          description: Catalog not found. The response has NO body.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1756,14 +1748,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request body
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CatalogDto'
-          description: Catalog not found
+          description: Catalog not found. The response has NO body.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -1820,13 +1808,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
+                $ref: '#/components/schemas/ApiError'
           description: Validation error
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
+                $ref: '#/components/schemas/ApiError'
           description: Business conflict
       security:
       - bearerAuth:
@@ -2101,7 +2089,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ItemCostsDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid payload
       security:
       - bearerAuth:
@@ -2223,11 +2211,7 @@ paths:
                 $ref: '#/components/schemas/NonInventoryProductDto'
           description: Successfully retrieved non-inventory product
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NonInventoryProductDto'
-          description: Non-inventory product not found
+          description: Non-inventory product not found. The response has NO body.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -2280,7 +2264,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid payload
       security:
       - bearerAuth:
@@ -2370,7 +2354,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookDto'
+                $ref: '#/components/schemas/ApiError'
           description: Price book not found
       security:
       - bearerAuth:
@@ -2428,7 +2412,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookDto'
+                $ref: '#/components/schemas/ApiError'
           description: Price book not found
       security:
       - bearerAuth:
@@ -2529,7 +2513,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookRuleDto'
+                $ref: '#/components/schemas/ApiError'
           description: Rule conflict
       security:
       - bearerAuth:
@@ -2636,7 +2620,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookRuleDto'
+                $ref: '#/components/schemas/ApiError'
           description: Rule conflict
       security:
       - bearerAuth:
@@ -2688,7 +2672,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EffectiveLocationPriceResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: No pricing context found
       security:
       - bearerAuth:
@@ -2741,7 +2725,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid policy payload
       security:
       - bearerAuth:
@@ -2796,13 +2780,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Guardrail validation failed
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: FORBIDDEN when the caller lacks catalog:location_price_override:write; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover the request's locationId (ADR-0061); no override is created
       security:
       - bearerAuth:
@@ -2861,19 +2845,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid approval request
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Override or approval request not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Version conflict
       security:
       - bearerAuth:
@@ -2934,19 +2918,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid rejection request
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Override or approval request not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Version conflict
       security:
       - bearerAuth:
@@ -3036,7 +3020,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogSearchResultDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request parameter (e.g., non-numeric limit)
       security:
       - bearerAuth:
@@ -3167,11 +3151,7 @@ paths:
                 $ref: '#/components/schemas/ServiceDto'
           description: Successfully retrieved service
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ServiceDto'
-          description: Service not found
+          description: Service not found. The response has NO body.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -3324,7 +3304,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubstitutionGroupDto'
+                $ref: '#/components/schemas/ApiError'
           description: Validation error
       security:
       - bearerAuth:
@@ -3363,6 +3343,10 @@ paths:
         '204':
           description: Substitution group deleted
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Substitution group not found
       security:
       - bearerAuth:
@@ -3407,7 +3391,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubstitutionGroupDto'
+                $ref: '#/components/schemas/ApiError'
           description: Substitution group not found
       security:
       - bearerAuth:
@@ -3465,19 +3449,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubstitutionGroupDto'
+                $ref: '#/components/schemas/ApiError'
           description: Validation error
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubstitutionGroupDto'
+                $ref: '#/components/schemas/ApiError'
           description: Substitution group or product not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubstitutionGroupDto'
+                $ref: '#/components/schemas/ApiError'
           description: Product already belongs to a substitution group
       security:
       - bearerAuth:
@@ -3530,7 +3514,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubstitutionGroupDto'
+                $ref: '#/components/schemas/ApiError'
           description: Substitution group or membership not found
       security:
       - bearerAuth:
@@ -3616,7 +3600,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UomConversionDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
       security:
       - bearerAuth:
@@ -3655,6 +3639,10 @@ paths:
         '204':
           description: Conversion deactivated
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Conversion not found
       security:
       - bearerAuth:
@@ -3699,7 +3687,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UomConversionDto'
+                $ref: '#/components/schemas/ApiError'
           description: Conversion not found
       security:
       - bearerAuth:
@@ -3756,13 +3744,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UomConversionDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UomConversionDto'
+                $ref: '#/components/schemas/ApiError'
           description: Conversion not found
       security:
       - bearerAuth:
@@ -3805,11 +3793,7 @@ paths:
                 $ref: '#/components/schemas/ProductDto'
           description: Successfully retrieved product
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductDto'
-          description: Product not found
+          description: Product not found. The response has NO body.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -3871,19 +3855,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
+                $ref: '#/components/schemas/ApiError'
           description: Validation error
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
+                $ref: '#/components/schemas/ApiError'
           description: Product not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
+                $ref: '#/components/schemas/ApiError'
           description: Business conflict
       security:
       - bearerAuth:
@@ -3936,19 +3920,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDetailView'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid location ID
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductDetailView'
-          description: Product not found
+          description: Product not found. The response has NO body.
         '500':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDetailView'
+                $ref: '#/components/schemas/ApiError'
           description: Unexpected server error while retrieving product details
       security:
       - bearerAuth:
@@ -3994,7 +3974,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductLifecycleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Product not found
       security:
       - bearerAuth:
@@ -4055,25 +4035,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductLifecycleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Validation error
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductLifecycleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Missing override permission
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductLifecycleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Product not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductLifecycleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Lifecycle business rule conflict
       security:
       - bearerAuth:
@@ -4174,19 +4154,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid payload
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                $ref: '#/components/schemas/ApiError'
           description: Temporal overlap conflict
       security:
       - bearerAuth:
@@ -4236,7 +4216,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                $ref: '#/components/schemas/ApiError'
           description: No active MSRP for date
       security:
       - bearerAuth:
@@ -4303,25 +4283,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid payload
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                $ref: '#/components/schemas/ApiError'
           description: MSRP record not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                $ref: '#/components/schemas/ApiError'
           description: Temporal overlap or optimistic locking conflict
       security:
       - bearerAuth:
@@ -4423,13 +4403,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReplacementOption'
+                $ref: '#/components/schemas/ApiError'
           description: Validation error
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReplacementOption'
+                $ref: '#/components/schemas/ApiError'
           description: Product not found
       security:
       - bearerAuth:
@@ -4479,9 +4459,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/ProductDto'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Product not found
       security:
       - bearerAuth:
@@ -4539,13 +4517,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
+                $ref: '#/components/schemas/ApiError'
           description: Validation error
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
+                $ref: '#/components/schemas/ApiError'
           description: Product not found
       security:
       - bearerAuth:
@@ -4593,9 +4571,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/ProductUomDto'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Product not found
       security:
       - bearerAuth:
@@ -4655,19 +4631,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductUomDto'
+                $ref: '#/components/schemas/ApiError'
           description: Validation error
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductUomDto'
+                $ref: '#/components/schemas/ApiError'
           description: Product not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductUomDto'
+                $ref: '#/components/schemas/ApiError'
           description: UoM code already defined for product
       security:
       - bearerAuth:
@@ -4713,6 +4689,10 @@ paths:
         '204':
           description: Product UoM deleted
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Product or UoM not found
       security:
       - bearerAuth:
@@ -4778,13 +4758,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductUomDto'
+                $ref: '#/components/schemas/ApiError'
           description: Validation error
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductUomDto'
+                $ref: '#/components/schemas/ApiError'
           description: Product or UoM not found
       security:
       - bearerAuth:
@@ -4848,8 +4828,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-          description: Invalid request payload
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request envelope.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -4910,17 +4890,13 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/ServicePackageResponseDto'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/ServicePackageResponseDto'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
       security:
       - bearerAuth:
@@ -4971,25 +4947,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: A package already exists with that code.
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: The package cannot be stored as described.
       security:
       - bearerAuth:
@@ -5053,8 +5029,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-          description: Invalid request payload
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request envelope.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -5098,19 +5074,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: No package has that id.
       security:
       - bearerAuth:
@@ -5170,25 +5146,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: The package or the service does not exist.
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: That service is already a member.
       security:
       - bearerAuth:
@@ -5239,19 +5215,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Authentication required.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServicePackageResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: That membership does not exist in that package.
       security:
       - bearerAuth:
