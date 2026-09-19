@@ -464,6 +464,10 @@ paths:
                 $ref: '#/components/schemas/APPaymentResponse'
           description: Payment found
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Payment not found
       security:
       - bearerAuth:
@@ -506,6 +510,10 @@ paths:
                 $ref: '#/components/schemas/APPaymentResponse'
           description: Payment found
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Payment not found
       security:
       - bearerAuth:
@@ -1833,6 +1841,10 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: No default mapping found
       security:
       - bearerAuth:
@@ -7825,6 +7837,10 @@ paths:
                 $ref: '#/components/schemas/VendorBillResponse'
           description: Vendor bill found
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Vendor bill not found
       security:
       - bearerAuth:
@@ -8026,6 +8042,10 @@ paths:
                 $ref: '#/components/schemas/VendorBillResponse'
           description: Vendor bill found
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Vendor bill not found
       security:
       - bearerAuth:
@@ -8178,6 +8198,10 @@ paths:
                 $ref: '#/components/schemas/VendorResponse'
           description: Vendor found
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Vendor not found
       security:
       - bearerAuth:
