@@ -108,7 +108,8 @@ class AppointmentsServiceImplWorkorderActualsTest {
                 Clock.fixed(Instant.parse("2026-06-18T00:00:00Z"), ZoneOffset.UTC),
                 workOrderAppointmentMappingRepository,
                 conflictEvaluator,
-                conflictRecorder);
+                conflictRecorder,
+                new BookingHorizonPolicy(180));
 
         when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(APPOINTMENT_ID))
                 .thenReturn(List.<AppointmentServiceRequest>of());

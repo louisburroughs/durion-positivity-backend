@@ -6,6 +6,7 @@ import com.positivity.shopmanager.internal.dto.ConflictResponse;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
+import com.positivity.shopmanager.internal.exception.BookingHorizonExceededException;
 import com.positivity.shopmanager.internal.exception.ConflictOverrideStateException;
 import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
@@ -99,6 +100,21 @@ public class GlobalExceptionHandler {
         return respond(
                 HttpStatus.UNPROCESSABLE_CONTENT,
                 ScheduleCapacityRangeExceededException.CODE,
+                exception.getMessage(),
+                correlationId);
+    }
+
+    /**
+     * A booking beyond the configured horizon (DECISION-SHOPMGMT-019, #2100): both instants are
+     * valid and ordered, so this is a policy failure rather than a syntactic one.
+     */
+    @ExceptionHandler(BookingHorizonExceededException.class)
+    public ResponseEntity<ApiError> handleBookingHorizonExceeded(
+            BookingHorizonExceededException exception, HttpServletRequest request) {
+        UUID correlationId = resolveCorrelationId(request);
+        return respond(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                BookingHorizonExceededException.CODE,
                 exception.getMessage(),
                 correlationId);
     }
@@ -299,7 +315,8 @@ public class GlobalExceptionHandler {
             case "SOURCE_NOT_ELIGIBLE",
                     "ESTIMATE_NOT_ELIGIBLE",
                     "WORKORDER_NOT_ELIGIBLE",
-                    ScheduleCapacityRangeExceededException.CODE -> HttpStatus.UNPROCESSABLE_CONTENT.value();
+                    ScheduleCapacityRangeExceededException.CODE,
+                    BookingHorizonExceededException.CODE -> HttpStatus.UNPROCESSABLE_CONTENT.value();
             default -> HttpStatus.BAD_REQUEST.value();
         };
     }

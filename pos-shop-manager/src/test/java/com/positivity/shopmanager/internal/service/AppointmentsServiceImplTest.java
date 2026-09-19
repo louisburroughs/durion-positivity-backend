@@ -117,7 +117,8 @@ class AppointmentsServiceImplTest {
                 Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC),
                 workOrderAppointmentMappingRepository,
                 conflictEvaluator,
-                conflictRecorder);
+                conflictRecorder,
+                new BookingHorizonPolicy(180));
     }
 
     @Test

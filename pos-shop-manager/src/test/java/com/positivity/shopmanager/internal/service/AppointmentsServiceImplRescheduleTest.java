@@ -99,7 +99,8 @@ class AppointmentsServiceImplRescheduleTest {
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                 mock(WorkOrderAppointmentMappingRepository.class),
                 conflictEvaluator,
-                conflictRecorder);
+                conflictRecorder,
+                new BookingHorizonPolicy(180));
     }
 
     @Test

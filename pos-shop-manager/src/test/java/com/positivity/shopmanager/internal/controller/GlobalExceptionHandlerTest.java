@@ -7,6 +7,7 @@ import com.positivity.shopmanager.internal.dto.ConflictResponse;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
+import com.positivity.shopmanager.internal.exception.BookingHorizonExceededException;
 import com.positivity.shopmanager.internal.exception.ConflictOverrideStateException;
 import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
@@ -131,6 +132,15 @@ class GlobalExceptionHandlerTest {
                 new SourceNotEligibleException(null, "Not eligible", "ESTIMATE", "EST-1", "DRAFT"), request());
 
         assertEnvelope(response, HttpStatus.UNPROCESSABLE_CONTENT, "SOURCE_NOT_ELIGIBLE");
+    }
+
+    @Test
+    void mapsABookingBeyondTheHorizonToUnprocessableContent() {
+        ResponseEntity<ApiError> response =
+                handler.handleBookingHorizonExceeded(new BookingHorizonExceededException(180, 181), request());
+
+        assertEnvelope(response, HttpStatus.UNPROCESSABLE_CONTENT, "BOOKING_HORIZON_EXCEEDED");
+        assertThat(response.getBody().message()).contains("180");
     }
 
     @Test
@@ -357,6 +367,8 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleScheduleCapacityRangeExceeded", (HandlerInvocation)
                             request -> sut.handleScheduleCapacityRangeExceeded(
                                     new ScheduleCapacityRangeExceededException(42, 43), request)),
+                    Named.of("handleBookingHorizonExceeded", (HandlerInvocation) request ->
+                            sut.handleBookingHorizonExceeded(new BookingHorizonExceededException(180, 181), request)),
                     Named.of("handleOpeningSearchPolicy", (HandlerInvocation) request -> sut.handleOpeningSearchPolicy(
                             new OpeningSearchPolicyException(OpeningSearchPolicyException.HORIZON_EXCEEDED, "31 > 30"),
                             request)),

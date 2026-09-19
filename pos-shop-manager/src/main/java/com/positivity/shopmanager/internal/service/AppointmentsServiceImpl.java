@@ -106,6 +106,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final WorkOrderAppointmentMappingRepository workOrderAppointmentMappingRepository;
     private final SchedulingConflictEvaluator conflictEvaluator;
     private final SchedulingConflictRecorder conflictRecorder;
+    private final BookingHorizonPolicy bookingHorizonPolicy;
 
     /**
      * Creates an appointment from an Estimate or Workorder.
@@ -150,6 +151,15 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         if (idempotentDuplicate.isPresent()) {
             return AppointmentCreation.replayed(idempotentDuplicate.get());
         }
+
+        // The booking horizon (DECISION-SHOPMGMT-019), checked once this is known to be a new
+        // booking rather than a replay. A repeated Idempotency-Key replays the appointment it
+        // already created (DECISION-SHOPMGMT-014), and a replay is not a write: lowering the
+        // horizon must not turn an accepted booking's retry into a 422 for a row that already
+        // exists. Still before the replica reads and before anything is persisted, so a genuinely
+        // out-of-horizon booking is refused cheaply.
+        bookingHorizonPolicy.verifyWithinHorizon(
+                request.getStartAt(), resolveZoneId(request.getLocationId()), Instant.now(clock));
 
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         // Local replica reads (ADR-0044 §6, #891): unknown ids raise the same not-found
@@ -415,6 +425,13 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                         || request.getRescheduleReasonNotes().isBlank())) {
             throw new AppointmentValidationException("rescheduleReasonNotes is required when reason is OTHER");
         }
+
+        // A reschedule is a write too, so the booking horizon binds it exactly as it binds a create
+        // (DECISION-SHOPMGMT-019). Checked after the required fields and before the appointment is
+        // touched: a refused reschedule leaves the previous window in place and records no history
+        // row against the reschedule allowance (DECISION-SHOPMGMT-004).
+        bookingHorizonPolicy.verifyWithinHorizon(
+                request.getNewStartAt(), resolveZoneId(appointment.getLocationId()), Instant.now(clock));
 
         Instant previousStartAt = appointment.getStartAt();
         Instant previousEndAt = appointment.getEndAt();
