@@ -278,6 +278,15 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
      * collapses duplicates through {@link WorkorderActuals#mostCurrent} rather than letting {@link
      * Collectors#toMap(java.util.function.Function, java.util.function.Function)} throw on a
      * duplicate key.
+     *
+     * <p>While a reopened work order's replica is still in flight, {@code mostCurrent} resolves the
+     * newest <em>replicated</em> mapping, so the superseded run's {@code workStartedAt}/{@code
+     * completedAt} drive this day's {@code occupiedMinutes}, {@code occupancy} and {@code
+     * carryOverIn} (#2089, option 1 — the decision and its trade-off are recorded on {@link
+     * WorkorderActuals#mostCurrent}). Capacity deliberately keeps that behaviour instead of falling
+     * back to the planned window, which would erase a running job's overrun for the length of the
+     * lag; {@code AppointmentsServiceImpl} resolves through the same method and so behaves
+     * identically.
      */
     private Map<UUID, WorkorderActuals> resolveActuals(Map<UUID, List<Appointment>> appointmentsByBay) {
         List<UUID> appointmentIds = appointmentsByBay.values().stream()
