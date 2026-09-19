@@ -1,26 +1,25 @@
 package com.positivity.mcp.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.mcp.internal.config.AgentOrchestrationService;
-import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.dto.ChatBlock;
 import com.positivity.mcp.internal.security.McpPermissions;
-import com.positivity.mcp.internal.service.ChatBlockSegmenter;
-import com.positivity.mcp.internal.service.CurrentUserContextResolver;
+import com.positivity.mcp.internal.service.ConversationTurnService;
+import com.positivity.mcp.internal.service.ConversationTurnService.ChatTurnResult;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.CurrentSecurityContext;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -37,16 +36,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/mcp")
 public class McpChatController {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(McpChatController.class);
+    private final ConversationTurnService conversationTurnService;
 
-    private final AgentOrchestrationService agentOrchestrationService;
-    private final CurrentUserContextResolver currentUserContextResolver;
-
-    public McpChatController(
-            @NonNull AgentOrchestrationService agentOrchestrationService,
-            @NonNull CurrentUserContextResolver currentUserContextResolver) {
-        this.agentOrchestrationService = agentOrchestrationService;
-        this.currentUserContextResolver = currentUserContextResolver;
+    public McpChatController(@NonNull ConversationTurnService conversationTurnService) {
+        this.conversationTurnService = conversationTurnService;
     }
 
     @Operation(operationId = "executeMcpChat", summary = "Execute a Blocking MCP Chat Turn", description = """
@@ -66,8 +59,39 @@ public class McpChatController {
                     table/code blocks wherever they occur, with no guarantee the first block is markdown. \
                     `blocks` is optional and may be empty; older clients may ignore it, and when it is empty or \
                     absent, render `response` instead.
+                    Conversation persistence (#2073): an absent `conversationId` starts a new persisted \
+                    conversation with fresh memory — the response always carries the resolved \
+                    `conversationId`, and callers must echo it on every follow-up turn to continue that same \
+                    conversation rather than starting a new one each time. A `conversationId` that is a UUID \
+                    owned by the caller reuses that conversation; a UUID that does not exist or belongs to \
+                    another subject answers 404 `CONVERSATION_NOT_FOUND` rather than silently starting a new \
+                    conversation under a caller-chosen id. A non-UUID `conversationId` is the deprecated \
+                    ephemeral isolation key (#1735): memory-only, never persisted, echoed back unchanged, and \
+                    `messageId` is `null` in that case. `messageId` (the persisted assistant message id) is \
+                    also `null` if the conversation was deleted or purged in the moment between the turn \
+                    starting and finishing — the answer is still returned.
+                    Turns on one persisted conversation are serialized: a second turn sent while one is \
+                    still running on the same `conversationId` answers 409 `CONVERSATION_BUSY`; retry once \
+                    the first has answered.
                     Returns 429 when the caller's chat rate limit is exceeded.
                     """)
+    @ApiResponse(responseCode = "200", description = "Chat turn answered")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Malformed request (blank message, message over the length limit)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "conversationId is a UUID not found, or owned by another subject",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "A turn is already running on this conversation (CONVERSATION_BUSY)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "429",
+            description = "Caller's chat rate limit exceeded",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/chat")
     @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_EXECUTE + "')")
     @EmitEvent(id = "MCP_CHAT_EXECUTE", apiVersion = "1")
@@ -86,40 +110,35 @@ public class McpChatController {
                     @RequestBody
                     @Valid
                     @NonNull
-                    ChatRequest request,
-            @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
+                    ChatRequest request) {
 
-        CurrentUserContext currentUserContext = currentUserContextResolver.resolve(authentication);
-        LOGGER.debug(
-                "MCP chat selected userContext username={} userId={} selectedRole={} roleCount={} authorityCount={} fallback={}",
-                currentUserContext.username(),
-                currentUserContext.userId(),
-                currentUserContext.primaryRole(),
-                currentUserContext.roles().size(),
-                currentUserContext.authorities().size(),
-                "ROLE_USER".equals(currentUserContext.primaryRole()));
-        String response =
-                agentOrchestrationService.chat(currentUserContext, request.message(), request.conversationId());
-        List<ChatBlock> blocks = ChatBlockSegmenter.segment(response);
-        return ResponseEntity.ok(new ChatResponse(response, blocks));
+        ChatTurnResult result = conversationTurnService.runTurn(request.conversationId(), request.message());
+        return ResponseEntity.ok(
+                new ChatResponse(result.response(), result.blocks(), result.conversationId(), result.messageId()));
     }
 
     @Schema(name = "ChatRequest", description = "Chat request payload", example = "{\"message\":\"Hello\"}")
     public record ChatRequest(
             @Schema(
-                    description = "User chat message to send to the agent",
+                    description = "User chat message to send to the agent. At most 32000 characters.",
                     example = "Hello",
+                    maxLength = 32000,
                     requiredMode = Schema.RequiredMode.REQUIRED)
             @NotBlank
+            @Size(min = 1, max = 32000)
             @NonNull
             String message,
 
             @Schema(
-                    description = "Optional conversation id. Turns sharing an id share one memory; "
-                            + "omit it to use the caller's default per-role conversation, and supply a "
-                            + "distinct id per request to ask independent questions that do not inherit "
-                            + "each other's history (#1735).",
-                    example = "gate-q07",
+                    description = "Optional conversation id (#2073). Omit to start a new persisted "
+                            + "conversation with fresh memory; the response's `conversationId` is the id to "
+                            + "echo on every follow-up turn. A UUID owned by the caller reuses that "
+                            + "conversation; a UUID not found or owned by another subject answers 404 "
+                            + "`CONVERSATION_NOT_FOUND`. A non-UUID value is the deprecated ephemeral "
+                            + "isolation key (#1735): memory-only, never persisted, echoed back unchanged so "
+                            + "existing non-UUID callers keep working. Deliberately typed as a plain string "
+                            + "(not a UUID) precisely to accept that deprecated non-UUID form.",
+                    example = "0198f2b1-6c2a-7c3e-8f00-1234567890ab",
                     requiredMode = Schema.RequiredMode.NOT_REQUIRED)
             @Nullable
             String conversationId) {}
@@ -127,7 +146,9 @@ public class McpChatController {
     @Schema(
             name = "ChatResponse",
             description = "Chat response payload",
-            example = "{\"response\":\"Hi!\",\"blocks\":[{\"kind\":\"markdown\",\"markdown\":\"Hi!\"}]}")
+            example = "{\"response\":\"Hi!\",\"blocks\":[{\"kind\":\"markdown\",\"markdown\":\"Hi!\"}],"
+                    + "\"conversationId\":\"0198f2b1-6c2a-7c3e-8f00-1234567890ab\","
+                    + "\"messageId\":\"0198f2b1-7a10-7b21-9c00-abcdef123456\"}")
     public record ChatResponse(
             @Schema(
                     description = "Full agent response text",
@@ -147,5 +168,26 @@ public class McpChatController {
                                             + "empty or absent, render `response` instead.",
                                     requiredMode = Schema.RequiredMode.NOT_REQUIRED))
             @NonNull
-            List<ChatBlock> blocks) {}
+            List<ChatBlock> blocks,
+
+            @Schema(
+                    description = "Conversation id this turn was recorded against (#2073). Always populated: "
+                            + "newly created, reused from the request, or (deprecated ephemeral path) the "
+                            + "caller's own non-UUID key echoed back unchanged. Echo this value on the next "
+                            + "turn's `conversationId` to continue the same conversation. Deliberately typed "
+                            + "as a plain string (not a UUID) to also carry the deprecated non-UUID ephemeral "
+                            + "form back to the caller unchanged.",
+                    example = "0198f2b1-6c2a-7c3e-8f00-1234567890ab",
+                    requiredMode = Schema.RequiredMode.REQUIRED)
+            @NonNull
+            String conversationId,
+
+            @Schema(
+                    description = "Id of the persisted assistant message for this turn, or `null` in the "
+                            + "deprecated ephemeral (non-UUID `conversationId`) path, or if the conversation "
+                            + "was deleted/purged between the turn starting and finishing.",
+                    nullable = true,
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            UUID messageId) {}
 }

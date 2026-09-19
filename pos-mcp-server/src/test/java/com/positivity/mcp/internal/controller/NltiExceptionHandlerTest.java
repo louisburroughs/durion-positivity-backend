@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
+import com.positivity.mcp.internal.exception.ConversationBusyException;
+import com.positivity.mcp.internal.exception.ConversationNotFoundException;
 import com.positivity.mcp.internal.exception.InvalidDocumentMetadataException;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.exception.SessionNotFoundException;
@@ -275,6 +277,11 @@ class NltiExceptionHandlerTest {
                     Named.of("handleInvalidDocumentMetadata", (HandlerInvocation)
                             request -> handler.handleInvalidDocumentMetadata(
                                     new InvalidDocumentMetadataException("bad metadata", null), request)),
+                    Named.of("handleConversationNotFound", (HandlerInvocation)
+                            request -> handler.handleConversationNotFound(
+                                    new ConversationNotFoundException("no such conversation"), request)),
+                    Named.of("handleConversationBusy", (HandlerInvocation) request -> handler.handleConversationBusy(
+                            new ConversationBusyException("conversation busy"), request)),
                     Named.of("handleSessionNotFound", (HandlerInvocation) request ->
                             handler.handleSessionNotFound(new SessionNotFoundException("no such session"), request)),
                     Named.of("handleSessionOwnershipViolation", (HandlerInvocation)

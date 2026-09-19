@@ -1,9 +1,13 @@
 package com.positivity.mcp.internal.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -16,14 +20,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.mcp.internal.config.AgentOrchestrationService;
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.security.McpPermissions;
+import com.positivity.mcp.internal.service.ConversationStore;
+import com.positivity.mcp.internal.service.ConversationTurnServiceImpl;
 import com.positivity.mcp.internal.service.CurrentUserContextResolver;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,10 +52,13 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextImpl;
+import org.springframework.security.test.context.TestSecurityContextHolder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -57,7 +72,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  * no longer carries a blanket {@code @ExceptionHandler(Exception.class)}.
  */
 @WebMvcTest(McpChatController.class)
-@Import(WebCommonErrorAutoConfiguration.class)
+@Import({WebCommonErrorAutoConfiguration.class, ConversationTurnServiceImpl.class})
 @ActiveProfiles("test")
 class McpChatControllerTest {
 
@@ -71,6 +86,14 @@ class McpChatControllerTest {
 
     @MockitoBean
     private CurrentUserContextResolver currentUserContextResolver;
+
+    /**
+     * #2073: the controller delegates to the real {@link ConversationTurnServiceImpl} (imported
+     * above) so these cases keep exercising orchestration + segmentation; persistence is mocked
+     * (an unstubbed {@code recordChatTurn} answers empty, i.e. {@code messageId} null).
+     */
+    @MockitoBean
+    private ConversationStore conversationStore;
 
     @BeforeEach
     void stubUserContextResolver() {
@@ -390,6 +413,167 @@ class McpChatControllerTest {
                 .andExpect(jsonPath("$.response").value(agentMarkdown))
                 .andExpect(jsonPath("$.blocks").isArray())
                 .andExpect(jsonPath("$.blocks.length()").value(0));
+    }
+
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName("POST /v1/mcp/chat: response carries conversationId and messageId (#2073)")
+    void chat_returnsConversationIdAndMessageId() throws Exception {
+        UUID existingConversationId = UUID.fromString("0198f2b1-6c2a-7c3e-8f00-1234567890ab");
+        UUID userId = defaultUserContext().userId();
+        UUID assistantMessageId = UUID.randomUUID();
+        when(conversationStore.isOwned(existingConversationId, userId)).thenReturn(true);
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+                .thenReturn("assistant reply");
+        when(conversationStore.recordChatTurn(
+                        eq(existingConversationId),
+                        eq(false),
+                        eq(userId),
+                        anyString(),
+                        anyList(),
+                        anyString(),
+                        anyList()))
+                .thenReturn(Optional.of(assistantMessageId));
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+
+        mockMvc.perform(post("/v1/mcp/chat")
+                        .principal(authentication)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\",\"conversationId\":\"" + existingConversationId + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conversationId").value(existingConversationId.toString()))
+                .andExpect(jsonPath("$.messageId").value(assistantMessageId.toString()));
+    }
+
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName(
+            "POST /v1/mcp/chat: a second turn while one runs on the same conversation returns 409 CONVERSATION_BUSY")
+    void chat_concurrentTurnOnSameConversation_returns409() throws Exception {
+        UUID conversationId = UUID.fromString("0198f2b1-6c2a-7c3e-8f00-1234567890ac");
+        UUID userId = defaultUserContext().userId();
+        when(conversationStore.isOwned(conversationId, userId)).thenReturn(true);
+        CountDownLatch firstTurnInModel = new CountDownLatch(1);
+        CountDownLatch releaseFirstTurn = new CountDownLatch(1);
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+                .thenAnswer(invocation -> {
+                    firstTurnInModel.countDown();
+                    if (!releaseFirstTurn.await(10, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("first turn was never released");
+                    }
+                    return "first answer";
+                });
+        when(conversationStore.recordChatTurn(
+                        eq(conversationId), eq(false), eq(userId), anyString(), anyList(), anyString(), anyList()))
+                .thenReturn(Optional.of(UUID.randomUUID()));
+        var caller = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+        String body = "{\"message\":\"test\",\"conversationId\":\"" + conversationId + "\"}";
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            // The worker thread inherits the test thread's context object; bind a fresh one so the
+            // first turn's request lifecycle cannot clear the authentication the test thread relies on.
+            Future<MvcResult> firstTurn = executor.submit(() -> {
+                TestSecurityContextHolder.setContext(new SecurityContextImpl(caller));
+                try {
+                    return mockMvc.perform(post("/v1/mcp/chat")
+                                    .principal(caller)
+                                    .with(csrf())
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(body))
+                            .andReturn();
+                } finally {
+                    TestSecurityContextHolder.clearContext();
+                }
+            });
+            assertThat(firstTurnInModel.await(10, TimeUnit.SECONDS)).isTrue();
+
+            mockMvc.perform(post("/v1/mcp/chat")
+                            .principal(caller)
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isConflict())
+                    .andExpect(header().exists("X-Correlation-Id"))
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.code").value("CONVERSATION_BUSY"))
+                    .andExpect(jsonPath("$.status").value(409))
+                    .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                    .andExpect(jsonPath("$.timestamp").isNotEmpty());
+
+            releaseFirstTurn.countDown();
+            assertThat(firstTurn.get(10, TimeUnit.SECONDS).getResponse().getStatus())
+                    .isEqualTo(200);
+        } finally {
+            releaseFirstTurn.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName("POST /v1/mcp/chat: a conversationId UUID not found/owned returns 404 CONVERSATION_NOT_FOUND (#2073)")
+    void chat_conversationIdNotFound_returns404() throws Exception {
+        UUID unknownId = UUID.randomUUID();
+        UUID userId = defaultUserContext().userId();
+        when(conversationStore.isOwned(unknownId, userId)).thenReturn(false);
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+
+        mockMvc.perform(post("/v1/mcp/chat")
+                        .principal(authentication)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\",\"conversationId\":\"" + unknownId + "\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("CONVERSATION_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
+
+        // The server must never silently start a new conversation under a caller-chosen id.
+        verify(agentOrchestrationService, never())
+                .chat(any(CurrentUserContext.class), anyString(), nullable(String.class));
+    }
+
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName("POST /v1/mcp/chat: a message over 32000 characters returns 400 ApiError envelope (#2073)")
+    void chat_messageOverLengthLimit_returns400() throws Exception {
+        String tooLong = "x".repeat(32001);
+
+        mockMvc.perform(post("/v1/mcp/chat")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"" + tooLong + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("message"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
+
+        verify(agentOrchestrationService, never())
+                .chat(any(CurrentUserContext.class), anyString(), nullable(String.class));
     }
 
     @TestConfiguration
