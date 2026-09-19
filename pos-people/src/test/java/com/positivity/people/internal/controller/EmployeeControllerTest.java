@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -200,6 +201,20 @@ class EmployeeControllerTest {
                 // the summary row carries no contact block at all, which is why it can stay on the
                 // permission every staff role holds
                 .andExpect(jsonPath("$.items[0].contactInfo").doesNotExist());
+    }
+
+    // ─── GET /v1/people/employees/by-number/{employeeNumber} — 404 envelope (#1720) ─
+
+    @Test
+    void resolveByNumber_returns404ApiError_whenNoEmployeeHasThatNumber() throws Exception {
+        when(employeeService.resolveByEmployeeNumber(eq("EMP-9999"))).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/v1/people/employees/by-number/{employeeNumber}", "EMP-9999")
+                        .header("X-Authorities", "people:employee:view"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     /**

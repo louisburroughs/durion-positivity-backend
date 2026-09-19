@@ -6,6 +6,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -267,7 +268,29 @@ class VehicleApplicabilityHintControllerTest extends BaseContractIntegrationTest
         mockMvc.perform(withGatewayAuth(post("/v1/vehicle-fitment/hints")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validCreateHintBody(UUID.randomUUID()))))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    /**
+     * Unknown hint id on GET: the 404 carries the ApiError envelope, not an empty body
+     * (issue #1720 — the operation declares ApiError for its 404).
+     */
+    @Test
+    @DisplayName("VAH-C008b: unknown hint id on GET → 404 ApiError envelope")
+    void VAH_C008b_unknownHint_get_returns404ApiError() throws Exception {
+        UUID hintId = UUID.randomUUID();
+        doThrow(new IllegalArgumentException("Hint not found with ID: " + hintId))
+                .when(hintService)
+                .getHint(hintId);
+
+        mockMvc.perform(withGatewayAuth(get("/v1/vehicle-fitment/hints/" + hintId)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     // ─────────────────────────────────────────────────────────────────────────

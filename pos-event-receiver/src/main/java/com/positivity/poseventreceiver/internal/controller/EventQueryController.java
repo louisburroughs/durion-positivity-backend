@@ -4,9 +4,11 @@ import com.positivity.events.EmitEvent;
 import com.positivity.poseventreceiver.internal.dto.EmittedEventResponse;
 import com.positivity.poseventreceiver.internal.dto.PagedResponse;
 import com.positivity.poseventreceiver.internal.service.EventQueryService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
@@ -18,12 +20,14 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for querying recorded events by entity id (issue #1521).
@@ -75,7 +79,7 @@ public class EventQueryController {
     @ApiResponse(
             responseCode = "400",
             description = "since is out of the allowed range, or page/size are invalid",
-            content = @Content)
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PagedResponse<EmittedEventResponse>> queryEventsByEntity(
             @Parameter(
                             description = "Entity id events were recorded against",
@@ -111,7 +115,7 @@ public class EventQueryController {
             return ResponseEntity.ok(eventQueryService.findByEntity(entityId, since, page, size));
         } catch (IllegalArgumentException e) {
             log.warn("Invalid event query request for entityId(mask) {}: {}", maskForLog(entityId), e.getMessage());
-            return ResponseEntity.badRequest().build();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EVENT_QUERY_INVALID_REQUEST", e);
         }
     }
 

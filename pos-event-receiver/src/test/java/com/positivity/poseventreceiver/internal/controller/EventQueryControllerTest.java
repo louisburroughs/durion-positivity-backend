@@ -1,6 +1,7 @@
 package com.positivity.poseventreceiver.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -21,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Unit tests for {@link EventQueryController}.
@@ -97,30 +99,28 @@ class EventQueryControllerTest {
         }
 
         @Test
-        @DisplayName("returns 400 with no body when since is rejected as out of bounds")
+        @DisplayName("returns 400 when since is rejected as out of bounds")
         void returnsBadRequest_whenServiceRejectsSince() {
             when(eventQueryService.findByEntity(anyString(), any(), anyInt(), anyInt()))
                     .thenThrow(new IllegalArgumentException("since must not be more than 90 days in the past"));
 
-            ResponseEntity<PagedResponse<EmittedEventResponse>> result =
-                    sut.queryEventsByEntity("ENTITY-1", Instant.EPOCH, 0, 50);
-
-            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(result.getBody()).isNull();
+            assertThatThrownBy(() -> sut.queryEventsByEntity("ENTITY-1", Instant.EPOCH, 0, 50))
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
         }
 
         @Test
-        @DisplayName("returns 400 with no body when since is rejected as being in the future")
+        @DisplayName("returns 400 when since is rejected as being in the future")
         void returnsBadRequest_whenServiceRejectsFutureSince() {
             Instant future = Instant.now().plusSeconds(3600);
             when(eventQueryService.findByEntity(anyString(), any(), anyInt(), anyInt()))
                     .thenThrow(new IllegalArgumentException("since must not be in the future"));
 
-            ResponseEntity<PagedResponse<EmittedEventResponse>> result =
-                    sut.queryEventsByEntity("ENTITY-1", future, 0, 50);
-
-            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(result.getBody()).isNull();
+            assertThatThrownBy(() -> sut.queryEventsByEntity("ENTITY-1", future, 0, 50))
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
         }
     }
 }

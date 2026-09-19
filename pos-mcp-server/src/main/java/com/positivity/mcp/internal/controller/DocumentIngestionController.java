@@ -19,6 +19,7 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -106,12 +108,17 @@ public class DocumentIngestionController {
                     exists for the id.
                     """,
             tags = {"Document Ingestion"})
+    @ApiResponse(
+            responseCode = "404",
+            description = "No ingestion job exists for the id",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<DocumentIngestionJobResponse> getIngestionJob(@PathVariable @NonNull UUID jobId) {
         return documentIngestionService
                 .getIngestionJob(jobId)
                 .map(DocumentIngestionJobResponse::from)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "DOCUMENT_INGESTION_JOB_NOT_FOUND"));
     }
 
     @Schema(

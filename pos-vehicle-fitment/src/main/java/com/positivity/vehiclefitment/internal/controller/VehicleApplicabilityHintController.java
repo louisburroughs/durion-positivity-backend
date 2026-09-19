@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for managing vehicle applicability hints.
@@ -69,7 +70,10 @@ public class VehicleApplicabilityHintController {
             responseCode = "400",
             description = "Invalid request data",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Product not found", content = @Content())
+    @ApiResponse(
+            responseCode = "404",
+            description = "Product not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_CREATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -102,7 +106,7 @@ public class VehicleApplicabilityHintController {
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IllegalArgumentException e) {
             log.error("Error creating hint: {}", sanitizeForLogging(e.getMessage()));
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "PRODUCT_NOT_FOUND", e);
         }
     }
 
@@ -123,7 +127,10 @@ public class VehicleApplicabilityHintController {
             responseCode = "400",
             description = "Invalid request data",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Hint not found", content = @Content())
+    @ApiResponse(
+            responseCode = "404",
+            description = "Hint not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_UPDATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -156,7 +163,7 @@ public class VehicleApplicabilityHintController {
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             log.error("Error updating hint(mask) {}: {}", maskForLog(hintId), sanitizeForLogging(e.getMessage()));
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "HINT_NOT_FOUND", e);
         }
     }
 
@@ -171,7 +178,10 @@ public class VehicleApplicabilityHintController {
                     Returns 204 on successful deletion, and 404 when no hint exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "204", description = "Hint deleted successfully")
-    @ApiResponse(responseCode = "404", description = "Hint not found", content = @Content())
+    @ApiResponse(
+            responseCode = "404",
+            description = "Hint not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_DELETE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -185,7 +195,7 @@ public class VehicleApplicabilityHintController {
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             log.error("Error deleting hint(mask) {}: {}", maskForLog(hintId), sanitizeForLogging(e.getMessage()));
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "HINT_NOT_FOUND", e);
         }
     }
 
@@ -199,7 +209,10 @@ public class VehicleApplicabilityHintController {
                     Returns 200 with the hint, and 404 when no hint exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Hint retrieved successfully")
-    @ApiResponse(responseCode = "404", description = "Hint not found", content = @Content())
+    @ApiResponse(
+            responseCode = "404",
+            description = "Hint not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -212,7 +225,7 @@ public class VehicleApplicabilityHintController {
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             log.error("Error retrieving hint(mask) {}: {}", maskForLog(hintId), sanitizeForLogging(e.getMessage()));
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "HINT_NOT_FOUND", e);
         }
     }
 

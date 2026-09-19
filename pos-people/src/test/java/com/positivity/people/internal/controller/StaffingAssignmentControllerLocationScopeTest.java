@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -192,5 +193,35 @@ class StaffingAssignmentControllerLocationScopeTest {
         Clock clock() {
             return TEST_CLOCK;
         }
+    }
+
+    // ─── 404 envelope for an unknown assignment (#1720) ─────────────────────
+
+    @Test
+    void getAssignment_anUnknownIdIs404WithTheApiErrorEnvelope() throws Exception {
+        when(staffingAssignmentService.findById(ASSIGNMENT_ID)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/v1/people/staffing/assignments/{id}", ASSIGNMENT_ID)
+                        .header("X-Authorities", PeoplePermissions.EMPLOYEE_VIEW)
+                        .header("X-Correlation-Id", "cid-1720"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").value("cid-1720"));
+    }
+
+    @Test
+    void update_anUnknownIdIs404WithTheApiErrorEnvelope() throws Exception {
+        when(staffingAssignmentService.update(eq(ASSIGNMENT_ID), any(), anyString()))
+                .thenReturn(Optional.empty());
+
+        mockMvc.perform(put("/v1/people/staffing/assignments/{id}", ASSIGNMENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody(IN_REACH))
+                        .header("X-Authorities", EDIT))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 }
