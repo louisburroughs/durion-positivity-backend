@@ -20,6 +20,7 @@ modules:
   pos-location:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-tenant:
     mode: STRICT
     annotationDepth: STRICT
