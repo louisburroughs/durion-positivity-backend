@@ -2,7 +2,6 @@ package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
-import com.positivity.shopmanager.internal.dto.ConflictResponse;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.ConflictOverrideService;
 import com.positivity.shopmanager.internal.service.dto.ConflictOverrideRequest;
@@ -66,8 +65,8 @@ public class ConflictOverrideController {
                     Emits a SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE event.
                     Returns 400 when a conflictId is not recorded against this appointment or the body is \
                     invalid, 403 when the caller lacks the authority or the location is out of scope, 404 when \
-                    the appointment cannot be resolved, and 409 either with the scheduling-conflict envelope \
-                    (a named conflict is HARD; nothing is written) or with code CONFLICT_ALREADY_OVERRIDDEN.
+                    the appointment cannot be resolved, and 409 either with code SCHEDULING_CONFLICT and the HARD \
+                    conflicts in conflicts[] (nothing is written) or with code CONFLICT_ALREADY_OVERRIDDEN.
                     """)
     @ApiResponse(responseCode = "201", description = "Override recorded for every named conflict.")
     @ApiResponse(
@@ -84,10 +83,9 @@ public class ConflictOverrideController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "A named conflict is HARD (scheduling-conflict envelope, nothing written) or already"
-                    + " overridden (ApiError CONFLICT_ALREADY_OVERRIDDEN).",
-            content =
-                    @Content(mediaType = "application/json", schema = @Schema(implementation = ConflictResponse.class)))
+            description = "A named conflict is HARD (code SCHEDULING_CONFLICT with conflicts[], nothing written) or"
+                    + " already overridden (code CONFLICT_ALREADY_OVERRIDDEN).",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public @NonNull ConflictOverrideResponse executeOverride(
             @Parameter(description = "Appointment ID", required = true) @PathVariable @NonNull UUID appointmentId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
