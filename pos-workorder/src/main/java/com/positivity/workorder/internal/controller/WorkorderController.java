@@ -17,6 +17,7 @@ import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
 import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkorderCountService;
 import com.positivity.workorder.internal.service.WorkorderInvoiceService;
@@ -37,9 +38,11 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @Tag(name = "Work Order API", description = "Endpoints for work order management")
 @RestController
@@ -147,7 +150,7 @@ public class WorkorderController {
         return workorderService
                 .getWorkorderById(workorderId)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
     }
 
     @Operation(operationId = "createWorkorder", summary = "Create a New Workorder", description = """
@@ -618,8 +621,8 @@ public class WorkorderController {
         try {
             return ResponseEntity.ok(
                     workorderService.completeServiceItem(workorderId, serviceLineId, resolveCurrentActorUserId()));
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "WORKORDER_ITEM_INVALID_STATE", e);
         }
     }
 
@@ -658,8 +661,8 @@ public class WorkorderController {
         try {
             return ResponseEntity.ok(
                     workorderService.completePartItem(workorderId, partId, resolveCurrentActorUserId()));
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "WORKORDER_ITEM_INVALID_STATE", e);
         }
     }
 

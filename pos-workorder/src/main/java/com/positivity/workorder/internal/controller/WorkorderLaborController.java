@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for labor tracking on workorders.
@@ -49,6 +50,8 @@ public class WorkorderLaborController {
     private final WorkorderLaborService laborService;
 
     private static final String SYSTEM_USERNAME = "system";
+    private static final String NOT_FOUND_CODE = "NOT_FOUND";
+    private static final String LABOR_SESSION_INVALID_STATE = "LABOR_SESSION_INVALID_STATE";
 
     /**
      * Start a labor session on a workorder service.
@@ -148,10 +151,10 @@ public class WorkorderLaborController {
 
         } catch (NoSuchElementException e) {
             log.warn("Start labor failed - not found: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_CODE, e);
         } catch (IllegalStateException e) {
             log.warn("Start labor failed - invalid state: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, LABOR_SESSION_INVALID_STATE, e);
         }
     }
 
@@ -224,10 +227,10 @@ public class WorkorderLaborController {
 
         } catch (NoSuchElementException e) {
             log.warn("Stop labor failed - not found: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_CODE, e);
         } catch (IllegalStateException e) {
             log.warn("Stop labor failed - invalid state: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, LABOR_SESSION_INVALID_STATE, e);
         }
     }
 

@@ -22,9 +22,11 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for managing technician assignments to workorders.
@@ -42,6 +44,7 @@ public class TechnicianAssignmentController {
     private final TechnicianAssignmentService assignmentService;
 
     private static final String SYSTEM_USERNAME = "system";
+    private static final String NOT_FOUND_CODE = "NOT_FOUND";
 
     /**
      * Assign a technician to a workorder.
@@ -165,7 +168,7 @@ public class TechnicianAssignmentController {
 
         } catch (NoSuchElementException e) {
             log.warn("Assignment failed - not found: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_CODE, e);
         } catch (IllegalStateException e) {
             log.warn("Assignment failed - invalid state: {}", e.getMessage());
             // Surface the reason (e.g. workorder status not assignable) so the client can show
@@ -300,7 +303,7 @@ public class TechnicianAssignmentController {
 
         } catch (NoSuchElementException e) {
             log.warn("Reassignment failed - not found: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_CODE, e);
         } catch (IllegalStateException e) {
             log.warn("Reassignment failed - invalid state: {}", e.getMessage());
             return ResponseEntity.badRequest().body(errorResponse(workorderId, e.getMessage()));
@@ -353,7 +356,7 @@ public class TechnicianAssignmentController {
 
             if (currentAssignment.isEmpty()) {
                 log.debug("No technician assignment found for workorder {}", workorderId);
-                return ResponseEntity.notFound().build();
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TECHNICIAN_ASSIGNMENT_NOT_FOUND");
             }
 
             var history = assignmentService.getAssignmentHistory(workorderId);
@@ -365,7 +368,7 @@ public class TechnicianAssignmentController {
 
         } catch (NoSuchElementException e) {
             log.warn("Get assignment failed - not found: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_CODE, e);
         }
     }
 

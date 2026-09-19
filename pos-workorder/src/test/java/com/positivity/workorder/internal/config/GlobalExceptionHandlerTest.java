@@ -61,12 +61,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Unit tests for {@link GlobalExceptionHandler}'s {@code X-Correlation-Id} contract (ADR-0017 §4,
@@ -111,6 +114,10 @@ class GlobalExceptionHandlerTest {
             MockHttpServletRequest request = new MockHttpServletRequest();
             request.addHeader("X-Correlation-Id", "   ");
             return request;
+        }
+
+        static ObjectProvider<Clock> fixedClockProviderForTests() {
+            return fixedClockProvider();
         }
 
         private static ObjectProvider<Clock> fixedClockProvider() {
@@ -249,6 +256,9 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleConstraintViolation", (HandlerInvocation)
                             request -> handler.handleConstraintViolation(
                                     new ConstraintViolationException(Set.<ConstraintViolation<?>>of()), request)),
+                    Named.of("handleResponseStatus", (HandlerInvocation) request -> handler.handleResponseStatus(
+                            new ResponseStatusException(HttpStatus.NOT_FOUND, "TECHNICIAN_ASSIGNMENT_NOT_FOUND"),
+                            request)),
                     Named.of("handleAccessDenied", (HandlerInvocation)
                             request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)),
                     Named.of("handleWorkSessionConflict", (HandlerInvocation) request ->
@@ -312,6 +322,61 @@ class GlobalExceptionHandlerTest {
                             + "entry in XCorrelationIdHeader#handlerInvocations() in GlobalExceptionHandlerTest — "
                             + "add one so the X-Correlation-Id header contract stays proven for every handler")
                     .isEqualTo(handlerMethodCount);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // ResponseStatusException (#1720)
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("ResponseStatusException (#1720)")
+    class ResponseStatus {
+
+        private final GlobalExceptionHandler handler =
+                new GlobalExceptionHandler(XCorrelationIdHeader.fixedClockProviderForTests());
+
+        private ResponseEntity<ApiError> handle(ResponseStatusException ex) {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.setRequestURI("/v1/workorders/" + SOME_ID);
+            return handler.handleResponseStatus(ex, request);
+        }
+
+        @Test
+        @DisplayName("a machine-code reason is the code, under the exception's own status, 5xx included")
+        void machineCodeReasonIsTheCode() {
+            ResponseEntity<ApiError> response =
+                    handle(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "DOCUMENT_SERVICE_UNAVAILABLE"));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+            assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_JSON);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("DOCUMENT_SERVICE_UNAVAILABLE");
+            assertThat(response.getBody().status()).isEqualTo(502);
+        }
+
+        @Test
+        @DisplayName("a free-text 4xx reason is never reflected: generic code and message, status kept")
+        void freeTextReasonIsNotReflected() {
+            ResponseEntity<ApiError> response =
+                    handle(new ResponseStatusException(HttpStatus.NOT_FOUND, "No pick list for workorder " + SOME_ID));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("NOT_FOUND");
+            assertThat(response.getBody().message()).doesNotContain(SOME_ID.toString());
+        }
+
+        @Test
+        @DisplayName("a free-text 5xx reason answers the platform's generic 500")
+        void freeText5xxIsAGeneric500() {
+            ResponseEntity<ApiError> response =
+                    handle(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to queue " + SOME_ID));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("INTERNAL_ERROR");
+            assertThat(response.getBody().message()).doesNotContain(SOME_ID.toString());
         }
     }
 }

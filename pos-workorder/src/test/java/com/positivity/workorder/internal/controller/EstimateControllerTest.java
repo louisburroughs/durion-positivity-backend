@@ -157,7 +157,8 @@ class EstimateControllerTest {
         void reportsNotFoundForAnUnknownEstimate() {
             when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(Optional.empty());
 
-            assertThat(controller.getEstimateById(ESTIMATE_ID).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.getEstimateById(ESTIMATE_ID))
+                    .isInstanceOf(EstimateNotFoundException.class);
         }
 
         @Test
@@ -277,8 +278,11 @@ class EstimateControllerTest {
         void reportsAnInternalErrorForAnythingElse() {
             when(estimateService.createEstimate(any(), anyString())).thenThrow(new RuntimeException("boom"));
 
-            assertThat(controller.createEstimate(createRequest(), null).getStatusCode())
-                    .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThatThrownBy(() -> controller.createEstimate(createRequest(), null))
+                    .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+                        assertThat(e.getReason()).isEqualTo("INTERNAL_ERROR");
+                    });
         }
     }
 
@@ -370,8 +374,11 @@ class EstimateControllerTest {
             when(estimateService.declineEstimate(any(), any()))
                     .thenThrow(new IllegalStateException("already declined"));
 
-            assertThat(controller.declineEstimate(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.declineEstimate(ESTIMATE_ID, null))
+                    .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                        assertThat(e.getReason()).isEqualTo("ESTIMATE_INVALID_STATE");
+                    });
         }
 
         @Test
@@ -385,7 +392,11 @@ class EstimateControllerTest {
         void reportsBadRequestWhenAReopenIsNotAllowed() {
             when(estimateService.reopenEstimate(ESTIMATE_ID)).thenThrow(new IllegalStateException("expired"));
 
-            assertThat(controller.reopenEstimate(ESTIMATE_ID).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.reopenEstimate(ESTIMATE_ID))
+                    .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                        assertThat(e.getReason()).isEqualTo("ESTIMATE_INVALID_STATE");
+                    });
         }
 
         @Test
@@ -680,12 +691,11 @@ class EstimateControllerTest {
             assertThatThrownBy(() -> controller.addEstimateItem(ESTIMATE_ID, null))
                     .isInstanceOf(EstimateNotFoundException.class);
 
-            // The 400 branch is unchanged and still answers directly; it is out of #1713's scope.
-            doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "bad item"))
-                    .when(estimateService)
-                    .addEstimateItem(any(), any(), anyString());
-            assertThat(controller.addEstimateItem(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            // #1720: the 400 branch now propagates too, for the advice's ApiError envelope.
+            ResponseStatusException badItem = new ResponseStatusException(HttpStatus.BAD_REQUEST, "bad item");
+            doThrow(badItem).when(estimateService).addEstimateItem(any(), any(), anyString());
+            assertThatThrownBy(() -> controller.addEstimateItem(ESTIMATE_ID, null))
+                    .isSameAs(badItem);
         }
 
         @Test
@@ -706,8 +716,9 @@ class EstimateControllerTest {
             doThrow(new IllegalStateException("estimate is locked"))
                     .when(estimateService)
                     .addEstimateItem(any(), any(), anyString());
-            assertThat(controller.addEstimateItem(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            // #1720: rethrown for the module advice's enveloped 409 CONFLICT.
+            assertThatThrownBy(() -> controller.addEstimateItem(ESTIMATE_ID, null))
+                    .isInstanceOf(IllegalStateException.class);
         }
 
         @Test
@@ -738,8 +749,9 @@ class EstimateControllerTest {
             doThrow(new IllegalStateException("estimate is locked"))
                     .when(estimateService)
                     .updateEstimateItem(any(), any(), any());
-            assertThat(controller.updateEstimateItem(ESTIMATE_ID, ITEM_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            // #1720: rethrown for the module advice's enveloped 409 CONFLICT.
+            assertThatThrownBy(() -> controller.updateEstimateItem(ESTIMATE_ID, ITEM_ID, null))
+                    .isInstanceOf(IllegalStateException.class);
         }
 
         @Test
@@ -760,8 +772,9 @@ class EstimateControllerTest {
             doThrow(new IllegalStateException("estimate is locked"))
                     .when(estimateService)
                     .deleteEstimateItem(ESTIMATE_ID, ITEM_ID);
-            assertThat(controller.deleteEstimateItem(ESTIMATE_ID, ITEM_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            // #1720: rethrown for the module advice's enveloped 409 CONFLICT.
+            assertThatThrownBy(() -> controller.deleteEstimateItem(ESTIMATE_ID, ITEM_ID))
+                    .isInstanceOf(IllegalStateException.class);
         }
 
         @Test
@@ -790,8 +803,9 @@ class EstimateControllerTest {
             doThrow(new IllegalStateException("no items"))
                     .when(estimateService)
                     .calculateEstimateTaxesAndTotals(any(), anyString());
-            assertThat(controller.calculateEstimateTotals(ESTIMATE_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            // #1720: rethrown for the module advice's enveloped 409 CONFLICT.
+            assertThatThrownBy(() -> controller.calculateEstimateTotals(ESTIMATE_ID))
+                    .isInstanceOf(IllegalStateException.class);
         }
 
         @Test
@@ -826,16 +840,24 @@ class EstimateControllerTest {
 
         @Test
         void reportsNotFoundForAPdfOfAnUnknownEstimateAndBadGatewayOnRenderFailure() {
+            // #1720: both propagate for the advice to envelope as ApiError, not a bodiless status.
+            when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(Optional.empty());
+            assertThatThrownBy(() -> controller.generateEstimatePdf(ESTIMATE_ID))
+                    .isInstanceOf(EstimateNotFoundException.class);
+
+            when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(Optional.of(estimate()));
             doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .generateEstimatePdf(ESTIMATE_ID);
-            assertThat(controller.generateEstimatePdf(ESTIMATE_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.generateEstimatePdf(ESTIMATE_ID))
+                    .isInstanceOf(EstimateNotFoundException.class);
 
-            when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(Optional.of(estimate()));
             doThrow(new RuntimeException("renderer down")).when(estimateService).generateEstimatePdf(ESTIMATE_ID);
-            assertThat(controller.generateEstimatePdf(ESTIMATE_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_GATEWAY);
+            assertThatThrownBy(() -> controller.generateEstimatePdf(ESTIMATE_ID))
+                    .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+                        assertThat(e.getReason()).isEqualTo("DOCUMENT_SERVICE_UNAVAILABLE");
+                    });
         }
 
         @Test

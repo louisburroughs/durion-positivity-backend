@@ -55,6 +55,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @Tag(name = "Estimate API", description = "Endpoints for estimate management and approval workflow")
 @RestController
@@ -64,6 +65,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class EstimateController {
     private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
     private static final String CONFLICT = "CONFLICT";
+    private static final String ESTIMATE_INVALID_STATE = "ESTIMATE_INVALID_STATE";
     private static final String SYSTEM = "SYSTEM";
     private static final String IDEMPOTENCY_OPERATION_ESTIMATE_CREATE = "estimate.create";
     private static final String IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE = "estimate.promote";
@@ -147,7 +149,7 @@ public class EstimateController {
         // cover.
         Optional<EstimateResponse> estimate = estimateService.getEstimateById(estimateId);
         if (estimate.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            throw new EstimateNotFoundException(estimateId);
         }
         SecurityContextHelper.locationScope()
                 .require(
@@ -353,7 +355,7 @@ public class EstimateController {
 
         } catch (Exception e) {
             log.error("Unexpected error creating estimate", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", e);
         }
     }
 
@@ -478,8 +480,8 @@ public class EstimateController {
         try {
             EstimateResponse declined = estimateService.declineEstimate(estimateId, reason);
             return ResponseEntity.ok(declined);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ESTIMATE_INVALID_STATE, e);
         }
     }
 
@@ -517,8 +519,8 @@ public class EstimateController {
         try {
             EstimateResponse reopened = estimateService.reopenEstimate(estimateId);
             return ResponseEntity.ok(reopened);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ESTIMATE_INVALID_STATE, e);
         }
     }
 
@@ -937,12 +939,11 @@ public class EstimateController {
             }
             if (e.getStatusCode() == HttpStatus.BAD_REQUEST) {
                 log.warn("Validation error adding item to estimate {}: {}", estimateId, e.getReason());
-                return ResponseEntity.badRequest().build();
             }
             throw e;
         } catch (IllegalStateException e) {
             log.warn("State error adding item to estimate {}: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            throw e;
         }
     }
 
@@ -1016,7 +1017,7 @@ public class EstimateController {
             return ResponseEntity.ok(item);
         } catch (IllegalStateException e) {
             log.warn("State error updating item {} on estimate {}: {}", itemId, estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            throw e;
         }
     }
 
@@ -1063,7 +1064,7 @@ public class EstimateController {
             return ResponseEntity.noContent().build();
         } catch (IllegalStateException e) {
             log.warn("State error deleting item {} from estimate {}: {}", itemId, estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            throw e;
         }
     }
 
@@ -1119,7 +1120,7 @@ public class EstimateController {
             return ResponseEntity.ok(response);
         } catch (IllegalStateException e) {
             log.warn("State error calculating estimate {}: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            throw e;
         }
     }
 
@@ -1201,15 +1202,24 @@ public class EstimateController {
                 @ApiResponse(
                         responseCode = "403",
                         description = LOCATION_SCOPE_DENIED_DESCRIPTION,
-                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "404",
                         description = "Estimate not found",
-                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "502",
                         description = "Document service unavailable",
-                        content = @Content(schema = @Schema(implementation = ApiError.class)))
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @GetMapping(value = "/{estimateId}/pdf", produces = "application/pdf")
     @EmitEvent(id = "ESTIMATE_PDF_GENERATE", apiVersion = "1")
@@ -1226,7 +1236,7 @@ public class EstimateController {
         // into the renderer's 502.
         Optional<EstimateResponse> estimate = estimateService.getEstimateById(estimateId);
         if (estimate.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new EstimateNotFoundException(estimateId);
         }
         SecurityContextHelper.locationScope()
                 .require(
@@ -1240,10 +1250,10 @@ public class EstimateController {
                     .body(pdfBytes);
         } catch (EstimateNotFoundException e) {
             log.warn("Estimate {} not found for PDF generation: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw e;
         } catch (Exception e) {
             log.error("Failed to generate PDF for estimate {}: {}", estimateId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).build();
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "DOCUMENT_SERVICE_UNAVAILABLE", e);
         }
     }
 

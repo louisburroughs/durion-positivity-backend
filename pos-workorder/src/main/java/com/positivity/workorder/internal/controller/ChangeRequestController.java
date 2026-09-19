@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @Tag(name = "Change Request API", description = "Endpoints for managing additional work requests and approvals")
 @RestController
@@ -100,8 +102,8 @@ public class ChangeRequestController {
             dto.setWorkorderId(workorderId);
             var created = changeRequestService.createChangeRequestWithIdempotency(dto, idempotencyKey);
             return ResponseEntity.ok(created);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CHANGE_REQUEST_INVALID_STATE", e);
         }
     }
 
@@ -154,8 +156,8 @@ public class ChangeRequestController {
             var approved =
                     changeRequestService.approveChangeRequest(changeId, dto.getApprovedBy(), dto.getApprovalNote());
             return ResponseEntity.ok(approved);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CHANGE_REQUEST_INVALID_STATE", e);
         }
     }
 
@@ -207,8 +209,8 @@ public class ChangeRequestController {
         try {
             var declined = changeRequestService.declineChangeRequest(changeId, dto.getApprovalNote());
             return ResponseEntity.ok(declined);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CHANGE_REQUEST_INVALID_STATE", e);
         }
     }
 
@@ -247,8 +249,8 @@ public class ChangeRequestController {
         try {
             changeRequestService.recordCustomerDenialAcknowledgment(changeId);
             return ResponseEntity.noContent().build();
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CHANGE_REQUEST_INVALID_STATE", e);
         }
     }
 
@@ -310,8 +312,8 @@ public class ChangeRequestController {
         try {
             var overridden = changeRequestService.applyEmergencyOverride(changeId, dto.getExceptionReason());
             return ResponseEntity.ok(overridden);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CHANGE_REQUEST_INVALID_STATE", e);
         }
     }
 

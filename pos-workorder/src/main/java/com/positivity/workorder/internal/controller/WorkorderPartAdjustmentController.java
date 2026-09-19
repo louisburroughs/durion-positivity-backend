@@ -24,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for workorder part adjustments (substitutions, returns,
@@ -120,8 +121,8 @@ public class WorkorderPartAdjustmentController {
                     request.getNotes());
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (NoSuchElementException _) {
-            return ResponseEntity.notFound().build();
+        } catch (NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "NOT_FOUND", e);
         }
     }
 
@@ -191,8 +192,8 @@ public class WorkorderPartAdjustmentController {
                     request.getNotes());
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (NoSuchElementException _) {
-            return ResponseEntity.notFound().build();
+        } catch (NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "NOT_FOUND", e);
         }
     }
 
@@ -270,8 +271,8 @@ public class WorkorderPartAdjustmentController {
                     request.getNotes());
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (NoSuchElementException _) {
-            return ResponseEntity.notFound().build();
+        } catch (NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "NOT_FOUND", e);
         }
     }
 
