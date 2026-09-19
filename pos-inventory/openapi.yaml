@@ -792,7 +792,11 @@ paths:
                 $ref: '#/components/schemas/InventoryAvailabilityResponse'
           description: Availability updated
         '501':
-          description: Not implemented. The response has NO body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not implemented (code NOT_IMPLEMENTED)
       security:
       - bearerAuth:
         - inventory:adjustment:create
@@ -4418,7 +4422,11 @@ paths:
         '200':
           description: Picking list confirmed
         '501':
-          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not implemented (code NOT_IMPLEMENTED)
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -7045,11 +7053,8 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  format: uuid
-                  type: string
-                type: array
-          description: Not implemented
+                $ref: '#/components/schemas/ApiError'
+          description: Not implemented (code NOT_IMPLEMENTED)
       security:
       - bearerAuth:
         - inventory:location:view
@@ -7100,7 +7105,11 @@ paths:
         '200':
           description: Default locations replaced
         '501':
-          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not implemented (code NOT_IMPLEMENTED)
       security:
       - bearerAuth:
         - inventory:location:admin
