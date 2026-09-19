@@ -26,6 +26,7 @@ modules:
   pos-people:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-catalog:
     mode: STRICT
     annotationDepth: STRICT
@@ -57,9 +58,11 @@ modules:
   pos-event-receiver:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-vehicle-fitment:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-image:
     mode: STRICT
     annotationDepth: STRICT
@@ -78,6 +81,7 @@ modules:
   pos-mcp-server:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-marketing:
     mode: STRICT
     annotationDepth: STRICT
@@ -89,6 +93,7 @@ modules:
   pos-tax:
     mode: STRICT
     annotationDepth: STRICT
+    errorSchema: STRICT
   pos-inquiry:
     mode: EXCEPTION
     reason: stub module with no REST producer surface
