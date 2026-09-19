@@ -268,25 +268,31 @@ public class OpenAiSpeechToTextClient implements SpeechToTextClient {
     }
 
     /**
-     * Providers infer the container from the file extension. Browsers post {@code MediaRecorder}
-     * clips as {@code "blob"} with no extension, so a name without a known extension is replaced by
-     * one derived from the content type. The name is also reduced to safe characters: it is sent to
-     * a third party in a multipart header.
+     * Providers infer the container from the file extension, so the extension sent must always
+     * match {@code mimeType} — the type this call was already validated against — never a
+     * caller-supplied name that could disagree with it (a browser can send any filename alongside
+     * any content type). The base name is kept from {@code filename} only when it already carries
+     * one of {@link #KNOWN_EXTENSIONS} (proof it is a real name, not the browser's generic {@code
+     * "blob"} for an extensionless {@code MediaRecorder} clip); otherwise the base name falls back
+     * to {@code "audio"}. The name is also reduced to safe characters: it is sent to a third party
+     * in a multipart header.
      */
     static @NonNull String providerFilename(@NonNull String filename, @NonNull String mimeType) {
         String safe = UNSAFE_FILENAME_CHARS.matcher(filename.strip()).replaceAll("_");
         int dot = safe.lastIndexOf('.');
-        if (dot > 0 && dot < safe.length() - 1) {
-            String extension = safe.substring(dot + 1).toLowerCase(Locale.ROOT);
-            if (KNOWN_EXTENSIONS.contains(extension)) {
-                return safe;
-            }
-        }
+        boolean hasKnownExtension = dot > 0
+                && dot < safe.length() - 1
+                && KNOWN_EXTENSIONS.contains(safe.substring(dot + 1).toLowerCase(Locale.ROOT));
+        String base = hasKnownExtension ? safe.substring(0, dot) : "audio";
+        return base + "." + extensionForMimeType(mimeType);
+    }
+
+    private static @NonNull String extensionForMimeType(@NonNull String mimeType) {
         int semicolon = mimeType.indexOf(';');
         String baseType = (semicolon >= 0 ? mimeType.substring(0, semicolon) : mimeType)
                 .strip()
                 .toLowerCase(Locale.ROOT);
-        return "audio." + EXTENSION_BY_MIME_TYPE.getOrDefault(baseType, "webm");
+        return EXTENSION_BY_MIME_TYPE.getOrDefault(baseType, "webm");
     }
 
     private static @Nullable Double validDuration(@Nullable Double duration) {

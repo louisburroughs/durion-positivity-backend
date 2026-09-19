@@ -179,7 +179,8 @@ unsupported — use `whisper-1` or a self-hosted equivalent that returns it.
 **Retention: transcribe-and-discard.** Audio is held in memory for the request only — never written to disk,
 persisted, logged, or included in the `MCP_TRANSCRIPTION_EXECUTE` event. It is forwarded to the configured
 provider to produce the transcript; a hosted provider's (e.g. OpenAI's) own retention policy applies to the copy
-it received, a self-hosted provider retains nothing.
+it received. A self-hosted provider — infrastructure under our own control — keeps nothing beyond serving this
+one request.
 
 | Property                          | Env / Default                     | Description                                                       |
 | ---------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |

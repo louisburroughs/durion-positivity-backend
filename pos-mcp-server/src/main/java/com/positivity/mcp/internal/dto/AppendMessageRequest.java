@@ -51,7 +51,7 @@ public record AppendMessageRequest(
                                 requiredMode = REQUIRED))
         @NotNull
         @Size(max = 64)
-        List<@Valid ChatBlock> blocks,
+        List<@NotNull @Valid ChatBlock> blocks,
 
         @Schema(
                 description = "Optional raw text/markdown fallback for this turn, for clients that render "

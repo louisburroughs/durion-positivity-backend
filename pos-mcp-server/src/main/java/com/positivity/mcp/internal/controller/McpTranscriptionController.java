@@ -11,13 +11,16 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import java.util.Locale;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,7 +38,8 @@ import org.springframework.web.multipart.MultipartFile;
  * no audio reaches the event). The clip is forwarded to the configured speech-to-text provider to
  * produce the transcript and is discarded once this response is built. If the configured provider
  * is a hosted third party (for example OpenAI), that provider's own retention policy applies to
- * the copy it received; a self-hosted provider retains nothing beyond its own request handling.
+ * the copy it received. If it is self-hosted — infrastructure under our own control — it keeps
+ * nothing beyond serving this one request.
  *
  * <p>Reuses {@code mcp:chat:execute} rather than a new permission — voice is an input modality of
  * chat, and minting a new permission would need bitset/gateway/role-seed work this story does not
@@ -69,8 +73,9 @@ class McpTranscriptionController {
                     Retention: transcribe-and-discard — the audio is held in memory for this request only, \
                     forwarded to the configured speech-to-text provider, and never persisted, logged, or \
                     included in the emitted event. A hosted provider's own retention policy applies to the \
-                    copy it received; a self-hosted provider retains nothing.
-                    Emits a MCP_TRANSCRIPTION_EXECUTE event.
+                    copy it received. A self-hosted provider — infrastructure under our own control — keeps \
+                    nothing beyond serving this one request.
+                    Emits an MCP_TRANSCRIPTION_EXECUTE event.
                     Returns 200 with the transcript synchronously — clips this short never queue for later \
                     polling.
                     """)
@@ -80,7 +85,8 @@ class McpTranscriptionController {
             content = @Content(schema = @Schema(implementation = TranscriptionResponse.class)))
     @ApiResponse(
             responseCode = "400",
-            description = "language is not a well-formed BCP-47 tag",
+            description = "language is not a well-formed BCP-47 tag, or the multipart request body is "
+                    + "malformed/truncated (a bad boundary, or the client aborting mid-upload)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "401",
@@ -138,8 +144,35 @@ class McpTranscriptionController {
                     @RequestPart(value = "language", required = false)
                     @Nullable
                     String language,
-            @Parameter(hidden = true) Locale requestLocale) {
-        TranscriptionResponse response = transcriptionService.transcribe(audio, language, requestLocale);
+            @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false) @Nullable
+                    String acceptLanguage) {
+        TranscriptionResponse response =
+                transcriptionService.transcribe(audio, language, resolveLocale(acceptLanguage));
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * The request's resolved locale, from the raw {@code Accept-Language} header only — no
+     * container/server default fallback. Spring's implicit {@code Locale} argument resolution
+     * (previously used here) delegates to {@code HttpServletRequest#getLocale()}, which falls back
+     * to the container's default locale (e.g. the JVM default) when the header is absent, not to
+     * an undetermined locale; that silently defeated {@link TranscriptionService}'s auto-detect
+     * fallback for every caller that omits the header. {@link Locale#ROOT} ({@code "und"}) is
+     * returned instead, so a missing header reaches the service as "undetermined" rather than as
+     * an arbitrary guessed language.
+     */
+    private static @NonNull Locale resolveLocale(@Nullable String acceptLanguage) {
+        if (acceptLanguage == null || acceptLanguage.isBlank()) {
+            return Locale.ROOT;
+        }
+        List<Locale.LanguageRange> ranges;
+        try {
+            ranges = Locale.LanguageRange.parse(acceptLanguage);
+        } catch (IllegalArgumentException e) {
+            return Locale.ROOT;
+        }
+        return ranges.isEmpty()
+                ? Locale.ROOT
+                : Locale.forLanguageTag(ranges.get(0).getRange());
     }
 }

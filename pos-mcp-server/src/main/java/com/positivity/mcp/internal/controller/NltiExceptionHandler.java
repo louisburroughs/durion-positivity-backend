@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.controller;
 
+import com.positivity.mcp.internal.exception.ConversationBusyException;
 import com.positivity.mcp.internal.exception.ConversationNotFoundException;
 import com.positivity.mcp.internal.exception.InvalidDocumentMetadataException;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
@@ -138,6 +139,24 @@ class NltiExceptionHandler {
                         "CONVERSATION_NOT_FOUND",
                         ex.getMessage(),
                         HttpStatus.NOT_FOUND.value(),
+                        Instant.now(clock).toString(),
+                        correlationId.toString()));
+    }
+
+    /**
+     * #2073: a chat turn is already running on the same persisted conversation. Turns on one
+     * conversation are serialized, so the second concurrent turn is rejected (409) rather than
+     * interleaved; the caller retries once the first has answered.
+     */
+    @ExceptionHandler(ConversationBusyException.class)
+    ResponseEntity<ApiError> handleConversationBusy(ConversationBusyException ex, HttpServletRequest request) {
+        UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
+                .body(ApiError.of(
+                        "CONVERSATION_BUSY",
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
                         Instant.now(clock).toString(),
                         correlationId.toString()));
     }

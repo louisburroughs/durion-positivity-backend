@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -32,6 +33,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,10 +54,13 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextImpl;
+import org.springframework.security.test.context.TestSecurityContextHolder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -393,16 +402,11 @@ class McpChatControllerTest {
     @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat: a table nested in a list item degrades to an empty blocks array (O1, #2072)")
     void chat_nestedTableAnswer_emptyBlocksArrayResponseUnchanged() throws Exception {
-        // O1 (orchestrator, Wave 1 review cycle 2): blocks is either a faithful segmentation or
-        // EMPTY — never a partial one carrying raw pipes the frontend cannot render. A prior edit
-        // here asserted a single markdown-block "fallback", which contradicts O1 and current
-        // production intent; restored to the spec's required contract. See ChatBlockSegmenterTest's
-        // tableNestedInListItem_returnsEmptyList for the matching unit-level defect evidence: this
-        // scenario currently segments to a single raw-pipe-carrying MarkdownBlock instead of [],
-        // because the GFM table extension never forms a nested Table AST node for a table directly
-        // following a list item's first line without a blank line, so the segmenter's
-        // nested-node safety net has nothing to detect. This test is therefore expected to be RED
-        // until that gap is closed in production — do not "fix" it by weakening this assertion.
+        // blocks is either a faithful segmentation or EMPTY — never a partial one carrying raw
+        // pipes the frontend cannot render. The GFM table extension forms no Table node for a
+        // table directly after a list item's first line, so the table stays paragraph text; the
+        // segmenter's final safety net (a delimiter row inside an emitted markdown block) is what
+        // turns this answer into []. The client then parses `response` itself.
         String agentMarkdown = "- item one\n  | A | B |\n  | --- | --- |\n  | 1 | 2 |";
         when(agentOrchestrationService.chatTurn(
                         any(CurrentUserContext.class), anyString(), nullable(String.class), nullable(UUID.class)))
@@ -463,6 +467,76 @@ class McpChatControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.conversationId").value(existingConversationId.toString()))
                 .andExpect(jsonPath("$.messageId").value(assistantMessageId.toString()));
+    }
+
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName(
+            "POST /v1/mcp/chat: a second turn while one runs on the same conversation returns 409 CONVERSATION_BUSY")
+    void chat_concurrentTurnOnSameConversation_returns409() throws Exception {
+        UUID conversationId = UUID.fromString("0198f2b1-6c2a-7c3e-8f00-1234567890ac");
+        UUID userId = defaultUserContext().userId();
+        when(conversationStore.isOwned(conversationId, userId)).thenReturn(true);
+        CountDownLatch firstTurnInModel = new CountDownLatch(1);
+        CountDownLatch releaseFirstTurn = new CountDownLatch(1);
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+                .thenAnswer(invocation -> {
+                    firstTurnInModel.countDown();
+                    if (!releaseFirstTurn.await(10, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("first turn was never released");
+                    }
+                    return "first answer";
+                });
+        when(conversationStore.recordChatTurn(
+                        eq(conversationId), eq(false), eq(userId), anyString(), anyList(), anyString(), anyList()))
+                .thenReturn(Optional.of(UUID.randomUUID()));
+        var caller = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+        String body = "{\"message\":\"test\",\"conversationId\":\"" + conversationId + "\"}";
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            // The worker thread inherits the test thread's context object; bind a fresh one so the
+            // first turn's request lifecycle cannot clear the authentication the test thread relies on.
+            Future<MvcResult> firstTurn = executor.submit(() -> {
+                TestSecurityContextHolder.setContext(new SecurityContextImpl(caller));
+                try {
+                    return mockMvc.perform(post("/v1/mcp/chat")
+                                    .principal(caller)
+                                    .with(csrf())
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(body))
+                            .andReturn();
+                } finally {
+                    TestSecurityContextHolder.clearContext();
+                }
+            });
+            assertThat(firstTurnInModel.await(10, TimeUnit.SECONDS)).isTrue();
+
+            mockMvc.perform(post("/v1/mcp/chat")
+                            .principal(caller)
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isConflict())
+                    .andExpect(header().exists("X-Correlation-Id"))
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.code").value("CONVERSATION_BUSY"))
+                    .andExpect(jsonPath("$.status").value(409))
+                    .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                    .andExpect(jsonPath("$.timestamp").isNotEmpty());
+
+            releaseFirstTurn.countDown();
+            assertThat(firstTurn.get(10, TimeUnit.SECONDS).getResponse().getStatus())
+                    .isEqualTo(200);
+        } finally {
+            releaseFirstTurn.countDown();
+            executor.shutdownNow();
+        }
     }
 
     @Test

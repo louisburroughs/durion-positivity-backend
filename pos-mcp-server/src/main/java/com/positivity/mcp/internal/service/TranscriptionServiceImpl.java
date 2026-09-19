@@ -68,14 +68,18 @@ public class TranscriptionServiceImpl implements TranscriptionService {
         SpeechToTextResult result = client.transcribe(bytes, filename, baseMimeType, effectiveLanguage);
         long latencyMillis = (System.nanoTime() - start) / 1_000_000;
 
-        String text = result.text() == null ? "" : result.text().trim();
-        if (text.isBlank()) {
-            throw new UnintelligibleAudioException("transcription produced no usable text");
-        }
+        // Duration is checked before the blank-transcript check: a clip over the duration limit is
+        // AUDIO_TOO_LARGE (413) regardless of what the provider transcribed, even a blank result for
+        // a too-long clip (e.g. 61s of silence) — the size/duration rejection must win over the
+        // content-quality rejection.
         Double durationSeconds = result.durationSeconds();
         if (durationSeconds != null && durationSeconds > properties.maxDurationSeconds()) {
             throw new AudioTooLargeException("audio duration " + durationSeconds + "s exceeds the maximum of "
                     + properties.maxDurationSeconds() + "s");
+        }
+        String text = result.text() == null ? "" : result.text().trim();
+        if (text.isBlank()) {
+            throw new UnintelligibleAudioException("transcription produced no usable text");
         }
         String responseLanguage = firstNonBlank(result.language(), effectiveLanguage, "und");
 

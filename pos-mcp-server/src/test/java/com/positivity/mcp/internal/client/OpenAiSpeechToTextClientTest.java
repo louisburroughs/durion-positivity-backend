@@ -161,6 +161,14 @@ class OpenAiSpeechToTextClientTest {
                 .isEqualTo("audio.webm");
     }
 
+    @Test
+    @DisplayName("providerFilename: the extension always matches the validated mimeType, even when the "
+            + "original filename's own extension disagrees with it")
+    void providerFilename_extensionMismatchWithMimeType_usesMimeTypeExtension() {
+        assertThat(OpenAiSpeechToTextClient.providerFilename("clip.ogg", "audio/webm"))
+                .isEqualTo("clip.webm");
+    }
+
     // -- error mapping ----------------------------------------------------------------------
 
     @Test

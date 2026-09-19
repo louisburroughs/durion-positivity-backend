@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -329,6 +330,19 @@ class McpConversationControllerTest {
                         .content("{\"role\":\"user\",\"blocks\":[{\"kind\":\"bogus\"}]}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @WithMockUser(authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName("POST .../messages: a null blocks entry returns 400 VALIDATION_ERROR, not 500")
+    void appendMessage_nullBlockEntry_returns400() throws Exception {
+        mockMvc.perform(post(BASE + "/" + CONVERSATION_ID_STR + "/messages")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"user\",\"blocks\":[null],\"content\":\"x\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verifyNoInteractions(conversationService);
     }
 
     @Test

@@ -138,6 +138,22 @@ class McpTranscriptionControllerTest {
 
     @Test
     @WithMockUser(authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName("200: an absent Accept-Language header resolves to Locale.ROOT (\"und\"), not the container "
+            + "default — the request's implicit Locale resolution would otherwise fall back to the server's "
+            + "own default locale rather than an undetermined one")
+    void transcribe_absentAcceptLanguageHeader_resolvesToUndeterminedLocale() throws Exception {
+        when(transcriptionService.transcribe(any(), eq((String) null), any(Locale.class)))
+                .thenReturn(new TranscriptionResponse("hello", "und", null));
+
+        mockMvc.perform(multipart(BASE).file(audioPart()).with(csrf())).andExpect(status().isOk());
+
+        ArgumentCaptor<Locale> localeCaptor = ArgumentCaptor.forClass(Locale.class);
+        verify(transcriptionService).transcribe(any(), eq((String) null), localeCaptor.capture());
+        org.assertj.core.api.Assertions.assertThat(localeCaptor.getValue()).isEqualTo(Locale.ROOT);
+    }
+
+    @Test
+    @WithMockUser(authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("413: AudioTooLargeException maps to AUDIO_TOO_LARGE")
     void transcribe_audioTooLarge_returns413() throws Exception {
         when(transcriptionService.transcribe(any(), any(), any(Locale.class)))

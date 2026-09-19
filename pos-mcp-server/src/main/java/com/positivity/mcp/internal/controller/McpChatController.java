@@ -70,6 +70,9 @@ public class McpChatController {
                     `messageId` is `null` in that case. `messageId` (the persisted assistant message id) is \
                     also `null` if the conversation was deleted or purged in the moment between the turn \
                     starting and finishing — the answer is still returned.
+                    Turns on one persisted conversation are serialized: a second turn sent while one is \
+                    still running on the same `conversationId` answers 409 `CONVERSATION_BUSY`; retry once \
+                    the first has answered.
                     Returns 429 when the caller's chat rate limit is exceeded.
                     """)
     @ApiResponse(responseCode = "200", description = "Chat turn answered")
@@ -80,6 +83,10 @@ public class McpChatController {
     @ApiResponse(
             responseCode = "404",
             description = "conversationId is a UUID not found, or owned by another subject",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "A turn is already running on this conversation (CONVERSATION_BUSY)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "429",
@@ -118,7 +125,7 @@ public class McpChatController {
                     maxLength = 32000,
                     requiredMode = Schema.RequiredMode.REQUIRED)
             @NotBlank
-            @Size(max = 32000)
+            @Size(min = 1, max = 32000)
             @NonNull
             String message,
 
