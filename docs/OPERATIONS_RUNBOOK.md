@@ -1703,5 +1703,5 @@ vendor latency. Full design: `pos-catalog/docs/service-time-sourcing-plan.md`.
   (there is no `durion/docs/OPERATIONS_RUNBOOK.md`; this file is the backend operations runbook)
 - **Alpha accelerated-clock deployment**: [runbooks/accelerated-alpha-deployment.md](runbooks/accelerated-alpha-deployment.md)
 - **Flyway baseline reset**: [runbooks/flyway-baseline-reset.md](runbooks/flyway-baseline-reset.md)
-- **Architecture guide**: [ARCHITECTURE_GUIDE.md](ARCHITECTURE_GUIDE.md)
+- **Architecture guide**: [BACKEND_ARCHITECTURE_GUIDE.md](../durion/docs/architecture/BACKEND_ARCHITECTURE_GUIDE.md)
 - **Development guide**: [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)
