@@ -60,9 +60,12 @@ public class RolePersonaClient implements RolePersonaSource {
             List<RolePersona> personas =
                     response.roles().stream().map(RolePersonaClient::toPersona).toList();
             // A missing timestamp would make snapshot age unreadable, so fall back to receipt time:
-            // slightly optimistic, but bounded by how often the sync runs.
-            return Optional.of(new RolePersonaSnapshotData(
-                    response.generatedAt() == null ? Instant.now(clock) : response.generatedAt(), personas));
+            // slightly optimistic, but bounded by how often the sync runs. Read once (S2637):
+            // re-calling response.generatedAt() in the else branch leaves static analysis unable to
+            // tell the two calls return the same value.
+            Instant generatedAt = response.generatedAt();
+            return Optional.of(
+                    new RolePersonaSnapshotData(generatedAt == null ? Instant.now(clock) : generatedAt, personas));
         } catch (RuntimeException exception) {
             log.warn("Failed to fetch role personas: {}", exception.getMessage());
             return Optional.empty();

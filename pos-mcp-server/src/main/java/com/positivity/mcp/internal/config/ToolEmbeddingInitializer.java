@@ -7,6 +7,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.NonNull;
 import org.postgresql.util.PGobject;
 import org.slf4j.Logger;
@@ -50,7 +51,7 @@ public class ToolEmbeddingInitializer {
     private final EmbeddingModel embeddingModel;
     private final int batchSize;
     /** Counts down when the current backfill finishes; tests wait on it instead of sleeping. */
-    private volatile CountDownLatch completed = new CountDownLatch(1);
+    private final AtomicReference<CountDownLatch> completed = new AtomicReference<>(new CountDownLatch(1));
     /** One backfill at a time: a second trigger while one runs would double-embed the same rows. */
     private final AtomicBoolean running = new AtomicBoolean(false);
     /** Set on context shutdown so a backfill in flight stops at the next batch boundary. */
@@ -114,7 +115,7 @@ public class ToolEmbeddingInitializer {
             return null;
         }
         CountDownLatch latch = new CountDownLatch(1);
-        completed = latch;
+        completed.set(latch);
         return latch;
     }
 
@@ -213,7 +214,7 @@ public class ToolEmbeddingInitializer {
 
     /** Waits for the current backfill to finish; for tests only, never for readiness. */
     boolean awaitCompletion(long timeout, @NonNull TimeUnit unit) throws InterruptedException {
-        return completed.await(timeout, unit);
+        return completed.get().await(timeout, unit);
     }
 
     private static PGobject toVectorPGobject(float[] embedding) {

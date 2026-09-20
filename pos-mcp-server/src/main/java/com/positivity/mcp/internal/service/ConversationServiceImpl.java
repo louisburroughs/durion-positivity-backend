@@ -218,6 +218,10 @@ public class ConversationServiceImpl implements ConversationService {
                         .toList());
     }
 
+    // message.getId() is the JPA-managed primary key of a persisted row (McpMessage.id, column
+    // nullable = false); the Lombok getter carries no nullness annotation, so Sonar cannot see the
+    // DB constraint / pre-assigned-UUID-v7 guarantee and treats it as possibly null (java:S2637).
+    @SuppressWarnings("java:S2637")
     private static @NonNull ConversationMessage toMessage(
             @NonNull McpMessage message, @NonNull List<ChatBlock> blocks) {
         return new ConversationMessage(
