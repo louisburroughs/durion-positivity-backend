@@ -56,10 +56,13 @@ workflow refuses it too.
 Anything a service computes as "now plus N seconds" is N *virtual* seconds, and so lasts `N / scale`
 of real time. JWT lifetimes were the first case to bite: an hour-long access token expired about a
 real second after the login that minted it at scale 2,920, and every persona's next request came
-back 401. `pos-security-service` now multiplies its configured lifetimes by the clock's scale under
-this profile (`pos.security.jwt.clock-scale`, defaulted from `pos.time.accelerated.scale`), so a
-token configured to last an hour lasts an hour of wall time. Nothing needs to be set at dispatch;
-`POS_SECURITY_JWT_CLOCK_SCALE` overrides it if a run wants shorter tokens on purpose.
+back 401. `pos-security-service` now projects its configured lifetimes through the clock
+(`ScaledClock#instantAfter`, which answers what the clock will read after an hour of *real* time),
+so a token configured to last an hour lasts an hour of wall time — before convergence, across it,
+and after it. Nothing needs to be set at dispatch; `POS_SECURITY_JWT_ACCESS_TOKEN_TTL` and
+`POS_SECURITY_JWT_REFRESH_TOKEN_TTL` change the lifetimes themselves if a run wants shorter tokens
+on purpose. Any other wall-clock deadline minted under this profile needs the same treatment, and
+`instantAfter` is where it lives.
 
 Effective-dated bounds are deliberately *not* scaled. A token is still clamped to the end of the
 staffing or role assignment it was minted from (ADR-0061 §4), so personas whose assignment windows

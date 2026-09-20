@@ -530,9 +530,8 @@ committed spec against the controllers' declarations and fails on drift in eithe
 | `EUREKA_SERVER_URL`                 | required     | Eureka service discovery URL          |
 | `SECURITY_SEED_ADMIN_PASSWORD_HASH` | required     | BCrypt hash for the seed admins (`admin.alpha`, `admin.platform`) |
 | `security.lockout.threshold`        | configurable | Failed login threshold before lockout |
-| `pos.security.jwt.access-token-ttl` (`POS_SECURITY_JWT_ACCESS_TOKEN_TTL`) | `PT1H` | Access-token lifetime, as a Duration in wall-clock terms (#2135) |
-| `pos.security.jwt.refresh-token-ttl` (`POS_SECURITY_JWT_REFRESH_TOKEN_TTL`) | `P7D` | Refresh-token lifetime, as a Duration in wall-clock terms (#2135) |
-| `pos.security.jwt.clock-scale` (`POS_SECURITY_JWT_CLOCK_SCALE`) | `1`; `pos.time.accelerated.scale` under the `accelerated` profile | Multiplier applied to both lifetimes. `exp` is minted from the application `Clock`, so under the accelerated profile it inherits the shared `ScaledClock`'s scale and the lifetimes above stay wall-clock durations instead of collapsing to `ttl / scale` real seconds. See "Token lifetimes" below |
+| `pos.security.jwt.access-token-ttl` (`POS_SECURITY_JWT_ACCESS_TOKEN_TTL`) | `PT1H` | Access-token lifetime, as a Duration in wall-clock terms on every profile (#2135) |
+| `pos.security.jwt.refresh-token-ttl` (`POS_SECURITY_JWT_REFRESH_TOKEN_TTL`) | `P7D` | Refresh-token lifetime, as a Duration in wall-clock terms on every profile (#2135) |
 | `pos.security-service.kafka.people-events-topic` | `people.events.v1` | Staffing-assignment facts feeding the assigned-node read model (ADR-0061 §1) |
 | `pos.security-service.kafka.people-manifest-topic` | `people.manifest.v1` | Per-tenant reconciliation manifests for that read model; drift (compared against that tenant's `processed_events` rows) requests a replay on `people-commands-topic` under the manifest's tenant header |
 | `pos.security-service.location-scope.assigned-node-cap` | `8` | Assigned-node count above which `security.location-scope.assigned-nodes.cap-exceeded` fires (WARN + metric, never truncated) |
@@ -544,16 +543,21 @@ committed spec against the controllers' declarations and fails on drift in eithe
 
 `JwtServiceImpl` mints `exp` from the injected `Clock`, which under the `accelerated` profile is the
 shared `ScaledClock` (pos-events, #2065), and the gateway validates `exp` against the same clock
-(#2082). A lifetime is therefore a number of *clock* seconds, and its wall-clock life is
-`ttl / scale`: at scale 2920 an hour-long access token expired about one real second after the login
-that minted it. The `accelerated` profile document in `application.yml` sets
-`pos.security.jwt.clock-scale` to `pos.time.accelerated.scale` (default 1000, the same default
-`AcceleratedTimeProperties` carries), so the minted lifetime is `ttl × scale` clock seconds — `ttl`
-of wall time while the clock is accelerating, and the revocation TTLs in Redis follow it. Set
-`POS_SECURITY_JWT_CLOCK_SCALE` to override the profile's value, or the two `*_TTL` variables to
-change the lifetimes themselves.
+(#2082). Adding a lifetime's worth of seconds to that clock adds *virtual* seconds, so a token's
+real life was `ttl / scale`: at scale 2920 an hour-long access token expired about one real second
+after the login that minted it.
 
-Only the natural lifetimes scale. The ADR-0061 §4 clamps above (end of the earliest contributing
+The lifetimes above are therefore wall-clock durations that `JwtServiceImpl` **projects through the
+clock** — `ScaledClock#instantAfter`, which answers "what will this clock read after an hour of real
+time". Multiplying by the scale instead would be right only while the clock is still accelerating:
+a converging clock ticks at 1× once virtual time reaches wall time, so a multiplied lifetime minted
+after convergence would outlive its intended hour by the scale factor (about 1,000 hours at the
+default), and one minted shortly before convergence would outlive it by whatever part of the hour
+falls on the far side. The projection is exact in all three cases and is plain addition on an
+ordinary clock. The Redis revocation TTLs stay in wall seconds, because Redis expires keys on wall
+time.
+
+Only the natural lifetimes work this way. The ADR-0061 §4 clamps above (end of the earliest contributing
 staffing assignment, earliest end of a contributing role assignment) are clock instants derived from
 effective-dated rows and stay in clock time: a token must never outlive the assignment it was minted
 from, however fast the clock runs. An accelerated run whose personas hold bounded assignments has to

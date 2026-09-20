@@ -1,6 +1,7 @@
 package com.positivity.time;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Objects;
@@ -130,6 +131,45 @@ public final class ScaledClock extends Clock {
             return now;
         }
         return scaled;
+    }
+
+    /**
+     * The instant this clock will report once {@code realDuration} of <em>wall</em> time has
+     * passed, assuming the base clock advances normally.
+     *
+     * <p>This is what a caller needs to express a deadline in wall-clock terms on an accelerated
+     * clock — a token lifetime, a cache expiry, a lease. Multiplying the duration by {@link
+     * #getScale()} is only correct while the clock is still accelerating: a converging clock ticks
+     * at 1x once virtual time reaches wall time, so a multiplied deadline minted after convergence
+     * would outlive its intended wall-clock length by the scale factor, and one minted shortly
+     * before convergence would outlive it by however much of the duration falls on the far side.
+     * Projecting through the clock's own function is exact in all three cases, and on a
+     * non-converging clock it is the multiplication.
+     *
+     * <p>Purely a projection: it reads the base clock but never latches convergence, so asking
+     * about the future cannot change what {@link #instant()} reports now.
+     *
+     * @param realDuration how much wall time passes before the returned instant; must not be
+     *     negative
+     * @return the virtual instant reached then, never before {@link #instant()}
+     * @throws IllegalArgumentException if {@code realDuration} is negative
+     */
+    public Instant instantAfter(Duration realDuration) {
+        Objects.requireNonNull(realDuration, "realDuration");
+        if (realDuration.isNegative()) {
+            throw new IllegalArgumentException("realDuration must not be negative");
+        }
+
+        Instant targetReal = baseClock.instant().plus(realDuration);
+        if (!converge) {
+            return scaledInstant(targetReal);
+        }
+        if (converged.get()) {
+            return targetReal;
+        }
+
+        Instant scaled = scaledInstant(targetReal);
+        return scaled.isBefore(targetReal) ? scaled : targetReal;
     }
 
     private Instant scaledInstant(Instant now) {

@@ -15,6 +15,7 @@ import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantResolver;
+import com.positivity.time.ScaledClock;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jws;
@@ -24,6 +25,7 @@ import io.jsonwebtoken.Jwts;
 import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -84,9 +86,9 @@ public class JwtServiceImpl implements JwtService {
     private final TenantResolver tenantResolver;
 
     /**
-     * Token lifetimes ({@code pos.security.jwt.*}, #2135). Lifetimes are clock seconds, and under
-     * the {@code accelerated} profile the clock is the shared {@code ScaledClock}, so the natural
-     * lifetimes carry that clock's scale; the ADR-0061 §4 clamps below stay in clock time.
+     * Token lifetimes ({@code pos.security.jwt.*}, #2135), as wall-clock durations. See
+     * {@link #expiryAfter(Duration)} for why they are projected through the clock rather than
+     * added to it.
      */
     private final JwtLifetimeProperties jwtLifetimes;
 
@@ -392,7 +394,7 @@ public class JwtServiceImpl implements JwtService {
         }
 
         Instant now = Instant.now(clock);
-        Instant refreshExpiry = now.plusSeconds(jwtLifetimes.refreshTokenSeconds());
+        Instant refreshExpiry = expiryAfter(jwtLifetimes.refreshTokenTtl());
 
         String accessJti = UUIDv7Generator.generate().toString();
         String refreshJti = UUIDv7Generator.generate().toString();
@@ -422,12 +424,12 @@ public class JwtServiceImpl implements JwtService {
         Instant accessExpiry = reach.clampedExpiry();
 
         // ADR-0061 §4 amendment (2026-09-09, #1914 phase 3): exp is the minimum of every
-        // applicable bound — the natural lifetime (pos.security.jwt.access-token-ttl, scaled by
-        // the clock's scale under the accelerated profile, #2135), the location-reach clamp
-        // above, and now the earliest end of a role assignment perm_bits was built from — floored
-        // at now so a stale or racing bound can never produce an already-expired token. Only the
-        // natural lifetime scales: the two clamps are clock instants from effective-dated rows and
-        // a token must not outlive its assignment however fast the clock runs.
+        // applicable bound — the natural lifetime (pos.security.jwt.access-token-ttl, projected
+        // through the clock, #2135), the location-reach clamp above, and now the earliest end of a
+        // role assignment perm_bits was built from — floored at now so a stale or racing bound can
+        // never produce an already-expired token. Only the natural lifetime is a wall-clock
+        // duration: the two clamps are clock instants from effective-dated rows, and a token must
+        // not outlive its assignment however fast the clock runs.
         if (grantsExpireAt != null && grantsExpireAt.isBefore(accessExpiry)) {
             accessExpiry = grantsExpireAt;
         }
@@ -739,7 +741,7 @@ public class JwtServiceImpl implements JwtService {
                     jwtParser().parseSignedClaims(jwtToken.getToken()).getPayload();
             String oldAccessJti = oldAccessClaims.getId();
             if (oldAccessJti != null) {
-                tokenRevocationManager.revokeToken(oldAccessJti, jwtLifetimes.accessTokenSeconds());
+                tokenRevocationManager.revokeToken(oldAccessJti, jwtLifetimes.accessTokenRevocationSeconds());
             }
         } catch (JwtException e) {
             log.debug(
@@ -752,7 +754,7 @@ public class JwtServiceImpl implements JwtService {
                     jwtParser().parseSignedClaims(refreshToken).getPayload();
             String oldRefreshJti = oldRefreshClaims.getId();
             if (oldRefreshJti != null) {
-                tokenRevocationManager.revokeToken(oldRefreshJti, jwtLifetimes.refreshTokenSeconds());
+                tokenRevocationManager.revokeToken(oldRefreshJti, jwtLifetimes.refreshTokenRevocationSeconds());
             }
         } catch (JwtException e) {
             log.debug(
@@ -860,8 +862,25 @@ public class JwtServiceImpl implements JwtService {
      */
     private record LocationReach(List<UUID> nodes, Instant clampedExpiry) {}
 
+    /**
+     * The instant a lifetime of {@code ttl} <em>wall</em> time ends at, on the clock this service
+     * mints {@code exp} from (#2135).
+     *
+     * <p>Under the {@code accelerated} profile that clock is the shared converging
+     * {@code ScaledClock}, where adding {@code ttl.getSeconds()} would add virtual seconds and give
+     * the token {@code ttl / scale} of real life — about one second for an hour-long token at scale
+     * 2920, which is the defect this fixes. Multiplying by the scale instead is wrong in the other
+     * direction once the clock converges and ticks at 1x, so the clock projects the duration
+     * itself. On any ordinary {@link Clock} the projection is plain addition.
+     */
+    private Instant expiryAfter(Duration ttl) {
+        return clock instanceof ScaledClock scaled
+                ? scaled.instantAfter(ttl)
+                : clock.instant().plus(ttl);
+    }
+
     private LocationReach resolveLocationReach(LocationScopeBits scopeBits, @Nullable UUID personId, Instant now) {
-        Instant accessExpiry = now.plusSeconds(jwtLifetimes.accessTokenSeconds());
+        Instant accessExpiry = expiryAfter(jwtLifetimes.accessTokenTtl());
         if (scopeBits.isEmpty()) {
             // No location-scoped grant: no projection lookup, no clamp — the common case is
             // byte-for-byte what it was before ADR-0061, apart from two empty bitset claims.

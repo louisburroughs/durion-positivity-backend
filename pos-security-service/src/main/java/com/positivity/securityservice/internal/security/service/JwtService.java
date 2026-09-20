@@ -18,8 +18,8 @@ import org.jspecify.annotations.Nullable;
  * - Token revocation: Cached in Redis with TTL matching expiration
  * - Access token lifetime: {@code pos.security.jwt.access-token-ttl}, 1 hour by default
  * - Refresh token lifetime: {@code pos.security.jwt.refresh-token-ttl}, 7 days by default
- * - Both are clock seconds; under the {@code accelerated} profile they carry the clock's scale
- * ({@code pos.security.jwt.clock-scale}, #2135) so they stay wall-clock durations
+ * - Both are wall-clock durations, projected through the application clock rather than added to
+ * it, so they hold under the {@code accelerated} profile too (#2135)
  * - JWT ID (JTI): Unique identifier for token revocation tracking
  *
  * **Implementation Notes:**

@@ -7,30 +7,26 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 /**
  * Token lifetimes bound from {@code pos.security.jwt.*} (#2135).
  *
- * <p>{@code exp} is minted from the application {@link java.time.Clock}, so a lifetime is a number
- * of <em>clock</em> seconds. Under the {@code accelerated} profile that clock is the shared
- * {@code ScaledClock}, and a token's wall-clock life is {@code ttl / scale}: at scale 2920 an
- * hour-long access token expired about one real second after the login that minted it. {@code
- * clockScale} is the multiplier that keeps the configured durations meaningful in wall-clock terms:
- * the minted lifetime is {@code ttl × clockScale} clock seconds, which is {@code ttl} of wall time
- * while the clock is accelerating. The {@code accelerated} profile sets it from {@code
- * pos.time.accelerated.scale}; everywhere else it is 1 and the lifetimes are plain wall time.
+ * <p>Both are <em>wall-clock</em> durations. That distinction matters because {@code exp} is minted
+ * from the application {@link java.time.Clock}, which under the {@code accelerated} profile is the
+ * shared {@code ScaledClock}: adding a lifetime's worth of seconds to it adds <em>virtual</em>
+ * seconds, and an hour-long token lasted {@code 3600 / scale} of real time — about one second at
+ * scale 2920. {@code JwtServiceImpl} therefore projects a lifetime through the clock
+ * ({@code ScaledClock#instantAfter}) rather than adding its seconds, so the configured hour is an
+ * hour of real time whatever the clock is doing.
  *
- * <p>Only the natural lifetimes scale. The ADR-0061 §4 clamps (end of the earliest contributing
- * staffing assignment, earliest end of a contributing role assignment) are clock instants derived
- * from effective-dated rows and are compared in clock time on purpose: a token must never outlive
- * the assignment it was minted from, however fast the clock runs.
+ * <p>Only the natural lifetimes are expressed this way. The ADR-0061 §4 clamps (end of the earliest
+ * contributing staffing assignment, earliest end of a contributing role assignment) are clock
+ * instants derived from effective-dated rows and are compared in clock time on purpose: a token
+ * must never outlive the assignment it was minted from, however fast the clock runs.
  *
- * @param accessTokenTtl access-token lifetime before scaling; default one hour
- * @param refreshTokenTtl refresh-token lifetime before scaling; default seven days
- * @param clockScale how many clock seconds each wall-clock second of a lifetime is worth; 1 on a
- *     wall clock, the accelerated clock's scale under the {@code accelerated} profile
+ * @param accessTokenTtl how long an access token lives in wall-clock terms; default one hour
+ * @param refreshTokenTtl how long a refresh token lives in wall-clock terms; default seven days
  */
 @ConfigurationProperties(prefix = "pos.security.jwt")
 public record JwtLifetimeProperties(
         @DefaultValue("PT1H") Duration accessTokenTtl,
-        @DefaultValue("P7D") Duration refreshTokenTtl,
-        @DefaultValue("1") double clockScale) {
+        @DefaultValue("P7D") Duration refreshTokenTtl) {
 
     // (d) defensive/internal: these guard `pos.security.jwt.*` property binding at Spring context
     // startup (@ConfigurationProperties), never a value supplied on an HTTP request, so there is
@@ -43,29 +39,30 @@ public record JwtLifetimeProperties(
         if (refreshTokenTtl == null || refreshTokenTtl.isNegative() || refreshTokenTtl.isZero()) {
             throw new IllegalArgumentException("pos.security.jwt.refresh-token-ttl must be positive");
         }
-        if (clockScale <= 0.0 || Double.isNaN(clockScale) || Double.isInfinite(clockScale)) {
-            throw new IllegalArgumentException("pos.security.jwt.clock-scale must be a finite positive value");
-        }
     }
 
     /** The lifetimes every deployment gets without configuring anything: one hour and seven days. */
     public static JwtLifetimeProperties defaults() {
-        return new JwtLifetimeProperties(Duration.ofHours(1), Duration.ofDays(7), 1.0);
+        return new JwtLifetimeProperties(Duration.ofHours(1), Duration.ofDays(7));
     }
 
-    /** Access-token lifetime in clock seconds: {@code accessTokenTtl × clockScale}, at least one. */
-    public long accessTokenSeconds() {
-        return scaled(accessTokenTtl);
+    /**
+     * Redis TTL, in seconds, for a revoked access token's JTI. Redis expires keys on wall time, so
+     * this is the wall-clock lifetime and not a clock-projected instant — an upper bound on what is
+     * left of the revoked token's life, which is what the revocation list needs.
+     */
+    public long accessTokenRevocationSeconds() {
+        return atLeastOneSecond(accessTokenTtl);
     }
 
-    /** Refresh-token lifetime in clock seconds: {@code refreshTokenTtl × clockScale}, at least one. */
-    public long refreshTokenSeconds() {
-        return scaled(refreshTokenTtl);
+    /** Redis TTL, in seconds, for a revoked refresh token's JTI. See {@link #accessTokenRevocationSeconds()}. */
+    public long refreshTokenRevocationSeconds() {
+        return atLeastOneSecond(refreshTokenTtl);
     }
 
-    private long scaled(Duration ttl) {
-        // Floored at one second so a fractional scale can never round a lifetime down to zero, which
-        // TokenRevocationManager rejects and which would mint an already-expired token.
-        return Math.max(1L, Math.round(ttl.getSeconds() * clockScale));
+    private static long atLeastOneSecond(Duration ttl) {
+        // TokenRevocationManager rejects a non-positive TTL, and a sub-second lifetime truncates
+        // to zero seconds.
+        return Math.max(1L, ttl.toSeconds());
     }
 }
