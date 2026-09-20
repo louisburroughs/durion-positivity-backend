@@ -194,7 +194,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds workorder:approval_config:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds workorder:approval_config:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -413,7 +413,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds workorder:dashboard:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds workorder:dashboard:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - workorder:dashboard:view
@@ -575,7 +575,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds workorder:labor:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds workorder:labor:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - workorder:labor:view
@@ -913,7 +913,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks workorder:wip:view_all_locations for multiLocation=true (ApiError.code FORBIDDEN), or Caller holds workorder:wip:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller lacks workorder:wip:view_all_locations for multiLocation=true (ApiError.code FORBIDDEN), or Caller holds workorder:wip:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - workorder:wip:view
@@ -958,7 +958,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds workorder:wip:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds workorder:wip:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -1847,7 +1847,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks workorder:estimate:create (ApiError.code FORBIDDEN), or Caller holds workorder:estimate:create but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller lacks workorder:estimate:create (ApiError.code FORBIDDEN), or Caller holds workorder:estimate:create but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
       security:
       - bearerAuth: []
       summary: Create Draft Estimate From Appointment
@@ -1894,7 +1894,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - workorder:estimate:view
@@ -1942,7 +1942,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - workorder:estimate:view
@@ -2029,7 +2029,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -2563,7 +2563,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -2857,7 +2857,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -2932,7 +2932,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Insufficient permissions (ApiError.code FORBIDDEN), or Caller holds workorder:labor_intelligence:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Insufficient permissions (ApiError.code FORBIDDEN), or Caller holds workorder:labor_intelligence:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -3482,7 +3482,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds timekeeping:work_session:create but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds timekeeping:work_session:create but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - timekeeping:work_session:create
@@ -4775,7 +4775,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds workorder:operationalContext:override but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds workorder:operationalContext:override but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:

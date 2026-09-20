@@ -87,7 +87,7 @@ pos:
       catalog-events-topic: ${POS_MARKETING_CATALOG_EVENTS_TOPIC:catalog.events.v1}
       catalog-events-consumer-group: ${POS_MARKETING_CATALOG_EVENTS_CONSUMER_GROUP:pos-marketing-catalog-events}
       # Delivery/bounce/complaint/open/click reports from the shared platform sender
-      # (FI-2, docs/PLATFORM_SENDER_CONTRACT.md).
+      # (FI-2, durion/domains/positivity/PLATFORM_SENDER_CONTRACT.md).
       sender-outcomes-topic: ${POS_MARKETING_SENDER_OUTCOMES_TOPIC:sender.outcomes.v1}
       sender-outcomes-consumer-group: ${POS_MARKETING_SENDER_OUTCOMES_CONSUMER_GROUP:pos-marketing-sender-outcomes}
       # Outbound commands to pos-customer: asynchronous segment-membership resolution

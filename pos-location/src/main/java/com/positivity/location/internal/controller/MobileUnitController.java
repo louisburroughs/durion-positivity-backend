@@ -250,7 +250,8 @@ public class MobileUnitController {
                     @PathVariable
                     UUID id) {
         // Thrown rather than returned as a bare ResponseEntity.notFound(): every non-2xx response
-        // must carry the ApiError envelope (docs/ERROR_ENVELOPE.md), and an empty body has no code,
+        // must carry the ApiError envelope (../durion/docs/architecture/api/ERROR_ENVELOPE.md), and an empty body has
+        // no code,
         // message or correlationId for the caller or the logs to key on.
         if (!mobileUnitService.deleteMobileUnit(id)) {
             throw new ResourceNotFoundException("Mobile unit not found");

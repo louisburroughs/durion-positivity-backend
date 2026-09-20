@@ -473,6 +473,79 @@ never everything). Reach is expanded once per request by `LocationHierarchyServi
 | `getJobTimeTotals` | `workorder:labor:view` | controller, passing the reach to `WorkexecTimeTrackingService` |
 | `listLaborIntelligence` | `workorder:labor_intelligence:view` | controller, passing the reach to `LaborIntelligenceService`; `ROLE_ADMIN` without the permission is unrestricted |
 
+## Error codes
+
+Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
+and the platform-wide fallback codes emitted by `pos-web-common` and `pos-security-common` are in
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md).
+The table below is this module's own codes; any endpoint here may additionally return a platform
+fallback code. Add a row in the same pull request as the controller or advice that mints the code.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `INVALID_ARGUMENT` | 400 | Field-level or request-shape validation failure (`WorkorderRequestValidationException`) |
+| `VALIDATION_FAILED` | 400 | Bean-validation failure, with `fieldErrors` |
+| `VALIDATION_ERROR` | 400 | An estimate request the controller rejects before the service runs; also the generic code for any 400 `ResponseStatusException` whose reason is free text |
+| `WORKEXEC_INVALID_REQUEST` | 400 | A time-tracking request is malformed: bad timezone, `endDate` before `startDate`, missing `Idempotency-Key`, or no UUID user id on the caller |
+| `LABOR_SESSION_INVALID_STATE` | 400 | The labor session's state does not allow the operation |
+| `ESTIMATE_INVALID_STATE` | 400 | The estimate's status does not allow the operation |
+| `CHANGE_REQUEST_INVALID_STATE` | 400 | The change request's status does not allow the operation |
+| `WORKORDER_ITEM_INVALID_STATE` | 400 | The workorder item's status does not allow the operation |
+| `FORBIDDEN` | 403 | Caller lacks required workorder permissions |
+| `NOT_FOUND` | 404 | Workorder does not exist (also used generically by a few older endpoints, and for any 404 `ResponseStatusException` whose reason is free text) |
+| `ESTIMATE_NOT_FOUND` | 404 | Estimate does not exist, including when named by an estimate-to-workorder promotion |
+| `ESTIMATE_ITEM_NOT_FOUND` | 404 | Line item does not exist on the named estimate |
+| `CHANGE_REQUEST_NOT_FOUND` | 404 | Change request does not exist |
+| `SERVICE_LINE_NOT_FOUND` | 404 | Workorder service line does not exist, or does not belong to the named workorder |
+| `PART_NOT_FOUND` | 404 | Workorder part line does not exist, or does not belong to the named workorder |
+| `APPROVAL_CONFIGURATION_NOT_FOUND` | 404 | Approval configuration does not exist, or none applies to the location and customer |
+| `LABOR_ENTRY_NOT_FOUND` | 404 | Labor entry does not exist |
+| `TECHNICIAN_ASSIGNMENT_NOT_FOUND` | 404 | Technician assignment does not exist |
+| `FLEET_AUTHORIZATION_NOT_FOUND` | 404 | The workorder has no fleet authorization record |
+| `FLEET_AUTHORIZATION_NOT_REQUIRED` | 404 | The workorder does not require fleet authorization, so there is nothing to resolve |
+| `WORK_SESSION_NOT_FOUND` | 404 | Work session does not exist |
+| `BREAK_SEGMENT_NOT_FOUND` | 404 | Break segment does not exist |
+| `TRAVEL_SEGMENT_NOT_FOUND` | 404 | Travel segment does not exist |
+| `SUBSTITUTE_LINK_NOT_FOUND` | 404 | Part-substitution link does not exist |
+| `CONFLICT` | 409 | Generic stateful collision: invalid lifecycle transition, a caller-supplied id that does not match the resource it targets, an operation that would exceed a quantity the resource's current state actually has available, or a work-session overlap, state or lock violation (`WorkorderResourceConflictException`, `IllegalStateException`, the work-session exceptions); also the generic code for any 409 `ResponseStatusException` whose reason is free text |
+| `INVALID_STATE` | 409 | Time tracking: the workorder or its item is not in a state that accepts the timer operation; promotion: the estimate's state does not allow promotion |
+| `WORKEXEC_CONFLICT_WORKORDER_STATE` | 409 | Time tracking refused because of the workorder's status |
+| `TIMER_ALREADY_ACTIVE` | 409 | The technician already has an active timer |
+| `NO_ACTIVE_TIMER` | 409 | There is no active timer to stop |
+| `TRAVEL_SEGMENT_CONFLICT` | 409 | An active travel segment already exists for the assignment |
+| `DUPLICATE_SUBSTITUTE_LINK` | 409 | A substitute-part link already exists for this pair |
+| `STALE_SUBSTITUTE_LINK_VERSION` | 409 | Optimistic-lock version mismatch on a substitute link |
+| `CUSTOMER_APPROVAL_INVALID` | 409 | Workorder claims an approval its own state does not back |
+| `CUSTOMER_REQUIREMENTS_NOT_MET` | 409 | The customer-requirements verdict is known and negative, so the workorder cannot be created; `referenceId` is the customer id and `nextAction` says what to fix |
+| `INSUFFICIENT_PART_AVAILABILITY` | 409 | Requested part quantity exceeds current owned stock (guided, with `nextAction`) |
+| `RESOURCE_OCCUPIED` | 409 | The service position (bay) is occupied (guided, with `nextAction`) |
+| `TECHNICIAN_ALREADY_ASSIGNED` | 409 | The technician is already assigned to this workorder (guided, with `nextAction`) |
+| `TECHNICIAN_NOT_ASSIGNED` | 409 | A reassign or release was asked for on a workorder that has no current technician (guided, with `nextAction`) |
+| `WORKORDER_CLOSED` | 409 | A closed (COMPLETED or CANCELLED) workorder cannot have its service position or technician changed |
+| `ALREADY_PROMOTED` | 409 | The estimate was already promoted; `referenceId` is the existing workorder id |
+| `APPROVAL_EXPIRED` | 409 | The estimate's customer approval has expired, so it cannot be promoted |
+| `APPROVAL_INVALID` | 409 | The estimate's approval is not in APPROVED status |
+| `APPROVAL_NOT_FOUND` | 409 | The estimate has no approval record to promote from |
+| `NO_APPROVED_ITEMS` | 409 | The estimate has no approved items to promote |
+| `PURCHASE_ORDER_REQUIRED` | 422 | Commercial customer's billing rules require a purchase order that was not supplied |
+| `ESTIMATE_INCOMPLETE` | 422 | A DRAFT estimate was submitted for approval with no customer, no vehicle, no line items, or uncalculated totals (`EstimateIncompleteException`) |
+| `FRACTIONAL_QUANTITY_NOT_ALLOWED` | 422 | Quantity is not a whole number for a product the catalog declares indivisible |
+| `UOM_CONVERSION_UNDEFINED` | 422 | `uomCode` names no conversion row for the referenced product |
+| `SERVICE_POSITION_INVALID` | 422 | The named bay or mobile unit is unknown to the location replicas, belongs to a different site than the workorder, or is otherwise not one this workorder can be placed on |
+| `SERVICE_POSITION_INACTIVE` | 422 | The named bay or mobile unit is one pos-location has not marked active |
+| `TECHNICIAN_NOT_FOUND` | 422 | The technician named on an assignment is unknown to the `ext_person` replica |
+| `TECHNICIAN_NOT_STAFFED_AT_SITE` | 422 | The technician is not staffed at the workorder's site |
+| `UNPROCESSABLE_CONTENT` | 422 | Generic code for a 422 `ResponseStatusException` whose reason is free text |
+| `PROMOTION_IDEMPOTENCY_INCONSISTENT` | 500 | A recorded promotion idempotency key resolves to no workorder (server defect, correlated) |
+| `INTERNAL_ERROR` | 500 | An unexpected failure the controller reports as such, and the code every 5xx `ResponseStatusException` with a free-text reason collapses to — including the pick and invoice queueing 503s, which do not reach the wire as 503 |
+| `DOCUMENT_SERVICE_UNAVAILABLE` | 502 | Generating the estimate PDF failed |
+| `CUSTOMER_REQUIREMENTS_UNAVAILABLE` | 503 | The customer-requirements verdict has not replicated yet; retry after the `Retry-After` header |
+| `REQUEST_REJECTED` | varies | Generic code for a `ResponseStatusException` whose reason is free text and whose status is none of 400, 403, 404, 409 or 422 |
+
+A `ResponseStatusException` whose reason is a machine code (`new ResponseStatusException(NOT_FOUND,
+"TECHNICIAN_ASSIGNMENT_NOT_FOUND")`) answers that code under its own status; a free-text reason is
+never reflected and answers the generic code for its status instead (#1720).
+
 ## Configuration
 
 | Property                       | Default                    | Description                      |

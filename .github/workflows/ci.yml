@@ -100,7 +100,7 @@ jobs:
           echo "has-changes=true" >> "$GITHUB_OUTPUT"
 
   build-test:
-    # One job, three reactor invocations (BACKEND_BUILD_SPEC.md §4.2/§4.3, adapted):
+    # One job, three reactor invocations (docs/DEVELOPMENT_GUIDE.md, "CI Build Invariants"):
     #
     #  1. install -DskipTests        — full reactor, ~2 min warm. Needed because
     #     Maven's -amd includes dependents of the selection but NOT the dependents'
@@ -362,7 +362,7 @@ jobs:
         # how pos-image and pos-supplier reached main below their floors. haltOnFailure is
         # off here so the numbers are still logged for information while the binding
         # verdicts come from the two unit-only measurements: the PR step above and the
-        # nightly ratchet job. See docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.2.
+        # nightly ratchet job. See ../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.2.
         run: |
           ./mvnw ${{ steps.selection.outputs.args }} \
             -DskipTests=false verify \
@@ -944,7 +944,7 @@ jobs:
       # derived from a `-DskipITs` run, because that is what the build step above
       # runs. Floors derived from an IT-inclusive measurement describe coverage
       # this job cannot see, which silently eats the cushion and leaves modules
-      # failing on run-to-run noise. See docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1.
+      # failing on run-to-run noise. See ../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1.
       - name: Enforce the coverage ratchet across every module
         if: always()
         run: |
@@ -982,7 +982,7 @@ jobs:
             echo "Modules: $(paste -sd, "$RUNNER_TEMP/coverage-modules.txt" | sed 's/,/, /g')"
             echo
             echo "Floors live in each module's pom.xml (jacoco.line.min / jacoco.branch.min)."
-            echo "See docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6 for how they are set."
+            echo "See ../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6 for how they are set."
           } >> "$GITHUB_STEP_SUMMARY"
 
           while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/coverage-violations.txt"

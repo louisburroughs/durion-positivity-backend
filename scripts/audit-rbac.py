@@ -18,7 +18,7 @@ Cross-references five sources of truth about the authorization model:
   E. Catalog   -- PermissionCode enum (permanent JWT bit indexes)
   F. Location scope -- every controller operation whose parameter list carries
                   a caller-supplied `locationId` (the parameter-list parser from
-                  docs/location-scope-effective-dating-spike-2026-09.md section 7),
+                  durion/domains/security/location-scope-effective-dating-spike-2026-09.md section 7),
                   cross-checked against the module's recorded decision in
                   pos-*/location-scope.yaml (shape gate | narrow | unscoped)
   G. Scope alternates -- every location-scope call (LocationScope /
@@ -57,7 +57,7 @@ Run from the repo root; no build, no database:
   python3 scripts/audit-rbac.py [output.json]
 
 CI gate mode -- fail on NEW authorization drift, tolerate the documented
-backlog (see docs/rbac-permission-role-audit-2026-08.md §7 task 7):
+backlog (see durion/domains/security/rbac-permission-role-audit-2026-08.md §7 task 7):
 
   python3 scripts/audit-rbac.py --check [--baseline PATH]
 
@@ -99,7 +99,7 @@ permissions passed as arguments into a scope-reaching call count as named, which
 is how the forwarding helpers (requireInScope, requireScopeOnStoredLocation)
 are covered. Background: #1890, #1889, #1887.
 
-Known limitations (see docs/rbac-permission-role-audit-2026-08.md):
+Known limitations (see durion/domains/security/rbac-permission-role-audit-2026-08.md):
   - x-required-permissions alternates are treated as OR (mirrors
     hasAnyAuthority); complex and() expressions are not modelled.
   - Dynamically constructed permission strings (e.g. "people:timeEntry:" +
@@ -389,7 +389,7 @@ for m in re.finditer(r'(\w+)\((\d+),\s*"(' + PERM_RE + r')"\)', pc_path.read_tex
 # ---- F. location-scope decisions (ADR-0061, #1872) ---------------------------
 # Which operations take a caller-supplied locationId is decided by parsing each
 # mapping method's PARAMETER LIST (balanced parens after the method name), the
-# same parser as docs/location-scope-effective-dating-spike-2026-09.md section 7
+# same parser as durion/domains/security/location-scope-effective-dating-spike-2026-09.md section 7
 # -- grepping annotations under-reported (#1375). Bodies are comment-stripped so
 # a javadoc mentioning locationId cannot count. Note the parameter list includes
 # parameter annotations, so a @RequestBody whose example/description names
@@ -1076,7 +1076,7 @@ for category, (items, what) in location_gated.items():
         for item in items:
             print(f"  - {item}")
 
-print("\n-- informational only, not gated (see docs/rbac-permission-role-audit-2026-08.md §5) --")
+print("\n-- informational only, not gated (see durion/domains/security/rbac-permission-role-audit-2026-08.md §5) --")
 print(f"  required_unregistered: {len(flag_required_unregistered)}")
 print(f"  catalog_dead: {len(flag_catalog_dead)}")
 print("  location_scope_summary (operations taking a locationId / decided; gate / narrow / unscoped):")
@@ -1092,7 +1092,7 @@ if failed:
     print(f"Fix the drift, or add/remove a baseline entry with a reason: {baseline_path}")
     print(f"Location-scope codes are never baselined: record the decision in <module>/location-scope.yaml "
           f"(docs/OPERATIONS_RUNBOOK.md, \"Location-scope decisions\").")
-    print(f"Background: docs/rbac-permission-role-audit-2026-08.md (§7, task 7); ADR-0061 / #1872")
+    print(f"Background: durion/domains/security/rbac-permission-role-audit-2026-08.md (§7, task 7); ADR-0061 / #1872")
     sys.exit(1)
 
 print(f"\nOK: no new authorization drift (baseline: {sum(len(baseline.get(c, {})) for c in gated)} accepted "

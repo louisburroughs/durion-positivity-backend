@@ -1,15 +1,32 @@
+---
+type: Policy
+title: Data Seed Strategy
+description: Governs which datasets may enter through Flyway and which must enter through the owning service's API, and the tiered pipeline that keeps events, outboxes and ext_* replicas consistent with seeded data.
+status: current
+---
+
 # Data Seed Strategy
 
-**Status:** Proposed (2026-08-26)
+**Status:** Adopted and substantially executed. Proposed 2026-08-26; the tier 2 conversion ran
+through #1554, #1575 and #1968 and the classification rule is now enforced in CI by
+`scripts/check-flyway-hygiene.sh` against `scripts/flyway-seed-baseline.txt`. Residual work is
+tracked in §5.
 **Supersedes:** the implicit "seed everything via Flyway `R__seed_*` migrations" practice
 **Related:** ADR-0044 (event-only domain walls), `docs/OPERATIONS_RUNBOOK.md` ("Replica seeding
-and drift repair"), `docs/ARCHITECTURE_GUIDE.md` (event versioning table)
+and drift repair"), `../durion/docs/architecture/BACKEND_ARCHITECTURE_GUIDE.md` (event versioning table)
 
-## 1. Problem
+## 1. Problem (as it stood in 2026-08)
 
-Today ~10,700 lines of SQL across 22 `R__seed_*.sql` repeatable Flyway migrations insert both
-reference data and demo/operational data (customers, people, vehicles, mechanics, timekeeping
-rows) directly into service schemas. This is broken in three independent ways:
+> This section is history. It records the state that motivated the strategy, not the state of the
+> repo. Current state: **18 `R__seed_*.sql` files totalling ~5,760 lines**, all classified in
+> `scripts/flyway-seed-baseline.txt`, and **no `R__seed_*operational*` file remains**. Re-derive
+> with `find . -name 'R__seed_*.sql' -not -path '*/target/*' | wc -l`.
+
+At the time this strategy was written, ~10,700 lines of SQL across 22 `R__seed_*.sql` repeatable
+Flyway migrations inserted both reference data and demo/operational data (customers, people,
+vehicles, mechanics, timekeeping rows) directly into service schemas. That was broken in three
+independent ways, and the three arguments below remain the *reason the rule in §2 exists* — they
+apply to any new seed file someone proposes today:
 
 1. **Events never fire.** A Flyway `INSERT` bypasses the application layer entirely: no
    `@EmitEvent` audit event reaches `pos-event-receiver`, no outbox row is written, and no fact
@@ -22,15 +39,15 @@ rows) directly into service schemas. This is broken in three independent ways:
    reports green precisely because the data skipped the channel it guards.
 
 2. **Wrong environment scope.** Repeatable migrations run wherever Flyway runs. The demo data
-   (Charlotte-metro customers, fleet operators, mechanics) is only appropriate for **alpha**,
-   but nothing gates it: a prod bootstrap would apply the same `R__seed_*_operational_*` files.
-   Conversely, the data *cannot* "propagate" to later environments in any meaningful sense —
+   (Charlotte-metro customers, fleet operators, mechanics) was only appropriate for **alpha**,
+   but nothing gated it: a prod bootstrap would have applied the same `R__seed_*_operational_*`
+   files. Conversely, the data *cannot* "propagate" to later environments in any meaningful sense —
    later environments must be populated by real usage and real imports, not by SQL fixtures.
 
-3. **Hand-maintained cross-service consistency.** Because direct SQL can't ask another service
-   for an ID, seed files coordinate identity through reserved UUID namespaces
-   (`01960020-*` … `01960029-*`) that must line up across pos-customer, pos-people,
-   pos-people-contact, etc. This is exactly the cross-service foreign-key coupling the
+3. **Hand-maintained cross-service consistency.** Because direct SQL cannot ask another service
+   for an ID, seed files coordinated identity through reserved UUID namespaces
+   (`01960020-*` … `01960029-*`) that had to line up across pos-customer, pos-people,
+   pos-people-contact, etc. That was exactly the cross-service foreign-key coupling the
    architecture forbids, reintroduced through fixtures (see the accumulated
    `scripts/fix_uuids*.py` one-offs for the maintenance cost).
 
@@ -169,6 +186,28 @@ replicas.
 | pos-shop-manager `R__seed_shop_manager_mechanics.sql` | 2 | **Converted.** Mechanic rows are projected from the wired people.events.v1 feed; the skills became credentials owned by pos-people (`scripts/fixtures/seed/alpha/people/credentials.csv` → `POST /v1/people/credentials/bulk-ingest`, CAP-328), which pos-shop-manager reads from its `ext_person_credential` replica. `mechanic_skill` and `certification` are dropped (V9). |
 | pos-mcp-server `V18`, `V34` config seeds | 1 | Keep |
 
+### Seed files added after this table was written
+
+These postdate the original disposition pass. Each was classified at the time it was added, which is
+what `scripts/flyway-seed-baseline.txt` now requires of every new seed file.
+
+| File | Tier | Why it qualifies |
+|---|---|---|
+| pos-location `R__seed_location_2_bay_specialty.sql` | 1 | Bay specialty vocabulary — service-private reference data, environment-invariant, published on no topic |
+| pos-people `R__seed_people_2_skill_registry.sql` | 1 | Replicated into pos-catalog as `ext_skill`, which rule (b) would normally forbid. It stays tier 1 only because `SkillRegistryFactPublisher` republishes every row on each `ApplicationReadyEvent`, so no consumer is ever starved by the seed path (CAP-329 1/3). Do not treat this as precedent without the same republish guarantee. |
+| pos-shop-manager `R__seed_shop_manager_1_conflict_rules.sql` | 1 | Scheduling conflict rules — service-private configuration |
+| pos-security-service `R__seed_tenant_template.sql` | 1 | Platform-tenant role template copied on `tenant.created` provisioning (ADR-0062 WS2b); reference data a rebuilt database needs to be provisionable at all |
+
+`scripts/flyway-seed-baseline.txt` is the authoritative classification — this table explains, it does
+not decide. Where the two disagree, the baseline file is correct and this table needs updating.
+
+**Known open discrepancy.** The catalog row above records files 1 (`R__seed_reference_catalog.sql`)
+and 5 (`R__seed_reference_catalog_5_uom.sql`) as "reclassified tier 1 and kept", but the baseline
+file still lists both as `tier2`, alongside file 6 (`R__seed_reference_catalog_6_labor_guide.sql`).
+The hygiene check therefore reports three tier 2 files pending conversion when the stated intent is
+one. Either the reclassification never reached the baseline, or it was reconsidered; resolve it in
+`scripts/flyway-seed-baseline.txt` and then correct whichever of these two statements is wrong.
+
 ## 5. Migration plan
 
 1. **Freeze.** No new rows land in `R__seed_*operational*` files; new demo data starts life as
@@ -190,9 +229,19 @@ replicas.
    pipeline, then verify: owner row counts vs. `ext_*` replica counts, `replica_drift_total`
    flat, expected event volume visible in pos-event-receiver. This is the acceptance test that
    the events actually fired.
-5. **Guard.** Extend `scripts/check-flyway-hygiene.sh` to fail the build when a file matching
-   `R__seed_*operational*` (or inserting into a known replicated table) appears under
-   `db/migration/` — the classification rule in §2, enforced.
+5. **Guard. — DONE, and stricter than specified.** `scripts/check-flyway-hygiene.sh` does not
+   pattern-match on `operational`; it enforces an allowlist. Every `R__seed_*.sql` under any
+   module's `db/migration/` must appear in `scripts/flyway-seed-baseline.txt` with a tier, or the
+   build fails with a message pointing back at §2. A stale entry — a listed file that no longer
+   exists — also fails, so the baseline cannot drift. Tier 2 entries are counted and reported as a
+   conversion backlog, and the file's own header forbids adding new ones. Net effect: a new seed
+   file of any name is a deliberate, reviewed classification decision, which is what the
+   `operational` pattern was only approximating.
+
+   *Residual gap:* the check verifies classification, not content — it does not inspect a
+   baselined file for inserts into replicated tables. That judgement is made by the reviewer at
+   the moment a line is added to the baseline (see the `R__seed_people_2_skill_registry.sql`
+   comment there for what that reasoning looks like).
 6. **Document.** Update `docs/OPERATIONS_RUNBOOK.md` alpha-bootstrap section to point at the
    pipeline; retire the UUID-namespace conventions and the `scripts/fix_uuids*.py` family.
 

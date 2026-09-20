@@ -87,7 +87,7 @@ public class GlobalExceptionHandler {
     /**
      * A shortfall is a conflict with current stock, not a malformed request, and it is actionable:
      * the advisor can order, transfer, or substitute. The nextAction says so rather than leaving a
-     * dead end (ADR-0017 response-code matrix, docs/ERROR_ENVELOPE.md).
+     * dead end (ADR-0017 response-code matrix, ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
      */
     @ExceptionHandler(InsufficientPartAvailabilityException.class)
     public ResponseEntity<ApiError> handleInsufficientPartAvailability(
@@ -117,7 +117,7 @@ public class GlobalExceptionHandler {
      *
      * <p>Carries both a {@code fieldErrors} entry, so a form can mark the quantity box, and a
      * {@code nextAction}, so the counter is told what to enter instead of hitting a dead end
-     * (docs/ERROR_ENVELOPE.md).
+     * (../durion/docs/architecture/api/ERROR_ENVELOPE.md).
      */
     @ExceptionHandler(FractionalQuantityNotAllowedException.class)
     public ResponseEntity<ApiError> handleFractionalQuantityNotAllowed(

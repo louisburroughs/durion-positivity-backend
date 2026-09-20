@@ -184,7 +184,8 @@ class TopicInventoryTest {
      *
      * <p>{@code sender.outcomes.v1}: {@code pos-marketing} consumes delivery/bounce/complaint
      * outcomes from the shared platform sender, a system outside this repo (see
-     * docs/PLATFORM_SENDER_CONTRACT.md). There is and never will be an in-repo producer for it.
+     * durion/domains/positivity/PLATFORM_SENDER_CONTRACT.md). There is and never will be an
+     * in-repo producer for it.
      * This topic does match {@link #TOPIC_PATTERN} and is reached by the scanner as a
      * consumer-only occurrence in {@code DeliveryOutcomeListener} — this entry is what keeps
      * {@link #everyInternalTopicHasAProducerAndAConsumer} from failing on it, not the naming
@@ -194,7 +195,7 @@ class TopicInventoryTest {
     private static final Map<String, ExternalTopic> EXTERNAL_TOPIC_ALLOWLIST = Map.of(
             "sender.outcomes.v1",
             new ExternalTopic(
-                    "shared platform sender (external; see docs/PLATFORM_SENDER_CONTRACT.md)",
+                    "shared platform sender (external; see durion/domains/positivity/PLATFORM_SENDER_CONTRACT.md)",
                     "pos-marketing/src/test/java/com/positivity/marketing/internal/service/PlatformSenderContractTest.java"));
 
     private record ExternalTopic(String owner, String contractTestClass) {}

@@ -29,7 +29,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Web-slice tests for the availability permission split (ADR-0057, issue #1494).
+ * Web-slice tests for the availability permission split (ADR-0066, issue #1494).
  *
  * <p>Three properties are worth pinning, because #1494 was the failure of the third:
  *

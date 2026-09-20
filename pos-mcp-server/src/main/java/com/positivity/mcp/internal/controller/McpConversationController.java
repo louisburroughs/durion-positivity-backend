@@ -48,7 +48,7 @@ import org.springframework.web.bind.annotation.RestController;
  * already gates chatting is the right gate, and a new permission would need bitset/gateway/role
  * seed work this story does not include (every caller would 403 until that lands).
  *
- * <p>Operation descriptions follow {@code docs/OPENAPI_DESCRIPTION_STANDARD.md} (ADR-0042 §1 and
+ * <p>Operation descriptions follow {@code ../durion/docs/architecture/api/OPENAPI_DESCRIPTION_STANDARD.md} (ADR-0042 §1 and
  * §3): they are what an agent reads when choosing between these tools, and this module is
  * validated in {@code STRICT} mode by {@code pos-openapi-validation}.
  */

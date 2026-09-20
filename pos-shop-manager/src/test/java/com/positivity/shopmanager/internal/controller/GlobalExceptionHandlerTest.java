@@ -47,7 +47,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
- * Shop-manager error envelope (docs/ERROR_ENVELOPE.md): each domain failure gets its own code and
+ * Shop-manager error envelope (../durion/docs/architecture/api/ERROR_ENVELOPE.md): each domain failure gets its own code and
  * status, and the correlation id comes from {@code X-Correlation-Id} when the caller sends a
  * usable one.
  */

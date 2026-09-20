@@ -15,7 +15,7 @@ import org.springframework.web.client.RestClientResponseException;
 
 /**
  * Adapter to the shared platform sender (Story #1150, FI-2 contract — durion#369,
- * {@code docs/PLATFORM_SENDER_CONTRACT.md}).
+ * {@code durion/domains/positivity/PLATFORM_SENDER_CONTRACT.md}).
  *
  * <p>The sender owns provider credentials, address resolution, wire-level retries, and the
  * bounce/complaint webhooks (decision O-1); this adapter only hands over one rendered message

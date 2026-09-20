@@ -14,7 +14,7 @@ import java.util.List;
  * <p>All REST controllers should return this type on non-2xx responses,
  * so that API consumers have a consistent structure to parse.
  *
- * <p>See {@code docs/ERROR_ENVELOPE.md} for payload examples and field semantics.
+ * <p>See {@code ../durion/docs/architecture/api/ERROR_ENVELOPE.md} for payload examples and field semantics.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Standard error response envelope returned by all Durion backend APIs")

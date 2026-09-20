@@ -19,7 +19,7 @@ CSV_HEADER = (
 )
 
 # Every row of the authoritative baseline table in
-# docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1: measured line%, measured branch%,
+# ../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1: measured line%, measured branch%,
 # and the floors that table publishes. The floors are the specification; this
 # asserts the script's arithmetic reproduces them exactly rather than
 # approximately, because a floor one hundredth too high is a false red every
@@ -254,7 +254,7 @@ POM_WITH_FLOORS = """<?xml version="1.0" encoding="UTF-8"?>
 
     <properties>
         <!-- Coverage ratchet: measured 79.2% line / 64.1% branch by the gate's own
-             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             command, `verify -DskipITs` (../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
         <jacoco.line.min>0.76</jacoco.line.min>

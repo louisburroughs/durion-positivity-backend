@@ -1811,7 +1811,7 @@ class SecurityGatewayConfigTest {
         // Cycle-count tolerance admin CRUD (ADR-0055 stage 4, #1416).
         assertThat(GatewayPermissionCatalog.authorityForBit(469))
                 .isEqualTo("PERM_inventory:cycle_count_tolerance:manage");
-        // Cross-location availability (ADR-0057, #1494). Availability splits from on-hand the way
+        // Cross-location availability (ADR-0066, #1494). Availability splits from on-hand the way
         // on_hand:search splits from on_hand:view: bit 311 answers "can this be promised (here)",
         // this one additionally enumerates every location holding the SKU.
         assertThat(GatewayPermissionCatalog.authorityForBit(470)).isEqualTo("PERM_inventory:availability:search");

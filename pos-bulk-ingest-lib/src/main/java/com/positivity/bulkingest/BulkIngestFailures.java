@@ -56,7 +56,7 @@ public final class BulkIngestFailures {
      * failure arrived as an {@code ApiError} envelope or as a row inside a 200. The two shapes are
      * already distinguishable without a second code.
      *
-     * <p>Not documented in {@code docs/ERROR_ENVELOPE.md}: issue #1724 was closed not-planned with
+     * <p>Not documented in {@code ../durion/docs/architecture/api/ERROR_ENVELOPE.md}: issue #1724 was closed not-planned with
      * the decision that the file covers the envelope shape and the {@code pos-web-common} fallback
      * codes only, and that each endpoint's own advice and OpenAPI spec are the source of truth for
      * the rest. A row result is not an {@code ApiError} and this is not a fallback code, so the

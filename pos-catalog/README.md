@@ -241,6 +241,22 @@ module's `LocationAncestorResolver`; there is no per-request call to pos-locatio
 The module's other location-parameterised operations stay unscoped by decision: a location there
 selects a price book or a bulk-load default, and the response carries no location-private data.
 
+## Error codes
+
+Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
+and the platform-wide fallback codes emitted by `pos-web-common` and `pos-security-common` are in
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md).
+The table below is this module's own codes; any endpoint here may additionally return a platform
+fallback code. Add a row in the same pull request as the controller or advice that mints the code.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `NOT_FOUND` | 404 | Catalog item not found |
+| `FORBIDDEN` | 403 | Operation not permitted on this catalog entry |
+| `VALIDATION_ERROR` | 400 | Catalog data validation failed |
+| `BUSINESS_RULE_VIOLATION` | 409 | Catalog business rule was violated |
+| `CONFLICT` | 409 | Concurrent update detected; retry required |
+
 ## Configuration
 
 | Property                                | Default  | Description                                                     |

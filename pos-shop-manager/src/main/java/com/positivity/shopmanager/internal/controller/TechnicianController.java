@@ -39,7 +39,7 @@ public class TechnicianController {
 
     private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
             "Caller holds shop:technician:view but its location scope does not cover the requested location"
-                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
     private final TechnicianPersonService technicianPersonService;
     private final MechanicRosterQueryService mechanicRosterQueryService;

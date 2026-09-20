@@ -418,6 +418,74 @@ What that costs is a constraint on the rollout, and it is stated rather than mit
   with the three core availability quantities missing, which the record constructor rejects. The
   forecast triple defaults to zero as it always did for schema-v1 payloads.
 
+## Error codes
+
+Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
+and the platform-wide fallback codes emitted by `pos-web-common` and `pos-security-common` are in
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md).
+The table below is this module's own codes; any endpoint here may additionally return a platform
+fallback code. Add a row in the same pull request as the controller or advice that mints the code.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `VALIDATION_ERROR` | 400 | Request parameter or body validation failed: bean validation, a type mismatch, an unreadable body, a constraint violation, an invalid availability request, an invalid PO reference, an invalid count quantity, or an `IllegalArgumentException` from a service |
+| `RECOUNT_LIMIT_EXCEEDED` | 400 | A cycle-count task has already been recounted the maximum number of times |
+| `SOURCE_DOCUMENT_ALREADY_RECEIVED` | 400 | A receiving session was opened for a source document that is already fully received |
+| `WORKORDER_CLOSED` | 400 | The workorder the consumption or pick targets is closed |
+| `INVALID_PARAM_COMBINATION` | 400 | The query parameters supplied cannot be combined |
+| `FORBIDDEN` | 403 | Caller lacks the required permission, or the request's location falls outside the caller's scope |
+| `PART_MATCH_PERMISSION_REQUIRED` | 403 | Confirming a part match needs a permission the caller lacks |
+| `NOT_FOUND` | 404 | Inventory resource not found: product, location, task, cycle-count plan, transfer order, scrap record, source document or receiving session |
+| `CONFLICT` | 409 | An `IllegalStateException` from a service, or a duplicate ASN |
+| `DUPLICATE_ENABLED_ANY_PUTAWAY_RULE` | 409 | An enabled `ANY`-scope putaway rule already exists |
+| `CYCLE_COUNT_CONFLICT` | 409 | Cycle-count approval rejected; the task is flagged CONFLICT and the reviewer must choose a recount or a recomputed approval |
+| `SOURCE_DOCUMENT_LINES_UNAVAILABLE` | 409 | The purchase-order line projection has not caught up (or the id is unknown); `nextAction` says to retry |
+| `PURCHASE_SUGGESTION_INVALID_STATE` | 409 | Accepting or dismissing a purchase suggestion from a terminal status |
+| `OVER_RECEIPT_NOT_PERMITTED` | 422 | The goods receipt would push the received total past the purchase order's open balance and the caller lacks `inventory:goods_receipt:override` |
+| `ROLLUP_EXPANSION_TOO_LARGE` | 422 | `expand=tree` was requested on a parent-location rollup whose descendant site count exceeds the configured cap |
+| `INSUFFICIENT_STOCK` | 422 | Not enough on-hand stock to fulfill |
+| `NEGATIVE_STOCK_OVERRIDE_REQUIRED` | 422 | The movement would drive stock negative and the policy requires an explicit override |
+| `NEGATIVE_STOCK_FLOOR_VIOLATION` | 422 | The movement would breach the negative-stock floor, which no override lifts |
+| `AS_OF_IN_FUTURE` | 422 | A point-in-time query names a future instant |
+| `VALUATION_AS_OF_SKU_CAP_EXCEEDED` | 422 | An as-of valuation covers more SKUs than the cap allows |
+| `REPLENISHMENT_SNOOZE_NOT_IN_FUTURE` | 422 | A replenishment snooze instant is not in the future |
+| `INSUFFICIENT_ATP` | 422 | Available-to-promise quantity is insufficient |
+| `PICK_SCAN_MISMATCH` | 422 | The scanned item does not match the pick line |
+| `WORKORDER_CONSUMPTION_ERROR` | 422 | Consuming parts against the workorder failed a business rule |
+| `RETURN_QUANTITY_EXCEEDED` | 422 | Return exceeds original purchase quantity |
+| `TRANSFER_DISPATCH_EXCEEDS_REQUESTED` | 422 | A transfer dispatch exceeds the requested quantity |
+| `TRANSFER_RECEIVE_EXCEEDS_DISPATCHED` | 422 | A transfer receipt exceeds the dispatched quantity |
+| `CROSS_SITE_TRANSFER_REQUIRES_ORDER` | 422 | Immediate stock movements are intra-site; a cross-site move needs a transfer order |
+| `TRANSFER_LOCATION_NOT_ELIGIBLE` | 422 | An INACTIVE or PENDING site cannot take part in a movement |
+| `SCRAP_INSUFFICIENT_STOCK` | 422 | Not enough on hand at the source location to scrap |
+| `LOCATION_NOT_VALID_FOR_SKU` | 422 | Putaway target location is not valid for the SKU |
+| `LOCATION_AT_CAPACITY` | 422 | Putaway target location is at capacity |
+| `NO_ON_HAND_AT_SOURCE_LOCATION` | 422 | Putaway source location has no on-hand quantity to move |
+| `NO_PUTAWAY_RULE_MATCH` | 422 | No putaway rule matches the receipt |
+| `RECEIPT_NOT_STAGED` | 422 | Putaway was requested for a receipt that is not staged |
+| `UNSUPPORTED_SOURCE_DOCUMENT_TYPE` | 422 | Receiving cannot resolve the source document type to an owning service |
+| `FRACTIONAL_QUANTITY_NOT_ALLOWED` | 422 | The quantity carries more decimals than the product's catalog declaration allows (ADR-0055) |
+| `UOM_CONVERSION_UNDEFINED` | 422 | No conversion path from `uomCode` to the product's base unit |
+| `LOT_NUMBER_REQUIRED` | 422 | A LOT-tracked product was posted without a lot number |
+| `LOT_UNKNOWN` | 422 | An outbound flow named a lot that does not exist |
+| `LOT_NOT_AVAILABLE` | 422 | The lot is QUARANTINED, RECALLED or CONSUMED and cannot leave stock |
+| `LOT_INSUFFICIENT_STOCK` | 422 | The lot has less on hand than the posting needs; the per-lot floor has no override |
+| `SERIAL_COUNT_MISMATCH` | 422 | A serialized posting does not enumerate exactly one serial per unit |
+| `SERIAL_ALREADY_IN_STOCK` | 422 | A serial being received is already in stock |
+| `SERIAL_NOT_AVAILABLE` | 422 | An outbound posting named an unknown or already-consumed serial |
+| `PURCHASE_SUGGESTION_NOT_ACCEPTED` | 422 | Only an ACCEPTED purchase suggestion can be converted |
+| `PURCHASE_SUGGESTION_VENDOR_MISMATCH` | 422 | The suggestions being converted name different vendors |
+| `PURCHASE_SUGGESTION_MISSING_VENDOR` | 422 | The suggestion names no vendor to order from |
+| `PURCHASE_SUGGESTION_MISSING_UNIT_COST` | 422 | The suggestion carries no unit cost |
+| `PURCHASE_SUGGESTION_SITE_MISMATCH` | 422 | The suggestions being converted belong to different sites |
+| `SHORTAGE_RESOLVE_MISSING_FIELD` | 422 | The shortage resolution omits a field its strategy requires |
+| `SHORTAGE_RESOLVE_SUBSTITUTE_UNAVAILABLE` | 422 | The substitute named for the shortage is not available |
+| `SHORTAGE_RESOLVE_INVALID_IDENTIFIER` | 422 | The shortage resolution names an identifier that does not resolve |
+| `ADJUSTMENT_LEDGER_POST_FAILED` | 500 | Ledger post for adjustment failed |
+| `SCRAP_LEDGER_POST_FAILED` | 500 | Ledger post for scrap failed |
+| `NOT_IMPLEMENTED` | 501 | The operation is deliberately unimplemented; enveloped rather than answered with an empty body (#1720) |
+| `LOCATION_SERVICE_UNAVAILABLE` | 503 | pos-location could not be reached, or answered a server error, while a rollup read needed authoritative topology |
+
 ## Configuration
 
 | Property                                            | Default  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |

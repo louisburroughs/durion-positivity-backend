@@ -35,7 +35,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * open their transaction <em>inside</em> the binding through a {@link TransactionTemplate} rather
  * than {@code @Transactional}: the connection binds {@code app.current_tenant} at checkout and the
  * Hibernate session fixes its {@code @TenantId} when it opens, so a transaction begun before the
- * rebind would write as the caller's tenant (the pattern {@code docs/TENANCY_SCHEMA.md} prescribes
+ * rebind would write as the caller's tenant (the pattern {@code ../durion/docs/architecture/deployment/TENANCY_SCHEMA.md} prescribes
  * for per-tenant work). Every other operation reads and writes under the request's own binding,
  * which row-level security and the Hibernate filter scope like any other read.
  */

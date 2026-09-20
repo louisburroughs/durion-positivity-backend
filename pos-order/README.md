@@ -101,6 +101,60 @@ Over-settlement raises `order.payment.integrity-alert`. Applied price overrides 
 - An order that was never transmitted has an empty timeline (200), not a 404; a 404 means the purchase
   order itself does not exist.
 
+## Error codes
+
+Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
+and the platform-wide fallback codes emitted by `pos-web-common` and `pos-security-common` are in
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md).
+The table below is this module's own codes; any endpoint here may additionally return a platform
+fallback code. Add a row in the same pull request as the controller or advice that mints the code.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `ORDER_INVALID_SKU` | 400 | SKU on the order line is not valid |
+| `ORDER_INVALID_ARGUMENT` | 400 | Sales-order request validation failure (`SalesOrderRequestValidationException`) |
+| `ORDER_PRICE_OVERRIDE_BAD_REQUEST` | 400 | Price-override request validation failure |
+| `VALIDATION_FAILED` | 400 | Bean-validation rejection of a price-override body, with `fieldErrors` |
+| `PURCHASE_ORDER_BAD_REQUEST` | 400 | Purchase-order request validation failure |
+| `REGISTER_SESSION_INVALID_ARGUMENT` | 400 | Register-session request validation failure |
+| `RETURN_INVALID_ARGUMENT` | 400 | Return request validation failure |
+| `ORDER_FORBIDDEN` | 403 | Caller lacks required order permissions (sales orders, cancellations, price overrides, register sessions) |
+| `PURCHASE_ORDER_FORBIDDEN` | 403 | Caller lacks required purchase-order permissions |
+| `ORDER_NOT_FOUND` | 404 | Sales order does not exist |
+| `ORDER_PRICE_OVERRIDE_NOT_FOUND` | 404 | Price override record not found |
+| `PURCHASE_ORDER_NOT_FOUND` | 404 | Purchase order does not exist |
+| `REGISTER_SESSION_NOT_FOUND` | 404 | Register session does not exist |
+| `RETURN_NOT_FOUND` | 404 | On a return endpoint: the return order, or the sales order it references, does not exist |
+| `ORDER_PRICE_OVERRIDE_IDEMPOTENCY_CONFLICT` | 409 | Duplicate idempotency key for price override |
+| `ORDER_IDEMPOTENCY_CONFLICT` | 409 | A cart idempotency key was reused with a different payload |
+| `ORDER_CANCELLATION_INVALID` | 409 | Order cannot be cancelled in its current state |
+| `ORDER_NOT_EDITABLE` | 409 | The order's status no longer allows edits |
+| `ORDER_INVALID_STATE_TRANSITION` | 409 | The requested status transition is not allowed from the order's current status |
+| `ORDER_CONFLICT` | 409 | The order was modified concurrently; retry with fresh state |
+| `ORDER_VOID_BLOCKED` | 409 | A void was requested on an order that already has settled payments; use cancellation so the money is reversed |
+| `PURCHASE_ORDER_INVALID_STATE` | 409 | The purchase order's status does not allow the operation |
+| `REGISTER_SESSION_CONFLICT` | 409 | A second open on a terminal that already has an OPEN session, a cash movement or close against a non-OPEN session, or a confirm-close before begin-close |
+| `SESSION_CLOSE_BLOCKED` | 409 | The register session cannot close while one or more of its orders are still in PENDING_PAYMENT |
+| `RETURN_INVALID_STATE` | 409 | The return order's status does not allow the operation |
+| `ORDER_PRICE_OVERRIDE_INVALID` | 422 | Price override failed business validation |
+| `ORDER_INVALID_CUSTOMER` | 422 | The customer referenced by the order is not valid for it |
+| `ORDER_UNPROCESSABLE` | 422 | The order is refused by an attribute of the target other than its status, or by the state of a referenced resource (`SalesOrderUnprocessableException`) |
+| `RETURN_LINE_NOT_RETURNABLE` | 422 | Requested return line is not returnable per policy (issue #1694; split out of the former blanket `RETURN_INVALID_ARGUMENT` 422 catch-all) |
+| `RETURN_OVER_CAP` | 422 | The return exceeds the un-refunded remainder of one or more sold lines; `fieldErrors` lists the current `returnableQty` per offending line |
+| `RETURN_WARRANTY_ROUTING` | 422 | A WARRANTY-condition return was requested on a non-returnable workorder-consumed line; it routes to pos-warranty instead |
+| `RETURN_UNPROCESSABLE` | 422 | A structurally valid return that a domain rule refuses: a refund method needing a customer the return lacks, no invoice to refund against, or insufficient settled original tender |
+| `UOM_CONVERSION_UNDEFINED` | 422 | A purchase-order line names a `uomCode` with no conversion row for the product |
+| `SUPPLIER_REF_MISSING` | 422 | The purchase order cannot be transmitted: no supplier reference |
+| `PURCHASE_ORDER_NOT_APPROVED` | 422 | The purchase order cannot be transmitted: not approved |
+| `TRANSMISSION_IN_FLIGHT` | 422 | A transmission of this purchase order is already in flight (ADR-0052) |
+| `TRANSMISSION_AWAITING_REVIEW` | 422 | A prior transmission attempt is awaiting review |
+| `ARTICLE_NOT_IDENTIFIABLE` | 422 | One or more purchase-order lines name no article the vendor could recognise |
+| `FRACTIONAL_QUANTITY` | 422 | A purchase-order line's quantity is not a whole number |
+| `TRANSMISSION_UNAVAILABLE` | 422 | The deployment has no event publishing wired, so nothing can reach the vendor |
+| `ORDER_CANCEL_REVIEW_REQUIRED` | 500 | The cancellation retry failed again and the order is parked at `CANCEL_REQUIRES_MANUAL_REVIEW`; `nextAction` carries the recovery |
+| `ORDER_TAX_UNAVAILABLE` | 503 | pos-tax could not be reached to price the order |
+| `ORDER_INVOICING_UNAVAILABLE` | 503 | pos-invoice could not be reached to complete the order |
+
 ## Configuration
 
 | Property                | Default  | Description                  |

@@ -83,7 +83,7 @@ the query shape is the isolation. `EmittedEventHourlyRepository` is a marker `Re
 
 The refresh policy (`add_continuous_aggregate_policy`, hourly with a one-hour end offset) and the compression
 policy are unchanged; compression now segments by `(tenant_id, id)` so per-tenant reads of compressed chunks stay
-selective. `V2` is edited in place (`docs/TENANCY_SCHEMA.md`): a database that already carries the tenant-less
+selective. `V2` is edited in place (`../durion/docs/architecture/deployment/TENANCY_SCHEMA.md`): a database that already carries the tenant-less
 aggregate is reset, not migrated. The H2 `dev` profile builds the view as a plain table from `EmittedEventHourly`
 (`ddl-auto: create-drop`), so the JPQL reads work there unchanged.
 

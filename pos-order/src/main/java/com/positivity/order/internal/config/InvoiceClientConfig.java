@@ -10,7 +10,7 @@ import org.springframework.web.client.RestClient;
  * REST client for pos-invoice. pos-invoice is a domain module — this synchronous edge exists under
  * the scoped ADR-0044 amendment for pos-order (checkout invoice creation and saga payment
  * reversal, both money-moving counter-flows that must fail loudly in the request path; see
- * {@code docs/adr-0044-event-only-domain-walls.md} and pos-archunit {@code DomainWallsTest}).
+ * {@code ../durion/docs/adr/0044-platform-event-only-domain-walls.adr.md} and pos-archunit {@code DomainWallsTest}).
  */
 @Configuration
 public class InvoiceClientConfig {

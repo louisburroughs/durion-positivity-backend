@@ -102,7 +102,7 @@ public class InvoiceExceptionHandler {
      * manager-approval permission matrix requires a step-up elevation token that was not
      * supplied. That is a refusal about what the caller is allowed to do, so it answers 403 with
      * a {@code nextAction} naming the recovery. #1694 had first moved this out of the blanket
-     * 400 handler above (with a fieldErrors hint) to a 422. Documented in docs/ERROR_ENVELOPE.md.
+     * 400 handler above (with a fieldErrors hint) to a 422. Documented in ../durion/docs/architecture/api/ERROR_ENVELOPE.md.
      */
     @ExceptionHandler(ManagerApprovalRequiredException.class)
     public ResponseEntity<ApiError> handleManagerApprovalRequired(
@@ -126,7 +126,7 @@ public class InvoiceExceptionHandler {
      * (wrong scope, tampered, or expired) — a step-up credential the server considers
      * insufficient, so 403, mirroring {@link #handleManagerApprovalRequired}. #1694 had first
      * moved this out of the blanket 400 handler above to a 422. Documented in
-     * docs/ERROR_ENVELOPE.md.
+     * ../durion/docs/architecture/api/ERROR_ENVELOPE.md.
      */
     @ExceptionHandler(InvalidManagerApprovalException.class)
     public ResponseEntity<ApiError> handleInvalidManagerApproval(
@@ -148,7 +148,7 @@ public class InvoiceExceptionHandler {
     /**
      * (b) ADR-0017 §2: the adjustment itself is shape-valid, but combined with the invoice's
      * existing state it would drive the total negative — a documented domain-policy violation,
-     * not a malformed request. New code, documented in docs/ERROR_ENVELOPE.md.
+     * not a malformed request. New code, documented in ../durion/docs/architecture/api/ERROR_ENVELOPE.md.
      */
     @ExceptionHandler(ExcessiveAdjustmentException.class)
     public ResponseEntity<ApiError> handleExcessiveAdjustment(

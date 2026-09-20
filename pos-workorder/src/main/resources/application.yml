@@ -85,6 +85,7 @@ pos:
   customer:
     service-id: ${POS_CUSTOMER_SERVICE_ID:customer}
   tax:
+    # Direct-call exception (#641): pos-tax is internal-only, register-with-eureka: false
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
   people:
     service-id: ${POS_PEOPLE_SERVICE_ID:people}

@@ -126,7 +126,8 @@ class RolePermissionBaselineTest {
      * carried into the baseline.
      *
      * <p>CONTROLLER is deliberately absent from this set as of the 2026-08 ACCOUNT_MANAGER /
-     * CONTROLLER rescope (#1499/#1512, docs/rbac-permission-role-audit-2026-08.md §6): the role seed ({@code
+     * CONTROLLER rescope (#1499/#1512,
+     * durion/domains/security/rbac-permission-role-audit-2026-08.md §6): the role seed ({@code
      * V2__seed_security_service.sql}, formerly V24) creates it, so it is reachable and this baseline
      * grants it the accounting-management authority the retired V25 revoked from ACCOUNT_MANAGER.
      */
@@ -193,7 +194,8 @@ class RolePermissionBaselineTest {
      * nlti: prefixes it is otherwise confined to. Each is a deliberate carve-out, not a domain
      * grant: image:image:store is the 2026-08 §2 decision 3 image-upload grant shared by both
      * admin roles; the other five are the 2026-08 §2 recommended-grants matrix (accepted and
-     * implemented 2026-08-25, docs/rbac-permission-role-audit-2026-08.md §2) narrow operational
+     * implemented 2026-08-25, durion/domains/security/rbac-permission-role-audit-2026-08.md §2)
+     * narrow operational
      * escape hatches that belong to system administration rather than any single business
      * domain -- event replay, compliance visibility and supplier transmission triage.
      */

@@ -4,7 +4,7 @@ package com.positivity.domainevents;
  * The platform's canonical staleness rule for a replica {@code aggregateVersion} guard (#1486).
  * It applies to every fact whose publisher guarantees a strictly-advancing version — as of the
  * #1486 follow-ups that is catalog, vehicle, invoice, warranty, location, workorder, and customer
- * facts; see "Event Replication: aggregateVersion Semantics" in {@code docs/ARCHITECTURE_GUIDE.md}
+ * facts; see "Event Replication: aggregateVersion Semantics" in {@code ../durion/docs/architecture/BACKEND_ARCHITECTURE_GUIDE.md}
  * for the per-fact survey.
  *
  * <p>pos-catalog's {@code aggregateVersion}, for example, is a JPA {@code @Version}-backed

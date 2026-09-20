@@ -12,7 +12,7 @@ vendor checksum recorded for audit rather than recomputed; overlap arithmetic v1
 threshold rather than the `write` sketched in §4.4 — an import rewrites priced reference
 data wholesale, so it warrants the strictest preset (rationale in `CatalogEventTypes`).
 **Tier 0 build (2026-09-07, #1575):** while Phase 2 stays gated on procurement, the Tier 0
-track from `docs/SPEC-tier-0-durion-owned-service-data.md` landed the Durion-owned half:
+track from the retired Tier 0 spec landed the Durion-owned half:
 shop-scoped labor standards, category-aware source precedence (Phase 3 item 2), the Tier 0
 tire/Michelin/fleet operation set with invented times, cross-source conflict surfacing (Phase 3
 item 3, reframed as _overlapping_ keys — see that spec §9 for why the same-key form cannot
@@ -747,7 +747,7 @@ _external vendor_, not a platform service. Design rules:
 - Excluded from coverage aggregation thresholds if `pos-coverage-aggregate` would otherwise
   count it; included in the reactor build so it can't rot. It does carry its own
   `jacoco.line.min` / `jacoco.branch.min` floors: the module is past the 50-line threshold at
-  which `docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md` §6.5 requires a floor, and a per-module floor
+  which `../durion/docs/architecture/TEST_COVERAGE_POLICY.md` §6.5 requires a floor, and a per-module floor
   gates only this module's own tests — it is not an aggregate threshold.
 
 ---
@@ -791,6 +791,23 @@ _external vendor_, not a platform service. Design rules:
   `/imports/incomplete`, unmapped-operation curation, source policy editing.
 - Observability: import counters (lines applied/skipped/unmapped), resolve latency + hit/miss
   by source, per-adapter vendor-call metrics (mirror supplier client conventions).
+
+---
+
+## 11a. Open after the Tier 0 build (#1575)
+
+Carried over from the Tier 0 spec, which was retired once its
+workstreams shipped. These four items were *not* completed by that build and have no other home.
+
+| # | Item | Evidence | Why it matters |
+|---|---|---|---|
+| 1 | **`ux_sls_active_key` carries no `source_code`.** The active-key index widened by *owner* (D1) but not by source: `V1__baseline_catalog.sql:1040` keys on `(tenant_id, service_id, time_type, COALESCE(owner_location_id,…), vehicle_year, make, model, submodel, engine_code)`. | `pos-catalog/src/main/resources/db/migration/V1__baseline_catalog.sql:1040` | Two `STORE`-tier sources publishing the same operation + vehicle key still collide, so one silently supersedes the other. The seeded source policy is deliberately fuller than the data can exercise until this widens — see the comment at `R__seed_reference_catalog_7_labor_time_source_policy.sql:30`. Deferred to the Phase 2 scale pass. |
+| 2 | **`EXACT` match grades are unreachable from the estimate path**, as is warranty time preference. `CatalogLaborTimeClientImpl` sends `submodel`, `engineCode` and `preferredTimeType` as `null` because the CRM vehicle record carries year/make/model only and nothing flags warranty work. | `pos-workorder/.../internal/client/CatalogLaborTimeClientImpl.java:80-84` | The resolver's full match-grade ladder is exercised only by direct API callers. Wiring the fields without real data would invent values and risk a wrongly `EXACT`-graded answer, so the fix is upstream (vehicle detail on the CRM record; a warranty flag on the workorder — Phase 3 item 4). |
+| 3 | **`API Artifacts Sync` has not been run for the Tier 0 specs.** | `pos-catalog`, `pos-price`, `pos-workorder` all changed surface in the Tier 0 build | Until it runs, both SDKs and the frontend tarballs do not carry the new endpoints, and the frontend drifts from the backend. `gh workflow run api-artifacts-sync.yml --ref <branch> -f modules="pos-catalog pos-price pos-workorder"` |
+| 4 | **The alpha reseed has never been executed.** The Tier 0 fixture packs are written and tested against their own files, but nothing has driven them against a live alpha. | §5.4 of `docs/DATA_SEED_STRATEGY.md` (step 4, "Reseed alpha") | The replica-count check is the only evidence that the facts actually fired — the whole reason Tier 0 moved from `R__` seeds to bulk-ingest. Without it, the claim that `ext_catalog_service` hydrates from these packs is untested end to end. |
+
+Items 3 and 4 are execution debt with no design question attached. Items 1 and 2 are design gaps
+whose resolution belongs with Phase 2 and with the upstream vehicle/warranty data respectively.
 
 ---
 

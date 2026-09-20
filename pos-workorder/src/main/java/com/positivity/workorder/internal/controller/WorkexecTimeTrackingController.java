@@ -60,7 +60,7 @@ public class WorkexecTimeTrackingController {
     private static final String USER_ID_REQUIRED_MESSAGE = "Authenticated user id must be a valid UUID";
     private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
             "Caller holds workorder:labor:view but its location scope does not cover the requested location"
-                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
     private final WorkexecTimeTrackingService service;
     private final LocationHierarchyService locationHierarchyService;

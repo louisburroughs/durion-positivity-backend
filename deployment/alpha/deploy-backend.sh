@@ -9,7 +9,7 @@ set -euo pipefail
 # postgres/init-databases.sql before the reconcile step recreates it, so Flyway rebuilds each
 # schema from its V1 baseline. This is the alpha schema reset of
 # docs/runbooks/flyway-baseline-reset.md ("Alpha Cutover") as a deploy option: while the
-# platform is in alpha, baselines are edited in place rather than migrated (docs/TENANCY_SCHEMA.md),
+# platform is in alpha, baselines are edited in place rather than migrated (../durion/docs/architecture/deployment/TENANCY_SCHEMA.md),
 # and a box whose databases predate a baseline change fails Flyway validation on the first
 # recreated service (run 34529050551). All alpha data is lost; nothing outside the pos_* databases
 # is touched. Driven from build-push-ecr.yml's `reset_alpha_databases` dispatch input, never from

@@ -72,7 +72,7 @@ public class WipController {
 
     private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
             "Caller holds workorder:wip:view but its location scope does not cover the requested location"
-                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
     private final WipService wipService;
     private final LocationHierarchyService locationHierarchyService;

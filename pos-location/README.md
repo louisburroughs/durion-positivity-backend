@@ -47,7 +47,7 @@ A caller whose permission is location-scoped (gateway headers `X-Loc-Fin-Bits`, 
 without the claims behave exactly as before. The per-operation decisions live in
 [`location-scope.yaml`](location-scope.yaml), which CI reads.
 
-- **Gated** (`403` with `ApiError.code = LOCATION_SCOPE_DENIED`, see `docs/ERROR_ENVELOPE.md`):
+- **Gated** (`403` with `ApiError.code = LOCATION_SCOPE_DENIED`, see [`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md)):
   `PUT|PATCH|DELETE /v1/locations/{locationId}` on `location:write` (a missing location still
   answers `404` first); every `/v1/locations/{locationId}/bays` operation on `location:bay:read` or
   `location:bay:manage`; `/v1/locations/{locationId}/defaults` on `location:write` / `location:read`.

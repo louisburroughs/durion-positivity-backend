@@ -130,7 +130,7 @@ public class BulkLoaderExceptionHandler {
     /**
      * Field-level failures move into {@code fieldErrors} rather than being flattened into one
      * semicolon-joined string, which is what the envelope's {@code fieldErrors} array exists for
-     * and what {@code docs/ERROR_ENVELOPE.md} tells clients to render.
+     * and what {@code ../durion/docs/architecture/api/ERROR_ENVELOPE.md} tells clients to render.
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidation(

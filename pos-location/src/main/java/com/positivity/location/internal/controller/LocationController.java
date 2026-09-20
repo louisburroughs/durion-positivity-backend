@@ -86,7 +86,7 @@ public class LocationController {
      */
     static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
             "Caller holds location:write but its location scope does not cover the requested location"
-                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).";
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).";
 
     /** ApiError.code for a location that does not exist (rendered by LocationGlobalExceptionHandler). */
     static final String LOCATION_NOT_FOUND = "LOCATION_NOT_FOUND";

@@ -34,7 +34,7 @@ public record OpenApiModulePolicy(
 
     /**
      * Enforcement level for the ADR-0042 §1 description depth and §3 request body rules described in
-     * {@code docs/OPENAPI_DESCRIPTION_STANDARD.md}.
+     * {@code ../durion/docs/architecture/api/OPENAPI_DESCRIPTION_STANDARD.md}.
      */
     public enum DepthMode {
         STRICT,

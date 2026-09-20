@@ -34,7 +34,7 @@ public class OperationalContextController {
 
     private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
             "Caller holds workorder:operationalContext:override but its location scope does not cover the"
-                    + " requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
     private final WorkorderService workorderService;
 

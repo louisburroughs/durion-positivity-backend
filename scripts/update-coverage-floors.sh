@@ -3,7 +3,7 @@
 # and write them into the module poms.
 #
 # This is what makes the ratchet a ratchet. Section 6.2 of
-# docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md says "raise a module's floor when its
+# ../durion/docs/architecture/TEST_COVERAGE_POLICY.md says "raise a module's floor when its
 # coverage rises", but nothing automated it, so floors only ever moved when
 # someone remembered. A floor left behind is slack: the module can shed every
 # point it gained without failing a build.

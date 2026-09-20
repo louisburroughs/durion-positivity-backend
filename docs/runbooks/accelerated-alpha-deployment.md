@@ -1,3 +1,10 @@
+---
+type: Runbook
+title: Accelerated Alpha Deployment Runbook
+description: The procedure for deploying and verifying the accelerated-clock alpha stack, including why the virtual clock is clamped to wall time and why a deploy refuses to proceed without convergence.
+status: current
+---
+
 # Accelerated Alpha Deployment Runbook
 
 Deploying the alpha stack on the `accelerated` Spring profile, with every POS JVM sharing one
@@ -8,7 +15,7 @@ clock anchored a year in the past, so the SDK repo's accelerated integration sui
 - SDK side: [durion-positivity-sdk#64](https://github.com/louisburroughs/durion-positivity-sdk/issues/64),
   and `packages/sdk-integration-tests/ACCELERATED_BACKEND_DEPLOYMENT.md` in that repo for the
   operator-facing suite procedure
-- Clock internals: [`docs/CLOCK_TIMESTAMP_OWNERSHIP.md`](../CLOCK_TIMESTAMP_OWNERSHIP.md),
+- Clock internals: [ADR-0024](../../../durion/docs/adr/0024-entity-createdat-updatedat-population-policy.adr.md),
   `pos-events/README.md`
 
 > **This back-dates records in the shared alpha database, and blocks every ordinary
@@ -186,7 +193,7 @@ injected `Clock`), one before the run's anchor (legitimate for rows that predate
 reported for review), or an `updated_at` earlier than its own `created_at`. An empty result
 means every audited timestamp came from the application clock. The accepted database-clock
 reads are listed in the SQL file's header and in
-[`docs/CLOCK_TIMESTAMP_OWNERSHIP.md`](../CLOCK_TIMESTAMP_OWNERSHIP.md).
+[ADR-0024](../../../durion/docs/adr/0024-entity-createdat-updatedat-population-policy.adr.md).
 
 ## Adding a service
 

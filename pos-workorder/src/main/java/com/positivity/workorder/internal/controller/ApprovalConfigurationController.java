@@ -40,7 +40,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class ApprovalConfigurationController {
     private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
             "Caller holds workorder:approval_config:view but its location scope does not cover the requested"
-                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
     private final ApprovalConfigurationService approvalConfigurationService;
 

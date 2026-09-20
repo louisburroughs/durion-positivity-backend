@@ -4,6 +4,12 @@
 
 The reusable validator and policy classes live under `src/main/java`. The Maven test phase remains the enforcement entrypoint — the module is not started as an application.
 
+## Why this is its own module
+
+Two existing homes were considered and rejected. `pos-coverage-aggregate` is dedicated to coverage aggregation, and folding a second, unrelated repository-wide policy into it would overload a module with one clear responsibility. The pre-existing shell and Python tooling (`scripts/generate-openapi.sh` and friends) is well suited to *generating* and cleaning up specs, but is the wrong long-term source of truth for *enforcement*: policy decisions expressed only in shell are hard to test, hard to attribute to a source module, and behave differently between a developer's laptop and CI.
+
+A dedicated Maven module gives ADR-0042 enforcement three properties the alternatives could not: build pass/fail is deterministic and identical locally and in CI because it is an ordinary Maven test; the policy code is itself testable Java rather than script logic; and repository policy stays out of runtime gateway and MCP code, which must not carry it. Generation stays where it was — the scripts and each module's `openapi` profile still produce the `openapi.yaml` files this module reads.
+
 ## How it works
 
 The repository validation flow is:
@@ -23,7 +29,7 @@ The repository validation flow is:
 - operations missing `summary`
 - operations missing `description`
 
-`OpenApiAnnotationDepthValidator` additionally checks, for modules whose `annotationDepth` is not `EXEMPT`, that each operation meets the ADR-0042 §1 and §3 depth rules fixed in `docs/OPENAPI_DESCRIPTION_STANDARD.md`:
+`OpenApiAnnotationDepthValidator` additionally checks, for modules whose `annotationDepth` is not `EXEMPT`, that each operation meets the ADR-0042 §1 and §3 depth rules fixed in `../durion/docs/architecture/api/OPENAPI_DESCRIPTION_STANDARD.md`:
 
 - descriptions of 4–8 sentences opening with a primary-action sentence
 - the six remaining §1 elements, detected by their canonical lead-ins (`Use this tool ...`, `Preconditions: ...`, `Required inputs: ...`, `Emits ...` / `No events are emitted`, `Returns <code> when ...`, and negative guidance such as `do not use ...`)

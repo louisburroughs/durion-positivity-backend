@@ -19,7 +19,7 @@ public abstract class BaseContractIntegrationTest {
                                 ",",
                                 "inventory:on_hand:view",
                                 "inventory:on_hand:search",
-                                // ADR-0057 (#1494): availability is gated separately from on-hand.
+                                // ADR-0066 (#1494): availability is gated separately from on-hand.
                                 "inventory:availability:read",
                                 "inventory:availability:search",
                                 "inventory:adjustment:create",
