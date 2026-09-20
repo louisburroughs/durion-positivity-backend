@@ -477,9 +477,12 @@ public class PriceBookServiceImpl implements PriceBookService {
         PriceBookRuleConditionType conditionType =
                 request.getConditionType() == null ? PriceBookRuleConditionType.NONE : request.getConditionType();
 
-        Instant windowEnd = request.getEffectiveEndAt() == null
-                ? FAR_FUTURE_EFFECTIVE_END_AT
-                : toInstant(request.getEffectiveEndAt());
+        // Read the getter once so the null check and the conversion agree on the same value
+        // (S2637): findConflicts' windowEnd parameter is @NonNull, and calling the getter a
+        // second time inside the ternary's else-branch would let static analysis treat it as an
+        // independent, possibly-null read.
+        OffsetDateTime effectiveEndAt = request.getEffectiveEndAt();
+        Instant windowEnd = effectiveEndAt == null ? FAR_FUTURE_EFFECTIVE_END_AT : effectiveEndAt.toInstant();
 
         var conflicts = priceBookRuleRepository.findConflicts(
                 priceBookId,

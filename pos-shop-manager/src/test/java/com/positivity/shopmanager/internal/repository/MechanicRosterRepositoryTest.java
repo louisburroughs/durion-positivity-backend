@@ -119,7 +119,11 @@ class MechanicRosterRepositoryTest {
         Page<Mechanic> result =
                 mechanicRepository.findRoster(MechanicStatus.ACTIVE, "BRAKES", ON_DATE, PageRequest.of(0, 20));
 
+        // The revoked-only credential must not surface its holder...
         assertThat(result.getContent()).extracting(Mechanic::getPersonId).doesNotContain(revokedOnlyPersonId);
+        // ...while ZULU/ALPHA's unrevoked BRAKES credentials from setUp still do, proving the
+        // assertion above isn't vacuously true against an empty roster.
+        assertThat(result.getContent()).extracting(Mechanic::getPersonId).contains(ZULU_PERSON_ID, ALPHA_PERSON_ID);
     }
 
     private void insertShop(UUID id, String name) {

@@ -228,12 +228,16 @@ public class SchedulingConflictEvaluator {
     // ── BAY ─────────────────────────────────────────────────────────────────────────────────────
 
     private void evaluateBay(BookingAttempt attempt, @Nullable ZoneId zone, List<DetectedConflict> detected) {
-        if (!namesAResource(attempt.resourceId())) {
+        // Read the accessor once (S2637): findHeldOverlappingForResource's resourceId is
+        // @NonNull, and re-calling attempt.resourceId() after the namesAResource guard leaves
+        // static analysis unable to tell the two calls return the same value.
+        String resourceId = attempt.resourceId();
+        if (!namesAResource(resourceId)) {
             return;
         }
         boolean occupied = appointmentRepository
                 .findHeldOverlappingForResource(
-                        attempt.resourceId(), attempt.startAt(), attempt.endAt(), AppointmentStatus.holdingAResource())
+                        resourceId, attempt.startAt(), attempt.endAt(), AppointmentStatus.holdingAResource())
                 .stream()
                 .anyMatch(other -> !Objects.equals(other.getAppointmentId(), attempt.excludeAppointmentId()));
         if (occupied) {
