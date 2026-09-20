@@ -153,8 +153,8 @@ Refresh tokens never carry any of the three. Readers: `getFinancialLocationScope
 #### Effective-dating clamp on `exp`
 
 When either scope bitset is non-empty, the access token's `exp` is
-`min(now + 3600s, end of the day the earliest contributing staffing assignment ends)` in the
-issuer clock's zone (ADR-0061 §4, #1873). Tokens with no location-scoped grant, and holders whose
+`min(now + the access-token lifetime, end of the day the earliest contributing staffing assignment
+ends)` in the issuer clock's zone (ADR-0061 §4, #1873). Tokens with no location-scoped grant, and holders whose
 assignments are open-ended, are unaffected. Refresh tokens keep their own lifetime, and because
 `refreshAccessToken` re-enters `generateTokenPair`, the clamp is re-evaluated on every refresh
 rather than inherited.
@@ -217,7 +217,7 @@ role assignments a token's `perm_bits` is actually built from could still stay v
 of the access token's natural lifetime after being ended. Phase 3 closes it with the same two
 mechanisms applied to `role_assignments`:
 
-- **Clamp.** `exp` is `min(now + 3600s, the location-reach bound above, the earliest
+- **Clamp.** `exp` is `min(now + the access-token lifetime, the location-reach bound above, the earliest
   `effectiveEndDate` among the assignments that contributed to the token)`, floored at `now`. Login
   (`AuthenticationServiceImpl`) and refresh (`JwtServiceImpl.refreshAccessToken`) both resolve this
   bound via `UserService#getGrantsExpireAt` and pass it into `generateTokenPair`; the internal
@@ -530,12 +530,34 @@ committed spec against the controllers' declarations and fails on drift in eithe
 | `EUREKA_SERVER_URL`                 | required     | Eureka service discovery URL          |
 | `SECURITY_SEED_ADMIN_PASSWORD_HASH` | required     | BCrypt hash for the seed admins (`admin.alpha`, `admin.platform`) |
 | `security.lockout.threshold`        | configurable | Failed login threshold before lockout |
+| `pos.security.jwt.access-token-ttl` (`POS_SECURITY_JWT_ACCESS_TOKEN_TTL`) | `PT1H` | Access-token lifetime, as a Duration in wall-clock terms (#2135) |
+| `pos.security.jwt.refresh-token-ttl` (`POS_SECURITY_JWT_REFRESH_TOKEN_TTL`) | `P7D` | Refresh-token lifetime, as a Duration in wall-clock terms (#2135) |
+| `pos.security.jwt.clock-scale` (`POS_SECURITY_JWT_CLOCK_SCALE`) | `1`; `pos.time.accelerated.scale` under the `accelerated` profile | Multiplier applied to both lifetimes. `exp` is minted from the application `Clock`, so under the accelerated profile it inherits the shared `ScaledClock`'s scale and the lifetimes above stay wall-clock durations instead of collapsing to `ttl / scale` real seconds. See "Token lifetimes" below |
 | `pos.security-service.kafka.people-events-topic` | `people.events.v1` | Staffing-assignment facts feeding the assigned-node read model (ADR-0061 §1) |
 | `pos.security-service.kafka.people-manifest-topic` | `people.manifest.v1` | Per-tenant reconciliation manifests for that read model; drift (compared against that tenant's `processed_events` rows) requests a replay on `people-commands-topic` under the manifest's tenant header |
 | `pos.security-service.location-scope.assigned-node-cap` | `8` | Assigned-node count above which `security.location-scope.assigned-nodes.cap-exceeded` fires (WARN + metric, never truncated) |
 | `pos.security-service.kafka.tenant-events-topic` | `tenant.events.v1` | Tenant registry facts (pos-tenant, ADR-0062 §7) feeding the `ext_tenant` replica |
 | `pos.tenancy.default-tenant-id` | alpha default tenant | Transitional binding for unbound requests and pre-WS2b tokens without `tid`; empty means strict |
 | `pos.tenancy.unenforced-paths` | `/v1/auth/` | Paths that run unbound even in strict mode (login resolves the tenant itself) |
+
+### Token lifetimes and the accelerated clock (#2135)
+
+`JwtServiceImpl` mints `exp` from the injected `Clock`, which under the `accelerated` profile is the
+shared `ScaledClock` (pos-events, #2065), and the gateway validates `exp` against the same clock
+(#2082). A lifetime is therefore a number of *clock* seconds, and its wall-clock life is
+`ttl / scale`: at scale 2920 an hour-long access token expired about one real second after the login
+that minted it. The `accelerated` profile document in `application.yml` sets
+`pos.security.jwt.clock-scale` to `pos.time.accelerated.scale` (default 1000, the same default
+`AcceleratedTimeProperties` carries), so the minted lifetime is `ttl × scale` clock seconds — `ttl`
+of wall time while the clock is accelerating, and the revocation TTLs in Redis follow it. Set
+`POS_SECURITY_JWT_CLOCK_SCALE` to override the profile's value, or the two `*_TTL` variables to
+change the lifetimes themselves.
+
+Only the natural lifetimes scale. The ADR-0061 §4 clamps above (end of the earliest contributing
+staffing assignment, earliest end of a contributing role assignment) are clock instants derived from
+effective-dated rows and stay in clock time: a token must never outlive the assignment it was minted
+from, however fast the clock runs. An accelerated run whose personas hold bounded assignments has to
+back-date or extend those windows (durion-positivity-sdk#67), not the token.
 
 ## Dependencies
 

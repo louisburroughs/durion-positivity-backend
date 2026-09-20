@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.securityservice.internal.config.JwtLifetimeProperties;
 import com.positivity.securityservice.internal.domain.LocationScopeBits;
 import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
 import com.positivity.securityservice.internal.domain.SupportReadOnlyCeiling;
@@ -64,8 +65,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class JwtServiceImpl implements JwtService {
     private final Clock clock;
 
-    private static final long ACCESS_TOKEN_EXPIRATION_SECONDS = 3600L;
-    private static final long REFRESH_TOKEN_EXPIRATION_SECONDS = 604800L;
     private static final String ISSUER = "pos-security-service";
     private static final String AUDIENCE = "api-gateway";
 
@@ -83,6 +82,13 @@ public class JwtServiceImpl implements JwtService {
     private final UserDetailsService userDetailsService;
     private final StaffingAssignmentProjectionService staffingAssignmentProjectionService;
     private final TenantResolver tenantResolver;
+
+    /**
+     * Token lifetimes ({@code pos.security.jwt.*}, #2135). Lifetimes are clock seconds, and under
+     * the {@code accelerated} profile the clock is the shared {@code ScaledClock}, so the natural
+     * lifetimes carry that clock's scale; the ADR-0061 §4 clamps below stay in clock time.
+     */
+    private final JwtLifetimeProperties jwtLifetimes;
 
     @Value("${security.jwt.secret}")
     private String jwtSecret;
@@ -386,7 +392,7 @@ public class JwtServiceImpl implements JwtService {
         }
 
         Instant now = Instant.now(clock);
-        Instant refreshExpiry = now.plusSeconds(REFRESH_TOKEN_EXPIRATION_SECONDS);
+        Instant refreshExpiry = now.plusSeconds(jwtLifetimes.refreshTokenSeconds());
 
         String accessJti = UUIDv7Generator.generate().toString();
         String refreshJti = UUIDv7Generator.generate().toString();
@@ -416,9 +422,12 @@ public class JwtServiceImpl implements JwtService {
         Instant accessExpiry = reach.clampedExpiry();
 
         // ADR-0061 §4 amendment (2026-09-09, #1914 phase 3): exp is the minimum of every
-        // applicable bound — the natural 3600s lifetime, the location-reach clamp above, and now
-        // the earliest end of a role assignment perm_bits was built from — floored at now so a
-        // stale or racing bound can never produce an already-expired token.
+        // applicable bound — the natural lifetime (pos.security.jwt.access-token-ttl, scaled by
+        // the clock's scale under the accelerated profile, #2135), the location-reach clamp
+        // above, and now the earliest end of a role assignment perm_bits was built from — floored
+        // at now so a stale or racing bound can never produce an already-expired token. Only the
+        // natural lifetime scales: the two clamps are clock instants from effective-dated rows and
+        // a token must not outlive its assignment however fast the clock runs.
         if (grantsExpireAt != null && grantsExpireAt.isBefore(accessExpiry)) {
             accessExpiry = grantsExpireAt;
         }
@@ -730,7 +739,7 @@ public class JwtServiceImpl implements JwtService {
                     jwtParser().parseSignedClaims(jwtToken.getToken()).getPayload();
             String oldAccessJti = oldAccessClaims.getId();
             if (oldAccessJti != null) {
-                tokenRevocationManager.revokeToken(oldAccessJti, ACCESS_TOKEN_EXPIRATION_SECONDS);
+                tokenRevocationManager.revokeToken(oldAccessJti, jwtLifetimes.accessTokenSeconds());
             }
         } catch (JwtException e) {
             log.debug(
@@ -743,7 +752,7 @@ public class JwtServiceImpl implements JwtService {
                     jwtParser().parseSignedClaims(refreshToken).getPayload();
             String oldRefreshJti = oldRefreshClaims.getId();
             if (oldRefreshJti != null) {
-                tokenRevocationManager.revokeToken(oldRefreshJti, REFRESH_TOKEN_EXPIRATION_SECONDS);
+                tokenRevocationManager.revokeToken(oldRefreshJti, jwtLifetimes.refreshTokenSeconds());
             }
         } catch (JwtException e) {
             log.debug(
@@ -845,14 +854,14 @@ public class JwtServiceImpl implements JwtService {
      *
      * @param nodes         assigned location node ids, verbatim; empty when the caller holds no
      *                      location-scoped grant, has no person, or has no effective assignment
-     * @param clampedExpiry {@code min(now + ACCESS_TOKEN_EXPIRATION_SECONDS, end of the day the
-     *                      earliest contributing assignment ends)}; the unclamped value whenever
-     *                      the clamp does not apply
+     * @param clampedExpiry {@code min(now + the configured access-token lifetime, end of the day
+     *                      the earliest contributing assignment ends)}; the unclamped value
+     *                      whenever the clamp does not apply
      */
     private record LocationReach(List<UUID> nodes, Instant clampedExpiry) {}
 
     private LocationReach resolveLocationReach(LocationScopeBits scopeBits, @Nullable UUID personId, Instant now) {
-        Instant accessExpiry = now.plusSeconds(ACCESS_TOKEN_EXPIRATION_SECONDS);
+        Instant accessExpiry = now.plusSeconds(jwtLifetimes.accessTokenSeconds());
         if (scopeBits.isEmpty()) {
             // No location-scoped grant: no projection lookup, no clamp — the common case is
             // byte-for-byte what it was before ADR-0061, apart from two empty bitset claims.

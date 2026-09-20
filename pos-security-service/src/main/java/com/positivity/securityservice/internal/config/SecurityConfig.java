@@ -32,7 +32,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@EnableConfigurationProperties({LockoutPolicy.class, TenantSearchProperties.class})
+@EnableConfigurationProperties({LockoutPolicy.class, TenantSearchProperties.class, JwtLifetimeProperties.class})
 @RequiredArgsConstructor
 public class SecurityConfig {
     private static final String V1_AUTH_LOGIN = "/v1/auth/login";

@@ -143,6 +143,13 @@ pos:
       window: 10m
       backoff-multiplier: 2
       max-backoff-window: 30m
+    # Token lifetimes (#2135). Both are Durations in wall-clock terms; exp is minted from the
+    # application Clock, and clock-scale (1 here, the clock's scale under the accelerated profile
+    # below) is what keeps them wall-clock durations when that clock runs fast.
+    jwt:
+      access-token-ttl: ${POS_SECURITY_JWT_ACCESS_TOKEN_TTL:PT1H}
+      refresh-token-ttl: ${POS_SECURITY_JWT_REFRESH_TOKEN_TTL:P7D}
+      clock-scale: ${POS_SECURITY_JWT_CLOCK_SCALE:1}
     path: /swagger-ui.html
 
 # ADR-0062 section 3: the organization directory the login form searches, so a user picks their
@@ -158,3 +165,19 @@ auth:
     min-query-length: 3
     # Never offer more than this; no total is returned, since a total says how much is left.
     max-results: 10
+
+---
+# Accelerated runs (#2135): exp is minted from the shared ScaledClock, so a lifetime in clock
+# seconds lasts ttl / scale on the wall clock — at scale 2920 an hour-long access token expired
+# 1.2 real seconds after the login that minted it. Multiplying both lifetimes by the clock's
+# scale keeps them the wall-clock durations configured above. The scale is the value
+# AcceleratedTimeProperties binds from pos.time.accelerated.scale (POS_TIME_ACCELERATED_SCALE),
+# with the same 1000 default; POS_SECURITY_JWT_CLOCK_SCALE still wins when set explicitly.
+spring:
+  config:
+    activate:
+      on-profile: accelerated
+pos:
+  security:
+    jwt:
+      clock-scale: ${POS_SECURITY_JWT_CLOCK_SCALE:${pos.time.accelerated.scale:1000}}

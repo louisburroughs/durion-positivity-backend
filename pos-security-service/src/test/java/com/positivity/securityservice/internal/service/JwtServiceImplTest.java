@@ -12,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.config.JwtLifetimeProperties;
 import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.entity.JwtToken;
@@ -88,6 +89,14 @@ class JwtServiceImplTest {
     /** ADR-0062 §3: the tid claim comes from the bound tenant, here the transitional default. */
     @Spy
     private TenantResolver tenantResolver = tenantResolver();
+
+    /**
+     * The shipped defaults — one hour and seven days on an unscaled clock (#2135). The lifetimes
+     * themselves, and what the accelerated clock's scale does to them, are covered by
+     * {@code JwtServiceImplLifetimeTest}.
+     */
+    @Spy
+    private JwtLifetimeProperties jwtLifetimes = JwtLifetimeProperties.defaults();
 
     @InjectMocks
     private JwtServiceImpl sut;
@@ -223,7 +232,8 @@ class JwtServiceImplTest {
                 tokenRevocationManager,
                 userDetailsService,
                 staffingAssignmentProjectionService,
-                tenantResolver());
+                tenantResolver(),
+                JwtLifetimeProperties.defaults());
         ReflectionTestUtils.setField(fresh, "jwtSecret", "");
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))
@@ -242,7 +252,8 @@ class JwtServiceImplTest {
                 tokenRevocationManager,
                 userDetailsService,
                 staffingAssignmentProjectionService,
-                tenantResolver());
+                tenantResolver(),
+                JwtLifetimeProperties.defaults());
         ReflectionTestUtils.setField(fresh, "jwtSecret", "short");
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))
@@ -443,7 +454,8 @@ class JwtServiceImplTest {
                 tokenRevocationManager,
                 userDetailsService,
                 staffingAssignmentProjectionService,
-                new TenantResolver(new TenancyProperties()));
+                new TenantResolver(new TenancyProperties()),
+                JwtLifetimeProperties.defaults());
         ReflectionTestUtils.setField(strict, "jwtSecret", "this-is-a-long-test-secret-key-with-at-least-32-chars");
         ReflectionTestUtils.invokeMethod(strict, "initializeSecretKey");
         SecretKey key = (SecretKey) ReflectionTestUtils.getField(strict, "secretKey");

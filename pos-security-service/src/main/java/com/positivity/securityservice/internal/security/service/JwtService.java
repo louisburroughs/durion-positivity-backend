@@ -16,8 +16,10 @@ import org.jspecify.annotations.Nullable;
  * **Security Model (ADR-0011):**
  * - JWT secret: Injected from environment variable `SECURITY_JWT_SECRET`
  * - Token revocation: Cached in Redis with TTL matching expiration
- * - Access token lifetime: 1 hour (3600 seconds)
- * - Refresh token lifetime: 7 days (604800 seconds)
+ * - Access token lifetime: {@code pos.security.jwt.access-token-ttl}, 1 hour by default
+ * - Refresh token lifetime: {@code pos.security.jwt.refresh-token-ttl}, 7 days by default
+ * - Both are clock seconds; under the {@code accelerated} profile they carry the clock's scale
+ * ({@code pos.security.jwt.clock-scale}, #2135) so they stay wall-clock durations
  * - JWT ID (JTI): Unique identifier for token revocation tracking
  *
  * **Implementation Notes:**
@@ -106,10 +108,10 @@ public interface JwtService {
      *
      * **Implementation:**
      * - Token ID (JTI): Unique UUID v7 identifier for revocation tracking
-     * - Expiration: 1 hour (3600 seconds)
+     * - Expiration: the configured access-token lifetime (1 hour by default)
      * - Permissions: Encoded as perm_bits Base64URL BitSet via
      * PermissionBitsetCodec at issuance.
-     * - Revocation: Token stored in Redis with 1-hour TTL
+     * - Revocation: Token stored in Redis with a TTL matching that lifetime
      *
      * @param username the subject for the token
      * @param userId   stable user identifier for audit lineage
@@ -298,9 +300,9 @@ public interface JwtService {
      * Generates a pair of access and refresh tokens for the given username and
      * roles, stores them, and returns the pair.
      *
-     * **Token Lifetimes:**
-     * - Access token: 1 hour (3600 seconds)
-     * - Refresh token: 7 days (604800 seconds)
+     * **Token Lifetimes** ({@code pos.security.jwt.*}, #2135):
+     * - Access token: {@code access-token-ttl}, 1 hour by default
+     * - Refresh token: {@code refresh-token-ttl}, 7 days by default
      *
      * **JTI (JWT ID):**
      * - Both tokens include a unique JTI for revocation tracking
@@ -345,8 +347,8 @@ public interface JwtService {
      * <p>ADR-0061 §4 amendment (2026-09-09, #1914 phase 3): the location-reach clamp already
      * bounds {@code exp} to the end of the earliest contributing staffing assignment. The role
      * assignments {@code perm_bits} is built from were left out of that clamp — this overload
-     * closes that gap. {@code exp} is {@code min(now + 3600s, the location-reach bound,
-     * grantsExpireAt)}, floored at {@code now}; used by the login path ({@code
+     * closes that gap. {@code exp} is {@code min(now + the access-token lifetime, the location-reach
+     * bound, grantsExpireAt)}, floored at {@code now}; used by the login path ({@code
      * AuthenticationServiceImpl}, which resolves the bound via {@code
      * UserService#getGrantsExpireAt}) and the refresh path ({@link #refreshAccessToken}, which
      * resolves it the same way).

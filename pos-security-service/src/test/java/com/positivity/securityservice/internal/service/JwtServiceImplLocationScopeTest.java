@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.config.JwtLifetimeProperties;
 import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
 import com.positivity.securityservice.internal.domain.RoleGrant;
 import com.positivity.securityservice.internal.dto.UserDto;
@@ -107,7 +108,8 @@ class JwtServiceImplLocationScopeTest {
                 tokenRevocationManager,
                 userDetailsService,
                 projection,
-                tenantResolver());
+                tenantResolver(),
+                JwtLifetimeProperties.defaults());
         ReflectionTestUtils.setField(sut, "jwtSecret", "this-is-a-long-test-secret-key-with-at-least-32-chars");
         ReflectionTestUtils.invokeMethod(sut, "initializeSecretKey");
 

@@ -11,9 +11,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * - camelCase field naming
  * - Returns both access token (short-lived) and refresh token (long-lived)
  *
- * **Token Expiration:**
- * - accessToken: 1 hour (3600 seconds)
- * - refreshToken: 7 days (604800 seconds)
+ * **Token Expiration** ({@code pos.security.jwt.*}, #2135):
+ * - accessToken: {@code access-token-ttl}, 1 hour by default
+ * - refreshToken: {@code refresh-token-ttl}, 7 days by default
  *
  * @since 1.0
  * @see com.positivity.securityservice.internal.controller.JwtController#generateTokenPair
