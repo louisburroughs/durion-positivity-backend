@@ -77,23 +77,24 @@ public final class ChatBlockSegmenter {
     // Placeholder cells that neither confirm nor refute a column being numeric; treated like blank.
     private static final Set<String> NON_NUMERIC_PLACEHOLDER_CELLS = Set.of("-", "–", "—", "n/a");
 
-    // Safety-net patterns for text commonmark 0.24 left as plain paragraph lines instead of
+    // Safety-net checks for text commonmark 0.24 left as plain paragraph lines instead of
     // recognizing as a table/fence (no blank line before the table/fence in the source). A GFM
-    // table delimiter row: 1+ dash-only cells (each optionally colon-bounded) separated by pipes,
-    // optional leading/trailing pipe. The leading "(?=.*\|)" lookahead requires at least one pipe
-    // somewhere on the line (checked before the cell grammar, which alone would also accept a
-    // pipe-less "---"/"***" thematic break or a setext heading underline), so those and prose with
-    // a single stray "|" cannot match.
-    private static final Pattern LEADING_BLOCKQUOTE_INDENT = Pattern.compile("^(?:[ \\t]*>)*[ \\t]*");
-    private static final Pattern TABLE_DELIMITER_ROW =
-            Pattern.compile("^(?=.*\\|)\\|?\\s*:?-+:?\\s*(\\|\\s*:?-+:?\\s*)*\\|?\\s*$");
+    // table delimiter row is 1+ dash-only cells (each optionally colon-bounded) separated by
+    // pipes, with an optional leading/trailing pipe; at least one literal pipe must be present
+    // anywhere on the line, so a pipe-less "---"/"***" thematic break or a setext heading
+    // underline never matches. isDashOnlyDelimiterRow and isFenceOpener below (and the
+    // stripLeadingBlockquoteIndent they build on) implement this as a plain linear scan instead of
+    // a regex with a repeated group (java:S5998: Java's regex engine recurses once per repetition
+    // of a quantified group, which can stack-overflow matching a long, highly repetitive line;
+    // java:S8786: the same nested-quantifier shape is also super-linear to backtrack).
+    private static final Pattern DASH_CELL = Pattern.compile("^:?-+:?$");
 
     // Mirrors the frontend's own fallback-detection regex exactly (chat-message-renderer's
     // TABLE_DELIMITER_RE), so this can never under-detect relative to what the client itself treats
     // as a table delimiter row. Requires a literal "-" too (the bare regex alone would also match an
-    // all-space/colon row like "| | |" that carries no delimiter dash at all).
+    // all-space/colon row like "| | |" that carries no delimiter dash at all). Deliberately left
+    // as-is (not a Sonar finding): it must mirror the frontend regex verbatim.
     private static final Pattern CLIENT_TABLE_DELIMITER_ROW = Pattern.compile("^\\|[\\s:|-]+\\|\\s*$");
-    private static final Pattern FENCE_OPENER = Pattern.compile("^\\s*(>\\s*)*(```|~~~)");
 
     private ChatBlockSegmenter() {}
 
@@ -156,10 +157,10 @@ public final class ChatBlockSegmenter {
     /** True when any line of {@code text} looks like a GFM table delimiter row or a fence opener. */
     private static boolean containsUnsegmentedTableOrFence(String text) {
         for (String line : LINE_SPLIT.split(text, -1)) {
-            if (FENCE_OPENER.matcher(line).find()) {
+            if (isFenceOpener(line)) {
                 return true;
             }
-            String stripped = LEADING_BLOCKQUOTE_INDENT.matcher(line).replaceFirst("");
+            String stripped = stripLeadingBlockquoteIndent(line);
             if (isTableDelimiterRow(stripped)) {
                 return true;
             }
@@ -167,14 +168,111 @@ public final class ChatBlockSegmenter {
         return false;
     }
 
+    /**
+     * Strips a leading run of nested blockquote markers ({@code "> > > "}) and any surrounding
+     * horizontal whitespace: equivalent to the regex {@code ^(?:[ \t]*>)*[ \t]*}, but as a plain
+     * linear scan instead of a regex with a repeated group (java:S5998).
+     */
+    static String stripLeadingBlockquoteIndent(String line) {
+        int length = line.length();
+        int i = 0;
+        int lastMarkerEnd = -1;
+        while (i < length) {
+            int afterSpaces = i;
+            while (afterSpaces < length && isHorizontalTab(line.charAt(afterSpaces))) {
+                afterSpaces++;
+            }
+            if (afterSpaces >= length || line.charAt(afterSpaces) != '>') {
+                break;
+            }
+            i = afterSpaces + 1;
+            lastMarkerEnd = i;
+        }
+        int start = lastMarkerEnd >= 0 ? lastMarkerEnd : 0;
+        while (start < length && isHorizontalTab(line.charAt(start))) {
+            start++;
+        }
+        return line.substring(start);
+    }
+
+    private static boolean isHorizontalTab(char c) {
+        return c == ' ' || c == '\t';
+    }
+
+    /**
+     * True when {@code line}, after any number of nested blockquote markers, opens with a fenced
+     * code block delimiter ({@code ```} or {@code ~~~}): equivalent to the regex
+     * {@code ^\s*(>\s*)*(```|~~~)}, but as a plain linear scan instead of a regex with a repeated
+     * group (java:S5998).
+     */
+    static boolean isFenceOpener(String line) {
+        int i = skipRegexWhitespace(line, 0);
+        while (i < line.length() && line.charAt(i) == '>') {
+            i = skipRegexWhitespace(line, i + 1);
+        }
+        return line.startsWith("```", i) || line.startsWith("~~~", i);
+    }
+
+    private static int skipRegexWhitespace(String line, int from) {
+        int i = from;
+        while (i < line.length() && isRegexWhitespace(line.charAt(i))) {
+            i++;
+        }
+        return i;
+    }
+
+    /** The character class Java's regex {@code \s} matches (no {@code UNICODE_CHARACTER_CLASS}). */
+    private static boolean isRegexWhitespace(char c) {
+        return c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r';
+    }
+
     private static boolean isTableDelimiterRow(String stripped) {
-        if (TABLE_DELIMITER_ROW.matcher(stripped).matches()) {
+        if (isDashOnlyDelimiterRow(stripped)) {
             return true;
         }
         // Belt-and-suspenders: also bail whenever the client's own, looser fallback regex would
         // treat this line as a delimiter row, so this method can never miss a case the client
         // itself renders as a table.
         return CLIENT_TABLE_DELIMITER_ROW.matcher(stripped).matches() && stripped.contains("-");
+    }
+
+    /**
+     * True when {@code stripped} is a GFM table delimiter row: at least one literal pipe, an
+     * optional single leading and/or trailing pipe, and every pipe-separated cell in between a run
+     * of dashes optionally bounded by colons ({@code ^:?-+:?$} once trimmed). Equivalent to the
+     * regex {@code ^(?=.*\|)\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$}, but built from a plain split
+     * instead of a regex with a repeated group (java:S5998, java:S8786: that group's nested
+     * quantifiers are also super-linear to backtrack).
+     */
+    static boolean isDashOnlyDelimiterRow(String stripped) {
+        if (stripped.indexOf('|') < 0) {
+            return false;
+        }
+        String content = stripped.startsWith("|") ? stripped.substring(1) : stripped;
+        int end = content.length();
+        while (end > 0 && isRegexWhitespace(content.charAt(end - 1))) {
+            end--;
+        }
+        if (end > 0 && content.charAt(end - 1) == '|') {
+            end--;
+        }
+        content = content.substring(0, end);
+        for (String cell : content.split("\\|", -1)) {
+            if (!DASH_CELL.matcher(trimRegexWhitespace(cell)).matches()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Trims exactly the characters regex {@code \s} matches (narrower than {@link String#strip()}). */
+    private static String trimRegexWhitespace(String cell) {
+        int start = skipRegexWhitespace(cell, 0);
+        int end = cell.length();
+        while (end > start && isRegexWhitespace(cell.charAt(end - 1))) {
+            end--;
+        }
+        return cell.substring(start, end);
     }
 
     /**

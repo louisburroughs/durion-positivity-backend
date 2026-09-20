@@ -394,6 +394,11 @@ public class ConversationStore implements ConversationMemoryHistory {
         }
     }
 
+    // conversation.getId() is the JPA-managed primary key of a persisted row (McpConversation.id,
+    // column nullable = false); both call sites pass a conversation already loaded via
+    // findOwnedForUpdate, so it is always set. The Lombok getter carries no nullness annotation, so
+    // Sonar cannot see that and treats it as possibly null (java:S2637).
+    @SuppressWarnings("java:S2637")
     private void deriveTitleFromFirstUserTurn(@NonNull McpConversation conversation, @NonNull String userText) {
         if (!conversation.isTitleUserSet()
                 && !messages.existsByConversationIdAndRole(conversation.getId(), ConversationMessageRole.USER)) {

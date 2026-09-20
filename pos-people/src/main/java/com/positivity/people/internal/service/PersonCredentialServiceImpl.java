@@ -111,17 +111,23 @@ public class PersonCredentialServiceImpl implements PersonCredentialService {
     }
 
     private Skill resolveSkill(CredentialUpsertCommand command) {
-        if (command.getSkillCode() != null && !command.getSkillCode().isBlank()) {
-            return skillRegistryService.requireByCode(command.getSkillCode());
+        // Read each getter once (S2637): requireByCode/resolve take @NonNull, and re-calling a
+        // getter after a null/blank guard on an earlier call leaves static analysis unable to
+        // tell the two calls return the same value.
+        String skillCode = command.getSkillCode();
+        if (skillCode != null && !skillCode.isBlank()) {
+            return skillRegistryService.requireByCode(skillCode);
         }
-        if (command.getSourceCode() == null
-                || command.getSourceCode().isBlank()
-                || command.getSourceCredentialCode() == null
-                || command.getSourceCredentialCode().isBlank()) {
+        String sourceCode = command.getSourceCode();
+        String sourceCredentialCode = command.getSourceCredentialCode();
+        if (sourceCode == null
+                || sourceCode.isBlank()
+                || sourceCredentialCode == null
+                || sourceCredentialCode.isBlank()) {
             throw new RequestValidationException(
                     "A credential names its skill either by skillCode or by sourceCode + sourceCredentialCode");
         }
-        return skillRegistryService.resolve(command.getSourceCode(), command.getSourceCredentialCode());
+        return skillRegistryService.resolve(sourceCode, sourceCredentialCode);
     }
 
     private static String normalizeIssuer(CredentialUpsertCommand command, Skill skill) {

@@ -6,8 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import com.positivity.mcp.internal.dto.ChatBlock;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Tests for {@link ChatBlockSegmenter} (#2072 wave 1): splits a chat answer's final markdown into
@@ -762,6 +767,168 @@ class ChatBlockSegmenterTest {
             List<ChatBlock> blocks = ChatBlockSegmenter.segment(answer);
             assertNoUnsegmentedTableOrFenceInMarkdownBlocks(blocks);
         }
+    }
+
+    // -- java:S5998 / java:S8786 remediation: isDashOnlyDelimiterRow / isFenceOpener /
+    // stripLeadingBlockquoteIndent replaced regexes with a repeated group with plain linear scans.
+    // These exercise those package-private helpers directly (fastest, most precise) in addition to
+    // the segment()-level tests above/below that already cover the safety net end to end.
+
+    @ParameterizedTest(name = "delimiter row: \"{0}\"")
+    @MethodSource("delimiterRowCases")
+    @DisplayName("isDashOnlyDelimiterRow matches exactly the intended set of lines")
+    void isDashOnlyDelimiterRow_matchesIntendedSet(String line, boolean expected) {
+        assertThat(ChatBlockSegmenter.isDashOnlyDelimiterRow(line)).isEqualTo(expected);
+    }
+
+    private static Stream<Arguments> delimiterRowCases() {
+        return Stream.of(
+                Arguments.of("| --- | --- |", true),
+                Arguments.of("--- | ---", true),
+                Arguments.of("| --- | --- ", true),
+                Arguments.of(" --- | --- |", true),
+                Arguments.of("|---|---|", true),
+                Arguments.of("| :--- | ---: | :---: |", true),
+                Arguments.of("|  ---  |  ---  |", true),
+                Arguments.of("| --- |", true),
+                Arguments.of("---", false),
+                Arguments.of("***", false),
+                Arguments.of("- - -", false),
+                Arguments.of("| | |", false),
+                Arguments.of("| not a table", false),
+                Arguments.of("Pick yes | no", false),
+                Arguments.of("", false));
+    }
+
+    // The exact patterns the three linear scans replaced. Kept here, test-only, as the oracle:
+    // every string over a small alphabet, up to a length that exercises each grammar element, must
+    // classify identically under the scan and the regex — including whitespace-prefixed rows
+    // (" |---|", "\t---|", "\u000B|---|"), which the delimiter regex rejects and the scan must too.
+    private static final Pattern LEGACY_LEADING_BLOCKQUOTE_INDENT = Pattern.compile("^(?:[ \\t]*>)*[ \\t]*");
+    private static final Pattern LEGACY_TABLE_DELIMITER_ROW =
+            Pattern.compile("^(?=.*\\|)\\|?\\s*:?-+:?\\s*(\\|\\s*:?-+:?\\s*)*\\|?\\s*$");
+    private static final Pattern LEGACY_FENCE_OPENER = Pattern.compile("^\\s*(>\\s*)*(```|~~~)");
+    private static final char[] SCAN_ALPHABET = {'|', '-', ':', ' ', '\t', '\u000B', '>', '`', 'a'};
+
+    @Test
+    @DisplayName("the linear scans classify every short string exactly as the regexes they replaced did")
+    void linearScans_matchLegacyRegexesExhaustively() {
+        int mismatches = 0;
+        StringBuilder firstMismatch = new StringBuilder();
+        for (int length = 0; length <= 6; length++) {
+            int combos = (int) Math.pow(SCAN_ALPHABET.length, length);
+            for (int n = 0; n < combos; n++) {
+                char[] chars = new char[length];
+                int rest = n;
+                for (int i = 0; i < length; i++) {
+                    chars[i] = SCAN_ALPHABET[rest % SCAN_ALPHABET.length];
+                    rest /= SCAN_ALPHABET.length;
+                }
+                String line = new String(chars);
+                boolean sameRow = ChatBlockSegmenter.isDashOnlyDelimiterRow(line)
+                        == LEGACY_TABLE_DELIMITER_ROW.matcher(line).matches();
+                boolean sameFence = ChatBlockSegmenter.isFenceOpener(line)
+                        == LEGACY_FENCE_OPENER.matcher(line).find();
+                boolean sameIndent = ChatBlockSegmenter.stripLeadingBlockquoteIndent(line)
+                        .equals(LEGACY_LEADING_BLOCKQUOTE_INDENT.matcher(line).replaceFirst(""));
+                if (!(sameRow && sameFence && sameIndent)) {
+                    if (mismatches == 0) {
+                        firstMismatch.append(line.replace("\t", "\\t").replace("\u000B", "\\v"));
+                    }
+                    mismatches++;
+                }
+            }
+        }
+        assertThat(mismatches)
+                .as("strings classified differently by scan vs legacy regex (first: \"%s\")", firstMismatch)
+                .isZero();
+    }
+
+    @ParameterizedTest(name = "whitespace-prefixed delimiter row: \"{0}\"")
+    @ValueSource(strings = {" |---|", "\t|---|", "\u000B|---|", " | --- | --- |", "  |:---:|"})
+    @DisplayName("a delimiter row with whitespace before its leading pipe is rejected, as the regex rejected it")
+    void isDashOnlyDelimiterRow_whitespaceBeforeLeadingPipe_isRejectedLikeTheRegex(String line) {
+        assertThat(LEGACY_TABLE_DELIMITER_ROW.matcher(line).matches()).isFalse();
+        assertThat(ChatBlockSegmenter.isDashOnlyDelimiterRow(line)).isFalse();
+        // The segmenter only ever sees such a row after stripLeadingBlockquoteIndent, which removes
+        // spaces and tabs (not other whitespace), so the space/tab variants are accepted from there.
+        String stripped = ChatBlockSegmenter.stripLeadingBlockquoteIndent(line);
+        assertThat(ChatBlockSegmenter.isDashOnlyDelimiterRow(stripped))
+                .isEqualTo(LEGACY_TABLE_DELIMITER_ROW.matcher(stripped).matches());
+    }
+
+    @Test
+    @DisplayName("isDashOnlyDelimiterRow handles a pathological 5000-char input without recursing or hanging")
+    void isDashOnlyDelimiterRow_pathologicalInput_noStackOverflowAndFast() {
+        String longRow = "|-".repeat(2500);
+
+        long start = System.nanoTime();
+        boolean result = ChatBlockSegmenter.isDashOnlyDelimiterRow(longRow);
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        assertThat(result).isTrue();
+        assertThat(elapsedMs).isLessThan(1000);
+    }
+
+    @Test
+    @DisplayName("stripLeadingBlockquoteIndent strips nested blockquote markers and surrounding whitespace")
+    void stripLeadingBlockquoteIndent_stripsNestedMarkers() {
+        assertThat(ChatBlockSegmenter.stripLeadingBlockquoteIndent("> > > deep"))
+                .isEqualTo("deep");
+        assertThat(ChatBlockSegmenter.stripLeadingBlockquoteIndent(">>>text")).isEqualTo("text");
+        assertThat(ChatBlockSegmenter.stripLeadingBlockquoteIndent("  plain text"))
+                .isEqualTo("plain text");
+        assertThat(ChatBlockSegmenter.stripLeadingBlockquoteIndent("> | --- |")).isEqualTo("| --- |");
+        assertThat(ChatBlockSegmenter.stripLeadingBlockquoteIndent("")).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "stripLeadingBlockquoteIndent on a pathological 5000-char nested-blockquote input never stack overflows")
+    void stripLeadingBlockquoteIndent_pathologicalInput_noStackOverflowAndFast() {
+        String deeplyNested = "> ".repeat(2500) + "text";
+
+        long start = System.nanoTime();
+        String result = ChatBlockSegmenter.stripLeadingBlockquoteIndent(deeplyNested);
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        assertThat(result).isEqualTo("text");
+        assertThat(elapsedMs).isLessThan(1000);
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "```",
+                "~~~",
+                "```python",
+                "> ```",
+                "> > ```",
+                "  ```",
+            })
+    @DisplayName("isFenceOpener recognizes fence openers, with or without blockquote prefixes")
+    void isFenceOpener_recognizesFenceOpeners(String line) {
+        assertThat(ChatBlockSegmenter.isFenceOpener(line)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"not a fence", "``", "`single`", "", "> not a fence"})
+    @DisplayName("isFenceOpener rejects non-fence lines")
+    void isFenceOpener_rejectsNonFenceLines(String line) {
+        assertThat(ChatBlockSegmenter.isFenceOpener(line)).isFalse();
+    }
+
+    @Test
+    @DisplayName("isFenceOpener on a pathological 5000-char nested-blockquote input never stack overflows")
+    void isFenceOpener_pathologicalInput_noStackOverflowAndFast() {
+        String deeplyNested = "> ".repeat(2500) + "```";
+
+        long start = System.nanoTime();
+        boolean result = ChatBlockSegmenter.isFenceOpener(deeplyNested);
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        assertThat(result).isTrue();
+        assertThat(elapsedMs).isLessThan(1000);
     }
 
     // Mirrors production's own safety net (ChatBlockSegmenter#containsUnsegmentedTableOrFence):

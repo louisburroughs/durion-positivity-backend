@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -30,8 +31,8 @@ import org.springframework.web.client.RestClient;
  * logged once on the transition to failing and once on recovery, each with the consecutive count.
  * That fallback keeps per-tenant jobs alive but makes the list non-authoritative, which {@link
  * #hasCompleteSnapshot()} reports so a fleet-wide job can hold off. The list and that verdict are
- * published together as one immutable {@link TenantRegistry.Snapshot}, replaced by a single
- * volatile write on every refresh outcome, so {@link #snapshot()} — the accessor a fleet-wide
+ * published together as one immutable {@link TenantRegistry.Snapshot}, replaced by a single atomic
+ * reference update on every refresh outcome, so {@link #snapshot()} — the accessor a fleet-wide
  * caller must use — can never return a list from one refresh paired with a completeness verdict
  * from another.
  *
@@ -58,11 +59,11 @@ public class RemoteTenantRegistry implements TenantRegistry, TenantRegistryFresh
 
     /**
      * The tenant list and its completeness, published together: every refresh outcome (success or
-     * failure) replaces this reference with one new immutable pair in a single volatile write, so a
-     * reader that dereferences it once — {@link #snapshot()} — can never observe a list from one
-     * refresh alongside a completeness verdict from another.
+     * failure) replaces this reference with one new immutable pair in a single atomic {@code set},
+     * so a reader that dereferences it once — {@link #snapshot()} — can never observe a list from
+     * one refresh alongside a completeness verdict from another.
      */
-    private volatile TenantRegistry.Snapshot snapshot;
+    private final AtomicReference<TenantRegistry.Snapshot> snapshot;
 
     private volatile @Nullable Instant lastAttempt;
     private volatile @Nullable Instant lastSuccess;
@@ -91,7 +92,7 @@ public class RemoteTenantRegistry implements TenantRegistry, TenantRegistryFresh
         List<UUID> seed = new StaticTenantRegistry(properties).activeTenantIds();
         // The static seed is never the fleet, so it starts incomplete, same as hasCompleteSnapshot()
         // always reported before this pairing existed.
-        this.snapshot = new TenantRegistry.Snapshot(seed, false);
+        this.snapshot = new AtomicReference<>(new TenantRegistry.Snapshot(seed, false));
         if (secret.isBlank()) {
             log.warn(
                     "pos.tenancy.registry.secret is not set: every fetch from {} will be refused and the"
@@ -128,12 +129,12 @@ public class RemoteTenantRegistry implements TenantRegistry, TenantRegistryFresh
                 refreshLock.unlock();
             }
         }
-        return snapshot;
+        return snapshot.get();
     }
 
     /** Tenants in the current snapshot; the {@code tenancy.registry.tenants} gauge. */
     public int snapshotSize() {
-        return snapshot.tenantIds().size();
+        return snapshot.get().tenantIds().size();
     }
 
     /** Epoch seconds of the last successful fetch, {@code 0} until one has succeeded. */
@@ -158,7 +159,7 @@ public class RemoteTenantRegistry implements TenantRegistry, TenantRegistryFresh
      */
     @Override
     public boolean hasCompleteSnapshot() {
-        return snapshot.complete();
+        return snapshot.get().complete();
     }
 
     private boolean isDue(Instant now) {
@@ -175,8 +176,8 @@ public class RemoteTenantRegistry implements TenantRegistry, TenantRegistryFresh
             long failures = consecutiveFailures.incrementAndGet();
             // Same list, completeness turned off, published in one write: a reader mid-dereference
             // of snapshot() never pairs the pre-failure list with a stale "complete" verdict.
-            List<UUID> keptTenantIds = snapshot.tenantIds();
-            snapshot = new TenantRegistry.Snapshot(keptTenantIds, false);
+            List<UUID> keptTenantIds = snapshot.get().tenantIds();
+            snapshot.set(new TenantRegistry.Snapshot(keptTenantIds, false));
             if (failures == 1) {
                 log.warn(
                         "Tenant registry refresh from {} failed (failure 1); keeping the last good snapshot"
@@ -190,7 +191,7 @@ public class RemoteTenantRegistry implements TenantRegistry, TenantRegistryFresh
             }
             return;
         }
-        snapshot = new TenantRegistry.Snapshot(fetched, true);
+        snapshot.set(new TenantRegistry.Snapshot(fetched, true));
         lastSuccess = now;
         long failures = consecutiveFailures.getAndSet(0);
         if (failures > 0) {
