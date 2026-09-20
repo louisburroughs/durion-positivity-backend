@@ -40,7 +40,7 @@ public class McpServerConfiguration {
 
     // MCP tools route through pos-api-gateway because they relay end-user bearer tokens
     // which require JWT->X-Authorities conversion at the gateway layer.
-    // See docs/service-discovery-migration/client-policy-matrix.md: gateway-exception.
+    // See ../durion/docs/architecture/INTERNAL_TRANSPORT_AND_SERVICE_DISCOVERY.md: gateway-exception.
     //
     // Bounded connect/read timeouts (#1660, ToolHttpProperties): a stalled downstream previously
     // held the whole chat turn until something else gave up (mirrors OllamaChatModelConfiguration's

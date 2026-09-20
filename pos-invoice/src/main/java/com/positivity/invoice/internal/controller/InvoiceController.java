@@ -60,11 +60,11 @@ public class InvoiceController {
 
     private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
             "Caller holds invoice:manage but its location scope does not cover the invoice's location"
-                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
     private static final String VIEW_LOCATION_SCOPE_DENIED_DESCRIPTION =
             "Caller holds invoice:invoice:view but its location scope does not cover the invoice's location"
-                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
     private final InvoiceService invoiceService;
     private final InvoiceFinalizationService invoiceFinalizationService;

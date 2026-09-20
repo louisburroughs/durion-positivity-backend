@@ -319,7 +319,7 @@ decisions are recorded in `location-scope.yaml` beside `openapi.yaml`, which CI 
 
 No endpoint here *narrows*: every `locationId` names the resource being acted on, none is an
 optional list filter. A denial renders `403` with `ApiError.code = LOCATION_SCOPE_DENIED` (see
-`docs/ERROR_ENVELOPE.md`); a malformed id is still `400` for every caller because Spring parses
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md)); a malformed id is still `400` for every caller because Spring parses
 the UUID before the gate runs. The `hasAnyAuthority` endpoints go through
 `LocationScopeGuard.requireAny`, which consults only the alternates the caller actually holds.
 

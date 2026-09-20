@@ -418,6 +418,23 @@ What that costs is a constraint on the rollout, and it is stated rather than mit
   with the three core availability quantities missing, which the record constructor rejects. The
   forecast triple defaults to zero as it always did for schema-v1 payloads.
 
+## Error codes
+
+Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
+and the platform-wide fallback codes emitted by `pos-web-common` and `pos-security-common` are in
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md).
+The table below is this module's own codes; any endpoint here may additionally return a platform
+fallback code. Add a row in the same pull request as the controller or advice that mints the code.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `NOT_FOUND` | 404 | Inventory resource not found |
+| `VALIDATION_ERROR` | 400 | Request parameter validation failed |
+| `INSUFFICIENT_STOCK` | 422 | Not enough on-hand stock to fulfill |
+| `INSUFFICIENT_ATP` | 422 | Available-to-promise quantity is insufficient |
+| `RETURN_QUANTITY_EXCEEDED` | 422 | Return exceeds original purchase quantity |
+| `ADJUSTMENT_LEDGER_POST_FAILED` | 500 | Ledger post for adjustment failed |
+
 ## Configuration
 
 | Property                                            | Default  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |

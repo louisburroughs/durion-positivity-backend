@@ -33,7 +33,7 @@
 - Tenancy (ADR-0062). **Schema, actionable now:** a new table goes into the module's `V1__baseline_<module>.sql`
   with `tenant_id` first, RLS enabled and forced, the `tenant_isolation` policy, unique constraints and
   scoped-to-scoped foreign keys leading with `tenant_id`, unless it is listed in `db/tenancy-global-tables.txt` with
-  a reason (`docs/TENANCY_SCHEMA.md`); `INSERT ... ON CONFLICT (cols)` on a scoped table names `(tenant_id, cols)`;
+  a reason (`../durion/docs/architecture/deployment/TENANCY_SCHEMA.md`); `INSERT ... ON CONFLICT (cols)` on a scoped table names `(tenant_id, cols)`;
   nothing reads a tenant from a request body, query parameter, or client header. Two exceptions are approved.
   `pos-event-receiver`'s summary endpoints (plan WS6) take an optional `tenantId` query parameter as a *scope
   selector* for a caller already bound to the platform tenant, never as the caller's identity, and refuse it from
@@ -64,6 +64,26 @@
   example. Such a table is not relocated into `V1` after the fact: moving DDL out of a migration other databases
   have already run needs the same reset or repair, and the next flattening folds it into the new baseline for
   free. Data reconciliation and any index over pre-existing rows always stay in a post-baseline migration.
+- Permission registries: assert **enforcement → catalog**, never a bidirectional match. A module's
+  `{Module}PermissionRegistry` constants and its `src/main/resources/permissions.yaml` catalog are not
+  the same set and are not meant to be — `pos-inventory` currently has 57 catalog entries against 54
+  constants, and that is legitimate (a catalog may declare an authority no local controller enforces).
+  A test asserting set equality fails by design. The assertion that catches a real defect is
+  `everyEnforcedAuthorityIsRegistered`: scan `src/main/java` for the authorities controllers actually
+  enforce and require each to appear in the catalog, because a `@PreAuthorize` naming an unregistered
+  authority is an endpoint **no role can ever be granted** — it fails closed at runtime with no build
+  error. Pair it with `everyConstantIsRegistered` to cover constant-reference (non-literal)
+  `@PreAuthorize` expressions. Exemplar:
+  `pos-inventory/src/test/java/com/positivity/inventory/internal/security/InventoryPermissionRegistryTest.java`.
+
+  Two static-analysis traps when writing that scan:
+  1. **Parse balanced parentheses, not a fixed window.** Reading N characters forward from
+     `hasAuthority(` sweeps up whatever annotation argument follows — an
+     `@EmitEvent(id = "VEHICLE_SEARCH", …)` on the next method
+     (`pos-vehicle-inventory/.../VehicleSearchController.java:78`) scores as an enforced authority
+     and the test then demands a catalog entry for an event id.
+  2. **Strip comments before scanning.** A `hasAuthority('…')` inside javadoc that documents an
+     endpoint is not enforcement, but reads identically to a regex.
 - Keep ArchUnit rules green.
 
 ## Where to Look
@@ -75,7 +95,7 @@
 
 ## Related References
 
-- `docs/ARCHITECTURE_GUIDE.md`
+- `../durion/docs/architecture/BACKEND_ARCHITECTURE_GUIDE.md`
 - `docs/DEVELOPMENT_GUIDE.md`
 - `docs/OPERATIONS_RUNBOOK.md`
 - `../durion/knowledge-catalog/`

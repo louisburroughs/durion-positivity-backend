@@ -13,7 +13,7 @@
 
     <properties>
         <!-- Coverage ratchet: measured 82.9% line / 92.9% branch by the gate's own
-             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             command, `verify -DskipITs` (../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1).
              Floors sit 3 points under, the same standard cushion every module gets.
              Re-derive them ONLY from a -DskipITs run — an IT-inclusive measurement
              describes coverage the gate cannot see.
@@ -29,7 +29,7 @@
     <packaging>jar</packaging>
     <dependencies>
         <!-- Lombok for annotation processing -->
-        <!-- Standard ApiError envelope (docs/ERROR_ENVELOPE.md). Added with the store endpoint
+        <!-- Standard ApiError envelope (../durion/docs/architecture/api/ERROR_ENVELOPE.md). Added with the store endpoint
              (CAP-324 #1257): this module had no error handling because it had no writes, and a new
              write must not answer in a shape no client parses. -->
         <dependency>

@@ -1,6 +1,6 @@
 -- pos-mcp-server #2073: persisted assistant conversation history.
 --
--- Both tables are tenant-scoped (ADR-0062, docs/TENANCY_SCHEMA.md "What every tenant-scoped table
+-- Both tables are tenant-scoped (ADR-0062, ../durion/docs/architecture/deployment/TENANCY_SCHEMA.md "What every tenant-scoped table
 -- has"): tenant_id first with the app_current_tenant() default, row-level security forced, a
 -- (tenant_id, id) unique key as the composite foreign-key target, and the scoped -> scoped foreign key
 -- composite so a key check (which runs as the owner and bypasses RLS) can never be satisfied by

@@ -3,7 +3,7 @@
 The ADR-0062 tenancy runtime every adopted module gets by auto-configuration: `TenantContext`,
 the request/record/scheduler bindings, the connection and Hibernate resolvers, and the
 classification annotations. Conventions, the binding table and the add-a-table checklist live in
-`docs/TENANCY_SCHEMA.md`; this file covers what the library configures.
+`../durion/docs/architecture/deployment/TENANCY_SCHEMA.md`; this file covers what the library configures.
 
 ## Configuration (`pos.tenancy.*`)
 

@@ -39,7 +39,8 @@ public class OutboxReplayServiceImpl implements OutboxReplayService {
         this.tenantIterator = tenantIterator;
         this.perTenantTransaction = new TransactionTemplate(transactionManager);
         // Never join a transaction begun before the tenant was bound: its connection was checked
-        // out unbound (docs/TENANCY_SCHEMA.md, "Per-tenant schedulers and transactions").
+        // out unbound (../durion/docs/architecture/deployment/TENANCY_SCHEMA.md, "Per-tenant schedulers and
+        // transactions").
         this.perTenantTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 

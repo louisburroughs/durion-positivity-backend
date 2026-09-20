@@ -49,7 +49,7 @@ public class LaborIntelligenceController {
 
     private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
             "Caller holds workorder:labor_intelligence:view but its location scope does not cover the requested"
-                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
     private final LaborIntelligenceService laborIntelligenceService;
     private final LocationHierarchyService locationHierarchyService;

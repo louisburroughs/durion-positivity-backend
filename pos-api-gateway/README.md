@@ -85,7 +85,7 @@ pos-security-service's own schema, and cross-service DB access is not how this p
 A revoked token gets `401` with `code: TOKEN_REVOKED`. Every other auth failure gets `401` with
 `code: UNAUTHORIZED`; the specific reason (bad signature, unknown `perm_ver`, malformed claim) is
 logged and counted, never returned, because it is diagnostic for us and a probing oracle for anyone
-else. Both carry the platform `ApiError` envelope (`docs/ERROR_ENVELOPE.md`) — before #1883 a gateway
+else. Both carry the platform `ApiError` envelope ([`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md)) — before #1883 a gateway
 401 had no body at all.
 
 **Redis unavailable: fail open, loudly.** A lookup that errors or exceeds

@@ -1,3 +1,10 @@
+---
+type: Operations
+title: Development Guide
+description: 'Governs how a backend change is built, versioned and propagated: the toolchain and version baseline, the environment profile matrix, the three OpenAPI generation methods and the API Artifacts Sync fan-out, plus how code quality is measured and which CI invariants must hold.'
+status: current
+---
+
 # Development Guide
 
 This document covers development workflows, build configuration, OpenAPI documentation, version management, and the pos-events shared library for the durion-positivity-backend microservices platform.
@@ -10,7 +17,9 @@ This document covers development workflows, build configuration, OpenAPI documen
 4. [OpenAPI Documentation](#openapi-documentation)
 5. [Version Management](#version-management)
 6. [pos-events Shared Library](#pos-events-shared-library)
-7. [Spring Boot 4.0 Migration Status](#spring-boot-40-migration-status)
+7. [Spring Boot 4 Migration Status](#spring-boot-4-migration-status)
+8. [Code Quality Measurement (SonarCloud)](#code-quality-measurement-sonarcloud)
+9. [CI Build Invariants](#ci-build-invariants)
 
 ---
 
@@ -125,32 +134,37 @@ Local checkouts are unaffected: the hook exits immediately unless
 
 ### POM Consolidation
 
-All dependency versions are centralized in the root `pom.xml`:
+All dependency versions are centralized in the root `pom.xml`. The platform baseline below is
+load-bearing (other docs, CI, and the SDKMAN! section above depend on it); every other version lives
+in `pom.xml` `<properties>` and is not duplicated here, because a copied list drifts silently.
 
-**Version Properties:**
+| Axis | Version | Source |
+| ---- | ------- | ------ |
+| Java | 25 | `pom.xml` `<java.version>` / `.sdkmanrc` (`25.0.2-tem`) |
+| Spring Boot | 4.1.1 | `pom.xml` `<parent>` → `spring-boot-starter-parent` |
+| Spring Cloud | 2025.1.3 | `pom.xml` `<spring-cloud.version>` |
+| SpringDoc OpenAPI | 3.1.0 | `pom.xml` `<springdoc-openapi.version>` |
 
-```xml
-<properties>
-    <java.version>25</java.version>
-    <spring-cloud.version>2025.1.1</spring-cloud.version>
-    <junit5.version>5.10.1</junit5.version>
-    <mockito.version>5.8.0</mockito.version>
-    <assertj.version>3.25.1</assertj.version>
-    <lombok.version>1.18.32</lombok.version>
-    <slf4j.version>2.0.13</slf4j.version>
-    <springdoc-openapi.version>2.7.0</springdoc-openapi.version>
-    <swagger-annotations.version>2.2.44</swagger-annotations.version>
-    <opentelemetry.version>1.40.0</opentelemetry.version>
-</properties>
+```bash
+# Read the current values rather than trusting a doc:
+./mvnw -q help:evaluate -Dexpression=java.version -DforceStdout
+grep -n 'spring-cloud.version\|springdoc-openapi.version' pom.xml
 ```
+
+A handful of `<properties>` entries are deliberate **overrides ahead of the Spring Boot BOM**, each
+carrying a CVE comment and a "still ahead of the parent — check before deleting" note (currently
+`tomcat.version` and `kafka.version`). Do not bump or remove one without re-reading its comment.
 
 ### Internal BOM (`pos-dependencies`)
 
-The `pos-dependencies` module manages internal artifact versions:
+`pos-dependencies` is the internal BOM. Its `<dependencyManagement>` holds twelve entries — eleven
+`com.positivity` artifacts at `${project.version}` (`pos-security-common`, `pos-tenancy-common`,
+`pos-tenant`, `pos-web-common`, `pos-events`, `pos-document-helper`, `pos-shared-dtos`,
+`pos-domain-events`, `pos-tax-common`, `pos-archunit` (test scope), `pos-agent-framework`) plus the
+external `uuid-creator` (ADR-0013). It also pins the Spotless/Palantir formatter plugin version.
 
-- pos-events
-- pos-archunit
-- pos-agent-framework
+Read `pos-dependencies/pom.xml` for the authoritative list — it changes whenever a shared library is
+added, and an enumeration copied elsewhere goes stale.
 
 ### Common Commands
 
@@ -176,7 +190,8 @@ The `pos-dependencies` module manages internal artifact versions:
 
 ## Runtime Profile Matrix
 
-The backend uses four canonical environment/build profiles:
+The backend has four canonical **environment** profiles. Exactly one of these is active at a time;
+everything else in the repo is an additive overlay (next table), not an environment.
 
 | Profile   | Activation                                                | Primary Purpose                                                                                          | Intended Environment  |
 | --------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------- |
@@ -184,6 +199,29 @@ The backend uses four canonical environment/build profiles:
 | `dev`     | Spring runtime profile (`--spring.profiles.active=dev`)   | Local developer runtime with H2 and minimal laptop-friendly defaults                                     | Developer workstation |
 | `alpha`   | Spring runtime profile (`--spring.profiles.active=alpha`) | Near-production runtime defaults for EC2 alpha environment                                               | AWS EC2 alpha         |
 | `prod`    | Spring runtime profile (`--spring.profiles.active=prod`)  | Production runtime configuration (env-driven; intentionally minimal while production is being finalized) | Production            |
+
+### Non-environment overlays
+
+These are real, active profile names you will meet in `application-*.yml` and in Compose. They layer
+on top of an environment profile rather than replacing one, so a grep for "the four profiles" will
+not find them.
+
+| Overlay       | Activation                                                        | What it changes                                                                                                                 |
+| ------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `indus`       | `SPRING_PROFILES_ACTIVE=indus`                                    | Industrialization runtime: env-driven base plus the ADR-0046 INFO logging baseline. Present in ~31 modules — the widest overlay. |
+| `docker`      | `SPRING_PROFILES_ACTIVE=docker` (`docker-compose.yml`)            | Compose/Postgres wiring. Only `pos-security-service` ships an `application-docker.yml`.                                          |
+| `accelerated` | `SPRING_PROFILES_INCLUDE=accelerated` (additive, never exclusive) | Virtual-clock runs. Applied to **every** JVM service at once — see below.                                                        |
+| `test`        | Spring test context                                               | Test-only datasource/messaging overrides.                                                                                        |
+| `local-kafka` | `SPRING_PROFILES_INCLUDE=local-kafka`                             | Points a locally run service at a Compose Kafka broker.                                                                          |
+| `standalone`  | `SPRING_PROFILES_INCLUDE=standalone`                              | `pos-tax` only: run without Eureka.                                                                                             |
+
+**`accelerated` is all-or-nothing.** `deployment/alpha/docker-compose.accelerated.yml` applies one
+shared `x-accelerated-env` anchor to every JVM service because a single service left on the wall
+clock writes records a year ahead of everything else in the same database — an unrecoverable state
+for a shared environment. `scripts/check-accelerated-compose.sh` fails CI when a service added to
+`docker-compose.yml` is missing from the accelerated overlay. `eureka-server`,
+`pos-reference-mock`, and `pos-frontend` are deliberately excluded (no business timestamps / not a
+JVM); that exclusion list is encoded in the same script.
 
 Migration note:
 
@@ -195,7 +233,15 @@ Migration note:
 
 ### Overview
 
-All 19 POS modules have complete OpenAPI 3.0.1 documentation integration using SpringDoc OpenAPI 2.7.0.
+The reactor declares 44 modules (`<module>` entries in the root `pom.xml`). The 27 that expose an
+HTTP surface each publish a module-root `openapi.yaml` generated by SpringDoc OpenAPI 3.1.0; the
+remaining modules are shared libraries, BOMs, or build-policy modules with no controllers and no
+spec. To get the current count without trusting this sentence:
+
+```bash
+grep -c '<module>' pom.xml          # reactor modules
+ls pos-*/openapi.yaml | wc -l       # modules publishing a spec
+```
 
 ### Standard Pattern
 
@@ -462,10 +508,16 @@ public @interface EmitEvent {
 ```java
 public record EventEmitted(
     String eventId,
+    String apiVersion,
     long timestamp,
+    long elapsedMs,
     Instant publishedAt
 )
 ```
+
+`apiVersion` carries the `@EmitEvent` API version that triggered the emission, and `elapsedMs` is the
+measured operation duration that `pos-event-receiver` compares against the event type's threshold
+preset. Source of truth: `pos-events/src/main/java/com/positivity/events/EventEmitted.java`.
 
 ### Usage
 
@@ -537,34 +589,44 @@ The library uses Spring Boot auto-configuration — no manual setup required. Co
 
 ---
 
-## Spring Boot 4.0 Migration Status
+## Spring Boot 4 Migration Status
 
 ### Current State
 
-**Completed (Phase 1-2):**
+The 3.4.x → 4.x migration is complete and the reactor has since moved on to Boot 4.1.x. Treat the
+list below as history, and the "Current baseline" table in [Build Configuration](#build-configuration)
+as the live answer.
 
-- ✅ Spring Boot: 3.4.2 → 4.0.1
-- ✅ Spring Cloud: 2024.0.0 → 2025.1.1
-- ✅ RestTemplate → RestClient migration (15 files, 8 modules)
-- ✅ Spring AOP manual configuration
-- ✅ All 27 modules compile successfully
-- ✅ Eureka Server runtime validated
-- ✅ Test infrastructure updated
+**Completed:**
 
-**Deferred (Future Work):**
+- Spring Boot 3.4.2 → 4.x (current parent: 4.1.1)
+- Spring Cloud 2024.0.0 → 2025.1.x (current: 2025.1.3)
+- RestTemplate → RestClient migration (15 files, 8 modules)
+- Spring AOP manual configuration
+- Whole reactor compiles (44 modules today; it was 27 when this migration landed)
+- Eureka Server runtime validated
+- Test infrastructure updated
+- Spring Security 7 — arrived with the Boot 4.1.1 parent
 
-- ⏳ Jackson 3.0 code migration (tools.jackson.\* group ID)
-- ⏳ Spring Security 7.0 refactoring
+**Still mixed — Jackson 2 / Jackson 3 coexist.** The `tools.jackson.*` (Jackson 3) packages are now
+the majority of imports, but Jackson 2 databind has not been fully retired. Re-derive before
+assuming either way:
+
+```bash
+grep -rl "tools\.jackson" --include=*.java . | wc -l              # Jackson 3
+grep -rho "com\.fasterxml\.jackson\.[a-z]*" --include=*.java . | sort | uniq -c
+```
+
+Note that `com.fasterxml.jackson.annotation` is *not* evidence of Jackson 2: `jackson-annotations`
+keeps that package name under Jackson 3. Only `…databind` / `…core` references indicate unmigrated
+code.
 
 ### Critical Version Enforcement
 
-**Required Versions:**
-
-- Spring Boot: 4.0.1
-- Spring Cloud: 2025.1.1 (minimum)
-- Java: 21 LTS
-
-**DO NOT USE:** Spring Cloud 2025.0.0 (incompatible with Boot 4.0.1)
+Do not pin Spring Boot or Spring Cloud in a module POM — the root parent and
+`<spring-cloud.version>` govern. Spring Cloud 2025.0.0 is incompatible with Boot 4.x and must not be
+used. Java is 25, not 21 (`<java.version>25</java.version>`; enforced by the `enforce-java` execution
+in the root POM and by `.sdkmanrc`).
 
 ### RestClient Migration Pattern
 
@@ -579,6 +641,82 @@ restTemplate.getForEntity(url, Response.class);
 ```java
 restClient.get().uri(url).retrieve().body(Response.class);
 ```
+
+---
+
+## Code Quality Measurement (SonarCloud)
+
+### The project gate does not refresh on merge
+
+This is the single most misread signal in the repo. Two SonarCloud jobs exist and they publish
+different things:
+
+| Job                 | Scope                    | Trigger                                      | Publishes a branch analysis? |
+| ------------------- | ------------------------ | -------------------------------------------- | ---------------------------- |
+| `code-quality`      | Pull-request scoped      | Every PR                                     | No                           |
+| `code-quality-full` | Full coverage, `main`    | Nightly 06:00 UTC, or `workflow_dispatch`    | Yes — the only one           |
+
+**Merging to `main` does not refresh the project-level quality gate.** Between a merge and the next
+nightly run, the project gate and the issue counts on SonarCloud describe the *previous* analysis.
+Never conclude "the fix didn't land" or "the gate regressed" from a gate read taken inside that
+window — either dispatch `code-quality-full` manually and wait for it, or state the analysis
+timestamp alongside the number.
+
+### Re-deriving gate status and issue facets (no token required)
+
+The project is public, so these read-only calls work unauthenticated:
+
+```bash
+curl -s "https://sonarcloud.io/api/qualitygates/project_status?projectKey=louisburroughs_durion-positivity-backend"
+curl -s "https://sonarcloud.io/api/issues/search?componentKeys=louisburroughs_durion-positivity-backend&resolved=false&impactSeverities=BLOCKER,HIGH&ps=100&p=1&facets=rules,impactSoftwareQualities"
+curl -s "https://sonarcloud.io/api/issues/search?componentKeys=louisburroughs_durion-positivity-backend&resolved=false&impactSoftwareQualities=RELIABILITY&ps=100"
+```
+
+### Regenerating `docs/sonarqube-remediation-inventory.csv`
+
+The CSV is a frozen snapshot of one analysis, not a live view. Regenerate it from the **second and
+third** calls above after each remediation phase lands, and record the analysis timestamp with it.
+
+**Every `file.java:NN` coordinate in that CSV is the line SonarCloud reported at the analysis it was
+built from.** Editing any file shifts every coordinate below the edit. Re-derive coordinates from a
+fresh analysis rather than trusting a stale line number — a "fixed" line that no longer matches is
+usually drift, not a resolved issue.
+
+---
+
+## CI Build Invariants
+
+Two non-obvious constraints govern the pipeline. Both are cheap to violate and expensive to
+rediscover.
+
+### ArchUnit must stop at the `test` phase (#909)
+
+`pos-archunit`'s cross-module rules need sibling modules' plain `target/classes` on the classpath.
+Running the reactor past `package` lets `spring-boot:repackage` replace sibling JARs with fat JARs,
+which relocate classes under `BOOT-INF/classes`. ArchUnit then finds nothing to analyse and **every
+rule passes vacuously** — a green build that proves nothing.
+
+So ArchUnit runs as its own `-am` invocation stopped at `test`:
+
+```bash
+./mvnw -pl pos-archunit -am -Dtest=ArchitectureTests test
+```
+
+On `main`, where the full lifecycle (failsafe ITs, packaged JARs) is required, this is the one
+surviving special case: ArchUnit runs as a separate invocation *inside* the same job, at the `test`
+phase, so `-am` rebuilds siblings from source and their classes resolve from `target/classes`.
+
+### `install`, not `verify`, on `main` — deliberate
+
+`verify` runs every test and packages the JARs but stops one phase short of copying reactor
+artifacts into `~/.m2/repository`. A `~/.m2` cache saved after a `verify` run therefore would not
+contain the just-built internal modules, and downstream jobs could not resolve them — they would
+silently fall back to stale snapshots or fail in offline (`-o`) mode.
+
+`install` is the cheapest way to make reactor output consumable by later jobs through the existing
+SHA-keyed cache; it adds only a local file copy per module on top of `verify`. Uploading `target/`
+trees or the internal `com/positivity` subtree of `~/.m2` as workflow artifacts was considered and
+rejected: a second transport mechanism with no benefit over the cache.
 
 ---
 

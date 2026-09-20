@@ -78,7 +78,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * contract to preserve, unlike pos-order's and pos-invoice's module-prefixed codes.
  * - Request-binding failures (MethodArgumentNotValidException and friends) keep the
  * pre-existing INVALID_REQUEST code — that one does have consumers, so #1730 left it alone and
- * recorded both spellings in docs/ERROR_ENVELOPE.md
+ * recorded both spellings in ../durion/docs/architecture/api/ERROR_ENVELOPE.md
  * - NoRolesAssignedException → 403 Forbidden (USER_HAS_NO_ROLES) — valid credentials or refresh
  * token, but the account currently holds no roles and so no effective permissions (ADR-0017 §2
  * question 1: a refusal about the caller's authorization, answered the same on login and refresh)

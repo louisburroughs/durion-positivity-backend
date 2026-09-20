@@ -648,7 +648,7 @@ alpha.
 
 Verifies that every module's coverage ratchet still gates something.
 
-Root `pom.xml` checks each module against `<jacoco.line.min>` / `<jacoco.branch.min>`, set a few points below measured coverage (`docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md` §6.2). Nothing kept those floors in step with the code: `jacoco:check` catches a module falling below its floor, but not a floor left far behind a module that improved. When this check was written the reactor's floors permitted roughly 3,400 covered lines and 970 covered branches to disappear — about four points of overall coverage — without one build turning red.
+Root `pom.xml` checks each module against `<jacoco.line.min>` / `<jacoco.branch.min>`, set a few points below measured coverage (`../durion/docs/architecture/TEST_COVERAGE_POLICY.md` §6.2). Nothing kept those floors in step with the code: `jacoco:check` catches a module falling below its floor, but not a floor left far behind a module that improved. When this check was written the reactor's floors permitted roughly 3,400 covered lines and 970 covered branches to disappear — about four points of overall coverage — without one build turning red.
 
 **Usage:**
 ```bash

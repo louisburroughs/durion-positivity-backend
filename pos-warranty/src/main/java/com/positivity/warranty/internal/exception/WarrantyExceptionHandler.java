@@ -24,7 +24,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 /**
  * Module-wide translation of exceptions into the standard {@code ApiError} envelope
- * ({@code docs/ERROR_ENVELOPE.md}) for every pos-warranty controller.
+ * ({@code ../durion/docs/architecture/api/ERROR_ENVELOPE.md}) for every pos-warranty controller.
  *
  * <p>Deliberately does NOT map bare {@code IllegalArgumentException} or {@code Exception}: see
  * {@link WarrantyValidationException} for why a blanket {@code IllegalArgumentException} handler

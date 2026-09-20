@@ -220,7 +220,7 @@ public class InventoryPermissionRegistry {
      * View the stock record itself at a location: counted on-hand quantity, lot and serial detail,
      * location contents and rollups. This is what is physically there, uncommitted-for.
      *
-     * <p>Does NOT confer availability (ADR-0057, #1494): availability is the derived projection net
+     * <p>Does NOT confer availability (ADR-0066, #1494): availability is the derived projection net
      * of prior commitments and is gated by {@link #AVAILABILITY_READ} / {@link #AVAILABILITY_SEARCH}.
      */
     public static final String INVENTORY_VIEW = "inventory:on_hand:view";
@@ -239,7 +239,7 @@ public class InventoryPermissionRegistry {
      * plus the incoming/outgoing forecast — in short, what can be promised, optionally narrowed to a
      * location or storage location.
      *
-     * <p>Availability and on-hand are different questions and neither implies the other (ADR-0057,
+     * <p>Availability and on-hand are different questions and neither implies the other (ADR-0066,
      * #1494). This permission never discloses which locations hold the SKU; enumerating them
      * requires {@link #AVAILABILITY_SEARCH}.
      */
@@ -248,7 +248,7 @@ public class InventoryPermissionRegistry {
     /**
      * Read the cross-location availability answer: the per-location breakdown that enumerates every
      * location holding the SKU. Mirrors {@link #INVENTORY_SEARCH} for the derived projection
-     * (ADR-0057, #1494).
+     * (ADR-0066, #1494).
      */
     public static final String AVAILABILITY_SEARCH = "inventory:availability:search";
 
@@ -518,7 +518,7 @@ public class InventoryPermissionRegistry {
     }
 
     /**
-     * Availability permissions (ADR-0057)
+     * Availability permissions (ADR-0066)
      */
     public static List<String> availabilityPermissions() {
         return Arrays.asList(AVAILABILITY_READ, AVAILABILITY_SEARCH);

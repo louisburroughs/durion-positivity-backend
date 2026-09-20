@@ -71,7 +71,7 @@ public class EstimateController {
     private static final String IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE = "estimate.promote";
     private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
             "Caller holds workorder:estimate:view but its location scope does not cover the estimate's location"
-                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
     private final EstimateService estimateService;
     private final WorkorderService workorderService;
     private final IdempotencyService idempotencyService;

@@ -39,7 +39,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 /**
  * Concurrent-write conflicts on the versioned claim aggregate must map to a retryable 409
  * {@code CONFLICT} ApiError, never the 500 {@code INTERNAL_ERROR} catch-all
- * (docs/ERROR_ENVELOPE.md; mirrors pos-catalog).
+ * (../durion/docs/architecture/api/ERROR_ENVELOPE.md; mirrors pos-catalog).
  */
 class WarrantyExceptionHandlerTest {
 

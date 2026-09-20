@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Single source of truth for CI change detection (BACKEND_BUILD_SPEC.md §4.1).
+# Single source of truth for CI change detection (docs/DEVELOPMENT_GUIDE.md, "CI Build Invariants").
 #
 # Emits one JSON object on stdout:
 #   {"full_reactor": false, "modules": ["pos-order", "pos-price"]}

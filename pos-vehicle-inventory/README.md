@@ -35,6 +35,21 @@ Vehicle registry and inventory service for the Durion Positivity ETSMS platform.
 - `GET /v1/vehicles/{id}` — get vehicle preferences (via preferences controller)
 - `PUT /v1/vehicles` — update vehicle preferences
 
+## Error codes
+
+Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
+and the platform-wide fallback codes emitted by `pos-web-common` and `pos-security-common` are in
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md).
+The table below is this module's own codes; any endpoint here may additionally return a platform
+fallback code. Add a row in the same pull request as the controller or advice that mints the code.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `VALIDATION_FAILED` | 400 | Bean-validation failure (with `fieldErrors`), or Jakarta constraint violation on a path/query parameter |
+| `VALIDATION_ERROR` | 400 | Field-level or request-shape validation failure (`VehicleValidationException`) (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all, code unchanged) |
+| `RESOURCE_NOT_FOUND` | 404 | Vehicle or care-preference document not found |
+| `VEHICLE_VIN_CONFLICT` | 409 | An active vehicle already holds the requested VIN — a stateful collision (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all, which had reported this same case as 400) |
+
 ## Configuration
 
 | Property                | Default  | Description                  |

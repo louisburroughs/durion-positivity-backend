@@ -4,7 +4,7 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 -- =============================================================
 -- R__seed_reference_catalog_7_labor_time_source_policy.sql
 -- Tier 1 — source precedence for the Tier 0 sources (#1575 Tier 0)
--- docs/SPEC-tier-0-durion-owned-service-data.md
+-- pos-catalog/docs/service-time-sourcing-plan.md
 -- =============================================================
 -- Genuine tier-1 configuration under docs/DATA_SEED_STRATEGY.md §2: these rows are
 -- (a) environment-invariant — the ranking is a platform decision, identical in alpha and prod;

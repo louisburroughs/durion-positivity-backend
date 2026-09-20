@@ -56,19 +56,19 @@ public class AppointmentsController {
 
     private static final String CREATE_SCOPE_DENIED_DESCRIPTION =
             "Caller holds appointments:create or shop:schedule:edit but its location scope does not cover the"
-                    + " requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
     private static final String VIEW_SCOPE_DENIED_DESCRIPTION =
             "Caller holds appointments:view or shop:schedule:view but its location scope does not cover the"
-                    + " appointment's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " appointment's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
     private static final String RESCHEDULE_SCOPE_DENIED_DESCRIPTION =
             "Caller holds appointments:reschedule but its location scope does not cover the appointment's"
-                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
     private static final String CANCEL_SCOPE_DENIED_DESCRIPTION =
             "Caller holds appointments:cancel but its location scope does not cover the appointment's"
-                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
     private final AppointmentsService appointmentsService;
 

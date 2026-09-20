@@ -39,7 +39,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Pins {@link DeliveryOutcomeListener} against the {@code sender.outcomes.v1} envelope tabulated
- * in {@code docs/PLATFORM_SENDER_CONTRACT.md} §2 (issue #1537 / D5). {@code sender.outcomes.v1}
+ * in {@code durion/domains/positivity/PLATFORM_SENDER_CONTRACT.md} §2 (issue #1537 / D5).
+ * {@code sender.outcomes.v1}
  * has no in-repo producer — it is fed by the external shared platform sender — so the published
  * document is the only other copy of this shape, and this test is what keeps the consumer from
  * drifting away from it silently.

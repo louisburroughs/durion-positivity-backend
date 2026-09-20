@@ -101,7 +101,7 @@ pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitse
   module's Flyway history is one flattened baseline (`V1__baseline_<module>.sql`, 2026-09-09) that already carries
   the tenancy schema: `tenant_id` on every scoped table under Postgres row-level security, unique constraints and
   foreign keys scoped by tenant, and a per-module `db/tenancy-global-tables.txt` whitelist. Conventions and the
-  add-a-table checklist: `docs/TENANCY_SCHEMA.md`. The runtime is `pos-tenancy-common` (WS1: `TenantContext`,
+  add-a-table checklist: `../durion/docs/architecture/deployment/TENANCY_SCHEMA.md`. The runtime is `pos-tenancy-common` (WS1: `TenantContext`,
   `TenantContextFilter`, `TenantRecordInterceptor`, `TenantAwareDataSource`, `TenantScopedEntity`, `@TenantGlobal`,
   `@PlatformScoped`, `TenantIterator`), adopted module by module (`pos-location`, `pos-tenant`,
   `pos-security-service`, `pos-inventory`, `pos-accounting`, `pos-workorder`, `pos-catalog`, `pos-shop-manager`, `pos-order`, `pos-customer`, `pos-supplier`, `pos-warranty`, `pos-people`, `pos-invoice`, `pos-marketing`, `pos-vehicle-inventory`, `pos-price`, `pos-vehicle-fitment`, `pos-people-contact`, `pos-tax`, `pos-image`, `pos-vehicle-reference-nhtsa`, `pos-vehicle-reference-carapi`, `pos-mcp-server`, `pos-event-receiver`, `pos-bulk-loader` (WS8: a target tenant per job) so far; every persisting module is adopted) and enforced by `pos-archunit`'s `TenancyArchitectureTest` for the modules in
@@ -126,15 +126,21 @@ pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitse
   inbound copies from external clients** (the gateway already does this for external traffic).
 - **API versioning is header-driven.** Clients send `X-API-Version: 1`; the gateway rewrites
   `GET /customer/crm/accounts` → `lb://CUSTOMER /v1/crm/accounts`.
-- **Ports**: gateway fixed at `8080`, Eureka at `8761`, bulk-loader at `8090`; every other domain service uses
-  `server.port: 0` (ephemeral) and registers itself with Eureka.
-- **UUID v7** for all primary keys (see `docs/UUID_V7_MIGRATION.md`).
+- **Ports**: on a local JVM run the gateway is fixed at `8080` and Eureka at `8761`; every other service uses
+  `server.port: 0` (ephemeral) and registers itself with Eureka. **Under Compose and alpha this does not hold** —
+  each container listens on `SERVER_PORT: 8080`, except `pos-tax` (8091), `pos-documents` (8092),
+  `pos-mcp-server` (8086) and `pos-reference-mock` (8095). A service-to-service URL must name the peer's
+  container port, not its host mapping. Registry and exceptions:
+  `../durion/docs/architecture/INTERNAL_TRANSPORT_AND_SERVICE_DISCOVERY.md`.
+- **UUID v7** for all primary keys — `@GeneratedValue` + `@UUIDv7Id`, never `@PrePersist`, and DTO identifiers stay
+  `UUID`-typed (ADR-0013, ADR-0027).
 - **Two cross-service call strategies**: through the gateway (`gateway.url`, header `X-API-Version`) for
   client-equivalent traffic, or direct `@LoadBalanced RestClient` to `http://<eureka-service-name>` for
   internal service-to-service calls. **Never** call another service's repository/DB directly.
 - Errors use a standard `ApiError` envelope (`code`, `message`, `status`, `timestamp`, `correlationId`,
   optional `fieldErrors`/`referenceId`/`nextAction`/`supportAction`, and `conflicts`/`suggestedAlternatives` on a
-  409 caused by named conflicts, ADR-0017 §3) — see `docs/ERROR_ENVELOPE.md`.
+  409 caused by named conflicts, ADR-0017 §3) — see `../durion/docs/architecture/api/ERROR_ENVELOPE.md`;
+  per-module error codes live in each module's own `README.md`.
 - Profiles: `dev` (H2, local JVM), `docker` (Compose/Postgres), `alpha` (staging EC2), `prod`. Legacy `local`/`preprod`
   names are retired.
 
@@ -248,8 +254,8 @@ Chat responses in this repo default to compressed "caveman" style (adopted from 
 
 - `AGENTS.md` — full code templates for the patterns above (event registries, initializers, ArchUnit rules)
 - `../durion/knowledge-catalog/` — workspace navigation layer (modules, ADRs, domains)
-- `docs/ARCHITECTURE_GUIDE.md` — Docker, ports, inter-service communication, observability stack
+- `../durion/docs/architecture/BACKEND_ARCHITECTURE_GUIDE.md` — Docker, ports, inter-service communication, observability stack
 - `docs/DEVELOPMENT_GUIDE.md` — OpenAPI generation, version bumping, Spring Boot 4 migration notes
 - `docs/OPERATIONS_RUNBOOK.md` — RBAC, permission registration, troubleshooting
-- `docs/ERROR_ENVELOPE.md` — `ApiError` schema and examples
-- `docs/UUID_V7_MIGRATION.md` — UUID v7 primary key strategy
+- `../durion/docs/architecture/api/ERROR_ENVELOPE.md` — `ApiError` schema and examples
+- `../durion/docs/adr/0013-platform-uuid-identifier-strategy.adr.md` — UUID v7 primary key strategy

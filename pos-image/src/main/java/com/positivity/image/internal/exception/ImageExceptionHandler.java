@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Error responses for this module (CAP-324 #1257, docs/ERROR_ENVELOPE.md).
+ * Error responses for this module (CAP-324 #1257, ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
  *
  * <h2>Why this module suddenly needs one</h2>
  *

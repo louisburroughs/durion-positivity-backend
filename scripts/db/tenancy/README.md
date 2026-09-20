@@ -16,4 +16,4 @@ database with Flyway 12.4.0, `pg_dump --schema-only`, run `flatten.py`, apply th
 repeatable seeds to a fresh database, dump it again, normalise both dumps and diff (empty), and
 compare seed row counts per table (identical). Data seeded by retired versioned scripts was carried
 into `V2__seed_<module>.sql` from a `pg_dump --data-only --column-inserts` of the versioned-only
-migration. See `docs/TENANCY_SCHEMA.md` for the conventions the baselines follow.
+migration. See `../durion/docs/architecture/deployment/TENANCY_SCHEMA.md` for the conventions the baselines follow.

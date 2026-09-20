@@ -125,7 +125,7 @@ public class ToolPriorityTuningService {
      * mid-loop left {@code mcp_tool} holding a mixture of recomputed and stale priorities. The
      * template is executed <em>inside</em> the {@link TenantIterator} binding for the per-tenant
      * unit, never around the whole sweep: a transaction opened outside checks its connection out
-     * before a tenant is bound, and the work would run unbound (docs/TENANCY_SCHEMA.md,
+     * before a tenant is bound, and the work would run unbound (../durion/docs/architecture/deployment/TENANCY_SCHEMA.md,
      * "Per-tenant schedulers and transactions"; the pos-inventory verifiers are the example).
      */
     private final TransactionTemplate transaction;

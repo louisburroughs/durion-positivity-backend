@@ -2,7 +2,7 @@
 # Guards the coverage ratchet against its own floors going stale.
 #
 # Root pom.xml gates each module on <jacoco.line.min> / <jacoco.branch.min>, set
-# a few points below measured coverage (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md
+# a few points below measured coverage (../durion/docs/architecture/TEST_COVERAGE_POLICY.md
 # §6.2). Nothing kept those floors in step with the code, and a floor that has
 # fallen behind fails nothing while the module gives back everything it gained.
 # At the time this check was written the reactor's floors permitted roughly

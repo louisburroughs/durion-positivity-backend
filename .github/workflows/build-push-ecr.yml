@@ -1,7 +1,7 @@
 name: Build and Push to ECR
 
 # Promotes the JARs that passed CI instead of rebuilding from source
-# (BACKEND_BUILD_SPEC.md §4.6): runs after a successful "Backend CI/CD"
+# (docs/DEVELOPMENT_GUIDE.md, "CI Build Invariants"): runs after a successful "Backend CI/CD"
 # main-push run and downloads its service-jars artifact, so the image
 # contains the tested bytes and a red CI run can never race a green ECR
 # push for the same commit.

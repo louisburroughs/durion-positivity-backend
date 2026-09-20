@@ -585,7 +585,7 @@
 					     catches regression without failing on noise. Raise a module's floor when
 					     its coverage rises; never lower one without saying why in the commit.
 					     Modules with no floor set inherit the 0.00 defaults below and are
-					     effectively unguarded — see docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6. -->
+					     effectively unguarded — see ../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6. -->
 					<execution>
 						<id>check-ratchet</id>
 						<phase>verify</phase>

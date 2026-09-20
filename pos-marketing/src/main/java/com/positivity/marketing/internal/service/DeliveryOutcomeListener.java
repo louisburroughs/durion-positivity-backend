@@ -27,7 +27,7 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * Consumes {@code sender.outcomes.v1} — the shared platform sender's delivery, bounce,
  * complaint, open, and click reports (Story #1150, FI-2 contract — durion#369,
- * {@code docs/PLATFORM_SENDER_CONTRACT.md}).
+ * {@code durion/domains/positivity/PLATFORM_SENDER_CONTRACT.md}).
  *
  * <p>Each outcome correlates back to a {@code CampaignSend} row via the
  * {@code providerMessageId} returned at send time. An outcome for an id this module has never

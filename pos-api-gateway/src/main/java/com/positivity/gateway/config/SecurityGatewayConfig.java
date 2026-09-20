@@ -915,7 +915,7 @@ public class SecurityGatewayConfig {
 
     /**
      * Completes the exchange with 401 and the platform {@code ApiError} envelope
-     * ({@code docs/ERROR_ENVELOPE.md}).
+     * ({@code ../durion/docs/architecture/api/ERROR_ENVELOPE.md}).
      *
      * <p>Rejections used to be a bare 401 with no body, which left the gateway as the one place in
      * the platform returning an un-parseable error. The body says only which of two things

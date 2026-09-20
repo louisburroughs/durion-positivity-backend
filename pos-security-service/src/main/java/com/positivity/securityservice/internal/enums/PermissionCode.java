@@ -11,8 +11,10 @@ import java.util.stream.Stream;
  * <p>
  * Bit indexes are permanent and MUST never be reused or reassigned.
  * To retire a permission, mark it {@code @Deprecated} — never remove or
- * renumber. See {@code docs/rbac-permission-role-audit-2026-08.md} §3 for the
- * record of which codes were retired and why, and §4 for the retirement
+ * renumber. Retire the grant by versioned migration; the permission definition
+ * row and its bit index stay forever. See
+ * {@code durion/domains/security/rbac-permission-role-audit-2026-08.md} §3 for
+ * the record of which codes were retired and why, and §4 for the retirement
  * convention this annotation implements.
  */
 @SuppressWarnings("java:S115")
@@ -168,7 +170,7 @@ public enum PermissionCode {
     INVENTORY__ON_HAND__VIEW(64, "inventory:on_hand:view"),
     /**
      * Superseded by {@link #INVENTORY__AVAILABILITY__READ}
-     * ({@code inventory:availability:read}). ADR-0057, #1497, #1499;
+     * ({@code inventory:availability:read}). ADR-0066, #1497, #1499;
      * audit doc §3.
      */
     @Deprecated
@@ -886,7 +888,7 @@ public enum PermissionCode {
     INVENTORY__CYCLE_COUNT_TOLERANCE__MANAGE(469, "inventory:cycle_count_tolerance:manage"),
     // ── Inventory (new) ────────────────────────────────────────────────────────
     // Cross-location availability: the per-location breakdown, split from the
-    // scope-limited read at bit 311 (ADR-0057, #1494).
+    // scope-limited read at bit 311 (ADR-0066, #1494).
     INVENTORY__AVAILABILITY__SEARCH(470, "inventory:availability:search"),
     WORKORDER__FINANCIALS__VIEW(471, "workorder:financials:view"),
     // ── Catalog (new) ──────────────────────────────────────────────────────────

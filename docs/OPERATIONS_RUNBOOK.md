@@ -1,3 +1,10 @@
+---
+type: Runbook
+title: Operations Runbook
+description: 'Governs running the deployed platform: monitoring, the RBAC framework and permission registration against pos-security-service, and the diagnosis paths for the failures this platform actually produces.'
+status: current
+---
+
 # Operations Runbook
 
 This document covers operational procedures, RBAC framework usage, and permission management for the durion-positivity-backend microservices platform.
@@ -69,7 +76,7 @@ Two workflows deliver changes to the alpha EC2 box; which one runs depends on wh
   `build:` contexts — expect both workflows to run on a root-compose change (they converge on
   the committed state).
 - **Schema reset** (ADR-0062 alpha): while the platform is in alpha, Flyway baselines are edited
-  in place rather than migrated (`docs/TENANCY_SCHEMA.md`), so a box whose databases predate a
+  in place rather than migrated (`../durion/docs/architecture/deployment/TENANCY_SCHEMA.md`), so a box whose databases predate a
   baseline change fails validation on the first recreated service (`checksum mismatch for
   migration version 1`, run 34529050551). Dispatch `build-push-ecr.yml` on `main` with
   `deploy_alpha=true` **and** `reset_alpha_databases=true`: the deploy stops the backend tier,
@@ -542,12 +549,22 @@ See `pos-security-service/README.md` for the full role policy.
 
 ### Creating Roles and Permissions
 
+Paths below are **through the gateway** (`/security-service/v1/...`, with `X-API-Version: 1`). Calling
+pos-security-service directly — as in-process registrars do — drops the `/security-service` prefix
+and uses `/v1/...`. The legacy `/api/...` prefix is retired and will 404.
+
 **1. Register a Permission:**
 
+`POST /v1/permissions/register` is guarded by `PermissionRegistrationSecretFilter`: supply the shared
+secret header `X-Permissions-Api-Secret` (value of `POS_SECURITY_API_SECRET`) **or** a token carrying
+`security:permission:register`. A bearer token without that authority is rejected, and the request is
+also rejected outright when `pos.security.api-secret` is unset on the service.
+
 ```bash
-POST /api/permissions/register
+POST /security-service/v1/permissions/register
 Content-Type: application/json
-Authorization: Bearer {JWT_TOKEN}
+X-API-Version: 1
+X-Permissions-Api-Secret: {POS_SECURITY_API_SECRET}
 
 {
   "name": "financial:refund:approve",
@@ -559,8 +576,9 @@ Authorization: Bearer {JWT_TOKEN}
 **2. Create a Role:**
 
 ```bash
-POST /api/roles
+POST /security-service/v1/roles
 Content-Type: application/json
+X-API-Version: 1
 Authorization: Bearer {JWT_TOKEN}
 
 {
@@ -572,8 +590,9 @@ Authorization: Bearer {JWT_TOKEN}
 **3. Assign Permissions to Role:**
 
 ```bash
-PUT /api/roles/permissions
+PUT /security-service/v1/roles/permissions
 Content-Type: application/json
+X-API-Version: 1
 Authorization: Bearer {JWT_TOKEN}
 
 {
@@ -595,8 +614,9 @@ assignment when the token is issued.
 **Open-ended:**
 
 ```bash
-POST /api/roles/assignments
+POST /security-service/v1/roles/assignments
 Content-Type: application/json
+X-API-Version: 1
 Authorization: Bearer {JWT_TOKEN}
 
 {
@@ -609,8 +629,9 @@ Authorization: Bearer {JWT_TOKEN}
 **Bounded window:**
 
 ```bash
-POST /api/roles/assignments
+POST /security-service/v1/roles/assignments
 Content-Type: application/json
+X-API-Version: 1
 Authorization: Bearer {JWT_TOKEN}
 
 {
@@ -628,10 +649,10 @@ service from the token's `loc_fin_bits` / `loc_oth_bits` / `loc_scope` claims (A
 
 ```bash
 # Get all user permissions
-GET /api/roles/permissions/user/123
+GET /security-service/v1/roles/permissions/user/123
 
 # Get user's role assignments
-GET /api/roles/assignments/user/123
+GET /security-service/v1/roles/assignments/user/123
 ```
 
 ### Permission Naming Convention
@@ -1666,8 +1687,11 @@ vendor latency. Full design: `pos-catalog/docs/service-time-sourcing-plan.md`.
   platform does not model). Add the xref row (or decide the code is not wanted), then re-run
   the import — mapping is deliberate curation, never automatic.
 - **Source precedence** is data: `labor_time_source_policy` rows order sources per time type
-  (lower `precedence` wins) and are seeded by `R__seed_reference_catalog_6_labor_guide.sql`;
-  edit rows rather than code to re-rank sources.
+  (lower `precedence` wins). Two seeds insert into that table — the tier 1
+  `R__seed_reference_catalog_7_labor_time_source_policy.sql` is the authoritative policy source;
+  `R__seed_reference_catalog_6_labor_guide.sql` is a tier 2 file pending conversion that still
+  carries one overlapping `DURION_STANDARD/DURION` row. Edit rows rather than code to re-rank
+  sources, and prefer file 7.
 - **Degradation**: if the resolve edge is down, pos-workorder prefills from its
   `ext_catalog_service` replica's `default_labor_hours` (fed by `catalog.service.updated`
   schema v2) and, failing that, the service writer types the hours — estimating never blocks
@@ -1675,6 +1699,9 @@ vendor latency. Full design: `pos-catalog/docs/service-time-sourcing-plan.md`.
 
 ## Related Documentation
 
-- **Platform-level runbook**: `durion/docs/OPERATIONS_RUNBOOK.md`
+- **Platform-level AWS provisioning runbook**: `../durion/docs/architecture/deployment/ALPHA_AWS_PROVISIONING_RUNBOOK.md`
+  (there is no `durion/docs/OPERATIONS_RUNBOOK.md`; this file is the backend operations runbook)
+- **Alpha accelerated-clock deployment**: [runbooks/accelerated-alpha-deployment.md](runbooks/accelerated-alpha-deployment.md)
+- **Flyway baseline reset**: [runbooks/flyway-baseline-reset.md](runbooks/flyway-baseline-reset.md)
 - **Architecture guide**: [ARCHITECTURE_GUIDE.md](ARCHITECTURE_GUIDE.md)
 - **Development guide**: [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)

@@ -74,7 +74,7 @@ class NltiExceptionHandlerErrorHandlingTest {
      * must NOT come back as a fabricated client error. It is an unexpected server-side failure, so
      * it must land on the generic, correlated 500 fallback -- and the previous
      * {@code INTERNAL_SERVER_ERROR} code is retired in favor of the canonical {@code INTERNAL_ERROR}
-     * (ADR-0056 / docs/ERROR_ENVELOPE.md).
+     * (ADR-0056 / ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
      */
     @Test
     @WithMockUser(authorities = "mcp:document:ingest")

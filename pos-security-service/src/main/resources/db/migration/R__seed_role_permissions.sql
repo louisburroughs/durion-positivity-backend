@@ -83,7 +83,7 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   create/view. The elevated escape hatches stay out: goods_receipt:override
 --   and the putaway capacity/compatibility overrides are not granted here.
 -- * The inventory:availability:* and inventory:on_hand:* families answer two
---   different questions and neither implies the other (ADR-0057, #1494).
+--   different questions and neither implies the other (ADR-0066, #1494).
 --   on_hand:* reads the stock record itself — counted quantity, lot and serial
 --   detail, location contents, rollups. availability:* reads the derived
 --   projection: on-hand net of prior commitments (allocations, reservations,
@@ -134,7 +134,7 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   grant therefore needs a versioned migration, which is what V23 does for the
 --   two deleted candidate roles.
 -- * 2026-08 ACCOUNT_MANAGER / CONTROLLER rescope (#1499/#1512, §6 of
---   docs/rbac-permission-role-audit-2026-08.md, decided 2026-08-25):
+--   durion/domains/security/rbac-permission-role-audit-2026-08.md, decided 2026-08-25):
 --   ACCOUNT_MANAGER is now a customer-accounts (AR) role -- payments, customer
 --   credits, credit memos, invoicing/billing, tax exemptions, and it retains
 --   reporting:view:financial-statements. CONTROLLER (created by V24) is the
@@ -146,7 +146,7 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   (superseded by accounting:ap:pay and the gl-mapping/mapping-key/
 --   default-mapping families, §3) and are not granted to any role.
 -- * workorder:start / workorder:workorder:start split-brain (#1499/#1512, §2
---   finding 1 / §7 task 2 of docs/rbac-permission-role-audit-2026-08.md): the
+--   finding 1 / §7 task 2 of durion/domains/security/rbac-permission-role-audit-2026-08.md): the
 --   start endpoint enforced workorder:start while the detail-response
 --   capability flag checked workorder:workorder:start, so a technician could
 --   start a workorder while the UI reported they couldn't. workorder:start is
@@ -166,7 +166,7 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   location:* family. V27 removes the seven dead shop:* grant rows. Live
 --   pos-shop-manager codes (shop:bay:assign, shop:schedule:*,
 --   shop:technician:view) are untouched.
--- * 2026-08 §2 decisions 1-5 (docs/rbac-permission-role-audit-2026-08.md,
+-- * 2026-08 §2 decisions 1-5 (durion/domains/security/rbac-permission-role-audit-2026-08.md,
 --   decided 2026-08-25) -- previously-unwired feature areas, purely additive,
 --   no revocations:
 --   - Marketing (all 9 codes: campaigns, templates, stats) -> ACCOUNT_MANAGER,
@@ -185,7 +185,7 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --     invoice:finalize:override precedent: wide grants would defeat the
 --     purpose of a manager-approval cap.
 -- * 2026-08 §2 recommended-grants matrix, accepted and implemented 2026-08-25
---   (docs/rbac-permission-role-audit-2026-08.md §2) -- purely additive, no
+--   (durion/domains/security/rbac-permission-role-audit-2026-08.md §2) -- purely additive, no
 --   revocations. Covers the register/checkout, returns, warranty, CRM
 --   engagement, fleet-auth and inventory transfer/scrap/valuation surfaces
 --   that had a PermissionCode bit but no role grant. Tie-breaks:
@@ -210,7 +210,7 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --     no PermissionCode bit yet, the latter names no real code.
 --   ADMIN receives every code above it did not already hold, preserving its
 --   strict-superset property.
--- * 2026-08 task 5 retirement wave (docs/rbac-permission-role-audit-2026-08.md
+-- * 2026-08 task 5 retirement wave (durion/domains/security/rbac-permission-role-audit-2026-08.md
 --   §3/§5/§7, V28) -- 34 codes granted here but enforced by no endpoint or
 --   capability check are retired (grants only; the permission-definition rows,
 --   bit indexes and permissions.yaml manifest entries all stay -- V25
@@ -220,7 +220,7 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --     (pos-order PurchaseOrderController); inventory:purchase_order:receive
 --     -> inventory:goods_receipt:create / inventory:receiving:complete (not
 --     order:purchase_order:* -- corrected from the §3 table's first pass).
---   - inventory:on_hand:search -> inventory:availability:read (ADR-0057).
+--   - inventory:on_hand:search -> inventory:availability:read (ADR-0066).
 --   - workorder:invoice:create -> workorder:workorder:generate_invoice.
 --   - order:line:view -> order:order:view (lines are embedded in the order
 --     response; there is no separate line-view endpoint).
@@ -250,7 +250,7 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   to be genuinely enforced (audit-script pattern gap, now fixed) --
 --   workorder:wip:view_all_locations and the two
 --   inventory:putaway:override_* codes -- keep their grants unchanged.
--- * 2026-08 task 5 enforcement wave (docs/rbac-permission-role-audit-2026-08.md
+-- * 2026-08 task 5 enforcement wave (durion/domains/security/rbac-permission-role-audit-2026-08.md
 --   §7 task 5, decided 2026-08-26) -- purely additive, no revocations. 15 codes
 --   across pos-catalog, pos-price, pos-vehicle-inventory and pos-vehicle-fitment
 --   went from bare isAuthenticated()/dead phantom-role checks to live

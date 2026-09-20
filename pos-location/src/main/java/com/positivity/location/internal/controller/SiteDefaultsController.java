@@ -44,11 +44,11 @@ public class SiteDefaultsController {
      */
     static final String WRITE_SCOPE_DENIED_DESCRIPTION =
             "Caller lacks location:write, or holds it but its location scope does not cover locationId"
-                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).";
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).";
 
     static final String READ_SCOPE_DENIED_DESCRIPTION =
             "Caller lacks location:read, or holds it but its location scope does not cover locationId"
-                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).";
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).";
 
     private final SiteDefaultsService siteDefaultsService;
 

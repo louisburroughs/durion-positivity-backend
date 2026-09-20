@@ -473,6 +473,44 @@ never everything). Reach is expanded once per request by `LocationHierarchyServi
 | `getJobTimeTotals` | `workorder:labor:view` | controller, passing the reach to `WorkexecTimeTrackingService` |
 | `listLaborIntelligence` | `workorder:labor_intelligence:view` | controller, passing the reach to `LaborIntelligenceService`; `ROLE_ADMIN` without the permission is unrestricted |
 
+## Error codes
+
+Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
+and the platform-wide fallback codes emitted by `pos-web-common` and `pos-security-common` are in
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md).
+The table below is this module's own codes; any endpoint here may additionally return a platform
+fallback code. Add a row in the same pull request as the controller or advice that mints the code.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `NOT_FOUND` | 404 | Workorder does not exist (also used generically by a few older endpoints) |
+| `ESTIMATE_NOT_FOUND` | 404 | Estimate does not exist |
+| `ESTIMATE_ITEM_NOT_FOUND` | 404 | Line item does not exist on the named estimate |
+| `CHANGE_REQUEST_NOT_FOUND` | 404 | Change request does not exist |
+| `SERVICE_LINE_NOT_FOUND` | 404 | Workorder service line does not exist, or does not belong to the named workorder |
+| `PART_NOT_FOUND` | 404 | Workorder part line does not exist, or does not belong to the named workorder |
+| `APPROVAL_CONFIGURATION_NOT_FOUND` | 404 | Approval configuration does not exist |
+| `WORK_SESSION_NOT_FOUND` | 404 | Work session does not exist |
+| `BREAK_SEGMENT_NOT_FOUND` | 404 | Break segment does not exist |
+| `TRAVEL_SEGMENT_NOT_FOUND` | 404 | Travel segment does not exist |
+| `SUBSTITUTE_LINK_NOT_FOUND` | 404 | Part-substitution link does not exist |
+| `INVALID_ARGUMENT` | 400 | Field-level or request-shape validation failure (`WorkorderRequestValidationException`) |
+| `VALIDATION_FAILED` | 400 | Bean-validation failure, with `fieldErrors` |
+| `CONFLICT` | 409 | Generic stateful collision: invalid lifecycle transition, or a caller-supplied id that does not match the resource it targets, or an operation that would exceed a quantity the resource's current state actually has available (`WorkorderResourceConflictException`, `IllegalStateException`) |
+| `TRAVEL_SEGMENT_CONFLICT` | 409 | An active travel segment already exists for the assignment |
+| `DUPLICATE_SUBSTITUTE_LINK` | 409 | A substitute-part link already exists for this pair |
+| `STALE_SUBSTITUTE_LINK_VERSION` | 409 | Optimistic-lock version mismatch on a substitute link |
+| `CUSTOMER_APPROVAL_INVALID` | 409 | Workorder claims an approval its own state does not back |
+| `INSUFFICIENT_PART_AVAILABILITY` | 409 | Requested part quantity exceeds current owned stock (guided, with `nextAction`) |
+| `PURCHASE_ORDER_REQUIRED` | 422 | Commercial customer's billing rules require a purchase order that was not supplied |
+| `ESTIMATE_INCOMPLETE` | 422 | A DRAFT estimate was submitted for approval with no customer, no vehicle, no line items, or uncalculated totals (`EstimateIncompleteException`) |
+| `FRACTIONAL_QUANTITY_NOT_ALLOWED` | 422 | Quantity is not a whole number for a product the catalog declares indivisible |
+| `UOM_CONVERSION_UNDEFINED` | 422 | `uomCode` names no conversion row for the referenced product |
+| `PROMOTION_IDEMPOTENCY_INCONSISTENT` | 500 | A recorded promotion idempotency key resolves to no workorder (server defect, correlated) |
+| Dynamic `PromotionErrorCode` values | 404/409 | Estimate-to-workorder promotion precondition failures; see `PromotionValidationException` |
+| Dynamic `CustomerRequirementsNotMetException` codes | 409/503 | Customer-requirements verdict blocked workorder creation; see that exception |
+| `FORBIDDEN` | 403 | Caller lacks required workorder permissions |
+
 ## Configuration
 
 | Property                       | Default                    | Description                      |

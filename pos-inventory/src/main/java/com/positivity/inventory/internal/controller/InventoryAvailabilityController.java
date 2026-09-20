@@ -36,7 +36,7 @@ import org.springframework.web.bind.annotation.*;
  *
  * <p>Availability is on-hand net of prior commitments — hard allocations, soft reservations on the
  * per-location projection, and expired ACTIVE lot on-hand — plus the incoming/outgoing forecast.
- * On-hand is the raw stock record. Per ADR-0057 (#1494) neither permission family implies the other,
+ * On-hand is the raw stock record. Per ADR-0066 (#1494) neither permission family implies the other,
  * so these endpoints are gated on {@code inventory:availability:*} and never on
  * {@code inventory:on_hand:*}, which stays with the endpoints that read the record itself.
  *

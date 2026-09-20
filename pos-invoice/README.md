@@ -95,6 +95,26 @@ When `pos.invoice.kafka.enabled` is on, per-payment settlement facts are publish
 manual capture) and `payment.payment.reversed` on voids and refunds (gateway and standalone).
 pos-order's completion handshake is the first consumer (order parity story C3).
 
+## Error codes
+
+Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
+and the platform-wide fallback codes emitted by `pos-web-common` and `pos-security-common` are in
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md).
+The table below is this module's own codes; any endpoint here may additionally return a platform
+fallback code. Add a row in the same pull request as the controller or advice that mints the code.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `NOT_FOUND` | 404 | Invoice or receipt not found |
+| `INVALID_STATE` | 409 | Invoice state transition is not allowed |
+| `CONFLICT` | 409 | General state conflict (e.g. already finalized) |
+| `PAYMENT_DECLINED` | 422 | Payment gateway declined the transaction |
+| `PAYMENT_WINDOW_EXPIRED` | 422 | Refund window for the payment has closed |
+| `INSUFFICIENT_REFUNDABLE_AMOUNT` | 422 | Refund amount exceeds what was originally paid |
+| `MANAGER_APPROVAL_REQUIRED` | 403 | Finalizing this invoice exceeds the amount cap and no manager-approval elevation token was supplied — a step-up credential the caller lacks (ADR-0017 §2 question 1, #1725; introduced by #1694 as a 422). `nextAction` points at `elevateManagerApproval` |
+| `MANAGER_APPROVAL_INVALID` | 403 | Supplied manager-approval elevation token does not verify (wrong scope, tampered, or expired) — a step-up credential the server considers insufficient (ADR-0017 §2 question 1, #1725; introduced by #1694 as a 422). `nextAction` points at `elevateManagerApproval` |
+| `EXCESSIVE_ADJUSTMENT` | 422 | Adjustment would drive the invoice total negative; a credit memo is required instead (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all) |
+
 ## Configuration
 
 | Property                          | Default  | Description                                                              |

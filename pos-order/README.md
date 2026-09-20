@@ -101,6 +101,25 @@ Over-settlement raises `order.payment.integrity-alert`. Applied price overrides 
 - An order that was never transmitted has an empty timeline (200), not a 404; a 404 means the purchase
   order itself does not exist.
 
+## Error codes
+
+Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
+and the platform-wide fallback codes emitted by `pos-web-common` and `pos-security-common` are in
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md).
+The table below is this module's own codes; any endpoint here may additionally return a platform
+fallback code. Add a row in the same pull request as the controller or advice that mints the code.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `ORDER_NOT_FOUND` | 404 | Sales order does not exist |
+| `ORDER_INVALID_SKU` | 400 | SKU on the order line is not valid |
+| `ORDER_PRICE_OVERRIDE_NOT_FOUND` | 404 | Price override record not found |
+| `ORDER_PRICE_OVERRIDE_INVALID` | 422 | Price override failed business validation |
+| `ORDER_PRICE_OVERRIDE_IDEMPOTENCY_CONFLICT` | 409 | Duplicate idempotency key for price override |
+| `ORDER_CANCELLATION_INVALID` | 409 | Order cannot be cancelled in its current state |
+| `ORDER_FORBIDDEN` | 403 | Caller lacks required order permissions |
+| `RETURN_LINE_NOT_RETURNABLE` | 422 | Requested return line is not returnable per policy (issue #1694; split out of the former blanket `RETURN_INVALID_ARGUMENT` 422 catch-all) |
+
 ## Configuration
 
 | Property                | Default  | Description                  |

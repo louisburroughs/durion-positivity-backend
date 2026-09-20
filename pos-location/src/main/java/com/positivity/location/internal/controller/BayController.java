@@ -59,11 +59,11 @@ public class BayController {
      */
     static final String BAY_READ_SCOPE_DENIED_DESCRIPTION =
             "Caller lacks location:bay:read, or holds it but its location scope does not cover locationId"
-                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).";
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).";
 
     static final String BAY_MANAGE_SCOPE_DENIED_DESCRIPTION =
             "Caller lacks location:bay:manage, or holds it but its location scope does not cover locationId"
-                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).";
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).";
 
     private final BayService bayService;
 
@@ -312,7 +312,8 @@ public class BayController {
                     @PathVariable
                     String bayId) {
         // Thrown rather than returned as a bare ResponseEntity.notFound(): every non-2xx response
-        // must carry the ApiError envelope (docs/ERROR_ENVELOPE.md), and an empty body has no code,
+        // must carry the ApiError envelope (../durion/docs/architecture/api/ERROR_ENVELOPE.md), and an empty body has
+        // no code,
         // message or correlationId. It also keeps one 404 contract for this operation -- a missing
         // *location* already surfaces through validateLocationExists as an enveloped 404, so
         // returning a bare body for a missing *bay* would give one endpoint two different 404s.

@@ -6,7 +6,7 @@ Root `pom.xml` gates every module on two properties, defaulted to 0.00:
     <jacoco.line.min>   <jacoco.branch.min>
 
 Each module overrides them a fixed number of points below its measured
-coverage (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md section 6.2). That cushion is
+coverage (../durion/docs/architecture/TEST_COVERAGE_POLICY.md section 6.2). That cushion is
 what keeps a parallel `-T 1C` CI run from failing on ordinary run-to-run
 variation, measured at roughly 1.7 points on pos-order.
 
@@ -95,7 +95,7 @@ CUSHION_RE = re.compile(r"Floors sit [0-9.]+ points under")
 
 COMMENT_LINES = (
     "<!-- Coverage ratchet: measured {line}% line / {branch}% branch by the gate's own",
-    "     command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).",
+    "     command, `verify -DskipITs` (../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1).",
     "     Floors sit {cushion:g} points under. Re-derive them ONLY from a -DskipITs run — an",
     "     IT-inclusive measurement describes coverage the gate cannot see.",
     "     Regenerate with scripts/update-coverage-floors.sh. -->",
@@ -507,7 +507,7 @@ def main(argv: list[str] | None = None) -> int:
         annotate(
             "error",
             f"Failsafe reports found in {shown} -- this coverage includes ITs, which neither binding "
-            "gate runs. Re-measure with -DskipITs (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1), "
+            "gate runs. Re-measure with -DskipITs (../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1), "
             "or pass --allow-its.",
         )
         return 1

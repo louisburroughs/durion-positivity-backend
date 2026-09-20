@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * Without this advice the module returned bare statuses with empty bodies, and
  * constraint violations on path variables escaped as 500s. The exceptions listed
  * below now carry the {@link ApiError} envelope required by
- * {@code docs/ERROR_ENVELOPE.md} (ADR-0017), so a caller has a {@code code} to
+ * {@code ../durion/docs/architecture/api/ERROR_ENVELOPE.md} (ADR-0017), so a caller has a {@code code} to
  * branch on and a {@code correlationId} to quote:
  * <ul>
  * <li>{@link ConstraintViolationException} - 400 Bad Request (path variable and

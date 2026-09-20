@@ -13,7 +13,7 @@ import org.jspecify.annotations.NonNull;
  * Checks the ADR-0042 §1 description depth and §3 request body rules for a single operation.
  *
  * <p>The seven §1 elements are detected by the canonical lead-in phrases fixed in
- * {@code docs/OPENAPI_DESCRIPTION_STANDARD.md}. Detecting lead-ins rather than meaning is what makes the
+ * {@code ../durion/docs/architecture/api/OPENAPI_DESCRIPTION_STANDARD.md}. Detecting lead-ins rather than meaning is what makes the
  * rule enforceable; it is also what makes the fleet read in one voice, which is the point of the
  * standard — these descriptions are compared against each other by an agent choosing a tool.
  */
@@ -79,7 +79,7 @@ public class OpenApiAnnotationDepthValidator {
         // ADR-0042 §3 also wants an explicit `required` flag, but springdoc omits `required: false`
         // (the OpenAPI default) from generated specs, so absence is indistinguishable from an
         // explicit false. That rule is therefore enforced at the annotation level by convention
-        // (docs/OPENAPI_DESCRIPTION_STANDARD.md), not here.
+        // (../durion/docs/architecture/api/OPENAPI_DESCRIPTION_STANDARD.md), not here.
         if (!hasExample(requestBody.getContent())) {
             findings.add("request body missing example (ADR-0042 §3)");
         }

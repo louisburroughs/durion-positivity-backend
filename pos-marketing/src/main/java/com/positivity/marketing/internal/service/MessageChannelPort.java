@@ -11,7 +11,8 @@ import org.jspecify.annotations.Nullable;
  * <p>pos-marketing owns orchestration only (decision O-1): who to contact, in what order, and
  * whether they may be contacted at all. The transport itself — provider credentials, retries at
  * the wire level, bounce and complaint webhooks — belongs to the shared platform sender, and
- * reaches this module through the FI-2 contract (durion#369, {@code docs/PLATFORM_SENDER_CONTRACT.md}).
+ * reaches this module through the FI-2 contract (durion#369,
+ * {@code durion/domains/positivity/PLATFORM_SENDER_CONTRACT.md}).
  *
  * <p>Two implementations exist, selected by {@code pos.marketing.send.transport}:
  * {@link LoggingMessageChannel} ({@code stub}, the default) and

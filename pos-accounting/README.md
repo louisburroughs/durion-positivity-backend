@@ -259,6 +259,30 @@ denied for a location-scoped caller — fail closed — and ignored for a global
 This is the platform's clearest `FINANCIAL`-dimension case: an `ACCOUNTANT` assigned to a region
 sees that region's shops and no others.
 
+## Error codes
+
+Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
+and the platform-wide fallback codes emitted by `pos-web-common` and `pos-security-common` are in
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md).
+The table below is this module's own codes; any endpoint here may additionally return a platform
+fallback code. Add a row in the same pull request as the controller or advice that mints the code.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `DUPLICATE_EVENT` | 409 | Event with this ID has already been processed |
+| `UNBALANCED_ENTRY` | 422 | Journal entry debits and credits do not balance (or has no lines) |
+| `GL_POSTING_FAILED` | 409 | General ledger posting failed |
+| `DUPLICATE_ACCOUNT_CODE` | 409 | Chart of accounts code already exists |
+| `GL_ACCOUNT_NOT_FOUND` | 404 | Referenced GL account does not exist |
+| `GL_ACCOUNT_NOT_ACTIVE` | 422 | GL account is not active on the transaction date, or was never activated |
+| `GL_MAPPING_NOT_CONFIGURED` | 422 | No GL mapping (posting category/key/effective date) is configured for the request |
+| `ACCOUNT_NOT_ZERO_BALANCE` | 409 | GL account cannot be deactivated because its posted balance is not zero |
+| `ACCOUNT_NOT_INACTIVE` | 409 | GL account cannot be archived because it is not currently INACTIVE |
+| `NO_MATCHING_VENDOR_BILL` | 400 | An inbound vendor invoice matched no pending receipt/bill for the vendor (a failed match, not a missing addressed resource) |
+| `JOURNAL_ENTRY_NOT_FOUND` | 404 | Referenced journal entry does not exist |
+| `DEFAULT_GL_MAPPING_NOT_FOUND` | 404 | Referenced default GL mapping does not exist |
+| `POSTING_RULE_SET_NOT_FOUND` | 404 | Referenced posting rule set does not exist |
+
 ## Configuration
 
 | Property                                            | Default              | Description                              |
@@ -321,7 +345,7 @@ non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_i
 ## Database
 
 Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration` (the pre-2026-09-09 chain was
-flattened into the baseline for ADR-0062; see `docs/TENANCY_SCHEMA.md`):
+flattened into the baseline for ADR-0062; see `../durion/docs/architecture/deployment/TENANCY_SCHEMA.md`):
 
 - `V1__baseline_accounting.sql` — full schema baseline with the tenancy schema (`tenant_id`, row-level security,
   tenant-scoped keys) on every scoped table

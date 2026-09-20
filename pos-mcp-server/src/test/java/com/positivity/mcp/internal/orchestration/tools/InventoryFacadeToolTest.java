@@ -16,7 +16,7 @@ import org.springframework.web.client.RestClient;
 /**
  * Unit tests for {@link InventoryFacadeTool}. Expected verbs and URIs derive from
  * {@code facade-contract.yaml} (#1519 WS-0.3), never from literals duplicating the configuration.
- * Targets are fixed by ADR-0057 / V36 (availability vs on-hand permission split).
+ * Targets are fixed by ADR-0066 / V36 (availability vs on-hand permission split).
  */
 class InventoryFacadeToolTest {
 

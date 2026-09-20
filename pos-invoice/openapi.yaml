@@ -245,7 +245,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds invoice:manage but its location scope does not cover the invoice's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds invoice:manage but its location scope does not cover the invoice's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - invoice:manage
@@ -622,7 +622,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds invoice:manage but its location scope does not cover the invoice's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds invoice:manage but its location scope does not cover the invoice's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - invoice:manage
@@ -836,7 +836,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds invoice:invoice:view but its location scope does not cover the invoice's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds invoice:invoice:view but its location scope does not cover the invoice's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:

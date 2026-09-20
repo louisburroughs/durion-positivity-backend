@@ -2,7 +2,7 @@ package com.positivity.catalog.internal.enums;
 
 /**
  * Who owns a stored labor time, and therefore who resolves it (#1575 Tier 0,
- * {@code docs/SPEC-tier-0-durion-owned-service-data.md} T0-2 / D1).
+ * {@code pos-catalog/docs/service-time-sourcing-plan.md} (T0-2 / D1)).
  *
  * <p>Ownership is deliberately a property of the <em>time</em>, not of the operation: the
  * taxonomy stays global because it is the shared vocabulary vendor codes map onto (ADR-0059

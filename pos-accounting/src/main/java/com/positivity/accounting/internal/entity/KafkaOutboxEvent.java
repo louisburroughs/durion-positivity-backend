@@ -25,7 +25,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * <p>Distinct from {@link EventOutbox} / {@code event_outbox}, which is this module's in-process
  * Spring-event outbox (drained by {@code OutboxProcessor}) and unrelated to Kafka.
  * {@code createdAt} is stamped by JPA auditing (ADR-0024) from the module's clock-backed
- * {@code DateTimeProvider} (docs/CLOCK_TIMESTAMP_OWNERSHIP.md).
+ * {@code DateTimeProvider} (../durion/docs/adr/0024-entity-createdat-updatedat-population-policy.adr.md).
  */
 @Entity
 @TenantGlobal(

@@ -213,7 +213,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 This repository participates in the workspace-wide agent ecosystem.
 
 - **Agent Guide**: [AGENTS.md](AGENTS.md) (Local context and commands)
-- **Architecture Guide**: [docs/ARCHITECTURE_GUIDE.md](docs/ARCHITECTURE_GUIDE.md) (Docker, ports, service communication, observability)
+- **Architecture Guide**: [../durion/docs/architecture/BACKEND_ARCHITECTURE_GUIDE.md](../durion/docs/architecture/BACKEND_ARCHITECTURE_GUIDE.md) (Docker, ports, service communication, observability)
 - **Development Guide**: [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) (OpenAPI, POM, version management, pos-events)
 - **Operations Runbook**: [docs/OPERATIONS_RUNBOOK.md](docs/OPERATIONS_RUNBOOK.md) (Operations, RBAC, permissions)
 - **Workspace Agents**: [../durion/AGENTS.md](../durion/AGENTS.md)

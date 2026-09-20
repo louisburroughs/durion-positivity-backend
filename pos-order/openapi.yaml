@@ -151,7 +151,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Insufficient permissions (ApiError.code FORBIDDEN), or Caller holds order:order:create but its location scope does not cover the cart's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Insufficient permissions (ApiError.code FORBIDDEN), or Caller holds order:order:create but its location scope does not cover the cart's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
         '409':
           content:
             application/json:
@@ -206,7 +206,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds order:order:view but its location scope does not cover the order's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds order:order:view but its location scope does not cover the order's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -1825,7 +1825,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds order:session:open but its location scope does not cover the session's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds order:session:open but its location scope does not cover the session's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
         '409':
           content:
             application/json:
@@ -1910,7 +1910,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds order:session:view but its location scope does not cover the session's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+          description: Caller holds order:session:view but its location scope does not cover the session's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:

@@ -585,7 +585,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds location:write but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
+          description: Caller holds location:write but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -693,7 +693,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds location:write but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
+          description: Caller holds location:write but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -785,7 +785,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller holds location:write but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
+          description: Caller holds location:write but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -877,7 +877,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks location:bay:read, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
+          description: Caller lacks location:bay:read, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -951,7 +951,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks location:bay:manage, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
+          description: Caller lacks location:bay:manage, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -1017,7 +1017,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks location:bay:manage, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
+          description: Caller lacks location:bay:manage, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -1084,7 +1084,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks location:bay:read, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
+          description: Caller lacks location:bay:read, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -1155,7 +1155,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks location:bay:manage, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
+          description: Caller lacks location:bay:manage, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -1266,7 +1266,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks location:read, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
+          description: Caller lacks location:read, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -1335,7 +1335,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks location:write, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
+          description: Caller lacks location:write, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:

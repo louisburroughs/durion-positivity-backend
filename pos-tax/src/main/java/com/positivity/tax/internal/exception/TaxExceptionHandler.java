@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
  * Module-local translation of pos-tax domain exceptions into the standard {@code ApiError}
- * envelope ({@code docs/ERROR_ENVELOPE.md}) for cases the platform-wide
+ * envelope ({@code ../durion/docs/architecture/api/ERROR_ENVELOPE.md}) for cases the platform-wide
  * {@code GlobalApiExceptionHandler} (pos-web-common) cannot express on its own:
  * <ul>
  *   <li>A 5xx status with a module-specific code and a message naming the offending

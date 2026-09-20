@@ -340,11 +340,36 @@ those claims.
 ## Error Responses
 
 Every non-2xx response this service maps itself (`GlobalExceptionHandler`) carries the platform
-`ApiError` envelope (see `docs/ERROR_ENVELOPE.md`) and the same correlation id in both the body's
+`ApiError` envelope (see
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md))
+and the same correlation id in both the body's
 `correlationId` and the `X-Correlation-Id` response header (ADR-0017 §4). An inbound
 `X-Correlation-Id` is echoed; otherwise a UUIDv7 is generated. All handlers build their response
 through one helper, and `GlobalExceptionHandlerTest` fails if a new handler is added without
 joining its header assertion (#1729).
+
+### Error codes
+
+This module's own codes. Any endpoint here may additionally return a platform fallback code from
+`pos-web-common` or `pos-security-common`; those are listed in the envelope document above. Add a
+row in the same pull request as the controller or advice that mints the code.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `ROLE_NOT_FOUND` | 404 | Role does not exist |
+| `USER_NOT_FOUND` | 404 | A referenced user does not resolve — on every entry point that references one by id or username (user management and token issuance alike; ADR-0017 §2 "one condition, one status", #1802). The token-issuance endpoints answer it with a generic message that never names the subject (#1715). A refresh token whose user no longer exists is `401 INVALID_REFRESH_TOKEN` instead, because there the missing user is a credential failure |
+| `INVALID_TOKEN` | 401 | `GET /v1/auth/roles`, `/subject`, `/user-id`: the `token` query parameter failed validation (expired, revoked, unknown to the token store, malformed); enveloped since #1808 — previously a bare 401 |
+| `TOKEN_USER_ID_MISSING` | 422 | `GET /v1/auth/user-id`: the token passed full validation but carries neither a `uid` nor a legacy `userId` claim (#1803). Not 401 — the token is genuine — and not 400 — it parsed; ADR-0017 §2 question 3 |
+| `DUPLICATE_ROLE_NAME` | 409 | Role name is already taken |
+| `ACCOUNT_LOCKED` | 401 | Account is locked due to repeated failures |
+| `ACCOUNT_DISABLED` | 401 | Account has been disabled by an administrator |
+| `BAD_CREDENTIALS` | 401 | Username or password is incorrect |
+| `FORBIDDEN` | 403 | Caller lacks required permissions |
+| `USER_HAS_NO_ROLES` | 403 | Credentials or refresh token are valid, but the account currently has no roles assigned; answered the same on login and refresh (ADR-0017 §2 question 1, #1725). `nextAction` tells the caller to have an administrator assign a role |
+| `VALIDATION_ERROR` | 400 | This module's own field/reference validation failure (`SecurityValidationException`): a blank required field, a malformed permission key or bitset, an unsupported `perm_ver`. A role or user reference that does not resolve is `ROLE_NOT_FOUND` / `USER_NOT_FOUND` (404) since #1802. Aligned onto the fleet-wide spelling in #1730; it answered `INVALID_REQUEST` between #1694 and #1730 |
+| `INVALID_REQUEST` | 400 | Request-binding failure raised by the framework before the controller runs — an unreadable body, a missing query parameter, a bean-validation rejection. A pre-existing code with consumers, so #1730 deliberately did **not** rename it. Clients that switch on validation codes should handle both this and `VALIDATION_ERROR` |
+
+The rules below say *why* several of these carry the status they do; read them before adding a code.
 
 Two rules constrain what those bodies may contain and where they can come from (#1715):
 
