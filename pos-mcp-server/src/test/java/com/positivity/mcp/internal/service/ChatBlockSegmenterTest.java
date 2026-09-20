@@ -800,6 +800,63 @@ class ChatBlockSegmenterTest {
                 Arguments.of("", false));
     }
 
+    // The exact patterns the three linear scans replaced. Kept here, test-only, as the oracle:
+    // every string over a small alphabet, up to a length that exercises each grammar element, must
+    // classify identically under the scan and the regex — including whitespace-prefixed rows
+    // (" |---|", "\t---|", "\u000B|---|"), which the delimiter regex rejects and the scan must too.
+    private static final Pattern LEGACY_LEADING_BLOCKQUOTE_INDENT = Pattern.compile("^(?:[ \\t]*>)*[ \\t]*");
+    private static final Pattern LEGACY_TABLE_DELIMITER_ROW =
+            Pattern.compile("^(?=.*\\|)\\|?\\s*:?-+:?\\s*(\\|\\s*:?-+:?\\s*)*\\|?\\s*$");
+    private static final Pattern LEGACY_FENCE_OPENER = Pattern.compile("^\\s*(>\\s*)*(```|~~~)");
+    private static final char[] SCAN_ALPHABET = {'|', '-', ':', ' ', '\t', '\u000B', '>', '`', 'a'};
+
+    @Test
+    @DisplayName("the linear scans classify every short string exactly as the regexes they replaced did")
+    void linearScans_matchLegacyRegexesExhaustively() {
+        int mismatches = 0;
+        StringBuilder firstMismatch = new StringBuilder();
+        for (int length = 0; length <= 6; length++) {
+            int combos = (int) Math.pow(SCAN_ALPHABET.length, length);
+            for (int n = 0; n < combos; n++) {
+                char[] chars = new char[length];
+                int rest = n;
+                for (int i = 0; i < length; i++) {
+                    chars[i] = SCAN_ALPHABET[rest % SCAN_ALPHABET.length];
+                    rest /= SCAN_ALPHABET.length;
+                }
+                String line = new String(chars);
+                boolean sameRow = ChatBlockSegmenter.isDashOnlyDelimiterRow(line)
+                        == LEGACY_TABLE_DELIMITER_ROW.matcher(line).matches();
+                boolean sameFence = ChatBlockSegmenter.isFenceOpener(line)
+                        == LEGACY_FENCE_OPENER.matcher(line).find();
+                boolean sameIndent = ChatBlockSegmenter.stripLeadingBlockquoteIndent(line)
+                        .equals(LEGACY_LEADING_BLOCKQUOTE_INDENT.matcher(line).replaceFirst(""));
+                if (!(sameRow && sameFence && sameIndent)) {
+                    if (mismatches == 0) {
+                        firstMismatch.append(line.replace("\t", "\\t").replace("\u000B", "\\v"));
+                    }
+                    mismatches++;
+                }
+            }
+        }
+        assertThat(mismatches)
+                .as("strings classified differently by scan vs legacy regex (first: \"%s\")", firstMismatch)
+                .isZero();
+    }
+
+    @ParameterizedTest(name = "whitespace-prefixed delimiter row: \"{0}\"")
+    @ValueSource(strings = {" |---|", "\t|---|", "\u000B|---|", " | --- | --- |", "  |:---:|"})
+    @DisplayName("a delimiter row with whitespace before its leading pipe is rejected, as the regex rejected it")
+    void isDashOnlyDelimiterRow_whitespaceBeforeLeadingPipe_isRejectedLikeTheRegex(String line) {
+        assertThat(LEGACY_TABLE_DELIMITER_ROW.matcher(line).matches()).isFalse();
+        assertThat(ChatBlockSegmenter.isDashOnlyDelimiterRow(line)).isFalse();
+        // The segmenter only ever sees such a row after stripLeadingBlockquoteIndent, which removes
+        // spaces and tabs (not other whitespace), so the space/tab variants are accepted from there.
+        String stripped = ChatBlockSegmenter.stripLeadingBlockquoteIndent(line);
+        assertThat(ChatBlockSegmenter.isDashOnlyDelimiterRow(stripped))
+                .isEqualTo(LEGACY_TABLE_DELIMITER_ROW.matcher(stripped).matches());
+    }
+
     @Test
     @DisplayName("isDashOnlyDelimiterRow handles a pathological 5000-char input without recursing or hanging")
     void isDashOnlyDelimiterRow_pathologicalInput_noStackOverflowAndFast() {

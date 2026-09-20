@@ -320,4 +320,33 @@ class TranscriptionServiceImplTest {
             logger.setLevel(null);
         }
     }
+
+    @Test
+    @DisplayName("the completion log line strips control characters and caps oversized provider/request values")
+    void transcribe_completionLog_sanitizesControlCharactersAndCapsLength() {
+        // A hostile provider language: CR/LF that would forge a second log line, other control
+        // characters, and far more than the 100-character cap.
+        String injected = "en-US\r\nFORGED level=ERROR\u0007" + "x".repeat(200);
+        when(client.transcribe(any(), any(), any(), any()))
+                .thenReturn(new SpeechToTextResult("some words", injected, 1.0));
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(TranscriptionServiceImpl.class);
+        logger.setLevel(Level.INFO);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            service.transcribe(audio(new byte[] {9, 9, 9}, "audio/webm"), null, Locale.ROOT);
+
+            assertThat(appender.list).hasSize(1);
+            String line = appender.list.getFirst().getFormattedMessage();
+            assertThat(line).doesNotContain("\r").doesNotContain("\n").doesNotContain("\u0007");
+            assertThat(line).contains("language=en-US__FORGED level=ERROR");
+            // The 200 x's are cut at the cap, so the logged language ends in "..." before latencyMs.
+            assertThat(line).doesNotContain("x".repeat(101)).contains("..., durationSeconds=1.0");
+        } finally {
+            logger.detachAppender(appender);
+            logger.setLevel(null);
+        }
+    }
 }

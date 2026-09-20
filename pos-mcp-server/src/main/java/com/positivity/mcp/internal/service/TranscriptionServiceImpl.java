@@ -147,9 +147,10 @@ public class TranscriptionServiceImpl implements TranscriptionService {
     }
 
     /**
-     * Strips CR/LF/control characters and caps length before a request-derived value ({@code
-     * baseMimeType}, {@code responseLanguage}) is interpolated into a log line (log injection
-     * defense, javasecurity:S5145).
+     * Strips CR/LF/control characters and caps length before an externally sourced value is
+     * interpolated into a log line (log injection defense, javasecurity:S5145): {@code
+     * baseMimeType} comes from the request, {@code responseLanguage} from the provider's response
+     * or, failing that, the request.
      */
     private static @NonNull String sanitizeForLog(@NonNull String value) {
         String sanitized = value.replaceAll("[\\r\\n\\t]", "_").replaceAll("\\p{Cntrl}", "");

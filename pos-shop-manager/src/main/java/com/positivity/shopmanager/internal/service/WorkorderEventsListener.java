@@ -195,9 +195,9 @@ public class WorkorderEventsListener {
 
         UUID notificationId = parseEventId(eventId);
         if (notificationId != null && payload.status() != null && !Objects.equals(previousStatus, payload.status())) {
-            // Read the getter once (S2637): the event's mechanicIds is @NonNull, and re-calling
-            // payload.mechanicIds() after the null check leaves static analysis unable to tell the
-            // two calls return the same value.
+            // Read the getter once (S2637): payload.mechanicIds() may be null while the event's
+            // mechanicIds is @NonNull, and re-calling the getter after the null check leaves static
+            // analysis unable to tell the two calls return the same value.
             List<UUID> mechanicIds = payload.mechanicIds();
             applicationEventPublisher.publishEvent(new WorkorderStatusChangedEvent(
                     notificationId,
