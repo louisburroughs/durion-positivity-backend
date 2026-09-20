@@ -11,7 +11,7 @@ status: current
 > in one pass (`V1__baseline_<module>.sql` per module, generated from a `pg_dump` of the migrated
 > schema rather than from Hibernate, with the ADR-0062 tenancy schema folded in). The procedure,
 > the verification and the conventions the baselines now follow are in
-> [`../durion/docs/architecture/deployment/TENANCY_SCHEMA.md`](../TENANCY_SCHEMA.md) and `scripts/db/tenancy/README.md`. The old
+> [`../../../durion/docs/architecture/deployment/TENANCY_SCHEMA.md`](../../../durion/docs/architecture/deployment/TENANCY_SCHEMA.md) and `scripts/db/tenancy/README.md`. The old
 > chain was deleted, not archived; it is in git history before that date. The steps below remain
 > the general method for a future reset.
 
