@@ -87,8 +87,9 @@ Two workflows deliver changes to the alpha EC2 box; which one runs depends on wh
   `--config-only`). Procedure and verification: `docs/runbooks/flyway-baseline-reset.md`,
   "Alpha Cutover". Covered by `scripts/tests/deploy-backend-reset-databases-selftest.sh`.
 - **Accelerated clock** (#2065): dispatch `deploy-alpha-accelerated.yml` to put the whole stack on
-  the `accelerated` profile with one clock anchored a year in the past, which is what the SDK
-  repo's year-long integration run needs. It builds nothing — it redeploys a tag already in ECR
+  the `accelerated` profile with one clock anchored `days` virtual days in the past (365 by
+  default), which is what the SDK repo's integration run needs. It builds nothing — it redeploys
+  a tag already in ECR
   with `ACCELERATED=true`, which layers `deployment/alpha/docker-compose.accelerated.yml` on top of
   the two ordinary compose files. **Any ordinary deploy is the teardown**, and `GET /system/time`
   answering 404 is the proof; until it does, every non-accelerated integration run stays blocked.

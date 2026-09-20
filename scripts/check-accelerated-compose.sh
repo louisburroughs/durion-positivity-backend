@@ -48,7 +48,7 @@ REQUIRED_KEYS=(
 )
 
 # Any valid pair satisfying the compose interpolation; this check is about coverage, and
-# deploy-backend.sh owns the 360-day floor and the rest of the anchor validation.
+# deploy-backend.sh owns the one-day floor and the rest of the anchor validation.
 PROBE_REAL_START="2026-09-17T12:00:00Z"
 PROBE_VIRTUAL_START="2025-09-17T12:00:00Z"
 

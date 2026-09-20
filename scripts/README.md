@@ -409,9 +409,10 @@ Verifies that `deployment/alpha/docker-compose.accelerated.yml` puts **every** P
 accelerated clock, by merging the three alpha compose files with `docker compose config` and
 reading the result (#2065).
 
-An accelerated alpha run anchors the whole stack a year in the past so the SDK suite can drive a
-year of shop activity in a few real hours. A service missing from the override stays on the wall
-clock and writes records a year ahead of everything else in the same database — and nothing fails
+An accelerated alpha run anchors the whole stack in the past (365 virtual days by default) so the
+SDK suite can drive that much shop activity in a few real hours. A service missing from the
+override stays on the wall clock and writes records far ahead of everything else in the same
+database — and nothing fails
 at the time, so the gap is only visible in the data afterwards.
 
 **Usage:**
@@ -484,7 +485,7 @@ bash scripts/tests/deploy-backend-accelerated-selftest.sh
 - A config-only sync inherits the box's state — it applies the override on an accelerated box
   without re-anchoring it, and cannot be asked to start or end a run
 - Refused before anything on the host is touched: a missing or malformed anchor, a gap shorter
-  than 360 days, a virtual start after the real one, a scale that cannot converge, a non-numeric
+  than a day, a virtual start after the real one, a scale that cannot converge, a non-numeric
   scale, a value other than `true`/`false`, `--config-only`, and an override file that is missing
   or fails its checksum
 

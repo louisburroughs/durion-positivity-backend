@@ -186,9 +186,9 @@ jobs:
         run: ./scripts/check-deploy-service-drift.sh
 
       - name: Enforce accelerated-clock coverage
-        # An accelerated alpha run (#2065) puts every POS JVM on one clock anchored a year
-        # back. A service missing from deployment/alpha/docker-compose.accelerated.yml stays
-        # on the wall clock and writes records a year ahead of everything else in the same
+        # An accelerated alpha run (#2065) puts every POS JVM on one clock anchored in the
+        # past. A service missing from deployment/alpha/docker-compose.accelerated.yml stays
+        # on the wall clock and writes records far ahead of everything else in the same
         # database, with nothing failing at the time — so the merged `docker compose config`
         # is asserted here: all 25 JVMs, the same five anchors, and a missing anchor still
         # refused by the required-variable syntax.
@@ -198,7 +198,7 @@ jobs:
         # Both halves of the switch, neither observable anywhere but on the box: ACCELERATED=true
         # applies and checksums the override and persists the anchors; an ordinary deploy is the
         # teardown that removes them; a config-only sync inherits the box's state; and every bad
-        # anchor — missing, malformed, a gap under 360 days, a scale that cannot converge — is
+        # anchor — missing, malformed, a gap under a day, a scale that cannot converge — is
         # refused before a 25-service rollout. Driven against a stubbed Docker.
         run: bash scripts/tests/deploy-backend-accelerated-selftest.sh
 
