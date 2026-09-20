@@ -8,8 +8,9 @@ status: current
 # Accelerated Alpha Deployment Runbook
 
 Deploying the alpha stack on the `accelerated` Spring profile, with every POS JVM sharing one
-clock anchored a year in the past, so the SDK repo's accelerated integration suite can drive
-365 virtual days of shop activity in 1–6 real hours and produce a year of financial history.
+clock anchored `days` virtual days in the past, so the SDK repo's accelerated integration suite
+can drive that much shop activity in a few real hours. At the default of 365 days it produces a
+year of financial history in 1–6 real hours.
 
 - Issue: [#2065](https://github.com/louisburroughs/durion-positivity-backend/issues/2065)
 - SDK side: [durion-positivity-sdk#64](https://github.com/louisburroughs/durion-positivity-sdk/issues/64),
@@ -39,10 +40,10 @@ Three consequences worth holding on to:
   `deploy-backend.sh` refuses `POS_TIME_ACCELERATED_CONVERGE` set to anything but `true`, because
   with it off the stack future-dates every row it writes into a database other people share, and
   no later deploy can unwrite them.
-- **It stops being accelerated once it converges.** A one-year gap closes after
-  `gap / (scale - 1)` real time — about 6 h at 1460, 3 h at 2920, 1 h at 8760. After that the
-  stack is on ordinary wall time and there is no back-dated window left, so the SDK run has to
-  finish inside that budget.
+- **It stops being accelerated once it converges.** The gap closes after
+  `gap / (scale - 1)` real time — for a year, about 6 h at 1460, 3 h at 2920, 1 h at 8760. After
+  that the stack is on ordinary wall time and there is no back-dated window left, so the SDK
+  run has to finish inside that budget.
 - **Every JVM must share the same two anchors.** They are generated once, in CI, at dispatch.
   A service deriving its own anchor is skewed from every other by `scale ×` its own startup
   delay: at 1460, one real second of startup skew is 24 virtual minutes.
@@ -83,14 +84,24 @@ registry and a mock external vendor write no business timestamps.
    | Input | Meaning |
    | --- | --- |
    | `backend_tag` | The ECR tag (`sha-a1b2c3d`) or the commit SHA behind it. Blank uses this ref's head commit. |
-   | `scale` | Virtual seconds per real second. Must be `> 1` and `< 26280`. |
-   | `days` | Virtual days the SDK run will drive. Recorded in the summary; the clock is always anchored one year back. |
+   | `scale` | Virtual seconds per real second. Must be `> 1` and `< 26280`. For 365 days, 1460 closes the gap in ~6h, 2920 in ~3h, 8760 in ~1h. |
+   | `days` | Virtual days the run drives. The clock is anchored this many days before `real-start`; the SDK suite decides whether that is enough for the run it is asked for. Default 365. |
    | `confirm` | Must be exactly `ACCELERATE ALPHA`. |
 
    The workflow generates `POS_TIME_ACCELERATED_REAL_START` (now) and `_VIRTUAL_START`
-   (one year ago) **once** and hands the same pair to every service. It shares the
-   `alpha-deploy` concurrency group with `Build and Push to ECR` and `Sync Alpha Config`, so no
-   two of them can interleave on the box.
+   (exactly `days` × 86400 seconds earlier) **once**, with `scripts/accelerated-anchors.sh`,
+   and hands the same pair to every service. It shares the `alpha-deploy` concurrency group
+   with `Build and Push to ECR` and `Sync Alpha Config`, so no two of them can interleave on
+   the box.
+
+   The workflow refuses, before it touches AWS, a `days` or `scale` that is malformed, a
+   `scale` at or above 26,280, and a pair whose gap would close in **under one real hour**:
+   the rollout runs under a 45-minute SSM timeout and the verifier for up to five more, and
+   the verifier fails a stack whose clock has already converged. `days × 86400 / (scale − 1)`
+   has to cover that window, so a short run needs a slower scale (one day at 1460 closes in
+   a minute; at 20 it takes ~1.3 h). A `days` under 360 deploys with a warning: the SDK
+   suite's accelerated run expects a year and will refuse a shorter backend, but other
+   consumers of the accelerated stack need not.
 
 3. **Read the run summary.** It records the backend tag, both anchors, the scale, the requested
    days, when the clock converges, and who dispatched it. The anchors are the run's identity —
@@ -100,9 +111,9 @@ registry and a mock external vendor write no business timestamps.
 The deploy refuses, before anything on the box is touched:
 
 - a missing or malformed anchor;
-- a `virtual-start` less than **360 days** before `real-start` (the SDK suite refuses such a
-  backend anyway, and failing at deploy time is cheaper than failing after a 25-service
-  rollout);
+- a `virtual-start` less than **one day** before `real-start` — the gap is the run's length,
+  so a pair that close has no run in it, and failing at deploy time is cheaper than failing
+  after a 25-service rollout;
 - a scale that is not a positive number, or is `<= 1` (the gap would never close);
 - `POS_TIME_ACCELERATED_CONVERGE` set to anything but `true` (see above);
 - a `POS_TIME_ACCELERATED_ZONE` that `java.time.ZoneId` would reject — checked against the box's

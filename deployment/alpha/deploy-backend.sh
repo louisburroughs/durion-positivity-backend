@@ -17,7 +17,7 @@ set -euo pipefail
 #
 # ACCELERATED=true (full deploy only) additionally applies
 # deployment/alpha/docker-compose.accelerated.yml, putting every POS JVM on the `accelerated`
-# Spring profile with its clock anchored a year in the past (#2065). See the block below the
+# Spring profile with its clock anchored in the past (#2065). See the block below the
 # RESET_DATABASES one for the full contract; the short version is that a full deploy which
 # does not ask for it is the teardown, and a config-only sync inherits the box's state.
 #
@@ -56,8 +56,9 @@ fi
 
 # ACCELERATED=true (full deploy only) layers docker-compose.accelerated.yml on top of the two
 # ordinary compose files, putting every POS JVM on the `accelerated` Spring profile with its
-# clock anchored a year in the past (#2065). This is what the SDK repo's accelerated
-# integration suite needs: it drives 365 virtual days of shop activity in a few real hours.
+# clock anchored in the past (#2065) — as far back as the dispatch asked for, 365 virtual
+# days by default. This is what the SDK repo's accelerated integration suite needs: it drives
+# that many virtual days of shop activity in a few real hours.
 #
 # It is an option on the deploy rather than a hand-placed file on the box because the
 # checksum guard below would either ignore such a file or break the next ordinary deploy.
@@ -253,11 +254,12 @@ ACCELERATED_ENV_KEYS=(
   POS_TIME_ACCELERATED_VIRTUAL_START
 )
 
-# How far the virtual anchor must trail the real one. The SDK suite drives a full year of
-# shop activity and refuses a backend whose gap is shorter, so a deploy that cannot host the
-# run is cheaper to refuse here than after a 25-service rollout. Fixed, not an env knob: a
-# shorter run is the suite's call to make, not a deploy-time one.
-ACCELERATED_MIN_GAP_DAYS=360
+# How far the virtual anchor must trail the real one. The gap IS the run's length: the
+# dispatching workflow derives virtual-start from its `days` input, so how long a run to host
+# is the dispatcher's call and the SDK suite's to refuse. What this floor rejects is a pair
+# with no run in it at all — a virtual start on, after, or within the same day as the real
+# one — which is cheaper to refuse here than after a 25-service rollout.
+ACCELERATED_MIN_GAP_DAYS=1
 
 # The box's IANA zone database. Overridable for the self-test, which cannot rely on any
 # particular set of zones being installed on a CI runner.
@@ -331,7 +333,8 @@ validate_accelerated_anchors() {
     echo "every other by 'scale x' its startup delay (at 1460, one real second is 24 virtual" >&2
     echo "minutes):" >&2
     echo "  POS_TIME_ACCELERATED_REAL_START=\$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
-    echo "  POS_TIME_ACCELERATED_VIRTUAL_START=\$(date -u -d '1 year ago' +%Y-%m-%dT%H:%M:%SZ)" >&2
+    echo "  POS_TIME_ACCELERATED_VIRTUAL_START=\$(date -u -d '365 days ago' +%Y-%m-%dT%H:%M:%SZ)" >&2
+    echo "with '365 days' replaced by however many virtual days the run should drive." >&2
     exit 1
   fi
 
@@ -341,12 +344,12 @@ validate_accelerated_anchors() {
   min_gap=$((ACCELERATED_MIN_GAP_DAYS * 86400))
   gap_days=$(((real_epoch - virtual_epoch) / 86400))
   if [[ "$((real_epoch - virtual_epoch))" -lt "${min_gap}" ]]; then
-    echo "ERROR: POS_TIME_ACCELERATED_VIRTUAL_START must be at least ${ACCELERATED_MIN_GAP_DAYS} days before" >&2
+    echo "ERROR: POS_TIME_ACCELERATED_VIRTUAL_START must be at least ${ACCELERATED_MIN_GAP_DAYS} day before" >&2
     echo "POS_TIME_ACCELERATED_REAL_START; this pair is ${gap_days} day(s) apart." >&2
     echo "  real-start:    ${real_start}" >&2
     echo "  virtual-start: ${virtual_start}" >&2
-    echo "The SDK suite drives a year of activity and refuses a backend with a shorter gap, so" >&2
-    echo "this deploy could not host the run it is being made for." >&2
+    echo "The gap is the number of virtual days the run drives (the workflow's 'days' input), so" >&2
+    echo "a pair this close together has no run in it for this deploy to host." >&2
     exit 1
   fi
 

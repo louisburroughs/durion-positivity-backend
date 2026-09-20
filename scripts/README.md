@@ -409,9 +409,10 @@ Verifies that `deployment/alpha/docker-compose.accelerated.yml` puts **every** P
 accelerated clock, by merging the three alpha compose files with `docker compose config` and
 reading the result (#2065).
 
-An accelerated alpha run anchors the whole stack a year in the past so the SDK suite can drive a
-year of shop activity in a few real hours. A service missing from the override stays on the wall
-clock and writes records a year ahead of everything else in the same database — and nothing fails
+An accelerated alpha run anchors the whole stack in the past (365 virtual days by default) so the
+SDK suite can drive that much shop activity in a few real hours. A service missing from the
+override stays on the wall clock and writes records far ahead of everything else in the same
+database — and nothing fails
 at the time, so the gap is only visible in the data afterwards.
 
 **Usage:**
@@ -465,6 +466,47 @@ bash scripts/tests/deploy-backend-config-only-selftest.sh
 
 ---
 
+### `accelerated-anchors.sh`
+
+Generates and validates the anchor pair for an accelerated alpha run (#2065). The
+`Deploy Alpha (Accelerated Clock)` workflow runs it once at dispatch and hands the same pair to
+every JVM; it lives here so the arithmetic and every refusal are covered by a self-test.
+
+**Usage:**
+```bash
+scripts/accelerated-anchors.sh --days 365 --scale 1460 \
+  [--max-scale 26280] [--min-converge-hours 1] [--now <epoch seconds>]
+```
+
+**Output** (one `key=value` per line, the shape `$GITHUB_OUTPUT` takes): `real_start` (now),
+`virtual_start` (exactly `days` × 86400 s earlier, from the same epoch read), `days`, `scale`,
+`hours_to_converge`.
+
+**Refuses** (reason on stderr, exit 1): a `days` that is not a positive integer; a `scale` that is
+not a number, is `<= 1` (the gap never closes) or is at or above `--max-scale` (the SDK suite's
+ceiling); and a pair whose gap would close in under `--min-converge-hours` of real time — the
+rollout runs under a 45-minute SSM timeout plus a five-minute verifier, and the verifier fails a
+stack whose clock has already converged. `--now` pins the clock for the self-test.
+
+---
+
+### `tests/accelerated-anchors-selftest.sh`
+
+Drives `accelerated-anchors.sh` with a pinned clock.
+
+**Usage:**
+```bash
+bash scripts/tests/accelerated-anchors-selftest.sh
+```
+
+**Cases:** the default dispatch anchors exactly a year back; a shorter `days` anchors exactly that
+far back; days are 86400-second days across a leap day; a leading zero is decimal, not octal;
+`days` and `scale` refusals by name; the `--max-scale` ceiling; a pair that converges inside the
+budget is refused (1 day at 26279, and a year at 26279) while one on or past it is accepted
+(365 at 8760, 1 day at 20); usage errors.
+
+---
+
 ### `tests/deploy-backend-accelerated-selftest.sh`
 
 Drives the real `deploy-backend.sh` against a stubbed Docker to pin both halves of the
@@ -484,7 +526,7 @@ bash scripts/tests/deploy-backend-accelerated-selftest.sh
 - A config-only sync inherits the box's state — it applies the override on an accelerated box
   without re-anchoring it, and cannot be asked to start or end a run
 - Refused before anything on the host is touched: a missing or malformed anchor, a gap shorter
-  than 360 days, a virtual start after the real one, a scale that cannot converge, a non-numeric
+  than a day, a virtual start after the real one, a scale that cannot converge, a non-numeric
   scale, a value other than `true`/`false`, `--config-only`, and an override file that is missing
   or fails its checksum
 

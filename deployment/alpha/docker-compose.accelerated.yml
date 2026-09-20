@@ -2,9 +2,10 @@
 #
 # Layered on top of docker-compose.yml + docker-compose.prod.yml by
 # deployment/alpha/deploy-backend.sh when ACCELERATED=true, so the whole stack runs on the
-# `accelerated` Spring profile with its clock anchored in the past. The SDK repo's
-# accelerated integration suite drives 365 virtual days of shop activity against a stack
-# deployed this way (louisburroughs/durion-positivity-sdk#64).
+# `accelerated` Spring profile with its clock anchored in the past, as many virtual days
+# back as the dispatch asked for (365 by default). The SDK repo's accelerated integration
+# suite drives that much shop activity against a stack deployed this way
+# (louisburroughs/durion-positivity-sdk#64).
 #
 # The clock itself is pos-events: AcceleratedTimeProperties binds pos.time.accelerated.*,
 # TimeConfig.AcceleratedTimeConfiguration supplies the shared ScaledClock under the profile,
@@ -27,7 +28,7 @@
 # `${VAR:?...}` on the two anchors makes a missing one fail the `docker compose` invocation
 # itself, before a single container is recreated, rather than silently starting one service
 # unaccelerated. deploy-backend.sh checks them earlier still, and also refuses a virtual
-# start less than 360 days before the real one.
+# start less than a day before the real one.
 #
 # Compose MERGES the environment mapping rather than replacing it, so every service keeps
 # its datasource, Kafka, OTEL and security/events client variables. Services carrying their

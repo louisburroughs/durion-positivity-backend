@@ -1,10 +1,10 @@
 name: Deploy Alpha (Accelerated Clock)
 
 # Deploys an ALREADY-PUSHED backend tag to alpha on the `accelerated` Spring profile, with
-# every POS JVM sharing one clock anchored a year in the past (#2065). The SDK repo's
-# accelerated integration suite needs a backend deployed this way: it drives 365 virtual days
-# of shop activity in 1-6 real hours, producing a year of financial history
-# (louisburroughs/durion-positivity-sdk#64).
+# every POS JVM sharing one clock anchored `days` virtual days in the past (#2065). The SDK
+# repo's accelerated integration suite needs a backend deployed this way: at the default of
+# 365 days it drives a year of shop activity in 1-6 real hours, producing a year of financial
+# history (louisburroughs/durion-positivity-sdk#64).
 #
 # Deliberately a separate workflow rather than an input on build-push-ecr.yml. That workflow's
 # automatic promotion path fires on every green CI run on main, and an accelerated deploy
@@ -26,12 +26,12 @@ on:
         default: ""
         type: string
       scale:
-        description: "Virtual seconds per real second. 1460 ~ 6h to close a year, 2920 ~ 3h, 8760 ~ 1h"
+        description: "Virtual seconds per real second. For 365 days: 1460 ~ 6h to close the gap, 2920 ~ 3h, 8760 ~ 1h"
         required: false
         default: "1460"
         type: string
       days:
-        description: "Virtual days the SDK run will drive (recorded in the run summary; the clock is always anchored one year back)"
+        description: "Virtual days the run drives: the clock is anchored this many days before real-start. 365 = a year of history"
         required: false
         default: "365"
         type: string
@@ -54,6 +54,15 @@ env:
   # under 1.4 real seconds, too tight for any work to progress, and the suite refuses the
   # deployment — so refuse it here rather than after a 25-service rollout.
   MAX_SCALE: "26280"
+  # The least real time the gap may take to close. The rollout below runs under a 45-minute
+  # SSM timeout and the verifier for up to five more, and the verifier fails a stack whose
+  # clock has ALREADY converged — so a pair that closes inside this window would recreate
+  # 25 services and then fail verification with no back-dated window left.
+  MIN_CONVERGE_HOURS: "1"
+  # The gap the SDK suite's accelerated integration run expects (durion-positivity-sdk#64).
+  # A shorter run deploys fine; it is warned about, not refused, because that suite is the
+  # documented consumer today, not the only possible one.
+  SDK_RUN_DAYS: "360"
 
 jobs:
   deploy:
@@ -105,33 +114,30 @@ jobs:
             exit 1
           fi
 
-          if [[ ! "${SCALE}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || ! awk -v s="${SCALE}" 'BEGIN { exit !(s > 1) }'; then
-            echo "::error::scale must be a number greater than 1 (got '${SCALE}'); at 1 or below the one-year gap never closes."
+          # The anchors are generated ONCE, here, and handed to every JVM. A service deriving
+          # its own anchor is skewed from every other by `scale x` its startup delay; at 1460
+          # one real second of startup skew is 24 virtual minutes of service-to-service
+          # disagreement.
+          #
+          # scripts/accelerated-anchors.sh owns the arithmetic (virtual-start is real-start
+          # minus exactly `days` x 86400 s, both from one epoch read) and every refusal: a bad
+          # days or scale, a scale at or above MAX_SCALE, and a pair that would converge inside
+          # MIN_CONVERGE_HOURS. It is covered by scripts/tests/accelerated-anchors-selftest.sh.
+          if ! anchors="$(bash scripts/accelerated-anchors.sh \
+                --days "${DAYS}" --scale "${SCALE}" \
+                --max-scale "${MAX_SCALE}" --min-converge-hours "${MIN_CONVERGE_HOURS}" 2> "${RUNNER_TEMP}/anchors.err")"; then
+            while IFS= read -r line; do echo "::error::${line}"; done < "${RUNNER_TEMP}/anchors.err"
             exit 1
           fi
-          if ! awk -v s="${SCALE}" -v m="${MAX_SCALE}" 'BEGIN { exit !(s < m) }'; then
-            echo "::error::scale must be below ${MAX_SCALE} (got '${SCALE}'). The SDK suite refuses a backend that fast: a ten-hour virtual window would be ~1.4 real seconds."
-            exit 1
+          days="$(sed -n 's/^days=//p' <<< "${anchors}")"
+          if [[ "${days}" -lt "${SDK_RUN_DAYS}" ]]; then
+            echo "::warning::days=${days} is shorter than the ${SDK_RUN_DAYS}-day gap the SDK suite's accelerated integration run expects (durion-positivity-sdk#64); that suite will refuse this backend. Fine for any other consumer of the accelerated stack."
           fi
-          if [[ ! "${DAYS}" =~ ^[0-9]+$ ]] || [[ "${DAYS}" -le 0 ]]; then
-            echo "::error::days must be a positive integer (got '${DAYS}')."
-            exit 1
-          fi
-
-          # Generated ONCE, here, and handed to every JVM. A service deriving its own anchor is
-          # skewed from every other by `scale x` its startup delay; at 1460 one real second of
-          # startup skew is 24 virtual minutes of service-to-service disagreement.
-          real_start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          virtual_start="$(date -u -d '1 year ago' +%Y-%m-%dT%H:%M:%SZ)"
 
           {
             echo "sha=${sha}"
             echo "image_tag=sha-${sha:0:7}"
-            echo "real_start=${real_start}"
-            echo "virtual_start=${virtual_start}"
-            echo "scale=${SCALE}"
-            echo "days=${DAYS}"
-            echo "hours_to_converge=$(awk -v s="${SCALE}" 'BEGIN { printf "%.1f", 365 * 86400 / (s - 1) / 3600 }')"
+            echo "${anchors}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials (OIDC)
@@ -187,10 +193,10 @@ jobs:
           if [[ -n "${SUPPLIER_AUDIT_ENC_KEY}" ]]; then
             SUPPLIER_KEY_ASSIGNMENT="SUPPLIER_AUDIT_ENC_KEY='${SUPPLIER_AUDIT_ENC_KEY}' "
           fi
-          # deploy-backend.sh re-checks all of this before it touches the host: the anchors'
-          # shape, the 360-day floor, and the scale. It also writes them into the on-box env
-          # file so a later config-only sync cannot drop the stack back to the wall clock
-          # mid-run.
+          # deploy-backend.sh re-checks the anchors before it touches the host: their shape, a
+          # gap of at least one day, and the scale. It also writes them into the
+          # on-box env file so a later config-only sync cannot drop the stack back to the wall
+          # clock mid-run.
           # Built by appending rather than with backslash continuations: inside double quotes a
           # continuation keeps the next line's YAML indentation, which would pad the command
           # with runs of spaces for no reason.
@@ -283,7 +289,7 @@ jobs:
             echo "| Backend tag | \`${{ steps.run.outputs.image_tag }}\` |"
             echo "| Commit | \`${{ steps.run.outputs.sha }}\` |"
             echo "| Scale | \`${{ steps.run.outputs.scale }}\`x |"
-            echo "| Virtual days requested | \`${{ steps.run.outputs.days }}\` |"
+            echo "| Virtual days (gap between the anchors) | \`${{ steps.run.outputs.days }}\` |"
             echo "| \`POS_TIME_ACCELERATED_REAL_START\` | \`${{ steps.run.outputs.real_start }}\` |"
             echo "| \`POS_TIME_ACCELERATED_VIRTUAL_START\` | \`${{ steps.run.outputs.virtual_start }}\` |"
             echo "| Converges on wall time after | ~\`${{ steps.run.outputs.hours_to_converge }}\` real hours |"

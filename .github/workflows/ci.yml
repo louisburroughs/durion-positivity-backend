@@ -186,9 +186,9 @@ jobs:
         run: ./scripts/check-deploy-service-drift.sh
 
       - name: Enforce accelerated-clock coverage
-        # An accelerated alpha run (#2065) puts every POS JVM on one clock anchored a year
-        # back. A service missing from deployment/alpha/docker-compose.accelerated.yml stays
-        # on the wall clock and writes records a year ahead of everything else in the same
+        # An accelerated alpha run (#2065) puts every POS JVM on one clock anchored in the
+        # past. A service missing from deployment/alpha/docker-compose.accelerated.yml stays
+        # on the wall clock and writes records far ahead of everything else in the same
         # database, with nothing failing at the time — so the merged `docker compose config`
         # is asserted here: all 25 JVMs, the same five anchors, and a missing anchor still
         # refused by the required-variable syntax.
@@ -198,9 +198,17 @@ jobs:
         # Both halves of the switch, neither observable anywhere but on the box: ACCELERATED=true
         # applies and checksums the override and persists the anchors; an ordinary deploy is the
         # teardown that removes them; a config-only sync inherits the box's state; and every bad
-        # anchor — missing, malformed, a gap under 360 days, a scale that cannot converge — is
+        # anchor — missing, malformed, a gap under a day, a scale that cannot converge — is
         # refused before a 25-service rollout. Driven against a stubbed Docker.
         run: bash scripts/tests/deploy-backend-accelerated-selftest.sh
+
+      - name: Verify the accelerated deploy's anchor generation
+        # deploy-alpha-accelerated.yml generates the run's anchor pair with
+        # scripts/accelerated-anchors.sh at dispatch. The self-test pins the arithmetic
+        # (virtual-start is exactly `days` x 86400 s before real-start) and every refusal,
+        # including a pair that would converge before the rollout and its verification could
+        # finish — which the verifier would otherwise only catch after a 25-service recreate.
+        run: bash scripts/tests/accelerated-anchors-selftest.sh
 
       - name: Verify the config-only sync's image pre-flight
         # deploy-backend.sh --config-only decides what an alpha sync does when an

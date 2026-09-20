@@ -4,8 +4,9 @@ set -euo pipefail
 # Self-test for the accelerated-clock path in deploy-backend.sh (#2065).
 #
 # ACCELERATED=true layers deployment/alpha/docker-compose.accelerated.yml onto the deploy,
-# putting every POS JVM on the `accelerated` profile with its clock anchored a year in the
-# past, so the SDK repo's suite can drive a year of shop activity in a few real hours. The
+# putting every POS JVM on the `accelerated` profile with its clock anchored as many virtual
+# days in the past as the dispatch asked for (365 by default), so the SDK repo's suite can
+# drive that much shop activity in a few real hours. The
 # stakes make both halves worth pinning, and neither is observable anywhere but on the box:
 #
 #   1. Off by default: an ordinary deploy is byte-for-byte the deploy it was before, and is
@@ -17,7 +18,7 @@ set -euo pipefail
 #      the anchors are persisted into the env file so a later config-only sync cannot drop
 #      the stack back to wall time halfway through a run.
 #   3. Refused, before anything on the host is touched: a missing anchor, a malformed one, a
-#      gap shorter than 360 days, a scale that cannot converge, a value other than
+#      gap shorter than a day, a scale that cannot converge, a value other than
 #      true/false, --config-only, and an override file that is missing or stale. Every one of
 #      these is cheaper to catch here than after a 25-service rollout.
 #   4. A config-only sync INHERITS the box's state: it applies the override when the box is
@@ -35,9 +36,11 @@ CASE_FAILURES=0
 
 SHA=b30123cfeedfacedeadbeef0123456789abcdef0
 
-# A one-year gap, well clear of the 360-day floor.
+# A one-year gap, the workflow's default.
 REAL_START="2026-09-17T12:00:00Z"
 VIRTUAL_START="2025-09-17T12:00:00Z"
+# A 92-day gap: the workflow honours a shorter `days` input, so the deploy must too.
+SHORT_VIRTUAL_START="2026-06-17T12:00:00Z"
 
 make_stubs() {
   mkdir -p "${WORK}/bin"
@@ -266,18 +269,28 @@ make_alpha_root none
 run_case ACCELERATED=true "POS_TIME_ACCELERATED_REAL_START=${REAL_START}" -- "${SHA}"
 assert "exits 1" "$([[ ${RC} -eq 1 ]] && echo pass)"
 assert "names both anchors" "$(grep -q 'requires POS_TIME_ACCELERATED_REAL_START and' <<< "${OUT}" && echo pass)"
-assert "shows how to generate them" "$(grep -q "date -u -d '1 year ago'" <<< "${OUT}" && echo pass)"
+assert "shows how to generate them" "$(grep -q "date -u -d '365 days ago'" <<< "${OUT}" && echo pass)"
 assert "touched nothing" "$([[ ! -s "${WORK}/compose.log" ]] && echo pass)"
 assert "did not retag the deploy" "$(grep -q '^BACKEND_TAG=sha-0000000$' "${WORK}/alpha/.env" && echo pass)"
 end_case
 
-echo "case 9: a gap shorter than 360 days is refused before the rollout"
+echo "case 9: a gap shorter than a year is accepted — the dispatch's days input sets the run's length"
 make_alpha_root none
 run_case ACCELERATED=true "POS_TIME_ACCELERATED_REAL_START=${REAL_START}" \
-  POS_TIME_ACCELERATED_VIRTUAL_START=2026-06-17T12:00:00Z -- "${SHA}"
+  "POS_TIME_ACCELERATED_VIRTUAL_START=${SHORT_VIRTUAL_START}" -- "${SHA}"
+assert "exits 0" "$([[ ${RC} -eq 0 ]] && echo pass)"
+assert "persists the shorter virtual-start" "$(env_has "POS_TIME_ACCELERATED_VIRTUAL_START=${SHORT_VIRTUAL_START}" && echo pass)"
+assert "logs the gap in days" "$(grep -q '(92 days earlier)' <<< "${OUT}" && echo pass)"
+assert "applies the override to every compose call" "$(every_compose_call_is_accelerated && echo pass)"
+end_case
+
+echo "case 9b: a gap shorter than a day is refused before the rollout"
+make_alpha_root none
+run_case ACCELERATED=true "POS_TIME_ACCELERATED_REAL_START=${REAL_START}" \
+  POS_TIME_ACCELERATED_VIRTUAL_START=2026-09-17T11:00:00Z -- "${SHA}"
 assert "exits 1" "$([[ ${RC} -eq 1 ]] && echo pass)"
-assert "names the floor" "$(grep -q 'at least 360 days before' <<< "${OUT}" && echo pass)"
-assert "reports the actual gap" "$(grep -q '92 day(s) apart' <<< "${OUT}" && echo pass)"
+assert "names the floor" "$(grep -q 'at least 1 day before' <<< "${OUT}" && echo pass)"
+assert "reports the actual gap" "$(grep -q '0 day(s) apart' <<< "${OUT}" && echo pass)"
 assert "touched nothing" "$([[ ! -s "${WORK}/compose.log" ]] && echo pass)"
 end_case
 
@@ -286,7 +299,7 @@ make_alpha_root none
 run_case ACCELERATED=true "POS_TIME_ACCELERATED_REAL_START=${VIRTUAL_START}" \
   "POS_TIME_ACCELERATED_VIRTUAL_START=${REAL_START}" -- "${SHA}"
 assert "exits 1" "$([[ ${RC} -eq 1 ]] && echo pass)"
-assert "names the floor" "$(grep -q 'at least 360 days before' <<< "${OUT}" && echo pass)"
+assert "names the floor" "$(grep -q 'at least 1 day before' <<< "${OUT}" && echo pass)"
 assert "touched nothing" "$([[ ! -s "${WORK}/compose.log" ]] && echo pass)"
 end_case
 
