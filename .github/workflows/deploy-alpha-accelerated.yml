@@ -54,6 +54,15 @@ env:
   # under 1.4 real seconds, too tight for any work to progress, and the suite refuses the
   # deployment — so refuse it here rather than after a 25-service rollout.
   MAX_SCALE: "26280"
+  # The least real time the gap may take to close. The rollout below runs under a 45-minute
+  # SSM timeout and the verifier for up to five more, and the verifier fails a stack whose
+  # clock has ALREADY converged — so a pair that closes inside this window would recreate
+  # 25 services and then fail verification with no back-dated window left.
+  MIN_CONVERGE_HOURS: "1"
+  # The gap the SDK suite's accelerated integration run expects (durion-positivity-sdk#64).
+  # A shorter run deploys fine; it is warned about, not refused, because that suite is the
+  # documented consumer today, not the only possible one.
+  SDK_RUN_DAYS: "360"
 
 jobs:
   deploy:
@@ -105,41 +114,30 @@ jobs:
             exit 1
           fi
 
-          if [[ ! "${SCALE}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || ! awk -v s="${SCALE}" 'BEGIN { exit !(s > 1) }'; then
-            echo "::error::scale must be a number greater than 1 (got '${SCALE}'); at 1 or below the one-year gap never closes."
-            exit 1
-          fi
-          if ! awk -v s="${SCALE}" -v m="${MAX_SCALE}" 'BEGIN { exit !(s < m) }'; then
-            echo "::error::scale must be below ${MAX_SCALE} (got '${SCALE}'). The SDK suite refuses a backend that fast: a ten-hour virtual window would be ~1.4 real seconds."
-            exit 1
-          fi
-          # Digits first, then decimal whatever was typed: `$(( ))` and `-le` would read a
-          # leading zero as octal, and '0092' is not a valid octal number.
-          if [[ ! "${DAYS}" =~ ^[0-9]+$ ]] || [[ "$((10#${DAYS}))" -le 0 ]]; then
-            echo "::error::days must be a positive integer (got '${DAYS}'); the clock is anchored that many days in the past."
-            exit 1
-          fi
-          DAYS="$((10#${DAYS}))"
-
-          # Generated ONCE, here, and handed to every JVM. A service deriving its own anchor is
-          # skewed from every other by `scale x` its startup delay; at 1460 one real second of
-          # startup skew is 24 virtual minutes of service-to-service disagreement.
+          # The anchors are generated ONCE, here, and handed to every JVM. A service deriving
+          # its own anchor is skewed from every other by `scale x` its startup delay; at 1460
+          # one real second of startup skew is 24 virtual minutes of service-to-service
+          # disagreement.
           #
-          # Both anchors come from one epoch read so the gap is exactly `days`: the virtual
-          # start is real-start minus `days` (as 86400-second days, not calendar arithmetic,
-          # so a run dispatched on 29 Feb still lands a whole number of days back).
-          real_epoch="$(date -u +%s)"
-          real_start="$(date -u -d "@${real_epoch}" +%Y-%m-%dT%H:%M:%SZ)"
-          virtual_start="$(date -u -d "@$((real_epoch - DAYS * 86400))" +%Y-%m-%dT%H:%M:%SZ)"
+          # scripts/accelerated-anchors.sh owns the arithmetic (virtual-start is real-start
+          # minus exactly `days` x 86400 s, both from one epoch read) and every refusal: a bad
+          # days or scale, a scale at or above MAX_SCALE, and a pair that would converge inside
+          # MIN_CONVERGE_HOURS. It is covered by scripts/tests/accelerated-anchors-selftest.sh.
+          if ! anchors="$(bash scripts/accelerated-anchors.sh \
+                --days "${DAYS}" --scale "${SCALE}" \
+                --max-scale "${MAX_SCALE}" --min-converge-hours "${MIN_CONVERGE_HOURS}" 2> "${RUNNER_TEMP}/anchors.err")"; then
+            while IFS= read -r line; do echo "::error::${line}"; done < "${RUNNER_TEMP}/anchors.err"
+            exit 1
+          fi
+          days="$(sed -n 's/^days=//p' <<< "${anchors}")"
+          if [[ "${days}" -lt "${SDK_RUN_DAYS}" ]]; then
+            echo "::warning::days=${days} is shorter than the ${SDK_RUN_DAYS}-day gap the SDK suite's accelerated integration run expects (durion-positivity-sdk#64); that suite will refuse this backend. Fine for any other consumer of the accelerated stack."
+          fi
 
           {
             echo "sha=${sha}"
             echo "image_tag=sha-${sha:0:7}"
-            echo "real_start=${real_start}"
-            echo "virtual_start=${virtual_start}"
-            echo "scale=${SCALE}"
-            echo "days=${DAYS}"
-            echo "hours_to_converge=$(awk -v d="${DAYS}" -v s="${SCALE}" 'BEGIN { printf "%.1f", d * 86400 / (s - 1) / 3600 }')"
+            echo "${anchors}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials (OIDC)
@@ -195,8 +193,8 @@ jobs:
           if [[ -n "${SUPPLIER_AUDIT_ENC_KEY}" ]]; then
             SUPPLIER_KEY_ASSIGNMENT="SUPPLIER_AUDIT_ENC_KEY='${SUPPLIER_AUDIT_ENC_KEY}' "
           fi
-          # deploy-backend.sh re-checks all of this before it touches the host: the anchors'
-          # shape, a gap of at least one day, and the scale. It also writes them into the
+          # deploy-backend.sh re-checks the anchors before it touches the host: their shape, a
+          # gap of at least one day, and the scale. It also writes them into the
           # on-box env file so a later config-only sync cannot drop the stack back to the wall
           # clock mid-run.
           # Built by appending rather than with backslash continuations: inside double quotes a

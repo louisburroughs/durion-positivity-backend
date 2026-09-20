@@ -40,10 +40,10 @@ Three consequences worth holding on to:
   `deploy-backend.sh` refuses `POS_TIME_ACCELERATED_CONVERGE` set to anything but `true`, because
   with it off the stack future-dates every row it writes into a database other people share, and
   no later deploy can unwrite them.
-- **It stops being accelerated once it converges.** A one-year gap closes after
-  `gap / (scale - 1)` real time — about 6 h at 1460, 3 h at 2920, 1 h at 8760. After that the
-  stack is on ordinary wall time and there is no back-dated window left, so the SDK run has to
-  finish inside that budget.
+- **It stops being accelerated once it converges.** The gap closes after
+  `gap / (scale - 1)` real time — for a year, about 6 h at 1460, 3 h at 2920, 1 h at 8760. After
+  that the stack is on ordinary wall time and there is no back-dated window left, so the SDK
+  run has to finish inside that budget.
 - **Every JVM must share the same two anchors.** They are generated once, in CI, at dispatch.
   A service deriving its own anchor is skewed from every other by `scale ×` its own startup
   delay: at 1460, one real second of startup skew is 24 virtual minutes.
@@ -89,9 +89,19 @@ registry and a mock external vendor write no business timestamps.
    | `confirm` | Must be exactly `ACCELERATE ALPHA`. |
 
    The workflow generates `POS_TIME_ACCELERATED_REAL_START` (now) and `_VIRTUAL_START`
-   (exactly `days` × 86400 seconds earlier) **once** and hands the same pair to every
-   service. It shares the `alpha-deploy` concurrency group with `Build and Push to ECR` and
-   `Sync Alpha Config`, so no two of them can interleave on the box.
+   (exactly `days` × 86400 seconds earlier) **once**, with `scripts/accelerated-anchors.sh`,
+   and hands the same pair to every service. It shares the `alpha-deploy` concurrency group
+   with `Build and Push to ECR` and `Sync Alpha Config`, so no two of them can interleave on
+   the box.
+
+   The workflow refuses, before it touches AWS, a `days` or `scale` that is malformed, a
+   `scale` at or above 26,280, and a pair whose gap would close in **under one real hour**:
+   the rollout runs under a 45-minute SSM timeout and the verifier for up to five more, and
+   the verifier fails a stack whose clock has already converged. `days × 86400 / (scale − 1)`
+   has to cover that window, so a short run needs a slower scale (one day at 1460 closes in
+   a minute; at 20 it takes ~1.3 h). A `days` under 360 deploys with a warning: the SDK
+   suite's accelerated run expects a year and will refuse a shorter backend, but other
+   consumers of the accelerated stack need not.
 
 3. **Read the run summary.** It records the backend tag, both anchors, the scale, the requested
    days, when the clock converges, and who dispatched it. The anchors are the run's identity —

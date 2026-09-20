@@ -202,6 +202,14 @@ jobs:
         # refused before a 25-service rollout. Driven against a stubbed Docker.
         run: bash scripts/tests/deploy-backend-accelerated-selftest.sh
 
+      - name: Verify the accelerated deploy's anchor generation
+        # deploy-alpha-accelerated.yml generates the run's anchor pair with
+        # scripts/accelerated-anchors.sh at dispatch. The self-test pins the arithmetic
+        # (virtual-start is exactly `days` x 86400 s before real-start) and every refusal,
+        # including a pair that would converge before the rollout and its verification could
+        # finish — which the verifier would otherwise only catch after a 25-service recreate.
+        run: bash scripts/tests/accelerated-anchors-selftest.sh
+
       - name: Verify the config-only sync's image pre-flight
         # deploy-backend.sh --config-only decides what an alpha sync does when an
         # image is missing at the pinned BACKEND_TAG, and that decision is
