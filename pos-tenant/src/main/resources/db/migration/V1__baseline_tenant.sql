@@ -1,5 +1,5 @@
 -- pos-tenant: Flyway baseline (module born 2026-09-10 under ADR-0062 section 7, plan WS2a) with the
--- tenancy schema of ../durion/docs/architecture/deployment/TENANCY_SCHEMA.md. Every registry row belongs to the platform tenant
+-- tenancy schema of docs/TENANCY_SCHEMA.md. Every registry row belongs to the platform tenant
 -- (pos-tenancy-common PlatformTenant.ID), so RLS protects accounts, contacts, billing profiles and
 -- the tenant table itself by the same mechanism as every other module's tables. Global (unscoped)
 -- tables: src/main/resources/db/tenancy-global-tables.txt.

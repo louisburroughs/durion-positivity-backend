@@ -6,7 +6,7 @@
 -- ext_catalog_service on write. Deliberately no FK: the vocabulary is owned by pos-catalog and
 -- reaches this module only as a replica (ADR-0044 §6).
 --
--- Tenant-scoped per ../durion/docs/architecture/deployment/TENANCY_SCHEMA.md — a tenant's shops may confine work differently — with
+-- Tenant-scoped per docs/TENANCY_SCHEMA.md — a tenant's shops may confine work differently — with
 -- the platform default supplied by R__seed_location_2_bay_specialty.sql.
 
 CREATE TABLE public.bay_specialty_operation (

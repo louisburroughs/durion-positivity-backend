@@ -7,7 +7,7 @@
 -- vocabulary without a synchronous cross-module read. operation_code is the column the specialty
 -- map joins against, hence the partial index.
 --
--- Tenant-scoped per ../durion/docs/architecture/deployment/TENANCY_SCHEMA.md; deliberately NOT in db/tenancy-global-tables.txt.
+-- Tenant-scoped per docs/TENANCY_SCHEMA.md; deliberately NOT in db/tenancy-global-tables.txt.
 
 CREATE TABLE public.ext_catalog_service (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,

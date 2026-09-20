@@ -7,7 +7,7 @@
 -- by tenant_id as well as event type, so a tenant's statistics are its own rows and the global view
 -- is the sum across tenants. emitted_event has no row-level security (V1_1), so the aggregate has
 -- none either; tenant_id is a data column that every reader names (EmittedEventHourlyRepository).
--- Edited in place (../durion/docs/architecture/deployment/TENANCY_SCHEMA.md): a database that already carries the tenant-less
+-- Edited in place (docs/TENANCY_SCHEMA.md): a database that already carries the tenant-less
 -- aggregate is reset, not migrated.
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 SELECT create_hypertable('emitted_event', by_range('published_at'), migrate_data => true);

@@ -21,7 +21,7 @@
 -- a session or break opens and lose it when one closes, which is also the only write path that
 -- touches them.
 --
--- Tenant-leading, per ../durion/docs/architecture/deployment/TENANCY_SCHEMA.md: the row-level-security predicate filters on tenant_id
+-- Tenant-leading, per docs/TENANCY_SCHEMA.md: the row-level-security predicate filters on tenant_id
 -- first, so an index that does not lead with it cannot serve the query.
 --
 -- Deliberately NOT unique. A unique partial index here would additionally close #2061's BR2 gap —

@@ -13,7 +13,7 @@ INSERT INTO tenant (id, slug, display_name, status, account_id, cell, initial_ad
 VALUES ('01900000-0000-7000-8000-000000000000', 'platform', 'Durion Platform', 'ACTIVE',
         '01900000-0000-7000-8000-00000000a000', NULL, 'platform@durionpos.org', 0, now(), now(), now());
 
--- The alpha default tenant (../durion/docs/architecture/deployment/TENANCY_SCHEMA.md): the one tenant every flattened seed row in
+-- The alpha default tenant (docs/TENANCY_SCHEMA.md): the one tenant every flattened seed row in
 -- every module already belongs to, registered here so login resolution and the ext_tenant
 -- replicas (plan WS2b) know it. ACTIVE for the same reason as the platform tenant.
 INSERT INTO account (id, legal_name, trading_name, status, tax_id, home_country, home_currency, version, created_at, updated_at)
