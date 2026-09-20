@@ -686,6 +686,14 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         return permissionCodes;
     }
 
+    // Sonar (java:S2583) misreads "raced != null" below as always true: chatMemoryCache.asMap()
+    // exposes java.util.concurrent.ConcurrentMap<String, ChatMemory> under this package's
+    // @NullMarked scope, and its dataflow engine infers putIfAbsent's unannotated JDK return as
+    // non-null from the (non-nullable) value type parameter rather than from putIfAbsent's actual
+    // contract (returns the PREVIOUS mapping, null when this call is the one that inserted the
+    // key) — a known false positive, not a real invariant. The null branch is exactly the case
+    // this line exists for (#2073: first published wins), so it must stay.
+    @SuppressWarnings("java:S2583")
     private @NonNull ChatMemory chatMemoryFor(@NonNull Object memoryId) {
         // Tier 3: Replace MessageWindowChatMemory with SemanticChatMemoryStore
         // for persistent semantic memory and session summarization

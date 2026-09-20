@@ -31,6 +31,8 @@ public class TranscriptionServiceImpl implements TranscriptionService {
 
     private static final Set<String> SUPPORTED_MIME_TYPES = Set.of("audio/webm", "audio/ogg", "audio/mp4");
 
+    private static final int MAX_LOGGED_VALUE_LENGTH = 100;
+
     private final SpeechToTextClient client;
     private final TranscriptionProperties properties;
 
@@ -77,7 +79,8 @@ public class TranscriptionServiceImpl implements TranscriptionService {
             throw new AudioTooLargeException("audio duration " + durationSeconds + "s exceeds the maximum of "
                     + properties.maxDurationSeconds() + "s");
         }
-        String text = result.text() == null ? "" : result.text().trim();
+        // result.text() is @NonNull (SpeechToTextResult contract: never null, possibly blank).
+        String text = result.text().trim();
         if (text.isBlank()) {
             throw new UnintelligibleAudioException("transcription produced no usable text");
         }
@@ -86,8 +89,8 @@ public class TranscriptionServiceImpl implements TranscriptionService {
         LOGGER.info(
                 "transcription completed: sizeBytes={}, mimeType={}, language={}, durationSeconds={}, latencyMs={}",
                 bytes.length,
-                baseMimeType,
-                responseLanguage,
+                sanitizeForLog(baseMimeType),
+                sanitizeForLog(responseLanguage),
                 durationSeconds,
                 latencyMillis);
 
@@ -141,6 +144,18 @@ public class TranscriptionServiceImpl implements TranscriptionService {
                     default -> "bin";
                 };
         return "clip." + extension;
+    }
+
+    /**
+     * Strips CR/LF/control characters and caps length before a request-derived value ({@code
+     * baseMimeType}, {@code responseLanguage}) is interpolated into a log line (log injection
+     * defense, javasecurity:S5145).
+     */
+    private static @NonNull String sanitizeForLog(@NonNull String value) {
+        String sanitized = value.replaceAll("[\\r\\n\\t]", "_").replaceAll("\\p{Cntrl}", "");
+        return sanitized.length() > MAX_LOGGED_VALUE_LENGTH
+                ? sanitized.substring(0, MAX_LOGGED_VALUE_LENGTH) + "..."
+                : sanitized;
     }
 
     private static @NonNull String firstNonBlank(@Nullable String... candidates) {
