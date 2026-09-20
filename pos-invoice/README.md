@@ -105,15 +105,24 @@ fallback code. Add a row in the same pull request as the controller or advice th
 
 | Code | Status | Description |
 |------|--------|-------------|
-| `NOT_FOUND` | 404 | Invoice or receipt not found |
+| `VALIDATION_ERROR` | 400 | This module's own request validation failure (`InvoiceRequestValidationException`) on the invoice, billing-rules, analytics, search and artifact endpoints |
+| `DEPOSIT_CREDIT_INVALID_ARGUMENT` | 400 | The same validation failure raised on a deposit-credit endpoint |
+| `ELEVATION_DENIED` | 401 | Manager-approval elevation refused: the employee number does not resolve to an active employee, or that person does not hold `invoice:finalize:override` |
+| `FORBIDDEN` | 403 | Caller lacks the required payment permission, or the artifact download token is invalid |
+| `MANAGER_APPROVAL_REQUIRED` | 403 | Finalizing this invoice exceeds the amount cap and no manager-approval elevation token was supplied — a step-up credential the caller lacks (ADR-0017 §2 question 1, #1725; introduced by #1694 as a 422). `nextAction` points at `elevateManagerApproval` |
+| `MANAGER_APPROVAL_INVALID` | 403 | Supplied manager-approval elevation token does not verify (wrong scope, tampered, or expired) — a step-up credential the server considers insufficient (ADR-0017 §2 question 1, #1725; introduced by #1694 as a 422). `nextAction` points at `elevateManagerApproval` |
+| `NOT_FOUND` | 404 | Invoice, receipt, artifact, payment intent or billing rules not found |
+| `DEPOSIT_CREDIT_NOT_FOUND` | 404 | Referenced deposit credit does not exist |
 | `INVALID_STATE` | 409 | Invoice state transition is not allowed |
 | `CONFLICT` | 409 | General state conflict (e.g. already finalized) |
+| `INVALID_PAYMENT_STATE` | 409 | The payment intent is not in a state that allows the capture, void or refund |
+| `PAYMENT_IDEMPOTENCY_CONFLICT` | 409 | A payment idempotency key was reused with a different payload |
+| `REPRINT_LIMIT_EXCEEDED` | 409 | The receipt has already been reprinted the maximum number of times |
 | `PAYMENT_DECLINED` | 422 | Payment gateway declined the transaction |
 | `PAYMENT_WINDOW_EXPIRED` | 422 | Refund window for the payment has closed |
 | `INSUFFICIENT_REFUNDABLE_AMOUNT` | 422 | Refund amount exceeds what was originally paid |
-| `MANAGER_APPROVAL_REQUIRED` | 403 | Finalizing this invoice exceeds the amount cap and no manager-approval elevation token was supplied — a step-up credential the caller lacks (ADR-0017 §2 question 1, #1725; introduced by #1694 as a 422). `nextAction` points at `elevateManagerApproval` |
-| `MANAGER_APPROVAL_INVALID` | 403 | Supplied manager-approval elevation token does not verify (wrong scope, tampered, or expired) — a step-up credential the server considers insufficient (ADR-0017 §2 question 1, #1725; introduced by #1694 as a 422). `nextAction` points at `elevateManagerApproval` |
 | `EXCESSIVE_ADJUSTMENT` | 422 | Adjustment would drive the invoice total negative; a credit memo is required instead (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all) |
+| `INTERNAL_SERVER_ERROR` | 500 | The payment gateway call failed during a reversal |
 
 ## Configuration
 

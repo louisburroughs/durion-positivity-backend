@@ -356,18 +356,47 @@ row in the same pull request as the controller or advice that mints the code.
 
 | Code | Status | Description |
 |------|--------|-------------|
-| `ROLE_NOT_FOUND` | 404 | Role does not exist |
-| `USER_NOT_FOUND` | 404 | A referenced user does not resolve — on every entry point that references one by id or username (user management and token issuance alike; ADR-0017 §2 "one condition, one status", #1802). The token-issuance endpoints answer it with a generic message that never names the subject (#1715). A refresh token whose user no longer exists is `401 INVALID_REFRESH_TOKEN` instead, because there the missing user is a credential failure |
-| `INVALID_TOKEN` | 401 | `GET /v1/auth/roles`, `/subject`, `/user-id`: the `token` query parameter failed validation (expired, revoked, unknown to the token store, malformed); enveloped since #1808 — previously a bare 401 |
-| `TOKEN_USER_ID_MISSING` | 422 | `GET /v1/auth/user-id`: the token passed full validation but carries neither a `uid` nor a legacy `userId` claim (#1803). Not 401 — the token is genuine — and not 400 — it parsed; ADR-0017 §2 question 3 |
-| `DUPLICATE_ROLE_NAME` | 409 | Role name is already taken |
-| `ACCOUNT_LOCKED` | 401 | Account is locked due to repeated failures |
-| `ACCOUNT_DISABLED` | 401 | Account has been disabled by an administrator |
-| `BAD_CREDENTIALS` | 401 | Username or password is incorrect |
-| `FORBIDDEN` | 403 | Caller lacks required permissions |
-| `USER_HAS_NO_ROLES` | 403 | Credentials or refresh token are valid, but the account currently has no roles assigned; answered the same on login and refresh (ADR-0017 §2 question 1, #1725). `nextAction` tells the caller to have an administrator assign a role |
 | `VALIDATION_ERROR` | 400 | This module's own field/reference validation failure (`SecurityValidationException`): a blank required field, a malformed permission key or bitset, an unsupported `perm_ver`. A role or user reference that does not resolve is `ROLE_NOT_FOUND` / `USER_NOT_FOUND` (404) since #1802. Aligned onto the fleet-wide spelling in #1730; it answered `INVALID_REQUEST` between #1694 and #1730 |
 | `INVALID_REQUEST` | 400 | Request-binding failure raised by the framework before the controller runs — an unreadable body, a missing query parameter, a bean-validation rejection. A pre-existing code with consumers, so #1730 deliberately did **not** rename it. Clients that switch on validation codes should handle both this and `VALIDATION_ERROR` |
+| `INVALID_STATE` | 400 | An `IllegalStateException` from a service other than a role-assignment overlap |
+| `INVALID_CREDENTIALS` | 401 | Username or password is incorrect; also the code for a hidden unknown-user login and for any other authentication failure the entry point cannot name |
+| `ACCOUNT_LOCKED` | 401 | Account is locked due to repeated failures |
+| `ACCOUNT_DISABLED` | 401 | Account has been disabled by an administrator |
+| `ACCOUNT_EXPIRED` | 401 | Account has expired |
+| `CREDENTIALS_EXPIRED` | 401 | Credentials have expired |
+| `INVALID_TOKEN` | 401 | `GET /v1/auth/roles`, `/subject`, `/user-id`: the `token` query parameter failed validation (expired, revoked, unknown to the token store, malformed); enveloped since #1808 — previously a bare 401 |
+| `INVALID_REFRESH_TOKEN` | 401 | The refresh token is expired, revoked, unknown, or its user no longer exists |
+| `ACTIVATION_TOKEN_INVALID` | 401 | The activation token does not verify or has expired |
+| `PERMISSION_REGISTRATION_SECRET_MISSING` | 401 | A permission-registration call carried no registration secret header |
+| `INVALID_PERMISSION_REGISTRATION_SECRET` | 401 | The permission-registration secret does not match |
+| `FORBIDDEN` | 403 | Caller lacks required permissions |
+| `USER_HAS_NO_ROLES` | 403 | Credentials or refresh token are valid, but the account currently has no roles assigned; answered the same on login and refresh (ADR-0017 §2 question 1, #1725). `nextAction` tells the caller to have an administrator assign a role |
+| `PLATFORM_TENANT_REQUIRED` | 403 | The endpoint is for platform-tenant callers only (ADR-0062) |
+| `ROLE_NOT_FOUND` | 404 | Role does not exist |
+| `USER_NOT_FOUND` | 404 | A referenced user does not resolve — on every entry point that references one by id or username (user management and token issuance alike; ADR-0017 §2 "one condition, one status", #1802). The token-issuance endpoints answer it with a generic message that never names the subject (#1715). A refresh token whose user no longer exists is `401 INVALID_REFRESH_TOKEN` instead, because there the missing user is a credential failure |
+| `ROLE_ASSIGNMENT_NOT_FOUND` | 404 | Referenced role assignment does not exist |
+| `PERMISSION_NOT_FOUND` | 404 | Referenced permission does not exist |
+| `SELF_REGISTRATION_REVIEW_CASE_NOT_FOUND` | 404 | Referenced self-registration review case does not exist |
+| `TENANT_NOT_FOUND` | 404 | The tenant slug or id does not resolve in the `ext_tenant` replica |
+| `NOT_FOUND` | 404 | Any other JPA entity the request addresses does not exist (`EntityNotFoundException`) |
+| `DUPLICATE_ROLE_NAME` | 409 | Role name is already taken |
+| `USER_ALREADY_EXISTS` | 409 | Creating or self-registering a user whose username is taken; on self-registration `nextAction` and `supportAction` are populated |
+| `ACCOUNT_RECOVERY_REQUIRED` | 409 | Self-registration matched an inactive or already-linked account; use recovery or reactivation instead |
+| `PERSON_ALREADY_HAS_ACTIVE_USER` | 409 | Self-registration resolved a person who already has an active user |
+| `CRM_PERSON_CONFLICT` | 409 | Self-registration matched an existing customer or contact identity that needs review |
+| `IDEMPOTENCY_KEY_REUSED` | 409 | A self-registration idempotency key was reused with a different payload |
+| `ROLE_ASSIGNMENT_CONFLICT` | 409 | The role assignment overlaps an existing one |
+| `CONCURRENCY_CONFLICT` | 409 | Optimistic-lock version mismatch; reload and retry |
+| `ROLE_NOT_USER_ASSIGNABLE` | 409 | The role cannot be assigned to users |
+| `ROLE_TEMPLATE_IMMUTABLE` | 409 | Platform template roles cannot be deleted (ADR-0062) |
+| `USER_NOT_AWAITING_ACTIVATION` | 409 | Activation was attempted for a user who is not awaiting it |
+| `TENANT_NOT_IMPERSONABLE` | 409 | The tenant cannot be impersonated in its current state |
+| `TOKEN_USER_ID_MISSING` | 422 | `GET /v1/auth/user-id`: the token passed full validation but carries neither a `uid` nor a legacy `userId` claim (#1803). Not 401 — the token is genuine — and not 400 — it parsed; ADR-0017 §2 question 3 |
+| `INTERNAL_ERROR` | 500 | `JwtAuthenticationFilter`'s fail-closed catch-all for an unexpected failure while resolving the token (ADR-0056 §1) |
+
+The 401 account-state and credential codes are minted twice on purpose: by `GlobalExceptionHandler`
+when the login endpoint itself raises them, and by `JsonAuthenticationEntryPoint` when the filter
+chain rejects the request before any controller runs. Both spell them identically.
 
 The rules below say *why* several of these carry the status they do; read them before adding a code.
 

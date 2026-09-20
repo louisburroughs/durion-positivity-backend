@@ -269,19 +269,61 @@ fallback code. Add a row in the same pull request as the controller or advice th
 
 | Code | Status | Description |
 |------|--------|-------------|
-| `DUPLICATE_EVENT` | 409 | Event with this ID has already been processed |
-| `UNBALANCED_ENTRY` | 422 | Journal entry debits and credits do not balance (or has no lines) |
-| `GL_POSTING_FAILED` | 409 | General ledger posting failed |
-| `DUPLICATE_ACCOUNT_CODE` | 409 | Chart of accounts code already exists |
-| `GL_ACCOUNT_NOT_FOUND` | 404 | Referenced GL account does not exist |
-| `GL_ACCOUNT_NOT_ACTIVE` | 422 | GL account is not active on the transaction date, or was never activated |
-| `GL_MAPPING_NOT_CONFIGURED` | 422 | No GL mapping (posting category/key/effective date) is configured for the request |
-| `ACCOUNT_NOT_ZERO_BALANCE` | 409 | GL account cannot be deactivated because its posted balance is not zero |
-| `ACCOUNT_NOT_INACTIVE` | 409 | GL account cannot be archived because it is not currently INACTIVE |
+| `VALIDATION_ERROR` | 400 | Request-level validation failure this module raises itself: an invalid date range or request parameter, an unparseable bank statement, an invalid inbound event, a posting-rule publish that fails validation, an invalid bill allocation or vendor-bill operator action, or a constraint violation on a parameter |
+| `ARGUMENT_NOT_VALID` | 400 | Bean-validation rejection of a request body (`MethodArgumentNotValidException`) |
+| `UNSUPPORTED_SORT_PROPERTY` | 400 | A `sort` parameter names a property the endpoint does not sort on |
 | `NO_MATCHING_VENDOR_BILL` | 400 | An inbound vendor invoice matched no pending receipt/bill for the vendor (a failed match, not a missing addressed resource) |
+| `UNAUTHENTICATED` | 401 | No usable authentication on the request |
+| `FORBIDDEN` | 403 | Caller lacks the required permission |
+| `AUTHORIZATION_DENIED` | 403 | Audit-trail event creation refused because the caller may not record that event |
+| `NOT_FOUND` | 404 | A JPA entity the request addresses does not exist (`EntityNotFoundException`) |
 | `JOURNAL_ENTRY_NOT_FOUND` | 404 | Referenced journal entry does not exist |
 | `DEFAULT_GL_MAPPING_NOT_FOUND` | 404 | Referenced default GL mapping does not exist |
 | `POSTING_RULE_SET_NOT_FOUND` | 404 | Referenced posting rule set does not exist |
+| `GL_ACCOUNT_NOT_FOUND` | 404 | Referenced GL account does not exist |
+| `PERIOD_NOT_FOUND` | 404 | Referenced accounting period does not exist |
+| `TAX_SNAPSHOT_NOT_FOUND` | 404 | Referenced tax snapshot does not exist |
+| `SETTLEMENT_LINE_NOT_FOUND` | 404 | Referenced settlement line does not exist |
+| `RECEIVABLE_PAYMENT_NOT_FOUND` | 404 | Referenced receivable payment does not exist |
+| `RECONCILIATION_NOT_FOUND` | 404 | Referenced bank reconciliation does not exist |
+| `EVENT_NOT_FOUND` | 404 | Referenced AP payment event does not exist |
+| `EXPORT_JOB_NOT_FOUND` | 404 | Referenced report export job does not exist |
+| `DUPLICATE_EVENT` | 409 | Event with this ID has already been processed |
+| `IDEMPOTENCY_CONFLICT` | 409 | An AP payment idempotency key was reused with a different payload |
+| `GL_POSTING_FAILED` | 409 | General ledger posting failed |
+| `DUPLICATE_ACCOUNT_CODE` | 409 | Chart of accounts code already exists |
+| `ACCOUNT_NOT_ZERO_BALANCE` | 409 | GL account cannot be deactivated because its posted balance is not zero |
+| `ACCOUNT_NOT_INACTIVE` | 409 | GL account cannot be archived because it is not currently INACTIVE |
+| `ENTRY_ALREADY_POSTED` | 409 | Posting a journal entry that is already POSTED or REVERSED |
+| `JE_ALREADY_REVERSED` | 409 | Reversing a journal entry that is already REVERSED |
+| `JE_NOT_POSTED` | 409 | Reversing a journal entry that was never POSTED |
+| `PERIOD_ALREADY_CLOSED` | 409 | Closing an accounting period that is already closed |
+| `PERIOD_ALREADY_OPEN` | 409 | Reopening an accounting period that is already open |
+| `TAX_SNAPSHOT_PERIOD_NOT_CLOSED` | 409 | A tax snapshot was requested for a period that is still open |
+| `TAX_SNAPSHOT_ALREADY_EXISTS` | 409 | A tax snapshot already exists for the period |
+| `SETTLEMENT_LINE_NOT_UNMATCHED` | 409 | The settlement line is no longer in the UNMATCHED state the operation needs |
+| `SETTLEMENT_NOT_POSTED` | 409 | The operation needs a POSTED settlement |
+| `RECONCILIATION_ALREADY_FINALIZED` | 409 | The bank reconciliation is finalized and no longer editable |
+| `RECONCILIATION_LINE_INELIGIBLE` | 409 | The reconciliation line's state does not allow the requested match or adjustment |
+| `CONFLICT` | 409 | An `IllegalStateException` reporting an item that is `already PROCESSED` |
+| `ILLEGAL_STATE` | 409 | Any other `IllegalStateException` raised by this module's services |
+| `UNBALANCED_ENTRY` | 422 | Journal entry debits and credits do not balance (or has no lines) |
+| `GL_ACCOUNT_NOT_ACTIVE` | 422 | GL account is not active on the transaction date, or was never activated |
+| `GL_MAPPING_NOT_CONFIGURED` | 422 | No GL mapping (posting category/key/effective date) is configured for the request |
+| `PERIOD_CLOSED` | 422 | The transaction date falls in a closed accounting period |
+| `PERIOD_HARD_LOCKED` | 422 | The transaction date falls in a hard-locked accounting period |
+| `HARD_LOCK_DATE_REGRESSION` | 422 | The requested hard-lock date is earlier than the current one |
+| `PERIOD_HAS_DRAFT_ENTRIES` | 422 | The period cannot close while DRAFT journal entries remain; `fieldErrors` lists each `draftJournalEntryIds` value |
+| `UNBALANCED_RULES` | 422 | A posting-rule publish violates the split-group/`factorPercent` invariants; `fieldErrors` locates each offending group or line |
+| `WRITE_OFF_THRESHOLD_EXCEEDED` | 422 | A settlement write-off exceeds the configured threshold |
+| `WHOLE_REQUEST_REVERSAL_REQUIRED` | 422 | A payment application that was applied as one request must be reversed as one request |
+| `ACCOUNT_NOT_RECONCILABLE` | 422 | The GL account is not flagged as reconcilable |
+| `MATCH_AMOUNT_MISMATCH` | 422 | The matched statement and ledger amounts differ |
+| `RECONCILIATION_ADJUSTMENT_SIGN_INVALID` | 422 | A reconciliation adjustment carries the wrong sign for its type |
+| `RECONCILIATION_NOT_BALANCED` | 422 | The reconciliation cannot finalize while a difference remains; `fieldErrors` carries the `difference` |
+| `PAYMENT_GATEWAY_FAILURE` | 500 | The AP payment gateway call failed |
+| `INTERNAL_ERROR` | 500 | Audit-trail event creation failed unexpectedly |
+| `REQUEST_FAILED` | varies | A `ResponseStatusException` raised by a service (payment application, credit memos, report exports, mapping keys): the status is the exception's own and the message is its reason |
 
 ## Configuration
 
