@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -380,5 +381,76 @@ class ScaledClockTest {
         public Instant instant() {
             return instant;
         }
+    }
+
+    // instantAfter — wall-clock deadlines on an accelerated clock (#2135)
+
+    @Test
+    void instantAfter_whileAccelerating_isTheDurationTimesTheScale() {
+        MutableClock baseClock = new MutableClock(REAL_START, ZoneOffset.UTC);
+        ScaledClock clock = new ScaledClock(baseClock, ZoneOffset.UTC, REAL_START, VIRTUAL_START, 1000.0);
+
+        // Not converging (virtual time starts a day AHEAD here), so the projection is the plain
+        // multiplication: an hour of wall time is 1000 virtual hours.
+        assertThat(clock.instantAfter(Duration.ofHours(1))).isEqualTo(VIRTUAL_START.plusSeconds(3_600_000L));
+    }
+
+    @Test
+    void instantAfter_afterConvergence_isPlainWallTime() {
+        MutableClock baseClock = new MutableClock(CONVERGING_REAL_START, ZoneOffset.UTC);
+        ScaledClock clock = new ScaledClock(
+                baseClock, ZoneOffset.UTC, CONVERGING_REAL_START, CONVERGING_VIRTUAL_START, CONVERGING_SCALE, true);
+
+        // One real second closes the 999-second gap; the clock is on wall time from here.
+        baseClock.setInstant(CONVERGING_REAL_START.plusSeconds(2));
+        assertThat(clock.isConverged()).isTrue();
+
+        // The scale must NOT be applied any more: an hour of wall time is an hour, not 1000.
+        assertThat(clock.instantAfter(Duration.ofHours(1)))
+                .isEqualTo(CONVERGING_REAL_START.plusSeconds(2).plusSeconds(3600));
+    }
+
+    @Test
+    void instantAfter_spanningConvergence_doesNotOutliveTheDuration() {
+        MutableClock baseClock = new MutableClock(CONVERGING_REAL_START, ZoneOffset.UTC);
+        ScaledClock clock = new ScaledClock(
+                baseClock, ZoneOffset.UTC, CONVERGING_REAL_START, CONVERGING_VIRTUAL_START, CONVERGING_SCALE, true);
+
+        // Asked at the anchor, when the clock is still accelerating and convergence is one real
+        // second away. Multiplying would put the deadline 1000 hours out; the projection clamps it
+        // to wall time, because that is where the clock will actually be an hour from now.
+        assertThat(clock.instantAfter(Duration.ofHours(1))).isEqualTo(CONVERGING_REAL_START.plusSeconds(3600));
+    }
+
+    @Test
+    void instantAfter_zeroDuration_isTheCurrentInstant() {
+        MutableClock baseClock = new MutableClock(REAL_START, ZoneOffset.UTC);
+        ScaledClock clock = new ScaledClock(baseClock, ZoneOffset.UTC, REAL_START, VIRTUAL_START, 1000.0);
+
+        assertThat(clock.instantAfter(Duration.ZERO)).isEqualTo(clock.instant());
+    }
+
+    @Test
+    void instantAfter_doesNotLatchConvergence() {
+        MutableClock baseClock = new MutableClock(CONVERGING_REAL_START, ZoneOffset.UTC);
+        ScaledClock clock = new ScaledClock(
+                baseClock, ZoneOffset.UTC, CONVERGING_REAL_START, CONVERGING_VIRTUAL_START, CONVERGING_SCALE, true);
+
+        // A projection an hour into the future lands past convergence, but asking must not make
+        // the clock believe it has converged now: it is still 999 seconds behind wall time.
+        clock.instantAfter(Duration.ofHours(1));
+
+        assertThat(clock.isConverged()).isFalse();
+        assertThat(clock.instant()).isEqualTo(CONVERGING_VIRTUAL_START);
+    }
+
+    @Test
+    void instantAfter_rejectsNegativeDuration() {
+        MutableClock baseClock = new MutableClock(REAL_START, ZoneOffset.UTC);
+        ScaledClock clock = new ScaledClock(baseClock, ZoneOffset.UTC, REAL_START, VIRTUAL_START, 1000.0);
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> clock.instantAfter(Duration.ofSeconds(-1)))
+                .withMessage("realDuration must not be negative");
     }
 }

@@ -69,9 +69,9 @@
  *
  *       // Revoke old tokens with retry (executed via Resilience4j)
  *       tokenRevocationManager.revokeToken(oldAccessJti,
- *       ACCESS_TOKEN_EXPIRATION_SECONDS);
+ *       jwtLifetimes.accessTokenSeconds());
  *       tokenRevocationManager.revokeToken(oldRefreshJti,
- *       REFRESH_TOKEN_EXPIRATION_SECONDS);
+ *       jwtLifetimes.refreshTokenSeconds());
  *
  *       // Delete from database (JPA handles retry via @Version)
  *       jwtTokenRepository.delete(jwtToken); // ← Optimistic locking applied

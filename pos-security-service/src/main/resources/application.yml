@@ -143,6 +143,13 @@ pos:
       window: 10m
       backoff-multiplier: 2
       max-backoff-window: 30m
+    # Token lifetimes (#2135). Both are Durations in WALL-clock terms, on every profile: exp is
+    # minted from the application Clock, and JwtServiceImpl projects these durations through it
+    # (ScaledClock#instantAfter) rather than adding their seconds, so an hour is an hour of real
+    # time even when that clock is the accelerated one.
+    jwt:
+      access-token-ttl: ${POS_SECURITY_JWT_ACCESS_TOKEN_TTL:PT1H}
+      refresh-token-ttl: ${POS_SECURITY_JWT_REFRESH_TOKEN_TTL:P7D}
     path: /swagger-ui.html
 
 # ADR-0062 section 3: the organization directory the login form searches, so a user picks their

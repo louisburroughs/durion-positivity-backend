@@ -23,8 +23,8 @@ import org.springframework.stereotype.Component;
  * Key: `jwt:revoked:{jti}` (example:
  * `jwt:revoked:550e8400-e29b-41d4-a716-446655440000`)
  * Value: `true` (boolean flag, only key presence matters)
- * TTL: Matches token expiration time (1 hour for access tokens, 7 days for
- * refresh tokens)
+ * TTL: Matches token expiration time ({@code pos.security.jwt.*}: 1 hour for access
+ * tokens, 7 days for refresh tokens by default)
  *
  * **Concurrency:**
  * Implements exponential backoff retry for OptimisticLockingFailureException:
