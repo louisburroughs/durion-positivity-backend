@@ -35,7 +35,7 @@ tags:
 paths:
   /v1/locations:
     get:
-      description: 'Lists every location in the system as a flat, unpaginated collection with address, status and type details, plus a query-time repair-capability projection: hasRepairCapability, activeBayCount and activeMobileUnitCount.
+      description: 'Lists every location in the system as a flat, unpaginated collection with address, status, type details and the stored scheduling facts (timezone, operatingHours, holidayClosures), plus a query-time repair-capability projection: hasRepairCapability, activeBayCount and activeMobileUnitCount.
 
         Use this tool when a complete location inventory is needed at once, including when deciding which locations can perform repairs; use getLocationRoster instead for a paginated sync feed with status and updated-since filtering, do not use it to fetch a single known id, which is getLocationById, and do not fan out over listBays or listMobileUnits per location to derive repair capability.
 
@@ -601,7 +601,9 @@ paths:
       x-required-permissions:
       - location:write
     get:
-      description: 'Returns the full location record, including address fields, active flag, responsible person id and type classification, for a known id.
+      description: 'Returns the full location record, including address fields, active flag, responsible person id, type classification and the scheduling facts as stored — timezone, operatingHours and holidayClosures — for a known id.
+
+        The hours and closures are expressed in the location''s own timezone, which is the zone scheduling converts a booking into before judging it against them, so reading them back is how a caller confirms what it published and in which zone.
 
         Use this tool when the location id is already known; use listLocations instead to enumerate, and use validateLocation when only existence and active state are needed.
 
@@ -647,6 +649,8 @@ paths:
       - location:read
     patch:
       description: 'Applies a partial update to a location, changing only the supplied fields: name, status, timezone, operatingHours, holidayClosures, checkInBufferMinutes and cleanupBufferMinutes.
+
+        The response echoes the stored timezone, operatingHours and holidayClosures, so a caller sees what the server kept and which zone the hours are read in — they are facility-local, and hours published without a timezone keep whichever zone the location already carries.
 
         Use this tool for targeted edits such as deactivation or hours changes; do not use updateLocation, which overwrites every mutable field including address and type.
 
@@ -3336,6 +3340,23 @@ components:
       required:
       - date
       type: object
+    HolidayClosureResponse:
+      description: A single stored holiday closure for a location
+      properties:
+        date:
+          description: Date on which the location is closed, in the location's own timezone
+          example: '2026-12-25'
+          format: date
+          type: string
+        reason:
+          description: Human-readable reason for the closure
+          example: Christmas Day
+          type:
+          - string
+          - 'null'
+      required:
+      - date
+      type: object
     LocationBulkIngestRecord:
       description: A single location record within a bulk ingest request
       properties:
@@ -3677,6 +3698,13 @@ components:
           description: Whether the location can perform repairs, true when it has at least one ACTIVE bay or at least one ACTIVE mobile unit based there; always false for an inactive location
           example: true
           type: boolean
+        holidayClosures:
+          description: Stored dated closures, in the location's own timezone; null when none have ever been published
+          items:
+            $ref: '#/components/schemas/HolidayClosureResponse'
+          type:
+          - array
+          - 'null'
         id:
           description: Unique identifier of the location
           example: 01960003-0000-7000-8000-000000000001
@@ -3690,6 +3718,13 @@ components:
           description: Display name of the location
           example: Downtown Service Center
           type: string
+        operatingHours:
+          description: Stored weekly operating hours, one entry per published day of the week, in the location's own timezone; null when hours have never been published
+          items:
+            $ref: '#/components/schemas/OperatingHoursResponse'
+          type:
+          - array
+          - 'null'
         phoneNumber:
           description: Primary phone number for the location
           example: +1-217-555-0100
@@ -3707,6 +3742,12 @@ components:
           description: State or province of the location
           example: IL
           type: string
+        timezone:
+          description: IANA timezone identifier of the location; the zone every operating-hours and holiday closure entry below is expressed in, and the zone scheduling converts a booking into
+          example: America/New_York
+          type:
+          - string
+          - 'null'
         type:
           $ref: '#/components/schemas/LocationTypeDTO'
       required:
@@ -3888,6 +3929,28 @@ components:
           description: Opening time (local time)
           example: 08:00
           type: string
+      required:
+      - dayOfWeek
+      type: object
+    OperatingHoursResponse:
+      description: A single stored operating-hours entry for a day of the week
+      properties:
+        closeTime:
+          description: Closing time, in the location's own timezone
+          example: 61200
+          type:
+          - string
+          - 'null'
+        dayOfWeek:
+          description: Day of week the hours apply to
+          example: MONDAY
+          type: string
+        openTime:
+          description: Opening time, in the location's own timezone
+          example: 08:00:00
+          type:
+          - string
+          - 'null'
       required:
       - dayOfWeek
       type: object

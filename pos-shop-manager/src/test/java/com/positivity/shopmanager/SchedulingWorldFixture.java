@@ -48,36 +48,45 @@ public final class SchedulingWorldFixture {
      * asserting nothing fires for it should be asserting the production configuration.
      */
     public static void seedConflictRules(ConflictRuleRepository conflictRuleRepository) {
-        List<ConflictRule> rules = List.of(
+        conflictRuleRepository.saveAll(conflictRules());
+    }
+
+    /**
+     * The seeded catalog itself, so a unit test that stubs {@code ConflictRuleRepository} renders the
+     * templates production ships rather than a paraphrase of them — the templates are the refusal a
+     * caller reads (#2139, #2140), and a test with its own copy of them proves nothing about that.
+     */
+    public static List<ConflictRule> conflictRules() {
+        return List.of(
                 rule(
                         "BAY_DOUBLE_BOOKED",
                         ConflictSeverity.HARD,
                         ConflictResourceType.BAY,
-                        "Bay {resource} is already booked for part of {start}–{end}.",
+                        "Bay {resource} is already booked for part of {start}–{end} {zone}.",
                         true),
                 rule(
                         "MECHANIC_UNAVAILABLE",
                         ConflictSeverity.HARD,
                         ConflictResourceType.MECHANIC,
-                        "No mechanic is present at this location for {start}–{end}.",
+                        "No technician staffing assignment covers {start}–{end} {zone} at this location{reason}.",
                         true),
                 rule(
                         "MECHANIC_OVERTIME",
                         ConflictSeverity.SOFT,
                         ConflictResourceType.MECHANIC,
-                        "Booking {start}–{end} puts the assigned mechanic into overtime.",
+                        "Booking {start}–{end} {zone} puts the assigned mechanic into overtime.",
                         false),
                 rule(
                         "FACILITY_NEAR_CAPACITY",
                         ConflictSeverity.SOFT,
                         ConflictResourceType.CAPACITY,
-                        "The location is near capacity for {start}–{end}.",
+                        "The location is near capacity for {start}–{end} {zone}.",
                         true),
                 rule(
                         "COMPETENT_MECHANIC_UNAVAILABLE",
                         ConflictSeverity.SOFT,
                         ConflictResourceType.SKILL,
-                        "A mechanic holding {skills} works at this location but none is free for {start}–{end}.",
+                        "A mechanic holding {skills} works at this location but none is free for {start}–{end} {zone}.",
                         true),
                 rule(
                         "NO_COMPETENT_MECHANIC_ROSTERED",
@@ -89,7 +98,7 @@ public final class SchedulingWorldFixture {
                         "OUTSIDE_OPERATING_HOURS",
                         ConflictSeverity.HARD,
                         ConflictResourceType.HOURS,
-                        "{start}–{end} falls outside the location's operating hours for that day.",
+                        "{start}–{end} {zone} falls outside the location's operating hours for that day.",
                         true),
                 rule(
                         "FACILITY_CLOSED",
@@ -97,7 +106,15 @@ public final class SchedulingWorldFixture {
                         ConflictResourceType.HOURS,
                         "The location is closed on {date}{reason}.",
                         true));
-        conflictRuleRepository.saveAll(rules);
+    }
+
+    /** The seeded message template for one rule code. */
+    public static String messageTemplate(String code) {
+        return conflictRules().stream()
+                .filter(rule -> rule.getCode().equals(code))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("no seeded conflict rule " + code))
+                .getMessageTemplate();
     }
 
     /**

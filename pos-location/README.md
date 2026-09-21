@@ -169,6 +169,24 @@ envelope's `aggregateVersion`, which strictly advances per committed mutation so
 guard is sound (#1486). Tombstones publish at `version + 1` — one past every fact the aggregate has
 published — because consumers delete without consulting a version.
 
+### Reading the scheduling fields back (#2139)
+
+`LocationResponseDTO` carries `timezone`, `operatingHours` and `holidayClosures`, so every location
+read (`GET /v1/locations`, `GET /v1/locations/{locationId}`, `GET /v1/locations:top-level`,
+`GET /v1/locations/{locationId}/children`) and every write response (`POST`, `PUT`, `PATCH`) returns
+the scheduling facts as stored. They were write-only until #2139: a caller could publish hours
+through `patchLocation`, be refused a booking against them by pos-shop-manager, and have no way to
+read back what the server kept or which zone it reads them in.
+
+The zone is the load-bearing part. Hours are facility-local (DECISION-015), so hours published
+without a `timezone` keep whichever zone the location already carries — `08:00` then means 08:00 to
+the shop, not to the caller, and a booking sent as `09:00Z` is judged at that location's `04:00`.
+
+`null` and `[]` stay different facts here exactly as they are on the event (see below): a `null`
+`operatingHours` means hours were never published, which is also why the scheduling HOURS rules do
+not fire on it, while `[]` means configured as closed every day. Stored JSON that cannot be read is
+logged and answered as absent rather than failing the read.
+
 ### Operating hours and holiday closures on `location.location.updated` (#2023)
 
 `LocationUpdatedV1` (also on `location.events.v1`) carries four additional fields so

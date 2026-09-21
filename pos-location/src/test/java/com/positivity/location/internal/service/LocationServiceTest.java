@@ -568,6 +568,196 @@ class LocationServiceTest {
     }
 
     @Test
+    @DisplayName("#2139: the patch response returns the scheduling fields it stored, zone included")
+    void patchLocation_returnsTheScheduleFieldsItStored() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Location existing = savedLocation(
+                id,
+                validRequest("Patch Readback", "PAT-READ"),
+                LocationType.builder()
+                        .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                        .name("Shop")
+                        .build());
+        LocationPatchRequest patch = LocationPatchRequest.builder()
+                .timezone("America/New_York")
+                .operatingHours(List.of(OperatingHoursRequest.builder()
+                        .dayOfWeek("MONDAY")
+                        .openTime(LocalTime.of(8, 0))
+                        .closeTime(LocalTime.of(18, 0))
+                        .build()))
+                .holidayClosures(List.of(HolidayClosureRequest.builder()
+                        .date(LocalDate.of(2026, 12, 25))
+                        .reason("Christmas Day")
+                        .build()))
+                .build();
+
+        when(locationRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(locationRepository.saveAndFlush(any(Location.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        LocationResponseDTO response = locationService.patchLocation(id, patch);
+
+        // The gap #2139 names: a caller could publish hours, be refused a booking against them, and
+        // never read back what the server stored or in which zone it reads them.
+        assertThat(response.getTimezone()).isEqualTo("America/New_York");
+        assertThat(response.getOperatingHours()).singleElement().satisfies(hours -> {
+            assertThat(hours.getDayOfWeek()).isEqualTo("MONDAY");
+            assertThat(hours.getOpenTime()).isEqualTo(LocalTime.of(8, 0));
+            assertThat(hours.getCloseTime()).isEqualTo(LocalTime.of(18, 0));
+        });
+        assertThat(response.getHolidayClosures()).singleElement().satisfies(closure -> {
+            assertThat(closure.getDate()).isEqualTo(LocalDate.of(2026, 12, 25));
+            assertThat(closure.getReason()).isEqualTo("Christmas Day");
+        });
+    }
+
+    @Test
+    @DisplayName("#2139: the location read exposes the stored scheduling fields")
+    void getLocationByIdDto_returnsStoredScheduleFields() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Location stored = Location.builder()
+                .id(id)
+                .name("Readback")
+                .active(true)
+                .timezone("America/New_York")
+                .operatingHours("[{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"08:00:00\",\"closeTime\":\"18:00:00\"}]")
+                .holidayClosures("[{\"date\":\"2026-12-25\",\"reason\":\"Christmas Day\"}]")
+                .build();
+        when(locationRepository.findById(id)).thenReturn(Optional.of(stored));
+
+        LocationResponseDTO response = locationService.getLocationByIdDto(id).orElseThrow();
+
+        assertThat(response.getTimezone()).isEqualTo("America/New_York");
+        assertThat(response.getOperatingHours())
+                .singleElement()
+                .satisfies(hours -> assertThat(hours.getCloseTime()).isEqualTo(LocalTime.of(18, 0)));
+        assertThat(response.getHolidayClosures())
+                .singleElement()
+                .satisfies(closure -> assertThat(closure.getReason()).isEqualTo("Christmas Day"));
+    }
+
+    @Test
+    @DisplayName("#2139: hours never published read back as absent, not as an empty week")
+    void getLocationByIdDto_unpublishedScheduleFieldsAreNull() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Location stored =
+                Location.builder().id(id).name("No Hours").active(true).build();
+        when(locationRepository.findById(id)).thenReturn(Optional.of(stored));
+
+        LocationResponseDTO response = locationService.getLocationByIdDto(id).orElseThrow();
+
+        // "no hours on file" and "published as closed all week" are different facts: the scheduling
+        // rules do not fire at all on the first, so an empty list here would misreport it.
+        assertThat(response.getOperatingHours()).isNull();
+        assertThat(response.getHolidayClosures()).isNull();
+        assertThat(response.getTimezone()).isNull();
+    }
+
+    /**
+     * Read a location back with the two schedule columns set to exactly these stored strings.
+     *
+     * <p>The row is already written by the time anything reads it, so every unreadable shape below
+     * has to answer "absent" rather than 500 the read: the caller loses one field instead of the
+     * whole location.
+     */
+    private LocationResponseDTO readBackStoredSchedule(String storedHours, String storedClosures) {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Location stored = Location.builder()
+                .id(id)
+                .name("Readback")
+                .active(true)
+                .operatingHours(storedHours)
+                .holidayClosures(storedClosures)
+                .build();
+        when(locationRepository.findById(id)).thenReturn(Optional.of(stored));
+        return locationService.getLocationByIdDto(id).orElseThrow();
+    }
+
+    @Test
+    @DisplayName("#2139: a literal JSON null in either column reads back as absent, it does not 500 the read")
+    void getLocationByIdDto_literalJsonNullColumnsReadBackAsAbsent() {
+        // "null" is *valid* JSON, so the parse succeeds and hands back a null list rather than
+        // throwing: streaming that would NPE past a catch that only catches JsonProcessingException,
+        // failing the whole location read over one unreadable field.
+        LocationResponseDTO response = readBackStoredSchedule("null", "null");
+
+        assertThat(response.getOperatingHours()).isNull();
+        assertThat(response.getHolidayClosures()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2139: a null element in either column reads back as absent, it does not 500 the read")
+    void getLocationByIdDto_nullElementReadsBackAsAbsent() {
+        // Same hazard one level down: the element, not the list, is the null being dereferenced.
+        LocationResponseDTO response = readBackStoredSchedule("[null]", "[null]");
+
+        assertThat(response.getOperatingHours()).isNull();
+        assertThat(response.getHolidayClosures()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2139: an unparsable stored time reads the whole week back as absent, never a partial day")
+    void getLocationByIdDto_unparsableTimeReadsTheWeekBackAsAbsent() {
+        // Not a MONDAY entry with a null openTime: that would report a real, configured day as
+        // having no opening time, which misstates the stored schedule instead of declaring it
+        // unreadable. The holiday column is untouched and still reads.
+        LocationResponseDTO response = readBackStoredSchedule(
+                "[{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"not-a-time\",\"closeTime\":\"18:00:00\"}]",
+                "[{\"date\":\"2026-12-25\",\"reason\":\"Christmas Day\"}]");
+
+        assertThat(response.getOperatingHours()).isNull();
+        assertThat(response.getHolidayClosures())
+                .singleElement()
+                .satisfies(closure -> assertThat(closure.getDate()).isEqualTo(LocalDate.of(2026, 12, 25)));
+    }
+
+    @Test
+    @DisplayName("#2139: an unparsable stored date reads the closures back as absent, hours untouched")
+    void getLocationByIdDto_unparsableDateReadsClosuresBackAsAbsent() {
+        LocationResponseDTO response = readBackStoredSchedule(
+                "[{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"08:00:00\",\"closeTime\":\"18:00:00\"}]",
+                "[{\"date\":\"not-a-date\",\"reason\":\"Christmas Day\"}]");
+
+        // The two columns are independent facts: one being unreadable must not hide the other.
+        assertThat(response.getHolidayClosures()).isNull();
+        assertThat(response.getOperatingHours())
+                .singleElement()
+                .satisfies(hours -> assertThat(hours.getDayOfWeek()).isEqualTo("MONDAY"));
+    }
+
+    @Test
+    @DisplayName("#2139: an unknown stored dayOfWeek reads the week back as absent")
+    void getLocationByIdDto_unknownDayOfWeekReadsBackAsAbsent() {
+        LocationResponseDTO response = readBackStoredSchedule(
+                "[{\"dayOfWeek\":\"Frotz\",\"openTime\":\"08:00:00\",\"closeTime\":\"18:00:00\"}]", null);
+
+        assertThat(response.getOperatingHours()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2139: two stored entries colliding on one day read the week back as absent")
+    void getLocationByIdDto_duplicateStoredDayReadsBackAsAbsent() {
+        // "Monday" and "MONDAY" are the same day, and rows written before the write path validated
+        // day names can hold both. Answering one of them would be a guess about which is current.
+        LocationResponseDTO response = readBackStoredSchedule(
+                "[{\"dayOfWeek\":\"Monday\",\"openTime\":\"08:00:00\",\"closeTime\":\"12:00:00\"},"
+                        + "{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"13:00:00\",\"closeTime\":\"17:00:00\"}]",
+                null);
+
+        assertThat(response.getOperatingHours()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2139: an empty stored array reads back as an empty list, not as absent")
+    void getLocationByIdDto_emptyStoredArrayReadsBackAsEmptyNotAbsent() {
+        LocationResponseDTO response = readBackStoredSchedule("[]", "[]");
+
+        // "[]" is a published fact — closed every day, no closures — and is not the same answer as
+        // a null column, which is "never published". The scheduling rules act on the difference.
+        assertThat(response.getOperatingHours()).isNotNull().isEmpty();
+        assertThat(response.getHolidayClosures()).isNotNull().isEmpty();
+    }
+
+    @Test
     void deleteLocation_existingId_deletesAndPublishesTombstone() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Location location = Location.builder().id(id).build();

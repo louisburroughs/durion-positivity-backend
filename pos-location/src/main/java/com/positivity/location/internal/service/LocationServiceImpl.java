@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.positivity.domainevents.AggregateTouch;
 import com.positivity.location.internal.dto.HolidayClosureRequest;
+import com.positivity.location.internal.dto.HolidayClosureResponse;
 import com.positivity.location.internal.dto.LocationDescendantResponseDTO;
 import com.positivity.location.internal.dto.LocationParentResponseDTO;
 import com.positivity.location.internal.dto.LocationPatchRequest;
@@ -15,6 +16,7 @@ import com.positivity.location.internal.dto.LocationResponseDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
 import com.positivity.location.internal.dto.LocationValidationResponseDTO;
 import com.positivity.location.internal.dto.OperatingHoursRequest;
+import com.positivity.location.internal.dto.OperatingHoursResponse;
 import com.positivity.location.internal.dto.PersonDTO;
 import com.positivity.location.internal.entity.ExtPersonReplica;
 import com.positivity.location.internal.entity.Location;
@@ -616,7 +618,7 @@ public class LocationServiceImpl implements LocationService {
     }
 
     private String serializeOperatingHours(List<OperatingHoursRequest> operatingHours) {
-        List<OperatingHoursJsonEntry> canonical = operatingHours.stream()
+        List<LocationScheduleJson.OperatingHoursJsonEntry> canonical = operatingHours.stream()
                 .sorted(Comparator.comparing(
                                 OperatingHoursRequest::getDayOfWeek, Comparator.nullsLast(String::compareTo))
                         .thenComparing(
@@ -625,7 +627,7 @@ public class LocationServiceImpl implements LocationService {
                         .thenComparing(
                                 OperatingHoursRequest::getCloseTime,
                                 Comparator.nullsLast(java.time.LocalTime::compareTo)))
-                .map(hours -> new OperatingHoursJsonEntry(
+                .map(hours -> new LocationScheduleJson.OperatingHoursJsonEntry(
                         hours.getDayOfWeek(),
                         hours.getOpenTime() == null
                                 ? null
@@ -638,11 +640,11 @@ public class LocationServiceImpl implements LocationService {
     }
 
     private String serializeHolidayClosures(List<HolidayClosureRequest> holidayClosures) {
-        List<HolidayClosureJsonEntry> canonical = holidayClosures.stream()
+        List<LocationScheduleJson.HolidayClosureJsonEntry> canonical = holidayClosures.stream()
                 .sorted(Comparator.comparing(
                                 HolidayClosureRequest::getDate, Comparator.nullsLast(java.time.LocalDate::compareTo))
                         .thenComparing(HolidayClosureRequest::getReason, Comparator.nullsLast(String::compareTo)))
-                .map(closure -> new HolidayClosureJsonEntry(
+                .map(closure -> new LocationScheduleJson.HolidayClosureJsonEntry(
                         closure.getDate() == null ? null : DateTimeFormatter.ISO_LOCAL_DATE.format(closure.getDate()),
                         closure.getReason()))
                 .toList();
@@ -660,9 +662,54 @@ public class LocationServiceImpl implements LocationService {
         }
     }
 
-    private record OperatingHoursJsonEntry(String dayOfWeek, String openTime, String closeTime) {}
+    /**
+     * The stored weekly hours, read back for the location response (issue #2139).
+     *
+     * <p>Null rather than an empty list when hours were never published: "no hours on file" and
+     * "published as closed all week" are different facts, and the scheduling rules treat them
+     * differently — unpublished hours do not fire the HOURS rules at all.
+     *
+     * <p>Unreadable stored JSON is logged and answered as absent rather than failing the read: the
+     * row is already written, and a 500 on every read of it would be a worse answer than the one
+     * fact this field carries. {@link LocationScheduleJson} is what makes that true — including for
+     * the literal JSON {@code null} and a {@code null} element, which parse successfully and would
+     * otherwise NPE past every catch here. It is also all-or-nothing on purpose: an unreadable time
+     * answers the whole column as absent rather than reporting a real day with a missing bound,
+     * which would misstate the stored schedule instead of declaring it unreadable.
+     *
+     * <p>{@code dayOfWeek} comes back canonicalized to the {@link java.time.DayOfWeek} name, so a
+     * row written as {@code "Monday"} before the write path validated day names reads back as
+     * {@code "MONDAY"} rather than echoing storage.
+     */
+    private List<OperatingHoursResponse> parseOperatingHours(Location location) {
+        List<LocationScheduleJson.ParsedHours> parsed =
+                LocationScheduleJson.parseOperatingHours(location.getOperatingHours(), location.getId(), log);
+        if (parsed == null) {
+            return null;
+        }
+        return parsed.stream()
+                .map(hours -> OperatingHoursResponse.builder()
+                        .dayOfWeek(hours.day().name())
+                        .openTime(hours.openTime())
+                        .closeTime(hours.closeTime())
+                        .build())
+                .toList();
+    }
 
-    private record HolidayClosureJsonEntry(String date, String reason) {}
+    /** The stored dated closures, read back for the location response; see {@link #parseOperatingHours}. */
+    private List<HolidayClosureResponse> parseHolidayClosures(Location location) {
+        List<LocationScheduleJson.ParsedClosure> parsed =
+                LocationScheduleJson.parseHolidayClosures(location.getHolidayClosures(), location.getId(), log);
+        if (parsed == null) {
+            return null;
+        }
+        return parsed.stream()
+                .map(closure -> HolidayClosureResponse.builder()
+                        .date(closure.date())
+                        .reason(closure.reason())
+                        .build())
+                .toList();
+    }
 
     private String normalizeName(String name) {
         return name == null ? "" : name.toLowerCase(Locale.ROOT).trim();
@@ -723,6 +770,9 @@ public class LocationServiceImpl implements LocationService {
                 .active(location.isActive())
                 .responsiblePersonId(location.getResponsiblePersonId())
                 .type(toLocationTypeDto(location.getType()))
+                .timezone(location.getTimezone())
+                .operatingHours(parseOperatingHours(location))
+                .holidayClosures(parseHolidayClosures(location))
                 .hasRepairCapability(capability.hasRepairCapability())
                 .activeBayCount(capability.activeBayCount())
                 .activeMobileUnitCount(capability.activeMobileUnitCount())

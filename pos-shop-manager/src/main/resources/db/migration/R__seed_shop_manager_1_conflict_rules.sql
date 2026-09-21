@@ -11,27 +11,35 @@
 -- it from, and an active rule the evaluator never evaluates advertises enforcement that does not
 -- exist (#2045 review). Flip is_active here when weekly hours arrive.
 --
--- Templates use {placeholders} rendered by the enforcement tier: {resource}, {start}, {end}, {date},
--- {reason}, {skills}. Times render in the facility's timezone (DECISION-SHOPMGMT-015).
+-- Templates use {placeholders} rendered by the enforcement tier: {resource}, {start}, {end}, {zone},
+-- {date}, {reason}, {skills}. Times render in the facility's timezone (DECISION-SHOPMGMT-015), and
+-- every template that quotes a window names that zone through {zone} (#2139): a caller who sent
+-- 09:00Z and is refused for "04:00-05:00" reads the bare converted time as a platform error rather
+-- than as the facility-local conversion it is. {zone} renders as the IANA id the times are in.
+--
+-- MECHANIC_UNAVAILABLE states the question the rule actually asks -- whether an ACTIVE technician
+-- staffing assignment covers that facility-local date -- rather than asserting nobody is in the
+-- building (#2140). Its {reason} carries which of the two noes fired: no assignment at the location
+-- at all, or assignments that exist and none effective on the date.
 SET TIME ZONE 'UTC';
 
 INSERT INTO public.conflict_rule (id, code, severity, resource_type, message_template, is_active)
 SELECT md5('conflict_rule:' || r.code)::uuid, r.code, r.severity, r.resource_type, r.message_template, r.is_active
 FROM (VALUES
     ('BAY_DOUBLE_BOOKED',             'HARD', 'BAY',
-        'Bay {resource} is already booked for part of {start}–{end}.', true),
+        'Bay {resource} is already booked for part of {start}–{end} {zone}.', true),
     ('MECHANIC_UNAVAILABLE',          'HARD', 'MECHANIC',
-        'No mechanic is present at this location for {start}–{end}.', true),
+        'No technician staffing assignment covers {start}–{end} {zone} at this location{reason}.', true),
     ('MECHANIC_OVERTIME',             'SOFT', 'MECHANIC',
-        'Booking {start}–{end} puts the assigned mechanic into overtime.', false),
+        'Booking {start}–{end} {zone} puts the assigned mechanic into overtime.', false),
     ('FACILITY_NEAR_CAPACITY',        'SOFT', 'CAPACITY',
-        'The location is near capacity for {start}–{end}.', true),
+        'The location is near capacity for {start}–{end} {zone}.', true),
     ('COMPETENT_MECHANIC_UNAVAILABLE','SOFT', 'SKILL',
-        'A mechanic holding {skills} works at this location but none is free for {start}–{end}.', true),
+        'A mechanic holding {skills} works at this location but none is free for {start}–{end} {zone}.', true),
     ('NO_COMPETENT_MECHANIC_ROSTERED','SOFT', 'SKILL',
         'No mechanic at this location holds {skills}.', true),
     ('OUTSIDE_OPERATING_HOURS',       'HARD', 'HOURS',
-        '{start}–{end} falls outside the location''s operating hours for that day.', true),
+        '{start}–{end} {zone} falls outside the location''s operating hours for that day.', true),
     ('FACILITY_CLOSED',               'HARD', 'HOURS',
         'The location is closed on {date}{reason}.', true)
 ) AS r(code, severity, resource_type, message_template, is_active)

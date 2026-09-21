@@ -1025,6 +1025,22 @@ Rules the command follows, and why:
   neither source. (A catalog code no annotation names is dead weight rather than a broken
   endpoint; `audit-rbac.py`'s informational `catalog_dead` is where that is triaged.)
 
+**A new grant does not reach a tenant that already exists** (#2138). `--sync` writes the grant to the
+two *sources*; a deployed database holds *rows*, and they are not the same thing:
+
+| Where the role lives | How the new grant lands |
+| --- | --- |
+| A role Flyway still creates (`ADMIN`, `CONTROLLER`, `DISPATCHER`, `SELF_SERVICE_CUSTOMER`, `SHOP_MANAGER`, `SYSTEM_ADMINISTRATOR`, `SUPPORT`) | `R__seed_role_permissions.sql` is repeatable: editing it changes the checksum, so it re-applies on the next deploy and inserts the grant for the alpha tenant. Nothing to run. |
+| Any other role (`LOCATION_MANAGER`, `MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN`, the inventory and accounting personas) | The grant lives only in `role-permissions.csv`, which is applied by a bulk load. Re-run the security role-permission pack (`scripts/seed-alpha.py`, see "Bulk loading into a tenant") against the tenant. |
+| Any tenant provisioned from the platform role template | Provisioning copied the template once. Run `POST /v1/platform/tenants/{tenantId}/roles/reconcile-template` per tenant (see "Reconciling the role template"); it is a union, so it never removes a tenant-local grant. |
+
+This is what #2138 was. `workorder:position:assign` was minted, granted to ADMIN, DISPATCHER,
+LOCATION_MANAGER and SHOP_MANAGER in both sources, and CI was green — and the shop manager on alpha
+(a `LOCATION_MANAGER`) was still refused `PUT /v1/workorders/{id}/position` with a bare
+`403 FORBIDDEN`, because her tenant's `role_permissions` rows predated the load. A plain
+`FORBIDDEN / Access Denied` is that shape: the authority was missing from the token. A location-scope
+refusal is a different answer and says so (`403 LOCATION_SCOPE_DENIED`, ADR-0061).
+
 **A catalog bump is a fleet-coordinated deploy.** Adding a bit increments `CATALOG_VERSION` in
 `PermissionCode`, `GatewayPermissionCatalog` and `DownstreamPermissionCatalog`. JWTs carry
 `perm_bits` plus `perm_ver`, and the downstream check on `perm_ver` is strict: a token minted

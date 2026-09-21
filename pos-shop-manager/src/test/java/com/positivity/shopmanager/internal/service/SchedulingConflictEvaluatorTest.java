@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.shopmanager.SchedulingWorldFixture;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.ConflictRule;
 import com.positivity.shopmanager.internal.entity.ExtBayReplica;
@@ -198,6 +199,42 @@ class SchedulingConflictEvaluatorTest {
         }
 
         @Test
+        @DisplayName("#2139: the hours refusal names the zone the window was converted into")
+        void outsideOperatingHoursNamesTheFacilityZone() {
+            // 09:00Z on Friday 2026-06-19 is 04:00 Chicago (CDT), four hours before the 08:00 open:
+            // the shape of #2139, where a caller who published hours without a zone read the
+            // converted time as a platform error because nothing said which zone it was in.
+            Instant fri09Utc = Instant.parse("2026-06-19T09:00:00Z");
+            List<DetectedConflict> detected = evaluator.evaluate(attempt(fri09Utc, fri09Utc.plusSeconds(3600), null));
+
+            assertThat(codes(detected)).containsExactly("OUTSIDE_OPERATING_HOURS");
+            assertThat(detected.get(0).detail())
+                    .isEqualTo("04:00–05:00 America/Chicago falls outside the"
+                            + " location's operating hours for that day.");
+        }
+
+        @Test
+        @DisplayName("#2139: with no resolvable zone the window is UTC and {zone} says so, not \"Z\"")
+        void unresolvableZoneLabelsTheWindowUtc() {
+            // The fallback half of the contract render() documents. A location with no resolvable
+            // zone cannot fire the HOURS rules at all, so the label is pinned on the next rule that
+            // quotes the window: 15:00–16:00 is the UTC reading of the attempt, and the label has to
+            // say which zone that is. ZoneOffset.UTC.getId() is "Z" — neither the IANA identifier
+            // the refusal advertises nor a string a caller reads as a zone at all.
+            when(extLocationReplicaRepository.findById(LOCATION))
+                    .thenReturn(Optional.of(location("Mars/Olympus", HOURS, CLOSURES)));
+            when(appointmentRepository.findHeldOverlappingForResource(eq(BAY), eq(TUE_10), eq(TUE_11), any()))
+                    .thenReturn(List.of(Appointment.builder()
+                            .appointmentId(UUID.randomUUID())
+                            .build()));
+
+            List<DetectedConflict> detected = evaluator.evaluate(attempt(TUE_10, TUE_11, null));
+
+            assertThat(codes(detected)).containsExactly("BAY_DOUBLE_BOOKED");
+            assertThat(detected.get(0).detail()).isEqualTo("Bay bay-1 is already booked for part of 15:00–16:00 UTC.");
+        }
+
+        @Test
         void spanningLocalMidnightIsOutsideOperatingHours() {
             // Tuesday 23:30 → Wednesday 00:30 Chicago.
             Instant tue2330 = Instant.parse("2026-06-17T04:30:00Z");
@@ -283,6 +320,47 @@ class SchedulingConflictEvaluatorTest {
                     .thenReturn(List.of(staffing(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 6, 15))));
             assertThat(codes(evaluator.evaluate(attempt(TUE_10, TUE_11, null))))
                     .containsExactly("MECHANIC_UNAVAILABLE");
+        }
+
+        @Test
+        @DisplayName("#2140: an assignment beginning after the date judged does not cover it")
+        void anAssignmentThatBeginsAfterTheDayDoesNotCount() {
+            // The back-dated-clock shape: the assignment was written at wall time and starts ten
+            // months after the instant being judged. Effective dates are read as written, so the
+            // date genuinely has nobody assigned on it — what the refusal must not do is call that
+            // "nobody is present".
+            when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE"))
+                    .thenReturn(List.of(staffing(LocalDate.of(2027, 4, 1), null)));
+            List<DetectedConflict> detected = evaluator.evaluate(attempt(TUE_10, TUE_11, null));
+
+            assertThat(codes(detected)).containsExactly("MECHANIC_UNAVAILABLE");
+            assertThat(detected.get(0).detail())
+                    .isEqualTo("No technician staffing assignment covers 10:00–11:00 America/Chicago at this"
+                            + " location (1 ACTIVE technician staffing assignment exists at this location, none"
+                            + " effective on 2026-06-16).");
+        }
+
+        @Test
+        @DisplayName("#2140: the assignment count reads as a count, singular or plural")
+        void theAssignmentCountIsGrammatical() {
+            when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE"))
+                    .thenReturn(List.of(
+                            staffing(LocalDate.of(2027, 4, 1), null), staffing(LocalDate.of(2027, 5, 1), null)));
+
+            assertThat(evaluator.evaluate(attempt(TUE_10, TUE_11, null)).get(0).detail())
+                    .contains("2 ACTIVE technician staffing assignments exist at this location");
+        }
+
+        @Test
+        @DisplayName("#2140: a location with no assignment at all says that, not that a date is uncovered")
+        void anUnstaffedLocationSaysItHasNoAssignment() {
+            when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE"))
+                    .thenReturn(List.of());
+            List<DetectedConflict> detected = evaluator.evaluate(attempt(TUE_10, TUE_11, null));
+
+            assertThat(detected.get(0).detail())
+                    .isEqualTo("No technician staffing assignment covers 10:00–11:00 America/Chicago at this"
+                            + " location (no ACTIVE technician staffing assignment exists at this location).");
         }
 
         @Test
@@ -613,16 +691,14 @@ class SchedulingConflictEvaluatorTest {
         return detected.stream().map(DetectedConflict::code).toList();
     }
 
+    /**
+     * The rule as production seeds it, template included: a refusal a caller reads is the template
+     * rendered, so a test with its own paraphrase of it cannot defend what the message says
+     * (#2139, #2140). Severity and the active flag stay parameters — some tests need a rule switched
+     * off, which is configuration rather than wording.
+     */
     private static ConflictRule rule(String code, ConflictSeverity severity, boolean active) {
-        String template =
-                switch (code) {
-                    case "FACILITY_CLOSED" -> "The location is closed on {date}{reason}.";
-                    case "BAY_DOUBLE_BOOKED" -> "Bay {resource} is already booked for part of {start}–{end}.";
-                    case "NO_COMPETENT_MECHANIC_ROSTERED" -> "No mechanic at this location holds {skills}.";
-                    case "COMPETENT_MECHANIC_UNAVAILABLE" ->
-                        "A mechanic holding {skills} works at this location but none is free for {start}–{end}.";
-                    default -> code + " {start}–{end}";
-                };
+        String template = SchedulingWorldFixture.messageTemplate(code);
         return ConflictRule.builder()
                 .id(UUID.nameUUIDFromBytes(code.getBytes()))
                 .code(code)
