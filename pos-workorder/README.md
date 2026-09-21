@@ -158,6 +158,15 @@ and routes its position change through the same service, so it gets occupancy en
 history row, while keeping override semantics: the position is not re-validated against the location
 replicas, and it needs no placement grant of its own.
 
+A grant seeded in this repo is not a grant in a running tenant: #2138 was a `LOCATION_MANAGER` on
+alpha refused this endpoint with a bare `403 FORBIDDEN / Access Denied` after #2059 had already
+granted her role the code, because that tenant's `role_permissions` rows predated the role load. The
+roles that hold the grant are pinned by `DispatchPlacementGrantsTest` in pos-security-service; how a
+new grant reaches an existing tenant is
+[docs/OPERATIONS_RUNBOOK.md](../docs/OPERATIONS_RUNBOOK.md) → "Adding a permission". A bare
+`FORBIDDEN` is a missing authority; a location-scope refusal is `403 LOCATION_SCOPE_DENIED` and says
+which permission and location it denied.
+
 ## Estimate/workorder snapshot facts (order parity E1)
 
 `WorkorderFactPublisher` snapshots now carry `declined` and the new explicit `returnable`

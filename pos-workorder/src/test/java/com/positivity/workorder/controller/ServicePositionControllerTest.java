@@ -271,6 +271,27 @@ class ServicePositionControllerTest {
             verifyNoInteractions(servicePositionService);
         }
 
+        /**
+         * The grants a technician actually holds on this module (start, labor, parts) — #2138's other
+         * half. A technician carries real workorder authority and still may not decide where the job
+         * is worked, and the assertion is written with that authority present so it cannot pass just
+         * because the caller was sent in empty-handed.
+         */
+        private static final String TECHNICIAN_GRANTS =
+                "workorder:workorder:start,workorder:labor:add,workorder:parts:add,workorder:workorder:view";
+
+        @Test
+        @DisplayName("#2138: PUT with a technician's grants is refused")
+        void assignRefusesATechniciansGrants() throws Exception {
+            mockMvc.perform(put(URL, WORKORDER_ID)
+                            .header("X-Authorities", TECHNICIAN_GRANTS)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(BAY_BODY))
+                    .andExpect(status().isForbidden());
+
+            verifyNoInteractions(servicePositionService);
+        }
+
         @Test
         @DisplayName("PUT with only workorder:position:assign is allowed")
         void assignAcceptsThePlacementGrantAlone() throws Exception {
