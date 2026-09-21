@@ -428,12 +428,14 @@ jobs:
             exit 1
           fi
 
+          # The two identity lines come BEFORE the log excerpt: SSM caps captured stdout at
+          # 24 KB and truncates from the end, so anything the runner must parse goes first.
+          echo "RUN_PID=${pid}"
+          echo "RUN_LOG=${dir}/${log}"
           echo "npm run ${script} is running as $(id -un), pid ${pid}, logging to ${dir}/${log}"
           echo "--- ${log} so far ---"
           tail -n 30 "${log}"
           echo "--- end ---"
-          echo "RUN_PID=${pid}"
-          echo "RUN_LOG=${dir}/${log}"
           INNER
           chmod 0755 "${kickoff}"
           sudo -u '__SDK_USER__' -H bash -lc 'bash "$0" "$@"' "${kickoff}" '__SDK_DIR__' '__SDK_SCRIPT__' '__RUN_DAYS__' '__GRACE__'
@@ -484,10 +486,18 @@ jobs:
             echo "::error::the SDK run did not start (SSM status ${STATUS}). The stack IS deployed and accelerated, and its window is open: start the suite by hand on the host with 'cd ${SDK_CHECKOUT_DIR} && ITEST_BASE_URL=http://localhost:8080 ITEST_SECURITY_SERVICE_URL=http://localhost:8086 npm run ${SDK_SCRIPT}', or tear the stack down with an ordinary deploy."
             exit 1
           fi
+          # An SSM Success only says the host script exited 0. The run's identity has to have
+          # come back too, or the summary would hand the operator empty follow/stop commands.
+          RUN_PID="$(sed -n 's/^RUN_PID=//p' <<< "${STDOUT}" | head -n 1)"
+          RUN_LOG="$(sed -n 's/^RUN_LOG=//p' <<< "${STDOUT}" | head -n 1)"
+          if [[ ! "${RUN_PID}" =~ ^[0-9]+$ || ! "${RUN_LOG}" =~ ^/[A-Za-z0-9_./:-]+\.log$ ]]; then
+            echo "::error::the host reported success but no usable run identity came back (RUN_PID='${RUN_PID}', RUN_LOG='${RUN_LOG}'). The suite may well be running: check ${SDK_CHECKOUT_DIR}/accelerated-latest.log and .accelerated-run.pid on the host before starting anything by hand."
+            exit 1
+          fi
           {
             echo "started=true"
-            echo "pid=$(sed -n 's/^RUN_PID=//p' <<< "${STDOUT}" | tail -n 1)"
-            echo "log=$(sed -n 's/^RUN_LOG=//p' <<< "${STDOUT}" | tail -n 1)"
+            echo "pid=${RUN_PID}"
+            echo "log=${RUN_LOG}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Record the run
