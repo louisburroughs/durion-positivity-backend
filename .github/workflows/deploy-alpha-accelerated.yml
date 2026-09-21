@@ -332,13 +332,15 @@ jobs:
         env:
           SDK_SCRIPT: ${{ inputs.sdk_run }}
           RUN_DAYS: ${{ steps.run.outputs.days }}
+          REAL_START: ${{ steps.run.outputs.real_start }}
         run: |
           set -euo pipefail
 
           # Every value below is spliced into a script that runs on the host, so each is
           # checked against the shape it must have before it goes anywhere near a quote.
           for pair in "SDK_CHECKOUT_DIR=${SDK_CHECKOUT_DIR}" "SDK_CHECKOUT_USER=${SDK_CHECKOUT_USER}" \
-                      "SDK_SCRIPT=${SDK_SCRIPT}" "RUN_DAYS=${RUN_DAYS}" "SDK_RUN_GRACE_SECONDS=${SDK_RUN_GRACE_SECONDS}"; do
+                      "SDK_SCRIPT=${SDK_SCRIPT}" "RUN_DAYS=${RUN_DAYS}" "SDK_RUN_GRACE_SECONDS=${SDK_RUN_GRACE_SECONDS}" \
+                      "REAL_START=${REAL_START}"; do
             if [[ ! "${pair#*=}" =~ ^[A-Za-z0-9_./:-]+$ ]]; then
               echo "::error::${pair%%=*} carries a character the host script would not quote safely ('${pair#*=}')."
               exit 1
@@ -350,7 +352,7 @@ jobs:
           # the same reasons the SDK repo's deploy workflow does: root's npm would leave
           # root-owned files in a checkout meant to be run by hand from that account, and node
           # is on that account's profile PATH, not root's. Both heredocs are quoted — every `$`
-          # in them is the host's — and the four values the inner script needs arrive as
+          # in them is the host's — and the five values the inner script needs arrive as
           # positional parameters through the __PLACEHOLDERS__ substituted below.
           read -r -d '' HOST_SCRIPT <<'REMOTE' || true
           set -euo pipefail
@@ -358,7 +360,7 @@ jobs:
           trap 'rm -f "${kickoff}"' EXIT
           cat > "${kickoff}" <<'INNER'
           set -euo pipefail
-          dir="$1"; script="$2"; days="$3"; grace="$4"
+          dir="$1"; script="$2"; days="$3"; grace="$4"; real_start="$5"
 
           if [[ ! -d "${dir}/.git" ]]; then
             echo "no checkout at ${dir}; run the SDK repo's 'Build, Smoke Test and Deploy to Alpha' workflow first" >&2
@@ -367,10 +369,6 @@ jobs:
           cd "${dir}"
           if [[ ! -d node_modules ]]; then
             echo "${dir} has no node_modules; the SDK deploy workflow's npm ci has not run here" >&2
-            exit 1
-          fi
-          if [[ ! -f .env.itest ]]; then
-            echo "${dir}/.env.itest is missing; the suite reads its credentials from it (template: .env.itest.example)" >&2
             exit 1
           fi
           if ! command -v npm > /dev/null; then
@@ -391,6 +389,82 @@ jobs:
             exit 1
           fi
           rm -f "${pidfile}"
+
+          # The run journal (ITEST_ACCEL_JOURNAL, default .itest-accel-journal.json beside the
+          # checkout) is how the suite resumes an interrupted year — and how it refuses to
+          # start: a journal whose realStart is not this deployment's belongs to a different
+          # timeline, and global setup throws on it rather than writing a second year into it.
+          # Every dispatch re-anchors the stack, so the previous run's journal is always that
+          # case. Move it aside as <journal>.<its realStart>.json, which keeps past runs in
+          # order by the timeline they drove; a journal that cannot be parsed takes the
+          # rotation time instead. A journal already on this timeline is left where it is,
+          # because resuming it is exactly what the suite would do with it.
+          #
+          # Which file that is comes from the suite's credentials file, found and read the way
+          # the suite finds and reads it (harness/loadEnvFile.ts): ITEST_ENV_FILE if set, else
+          # .env.itest at the repo root, else beside the package; `export KEY=`, spaces around
+          # `=`, quoted values and ` #` comments all accepted; a non-empty shell value wins over
+          # the file. Parsed with node rather than sed so this and the suite cannot disagree
+          # about which file is the journal — and a missing credentials file is refused here,
+          # by name, before the suite is started only to fail on it.
+          journal="$(node -e '
+            const fs = require("fs"), path = require("path"), env = process.env;
+            const parse = (text) => {
+              const out = {};
+              for (const raw of text.split(/\r?\n/)) {
+                const line = raw.trim();
+                if (line === "" || line.startsWith("#")) continue;
+                const body = line.startsWith("export ") ? line.slice("export ".length).trim() : line;
+                const at = body.indexOf("=");
+                if (at <= 0) continue;
+                const key = body.slice(0, at).trim();
+                if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+                let value = body.slice(at + 1).trim();
+                const quote = value[0];
+                if ((quote === "\"" || quote === "\x27") && value.length >= 2 && value[value.length - 1] === quote) {
+                  value = value.slice(1, -1);
+                } else {
+                  const comment = value.indexOf(" #");
+                  if (comment !== -1) value = value.slice(0, comment).trim();
+                }
+                out[key] = value;
+              }
+              return out;
+            };
+            const candidates = env.ITEST_ENV_FILE
+              ? [path.resolve(env.ITEST_ENV_FILE)]
+              : [path.resolve(".env.itest"), path.resolve("packages/sdk-integration-tests/.env.itest")];
+            const file = candidates.find((candidate) => fs.existsSync(candidate));
+            if (!file) {
+              console.error("no credentials file for the suite: looked for " + candidates.join(", ") + " (template: .env.itest.example)");
+              process.exit(1);
+            }
+            const fromFile = parse(fs.readFileSync(file, "utf8")).ITEST_ACCEL_JOURNAL;
+            const fromShell = env.ITEST_ACCEL_JOURNAL;
+            process.stdout.write((fromShell !== undefined && fromShell !== "" ? fromShell : fromFile) || ".itest-accel-journal.json");
+          ')"
+          if [[ -f "${journal}" ]]; then
+            stamp="$(node -e '
+              const fs = require("fs");
+              const [path, current] = process.argv.slice(1);
+              let recorded;
+              try { recorded = JSON.parse(fs.readFileSync(path, "utf8")).realStart; } catch { recorded = undefined; }
+              const at = typeof recorded === "string" ? new Date(recorded) : new Date(NaN);
+              if (!Number.isNaN(at.getTime()) && at.getTime() === new Date(current).getTime()) { process.stdout.write("same"); process.exit(0); }
+              const when = Number.isNaN(at.getTime()) ? new Date() : at;
+              process.stdout.write(when.toISOString().replace(/\.\d{3}Z$/, "Z").replace(/[-:]/g, ""));
+            ' "${journal}" "${real_start}")"
+            if [[ "${stamp}" == "same" ]]; then
+              echo "keeping ${journal}: it already belongs to this timeline (realStart ${real_start}), so the suite will resume it"
+            else
+              rotated="${journal%.json}.${stamp}.json"
+              if [[ -e "${rotated}" ]]; then
+                rotated="${journal%.json}.${stamp}.$(date -u +%H%M%S).json"
+              fi
+              mv -n "${journal}" "${rotated}"
+              echo "moved the previous run's journal aside: ${journal} -> ${rotated}"
+            fi
+          fi
 
           log="accelerated-$(date -u +%Y%m%dT%H%M%SZ).log"
           ln -sfn "${log}" accelerated-latest.log
@@ -438,13 +512,14 @@ jobs:
           echo "--- end ---"
           INNER
           chmod 0755 "${kickoff}"
-          sudo -u '__SDK_USER__' -H bash -lc 'bash "$0" "$@"' "${kickoff}" '__SDK_DIR__' '__SDK_SCRIPT__' '__RUN_DAYS__' '__GRACE__'
+          sudo -u '__SDK_USER__' -H bash -lc 'bash "$0" "$@"' "${kickoff}" '__SDK_DIR__' '__SDK_SCRIPT__' '__RUN_DAYS__' '__GRACE__' '__REAL_START__'
           REMOTE
           HOST_SCRIPT="${HOST_SCRIPT//__SDK_USER__/${SDK_CHECKOUT_USER}}"
           HOST_SCRIPT="${HOST_SCRIPT//__SDK_DIR__/${SDK_CHECKOUT_DIR}}"
           HOST_SCRIPT="${HOST_SCRIPT//__SDK_SCRIPT__/${SDK_SCRIPT}}"
           HOST_SCRIPT="${HOST_SCRIPT//__RUN_DAYS__/${RUN_DAYS}}"
           HOST_SCRIPT="${HOST_SCRIPT//__GRACE__/${SDK_RUN_GRACE_SECONDS}}"
+          HOST_SCRIPT="${HOST_SCRIPT//__REAL_START__/${REAL_START}}"
 
           # --parameters as JSON built by jq, not the inline string the other steps use: this
           # script is multi-line and full of quotes, and jq is what gets it there intact.
