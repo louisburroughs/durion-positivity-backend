@@ -208,15 +208,23 @@ What it runs, and where:
 - A run this workflow started earlier and still alive is not killed: the step refuses to start
   a second one and names the pid. Stop it yourself first (the runbook rule that you never
   re-dispatch mid-run still stands).
-- **The previous run's journal is moved aside.** The suite resumes from its journal
-  (`ITEST_ACCEL_JOURNAL`, default `.itest-accel-journal.json` in the checkout) and refuses to
-  start on one whose `realStart` is not this deployment's — and every dispatch re-anchors the
-  stack, so the last run's journal is always that case. Before starting, the step renames it
-  to `.itest-accel-journal.<its realStart, e.g. 20260920T120000Z>.json`, which keeps past runs
-  in order by the timeline they drove (a journal that will not parse takes the rotation time
-  instead; a name already taken gets a time-of-day suffix). A journal that already belongs to
-  this deployment's timeline is left where it is, because resuming it is what the suite would
-  do. Nothing is deleted.
+- **The previous run's journal is moved aside.** The suite resumes from its journal and
+  refuses to start on one whose `realStart` is not this deployment's — and every dispatch
+  re-anchors the stack, so the last run's journal is always that case. Before starting, the
+  step renames it in place, the stamp going before the `.json`: with the default path that is
+  `.itest-accel-journal.json` → `.itest-accel-journal.<its realStart, e.g. 20260920T120000Z>.json`,
+  and a custom `ITEST_ACCEL_JOURNAL` such as `runs/alpha.json` becomes
+  `runs/alpha.20260920T120000Z.json`, beside the original. That keeps past runs in order by
+  the timeline they drove (a journal that will not parse takes the rotation time instead; a
+  name already taken gets a time-of-day suffix). A journal that already belongs to this
+  deployment's timeline is left where it is, because resuming it is what the suite would do.
+  Nothing is deleted.
+- **Which journal, and which credentials file, is decided the suite's way.** The step reads
+  `ITEST_ACCEL_JOURNAL` from the shell if set there, else from the credentials file, which it
+  finds as the suite does: `ITEST_ENV_FILE` if set, else `.env.itest` at the checkout root,
+  else `packages/sdk-integration-tests/.env.itest` — accepting `export KEY=`, spaces around
+  `=`, quoted values and ` #` comments. No credentials file at all fails the step by name
+  before the suite is started.
 
 On the host:
 
