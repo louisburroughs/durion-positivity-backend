@@ -86,19 +86,22 @@ public class LocationResponseDTO {
             description = "IANA timezone identifier of the location; the zone every operating-hours and holiday "
                     + "closure entry below is expressed in, and the zone scheduling converts a booking into",
             example = "America/New_York",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private String timezone;
 
     @Schema(
             description = "Stored weekly operating hours, one entry per published day of the week, in the "
                     + "location's own timezone; null when hours have never been published",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private List<OperatingHoursResponse> operatingHours;
 
     @Schema(
             description = "Stored dated closures, in the location's own timezone; null when none have ever been "
                     + "published",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private List<HolidayClosureResponse> holidayClosures;
 
     // Issue #1657: computed per request from aggregate queries over bays and mobile

@@ -3351,7 +3351,9 @@ components:
         reason:
           description: Human-readable reason for the closure
           example: Christmas Day
-          type: string
+          type:
+          - string
+          - 'null'
       required:
       - date
       type: object
@@ -3700,7 +3702,9 @@ components:
           description: Stored dated closures, in the location's own timezone; null when none have ever been published
           items:
             $ref: '#/components/schemas/HolidayClosureResponse'
-          type: array
+          type:
+          - array
+          - 'null'
         id:
           description: Unique identifier of the location
           example: 01960003-0000-7000-8000-000000000001
@@ -3718,7 +3722,9 @@ components:
           description: Stored weekly operating hours, one entry per published day of the week, in the location's own timezone; null when hours have never been published
           items:
             $ref: '#/components/schemas/OperatingHoursResponse'
-          type: array
+          type:
+          - array
+          - 'null'
         phoneNumber:
           description: Primary phone number for the location
           example: +1-217-555-0100
@@ -3739,7 +3745,9 @@ components:
         timezone:
           description: IANA timezone identifier of the location; the zone every operating-hours and holiday closure entry below is expressed in, and the zone scheduling converts a booking into
           example: America/New_York
-          type: string
+          type:
+          - string
+          - 'null'
         type:
           $ref: '#/components/schemas/LocationTypeDTO'
       required:
@@ -3930,7 +3938,9 @@ components:
         closeTime:
           description: Closing time, in the location's own timezone
           example: 61200
-          type: string
+          type:
+          - string
+          - 'null'
         dayOfWeek:
           description: Day of week the hours apply to
           example: MONDAY
@@ -3938,7 +3948,9 @@ components:
         openTime:
           description: Opening time, in the location's own timezone
           example: 08:00:00
-          type: string
+          type:
+          - string
+          - 'null'
       required:
       - dayOfWeek
       type: object

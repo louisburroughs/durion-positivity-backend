@@ -29,12 +29,14 @@ public class OperatingHoursResponse {
     @Schema(
             description = "Opening time, in the location's own timezone",
             example = "08:00:00",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private LocalTime openTime;
 
     @Schema(
             description = "Closing time, in the location's own timezone",
             example = "17:00:00",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private LocalTime closeTime;
 }

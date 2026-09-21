@@ -32,6 +32,7 @@ public class HolidayClosureResponse {
     @Schema(
             description = "Human-readable reason for the closure",
             example = "Christmas Day",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private String reason;
 }

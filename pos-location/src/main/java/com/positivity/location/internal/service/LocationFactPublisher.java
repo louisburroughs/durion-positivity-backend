@@ -1,10 +1,5 @@
 package com.positivity.location.internal.service;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.location.BayDeletedV1;
 import com.positivity.domainevents.location.BayUpdatedV1;
@@ -24,14 +19,9 @@ import com.positivity.location.internal.repository.LocationParentRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -76,12 +66,6 @@ import org.springframework.stereotype.Component;
 public class LocationFactPublisher {
 
     private static final String SOURCE = "pos-location";
-
-    /**
-     * Deserializes the canonical JSON {@code LocationServiceImpl.serializeOperatingHours} /
-     * {@code serializeHolidayClosures} write, mirroring the same library those methods use.
-     */
-    private static final ObjectMapper JSON_MAPPER = JsonMapper.builder().build();
 
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
     private final LocationParentRepository locationParentRepository;
@@ -177,131 +161,50 @@ public class LocationFactPublisher {
     }
 
     /**
-     * Parse {@code Location.operatingHours} into event-contract entries (issue #2023).
+     * Map the stored {@code operating_hours} column onto the event contract (issue #2023).
      *
-     * <p>{@code dayOfWeek} is canonicalized case-insensitively against {@link DayOfWeek} because
-     * the write path ({@code LocationServiceImpl}) does not validate it today (issue #2020 F1):
-     * {@code "MONDAY"}, {@code "Monday"} and {@code "monday"} all persist as-is. The event contract
-     * uses the {@code DayOfWeek} enum precisely so this drift stops at the wall rather than leaking
-     * into every consumer.
-     *
-     * <p>Returns {@code null} — meaning <em>not configured</em>, per {@code LocationUpdatedV1}'s
-     * contract — both when the column itself is {@code null} and when any entry cannot be
-     * canonicalized: malformed JSON, an unparseable day name, or two entries that collide on the
-     * same day once canonicalized (e.g. {@code "Monday"} and {@code "MONDAY"}). A <em>partial</em>
-     * list is deliberately never returned: dropping the one bad day and publishing the rest would
-     * let a consumer report that real, configured day as {@code CLOSED}, which is a worse and more
-     * misleading failure than reporting the whole week as unknown. An empty JSON array ({@code "[]"})
-     * is a distinct, legitimate fact — configured as closed every day — and returns an empty list,
-     * never {@code null}.
+     * <p>{@link LocationScheduleJson} owns the reading of the column, including canonicalizing
+     * {@code dayOfWeek} against {@link DayOfWeek}, rejecting duplicate days and the all-or-nothing
+     * policy — see that class for why a partial week is never published. This method only reshapes
+     * the result: {@code null} stays {@code null} (<em>not configured</em>, per
+     * {@code LocationUpdatedV1}'s contract) and an empty list stays empty ({@code "[]"} is the
+     * distinct fact <em>configured as closed every day</em>). The order is the
+     * {@code DayOfWeek} ordinal order the contract requires, established by the parser.
      */
     private @Nullable List<LocationUpdatedV1.OperatingHoursEntry> parseOperatingHours(@NonNull Location location) {
-        String json = location.getOperatingHours();
-        if (json == null) {
+        List<LocationScheduleJson.ParsedHours> parsed =
+                LocationScheduleJson.parseOperatingHours(location.getOperatingHours(), location.getId(), log);
+        if (parsed == null) {
             return null;
         }
-        List<OperatingHoursJsonEntry> raw;
-        try {
-            raw = JSON_MAPPER.readValue(json, new TypeReference<List<OperatingHoursJsonEntry>>() {});
-        } catch (JsonProcessingException e) {
-            log.error("Unparseable operating_hours JSON for location {}: {}", location.getId(), json, e);
-            return null;
+        List<LocationUpdatedV1.OperatingHoursEntry> entries = new ArrayList<>(parsed.size());
+        for (LocationScheduleJson.ParsedHours hours : parsed) {
+            entries.add(new LocationUpdatedV1.OperatingHoursEntry(hours.day(), hours.openTime(), hours.closeTime()));
         }
-        if (raw == null) {
-            // The literal JSON `null` parses successfully and yields a null list. Without this the
-            // loop below would throw an NPE past every catch in this method, failing the publish
-            // instead of degrading to "not configured" the way this parser promises.
-            log.error("Null operating_hours JSON literal for location {}", location.getId());
-            return null;
-        }
-        // EnumMap always iterates in DayOfWeek ordinal order regardless of insertion order, so this
-        // also satisfies the "sorted by DayOfWeek ordinal" contract without a separate sort step.
-        Map<DayOfWeek, LocationUpdatedV1.OperatingHoursEntry> byDay = new EnumMap<>(DayOfWeek.class);
-        for (OperatingHoursJsonEntry entry : raw) {
-            DayOfWeek day;
-            try {
-                day = DayOfWeek.valueOf(entry.dayOfWeek().trim().toUpperCase(Locale.ROOT));
-            } catch (RuntimeException e) {
-                log.error(
-                        "Unparseable operating_hours dayOfWeek={} for location {}",
-                        entry.dayOfWeek(),
-                        location.getId(),
-                        e);
-                return null;
-            }
-            if (byDay.containsKey(day)) {
-                log.error(
-                        "Duplicate operating_hours entry for day {} on location {} after canonicalizing"
-                                + " dayOfWeek values; publishing operatingHours=null rather than a partial week",
-                        day,
-                        location.getId());
-                return null;
-            }
-            try {
-                byDay.put(
-                        day,
-                        new LocationUpdatedV1.OperatingHoursEntry(
-                                day,
-                                entry.openTime() == null ? null : LocalTime.parse(entry.openTime()),
-                                entry.closeTime() == null ? null : LocalTime.parse(entry.closeTime())));
-            } catch (RuntimeException e) {
-                log.error(
-                        "Unparseable operating_hours openTime/closeTime for day {} on location {}: {}",
-                        day,
-                        location.getId(),
-                        entry,
-                        e);
-                return null;
-            }
-        }
-        return List.copyOf(byDay.values());
+        return List.copyOf(entries);
     }
 
     /**
-     * Parse {@code Location.holidayClosures} into event-contract entries (issue #2023).
+     * Map the stored {@code holiday_closures} column onto the event contract (issue #2023).
      *
      * <p>Independent of {@link #parseOperatingHours} — a malformed entry in one column must not
-     * null the other, since they describe unrelated facts. Same null-versus-empty-list distinction
-     * as operating hours: {@code null} column is <em>not configured</em>, {@code "[]"} is
-     * <em>configured with no closures</em>.
+     * null the other, since they describe unrelated facts; {@link LocationScheduleJson} reads each
+     * column on its own. Same null-versus-empty-list distinction as operating hours: {@code null}
+     * column is <em>not configured</em>, {@code "[]"} is <em>configured with no closures</em>.
      */
     private @Nullable List<LocationUpdatedV1.HolidayClosure> parseHolidayClosures(@NonNull Location location) {
-        String json = location.getHolidayClosures();
-        if (json == null) {
+        List<LocationScheduleJson.ParsedClosure> parsed =
+                LocationScheduleJson.parseHolidayClosures(location.getHolidayClosures(), location.getId(), log);
+        if (parsed == null) {
             return null;
         }
-        List<HolidayClosureJsonEntry> raw;
-        try {
-            raw = JSON_MAPPER.readValue(json, new TypeReference<List<HolidayClosureJsonEntry>>() {});
-        } catch (JsonProcessingException e) {
-            log.error("Unparseable holiday_closures JSON for location {}: {}", location.getId(), json, e);
-            return null;
+        List<LocationUpdatedV1.HolidayClosure> closures = new ArrayList<>(parsed.size());
+        for (LocationScheduleJson.ParsedClosure closure : parsed) {
+            closures.add(new LocationUpdatedV1.HolidayClosure(closure.date(), closure.reason()));
         }
-        if (raw == null) {
-            // See parseOperatingHours: the literal JSON `null` parses to a null list.
-            log.error("Null holiday_closures JSON literal for location {}", location.getId());
-            return null;
-        }
-        List<LocationUpdatedV1.HolidayClosure> parsed = new ArrayList<>(raw.size());
-        for (HolidayClosureJsonEntry entry : raw) {
-            try {
-                parsed.add(new LocationUpdatedV1.HolidayClosure(LocalDate.parse(entry.date()), entry.reason()));
-            } catch (RuntimeException e) {
-                log.error("Unparseable holiday_closures entry {} for location {}", entry, location.getId(), e);
-                return null;
-            }
-        }
-        parsed.sort(Comparator.comparing(LocationUpdatedV1.HolidayClosure::date));
-        return List.copyOf(parsed);
+        closures.sort(Comparator.comparing(LocationUpdatedV1.HolidayClosure::date));
+        return List.copyOf(closures);
     }
-
-    /** Local mirror of {@code LocationServiceImpl.OperatingHoursJsonEntry} as persisted in the column. */
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record OperatingHoursJsonEntry(String dayOfWeek, String openTime, String closeTime) {}
-
-    /** Local mirror of {@code LocationServiceImpl.HolidayClosureJsonEntry} as persisted in the column. */
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record HolidayClosureJsonEntry(String date, String reason) {}
 
     /**
      * Emit {@code location.location.deleted} for a location removed in the current transaction.
