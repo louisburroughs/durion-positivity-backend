@@ -10,7 +10,9 @@ status: current
 Deploying the alpha stack on the `accelerated` Spring profile, with every POS JVM sharing one
 clock anchored `days` virtual days in the past, so the SDK repo's accelerated integration suite
 can drive that much shop activity in a few real hours. At the default of 365 days it produces a
-year of financial history in 1–6 real hours.
+year of financial history in 1–6 real hours. The same dispatch starts that suite on the alpha
+host the moment the stack verifies (see *The SDK run* below), so a run is one dispatch, not a
+deploy followed by a hand-started job.
 
 - Issue: [#2065](https://github.com/louisburroughs/durion-positivity-backend/issues/2065)
 - SDK side: [durion-positivity-sdk#64](https://github.com/louisburroughs/durion-positivity-sdk/issues/64),
@@ -75,8 +77,9 @@ sit in the virtual past need those rows back-dated — the token layer cannot co
 | --- | --- |
 | The override — profile + five anchors on all 25 POS JVMs | `deployment/alpha/docker-compose.accelerated.yml` |
 | `ACCELERATED=true`, anchor validation, `.env` persistence, teardown | `deployment/alpha/deploy-backend.sh` |
-| The dispatch | `.github/workflows/deploy-alpha-accelerated.yml` |
+| The dispatch, and the hand-off to the SDK suite | `.github/workflows/deploy-alpha-accelerated.yml` |
 | Post-deploy verification, on the box | `deployment/alpha/verify-accelerated-deployment.sh` |
+| The SDK suite's checkout on the box | `/home/ec2-user/durion-positivity-sdk`, kept current by the SDK repo's `deploy-alpha-checkout.yml` |
 | Post-run timestamp audit, against the databases | `deployment/alpha/verify-accelerated-timestamps.sql` |
 | CI coverage guard | `scripts/check-accelerated-compose.sh` |
 
@@ -95,6 +98,7 @@ registry and a mock external vendor write no business timestamps.
      -f backend_tag=sha-a1b2c3d \
      -f scale=1460 \
      -f days=365 \
+     -f sdk_run=test:accelerated \
      -f confirm='ACCELERATE ALPHA'
    ```
 
@@ -103,6 +107,7 @@ registry and a mock external vendor write no business timestamps.
    | `backend_tag` | The ECR tag (`sha-a1b2c3d`) or the commit SHA behind it. Blank uses this ref's head commit. |
    | `scale` | Virtual seconds per real second. Must be `> 1` and `< 26280`. For 365 days, 1460 closes the gap in ~6h, 2920 in ~3h, 8760 in ~1h. |
    | `days` | Virtual days the run drives. The clock is anchored this many days before `real-start`; the SDK suite decides whether that is enough for the run it is asked for. Default 365. |
+   | `sdk_run` | The SDK script to start on the host once the stack verifies: `test:accelerated` (default — the parity suites, then the year), `test:accelerated:parity` (minutes, no year run), `populate:accelerated-year` (the year, asserting nothing), or `none` to deploy without starting anything. |
    | `confirm` | Must be exactly `ACCELERATE ALPHA`. |
 
    The workflow generates `POS_TIME_ACCELERATED_REAL_START` (now) and `_VIRTUAL_START`
@@ -116,12 +121,14 @@ registry and a mock external vendor write no business timestamps.
    the rollout runs under a 45-minute SSM timeout and the verifier for up to five more, and
    the verifier fails a stack whose clock has already converged. `days × 86400 / (scale − 1)`
    has to cover that window, so a short run needs a slower scale (one day at 1460 closes in
-   a minute; at 20 it takes ~1.3 h). A `days` under 360 deploys with a warning: the SDK
-   suite's accelerated run expects a year and will refuse a shorter backend, but other
-   consumers of the accelerated stack need not.
+   a minute; at 20 it takes ~1.3 h). A `days` under 360 is refused unless `sdk_run=none`: the
+   SDK suite's accelerated run expects a year and would refuse a shorter backend after the
+   rollout, but other consumers of the accelerated stack need not, and for them it deploys
+   with a warning.
 
 3. **Read the run summary.** It records the backend tag, both anchors, the scale, the requested
-   days, when the clock converges, and who dispatched it. The anchors are the run's identity —
+   days, when the clock converges, who dispatched it, and — when `sdk_run` is not `none` — the
+   pid and log file of the SDK run it started. The anchors are the run's identity —
    the SDK suite's journal refuses to resume a run whose `realStart` differs from the one it
    recorded, so copy them from here rather than re-deriving them.
 
@@ -171,6 +178,48 @@ curl -s https://<alpha-host>/system/time
 ```
 
 `converged: true` means the gap has closed and the accelerated window is over.
+
+## The SDK run
+
+With `sdk_run` anything but `none`, the workflow starts the SDK suite itself, over SSM, the
+moment the verifier passes — every minute between the deploy and the suite's first request is
+spent out of the accelerated window, and `deploy-backend.sh` has already gated each tier on its
+compose healthcheck, so "all the required containers are available" is exactly then.
+
+What it runs, and where:
+
+- The suite is the SDK repo's checkout on the alpha host, `/home/ec2-user/durion-positivity-sdk`,
+  kept current and built (`npm ci`, `npm run build`) by that repo's `deploy-alpha-checkout.yml`
+  on every push to its `main`. The workflow does not pull or build it: a checkout that is
+  missing, unbuilt, or has no `.env.itest` beside it fails the step with a message saying so.
+- It runs as `ec2-user`, through a login shell (node is on that account's PATH, not root's), so
+  nothing it writes is root-owned. The credentials are the host's `.env.itest`; the workflow
+  never sees them and passes none.
+- `ITEST_BASE_URL` and `ITEST_SECURITY_SERVICE_URL` are set to the ports the base compose file
+  publishes on the host (`8080`, `8086`), overriding an `.env.itest` written for the laptop
+  tunnel's `18080`/`18086`. `ITEST_ACCEL_DAYS` is the dispatch's `days`.
+- It is started detached — its own session, `setsid` — because the run takes 1–6 real hours,
+  and writes `accelerated-<timestamp>.log` (also `accelerated-latest.log`) and
+  `.accelerated-run.pid` in the checkout. The step then watches it for 90 s and fails if it has
+  exited: that is where global setup's refusals land (a clock it will not drive, a held lock, a
+  login that fails, an infeasible scale), and they belong in the workflow log, not in a file
+  nobody reads until the window has closed. A run that outlives the grace period is into the
+  suites proper, and from there its log is the record, not the workflow.
+- A run this workflow started earlier and still alive is not killed: the step refuses to start
+  a second one and names the pid. Stop it yourself first (the runbook rule that you never
+  re-dispatch mid-run still stands).
+
+On the host:
+
+```bash
+tail -f /home/ec2-user/durion-positivity-sdk/accelerated-latest.log   # follow it
+kill -TERM -- -$(cat /home/ec2-user/durion-positivity-sdk/.accelerated-run.pid)   # stop it; the suite releases its lock on SIGTERM
+```
+
+If the step fails, the stack is still deployed and its window is open: either start the suite
+by hand (`cd /home/ec2-user/durion-positivity-sdk && ITEST_BASE_URL=http://localhost:8080
+ITEST_SECURITY_SERVICE_URL=http://localhost:8086 npm run test:accelerated`) or tear the stack
+down. Nothing tears it down for you at the end of the run either — see *Teardown*.
 
 ## During the run
 
