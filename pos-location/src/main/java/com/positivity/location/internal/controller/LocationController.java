@@ -98,9 +98,10 @@ public class LocationController {
     private final LocationRosterService locationRosterService;
 
     @Operation(operationId = "listLocations", summary = "List All Locations Without Pagination", description = """
-                    Lists every location in the system as a flat, unpaginated collection with address, status and \
-                    type details, plus a query-time repair-capability projection: hasRepairCapability, \
-                    activeBayCount and activeMobileUnitCount.
+                    Lists every location in the system as a flat, unpaginated collection with address, status, \
+                    type details and the stored scheduling facts (timezone, operatingHours, holidayClosures), plus \
+                    a query-time repair-capability projection: hasRepairCapability, activeBayCount and \
+                    activeMobileUnitCount.
                     Use this tool when a complete location inventory is needed at once, including when deciding \
                     which locations can perform repairs; use getLocationRoster instead for a paginated sync feed \
                     with status and updated-since filtering, do not use it to fetch a single known id, which is \
@@ -170,7 +171,11 @@ public class LocationController {
 
     @Operation(operationId = "getLocationById", summary = "Get Location by Unique Identifier", description = """
                     Returns the full location record, including address fields, active flag, responsible person \
-                    id and type classification, for a known id.
+                    id, type classification and the scheduling facts as stored — timezone, operatingHours and \
+                    holidayClosures — for a known id.
+                    The hours and closures are expressed in the location's own timezone, which is the zone \
+                    scheduling converts a booking into before judging it against them, so reading them back is \
+                    how a caller confirms what it published and in which zone.
                     Use this tool when the location id is already known; use listLocations instead to enumerate, \
                     and use validateLocation when only existence and active state are needed.
                     Preconditions: the location must exist.
@@ -370,6 +375,9 @@ public class LocationController {
     @Operation(operationId = "patchLocation", summary = "Patch Selected Fields of a Location", description = """
                     Applies a partial update to a location, changing only the supplied fields: name, status, \
                     timezone, operatingHours, holidayClosures, checkInBufferMinutes and cleanupBufferMinutes.
+                    The response echoes the stored timezone, operatingHours and holidayClosures, so a caller sees \
+                    what the server kept and which zone the hours are read in — they are facility-local, and hours \
+                    published without a timezone keep whichever zone the location already carries.
                     Use this tool for targeted edits such as deactivation or hours changes; do not use \
                     updateLocation, which overwrites every mutable field including address and type.
                     Preconditions: the location must exist, and a new name must not be used by another location.

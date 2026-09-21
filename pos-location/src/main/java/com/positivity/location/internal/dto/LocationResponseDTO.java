@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -76,6 +77,29 @@ public class LocationResponseDTO {
 
     @Schema(description = "Type classification of the location", requiredMode = NOT_REQUIRED)
     private LocationTypeDTO type;
+
+    // Issue #2139: the three scheduling facts were write-only on create/update/patch. A caller
+    // could publish hours, be refused a booking against them, and never read back what the server
+    // stored or which zone it reads them in — and the zone is what decides whether 08:00 means
+    // 08:00 to the shop or to the caller (DECISION-015: hours are facility-local).
+    @Schema(
+            description = "IANA timezone identifier of the location; the zone every operating-hours and holiday "
+                    + "closure entry below is expressed in, and the zone scheduling converts a booking into",
+            example = "America/New_York",
+            requiredMode = NOT_REQUIRED)
+    private String timezone;
+
+    @Schema(
+            description = "Stored weekly operating hours, one entry per published day of the week, in the "
+                    + "location's own timezone; null when hours have never been published",
+            requiredMode = NOT_REQUIRED)
+    private List<OperatingHoursResponse> operatingHours;
+
+    @Schema(
+            description = "Stored dated closures, in the location's own timezone; null when none have ever been "
+                    + "published",
+            requiredMode = NOT_REQUIRED)
+    private List<HolidayClosureResponse> holidayClosures;
 
     // Issue #1657: computed per request from aggregate queries over bays and mobile
     // units; never stored on the location row. An inactive location always reports

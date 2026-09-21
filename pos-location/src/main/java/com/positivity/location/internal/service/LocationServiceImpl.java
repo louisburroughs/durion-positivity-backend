@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.positivity.domainevents.AggregateTouch;
 import com.positivity.location.internal.dto.HolidayClosureRequest;
+import com.positivity.location.internal.dto.HolidayClosureResponse;
 import com.positivity.location.internal.dto.LocationDescendantResponseDTO;
 import com.positivity.location.internal.dto.LocationParentResponseDTO;
 import com.positivity.location.internal.dto.LocationPatchRequest;
@@ -15,6 +16,7 @@ import com.positivity.location.internal.dto.LocationResponseDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
 import com.positivity.location.internal.dto.LocationValidationResponseDTO;
 import com.positivity.location.internal.dto.OperatingHoursRequest;
+import com.positivity.location.internal.dto.OperatingHoursResponse;
 import com.positivity.location.internal.dto.PersonDTO;
 import com.positivity.location.internal.entity.ExtPersonReplica;
 import com.positivity.location.internal.entity.Location;
@@ -27,8 +29,11 @@ import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.LocationTypeRepository;
 import java.time.Clock;
 import java.time.DateTimeException;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -664,6 +669,78 @@ public class LocationServiceImpl implements LocationService {
 
     private record HolidayClosureJsonEntry(String date, String reason) {}
 
+    /**
+     * The stored weekly hours, read back for the location response (issue #2139). Null rather than an
+     * empty list when hours were never published: "no hours on file" and "published as closed all
+     * week" are different facts, and the scheduling rules treat them differently — unpublished hours
+     * do not fire the HOURS rules at all.
+     *
+     * <p>Unreadable stored JSON is logged and answered as absent rather than failing the read: the
+     * row is already written, and a 500 on every read of it would be a worse answer than the one
+     * fact this field carries.
+     */
+    private List<OperatingHoursResponse> parseOperatingHours(Location location) {
+        String stored = location.getOperatingHours();
+        if (stored == null || stored.isBlank()) {
+            return null;
+        }
+        try {
+            return JSON_MAPPER.readValue(stored, new TypeReference<List<OperatingHoursJsonEntry>>() {}).stream()
+                    .map(entry -> OperatingHoursResponse.builder()
+                            .dayOfWeek(entry.dayOfWeek())
+                            .openTime(parseLocalTime(entry.openTime()))
+                            .closeTime(parseLocalTime(entry.closeTime()))
+                            .build())
+                    .toList();
+        } catch (JsonProcessingException e) {
+            log.warn("Unreadable operating_hours on location {}; omitted from the response", location.getId(), e);
+            return null;
+        }
+    }
+
+    /** The stored dated closures, read back for the location response; see {@link #parseOperatingHours}. */
+    private List<HolidayClosureResponse> parseHolidayClosures(Location location) {
+        String stored = location.getHolidayClosures();
+        if (stored == null || stored.isBlank()) {
+            return null;
+        }
+        try {
+            return JSON_MAPPER.readValue(stored, new TypeReference<List<HolidayClosureJsonEntry>>() {}).stream()
+                    .map(entry -> HolidayClosureResponse.builder()
+                            .date(parseLocalDate(entry.date()))
+                            .reason(entry.reason())
+                            .build())
+                    .toList();
+        } catch (JsonProcessingException e) {
+            log.warn("Unreadable holiday_closures on location {}; omitted from the response", location.getId(), e);
+            return null;
+        }
+    }
+
+    private LocalTime parseLocalTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(value);
+        } catch (DateTimeParseException e) {
+            log.warn("Unparsable stored time {}; omitted from the response", value);
+            return null;
+        }
+    }
+
+    private LocalDate parseLocalDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException e) {
+            log.warn("Unparsable stored date {}; omitted from the response", value);
+            return null;
+        }
+    }
+
     private String normalizeName(String name) {
         return name == null ? "" : name.toLowerCase(Locale.ROOT).trim();
     }
@@ -723,6 +800,9 @@ public class LocationServiceImpl implements LocationService {
                 .active(location.isActive())
                 .responsiblePersonId(location.getResponsiblePersonId())
                 .type(toLocationTypeDto(location.getType()))
+                .timezone(location.getTimezone())
+                .operatingHours(parseOperatingHours(location))
+                .holidayClosures(parseHolidayClosures(location))
                 .hasRepairCapability(capability.hasRepairCapability())
                 .activeBayCount(capability.activeBayCount())
                 .activeMobileUnitCount(capability.activeMobileUnitCount())
