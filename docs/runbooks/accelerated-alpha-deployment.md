@@ -208,6 +208,15 @@ What it runs, and where:
 - A run this workflow started earlier and still alive is not killed: the step refuses to start
   a second one and names the pid. Stop it yourself first (the runbook rule that you never
   re-dispatch mid-run still stands).
+- **The previous run's journal is moved aside.** The suite resumes from its journal
+  (`ITEST_ACCEL_JOURNAL`, default `.itest-accel-journal.json` in the checkout) and refuses to
+  start on one whose `realStart` is not this deployment's — and every dispatch re-anchors the
+  stack, so the last run's journal is always that case. Before starting, the step renames it
+  to `.itest-accel-journal.<its realStart, e.g. 20260920T120000Z>.json`, which keeps past runs
+  in order by the timeline they drove (a journal that will not parse takes the rotation time
+  instead; a name already taken gets a time-of-day suffix). A journal that already belongs to
+  this deployment's timeline is left where it is, because resuming it is what the suite would
+  do. Nothing is deleted.
 
 On the host:
 
