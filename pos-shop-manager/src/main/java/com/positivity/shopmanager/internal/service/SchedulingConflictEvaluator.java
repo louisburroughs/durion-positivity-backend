@@ -82,6 +82,13 @@ public class SchedulingConflictEvaluator {
     static final String UNASSIGNED = "UNASSIGNED";
     static final String STAFFING_ACTIVE = "ACTIVE";
     static final double NEAR_CAPACITY_RATIO = 0.9;
+
+    /**
+     * What {@code {zone}} says when the location has no resolvable zone and the times fall back to
+     * UTC. Not {@code ZoneOffset.UTC.getId()}, which is {@code "Z"}: see {@link #render}.
+     */
+    static final String UTC_LABEL = "UTC";
+
     private static final DateTimeFormatter LOCAL_TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     private final ConflictRuleRepository conflictRuleRepository;
@@ -445,13 +452,17 @@ public class SchedulingConflictEvaluator {
      */
     static String render(ConflictRule rule, BookingAttempt attempt, @Nullable ZoneId zone, @Nullable String detail) {
         ZoneId renderZone = zone == null ? ZoneOffset.UTC : zone;
+        // ZoneOffset.UTC.getId() is "Z", which is neither the label this method documents nor an
+        // IANA zone id -- "04:00-05:00 Z falls outside ..." reads as a typo rather than as the one
+        // fact the caller cannot otherwise recover. A resolved zone still names itself.
+        String zoneLabel = zone == null ? UTC_LABEL : zone.getId();
         ZonedDateTime start = attempt.startAt().atZone(renderZone);
         ZonedDateTime end = attempt.endAt().atZone(renderZone);
         return rule.getMessageTemplate()
                 .replace("{resource}", attempt.resourceId() == null ? "(unassigned)" : attempt.resourceId())
                 .replace("{start}", start.format(LOCAL_TIME))
                 .replace("{end}", end.format(LOCAL_TIME))
-                .replace("{zone}", renderZone.getId())
+                .replace("{zone}", zoneLabel)
                 .replace("{date}", start.toLocalDate().toString())
                 .replace("{reason}", detail == null || detail.isBlank() ? "" : " (" + detail + ")")
                 .replace("{skills}", detail == null || detail.isBlank() ? "the required skills" : detail);

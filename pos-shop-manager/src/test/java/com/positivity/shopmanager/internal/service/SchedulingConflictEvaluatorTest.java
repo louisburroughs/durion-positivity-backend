@@ -214,6 +214,27 @@ class SchedulingConflictEvaluatorTest {
         }
 
         @Test
+        @DisplayName("#2139: with no resolvable zone the window is UTC and {zone} says so, not \"Z\"")
+        void unresolvableZoneLabelsTheWindowUtc() {
+            // The fallback half of the contract render() documents. A location with no resolvable
+            // zone cannot fire the HOURS rules at all, so the label is pinned on the next rule that
+            // quotes the window: 15:00–16:00 is the UTC reading of the attempt, and the label has to
+            // say which zone that is. ZoneOffset.UTC.getId() is "Z" — neither the IANA identifier
+            // the refusal advertises nor a string a caller reads as a zone at all.
+            when(extLocationReplicaRepository.findById(LOCATION))
+                    .thenReturn(Optional.of(location("Mars/Olympus", HOURS, CLOSURES)));
+            when(appointmentRepository.findHeldOverlappingForResource(eq(BAY), eq(TUE_10), eq(TUE_11), any()))
+                    .thenReturn(List.of(Appointment.builder()
+                            .appointmentId(UUID.randomUUID())
+                            .build()));
+
+            List<DetectedConflict> detected = evaluator.evaluate(attempt(TUE_10, TUE_11, null));
+
+            assertThat(codes(detected)).containsExactly("BAY_DOUBLE_BOOKED");
+            assertThat(detected.get(0).detail()).isEqualTo("Bay bay-1 is already booked for part of 15:00–16:00 UTC.");
+        }
+
+        @Test
         void spanningLocalMidnightIsOutsideOperatingHours() {
             // Tuesday 23:30 → Wednesday 00:30 Chicago.
             Instant tue2330 = Instant.parse("2026-06-17T04:30:00Z");
