@@ -53,8 +53,9 @@ import org.springframework.stereotype.Component;
  *       any part of the window. Reporting only; the exclusion constraint (V8) is what makes it
  *       unbypassable under concurrency.
  *   <li>{@code MECHANIC_UNAVAILABLE} (HARD, MECHANIC) — no ACTIVE staffing assignment at the
- *       location covers the booking's local date: nobody is present (#2035 answer 5; competence is
- *       a different rule).
+ *       location covers the booking's local date (#2035 answer 5; competence is a different rule).
+ *       The refusal names which of the two noes it is, an unstaffed location or a date no assignment
+ *       covers, rather than asserting nobody is present (#2140).
  *   <li>{@code FACILITY_NEAR_CAPACITY} (SOFT, CAPACITY) — this booking would put held appointments
  *       at or above 90% of the location's active bays.
  *   <li>{@code NO_COMPETENT_MECHANIC_ROSTERED} / {@code COMPETENT_MECHANIC_UNAVAILABLE} (SOFT,
@@ -248,11 +249,41 @@ public class SchedulingConflictEvaluator {
     // ── MECHANIC ────────────────────────────────────────────────────────────────────────────────
 
     private boolean evaluateStaffing(BookingAttempt attempt, @Nullable ZoneId zone, List<DetectedConflict> detected) {
-        boolean anyonePresent = !rosteredTechnicians(attempt, zone).isEmpty();
+        List<ExtStaffingAssignmentReplica> technicianAssignments = activeTechnicianAssignments(attempt);
+        LocalDate localDate = localDate(attempt, zone);
+        boolean anyonePresent = technicianAssignments.stream()
+                .anyMatch(assignment -> SkillRequirementResolver.covers(assignment, localDate));
         if (!anyonePresent) {
-            fire(CODE_MECHANIC_UNAVAILABLE, attempt, zone, null, detected);
+            fire(CODE_MECHANIC_UNAVAILABLE, attempt, zone, staffingDetail(technicianAssignments, localDate), detected);
         }
         return anyonePresent;
+    }
+
+    /**
+     * Why the MECHANIC rule fired, in the terms the caller can act on (#2140). The rule asks one
+     * question — does an ACTIVE TECHNICIAN staffing assignment at this location cover the booking's
+     * facility-local date — and it has two different noes. "Nobody is in the building" is only the
+     * first of them: an assignment that exists but starts after the date asked about is a shop that
+     * is staffed and a date that is not covered, and a caller told only that no mechanic is present
+     * cannot tell the two apart or act on either.
+     *
+     * <p>Effective dates are read as written and are not adjusted towards the question
+     * (DECISION-SHOPMGMT-015 reads every staffing and credential fact on the facility-local date of
+     * the attempt): a date before an assignment begins genuinely has nobody assigned on it, which is
+     * as true of historical reporting as of a booking. Naming the date and the assignment count is
+     * what makes that answer readable rather than misleading.
+     */
+    private static String staffingDetail(
+            List<ExtStaffingAssignmentReplica> technicianAssignments, LocalDate localDate) {
+        if (technicianAssignments.isEmpty()) {
+            return "no ACTIVE technician staffing assignment exists at this location";
+        }
+        int count = technicianAssignments.size();
+        return count
+                + (count == 1
+                        ? " ACTIVE technician staffing assignment exists"
+                        : " ACTIVE technician staffing assignments exist")
+                + " at this location, none effective on " + localDate;
     }
 
     /**
@@ -262,11 +293,21 @@ public class SchedulingConflictEvaluator {
      */
     private Set<UUID> rosteredTechnicians(BookingAttempt attempt, @Nullable ZoneId zone) {
         LocalDate localDate = localDate(attempt, zone);
-        return staffingAssignmentRepository.findByLocationIdAndStatus(attempt.locationId(), STAFFING_ACTIVE).stream()
-                .filter(SkillRequirementResolver::isTechnician)
+        return activeTechnicianAssignments(attempt).stream()
                 .filter(assignment -> SkillRequirementResolver.covers(assignment, localDate))
                 .map(ExtStaffingAssignmentReplica::getPersonId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /**
+     * Every ACTIVE TECHNICIAN staffing assignment at the location, before any date filter — the row
+     * set both the presence answer and {@link #staffingDetail} are read from, so the refusal can say
+     * whether the shop has no assignments at all or none covering the date.
+     */
+    private List<ExtStaffingAssignmentReplica> activeTechnicianAssignments(BookingAttempt attempt) {
+        return staffingAssignmentRepository.findByLocationIdAndStatus(attempt.locationId(), STAFFING_ACTIVE).stream()
+                .filter(SkillRequirementResolver::isTechnician)
+                .toList();
     }
 
     private static LocalDate localDate(BookingAttempt attempt, @Nullable ZoneId zone) {
@@ -361,14 +402,13 @@ public class SchedulingConflictEvaluator {
             String code,
             BookingAttempt attempt,
             @Nullable ZoneId zone,
-            @Nullable String closureReason,
+            @Nullable String detail,
             List<DetectedConflict> detected) {
         Optional<ConflictRule> rule = activeRule(code);
         if (rule.isEmpty()) {
             return;
         }
-        detected.add(new DetectedConflict(
-                rule.get(), attempt.resourceId(), render(rule.get(), attempt, zone, closureReason)));
+        detected.add(new DetectedConflict(rule.get(), attempt.resourceId(), render(rule.get(), attempt, zone, detail)));
     }
 
     /** Empty when the platform has switched the rule off; absent from the seed is a deployment defect. */
@@ -392,11 +432,18 @@ public class SchedulingConflictEvaluator {
 
     /**
      * Renders the rule's {@code {placeholders}} in facility-local time when the zone is known.
-     * {@code closureReason} doubles as the rule's free-text detail: the closure's reason for the
-     * HOURS templates, the skill codes for the SKILL templates.
+     * {@code detail} is the rule's free-text detail: the closure's reason for the HOURS templates,
+     * the skill codes for the SKILL templates, why presence failed for the MECHANIC one.
+     *
+     * <p>{@code {zone}} names the zone the times were rendered in (#2139). Every template that
+     * quotes a window carries it, because a bare {@code 04:00–05:00} for a booking the caller sent
+     * as {@code 09:00Z} reads as a platform error rather than as the facility-local conversion
+     * DECISION-SHOPMGMT-015 requires — the offset was left to be deduced, and a run was lost
+     * deducing it wrongly. When the zone is unknown the times are rendered in UTC, and
+     * {@code {zone}} says UTC: it names the zone the numbers are in, which is the one fact the
+     * caller cannot otherwise recover.
      */
-    static String render(
-            ConflictRule rule, BookingAttempt attempt, @Nullable ZoneId zone, @Nullable String closureReason) {
+    static String render(ConflictRule rule, BookingAttempt attempt, @Nullable ZoneId zone, @Nullable String detail) {
         ZoneId renderZone = zone == null ? ZoneOffset.UTC : zone;
         ZonedDateTime start = attempt.startAt().atZone(renderZone);
         ZonedDateTime end = attempt.endAt().atZone(renderZone);
@@ -404,10 +451,9 @@ public class SchedulingConflictEvaluator {
                 .replace("{resource}", attempt.resourceId() == null ? "(unassigned)" : attempt.resourceId())
                 .replace("{start}", start.format(LOCAL_TIME))
                 .replace("{end}", end.format(LOCAL_TIME))
+                .replace("{zone}", renderZone.getId())
                 .replace("{date}", start.toLocalDate().toString())
-                .replace("{reason}", closureReason == null || closureReason.isBlank() ? "" : " (" + closureReason + ")")
-                .replace(
-                        "{skills}",
-                        closureReason == null || closureReason.isBlank() ? "the required skills" : closureReason);
+                .replace("{reason}", detail == null || detail.isBlank() ? "" : " (" + detail + ")")
+                .replace("{skills}", detail == null || detail.isBlank() ? "the required skills" : detail);
     }
 }

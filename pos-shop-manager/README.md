@@ -93,6 +93,27 @@ are evaluated from the `ext_person_credential` and `ext_catalog_service_skill` r
 CAP-329). `MECHANIC_OVERTIME` is seeded `is_active = false`: nothing supplies weekly hours yet, and
 an active rule the evaluator never evaluates would advertise enforcement that does not exist.
 
+### What a refusal says (#2139, #2140)
+
+A conflict's message is its `conflict_rule.message_template` rendered by the evaluator, and two
+things about that text are contractual:
+
+- **Every template that quotes a window names the zone the window is in** (`{zone}`, rendered as the
+  IANA id). Times render in the facility's timezone (DECISION-SHOPMGMT-015), so a booking sent as
+  `09:00Z` at an Eastern site is refused for `04:00–05:00 America/New_York`. Without the zone the
+  converted time reads as a platform arithmetic error rather than as the facility-local conversion it
+  is. When the location's zone is unknown the times render in UTC and `{zone}` says so.
+- **`MECHANIC_UNAVAILABLE` names the staffing fact, not presence.** The rule asks whether an ACTIVE
+  TECHNICIAN staffing assignment at the location covers the booking's facility-local date, which has
+  two different noes; the message names which one fired — no assignment at the location at all, or
+  assignments that exist with none effective on that date. A shop with seven technicians whose
+  assignments begin after the date being asked about is staffed, and "no mechanic is present" was not
+  something a caller could act on. Effective dates are read as written and never adjusted toward the
+  question, so a date before an assignment begins genuinely has nobody assigned on it — as true of a
+  historical query as of a booking. The `/{locationId}/technicians` roster does not date-filter
+  (CAP-328), so it can list a technician the evaluator does not count for a given date; that is the
+  difference between "works here" and "assigned on that date".
+
 `BAY_DOUBLE_BOOKED` is enforced by the database: `appointment_resource_no_overlap` (V8) is an
 exclusion constraint on `(tenant_id, resource_id, tstzrange(start_at, end_at, '[)'))` over the
 statuses in `AppointmentStatus.holdingAResource()`. The evaluator's pre-check is reporting; the
