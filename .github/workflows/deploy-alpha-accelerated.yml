@@ -6,6 +6,13 @@ name: Deploy Alpha (Accelerated Clock)
 # 365 days it drives a year of shop activity in 1-6 real hours, producing a year of financial
 # history (louisburroughs/durion-positivity-sdk#64).
 #
+# Once the stack verifies it also STARTS that suite, on the host, from the SDK checkout the SDK
+# repo's deploy-alpha-checkout.yml keeps current there (`sdk_run`, default `test:accelerated`).
+# The clock starts at dispatch and every minute before the suite's first request is spent out
+# of the accelerated window, so the hand-off happens the moment the last container is
+# healthy and verified rather than whenever an operator notices. The run is detached — it
+# takes 1-6 real hours — and this workflow only confirms it survived its own global setup.
+#
 # Deliberately a separate workflow rather than an input on build-push-ecr.yml. That workflow's
 # automatic promotion path fires on every green CI run on main, and an accelerated deploy
 # back-dates records in a shared database — it must never be reachable by accident.
@@ -35,6 +42,16 @@ on:
         required: false
         default: "365"
         type: string
+      sdk_run:
+        description: "SDK suite to start on the alpha host once the stack verifies: test:accelerated (parity suites, then the year), test:accelerated:parity (minutes, no year), populate:accelerated-year (the year, asserting nothing), or none"
+        required: false
+        default: "test:accelerated"
+        type: choice
+        options:
+          - test:accelerated
+          - test:accelerated:parity
+          - populate:accelerated-year
+          - none
       confirm:
         description: "Type ACCELERATE ALPHA to confirm — this back-dates records in a shared database"
         required: true
@@ -60,9 +77,20 @@ env:
   # 25 services and then fail verification with no back-dated window left.
   MIN_CONVERGE_HOURS: "1"
   # The gap the SDK suite's accelerated integration run expects (durion-positivity-sdk#64).
-  # A shorter run deploys fine; it is warned about, not refused, because that suite is the
-  # documented consumer today, not the only possible one.
+  # A shorter run is refused when that suite is what `sdk_run` will start — it would refuse
+  # the backend after the rollout — and only warned about with sdk_run=none, because the
+  # suite is the documented consumer today, not the only possible one.
   SDK_RUN_DAYS: "360"
+  # The SDK suite's checkout on the alpha host and the account that owns it. The SDK repo's
+  # deploy-alpha-checkout.yml keeps it current and builds it as that user; the kick-off below
+  # starts `npm run <sdk_run>` there as the same user, so nothing it writes is root-owned.
+  # `.env.itest` beside the checkout holds the credentials — this workflow never sees them.
+  SDK_CHECKOUT_DIR: /home/ec2-user/durion-positivity-sdk
+  SDK_CHECKOUT_USER: ec2-user
+  # How long the kick-off watches the suite before calling it started. Global setup's
+  # refusals — a clock it will not drive, a held lock, a login that fails, an infeasible
+  # scale — all land inside this window; a run that outlives it is into the suites proper.
+  SDK_RUN_GRACE_SECONDS: "90"
 
 jobs:
   deploy:
@@ -96,6 +124,7 @@ jobs:
           BACKEND_TAG_INPUT: ${{ inputs.backend_tag }}
           SCALE: ${{ inputs.scale }}
           DAYS: ${{ inputs.days }}
+          SDK_RUN: ${{ inputs.sdk_run }}
         run: |
           set -euo pipefail
 
@@ -131,6 +160,12 @@ jobs:
           fi
           days="$(sed -n 's/^days=//p' <<< "${anchors}")"
           if [[ "${days}" -lt "${SDK_RUN_DAYS}" ]]; then
+            if [[ "${SDK_RUN}" != "none" ]]; then
+              # Refused here rather than after the rollout: the suite would be started against
+              # this stack only to refuse it, having spent a 25-service deploy to find out.
+              echo "::error::days=${days} is shorter than the ${SDK_RUN_DAYS}-day gap the SDK suite's accelerated integration run expects (durion-positivity-sdk#64), and sdk_run=${SDK_RUN} would start that suite only for it to refuse this backend. Use days=365, or sdk_run=none to deploy for another consumer."
+              exit 1
+            fi
             echo "::warning::days=${days} is shorter than the ${SDK_RUN_DAYS}-day gap the SDK suite's accelerated integration run expects (durion-positivity-sdk#64); that suite will refuse this backend. Fine for any other consumer of the accelerated stack."
           fi
 
@@ -274,11 +309,197 @@ jobs:
             exit 1
           fi
 
+      - name: Start the SDK accelerated run on the alpha host
+        id: sdk
+        if: inputs.sdk_run != 'none'
+        # "As soon as every required container is available" is exactly now: deploy-backend.sh
+        # gates each tier on its compose healthcheck (--wait), and the verifier above has just
+        # read the anchors out of all 25 JVMs and watched GET /system/time advance. Every
+        # minute between here and the suite's first request is spent out of the accelerated
+        # window, so nothing else sits in between.
+        #
+        # The suite is the SDK checkout on the host — SDK_CHECKOUT_DIR, kept current and built
+        # by the SDK repo's deploy-alpha-checkout.yml, with the host's own `.env.itest` beside
+        # it — run natively against the gateway and security-service ports the base compose
+        # file publishes on the host. Nothing here carries a credential: this names the script
+        # and the day count, and the checkout supplies the rest.
+        #
+        # The run takes 1-6 real hours, longer than this job should live, so it is started
+        # detached in its own session with a log file in the checkout, and this step only
+        # confirms it is still running after SDK_RUN_GRACE_SECONDS. That is long enough for
+        # global setup to refuse a backend it will not drive — the failure worth surfacing
+        # here rather than finding in a log after the window has closed.
+        env:
+          SDK_SCRIPT: ${{ inputs.sdk_run }}
+          RUN_DAYS: ${{ steps.run.outputs.days }}
+        run: |
+          set -euo pipefail
+
+          # Every value below is spliced into a script that runs on the host, so each is
+          # checked against the shape it must have before it goes anywhere near a quote.
+          for pair in "SDK_CHECKOUT_DIR=${SDK_CHECKOUT_DIR}" "SDK_CHECKOUT_USER=${SDK_CHECKOUT_USER}" \
+                      "SDK_SCRIPT=${SDK_SCRIPT}" "RUN_DAYS=${RUN_DAYS}" "SDK_RUN_GRACE_SECONDS=${SDK_RUN_GRACE_SECONDS}"; do
+            if [[ ! "${pair#*=}" =~ ^[A-Za-z0-9_./:-]+$ ]]; then
+              echo "::error::${pair%%=*} carries a character the host script would not quote safely ('${pair#*=}')."
+              exit 1
+            fi
+          done
+
+          # The host side. The outer part runs as root (that is what AWS-RunShellScript gives
+          # us) and hands the inner script to the checkout's owner through a login shell, for
+          # the same reasons the SDK repo's deploy workflow does: root's npm would leave
+          # root-owned files in a checkout meant to be run by hand from that account, and node
+          # is on that account's profile PATH, not root's. Both heredocs are quoted — every `$`
+          # in them is the host's — and the four values the inner script needs arrive as
+          # positional parameters through the __PLACEHOLDERS__ substituted below.
+          read -r -d '' HOST_SCRIPT <<'REMOTE' || true
+          set -euo pipefail
+          kickoff="$(mktemp)"
+          trap 'rm -f "${kickoff}"' EXIT
+          cat > "${kickoff}" <<'INNER'
+          set -euo pipefail
+          dir="$1"; script="$2"; days="$3"; grace="$4"
+
+          if [[ ! -d "${dir}/.git" ]]; then
+            echo "no checkout at ${dir}; run the SDK repo's 'Build, Smoke Test and Deploy to Alpha' workflow first" >&2
+            exit 1
+          fi
+          cd "${dir}"
+          if [[ ! -d node_modules ]]; then
+            echo "${dir} has no node_modules; the SDK deploy workflow's npm ci has not run here" >&2
+            exit 1
+          fi
+          if [[ ! -f .env.itest ]]; then
+            echo "${dir}/.env.itest is missing; the suite reads its credentials from it (template: .env.itest.example)" >&2
+            exit 1
+          fi
+          if ! command -v npm > /dev/null; then
+            echo "npm is not on $(id -un)'s login PATH" >&2
+            exit 1
+          fi
+          if ! node -e 'process.exit((require("./package.json").scripts || {})[process.argv[1]] ? 0 : 1)' "${script}"; then
+            echo "${dir}/package.json has no '${script}' script" >&2
+            exit 1
+          fi
+
+          # A run this workflow started earlier and still alive is an operator's to stop: the
+          # stack was just re-anchored underneath it, and a second suite on the same checkout
+          # would fight it for the lock and the shop's resources.
+          pidfile=.accelerated-run.pid
+          if [[ -f "${pidfile}" ]] && kill -0 "$(cat "${pidfile}")" 2> /dev/null; then
+            echo "a run started by this workflow is still alive (pid $(cat "${pidfile}"); log $(readlink -f accelerated-latest.log 2> /dev/null || echo unknown)); stop it with kill -TERM -- -$(cat "${pidfile}") before starting another" >&2
+            exit 1
+          fi
+          rm -f "${pidfile}"
+
+          log="accelerated-$(date -u +%Y%m%dT%H%M%SZ).log"
+          ln -sfn "${log}" accelerated-latest.log
+
+          # The base compose file publishes the gateway and the security service on the host at
+          # these ports (the laptop tunnel forwards the same two). Set in the shell, where they
+          # win over a .env.itest written for the tunnel's 18080/18086.
+          export ITEST_BASE_URL=http://localhost:8080
+          export ITEST_SECURITY_SERVICE_URL=http://localhost:8086
+          export ITEST_ACCEL_DAYS="${days}"
+
+          # Its own session, so it outlives this SSM invocation and can be stopped as one unit
+          # with `kill -TERM -- -<pid>`; the suite releases its lock on SIGTERM. The child
+          # records its pid before it becomes npm.
+          setsid -f bash -c 'echo "$$" > "$1"; exec npm run "$2"' _ "${pidfile}" "${script}" > "${log}" 2>&1 < /dev/null
+
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
+            [[ -s "${pidfile}" ]] && break
+            sleep 1
+          done
+          pid="$(cat "${pidfile}" 2> /dev/null || true)"
+          if [[ -z "${pid}" ]]; then
+            echo "the run never recorded a pid; ${log} so far:" >&2
+            cat "${log}" >&2
+            exit 1
+          fi
+
+          for ((i = 0; i < grace; i++)); do
+            kill -0 "${pid}" 2> /dev/null || break
+            sleep 1
+          done
+          if ! kill -0 "${pid}" 2> /dev/null; then
+            echo "npm run ${script} exited within ${grace}s of starting; ${log}:" >&2
+            cat "${log}" >&2
+            exit 1
+          fi
+
+          echo "npm run ${script} is running as $(id -un), pid ${pid}, logging to ${dir}/${log}"
+          echo "--- ${log} so far ---"
+          tail -n 30 "${log}"
+          echo "--- end ---"
+          echo "RUN_PID=${pid}"
+          echo "RUN_LOG=${dir}/${log}"
+          INNER
+          chmod 0755 "${kickoff}"
+          sudo -u '__SDK_USER__' -H bash -lc 'bash "$0" "$@"' "${kickoff}" '__SDK_DIR__' '__SDK_SCRIPT__' '__RUN_DAYS__' '__GRACE__'
+          REMOTE
+          HOST_SCRIPT="${HOST_SCRIPT//__SDK_USER__/${SDK_CHECKOUT_USER}}"
+          HOST_SCRIPT="${HOST_SCRIPT//__SDK_DIR__/${SDK_CHECKOUT_DIR}}"
+          HOST_SCRIPT="${HOST_SCRIPT//__SDK_SCRIPT__/${SDK_SCRIPT}}"
+          HOST_SCRIPT="${HOST_SCRIPT//__RUN_DAYS__/${RUN_DAYS}}"
+          HOST_SCRIPT="${HOST_SCRIPT//__GRACE__/${SDK_RUN_GRACE_SECONDS}}"
+
+          # --parameters as JSON built by jq, not the inline string the other steps use: this
+          # script is multi-line and full of quotes, and jq is what gets it there intact.
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "start SDK ${SDK_SCRIPT} for ${{ steps.run.outputs.image_tag }}" \
+            --parameters "$(jq -n --arg s "${HOST_SCRIPT}" '{commands: [$s]}')" \
+            --timeout-seconds 600 \
+            --query "Command.CommandId" --output text)
+          echo "SSM Command ID: $COMMAND_ID"
+          STATUS=Pending
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+              --query "Status" --output text)
+            echo "[$i/60] Status: $STATUS"
+            if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+              break
+            fi
+            sleep 10
+          done
+          STDOUT=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --query "StandardOutputContent" --output text)
+          STDERR=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --query "StandardErrorContent" --output text)
+          echo "--- host stdout ---"
+          echo "${STDOUT}"
+          if [[ -n "${STDERR}" && "${STDERR}" != "None" ]]; then
+            echo "--- host stderr ---"
+            echo "${STDERR}"
+          fi
+          if [[ "$STATUS" != "Success" ]]; then
+            echo "::error::the SDK run did not start (SSM status ${STATUS}). The stack IS deployed and accelerated, and its window is open: start the suite by hand on the host with 'cd ${SDK_CHECKOUT_DIR} && ITEST_BASE_URL=http://localhost:8080 ITEST_SECURITY_SERVICE_URL=http://localhost:8086 npm run ${SDK_SCRIPT}', or tear the stack down with an ordinary deploy."
+            exit 1
+          fi
+          {
+            echo "started=true"
+            echo "pid=$(sed -n 's/^RUN_PID=//p' <<< "${STDOUT}" | tail -n 1)"
+            echo "log=$(sed -n 's/^RUN_LOG=//p' <<< "${STDOUT}" | tail -n 1)"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Record the run
         if: always()
         # The run's identity. The SDK suite's journal refuses to resume a run whose realStart
         # differs from the one it recorded, so these values are what an operator copies into
         # the suite. Deliberately carries no credentials.
+        env:
+          SDK_RUN: ${{ inputs.sdk_run }}
+          SDK_OUTCOME: ${{ steps.sdk.outcome }}
+          SDK_PID: ${{ steps.sdk.outputs.pid }}
+          SDK_LOG: ${{ steps.sdk.outputs.log }}
         run: |
           {
             echo "## Alpha accelerated deployment"
@@ -294,6 +515,7 @@ jobs:
             echo "| \`POS_TIME_ACCELERATED_VIRTUAL_START\` | \`${{ steps.run.outputs.virtual_start }}\` |"
             echo "| Converges on wall time after | ~\`${{ steps.run.outputs.hours_to_converge }}\` real hours |"
             echo "| Requested by | @${{ github.actor }} |"
+            echo "| SDK run | \`${SDK_RUN}\` — \`${SDK_OUTCOME}\` |"
             echo
             echo "Virtual time is \`min(virtualStart + scale * elapsed, now)\`, so it closes the gap,"
             echo "then ticks at 1x forever. It never passes wall time, so the run cannot write"
@@ -304,6 +526,36 @@ jobs:
             echo "- \`GET /system/time\` on the gateway answers 200 with these anchors."
             echo "- Every non-accelerated integration run is blocked: their guard aborts on that 200."
             echo "- A config-only sync (\`Sync Alpha Config\`) keeps the clock; an ordinary deploy ends it."
+            echo
+            echo "### The SDK run"
+            echo
+            if [[ "${SDK_OUTCOME}" == "success" ]]; then
+              echo "\`npm run ${SDK_RUN}\` is running on the alpha host as \`${SDK_CHECKOUT_USER}\`, pid \`${SDK_PID}\`, from"
+              echo "\`${SDK_CHECKOUT_DIR}\`. It survived its own global setup; from here the suite's log says how"
+              echo "the run is going, not this workflow."
+              echo
+              echo '```'
+              echo "tail -f ${SDK_LOG}    # follow it (also accelerated-latest.log beside it)"
+              echo "kill -TERM -- -${SDK_PID}    # stop it; the suite releases its lock on SIGTERM"
+              echo '```'
+              echo
+              echo "It ends on its own when the clock converges. Nothing tears the stack down for it — see below."
+            elif [[ "${SDK_RUN}" == "none" ]]; then
+              echo "Not started (\`sdk_run=none\`). The stack is deployed for another consumer, or for a run started by hand:"
+              echo
+              echo '```'
+              echo "cd ${SDK_CHECKOUT_DIR} && ITEST_BASE_URL=http://localhost:8080 ITEST_SECURITY_SERVICE_URL=http://localhost:8086 npm run test:accelerated"
+              echo '```'
+            elif [[ "${SDK_OUTCOME}" == "skipped" ]]; then
+              echo "Not reached: the deploy or its verification failed before the hand-off."
+            else
+              echo "**\`npm run ${SDK_RUN}\` did not start** — its step log says why. The stack is deployed and its window is"
+              echo "open, so either start the suite by hand on the host or tear the stack down (below):"
+              echo
+              echo '```'
+              echo "cd ${SDK_CHECKOUT_DIR} && ITEST_BASE_URL=http://localhost:8080 ITEST_SECURITY_SERVICE_URL=http://localhost:8086 npm run ${SDK_RUN}"
+              echo '```'
+            fi
             echo
             echo "### Teardown"
             echo
