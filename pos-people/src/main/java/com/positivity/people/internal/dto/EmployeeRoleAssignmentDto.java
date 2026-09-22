@@ -39,7 +39,9 @@ public class EmployeeRoleAssignmentDto {
             requiredMode = Schema.RequiredMode.REQUIRED)
     String roleLocationScope;
 
-    @Schema(description = "When this assignment becomes or became effective", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "When this assignment becomes or became effective",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     LocalDateTime effectiveStartDate;
 
     @Schema(description = "Exclusive end of the effective window; null while open-ended", nullable = true)

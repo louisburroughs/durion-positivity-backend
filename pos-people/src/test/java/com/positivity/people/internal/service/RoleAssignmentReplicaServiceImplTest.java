@@ -66,7 +66,9 @@ class RoleAssignmentReplicaServiceImplTest {
 
         service.findActiveRoleAssignmentsByUsernames(Set.of("ada", "grace", "hedy"));
 
-        verify(repository).findActiveByUsernameIn(eq(Set.of("ada", "grace", "hedy")), eq(LocalDateTime.now(Clock.fixed(NOW, ZoneOffset.UTC))));
+        verify(repository)
+                .findActiveByUsernameIn(
+                        eq(Set.of("ada", "grace", "hedy")), eq(LocalDateTime.now(Clock.fixed(NOW, ZoneOffset.UTC))));
         verify(repository, never()).findById(any());
     }
 
@@ -75,8 +77,8 @@ class RoleAssignmentReplicaServiceImplTest {
     void groupsResultsByUsername() {
         UUID roleId = UUID.randomUUID();
         when(repository.findActiveByUsernameIn(any(), any()))
-                .thenReturn(List.of(
-                        assignment("ada", roleId, "SHOP_MANAGER"), assignment("grace", roleId, "TECHNICIAN")));
+                .thenReturn(
+                        List.of(assignment("ada", roleId, "SHOP_MANAGER"), assignment("grace", roleId, "TECHNICIAN")));
 
         Map<String, List<EmployeeRoleAssignmentDto>> result =
                 service.findActiveRoleAssignmentsByUsernames(Set.of("ada", "grace", "hedy"));
@@ -101,7 +103,8 @@ class RoleAssignmentReplicaServiceImplTest {
         Map<String, List<EmployeeRoleAssignmentDto>> result =
                 service.findActiveRoleAssignmentsByUsernames(Set.of("ada"));
 
-        assertThat(result.get("ada")).extracting(EmployeeRoleAssignmentDto::getRoleName)
+        assertThat(result.get("ada"))
+                .extracting(EmployeeRoleAssignmentDto::getRoleName)
                 .containsExactly("PARTS_COUNTER", "SHOP_MANAGER");
     }
 

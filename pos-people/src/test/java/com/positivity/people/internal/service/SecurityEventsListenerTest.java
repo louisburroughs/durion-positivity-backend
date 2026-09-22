@@ -84,13 +84,7 @@ class SecurityEventsListenerTest {
                    "effectiveStartDate":"2026-01-01T00:00:00","effectiveEndDate":null,
                    "revokedAt":%s,"tenantId":null}}
                 """.formatted(
-                eventId,
-                RoleAssignmentChangedV1.EVENT_TYPE,
-                version,
-                ASSIGNMENT_ID,
-                USER_ID,
-                ROLE_ID,
-                revokedAtJson);
+                eventId, RoleAssignmentChangedV1.EVENT_TYPE, version, ASSIGNMENT_ID, USER_ID, ROLE_ID, revokedAtJson);
     }
 
     private ExtRoleAssignmentReplica captureSaved() {
@@ -106,8 +100,7 @@ class SecurityEventsListenerTest {
         @Test
         @DisplayName("records a dedup row even for an event type this module does not consume")
         void ignoredTypeStillRecordsProcessedEvent() {
-            listener.onSecurityEvent(
-                    """
+            listener.onSecurityEvent("""
                     {"eventId":"evt-1","eventType":"security.something.else","payload":{}}""");
 
             // Opposite of the pos-order replica listeners on purpose: the owner's manifest counts
@@ -163,11 +156,9 @@ class SecurityEventsListenerTest {
         @Test
         @DisplayName("swallows a malformed payload but still records the event as seen")
         void malformedPayloadIsSwallowed() {
-            listener.onSecurityEvent(
-                    """
+            listener.onSecurityEvent("""
                     {"eventId":"evt-1","eventType":"%s","aggregateVersion":1,
-                     "payload":{"assignmentId":"not-a-uuid"}}"""
-                            .formatted(RoleAssignmentChangedV1.EVENT_TYPE));
+                     "payload":{"assignmentId":"not-a-uuid"}}""".formatted(RoleAssignmentChangedV1.EVENT_TYPE));
 
             // A poison message must not wedge the partition, and the manifest still counted it.
             verify(extRoleAssignmentReplicaRepository, never()).save(any());

@@ -27,20 +27,21 @@ import lombok.NoArgsConstructor;
 @Schema(description = "A page of employee search results, plus a status histogram over the q-filtered set")
 public class EmployeeSearchResponse {
 
-    @Schema(description = "Page of employee rows: q- and status-filtered, sorted, and windowed", requiredMode = REQUIRED)
+    @Schema(
+            description = "Page of employee rows: q- and status-filtered, sorted, and windowed",
+            requiredMode = REQUIRED)
     private PagedResponse<EmployeeSummaryDto> page;
 
     @Schema(
-            description =
-                    "Employee count per status, for the register's stat tiles. Computed over the q-filtered set "
-                            + "BEFORE the status filter, so a tile for a status the caller did not select still "
-                            + "shows what selecting it would return, and the counts sum to the q-filtered total "
-                            + "regardless of which statuses were requested — not to the (possibly smaller) "
-                            + "status-filtered page total. An employee with no status recorded (the column is "
-                            + "nullable; every create/update path requires one, so this is a defensive case rather "
-                            + "than an expected one) is still returned by the search but cannot be classified into "
-                            + "one of these buckets, so it is excluded here; the sum-to-total invariant holds "
-                            + "whenever every matching employee has a status.",
+            description = "Employee count per status, for the register's stat tiles. Computed over the q-filtered set "
+                    + "BEFORE the status filter, so a tile for a status the caller did not select still "
+                    + "shows what selecting it would return, and the counts sum to the q-filtered total "
+                    + "regardless of which statuses were requested — not to the (possibly smaller) "
+                    + "status-filtered page total. An employee with no status recorded (the column is "
+                    + "nullable; every create/update path requires one, so this is a defensive case rather "
+                    + "than an expected one) is still returned by the search but cannot be classified into "
+                    + "one of these buckets, so it is excluded here; the sum-to-total invariant holds "
+                    + "whenever every matching employee has a status.",
             requiredMode = REQUIRED)
     private Map<EmployeeStatus, Long> statusCounts;
 }
