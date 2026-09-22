@@ -27,6 +27,7 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.event.EstimateCreatedEvent;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
+import com.positivity.workorder.internal.exception.DocumentNumberConflictException;
 import com.positivity.workorder.internal.exception.EstimateIncompleteException;
 import com.positivity.workorder.internal.exception.EstimateItemNotFoundException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
@@ -57,6 +58,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -88,9 +90,11 @@ public class EstimateServiceImpl implements EstimateService {
     private final PartQuantityDivisibilityService partQuantityDivisibilityService;
     private final LaborTimeDefaultingService laborTimeDefaultingService;
     private final LaborRateDefaultingService laborRateDefaultingService;
+    private final DocumentNumberAllocator documentNumberAllocator;
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
+    private static final long ESTIMATE_NUMBER_SEQUENCE_START = 1000;
 
     // Tax category constants
     private static final String TAX_CATEGORY_GOODS = "GOODS";
@@ -302,7 +306,7 @@ public class EstimateServiceImpl implements EstimateService {
                                 : new ArrayList<>())
                 .build();
 
-        Estimate saved = estimateRepository.save(estimate);
+        Estimate saved = saveNumberedEstimate(estimate);
         estimateFactPublisher.markChanged(saved.getId());
 
         log.info(
@@ -351,22 +355,37 @@ public class EstimateServiceImpl implements EstimateService {
     }
 
     /**
-     * Generate a unique estimate number for a location
-     * Format: EST-YYYY-NNNN where YYYY is the year and NNNN is a sequential number
+     * Allocate the next estimate number for a location: EST-YYYY-NNNN, NNNN counting up from 1000
+     * per location and year. Drawn from the location's counter row under its lock (#2150), so two
+     * creates at the same location cannot pick the same number.
      */
     private String generateEstimateNumber(UUID locationId) {
         int year = Year.now(clock).getValue();
         String prefix = String.format("EST-%d-", year);
+        return documentNumberAllocator.allocate(
+                prefix + locationId,
+                prefix,
+                ESTIMATE_NUMBER_SEQUENCE_START,
+                candidate -> estimateRepository.existsByLocationIdAndEstimateNumber(locationId, candidate));
+    }
 
-        // Find the next available number
-        int sequence = 1000; // Start at 1000
-        String estimateNumber;
-        do {
-            estimateNumber = prefix + sequence;
-            sequence++;
-        } while (estimateRepository.existsByLocationIdAndEstimateNumber(locationId, estimateNumber));
-
-        return estimateNumber;
+    /**
+     * Insert a new estimate and flush, so a collision on its number surfaces here as a typed 409
+     * rather than escaping untranslated at commit as a 500 (#2150).
+     */
+    private Estimate saveNumberedEstimate(Estimate estimate) {
+        Estimate saved = estimateRepository.save(estimate);
+        try {
+            estimateRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            if (DocumentNumberConflictException.isViolationOf(
+                    e, DocumentNumberConflictException.ESTIMATE_NUMBER_CONSTRAINT)) {
+                throw new DocumentNumberConflictException(
+                        "Estimate number " + estimate.getEstimateNumber() + " was taken concurrently; retry", e);
+            }
+            throw e;
+        }
+        return saved;
     }
 
     @Override

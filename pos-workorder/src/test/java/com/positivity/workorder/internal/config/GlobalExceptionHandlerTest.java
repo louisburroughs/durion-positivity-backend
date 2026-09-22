@@ -11,6 +11,7 @@ import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException
 import com.positivity.workorder.internal.exception.ChangeRequestNotFoundException;
 import com.positivity.workorder.internal.exception.CustomerApprovalInvalidException;
 import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
+import com.positivity.workorder.internal.exception.DocumentNumberConflictException;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
 import com.positivity.workorder.internal.exception.EstimateIncompleteException;
 import com.positivity.workorder.internal.exception.EstimateItemNotFoundException;
@@ -62,6 +63,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -172,6 +175,12 @@ class GlobalExceptionHandlerTest {
                                     UomConversionUndefinedException.noConversionRow(SOME_ID, "EA"), request)),
                     Named.of("handleEstimateNotFound", (HandlerInvocation)
                             request -> handler.handleEstimateNotFound(new EstimateNotFoundException(SOME_ID), request)),
+                    Named.of("handleDocumentNumberConflict", (HandlerInvocation)
+                            request -> handler.handleDocumentNumberConflict(
+                                    new DocumentNumberConflictException(
+                                            "Estimate number EST-2026-1000 was taken concurrently; retry",
+                                            new DataIntegrityViolationException("duplicate key")),
+                                    request)),
                     Named.of("handleCustomerRequirementsNotMet", (HandlerInvocation)
                             request -> handler.handleCustomerRequirementsNotMet(
                                     CustomerRequirementsNotMetException.requirementsNotMet(SOME_ID), request)),
@@ -381,6 +390,37 @@ class GlobalExceptionHandlerTest {
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().code()).isEqualTo("INTERNAL_ERROR");
             assertThat(response.getBody().message()).doesNotContain(SOME_ID.toString());
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // DocumentNumberConflictException (#2150)
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("DocumentNumberConflictException (#2150)")
+    class DocumentNumberConflict {
+
+        private final GlobalExceptionHandler handler =
+                new GlobalExceptionHandler(XCorrelationIdHeader.fixedClockProviderForTests());
+
+        @Test
+        @DisplayName("a lost number race is a retryable 409 with its own code, not a 500")
+        void lostNumberRaceIsARetryableConflict() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.setRequestURI("/v1/workorders/estimates");
+
+            ResponseEntity<ApiError> response = handler.handleDocumentNumberConflict(
+                    new DocumentNumberConflictException(
+                            "Estimate number EST-2026-1000 was taken concurrently; retry",
+                            new DataIntegrityViolationException("duplicate key")),
+                    request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("1");
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("DOCUMENT_NUMBER_CONFLICT");
+            assertThat(response.getBody().status()).isEqualTo(409);
         }
     }
 }

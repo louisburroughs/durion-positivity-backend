@@ -1,11 +1,15 @@
 package com.positivity.workorder.internal.service;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,6 +21,7 @@ import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.entity.ApprovalConfiguration;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.exception.DocumentNumberConflictException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -36,6 +41,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -71,6 +77,9 @@ class EstimateServiceTest {
 
     @Mock
     private com.positivity.workorder.internal.service.EstimateFactPublisher estimateFactPublisher;
+
+    @Mock
+    private DocumentNumberAllocator documentNumberAllocator;
 
     @InjectMocks
     private EstimateServiceImpl estimateService;
@@ -169,6 +178,8 @@ class EstimateServiceTest {
                 .createdAt(Instant.now(TEST_CLOCK))
                 .build();
 
+        when(documentNumberAllocator.allocate(anyString(), anyString(), anyLong(), any()))
+                .thenAnswer(inv -> inv.getArgument(1) + String.valueOf((long) inv.getArgument(2)));
         when(estimateRepository.save(any(Estimate.class))).thenReturn(savedEstimate);
 
         // When
@@ -265,8 +276,39 @@ class EstimateServiceTest {
     }
 
     @Test
+    void testCreateEstimate_NumberCollisionOnInsertIsATypedConflict() {
+        when(documentNumberAllocator.allocate(anyString(), anyString(), anyLong(), any()))
+                .thenReturn("EST-2026-1000");
+        when(estimateRepository.save(any(Estimate.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doThrow(new DataIntegrityViolationException(
+                        "could not execute statement [ERROR: duplicate key value violates unique constraint"
+                                + " \"estimate_location_id_estimate_number_key\"]"))
+                .when(estimateRepository)
+                .flush();
+
+        assertThatThrownBy(() -> estimateService.createEstimate(validRequest, testUserId.toString()))
+                .isInstanceOf(DocumentNumberConflictException.class)
+                .hasMessageContaining("EST-2026-1000");
+    }
+
+    @Test
+    void testCreateEstimate_OtherIntegrityViolationIsNotReportedAsANumberCollision() {
+        when(documentNumberAllocator.allocate(anyString(), anyString(), anyLong(), any()))
+                .thenReturn("EST-2026-1000");
+        when(estimateRepository.save(any(Estimate.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doThrow(new DataIntegrityViolationException("violates foreign key constraint \"estimate_approval_fkey\""))
+                .when(estimateRepository)
+                .flush();
+
+        assertThatThrownBy(() -> estimateService.createEstimate(validRequest, testUserId.toString()))
+                .isExactlyInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void testCreateEstimate_GeneratesUniqueEstimateNumber() {
         // Given
+        when(documentNumberAllocator.allocate(anyString(), anyString(), anyLong(), any()))
+                .thenAnswer(inv -> inv.getArgument(1) + String.valueOf((long) inv.getArgument(2)));
         when(estimateRepository.save(any(Estimate.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -278,6 +320,10 @@ class EstimateServiceTest {
         assertTrue(
                 result.getEstimateNumber().matches("EST-\\d{4}-\\d+"),
                 "Estimate number should match pattern EST-YYYY-NNNN");
+
+        // Drawn from the location's own counter (#2150): scope EST-YYYY-<locationId>, first number 1000.
+        String prefix = result.getEstimateNumber().substring(0, "EST-YYYY-".length());
+        verify(documentNumberAllocator).allocate(eq(prefix + result.getLocationId()), eq(prefix), eq(1000L), any());
     }
 
     @Test

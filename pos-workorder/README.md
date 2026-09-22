@@ -517,6 +517,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `TRAVEL_SEGMENT_NOT_FOUND` | 404 | Travel segment does not exist |
 | `SUBSTITUTE_LINK_NOT_FOUND` | 404 | Part-substitution link does not exist |
 | `CONFLICT` | 409 | Generic stateful collision: invalid lifecycle transition, a caller-supplied id that does not match the resource it targets, an operation that would exceed a quantity the resource's current state actually has available, or a work-session overlap, state or lock violation (`WorkorderResourceConflictException`, `IllegalStateException`, the work-session exceptions); also the generic code for any 409 `ResponseStatusException` whose reason is free text |
+| `DOCUMENT_NUMBER_CONFLICT` | 409 | An estimate or workorder create lost a race for its number: the insert failed the number's unique constraint (#2150). Carries `Retry-After: 1`; re-sending the same request succeeds because the retry draws a new number. Numbers come from a locked counter row per scope (`document_number_sequence`), so this is a residual case, not the normal path |
 | `INVALID_STATE` | 409 | Time tracking: the workorder or its item is not in a state that accepts the timer operation; promotion: the estimate's state does not allow promotion |
 | `WORKEXEC_CONFLICT_WORKORDER_STATE` | 409 | Time tracking refused because of the workorder's status |
 | `TIMER_ALREADY_ACTIVE` | 409 | The technician already has an active timer |
@@ -622,6 +623,14 @@ the existing `FlywayMigrationIT` on the same strict `pg` profile.
 Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`: `V1__baseline_workorder.sql` (the
 2026-09-09 flattened baseline with the tenancy schema on every scoped table) and `V2__event_outbox_tenant_id.sql`
 (`tenant_id` as data on the global outbox table, see Multitenancy below).
+
+Estimate and workorder numbers (#2150) come from `document_number_sequence` (`V6`), one counter row per
+scope: `EST-{year}-{locationId}` for estimates, `WO-{year}` for workorders. `DocumentNumberAllocator`
+reads the row `FOR UPDATE` and advances it in the transaction that inserts the numbered row, so concurrent
+creates in one scope wait on the lock instead of probing for a free number and colliding. A scope's row
+is created on first use at 1000; the first allocation skips numbers issued before the counter existed.
+Estimates seeded from an appointment (`createEstimateFromAppointment`) are created without a number, as they
+were before the counter; only `createEstimate` assigns one.
 
 ## Development
 

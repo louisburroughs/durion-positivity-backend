@@ -177,7 +177,8 @@ class PartQuantityStrandingRegressionTest {
                 promotionValidationService,
                 peopleAvailabilityLocalService,
                 fleetAuthorizationService,
-                divisibility);
+                divisibility,
+                org.mockito.Mockito.mock(DocumentNumberAllocator.class));
 
         when(publisherProvider.getIfAvailable()).thenReturn(inventoryCommandPublisher);
         partUsageService = new WorkorderPartUsageServiceImpl(

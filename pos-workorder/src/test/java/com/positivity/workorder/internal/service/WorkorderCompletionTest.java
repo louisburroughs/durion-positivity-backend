@@ -187,7 +187,8 @@ class WorkorderCompletionTest {
                 peopleAvailabilityLocalService,
                 org.mockito.Mockito.mock(com.positivity.workorder.internal.service.FleetAuthorizationService.class),
                 org.mockito.Mockito.mock(
-                        com.positivity.workorder.internal.service.PartQuantityDivisibilityService.class));
+                        com.positivity.workorder.internal.service.PartQuantityDivisibilityService.class),
+                org.mockito.Mockito.mock(DocumentNumberAllocator.class));
     }
 
     @AfterEach
