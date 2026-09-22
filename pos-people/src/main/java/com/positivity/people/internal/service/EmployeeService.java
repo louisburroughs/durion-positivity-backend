@@ -3,6 +3,7 @@ package com.positivity.people.internal.service;
 import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
+import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.EmployeeSearchResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
@@ -33,6 +34,18 @@ public interface EmployeeService {
 
     @NonNull
     EmployeeProfileDto disableEmployee(@NonNull UUID employeeId, @NonNull DisableEmployeeRequestDto request);
+
+    /**
+     * Reactivate a DISABLED employee to ACTIVE (DECISION-PEOPLE-001's explicit DISABLED -&gt;
+     * ACTIVE transition, the inverse of {@link #disableEmployee}). Guarded by the same {@code
+     * updatedAt} concurrency token the profile already exposes (DECISION-PEOPLE-017); a mismatch,
+     * a TERMINATED employee, an ON_LEAVE or SUSPENDED employee, or an already-ACTIVE employee all
+     * raise {@link com.positivity.people.internal.exception.ResourceStateConflictException}
+     * (409). Staffing assignments are left untouched — reactivation does not resurrect
+     * assignments {@link #disableEmployee} ended.
+     */
+    @NonNull
+    EmployeeProfileDto enableEmployee(@NonNull UUID employeeId, @NonNull EnableEmployeeRequestDto request);
 
     /**
      * Case-insensitive substring search across employee names (first, last, preferred, from the

@@ -10,6 +10,7 @@ import com.positivity.people.internal.dto.EmployeeJobRoleDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.EmployeeSearchResponse;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
+import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
@@ -244,6 +245,61 @@ public class EmployeeServiceImpl implements EmployeeService {
             queueOffboardingRetry(employeeId, request, actorId, exception.getMessage());
         }
 
+        ExtPersonReplica person =
+                extPersonReplicaRepository.findById(employeeId).orElse(null);
+        return profileFromReplica(employeeId, person, savedEmployee, List.of());
+    }
+
+    @Override
+    @Transactional
+    public @NonNull EmployeeProfileDto enableEmployee(@NonNull UUID employeeId, @NonNull EnableEmployeeRequestDto request) {
+        Employee employee = employeeRepository
+                .findByPersonId(employeeId)
+                .orElseThrow(() -> new PersonNotFoundException(employeeId));
+
+        // Stateful collisions, not request-shape validation (ADR-0017 §2: 409) — same reasoning
+        // as disableEmployee's guards above: the request is well-formed, but the employee's
+        // current status blocks this transition. Bare IllegalStateException is not used for the
+        // same reason given there (see ResourceStateConflictException's javadoc, #1694).
+        EmployeeStatus currentStatus = employee.getStatus();
+        if (currentStatus == EmployeeStatus.TERMINATED) {
+            // DECISION-PEOPLE-001: TERMINATED is the irreversible terminal state. DISABLED is the
+            // only state this endpoint reverses.
+            throw new ResourceStateConflictException("Employee is TERMINATED; termination cannot be reversed");
+        }
+        if (currentStatus == EmployeeStatus.ON_LEAVE || currentStatus == EmployeeStatus.SUSPENDED) {
+            // Both carry an effective date and a reason a bare activate/deactivate switch cannot
+            // collect; updateEmployee is the full-profile path that can record them.
+            throw new ResourceStateConflictException(
+                    "Employee is " + currentStatus
+                            + "; use updateEmployee to change status, which can record the required"
+                            + " effective date and reason");
+        }
+        if (currentStatus != EmployeeStatus.DISABLED) {
+            // Covers ACTIVE (already active — nothing to reactivate) and any status this method
+            // does not yet special-case; only a DISABLED employee proceeds past this guard.
+            throw new ResourceStateConflictException("Only DISABLED employees can be enabled");
+        }
+
+        // Optimistic concurrency (DECISION-PEOPLE-017, as amended): reuse the profile's existing
+        // updatedAt as the token rather than adding a second timestamp field. A caller submits
+        // back the value it last read; a mismatch means the record moved since then (e.g. another
+        // admin already reactivated or edited it) and must not be silently overwritten.
+        if (!Objects.equals(employee.getUpdatedAt(), request.getUpdatedAt())) {
+            throw new ResourceStateConflictException(
+                    "Employee has changed since it was last read (updatedAt no longer matches); reload and retry");
+        }
+
+        employee.setStatus(EmployeeStatus.ACTIVE);
+        employee.setStatusEffectiveAt(Instant.now(clock));
+        Employee savedEmployee = employeeRepository.save(employee);
+        peopleEventPublisher.publishEmployeeUpdated(savedEmployee);
+
+        // No assignment-policy counterpart here by design: disableEmployee's offboarding ends or
+        // grace-periods staffing assignments, but reactivation must not silently resurrect
+        // assignments that were deliberately ended — that would restore staffing eligibility the
+        // shop never asked for. Any assignment the employee needs after reactivation is created
+        // fresh through the staffing-assignment endpoints.
         ExtPersonReplica person =
                 extPersonReplicaRepository.findById(employeeId).orElse(null);
         return profileFromReplica(employeeId, person, savedEmployee, List.of());

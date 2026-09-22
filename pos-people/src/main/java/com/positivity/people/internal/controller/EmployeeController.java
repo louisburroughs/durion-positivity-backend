@@ -6,6 +6,7 @@ import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.EmployeeSearchResponse;
+import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.NotFoundException;
@@ -341,5 +342,69 @@ public class EmployeeController {
                     DisableEmployeeRequestDto request) {
         DisableEmployeeRequestDto resolved = request != null ? request : new DisableEmployeeRequestDto();
         return ResponseEntity.ok(employeeService.disableEmployee(employeeId, resolved));
+    }
+
+    @PostMapping("/{employeeId}/enable")
+    @EmitEvent(id = "PEOPLE_EMPLOYEE_ENABLE", apiVersion = "1")
+    @Operation(
+            operationId = "enableEmployee",
+            summary = "Enable A Disabled Employee",
+            description = """
+                    Reactivates a DISABLED employee, setting status ACTIVE with a fresh statusEffectiveAt. This is \
+                    the explicit DISABLED -> ACTIVE transition DECISION-PEOPLE-001 calls for, and the direct \
+                    inverse of disableEmployee: staffing assignments are left exactly as disableEmployee's \
+                    offboarding policy left them, never silently resurrected.
+                    Use this tool to bring a DISABLED employee back to ACTIVE; do not use updateEmployee to force \
+                    the status field, which is gated on the broader profile-edit permission rather than this \
+                    activation permission and runs no confirmation semantics, and do not use this tool for \
+                    ON_LEAVE or SUSPENDED employees, which carry dates and a reason that only updateEmployee \
+                    collects.
+                    Preconditions: the employee must exist and currently be DISABLED; TERMINATED is rejected as \
+                    irreversible, ACTIVE is rejected as already active, and ON_LEAVE or SUSPENDED are rejected in \
+                    favor of updateEmployee.
+                    Required inputs: employeeId (UUID) path parameter; the request body is required and carries \
+                    updatedAt, the concurrency token also returned as EmployeeProfileDto.updatedAt — submit back \
+                    the value most recently read for this employee so a change made in the meantime is caught \
+                    rather than silently overwritten.
+                    Emits a PEOPLE_EMPLOYEE_ENABLE event and publishes a people.employee.updated fact, so the \
+                    downstream replicas disableEmployee notified converge back to ACTIVE without a manual replay.
+                    Returns 404 when the employee does not exist, and 409 when the employee is TERMINATED \
+                    (irreversible), ON_LEAVE or SUSPENDED (use updateEmployee instead), already ACTIVE, or when \
+                    the submitted updatedAt no longer matches the employee's current value.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Employee enabled")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Employee not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Employee is not currently DISABLED, or the concurrency token is stale",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:employee:activation"})
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_ACTIVATION + "')")
+    public ResponseEntity<EmployeeProfileDto> enableEmployee(
+            @PathVariable UUID employeeId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Concurrency token guarding the reactivation: the updatedAt value most"
+                                    + " recently read for this employee.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Reactivate with last-known updatedAt",
+                                                            value =
+                                                                    """
+                                                                    {"updatedAt":"2026-02-01T14:05:00Z"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    EnableEmployeeRequestDto request) {
+        return ResponseEntity.ok(employeeService.enableEmployee(employeeId, request));
     }
 }

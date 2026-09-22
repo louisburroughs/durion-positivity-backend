@@ -39,7 +39,7 @@ public final class EventTypes {
                 EventTypeRegistration.write("PEOPLE_STAFFING_ASSIGNMENT_END", "End a staffing assignment")
                         .build(),
 
-                // EmployeeController - 5 events
+                // EmployeeController - 6 events
                 EventTypeRegistration.write("PEOPLE_EMPLOYEE_CREATE", "Create employee profile")
                         .build(),
                 EventTypeRegistration.fastRead("PEOPLE_EMPLOYEE_GET", "Get employee profile")
@@ -47,6 +47,8 @@ public final class EventTypes {
                 EventTypeRegistration.write("PEOPLE_EMPLOYEE_UPDATE", "Update employee profile")
                         .build(),
                 EventTypeRegistration.write("PEOPLE_EMPLOYEE_DISABLE", "Disable employee profile")
+                        .build(),
+                EventTypeRegistration.write("PEOPLE_EMPLOYEE_ENABLE", "Enable (reactivate) employee profile")
                         .build(),
                 EventTypeRegistration.search(
                                 "PEOPLE_EMPLOYEE_SEARCH",

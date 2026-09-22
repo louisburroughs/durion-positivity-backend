@@ -16,6 +16,7 @@ import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
+import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
@@ -727,6 +728,113 @@ class EmployeeServiceImplTest {
             assertThatThrownBy(() -> service.disableEmployee(PERSON_ID, request))
                     .isInstanceOf(ResourceStateConflictException.class)
                     .hasMessageContaining("Only ACTIVE employees can be disabled");
+        }
+    }
+
+    @Nested
+    @DisplayName("enableEmployee")
+    class EnableEmployee {
+
+        private static final Instant CURRENT_UPDATED_AT = Instant.parse("2026-02-15T10:00:00Z");
+
+        private Employee employeeWithUpdatedAt(EmployeeStatus status, Instant updatedAt) {
+            return Employee.builder()
+                    .id(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4aaa"))
+                    .personId(PERSON_ID)
+                    .employeeNumber("EMP-0001")
+                    .status(status)
+                    .hireDate(LocalDate.of(2026, 1, 15))
+                    .statusEffectiveAt(Instant.parse("2026-01-15T00:00:00Z"))
+                    .updatedAt(updatedAt)
+                    .build();
+        }
+
+        private EnableEmployeeRequestDto enableRequest(Instant updatedAt) {
+            EnableEmployeeRequestDto request = new EnableEmployeeRequestDto();
+            request.setUpdatedAt(updatedAt);
+            return request;
+        }
+
+        @Test
+        void movesADisabledEmployeeToActiveAndPublishesTheFact() {
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.DISABLED, CURRENT_UPDATED_AT)));
+            when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.of(replica()));
+
+            EmployeeProfileDto profile = service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT));
+
+            ArgumentCaptor<Employee> saved = ArgumentCaptor.forClass(Employee.class);
+            verify(employeeRepository).save(saved.capture());
+            assertThat(saved.getValue().getStatus()).isEqualTo(EmployeeStatus.ACTIVE);
+            assertThat(saved.getValue().getStatusEffectiveAt()).isEqualTo(NOW);
+            verify(peopleEventPublisher).publishEmployeeUpdated(saved.getValue());
+            assertThat(profile.getStatus()).isEqualTo(EmployeeStatus.ACTIVE);
+            assertThat(profile.getFirstName()).isEqualTo("Jane");
+        }
+
+        @Test
+        void failsWhenTheEmployeeDoesNotExist() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT)))
+                    .isInstanceOf(PersonNotFoundException.class);
+        }
+
+        @Test
+        void rejectsATerminatedEmployee() {
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.TERMINATED, CURRENT_UPDATED_AT)));
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT)))
+                    .isInstanceOf(ResourceStateConflictException.class)
+                    .hasMessageContaining("TERMINATED");
+            verify(employeeRepository, never()).save(any());
+        }
+
+        @Test
+        void rejectsAnOnLeaveEmployeePointingAtTheProfileUpdate() {
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.ON_LEAVE, CURRENT_UPDATED_AT)));
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT)))
+                    .isInstanceOf(ResourceStateConflictException.class)
+                    .hasMessageContaining("updateEmployee");
+            verify(employeeRepository, never()).save(any());
+        }
+
+        @Test
+        void rejectsASuspendedEmployeePointingAtTheProfileUpdate() {
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.SUSPENDED, CURRENT_UPDATED_AT)));
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT)))
+                    .isInstanceOf(ResourceStateConflictException.class)
+                    .hasMessageContaining("updateEmployee");
+            verify(employeeRepository, never()).save(any());
+        }
+
+        @Test
+        void rejectsAnAlreadyActiveEmployee() {
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.ACTIVE, CURRENT_UPDATED_AT)));
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT)))
+                    .isInstanceOf(ResourceStateConflictException.class)
+                    .hasMessageContaining("Only DISABLED employees can be enabled");
+            verify(employeeRepository, never()).save(any());
+        }
+
+        @Test
+        void rejectsAStaleConcurrencyToken() {
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.DISABLED, CURRENT_UPDATED_AT)));
+
+            Instant staleToken = CURRENT_UPDATED_AT.minusSeconds(60);
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(staleToken)))
+                    .isInstanceOf(ResourceStateConflictException.class)
+                    .hasMessageContaining("updatedAt");
+            verify(employeeRepository, never()).save(any());
         }
     }
 

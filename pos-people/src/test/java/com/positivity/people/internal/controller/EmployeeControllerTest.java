@@ -1,8 +1,10 @@
 package com.positivity.people.internal.controller;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -16,6 +18,7 @@ import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.RequestValidationException;
+import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.service.EmployeeService;
 import java.time.Clock;
 import java.time.Instant;
@@ -31,6 +34,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -256,6 +260,54 @@ class EmployeeControllerTest {
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"))
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    // ─── POST /v1/people/employees/{employeeId}/enable — the DISABLED -> ACTIVE return edge ─
+
+    @Test
+    void enableEmployee_returnsOk_whenCallerHoldsTheActivationPermission() throws Exception {
+        EmployeeProfileDto activated = profile();
+        activated.setStatus(EmployeeStatus.ACTIVE);
+        when(employeeService.enableEmployee(eq(EMPLOYEE_ID), any())).thenReturn(activated);
+
+        mockMvc.perform(post("/v1/people/employees/{employeeId}/enable", EMPLOYEE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"updatedAt\":\"2026-02-01T14:05:00Z\"}")
+                        .header("X-Authorities", "people:employee:activation"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    void enableEmployee_returnsForbidden_whenCallerLacksTheActivationPermission() throws Exception {
+        // people:employee:edit is the profile-edit permission, deliberately distinct from
+        // people:employee:activation — an editor must not be able to silently restore sign-in.
+        mockMvc.perform(post("/v1/people/employees/{employeeId}/enable", EMPLOYEE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"updatedAt\":\"2026-02-01T14:05:00Z\"}")
+                        .header("X-Authorities", "people:employee:edit"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void enableEmployee_returnsConflict_whenTheServiceRejectsTheStateTransition() throws Exception {
+        when(employeeService.enableEmployee(eq(EMPLOYEE_ID), any()))
+                .thenThrow(new ResourceStateConflictException("Only DISABLED employees can be enabled"));
+
+        mockMvc.perform(post("/v1/people/employees/{employeeId}/enable", EMPLOYEE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"updatedAt\":\"2026-02-01T14:05:00Z\"}")
+                        .header("X-Authorities", "people:employee:activation"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void enableEmployee_rejectsAMissingConcurrencyToken() throws Exception {
+        mockMvc.perform(post("/v1/people/employees/{employeeId}/enable", EMPLOYEE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                        .header("X-Authorities", "people:employee:activation"))
+                .andExpect(status().isBadRequest());
     }
 
     /**
