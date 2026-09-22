@@ -82,11 +82,16 @@ class CycleCountApprovalGrantsTest {
     }
 
     @Test
-    @DisplayName("the manager who runs a location's counts may approve the write-off")
-    void locationManagerMayApproveAnAdjustment() {
+    @DisplayName("the manager who runs a location's counts may approve the write-off, and may not raise it")
+    void locationManagerMayApproveAnAdjustmentButNotCreateOne() {
         // The direct #2149 pin. LOCATION_MANAGER is the role diana.rowe holds
         // (scripts/fixtures/seed/alpha/security/users.csv).
         assertThat(grants.get("LOCATION_MANAGER")).contains(ADJUSTMENT_APPROVE);
+
+        // Both halves of the separation, pinned on the role this issue widened rather than only on
+        // the clerk's side below: handing the approver `create` would let one person raise a
+        // write-off and post it, which is the property #2149's fix must not buy back.
+        assertThat(grants.get("LOCATION_MANAGER")).doesNotContain(ADJUSTMENT_CREATE);
     }
 
     @Test
