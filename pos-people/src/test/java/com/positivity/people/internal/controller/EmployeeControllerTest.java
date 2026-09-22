@@ -11,15 +11,18 @@ import com.positivity.people.internal.dto.EmployeeAddressDto;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.EmployeeEmergencyContactDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
+import com.positivity.people.internal.dto.EmployeeSearchResponse;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.service.EmployeeService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -102,25 +105,50 @@ class EmployeeControllerTest {
     @Test
     void searchEmployees_returnsOkWithMatchingResults_whenCallerHoldsThePermission() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
-        when(employeeService.searchEmployees(eq("smith"), eq(0), eq(20))).thenReturn(page);
+        EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
+        when(employeeService.searchEmployees(eq("smith"), eq(null), eq("lastName,asc"), eq(0), eq(20)))
+                .thenReturn(response);
 
         mockMvc.perform(get("/v1/people/employees").param("q", "smith").header("X-Authorities", "people:employee:view"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].employeeNumber").value("EMP-0001"))
-                .andExpect(jsonPath("$.items[0].firstName").value("Jane"))
-                .andExpect(jsonPath("$.totalElements").value(1))
-                .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(20));
+                .andExpect(jsonPath("$.page.items[0].employeeNumber").value("EMP-0001"))
+                .andExpect(jsonPath("$.page.items[0].firstName").value("Jane"))
+                .andExpect(jsonPath("$.page.totalElements").value(1))
+                .andExpect(jsonPath("$.page.page").value(0))
+                .andExpect(jsonPath("$.page.size").value(20))
+                .andExpect(jsonPath("$.statusCounts.ACTIVE").value(1));
     }
 
     @Test
     void searchEmployees_appliesDefaultPagingWhenOmitted() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(), 0, 20, 0, 0);
-        when(employeeService.searchEmployees(eq(null), eq(0), eq(20))).thenReturn(page);
+        EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of());
+        when(employeeService.searchEmployees(eq(null), eq(null), eq("lastName,asc"), eq(0), eq(20)))
+                .thenReturn(response);
 
         mockMvc.perform(get("/v1/people/employees").header("X-Authorities", "people:employee:view"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items").isEmpty());
+                .andExpect(jsonPath("$.page.items").isEmpty());
+    }
+
+    @Test
+    void searchEmployees_passesRepeatedStatusParamsAndAnExplicitSortThrough() throws Exception {
+        PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
+        EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
+        when(employeeService.searchEmployees(
+                        eq(null),
+                        eq(List.of(EmployeeStatus.ACTIVE, EmployeeStatus.DISABLED)),
+                        eq("lastName,desc"),
+                        eq(0),
+                        eq(20)))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/v1/people/employees")
+                        .param("status", "ACTIVE", "DISABLED")
+                        .param("sort", "lastName,desc")
+                        .header("X-Authorities", "people:employee:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.items[0].employeeNumber").value("EMP-0001"));
     }
 
     @Test
@@ -140,6 +168,17 @@ class EmployeeControllerTest {
     @Test
     void searchEmployees_rejectsANegativePage() throws Exception {
         mockMvc.perform(get("/v1/people/employees").param("page", "-1").header("X-Authorities", "people:employee:view"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void searchEmployees_rejectsAnUnsupportedSortField() throws Exception {
+        when(employeeService.searchEmployees(eq(null), eq(null), eq("employeeNumber,asc"), eq(0), eq(20)))
+                .thenThrow(new RequestValidationException("Unsupported sort field: 'employeeNumber'"));
+
+        mockMvc.perform(get("/v1/people/employees")
+                        .param("sort", "employeeNumber,asc")
+                        .header("X-Authorities", "people:employee:view"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -193,14 +232,16 @@ class EmployeeControllerTest {
     @Test
     void searchEmployees_stillSucceeds_forTheTechnicianAuthoritiesDeniedTheProfile() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
-        when(employeeService.searchEmployees(eq("smith"), eq(0), eq(20))).thenReturn(page);
+        EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
+        when(employeeService.searchEmployees(eq("smith"), eq(null), eq("lastName,asc"), eq(0), eq(20)))
+                .thenReturn(response);
 
         mockMvc.perform(get("/v1/people/employees").param("q", "smith").header("X-Authorities", TECHNICIAN_AUTHORITIES))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].employeeNumber").value("EMP-0001"))
+                .andExpect(jsonPath("$.page.items[0].employeeNumber").value("EMP-0001"))
                 // the summary row carries no contact block at all, which is why it can stay on the
                 // permission every staff role holds
-                .andExpect(jsonPath("$.items[0].contactInfo").doesNotExist());
+                .andExpect(jsonPath("$.page.items[0].contactInfo").doesNotExist());
     }
 
     // ─── GET /v1/people/employees/by-number/{employeeNumber} — 404 envelope (#1720) ─

@@ -27,6 +27,7 @@ import com.positivity.people.internal.enums.DuplicatePolicy;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
@@ -37,7 +38,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -765,11 +768,49 @@ class EmployeeServiceImplTest {
                             replicaRow(DOE_PERSON_ID, "John", "Doe", null)));
         }
 
+        /**
+         * Ten employees, lastName Adams..Jones alphabetically, with DISABLED employees scattered
+         * at non-adjacent positions (Baker, Davis, Foster, Hale — 2nd, 4th, 6th, 8th) rather than
+         * bunched at the front or back. A dataset this shape is what makes the #2158 regression
+         * visible: filtering only the current page (the bug) would return whichever disabled
+         * rows happened to land on that page, not the whole disabled population, and would look
+         * "kind of right" on a front-loaded or back-loaded fixture. The ordering also spans more
+         * than one page at every size used below (2, 3, or 5), which is what a sort or filter
+         * bug that "restarts" per page needs to be caught.
+         */
+        private void givenALargeDirectory() {
+            String[] lastNames = {
+                "Adams", "Baker", "Cole", "Davis", "Evans", "Foster", "Grant", "Hale", "Irwin", "Jones"
+            };
+            EmployeeStatus[] statuses = {
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.DISABLED,
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.DISABLED,
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.DISABLED,
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.DISABLED,
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.ACTIVE
+            };
+            List<Employee> employees = new ArrayList<>();
+            List<ExtPersonReplica> replicas = new ArrayList<>();
+            for (int i = 0; i < lastNames.length; i++) {
+                UUID personId = UUID.randomUUID();
+                employees.add(employeeRow(personId, "EMP-1%03d".formatted(i), statuses[i]));
+                replicas.add(replicaRow(personId, "First" + i, lastNames[i], null));
+            }
+            when(employeeRepository.findAll()).thenReturn(employees);
+            when(extPersonReplicaRepository.findByPersonIdIn(any())).thenReturn(replicas);
+        }
+
         @Test
         void aBlankQueryListsEveryEmployee() {
             givenTheDirectory();
 
-            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees("  ", 0, 20);
+            PagedResponse<EmployeeSummaryDto> page =
+                    service.searchEmployees("  ", null, null, 0, 20).getPage();
 
             assertThat(page.items()).hasSize(3);
             assertThat(page.totalElements()).isEqualTo(3);
@@ -780,15 +821,19 @@ class EmployeeServiceImplTest {
         void aNullQueryListsEveryEmployee() {
             givenTheDirectory();
 
-            assertThat(service.searchEmployees(null, 0, 20).items()).hasSize(3);
+            assertThat(service.searchEmployees(null, null, null, 0, 20)
+                            .getPage()
+                            .items())
+                    .hasSize(3);
         }
 
         @Test
         void matchesByLastName() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results =
-                    service.searchEmployees("smith", 0, 20).items();
+            List<EmployeeSummaryDto> results = service.searchEmployees("smith", null, null, 0, 20)
+                    .getPage()
+                    .items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -799,8 +844,9 @@ class EmployeeServiceImplTest {
         void matchesByPreferredName() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results =
-                    service.searchEmployees("Janie", 0, 20).items();
+            List<EmployeeSummaryDto> results = service.searchEmployees("Janie", null, null, 0, 20)
+                    .getPage()
+                    .items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -811,8 +857,9 @@ class EmployeeServiceImplTest {
         void matchesByEmployeeNumber() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results =
-                    service.searchEmployees("0002", 0, 20).items();
+            List<EmployeeSummaryDto> results = service.searchEmployees("0002", null, null, 0, 20)
+                    .getPage()
+                    .items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -823,8 +870,9 @@ class EmployeeServiceImplTest {
         void matchingIsCaseInsensitive() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results =
-                    service.searchEmployees("DOE", 0, 20).items();
+            List<EmployeeSummaryDto> results = service.searchEmployees("DOE", null, null, 0, 20)
+                    .getPage()
+                    .items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -835,8 +883,9 @@ class EmployeeServiceImplTest {
         void anEmployeeWithNoReplicaRowIsStillFoundByNumberAndCarriesNullNames() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results =
-                    service.searchEmployees("EMP-0003", 0, 20).items();
+            List<EmployeeSummaryDto> results = service.searchEmployees("EMP-0003", null, null, 0, 20)
+                    .getPage()
+                    .items();
 
             assertThat(results).hasSize(1);
             EmployeeSummaryDto found = results.get(0);
@@ -851,7 +900,7 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             List<EmployeeSummaryDto> results =
-                    service.searchEmployees(null, 0, 20).items();
+                    service.searchEmployees(null, null, null, 0, 20).getPage().items();
 
             assertThat(results)
                     .filteredOn(dto -> dto.getEmployeeNumber().equals("EMP-0001"))
@@ -868,14 +917,16 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             // lastName order: Doe, Smith, then the no-replica row (null last name sorts last).
-            PagedResponse<EmployeeSummaryDto> firstPage = service.searchEmployees(null, 0, 2);
+            PagedResponse<EmployeeSummaryDto> firstPage =
+                    service.searchEmployees(null, null, null, 0, 2).getPage();
             assertThat(firstPage.items())
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
                     .containsExactly("EMP-0002", "EMP-0001");
             assertThat(firstPage.totalElements()).isEqualTo(3);
             assertThat(firstPage.totalPages()).isEqualTo(2);
 
-            PagedResponse<EmployeeSummaryDto> secondPage = service.searchEmployees(null, 1, 2);
+            PagedResponse<EmployeeSummaryDto> secondPage =
+                    service.searchEmployees(null, null, null, 1, 2).getPage();
             assertThat(secondPage.items())
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
                     .containsExactly("EMP-0003");
@@ -887,13 +938,189 @@ class EmployeeServiceImplTest {
         void anOutOfRangePageReturnsEmptyItemsWithCorrectTotals() {
             givenTheDirectory();
 
-            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees(null, 5, 20);
+            PagedResponse<EmployeeSummaryDto> page =
+                    service.searchEmployees(null, null, null, 5, 20).getPage();
 
             assertThat(page.items()).isEmpty();
             assertThat(page.totalElements()).isEqualTo(3);
             assertThat(page.totalPages()).isEqualTo(1);
             assertThat(page.page()).isEqualTo(5);
             assertThat(page.size()).isEqualTo(20);
+        }
+
+        /**
+         * The issue's headline acceptance criterion: totalElements for a status filter must be
+         * the full matching count (4, across the whole 10-row directory), not the count within
+         * the requested page window (2, for size=2). Asserting only the item count would pass
+         * even with the pre-fix in-page-only filter, since a page of 2 disabled rows out of 2
+         * requested still "looks" like 2 of 2 — the totals field is what exposes the bug.
+         */
+        @Test
+        void statusFilterAppliesAcrossTheWholeDirectoryNotJustThePage() {
+            givenALargeDirectory();
+
+            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees(
+                            null, List.of(EmployeeStatus.DISABLED), null, 0, 2)
+                    .getPage();
+
+            assertThat(page.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactly("Baker", "Davis");
+            assertThat(page.items()).allMatch(dto -> "DISABLED".equals(dto.getStatus()));
+            assertThat(page.totalElements()).isEqualTo(4);
+            assertThat(page.totalPages()).isEqualTo(2);
+
+            PagedResponse<EmployeeSummaryDto> secondPage = service.searchEmployees(
+                            null, List.of(EmployeeStatus.DISABLED), null, 1, 2)
+                    .getPage();
+            assertThat(secondPage.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactly("Foster", "Hale");
+            assertThat(secondPage.totalElements()).isEqualTo(4);
+        }
+
+        @Test
+        void repeatedStatusParamsCombineWithOrSemantics() {
+            givenALargeDirectory();
+
+            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees(
+                            null, List.of(EmployeeStatus.ACTIVE, EmployeeStatus.DISABLED), null, 0, 20)
+                    .getPage();
+
+            // Every row in the fixture is ACTIVE or DISABLED, so requesting both is equivalent
+            // to no status filter at all — proving the two statuses were OR'd together rather
+            // than (wrongly) intersected, which would return nothing.
+            assertThat(page.totalElements()).isEqualTo(10);
+        }
+
+        @Test
+        void aNullOrEmptyStatusListAppliesNoFilter() {
+            givenALargeDirectory();
+
+            assertThat(service.searchEmployees(null, null, null, 0, 20)
+                            .getPage()
+                            .totalElements())
+                    .isEqualTo(10);
+            assertThat(service.searchEmployees(null, List.of(), null, 0, 20)
+                            .getPage()
+                            .totalElements())
+                    .isEqualTo(10);
+        }
+
+        /**
+         * lastName,desc must order the WHOLE result set, not restart per page: page 0's last row
+         * (Foster) must sort strictly after page 1's first row (Evans) under descending order —
+         * i.e. continuing to descend across the page boundary rather than each page
+         * independently starting from Z.
+         */
+        @Test
+        void descendingSortOrdersAcrossTheWholeResultSetNotPerPage() {
+            givenALargeDirectory();
+
+            PagedResponse<EmployeeSummaryDto> firstPage = service.searchEmployees(
+                            null, null, "lastName,desc", 0, 5)
+                    .getPage();
+            PagedResponse<EmployeeSummaryDto> secondPage = service.searchEmployees(
+                            null, null, "lastName,desc", 1, 5)
+                    .getPage();
+
+            assertThat(firstPage.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactly("Jones", "Irwin", "Hale", "Grant", "Foster");
+            assertThat(secondPage.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactly("Evans", "Davis", "Cole", "Baker", "Adams");
+
+            String lastOfFirstPage =
+                    firstPage.items().get(firstPage.items().size() - 1).getLastName();
+            String firstOfSecondPage = secondPage.items().get(0).getLastName();
+            assertThat(lastOfFirstPage.compareToIgnoreCase(firstOfSecondPage)).isGreaterThan(0);
+        }
+
+        @Test
+        void ascendingSortIsTheDefaultAndMatchesLegacyOrdering() {
+            givenALargeDirectory();
+
+            PagedResponse<EmployeeSummaryDto> withoutSort =
+                    service.searchEmployees(null, null, null, 0, 10).getPage();
+            PagedResponse<EmployeeSummaryDto> withExplicitAscSort = service.searchEmployees(
+                            null, null, "lastName,asc", 0, 10)
+                    .getPage();
+
+            assertThat(withoutSort.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactly(
+                            "Adams", "Baker", "Cole", "Davis", "Evans", "Foster", "Grant", "Hale", "Irwin", "Jones");
+            assertThat(withExplicitAscSort.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactlyElementsOf(
+                            withoutSort.items().stream().map(EmployeeSummaryDto::getLastName).toList());
+        }
+
+        @Test
+        void anUnsupportedSortFieldRaisesAValidationException() {
+            givenALargeDirectory();
+
+            assertThatThrownBy(() -> service.searchEmployees(null, null, "employeeNumber,asc", 0, 20))
+                    .isInstanceOf(RequestValidationException.class);
+        }
+
+        @Test
+        void anUnsupportedSortDirectionRaisesAValidationException() {
+            givenALargeDirectory();
+
+            assertThatThrownBy(() -> service.searchEmployees(null, null, "lastName,sideways", 0, 20))
+                    .isInstanceOf(RequestValidationException.class);
+        }
+
+        /**
+         * The histogram is taken over the q-filtered set BEFORE the status filter: requesting
+         * only DISABLED rows must not make the ACTIVE tile disappear or shrink to zero, and the
+         * counts must always sum to the q-filtered total (10 here), never to the smaller
+         * status-filtered page total (4).
+         */
+        @Test
+        void statusHistogramCoversTheQFilteredSetRegardlessOfTheStatusFilter() {
+            givenALargeDirectory();
+
+            Map<EmployeeStatus, Long> counts = service.searchEmployees(
+                            null, List.of(EmployeeStatus.DISABLED), null, 0, 2)
+                    .getStatusCounts();
+
+            assertThat(counts.get(EmployeeStatus.DISABLED)).isEqualTo(4L);
+            assertThat(counts.get(EmployeeStatus.ACTIVE)).isEqualTo(6L);
+            assertThat(counts.values().stream().mapToLong(Long::longValue).sum())
+                    .isEqualTo(10L);
+        }
+
+        @Test
+        void statusHistogramIsUnaffectedByPaging() {
+            givenALargeDirectory();
+
+            Map<EmployeeStatus, Long> firstPageCounts = service.searchEmployees(null, null, null, 0, 2)
+                    .getStatusCounts();
+            Map<EmployeeStatus, Long> secondPageCounts = service.searchEmployees(null, null, null, 1, 2)
+                    .getStatusCounts();
+
+            assertThat(firstPageCounts).isEqualTo(secondPageCounts);
+        }
+
+        /**
+         * A caller that only ever passed q/page/size (the pre-#2158 contract) must see identical
+         * results after this change: no status filter, default lastName-ascending order.
+         */
+        @Test
+        void anExistingCallerPassingOnlyQPageAndSizeSeesUnchangedBehaviour() {
+            givenALargeDirectory();
+
+            PagedResponse<EmployeeSummaryDto> legacyStyleCall =
+                    service.searchEmployees("First", null, null, 0, 10).getPage();
+
+            assertThat(legacyStyleCall.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactly(
+                            "Adams", "Baker", "Cole", "Davis", "Evans", "Foster", "Grant", "Hale", "Irwin", "Jones");
+            assertThat(legacyStyleCall.totalElements()).isEqualTo(10);
         }
     }
 }

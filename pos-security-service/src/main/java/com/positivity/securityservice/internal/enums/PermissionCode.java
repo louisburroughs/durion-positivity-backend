@@ -1003,13 +1003,16 @@ public enum PermissionCode {
     // ── Catalog (new) ──────────────────────────────────────────────────────────
     CATALOG__SERVICE_REQUIREMENT__MANAGE(532, "catalog:service_requirement:manage"),
     // ── Workorder (new) ────────────────────────────────────────────────────────
-    WORKORDER__POSITION__ASSIGN(533, "workorder:position:assign");
+    WORKORDER__POSITION__ASSIGN(533, "workorder:position:assign"),
+    // ── People (new) ───────────────────────────────────────────────────────────
+    PEOPLE__JOBROLE__MANAGE(534, "people:jobRole:manage"),
+    PEOPLE__JOBROLE__VIEW(535, "people:jobRole:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 89;
+    public static final int CATALOG_VERSION = 90;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

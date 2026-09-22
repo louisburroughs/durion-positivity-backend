@@ -4,9 +4,10 @@ import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
-import com.positivity.people.internal.dto.EmployeeSummaryDto;
-import com.positivity.people.internal.dto.PagedResponse;
+import com.positivity.people.internal.dto.EmployeeSearchResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
+import com.positivity.people.internal.enums.EmployeeStatus;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -35,11 +36,22 @@ public interface EmployeeService {
 
     /**
      * Case-insensitive substring search across employee names (first, last, preferred, from the
-     * identity replica) and employee number (local), merged in memory (see {@link
+     * identity replica) and employee number (local), optionally filtered by status and sorted,
+     * merged/filtered/sorted/paged in memory (see {@link
      * com.positivity.people.internal.service.EmployeeServiceImpl#searchEmployees}). A blank or
-     * null {@code q} lists every employee. {@code page} and {@code size} are already validated
-     * (non-negative page, size in [1, 100]) by the controller.
+     * null {@code q} lists every employee; a null or empty {@code status} applies no status
+     * filter. {@code page} and {@code size} are already validated (non-negative page, size in
+     * [1, 100]) by the controller; {@code status} filtering happens before {@code sort} and
+     * before the page window is taken, so {@code totalElements} on the returned page always
+     * reflects the filtered set. The response also carries a status histogram over the
+     * q-filtered (not status-filtered) set — see {@link EmployeeSearchResponse}.
+     *
+     * @param sort {@code "field,direction"} (Spring convention), e.g. {@code "lastName,desc"}.
+     *     Null or blank defaults to {@code "lastName,asc"}. Only {@code lastName} is supported
+     *     today; an unsupported field or direction raises {@link
+     *     com.positivity.people.internal.exception.RequestValidationException}.
      */
     @NonNull
-    PagedResponse<EmployeeSummaryDto> searchEmployees(@Nullable String q, int page, int size);
+    EmployeeSearchResponse searchEmployees(
+            @Nullable String q, @Nullable List<EmployeeStatus> status, @Nullable String sort, int page, int size);
 }

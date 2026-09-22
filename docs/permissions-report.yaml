@@ -1,9 +1,9 @@
-generatedAt: "2026-09-22T13:00:54.474088+00:00"
+generatedAt: "2026-09-22T19:25:59.700702+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 498
-  uniquePermissionCount: 498
+  permissionCount: 500
+  uniquePermissionCount: 500
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -672,22 +672,26 @@ manifests:
     domain: "people"
     serviceName: "pos-people"
     version: "1.0"
-    permissionCount: 26
+    permissionCount: 28
     permissions:
       - name: "people:availability:view"
         description: "View availability"
       - name: "people:compliance:view"
         description: "View identity-compliance reports (active users linked to inactive persons)"
+      - name: "people:employee:activation"
+        description: "Activate and deactivate employee records"
       - name: "people:employee:create"
         description: "Create employee records"
-      - name: "people:employee:deactivate"
-        description: "Deactivate employee records"
       - name: "people:employee:edit"
         description: "Edit employee records"
       - name: "people:employee:view"
         description: "View employee records"
       - name: "people:employee_pii:view"
         description: "View an employee's personal contact detail: address, personal phone numbers, personal email and emergency contact"
+      - name: "people:jobRole:manage"
+        description: "Add and edit job roles on the tenant's own list (durion#2157): HR master data, not a permission-bearing role"
+      - name: "people:jobRole:view"
+        description: "Read the tenant's job-role list (durion#2157): the vocabulary an employee's job role is named from"
       - name: "people:self:view"
         description: "View your own person record, staffing assignments and primary location"
       - name: "people:skill:assign"
@@ -2984,14 +2988,14 @@ permissions:
     serviceName: "pos-people"
     module: "pos-people"
     source: "pos-people/src/main/resources/permissions.yaml"
-  - name: "people:employee:create"
-    description: "Create employee records"
+  - name: "people:employee:activation"
+    description: "Activate and deactivate employee records"
     domain: "people"
     serviceName: "pos-people"
     module: "pos-people"
     source: "pos-people/src/main/resources/permissions.yaml"
-  - name: "people:employee:deactivate"
-    description: "Deactivate employee records"
+  - name: "people:employee:create"
+    description: "Create employee records"
     domain: "people"
     serviceName: "pos-people"
     module: "pos-people"
@@ -3010,6 +3014,18 @@ permissions:
     source: "pos-people/src/main/resources/permissions.yaml"
   - name: "people:employee_pii:view"
     description: "View an employee's personal contact detail: address, personal phone numbers, personal email and emergency contact"
+    domain: "people"
+    serviceName: "pos-people"
+    module: "pos-people"
+    source: "pos-people/src/main/resources/permissions.yaml"
+  - name: "people:jobRole:manage"
+    description: "Add and edit job roles on the tenant's own list (durion#2157): HR master data, not a permission-bearing role"
+    domain: "people"
+    serviceName: "pos-people"
+    module: "pos-people"
+    source: "pos-people/src/main/resources/permissions.yaml"
+  - name: "people:jobRole:view"
+    description: "Read the tenant's job-role list (durion#2157): the vocabulary an employee's job role is named from"
     domain: "people"
     serviceName: "pos-people"
     module: "pos-people"

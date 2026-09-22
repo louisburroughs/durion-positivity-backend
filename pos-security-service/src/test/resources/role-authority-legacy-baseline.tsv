@@ -183,7 +183,7 @@ ADMIN	people-contact:userLink:view
 ADMIN	people-contact:userLink:write
 ADMIN	people:availability:view
 ADMIN	people:employee:create
-ADMIN	people:employee:deactivate
+ADMIN	people:employee:activation
 ADMIN	people:employee:edit
 ADMIN	people:employee:view
 ADMIN	people:skill:assign

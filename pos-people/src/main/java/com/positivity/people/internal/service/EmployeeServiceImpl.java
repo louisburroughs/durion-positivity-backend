@@ -8,6 +8,7 @@ import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeJobRoleDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
+import com.positivity.people.internal.dto.EmployeeSearchResponse;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
@@ -20,6 +21,7 @@ import com.positivity.people.internal.enums.DuplicatePolicy;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
@@ -35,6 +37,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -248,11 +251,20 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     @Transactional(readOnly = true)
-    public @NonNull PagedResponse<EmployeeSummaryDto> searchEmployees(@Nullable String q, int page, int size) {
+    public @NonNull EmployeeSearchResponse searchEmployees(
+            @Nullable String q, @Nullable List<EmployeeStatus> status, @Nullable String sort, int page, int size) {
         // Employee counts (shop staff) are far smaller than the customer-directory volumes that
         // justified the same approach in pos-customer PartyServiceImpl#browseParties (ADR-0026 /
         // OQ3): load both sides, merge/filter/sort/page in memory rather than joining across
         // module boundaries in SQL.
+        //
+        // WARNING to whoever wires up #2155 (widening these rows with data pulled from other
+        // service replicas): that enrichment MUST be applied to `window` below — the page this
+        // call actually returns — and never to `employees`/`all`/`filtered` here. Those lists
+        // hold every employee in the tenant (214+ and growing), not just the requested page; an
+        // extra replica lookup per row done against the full list, instead of the ~20-row window,
+        // turns every search call into O(tenant size) outbound calls and makes this register
+        // slower than the per-row endpoint it was built to replace.
         List<Employee> employees = employeeRepository.findAll();
         List<UUID> personIds = employees.stream().map(Employee::getPersonId).toList();
         Map<UUID, ExtPersonReplica> replicasByPersonId = extPersonReplicaRepository.findByPersonIdIn(personIds).stream()
@@ -260,11 +272,25 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         List<EmployeeSummaryDto> all = employees.stream()
                 .map(employee -> toSummary(employee, replicasByPersonId.get(employee.getPersonId())))
+                .filter(summary -> matchesSearch(summary, q))
                 .toList();
 
+        // The status histogram for the register's stat tiles is taken over `all` — the
+        // q-filtered set — BEFORE `matchesStatus` narrows it below. The tiles are how the caller
+        // picks a status filter, so a tile must report what selecting that status would return
+        // out of the current search, including for statuses not currently selected; computing it
+        // after the status filter would zero out every tile except the ones already chosen. This
+        // ordering is also why the counts always sum to `all.size()` (the q-filtered total)
+        // regardless of which statuses, if any, the caller passed — never to the smaller,
+        // status-filtered total on the returned page.
+        Map<EmployeeStatus, Long> statusCounts = all.stream()
+                .map(EmployeeSummaryDto::getStatus)
+                .filter(Objects::nonNull)
+                .collect(Collectors.groupingBy(EmployeeStatus::valueOf, Collectors.counting()));
+
         List<EmployeeSummaryDto> filtered = all.stream()
-                .filter(summary -> matchesSearch(summary, q))
-                .sorted(SEARCH_COMPARATOR)
+                .filter(summary -> matchesStatus(summary, status))
+                .sorted(resolveComparator(sort))
                 .toList();
 
         int total = filtered.size();
@@ -273,7 +299,8 @@ public class EmployeeServiceImpl implements EmployeeService {
         List<EmployeeSummaryDto> window = filtered.subList(fromIndex, toIndex);
 
         int totalPages = size == 0 ? 0 : (int) Math.ceil((double) total / size);
-        return new PagedResponse<>(window, page, size, total, totalPages);
+        PagedResponse<EmployeeSummaryDto> pagedResponse = new PagedResponse<>(window, page, size, total, totalPages);
+        return new EmployeeSearchResponse(pagedResponse, statusCounts);
     }
 
     private EmployeeSummaryDto toSummary(Employee employee, @Nullable ExtPersonReplica person) {
@@ -304,11 +331,70 @@ public class EmployeeServiceImpl implements EmployeeService {
         return value != null && value.toLowerCase(Locale.ROOT).contains(lowercaseNeedle);
     }
 
+    /**
+     * True when {@code summary} carries one of the requested statuses. A null or empty {@code
+     * statuses} applies no filter (matches everything) — that is what makes an omitted {@code
+     * status} query param mean "all statuses" rather than "no employees", and is what keeps a
+     * pre-#2158 caller who never passed {@code status} seeing identical results.
+     */
+    private boolean matchesStatus(EmployeeSummaryDto summary, @Nullable List<EmployeeStatus> statuses) {
+        if (statuses == null || statuses.isEmpty()) {
+            return true;
+        }
+        return statuses.stream().map(Enum::name).anyMatch(name -> name.equals(summary.getStatus()));
+    }
+
     /** lastName, firstName, employeeNumber — null-safe, case-insensitive, nulls last. */
     private static final Comparator<EmployeeSummaryDto> SEARCH_COMPARATOR = Comparator.comparing(
                     EmployeeSummaryDto::getLastName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
             .thenComparing(EmployeeSummaryDto::getFirstName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
             .thenComparing(EmployeeSummaryDto::getEmployeeNumber, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+
+    /**
+     * The reverse of {@link #SEARCH_COMPARATOR}, built field-by-field rather than via {@code
+     * .reversed()} so that nulls stay LAST in both directions (a row with no name on file sorts
+     * to the bottom of the register whichever way the column is sorted, instead of jumping to the
+     * top on {@code desc} the way a bare {@code .reversed()} would put them).
+     */
+    private static final Comparator<EmployeeSummaryDto> SEARCH_COMPARATOR_DESC = Comparator.comparing(
+                    EmployeeSummaryDto::getLastName,
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER.reversed()))
+            .thenComparing(
+                    EmployeeSummaryDto::getFirstName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER.reversed()))
+            .thenComparing(
+                    EmployeeSummaryDto::getEmployeeNumber,
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER.reversed()));
+
+    private static final String DEFAULT_SORT = "lastName,asc";
+
+    /**
+     * Parses the {@code sort} query param ({@code "field[,direction]"}, the Spring Data
+     * convention already used elsewhere in this backend, e.g. pos-accounting's
+     * {@code SortParamParser}) into the comparator to apply. Only {@code lastName} is supported
+     * today — the register's other columns (status, employee number) are not yet sortable — so
+     * this stays a small hand-rolled switch rather than a generic field-name-to-accessor map; add
+     * to it if/when another sortable column is requested. Null or blank defaults to {@code
+     * "lastName,asc"}, matching the pre-#2158 unconditional {@code SEARCH_COMPARATOR} so an
+     * existing caller that never passes {@code sort} sees unchanged ordering.
+     */
+    private Comparator<EmployeeSummaryDto> resolveComparator(@Nullable String sort) {
+        String value = (sort == null || sort.isBlank()) ? DEFAULT_SORT : sort.trim();
+        String[] parts = value.split(",", 2);
+        String field = parts[0].trim();
+        if (!"lastName".equalsIgnoreCase(field)) {
+            throw new RequestValidationException(
+                    "Unsupported sort field: '" + field + "'. Supported fields: lastName");
+        }
+        String direction = parts.length == 2 ? parts[1].trim() : "asc";
+        if ("desc".equalsIgnoreCase(direction)) {
+            return SEARCH_COMPARATOR_DESC;
+        }
+        if (!"asc".equalsIgnoreCase(direction)) {
+            throw new RequestValidationException(
+                    "Unsupported sort direction: '" + direction + "'. Use 'asc' or 'desc'.");
+        }
+        return SEARCH_COMPARATOR;
+    }
 
     /** Queue the identity attributes as an upsert command toward pos-people-contact. */
     private void requestIdentityUpsert(

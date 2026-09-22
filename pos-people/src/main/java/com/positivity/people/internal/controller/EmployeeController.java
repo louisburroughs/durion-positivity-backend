@@ -5,9 +5,9 @@ import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
-import com.positivity.people.internal.dto.EmployeeSummaryDto;
-import com.positivity.people.internal.dto.PagedResponse;
+import com.positivity.people.internal.dto.EmployeeSearchResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
+import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.EmployeeService;
@@ -23,6 +23,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -115,31 +116,50 @@ public class EmployeeController {
     @EmitEvent(id = "PEOPLE_EMPLOYEE_SEARCH", apiVersion = "1")
     @Operation(operationId = "searchEmployees", summary = "Search Employees By Name Or Number", description = """
                     Returns a paged list of slim employee rows matching a case-insensitive substring search across \
-                    first name, last name, preferred name, and employee number.
-                    Use this tool when listing or typeahead-filtering employees; do not use getEmployee, which \
-                    requires the person id already be known, and do not use getEmployeeByNumber, which resolves \
-                    one exact employee number rather than searching.
+                    first name, last name, preferred name, and employee number, optionally narrowed to one or more \
+                    employment statuses and sorted, plus a status histogram for the register's stat tiles.
+                    Use this tool when listing, filtering, sorting, or typeahead-filtering employees; do not use \
+                    getEmployee, which requires the person id already be known, and do not use \
+                    getEmployeeByNumber, which resolves one exact employee number rather than searching.
                     Preconditions: none; an empty result set is returned rather than an error when nothing matches.
-                    Required inputs: none are mandatory; q defaults to blank, which lists every employee, page \
-                    defaults to 0, and size defaults to 20 with a maximum of 100.
+                    Required inputs: none are mandatory; q defaults to blank, which lists every employee; status \
+                    defaults to none, which applies no status filter; sort defaults to lastName,asc; page \
+                    defaults to 0, and size defaults to 20 with a maximum of 100. The status filter and sort are \
+                    applied across every matching employee, not just the returned page, so totalElements and \
+                    ordering are both correct for a result set spanning more than one page.
                     Emits a PEOPLE_EMPLOYEE_SEARCH audit event but changes no state; this is a read-only projection \
                     merged in memory from local employment rows and the pos-people-contact identity replica.
-                    Returns 200 with an empty items list and correct totals when the page or query matches nothing.
+                    Returns 200 with an empty items list and correct totals when the page, query, or status \
+                    filter matches nothing.
                     """)
     @ApiResponse(responseCode = "200", description = "Employees returned (possibly empty)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Unsupported sort field or direction",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:view"})
     @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
-    public ResponseEntity<PagedResponse<EmployeeSummaryDto>> searchEmployees(
+    public ResponseEntity<EmployeeSearchResponse> searchEmployees(
             @Parameter(description = "Case-insensitive substring match on name or employee number; blank lists all")
                     @RequestParam(required = false)
                     String q,
+            @Parameter(
+                            description = "Employment status filter; repeatable (?status=ACTIVE&status=DISABLED). "
+                                    + "Omitted or empty applies no status filter and lists every status.")
+                    @RequestParam(required = false)
+                    List<EmployeeStatus> status,
+            @Parameter(
+                            description = "Sort field with optional direction, e.g. 'lastName,desc'. Only "
+                                    + "lastName is supported today. Direction defaults to asc.")
+                    @RequestParam(required = false, defaultValue = "lastName,asc")
+                    String sort,
             @Parameter(description = "Zero-based page index") @PositiveOrZero @RequestParam(defaultValue = "0")
                     int page,
             @Parameter(description = "Page size, up to 100") @Positive @Max(100) @RequestParam(defaultValue = "20")
                     int size) {
-        return ResponseEntity.ok(employeeService.searchEmployees(q, page, size));
+        return ResponseEntity.ok(employeeService.searchEmployees(q, status, sort, page, size));
     }
 
     @PutMapping("/{employeeId}")
