@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.function.Consumer;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -24,7 +23,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -57,10 +58,21 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Business validation failures (scan mismatch, not-picked, over-consumption) are permanent:
  * they are logged, the command id is still recorded, and no fact is emitted — the consumer's
  * pending state surfaces through its timeout/attention path, not through HTTP errors.
+ *
+ * <h2>Transaction shape</h2>
+ *
+ * <p>Each pick command's handler runs in a transaction of its own ({@code REQUIRES_NEW}), and the
+ * {@code processed_events} mark is written in a second one afterwards. This listener method is
+ * deliberately not {@code @Transactional}: the handlers are {@code @Transactional} services, so an
+ * exception leaving one of them marks whatever transaction it joined rollback-only. Wrapped in the
+ * listener's transaction, a "permanent" failure that was caught and logged still made the commit
+ * after the catch throw {@code UnexpectedRollbackException}, which the container's error handler
+ * retried through its whole back-off ladder (1+2+4+8+16 s) before dead-lettering the record —
+ * 31 s of the partition per failed command, with the processed mark rolled back every time. With
+ * the handler isolated, its failure rolls back only its own work and the mark still commits.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.inventory.kafka", name = "enabled", havingValue = "true")
 public class InventoryCommandListener {
     private static final String PICK_LIST_ID = "pickListId";
@@ -101,10 +113,34 @@ public class InventoryCommandListener {
     private final ReservationRequestService reservationRequestHandler;
     private final ProcessedEventRepository processedEventRepository;
 
+    /** One transaction per pick-command handler, and one per processed mark; see the class doc. */
+    private final TransactionTemplate commandTransaction;
+
+    public InventoryCommandListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            OutboxReplayService outboxReplayService,
+            PickListService pickListService,
+            PickListGenerationService pickListGenerationService,
+            ConsumptionService consumptionService,
+            ReservationRequestService reservationRequestHandler,
+            ProcessedEventRepository processedEventRepository,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.outboxReplayService = outboxReplayService;
+        this.pickListService = pickListService;
+        this.pickListGenerationService = pickListGenerationService;
+        this.consumptionService = consumptionService;
+        this.reservationRequestHandler = reservationRequestHandler;
+        this.processedEventRepository = processedEventRepository;
+        this.commandTransaction = new TransactionTemplate(transactionManager);
+        this.commandTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.inventory.kafka.commands-topic:inventory.commands.v1}",
             groupId = "${pos.inventory.kafka.commands-consumer-group:pos-inventory-commands}")
-    @Transactional
     public void onCommand(@NonNull String message) {
         try {
             JsonNode root = objectMapper.readTree(message);
@@ -182,7 +218,14 @@ public class InventoryCommandListener {
         log.info("Outbox replay command processed since={} until={} eventsQueued={}", since, until, queued);
     }
 
-    /** Command-id dedupe shared by the pick commands: at-most-once per commandId. */
+    /**
+     * Command-id dedupe shared by the pick commands: at-most-once per commandId.
+     *
+     * <p>The handler runs in its own transaction so that a permanent failure inside it cannot
+     * poison the transaction the processed mark is written in (see the class doc). A transient
+     * failure still propagates, so the container retries the record and the mark is never written
+     * for a command that was not applied.
+     */
     private void handleDeduplicated(@NonNull JsonNode root, @NonNull Consumer<JsonNode> handler) {
         String commandId = root.path("commandId").stringValue(null);
         if (commandId == null || commandId.isBlank()) {
@@ -194,7 +237,7 @@ public class InventoryCommandListener {
             return;
         }
         try {
-            handler.accept(root.path("payload"));
+            commandTransaction.executeWithoutResult(_ -> handler.accept(root.path("payload")));
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (Exception e) {
@@ -203,11 +246,11 @@ public class InventoryCommandListener {
             // pending state surfaces via its timeout/attention path (#901).
             log.warn("Pick command {} failed permanently: {}", commandId, e.getMessage(), e);
         }
-        processedEventRepository.save(ProcessedEvent.builder()
+        commandTransaction.executeWithoutResult(_ -> processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(commandId)
                 .owner(COMMANDS_OWNER)
                 .processedAt(Instant.now(clock))
-                .build());
+                .build()));
     }
 
     private void handlePickListReleaseRequested(@NonNull JsonNode payload) {

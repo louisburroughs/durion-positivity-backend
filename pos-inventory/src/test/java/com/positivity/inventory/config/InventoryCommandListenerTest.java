@@ -40,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 class InventoryCommandListenerTest {
@@ -57,6 +58,7 @@ class InventoryCommandListenerTest {
     private final ConsumptionService consumptionService = mock(ConsumptionService.class);
     private final ReservationRequestService reservationRequestHandler = mock(ReservationRequestService.class);
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
+    private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
 
     private InventoryCommandListener listener;
 
@@ -70,7 +72,8 @@ class InventoryCommandListenerTest {
                 pickListGenerationService,
                 consumptionService,
                 reservationRequestHandler,
-                processedEvents);
+                processedEvents,
+                transactionManager);
         ReflectionTestUtils.setField(listener, "replayMaxLookback", Duration.ofDays(30));
     }
 

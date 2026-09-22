@@ -276,8 +276,11 @@ public class ReservationServiceImpl implements ReservationService {
                 .build();
         allocationRepository.save(allocation);
 
-        reservation.setAllocations(List.of(allocation));
-        return reservationRepository.save(reservation);
+        // The managed entity's own (mutable) list, never an immutable List.of: a later merge of this
+        // entity clears and refills the collection in place, and List.of answers that with an
+        // UnsupportedOperationException — which is how every reservation-request command failed.
+        reservation.getAllocations().add(allocation);
+        return reservation;
     }
 
     private BigDecimal calculateNetOnHand(UUID stockItemId) {
