@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -444,7 +443,9 @@ class ReservationServiceImplTest {
         assertThat(response.getWorkorderLineId()).isEqualTo(workorderLineId);
         assertThat(response.getStatus()).isEqualTo(ReservationStatus.PENDING.name());
         assertThat(response.getAllocatedQuantity()).isEqualByComparingTo("4");
-        verify(reservationRepository, times(2)).save(any(ReservationEntity.class));
+        // One persist, no re-merge: the second save used to hand Hibernate an immutable List.of
+        // as the allocations collection, which merge cannot clear.
+        verify(reservationRepository).save(any(ReservationEntity.class));
         verify(allocationRepository).save(any(AllocationEntity.class));
     }
 
