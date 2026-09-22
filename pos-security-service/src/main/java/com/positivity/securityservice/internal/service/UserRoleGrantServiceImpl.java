@@ -38,6 +38,7 @@ public class UserRoleGrantServiceImpl implements UserRoleGrantService {
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
+    private final RoleAssignmentEventEmitter roleAssignmentEventEmitter;
 
     @Override
     @Transactional
@@ -57,6 +58,9 @@ public class UserRoleGrantServiceImpl implements UserRoleGrantService {
         assignment.setCreatedBy(actor);
         assignment.setCreatedAt(Instant.now(clock));
         roleAssignmentRepository.save(assignment);
+        // Inside this transaction, same as RolePersonaEventEmitter's callers — the outbox write is
+        // MANDATORY propagation precisely so the fact cannot outlive a rolled-back grant.
+        roleAssignmentEventEmitter.roleAssignmentChanged(assignment);
     }
 
     @Override
@@ -129,6 +133,9 @@ public class UserRoleGrantServiceImpl implements UserRoleGrantService {
             assignment.setLastModifiedBy(actor);
             assignment.setLastModifiedAt(Instant.now(clock));
             roleAssignmentRepository.save(assignment);
+            // Inside this transaction, same as the grant path — a revoke fact must not outlive a
+            // rolled-back revocation any more than the grant fact may.
+            roleAssignmentEventEmitter.roleAssignmentChanged(assignment);
             revokedAny = true;
         }
         if (revokedAny) {
