@@ -42,8 +42,7 @@ public class RoleAssignmentReplicaServiceImpl implements RoleAssignmentReplicaSe
             // whose page has no resolvable username (e.g. no employees) should not pay for it.
             return Map.of();
         }
-        List<ExtRoleAssignmentReplica> active =
-                repository.findActiveByUsernameIn(usernames, LocalDateTime.now(clock));
+        List<ExtRoleAssignmentReplica> active = repository.findActiveByUsernameIn(usernames, LocalDateTime.now(clock));
 
         // LinkedHashMap/mutable lists: the repository query already orders by username, but the
         // grouping collector's map/list types are otherwise unspecified, and a stable iteration

@@ -173,14 +173,13 @@ public class EmployeeController {
             @Parameter(description = "Page size, up to 100") @Positive @Max(100) @RequestParam(defaultValue = "20")
                     int size,
             @Parameter(
-                            description =
-                                    "Register-enrichment categories (durion#2155); repeatable "
-                                            + "(?include=USERNAME&include=ROLE_ASSIGNMENTS), matching how `status` "
-                                            + "above is passed. Omitted or empty returns the thin pre-#2155 row: "
-                                            + "username, contactInfo, roleAssignments, primaryLocation, "
-                                            + "otherLocationCount and jobRole are all null. CONTACT_INFO additionally "
-                                            + "requires people:employee_pii:view (#1898); without it the field is "
-                                            + "simply absent, never a 403.")
+                            description = "Register-enrichment categories (durion#2155); repeatable "
+                                    + "(?include=USERNAME&include=ROLE_ASSIGNMENTS), matching how `status` "
+                                    + "above is passed. Omitted or empty returns the thin pre-#2155 row: "
+                                    + "username, contactInfo, roleAssignments, primaryLocation, "
+                                    + "otherLocationCount and jobRole are all null. CONTACT_INFO additionally "
+                                    + "requires people:employee_pii:view (#1898); without it the field is "
+                                    + "simply absent, never a 403.")
                     @RequestParam(required = false)
                     List<EmployeeSearchInclude> include) {
         return ResponseEntity.ok(employeeService.searchEmployees(q, status, sort, page, size, include));
@@ -369,10 +368,7 @@ public class EmployeeController {
 
     @PostMapping("/{employeeId}/enable")
     @EmitEvent(id = "PEOPLE_EMPLOYEE_ENABLE", apiVersion = "1")
-    @Operation(
-            operationId = "enableEmployee",
-            summary = "Enable A Disabled Employee",
-            description = """
+    @Operation(operationId = "enableEmployee", summary = "Enable A Disabled Employee", description = """
                     Reactivates a DISABLED employee, setting status ACTIVE with a fresh statusEffectiveAt. This is \
                     the explicit DISABLED -> ACTIVE transition DECISION-PEOPLE-001 calls for, and the direct \
                     inverse of disableEmployee: staffing assignments are left exactly as disableEmployee's \
@@ -420,8 +416,7 @@ public class EmployeeController {
                                             examples =
                                                     @ExampleObject(
                                                             name = "Reactivate with last-known updatedAt",
-                                                            value =
-                                                                    """
+                                                            value = """
                                                                     {"updatedAt":"2026-02-01T14:05:00Z"}
                                                                     """)))
                     @Valid

@@ -19,8 +19,9 @@ import lombok.Data;
  */
 @Data
 @Builder
-@Schema(description = "Employee row for search results; the fields below `active` are populated only when requested "
-        + "via `include=` (and, for `contactInfo`, only when the caller also holds `people:employee_pii:view`)")
+@Schema(
+        description = "Employee row for search results; the fields below `active` are populated only when requested "
+                + "via `include=` (and, for `contactInfo`, only when the caller also holds `people:employee_pii:view`)")
 public class EmployeeSummaryDto {
 
     @Schema(

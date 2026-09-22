@@ -1035,8 +1035,9 @@ class EmployeeServiceImplTest {
         void activeMirrorsTheEmployeeStatus() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results =
-                    service.searchEmployees(null, null, null, 0, 20, null).getPage().items();
+            List<EmployeeSummaryDto> results = service.searchEmployees(null, null, null, 0, 20, null)
+                    .getPage()
+                    .items();
 
             assertThat(results)
                     .filteredOn(dto -> dto.getEmployeeNumber().equals("EMP-0001"))
@@ -1099,9 +1100,7 @@ class EmployeeServiceImplTest {
                             null, List.of(EmployeeStatus.DISABLED), null, 0, 2, null)
                     .getPage();
 
-            assertThat(page.items())
-                    .extracting(EmployeeSummaryDto::getLastName)
-                    .containsExactly("Baker", "Davis");
+            assertThat(page.items()).extracting(EmployeeSummaryDto::getLastName).containsExactly("Baker", "Davis");
             assertThat(page.items()).allMatch(dto -> "DISABLED".equals(dto.getStatus()));
             assertThat(page.totalElements()).isEqualTo(4);
             assertThat(page.totalPages()).isEqualTo(2);
@@ -1189,8 +1188,9 @@ class EmployeeServiceImplTest {
                             "Adams", "Baker", "Cole", "Davis", "Evans", "Foster", "Grant", "Hale", "Irwin", "Jones");
             assertThat(withExplicitAscSort.items())
                     .extracting(EmployeeSummaryDto::getLastName)
-                    .containsExactlyElementsOf(
-                            withoutSort.items().stream().map(EmployeeSummaryDto::getLastName).toList());
+                    .containsExactlyElementsOf(withoutSort.items().stream()
+                            .map(EmployeeSummaryDto::getLastName)
+                            .toList());
         }
 
         @Test
@@ -1233,10 +1233,10 @@ class EmployeeServiceImplTest {
         void statusHistogramIsUnaffectedByPaging() {
             givenALargeDirectory();
 
-            Map<EmployeeStatus, Long> firstPageCounts = service.searchEmployees(null, null, null, 0, 2, null)
-                    .getStatusCounts();
-            Map<EmployeeStatus, Long> secondPageCounts = service.searchEmployees(null, null, null, 1, 2, null)
-                    .getStatusCounts();
+            Map<EmployeeStatus, Long> firstPageCounts =
+                    service.searchEmployees(null, null, null, 0, 2, null).getStatusCounts();
+            Map<EmployeeStatus, Long> secondPageCounts =
+                    service.searchEmployees(null, null, null, 1, 2, null).getStatusCounts();
 
             assertThat(firstPageCounts).isEqualTo(secondPageCounts);
         }
@@ -1411,7 +1411,8 @@ class EmployeeServiceImplTest {
                 requested.forEach(id -> result.put(id, usernamesByPersonId.get(id)));
                 return result;
             });
-            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any())).thenReturn(Map.of());
+            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any()))
+                    .thenReturn(Map.of());
 
             // lastName order Adams, Baker, Cole, Davis; page size 2, page 0 -> window is [Adams, Baker].
             service.searchEmployees(null, null, null, 0, 2, List.of(EmployeeSearchInclude.ROLE_ASSIGNMENTS));
@@ -1454,8 +1455,10 @@ class EmployeeServiceImplTest {
             when(extPersonReplicaRepository.findByPersonIdIn(any()))
                     .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
 
-            EmployeeSummaryDto row =
-                    service.searchEmployees(null, null, null, 0, 20, null).getPage().items().get(0);
+            EmployeeSummaryDto row = service.searchEmployees(null, null, null, 0, 20, null)
+                    .getPage()
+                    .items()
+                    .get(0);
 
             assertThat(row.getUsername()).isNull();
             assertThat(row.getContactInfo()).isNull();
@@ -1499,8 +1502,10 @@ class EmployeeServiceImplTest {
             when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
             when(extPersonReplicaRepository.findByPersonIdIn(any())).thenReturn(List.of());
             when(personUsernameService.usernamesByPersonId(any())).thenReturn(Map.of());
-            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any())).thenReturn(Map.of());
-            when(employeeLocationAssignmentRepository.findActiveByPersonIdIn(any(), any())).thenReturn(List.of());
+            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any()))
+                    .thenReturn(Map.of());
+            when(employeeLocationAssignmentRepository.findActiveByPersonIdIn(any(), any()))
+                    .thenReturn(List.of());
 
             EmployeeSummaryDto row = service.searchEmployees(null, null, null, 0, 20, EVERY_INCLUDE)
                     .getPage()

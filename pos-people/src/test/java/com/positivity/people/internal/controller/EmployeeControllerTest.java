@@ -111,8 +111,7 @@ class EmployeeControllerTest {
     void searchEmployees_returnsOkWithMatchingResults_whenCallerHoldsThePermission() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
         EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
-        when(employeeService.searchEmployees(eq("smith"), eq(null), eq("lastName,asc"), eq(0), eq(20),
-                        eq(null)))
+        when(employeeService.searchEmployees(eq("smith"), eq(null), eq("lastName,asc"), eq(0), eq(20), eq(null)))
                 .thenReturn(response);
 
         mockMvc.perform(get("/v1/people/employees").param("q", "smith").header("X-Authorities", "people:employee:view"))
@@ -129,8 +128,7 @@ class EmployeeControllerTest {
     void searchEmployees_appliesDefaultPagingWhenOmitted() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(), 0, 20, 0, 0);
         EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of());
-        when(employeeService.searchEmployees(eq(null), eq(null), eq("lastName,asc"), eq(0), eq(20),
-                        eq(null)))
+        when(employeeService.searchEmployees(eq(null), eq(null), eq("lastName,asc"), eq(0), eq(20), eq(null)))
                 .thenReturn(response);
 
         mockMvc.perform(get("/v1/people/employees").header("X-Authorities", "people:employee:view"))
@@ -221,8 +219,7 @@ class EmployeeControllerTest {
 
     @Test
     void searchEmployees_rejectsAnUnsupportedSortField() throws Exception {
-        when(employeeService.searchEmployees(eq(null), eq(null), eq("employeeNumber,asc"), eq(0), eq(20),
-                        eq(null)))
+        when(employeeService.searchEmployees(eq(null), eq(null), eq("employeeNumber,asc"), eq(0), eq(20), eq(null)))
                 .thenThrow(new RequestValidationException("Unsupported sort field: 'employeeNumber'"));
 
         mockMvc.perform(get("/v1/people/employees")
@@ -282,8 +279,7 @@ class EmployeeControllerTest {
     void searchEmployees_stillSucceeds_forTheTechnicianAuthoritiesDeniedTheProfile() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
         EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
-        when(employeeService.searchEmployees(eq("smith"), eq(null), eq("lastName,asc"), eq(0), eq(20),
-                        eq(null)))
+        when(employeeService.searchEmployees(eq("smith"), eq(null), eq("lastName,asc"), eq(0), eq(20), eq(null)))
                 .thenReturn(response);
 
         mockMvc.perform(get("/v1/people/employees").param("q", "smith").header("X-Authorities", TECHNICIAN_AUTHORITIES))
