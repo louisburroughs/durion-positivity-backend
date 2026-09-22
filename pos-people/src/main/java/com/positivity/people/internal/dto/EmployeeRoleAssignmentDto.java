@@ -15,9 +15,9 @@ import lombok.Value;
  * EmployeeJobRoleDto} already set for {@code EmployeeProfileDto}: a register row needs enough of
  * the assignment to render without a second call, and leaves room to grow.
  *
- * <p>{@code roleLocationScope} is nullable and, as of this DTO, always null — {@code
- * RoleAssignmentChangedV1} does not carry the role's location scope yet (durion#2160 is still in
- * flight); see {@link com.positivity.people.internal.entity.ExtRoleAssignmentReplica}'s javadoc.
+ * <p>{@code roleLocationScope} is {@code Role.locationScope} ({@code ALL} or {@code LOCATION}),
+ * denormalized from the role, not the assignment (ADR-0061 §1) — see {@link
+ * com.positivity.people.internal.entity.ExtRoleAssignmentReplica}'s javadoc.
  */
 @Value
 @Builder
@@ -34,9 +34,9 @@ public class EmployeeRoleAssignmentDto {
     String roleName;
 
     @Schema(
-            description =
-                    "The role's location scope, when known. Null today — not yet carried by the upstream event.",
-            nullable = true)
+            description = "The role's location scope: ALL (applies everywhere) or LOCATION (particular locations)",
+            example = "ALL",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     String roleLocationScope;
 
     @Schema(description = "When this assignment becomes or became effective", requiredMode = Schema.RequiredMode.REQUIRED)

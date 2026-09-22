@@ -29,12 +29,10 @@
 -- class-level javadoc). username is denormalized onto every row rather than requiring a second
 -- join at read time, matching how ExtUserLinkReplica itself is flat.
 --
--- role_location_scope is reserved, not yet populated: the register may eventually need to show
--- whether a displayed role applies everywhere or only at particular locations (Role.locationScope,
--- ADR-0061 SS1 -- RoleAssignment itself carries no scope, see V38__drop_role_assignment_scope.sql in
--- pos-security-service). RoleAssignmentChangedV1 does not carry that field as of this migration
--- (durion#2160), so the column stays null until the event is widened; adding it now avoids a second
--- migration purely to add a column when that lands.
+-- role_location_scope: whether the displayed role applies everywhere (ALL) or only at particular
+-- locations (LOCATION) -- Role.locationScope, ADR-0061 SS1. RoleAssignment itself carries no scope
+-- (see V38__drop_role_assignment_scope.sql in pos-security-service); RoleAssignmentChangedV1
+-- denormalizes it from Role at publish time and validates it non-blank, so it is NOT NULL here too.
 CREATE TABLE public.ext_role_assignment_replica (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
     assignment_id uuid NOT NULL,
@@ -42,7 +40,7 @@ CREATE TABLE public.ext_role_assignment_replica (
     username character varying(255) NOT NULL,
     role_id uuid NOT NULL,
     role_name character varying(255) NOT NULL,
-    role_location_scope character varying(50),
+    role_location_scope character varying(50) NOT NULL,
     effective_start_date timestamp(6) without time zone NOT NULL,
     effective_end_date timestamp(6) without time zone,
     revoked_at timestamp(6) with time zone,

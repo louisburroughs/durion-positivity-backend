@@ -152,9 +152,7 @@ public class SecurityEventsListener {
                 .username(payload.username())
                 .roleId(payload.roleId())
                 .roleName(payload.roleName())
-                // Reserved — RoleAssignmentChangedV1 does not carry the role's location scope yet
-                // (durion#2160 in flight); see ExtRoleAssignmentReplica's javadoc.
-                .roleLocationScope(null)
+                .roleLocationScope(payload.roleLocationScope())
                 .effectiveStartDate(payload.effectiveStartDate())
                 .effectiveEndDate(payload.effectiveEndDate())
                 .revokedAt(payload.revokedAt())

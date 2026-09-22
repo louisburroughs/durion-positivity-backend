@@ -34,9 +34,10 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * because employees are keyed by {@code personId} while assignments are keyed by
  * {@code userId}/{@code username} and {@code ExtUserLinkReplica} has no {@code userId} column.
  *
- * <p>{@link #roleLocationScope} is reserved: {@code RoleAssignmentChangedV1} does not carry the
- * role's location scope as of this class (durion#2160 is still in flight), so it is always
- * {@code null} today. See the migration header for why the column exists ahead of the data.
+ * <p>{@link #roleLocationScope} is {@code Role.locationScope} ({@code ALL} or {@code LOCATION}),
+ * denormalized onto the event at publish time by pos-security-service — it is a property of the
+ * role, not the assignment (ADR-0061 §1; {@code RoleAssignment} itself carries no scope). See
+ * {@code RoleAssignmentChangedV1}'s class javadoc.
  */
 @Data
 @Builder
@@ -63,8 +64,7 @@ public class ExtRoleAssignmentReplica extends TenantScopedEntity {
     @Column(name = "role_name", nullable = false)
     private String roleName;
 
-    /** Reserved — see class javadoc; null until RoleAssignmentChangedV1 carries the field. */
-    @Column(name = "role_location_scope", length = 50)
+    @Column(name = "role_location_scope", nullable = false, length = 50)
     private String roleLocationScope;
 
     @Column(name = "effective_start_date", nullable = false)
