@@ -153,11 +153,26 @@ class RolePermissionBaselineTest {
             Set.of("ADMIN", "INVENTORY_CONTROLLER", "INVENTORY_LEAD", "INVENTORY_MANAGER");
 
     /**
-     * Roles that may approve an inventory adjustment (#1373). INVENTORY_LEAD is
+     * Roles that may approve an inventory adjustment (#1373, widened by #2149). INVENTORY_LEAD is
      * deliberately absent: it raises requests, it does not approve them.
+     *
+     * <p>LOCATION_MANAGER joined in #2149. A cycle count's write-off is approved through
+     * {@code inventory:adjustment:approve} — there is no {@code inventory:cycle_count:approve} — so
+     * a role holding the whole cycle-count family could complete a count and then not post the
+     * adjustment it raised, which is how the grant's absence surfaced: a bare 403 on alpha that
+     * ended an accelerated run on virtual day 7.
+     *
+     * <p>LOCATION_MANAGER carries {@code LOCATION} reach on {@code roles.location_scope}
+     * (ADR-0061 §1), the same classification as INVENTORY_MANAGER. Note that this bounds the role,
+     * not this particular path: {@code StockMovementController.approveAdjustmentRequest} is a
+     * recorded location-scope decision, but {@code CycleCountAdjustmentController.approveAdjustment}
+     * is not scoped in {@code pos-inventory/location-scope.yaml} nor in
+     * {@code CycleCountAdjustmentServiceImpl}, so approval on that endpoint is not confined to the
+     * caller's site. That asymmetry predates #2149 — it is how INVENTORY_MANAGER already holds the
+     * grant — and widening the set here does not change it.
      */
     private static final Set<String> ADJUSTMENT_APPROVERS =
-            Set.of("ADMIN", "INVENTORY_CONTROLLER", "INVENTORY_MANAGER");
+            Set.of("ADMIN", "INVENTORY_CONTROLLER", "INVENTORY_MANAGER", "LOCATION_MANAGER");
 
     /**
      * Conversational entrypoints every role receives. Holding these grants reach to the
