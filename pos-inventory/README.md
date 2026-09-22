@@ -103,6 +103,46 @@ so the controller resolves the reach and passes it to
 path denied that internal actor inside the writing command's transaction and turned a completed
 write into a `500`.
 
+### Approving a cycle count write-off is an adjustment grant, not a cycle-count one (#2149)
+
+The cycle-count family stops at `inventory:cycle_count:initiate`, `:view` and `:complete`. There is
+no `inventory:cycle_count:approve`. A count that finds a variance raises a *cycle count adjustment*,
+and posting or rejecting that adjustment is governed by the adjustment family —
+`CycleCountAdjustmentController` enforces `inventory:adjustment:approve` on both
+`POST /{adjustmentId}/approve` and `POST /{adjustmentId}/reject`. #2149 was a `LOCATION_MANAGER` on
+alpha refused the approval with a bare `403 FORBIDDEN / Access denied` while holding the whole
+cycle-count family, because the role held nothing from the adjustment family at all.
+
+Two consequences worth knowing before diagnosing the next one:
+
+- **`inventory:adjustment:approve` is sufficient on its own.** Every read on that controller is
+  `hasAnyAuthority(ADJUSTMENT_VIEW, ADJUSTMENT_APPROVE)`, so an approver reaches the adjustment
+  detail, the status list and the pending-approvals queue without `inventory:adjustment:view`.
+  LOCATION_MANAGER is granted only the approve code for that reason. Narrowing any of those reads to
+  `hasAuthority(ADJUSTMENT_VIEW)` would leave the manager able to approve an adjustment it cannot
+  open; `CycleCountAdjustmentControllerTest` pins each read against an approve-only caller, and
+  `CycleCountApprovalGrantsTest` in pos-security-service pins the role grants per source.
+- **Counting and approving stay different people.** `INVENTORY_LEAD` (the parts-clerk persona) holds
+  `inventory:adjustment:create` and not `:approve`; `LOCATION_MANAGER` now holds the reverse. Neither
+  role gets `inventory:adjustment:override`, which waives the negative-stock policy on overridable
+  postings and remains with ADMIN and INVENTORY_CONTROLLER.
+
+**This endpoint is not location-scoped.** `StockMovementController.approveAdjustmentRequest` is a
+recorded ADR-0061 decision (see `location-scope.yaml`), but `CycleCountAdjustmentController` appears
+in neither `location-scope.yaml` nor `CycleCountAdjustmentServiceImpl`, so approval there is not
+confined to the caller's reach even though LOCATION_MANAGER and INVENTORY_MANAGER both carry
+`LOCATION` scope on `roles.location_scope`. The asymmetry between the two adjustment-approval paths
+predates #2149 — INVENTORY_MANAGER already held the grant under it — and closing it is a separate
+change, not one #2149's grant introduces.
+
+Unlike #2138, the grant was missing from `scripts/fixtures/seed/alpha/security/role-permissions.csv`
+as well as from the tenant, so re-seeding alpha alone would not have fixed it. LOCATION_MANAGER is
+bulk-loaded (#1613 D8) and the Flyway seed never provisions it, so the CSV is its only grant source;
+how a new grant reaches an existing tenant is
+[docs/OPERATIONS_RUNBOOK.md](../docs/OPERATIONS_RUNBOOK.md) → "Adding a permission". A bare
+`FORBIDDEN` is a missing authority; a location-scope refusal is `403 LOCATION_SCOPE_DENIED` and says
+which permission and location it denied.
+
 ## Lot Tracking — Inbound Capture (odoo-parity E1)
 
 Products whose catalog replica (`ext_product.tracking_level`) says `LOT` require a `lotNumber`
