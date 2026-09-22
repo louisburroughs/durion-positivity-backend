@@ -105,6 +105,9 @@ class WorkorderPromotionRefusalTest {
     @Mock
     private PromotedWorkorderDemandPublisher promotedWorkorderDemandPublisher;
 
+    @Mock
+    private DocumentNumberAllocator documentNumberAllocator;
+
     @InjectMocks
     private WorkorderServiceImpl workorderService;
 

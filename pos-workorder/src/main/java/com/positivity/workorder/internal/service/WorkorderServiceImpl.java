@@ -30,6 +30,7 @@ import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
 import com.positivity.workorder.internal.exception.CustomerApprovalInvalidException;
 import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
+import com.positivity.workorder.internal.exception.DocumentNumberConflictException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PartLineNotFoundException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
@@ -75,7 +76,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     private static final String IDEMPOTENCY_OPERATION_WORKORDER_CREATE = "workorder.create";
     private static final String ESTIMATE_PREFIX = "EST-";
     private static final String WORKORDER_PREFIX = "WO-";
-    private static final int WORKORDER_NUMBER_SEQUENCE_START = 1000;
+    private static final long WORKORDER_NUMBER_SEQUENCE_START = 1000;
 
     private final Clock clock;
     private final WorkorderRepository workorderRepository;
@@ -96,6 +97,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
     private final FleetAuthorizationService fleetAuthorizationService;
     private final PartQuantityDivisibilityService partQuantityDivisibilityService;
+    private final DocumentNumberAllocator documentNumberAllocator;
 
     @Override
     public List<WorkorderResponse> getAllWorkorders() {
@@ -192,31 +194,46 @@ public class WorkorderServiceImpl implements WorkorderService {
      * fall back to an independent WO-YYYY-NNNN sequence. This keeps the workorder number
      * "matching the estimate number except the prefix" for the common 1:1 case while
      * guaranteeing global uniqueness for estimate-less or revision cases.
+     *
+     * <p>Both paths hold the tenant's WO-YYYY counter lock (#2150), so the free-check and the
+     * insert cannot interleave with another create's. The sequence skips any number a swap
+     * already claimed.
      */
     @NonNull
     private String generateWorkorderNumber(@Nullable Estimate estimate) {
+        String prefix = WORKORDER_PREFIX + Year.now(clock).getValue() + "-";
+        String scopeKey = prefix.substring(0, prefix.length() - 1);
         if (estimate != null
                 && estimate.getEstimateNumber() != null
                 && estimate.getEstimateNumber().startsWith(ESTIMATE_PREFIX)) {
             String swapped = WORKORDER_PREFIX + estimate.getEstimateNumber().substring(ESTIMATE_PREFIX.length());
+            documentNumberAllocator.lockScope(scopeKey, WORKORDER_NUMBER_SEQUENCE_START);
             if (!workorderRepository.existsByWorkorderNumber(swapped)) {
                 return swapped;
             }
             log.debug("Workorder number {} already taken; falling back to sequence", swapped);
         }
-        return generateSequentialWorkorderNumber();
+        return documentNumberAllocator.allocate(
+                scopeKey, prefix, WORKORDER_NUMBER_SEQUENCE_START, workorderRepository::existsByWorkorderNumber);
     }
 
-    @NonNull
-    private String generateSequentialWorkorderNumber() {
-        String prefix = WORKORDER_PREFIX + Year.now(clock).getValue() + "-";
-        int sequence = WORKORDER_NUMBER_SEQUENCE_START;
-        String candidate;
-        do {
-            candidate = prefix + sequence;
-            sequence++;
-        } while (workorderRepository.existsByWorkorderNumber(candidate));
-        return candidate;
+    /**
+     * Insert a new workorder and flush, so a collision on its number surfaces here as a typed 409
+     * rather than escaping untranslated at commit as a 500 (#2150).
+     */
+    private Workorder saveNumberedWorkorder(Workorder workorder) {
+        Workorder saved = workorderRepository.save(workorder);
+        try {
+            workorderRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            if (DocumentNumberConflictException.isViolationOf(
+                    e, DocumentNumberConflictException.WORKORDER_NUMBER_CONSTRAINT)) {
+                throw new DocumentNumberConflictException(
+                        "Workorder number " + workorder.getWorkorderNumber() + " was taken concurrently; retry", e);
+            }
+            throw e;
+        }
+        return saved;
     }
 
     /**
@@ -323,7 +340,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         }
 
         // Save the workorder first to get the persisted entity
-        Workorder savedWorkorder = workorderRepository.save(workorder);
+        Workorder savedWorkorder = saveNumberedWorkorder(workorder);
         workorderFactPublisher.markChanged(savedWorkorder.getId());
 
         // CAP:004 Story #27 - Copy estimate items to workorder items if promoting from

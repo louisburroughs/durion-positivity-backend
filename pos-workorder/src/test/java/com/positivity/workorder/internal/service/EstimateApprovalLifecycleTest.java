@@ -168,7 +168,8 @@ class EstimateApprovalLifecycleTest {
                 // i.e. "no guide" and "no rate", which keeps every pre-#1569 scenario behaviorally
                 // identical.
                 org.mockito.Mockito.mock(LaborTimeDefaultingService.class),
-                org.mockito.Mockito.mock(LaborRateDefaultingService.class));
+                org.mockito.Mockito.mock(LaborRateDefaultingService.class),
+                org.mockito.Mockito.mock(DocumentNumberAllocator.class));
     }
 
     private Estimate estimate(EstimateStatus status) {

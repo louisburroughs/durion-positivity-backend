@@ -165,13 +165,19 @@ public class WorkorderController {
                     — a repeated key returns the originally created workorder instead of a duplicate.
                     Emits a WORKORDER_CREATE event and marks the workorder fact changed for downstream \
                     replication.
-                    Returns 200 with the created or replayed workorder, and 400 when the estimate cannot be \
-                    found.
+                    Returns 200 with the created or replayed workorder, 400 when the estimate cannot be found, \
+                    and 409 with code DOCUMENT_NUMBER_CONFLICT and a Retry-After header when a concurrent create \
+                    took the workorder number — re-send the same request.
                     """)
     @ApiResponse(
             responseCode = "200",
             description =
                     "Work order created successfully, or existing work order returned if idempotency key was previously processed.")
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "Conflict - a concurrent create took the workorder number (DOCUMENT_NUMBER_CONFLICT, retryable).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Estimate and customer the new workorder is created from.",
             required = true,

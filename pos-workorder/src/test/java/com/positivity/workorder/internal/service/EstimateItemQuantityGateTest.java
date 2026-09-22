@@ -139,7 +139,8 @@ class EstimateItemQuantityGateTest {
                 // i.e. "no guide" and "no rate", which keeps every pre-#1569 scenario behaviorally
                 // identical.
                 org.mockito.Mockito.mock(LaborTimeDefaultingService.class),
-                org.mockito.Mockito.mock(LaborRateDefaultingService.class));
+                org.mockito.Mockito.mock(LaborRateDefaultingService.class),
+                org.mockito.Mockito.mock(DocumentNumberAllocator.class));
 
         Estimate estimate = new Estimate();
         estimate.setId(ESTIMATE_ID);

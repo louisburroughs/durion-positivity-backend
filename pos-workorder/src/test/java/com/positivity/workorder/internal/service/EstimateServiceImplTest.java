@@ -90,6 +90,9 @@ class EstimateServiceImplTest {
     @Mock
     private com.positivity.workorder.internal.service.PartQuantityDivisibilityService partQuantityDivisibilityService;
 
+    @Mock
+    private DocumentNumberAllocator documentNumberAllocator;
+
     @InjectMocks
     private EstimateServiceImpl estimateService;
 

@@ -135,7 +135,8 @@ class WorkorderPromotionGuideSnapshotTest {
                 promotionValidationService,
                 peopleAvailabilityLocalService,
                 fleetAuthorizationService,
-                new PartQuantityDivisibilityService(productUomRepository));
+                new PartQuantityDivisibilityService(productUomRepository),
+                org.mockito.Mockito.mock(DocumentNumberAllocator.class));
 
         when(extCustomerPartyReplicaRepository.findById(CUSTOMER_ID))
                 .thenReturn(Optional.of(ExtCustomerPartyReplica.builder()

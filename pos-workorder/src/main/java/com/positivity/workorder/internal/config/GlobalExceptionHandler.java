@@ -7,6 +7,7 @@ import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException
 import com.positivity.workorder.internal.exception.ChangeRequestNotFoundException;
 import com.positivity.workorder.internal.exception.CustomerApprovalInvalidException;
 import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
+import com.positivity.workorder.internal.exception.DocumentNumberConflictException;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
 import com.positivity.workorder.internal.exception.EstimateIncompleteException;
 import com.positivity.workorder.internal.exception.EstimateItemNotFoundException;
@@ -74,6 +75,12 @@ public class GlobalExceptionHandler {
      * projection lag this covers is sub-second in practice.
      */
     private static final int REQUIREMENTS_RETRY_AFTER_SECONDS = 2;
+
+    /**
+     * How long a caller should wait before re-sending a create that lost a race for its document
+     * number (#2150). The retry draws a fresh number, so it needs no real wait.
+     */
+    private static final int DOCUMENT_NUMBER_RETRY_AFTER_SECONDS = 1;
 
     public GlobalExceptionHandler(ObjectProvider<Clock> clockProvider) {
         this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
@@ -503,6 +510,31 @@ public class GlobalExceptionHandler {
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         headers.setContentType(MediaType.APPLICATION_JSON);
+        return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
+    }
+
+    /**
+     * An estimate or workorder insert lost a race for its number (#2150). 409 with
+     * {@code Retry-After}, not 500: the request was valid, and the identical body succeeds when
+     * re-sent because the retry draws a new number. The code is distinct from the module's generic
+     * {@code CONFLICT} so a client can tell this retryable race from a state conflict that no
+     * retry resolves.
+     */
+    @ExceptionHandler(DocumentNumberConflictException.class)
+    public ResponseEntity<ApiError> handleDocumentNumberConflict(
+            DocumentNumberConflictException ex, HttpServletRequest request) {
+        log.warn("Document number conflict on {}: {}", request.getRequestURI(), ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.of(
+                DocumentNumberConflictException.ERROR_CODE,
+                ex.getMessage(),
+                HttpStatus.CONFLICT.value(),
+                Instant.now(clock).toString(),
+                correlationId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.add(HttpHeaders.RETRY_AFTER, String.valueOf(DOCUMENT_NUMBER_RETRY_AFTER_SECONDS));
         return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
     }
 

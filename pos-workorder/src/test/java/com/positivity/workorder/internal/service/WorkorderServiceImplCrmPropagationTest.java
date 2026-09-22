@@ -102,6 +102,9 @@ class WorkorderServiceImplCrmPropagationTest {
     @org.mockito.Mock
     private com.positivity.workorder.internal.service.PromotedWorkorderDemandPublisher promotedWorkorderDemandPublisher;
 
+    @Mock
+    private DocumentNumberAllocator documentNumberAllocator;
+
     @InjectMocks
     private WorkorderServiceImpl workorderService;
 

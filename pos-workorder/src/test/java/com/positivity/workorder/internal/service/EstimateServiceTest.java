@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -71,6 +73,9 @@ class EstimateServiceTest {
 
     @Mock
     private com.positivity.workorder.internal.service.EstimateFactPublisher estimateFactPublisher;
+
+    @Mock
+    private DocumentNumberAllocator documentNumberAllocator;
 
     @InjectMocks
     private EstimateServiceImpl estimateService;
@@ -169,6 +174,8 @@ class EstimateServiceTest {
                 .createdAt(Instant.now(TEST_CLOCK))
                 .build();
 
+        when(documentNumberAllocator.allocate(anyString(), anyString(), anyLong(), any()))
+                .thenAnswer(inv -> inv.getArgument(1) + String.valueOf((long) inv.getArgument(2)));
         when(estimateRepository.save(any(Estimate.class))).thenReturn(savedEstimate);
 
         // When
@@ -267,6 +274,8 @@ class EstimateServiceTest {
     @Test
     void testCreateEstimate_GeneratesUniqueEstimateNumber() {
         // Given
+        when(documentNumberAllocator.allocate(anyString(), anyString(), anyLong(), any()))
+                .thenAnswer(inv -> inv.getArgument(1) + String.valueOf((long) inv.getArgument(2)));
         when(estimateRepository.save(any(Estimate.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -278,6 +287,10 @@ class EstimateServiceTest {
         assertTrue(
                 result.getEstimateNumber().matches("EST-\\d{4}-\\d+"),
                 "Estimate number should match pattern EST-YYYY-NNNN");
+
+        // Drawn from the location's own counter (#2150): scope EST-YYYY-<locationId>, first number 1000.
+        String prefix = result.getEstimateNumber().substring(0, "EST-YYYY-".length());
+        verify(documentNumberAllocator).allocate(eq(prefix + result.getLocationId()), eq(prefix), eq(1000L), any());
     }
 
     @Test

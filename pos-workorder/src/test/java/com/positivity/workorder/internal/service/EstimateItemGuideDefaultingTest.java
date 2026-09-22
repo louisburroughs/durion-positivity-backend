@@ -152,7 +152,8 @@ class EstimateItemGuideDefaultingTest {
                 estimateFactPublisher,
                 new PartQuantityDivisibilityService(productUomRepository),
                 laborTimeDefaultingService,
-                laborRateDefaultingService);
+                laborRateDefaultingService,
+                org.mockito.Mockito.mock(DocumentNumberAllocator.class));
 
         Estimate estimate = new Estimate();
         estimate.setId(ESTIMATE_ID);

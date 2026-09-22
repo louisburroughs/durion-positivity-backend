@@ -14,6 +14,7 @@ import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
 import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.exception.DocumentNumberConflictException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
@@ -264,8 +265,9 @@ public class EstimateController {
                     Idempotency-Key header replays the originally created estimate.
                     Emits a WORKORDER_ESTIMATE_CREATE event.
                     Returns 201 with the estimate, 400 with code VALIDATION_ERROR when required fields are \
-                    missing or negative, and 409 with code CONFLICT when totals are inconsistent or an integrity \
-                    constraint fails.
+                    missing or negative, 409 with code CONFLICT when totals are inconsistent or an integrity \
+                    constraint fails, and 409 with code DOCUMENT_NUMBER_CONFLICT and a Retry-After header when a \
+                    concurrent create took the estimate number — re-send the same request.
                     """)
     @ApiResponse(responseCode = "201", description = "Estimate created successfully.")
     @ApiResponse(
@@ -278,7 +280,8 @@ public class EstimateController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Conflict - estimate could not be created due to state or integrity constraints.",
+            description = "Conflict - estimate could not be created due to state or integrity constraints"
+                    + " (CONFLICT), or a concurrent create took its number (DOCUMENT_NUMBER_CONFLICT, retryable).",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",
@@ -352,7 +355,7 @@ public class EstimateController {
             log.warn("Conflict creating estimate: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.CONFLICT, CONFLICT);
 
-        } catch (ResponseStatusException e) {
+        } catch (ResponseStatusException | DocumentNumberConflictException e) {
             throw e;
         } catch (Exception e) {
             log.error("Unexpected error creating estimate", e);
