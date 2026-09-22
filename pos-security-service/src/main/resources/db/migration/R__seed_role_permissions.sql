@@ -1556,6 +1556,7 @@ FROM (VALUES
     ('SUPPORT', 'people:availability:view'),
     ('SUPPORT', 'people:compliance:view'),
     ('SUPPORT', 'people:employee:view'),
+    ('SUPPORT', 'people:jobRole:view'),
     ('SUPPORT', 'people:skill:view'),
     ('SUPPORT', 'people:timeAdjustment:view'),
     ('SUPPORT', 'people:timeEntry:view'),
