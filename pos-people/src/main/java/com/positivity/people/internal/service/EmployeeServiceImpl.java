@@ -252,7 +252,8 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     @Transactional
-    public @NonNull EmployeeProfileDto enableEmployee(@NonNull UUID employeeId, @NonNull EnableEmployeeRequestDto request) {
+    public @NonNull EmployeeProfileDto enableEmployee(
+            @NonNull UUID employeeId, @NonNull EnableEmployeeRequestDto request) {
         Employee employee = employeeRepository
                 .findByPersonId(employeeId)
                 .orElseThrow(() -> new PersonNotFoundException(employeeId));
@@ -270,10 +271,9 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (currentStatus == EmployeeStatus.ON_LEAVE || currentStatus == EmployeeStatus.SUSPENDED) {
             // Both carry an effective date and a reason a bare activate/deactivate switch cannot
             // collect; updateEmployee is the full-profile path that can record them.
-            throw new ResourceStateConflictException(
-                    "Employee is " + currentStatus
-                            + "; use updateEmployee to change status, which can record the required"
-                            + " effective date and reason");
+            throw new ResourceStateConflictException("Employee is " + currentStatus
+                    + "; use updateEmployee to change status, which can record the required"
+                    + " effective date and reason");
         }
         if (currentStatus != EmployeeStatus.DISABLED) {
             // Covers ACTIVE (already active — nothing to reactivate) and any status this method
@@ -413,8 +413,7 @@ public class EmployeeServiceImpl implements EmployeeService {
      * top on {@code desc} the way a bare {@code .reversed()} would put them).
      */
     private static final Comparator<EmployeeSummaryDto> SEARCH_COMPARATOR_DESC = Comparator.comparing(
-                    EmployeeSummaryDto::getLastName,
-                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER.reversed()))
+                    EmployeeSummaryDto::getLastName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER.reversed()))
             .thenComparing(
                     EmployeeSummaryDto::getFirstName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER.reversed()))
             .thenComparing(
@@ -438,8 +437,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         String[] parts = value.split(",", 2);
         String field = parts[0].trim();
         if (!"lastName".equalsIgnoreCase(field)) {
-            throw new RequestValidationException(
-                    "Unsupported sort field: '" + field + "'. Supported fields: lastName");
+            throw new RequestValidationException("Unsupported sort field: '" + field + "'. Supported fields: lastName");
         }
         String direction = parts.length == 2 ? parts[1].trim() : "asc";
         if ("desc".equalsIgnoreCase(direction)) {

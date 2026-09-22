@@ -15,10 +15,7 @@ public class CreateJobRoleRequest {
     private String code;
 
     @NotBlank(message = "name is required")
-    @Schema(
-            description = "Display name",
-            example = "Lead Technician",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Display name", example = "Lead Technician", requiredMode = Schema.RequiredMode.REQUIRED)
     private String name;
 
     @Size(max = 1000, message = "description must be at most 1000 characters")

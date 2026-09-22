@@ -346,10 +346,7 @@ public class EmployeeController {
 
     @PostMapping("/{employeeId}/enable")
     @EmitEvent(id = "PEOPLE_EMPLOYEE_ENABLE", apiVersion = "1")
-    @Operation(
-            operationId = "enableEmployee",
-            summary = "Enable A Disabled Employee",
-            description = """
+    @Operation(operationId = "enableEmployee", summary = "Enable A Disabled Employee", description = """
                     Reactivates a DISABLED employee, setting status ACTIVE with a fresh statusEffectiveAt. This is \
                     the explicit DISABLED -> ACTIVE transition DECISION-PEOPLE-001 calls for, and the direct \
                     inverse of disableEmployee: staffing assignments are left exactly as disableEmployee's \
@@ -397,8 +394,7 @@ public class EmployeeController {
                                             examples =
                                                     @ExampleObject(
                                                             name = "Reactivate with last-known updatedAt",
-                                                            value =
-                                                                    """
+                                                            value = """
                                                                     {"updatedAt":"2026-02-01T14:05:00Z"}
                                                                     """)))
                     @Valid

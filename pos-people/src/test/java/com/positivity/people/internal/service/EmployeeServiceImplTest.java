@@ -965,9 +965,8 @@ class EmployeeServiceImplTest {
         void matchesByEmployeeNumber() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results = service.searchEmployees("0002", null, null, 0, 20)
-                    .getPage()
-                    .items();
+            List<EmployeeSummaryDto> results =
+                    service.searchEmployees("0002", null, null, 0, 20).getPage().items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -978,9 +977,8 @@ class EmployeeServiceImplTest {
         void matchingIsCaseInsensitive() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results = service.searchEmployees("DOE", null, null, 0, 20)
-                    .getPage()
-                    .items();
+            List<EmployeeSummaryDto> results =
+                    service.searchEmployees("DOE", null, null, 0, 20).getPage().items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -1071,9 +1069,7 @@ class EmployeeServiceImplTest {
                             null, List.of(EmployeeStatus.DISABLED), null, 0, 2)
                     .getPage();
 
-            assertThat(page.items())
-                    .extracting(EmployeeSummaryDto::getLastName)
-                    .containsExactly("Baker", "Davis");
+            assertThat(page.items()).extracting(EmployeeSummaryDto::getLastName).containsExactly("Baker", "Davis");
             assertThat(page.items()).allMatch(dto -> "DISABLED".equals(dto.getStatus()));
             assertThat(page.totalElements()).isEqualTo(4);
             assertThat(page.totalPages()).isEqualTo(2);
@@ -1125,12 +1121,10 @@ class EmployeeServiceImplTest {
         void descendingSortOrdersAcrossTheWholeResultSetNotPerPage() {
             givenALargeDirectory();
 
-            PagedResponse<EmployeeSummaryDto> firstPage = service.searchEmployees(
-                            null, null, "lastName,desc", 0, 5)
-                    .getPage();
-            PagedResponse<EmployeeSummaryDto> secondPage = service.searchEmployees(
-                            null, null, "lastName,desc", 1, 5)
-                    .getPage();
+            PagedResponse<EmployeeSummaryDto> firstPage =
+                    service.searchEmployees(null, null, "lastName,desc", 0, 5).getPage();
+            PagedResponse<EmployeeSummaryDto> secondPage =
+                    service.searchEmployees(null, null, "lastName,desc", 1, 5).getPage();
 
             assertThat(firstPage.items())
                     .extracting(EmployeeSummaryDto::getLastName)
@@ -1151,9 +1145,8 @@ class EmployeeServiceImplTest {
 
             PagedResponse<EmployeeSummaryDto> withoutSort =
                     service.searchEmployees(null, null, null, 0, 10).getPage();
-            PagedResponse<EmployeeSummaryDto> withExplicitAscSort = service.searchEmployees(
-                            null, null, "lastName,asc", 0, 10)
-                    .getPage();
+            PagedResponse<EmployeeSummaryDto> withExplicitAscSort =
+                    service.searchEmployees(null, null, "lastName,asc", 0, 10).getPage();
 
             assertThat(withoutSort.items())
                     .extracting(EmployeeSummaryDto::getLastName)
@@ -1161,8 +1154,9 @@ class EmployeeServiceImplTest {
                             "Adams", "Baker", "Cole", "Davis", "Evans", "Foster", "Grant", "Hale", "Irwin", "Jones");
             assertThat(withExplicitAscSort.items())
                     .extracting(EmployeeSummaryDto::getLastName)
-                    .containsExactlyElementsOf(
-                            withoutSort.items().stream().map(EmployeeSummaryDto::getLastName).toList());
+                    .containsExactlyElementsOf(withoutSort.items().stream()
+                            .map(EmployeeSummaryDto::getLastName)
+                            .toList());
         }
 
         @Test
@@ -1205,10 +1199,10 @@ class EmployeeServiceImplTest {
         void statusHistogramIsUnaffectedByPaging() {
             givenALargeDirectory();
 
-            Map<EmployeeStatus, Long> firstPageCounts = service.searchEmployees(null, null, null, 0, 2)
-                    .getStatusCounts();
-            Map<EmployeeStatus, Long> secondPageCounts = service.searchEmployees(null, null, null, 1, 2)
-                    .getStatusCounts();
+            Map<EmployeeStatus, Long> firstPageCounts =
+                    service.searchEmployees(null, null, null, 0, 2).getStatusCounts();
+            Map<EmployeeStatus, Long> secondPageCounts =
+                    service.searchEmployees(null, null, null, 1, 2).getStatusCounts();
 
             assertThat(firstPageCounts).isEqualTo(secondPageCounts);
         }
