@@ -35,10 +35,23 @@ import org.jspecify.annotations.Nullable;
  * <p>{@code RoleAssignment} carries no location scope of its own — the {@code scope_type} column
  * and {@code role_assignment_scope_locations} table were dropped by
  * {@code V38__drop_role_assignment_scope.sql} (#1875); location reach is a property of the
- * {@code Role} instead, combined with pos-people's staffing assignment (ADR-0061 §1). This event
- * is a fact about the assignment as pos-security-service stores it, so it carries no scope or
- * location fields — a consumer that needs a role's location reach reads it off the role, not off
- * this event.
+ * {@code Role} instead, combined with pos-people's staffing assignment (ADR-0061 §1).
+ *
+ * <p><b>{@code roleLocationScope} is deliberately named as the role's property, not the
+ * assignment's — it is denormalized here from {@code Role.locationScope} at publish time, not
+ * read off {@code RoleAssignment}.</b> Scope is not a property of the assignment: as noted above,
+ * {@code role_assignment_scope_locations} and its {@code scope_type} column are gone (V38,
+ * #1875), and location reach lives on {@code Role} instead (ADR-0061 §1). A consumer rendering an
+ * "application roles" column (pos-people) needs to know whether each displayed role applies
+ * everywhere or only at particular locations; without this field it would have to call back into
+ * pos-security-service per row to read the role's scope, which is exactly the N+1 this event
+ * exists to remove. Carried as {@code String}, matching this package's convention for enum-typed
+ * owner fields (see {@code WarrantyClaimSnapshotV1}), so this contract never depends on
+ * pos-security-service's {@code LocationScope} enum. {@code Role.locationHierarchy} (which parent
+ * chain a {@code LOCATION}-scoped role's reach traverses — ADR-0061 §2) is deliberately left off:
+ * it drives location-reach evaluation at authorization-check time, a service concern, not the
+ * everywhere-vs-particular-locations distinction a roles column displays; add it only if a
+ * consumer needs to evaluate reach, not merely display it.
  *
  * <p>{@code effectiveStartDate} and {@code effectiveEndDate} are {@link LocalDateTime}, matching
  * the type {@code RoleAssignment} stores them as (no zone offset persisted); {@code revokedAt} is
@@ -52,6 +65,9 @@ import org.jspecify.annotations.Nullable;
  *                 callback
  * @param roleId the assigned role's id
  * @param roleName the assigned role's name, unprefixed and upper-case as stored by the owner
+ * @param roleLocationScope the role's {@code LocationScope} ({@code ALL} or {@code LOCATION}),
+ *                          denormalized from {@code Role} — see the class-level note; not a
+ *                          property of the assignment
  * @param effectiveStartDate when this assignment becomes or became effective
  * @param effectiveEndDate when this assignment's effective window ends; null while open-ended
  * @param revokedAt when the revocation was entered, independent of {@code effectiveEndDate} which
@@ -66,6 +82,7 @@ public record RoleAssignmentChangedV1(
         @NonNull String username,
         @NonNull UUID roleId,
         @NonNull String roleName,
+        @NonNull String roleLocationScope,
         @NonNull LocalDateTime effectiveStartDate,
         @Nullable LocalDateTime effectiveEndDate,
         @Nullable Instant revokedAt,
@@ -89,6 +106,9 @@ public record RoleAssignmentChangedV1(
         }
         if (roleName == null || roleName.isBlank()) {
             throw new IllegalArgumentException("roleName must not be blank");
+        }
+        if (roleLocationScope == null || roleLocationScope.isBlank()) {
+            throw new IllegalArgumentException("roleLocationScope must not be blank");
         }
         if (effectiveStartDate == null) {
             throw new IllegalArgumentException("effectiveStartDate must not be null");
