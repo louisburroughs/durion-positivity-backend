@@ -16,6 +16,7 @@ import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.EmployeeSearchResponse;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.PagedResponse;
+import com.positivity.people.internal.enums.EmployeeSearchInclude;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
@@ -110,7 +111,8 @@ class EmployeeControllerTest {
     void searchEmployees_returnsOkWithMatchingResults_whenCallerHoldsThePermission() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
         EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
-        when(employeeService.searchEmployees(eq("smith"), eq(null), eq("lastName,asc"), eq(0), eq(20)))
+        when(employeeService.searchEmployees(eq("smith"), eq(null), eq("lastName,asc"), eq(0), eq(20),
+                        eq(null)))
                 .thenReturn(response);
 
         mockMvc.perform(get("/v1/people/employees").param("q", "smith").header("X-Authorities", "people:employee:view"))
@@ -127,7 +129,8 @@ class EmployeeControllerTest {
     void searchEmployees_appliesDefaultPagingWhenOmitted() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(), 0, 20, 0, 0);
         EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of());
-        when(employeeService.searchEmployees(eq(null), eq(null), eq("lastName,asc"), eq(0), eq(20)))
+        when(employeeService.searchEmployees(eq(null), eq(null), eq("lastName,asc"), eq(0), eq(20),
+                        eq(null)))
                 .thenReturn(response);
 
         mockMvc.perform(get("/v1/people/employees").header("X-Authorities", "people:employee:view"))
@@ -144,7 +147,8 @@ class EmployeeControllerTest {
                         eq(List.of(EmployeeStatus.ACTIVE, EmployeeStatus.DISABLED)),
                         eq("lastName,desc"),
                         eq(0),
-                        eq(20)))
+                        eq(20),
+                        eq(null)))
                 .thenReturn(response);
 
         mockMvc.perform(get("/v1/people/employees")
@@ -153,6 +157,46 @@ class EmployeeControllerTest {
                         .header("X-Authorities", "people:employee:view"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page.items[0].employeeNumber").value("EMP-0001"));
+    }
+
+    // ─── GET /v1/people/employees?include= — register enrichment (durion#2155) ────
+
+    @Test
+    void searchEmployees_passesRepeatedIncludeParamsThrough() throws Exception {
+        PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
+        EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
+        when(employeeService.searchEmployees(
+                        eq(null),
+                        eq(null),
+                        eq("lastName,asc"),
+                        eq(0),
+                        eq(20),
+                        eq(List.of(EmployeeSearchInclude.USERNAME, EmployeeSearchInclude.ROLE_ASSIGNMENTS))))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/v1/people/employees")
+                        .param("include", "USERNAME", "ROLE_ASSIGNMENTS")
+                        .header("X-Authorities", "people:employee:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.items[0].employeeNumber").value("EMP-0001"));
+    }
+
+    /** The controller-level half of "include= absent leaves the response identical to today's thin shape". */
+    @Test
+    void searchEmployees_omitsEveryEnrichmentField_whenIncludeIsAbsent() throws Exception {
+        PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
+        EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
+        when(employeeService.searchEmployees(eq(null), eq(null), eq("lastName,asc"), eq(0), eq(20), eq(null)))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/v1/people/employees").header("X-Authorities", "people:employee:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.items[0].username").doesNotExist())
+                .andExpect(jsonPath("$.page.items[0].contactInfo").doesNotExist())
+                .andExpect(jsonPath("$.page.items[0].roleAssignments").doesNotExist())
+                .andExpect(jsonPath("$.page.items[0].primaryLocation").doesNotExist())
+                .andExpect(jsonPath("$.page.items[0].otherLocationCount").doesNotExist())
+                .andExpect(jsonPath("$.page.items[0].jobRole").doesNotExist());
     }
 
     @Test
@@ -177,7 +221,8 @@ class EmployeeControllerTest {
 
     @Test
     void searchEmployees_rejectsAnUnsupportedSortField() throws Exception {
-        when(employeeService.searchEmployees(eq(null), eq(null), eq("employeeNumber,asc"), eq(0), eq(20)))
+        when(employeeService.searchEmployees(eq(null), eq(null), eq("employeeNumber,asc"), eq(0), eq(20),
+                        eq(null)))
                 .thenThrow(new RequestValidationException("Unsupported sort field: 'employeeNumber'"));
 
         mockMvc.perform(get("/v1/people/employees")
@@ -237,7 +282,8 @@ class EmployeeControllerTest {
     void searchEmployees_stillSucceeds_forTheTechnicianAuthoritiesDeniedTheProfile() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
         EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
-        when(employeeService.searchEmployees(eq("smith"), eq(null), eq("lastName,asc"), eq(0), eq(20)))
+        when(employeeService.searchEmployees(eq("smith"), eq(null), eq("lastName,asc"), eq(0), eq(20),
+                        eq(null)))
                 .thenReturn(response);
 
         mockMvc.perform(get("/v1/people/employees").param("q", "smith").header("X-Authorities", TECHNICIAN_AUTHORITIES))

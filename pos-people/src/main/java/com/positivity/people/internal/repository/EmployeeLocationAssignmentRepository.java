@@ -3,6 +3,7 @@ package com.positivity.people.internal.repository;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.enums.AssignmentStatus;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,6 +45,25 @@ public interface EmployeeLocationAssignmentRepository
     @NonNull
     List<EmployeeLocationAssignment> findActiveByPersonIdAndDate(
             @Param("personId") @NonNull UUID personId, @Param("date") @NonNull LocalDate date);
+
+    /**
+     * {@link #findActiveByPersonIdAndDate} batched across several people in one query
+     * (durion#2155): the employee register's location column enriches a page window of ~20-100
+     * employees, and one query per row would be exactly the per-row cost #2155 exists to remove.
+     * Ordered by person then primary-first so a caller grouping by {@code getPersonId()} finds
+     * any flagged-primary assignment first within each person's sublist without a second pass.
+     */
+    @Query("""
+            SELECT a FROM EmployeeLocationAssignment a
+            WHERE a.employee.personId IN :personIds
+              AND a.status = 'ACTIVE'
+              AND a.effectiveFrom <= :date
+              AND (a.effectiveTo IS NULL OR a.effectiveTo >= :date)
+            ORDER BY a.employee.personId, a.isPrimary DESC, a.effectiveFrom DESC
+            """)
+    @NonNull
+    List<EmployeeLocationAssignment> findActiveByPersonIdIn(
+            @Param("personIds") @NonNull Collection<UUID> personIds, @Param("date") @NonNull LocalDate date);
 
     /**
      * Whether an active assignment of this person, location and role already covers any part of the

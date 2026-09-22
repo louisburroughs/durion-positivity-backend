@@ -2,6 +2,9 @@ package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.entity.ExtLocationReplica;
 import com.positivity.people.internal.repository.ExtLocationReplicaRepository;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -64,5 +67,27 @@ public class LocationReferenceService {
                 .findById(locationId)
                 .map(ExtLocationReplica::getName)
                 .filter(name -> name != null && !name.isBlank());
+    }
+
+    /**
+     * {@link #findLocationName(UUID)} batched across several locations in one query
+     * (durion#2155): the employee register's location column resolves every distinct location on
+     * a page window in a single {@code findAllById} instead of one call per row. A location
+     * missing from the replica, or carrying a blank name, is simply absent from the map -- same
+     * non-throwing degrade as the single-id lookup, never an error over a lagging replica.
+     */
+    @NonNull
+    public Map<UUID, String> findLocationNames(@NonNull Collection<UUID> locationIds) {
+        if (locationIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> names = new HashMap<>();
+        for (ExtLocationReplica location : extLocationReplicaRepository.findAllById(locationIds)) {
+            String name = location.getName();
+            if (name != null && !name.isBlank()) {
+                names.put(location.getLocationId(), name);
+            }
+        }
+        return names;
     }
 }

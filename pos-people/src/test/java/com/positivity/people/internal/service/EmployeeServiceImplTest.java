@@ -15,35 +15,45 @@ import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
+import com.positivity.people.internal.dto.EmployeeRoleAssignmentDto;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
+import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.JobRole;
+import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.DuplicatePolicy;
+import com.positivity.people.internal.enums.EmployeeSearchInclude;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
+import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.JobRoleRepository;
+import com.positivity.people.internal.security.PeoplePermissions;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -54,6 +64,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Employment lifecycle unit coverage (ADR-0044 §6 Phase 3.2, #875): identity writes leave as
@@ -84,6 +96,18 @@ class EmployeeServiceImplTest {
     @Mock
     private JobRoleRepository jobRoleRepository;
 
+    @Mock
+    private PersonUsernameService personUsernameService;
+
+    @Mock
+    private RoleAssignmentReplicaService roleAssignmentReplicaService;
+
+    @Mock
+    private EmployeeLocationAssignmentRepository employeeLocationAssignmentRepository;
+
+    @Mock
+    private LocationReferenceService locationReferenceService;
+
     private EmployeeServiceImpl service;
 
     private static final UUID JOB_ROLE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01");
@@ -96,7 +120,11 @@ class EmployeeServiceImplTest {
                 employeeRepository,
                 offboardingRetryRepository,
                 peopleEventPublisher,
-                jobRoleRepository);
+                jobRoleRepository,
+                personUsernameService,
+                roleAssignmentReplicaService,
+                employeeLocationAssignmentRepository,
+                locationReferenceService);
         when(employeeRepository.save(any(Employee.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -918,7 +946,7 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             PagedResponse<EmployeeSummaryDto> page =
-                    service.searchEmployees("  ", null, null, 0, 20).getPage();
+                    service.searchEmployees("  ", null, null, 0, 20, null).getPage();
 
             assertThat(page.items()).hasSize(3);
             assertThat(page.totalElements()).isEqualTo(3);
@@ -929,7 +957,7 @@ class EmployeeServiceImplTest {
         void aNullQueryListsEveryEmployee() {
             givenTheDirectory();
 
-            assertThat(service.searchEmployees(null, null, null, 0, 20)
+            assertThat(service.searchEmployees(null, null, null, 0, 20, null)
                             .getPage()
                             .items())
                     .hasSize(3);
@@ -939,7 +967,7 @@ class EmployeeServiceImplTest {
         void matchesByLastName() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results = service.searchEmployees("smith", null, null, 0, 20)
+            List<EmployeeSummaryDto> results = service.searchEmployees("smith", null, null, 0, 20, null)
                     .getPage()
                     .items();
 
@@ -952,7 +980,7 @@ class EmployeeServiceImplTest {
         void matchesByPreferredName() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results = service.searchEmployees("Janie", null, null, 0, 20)
+            List<EmployeeSummaryDto> results = service.searchEmployees("Janie", null, null, 0, 20, null)
                     .getPage()
                     .items();
 
@@ -965,7 +993,7 @@ class EmployeeServiceImplTest {
         void matchesByEmployeeNumber() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results = service.searchEmployees("0002", null, null, 0, 20)
+            List<EmployeeSummaryDto> results = service.searchEmployees("0002", null, null, 0, 20, null)
                     .getPage()
                     .items();
 
@@ -978,7 +1006,7 @@ class EmployeeServiceImplTest {
         void matchingIsCaseInsensitive() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results = service.searchEmployees("DOE", null, null, 0, 20)
+            List<EmployeeSummaryDto> results = service.searchEmployees("DOE", null, null, 0, 20, null)
                     .getPage()
                     .items();
 
@@ -991,7 +1019,7 @@ class EmployeeServiceImplTest {
         void anEmployeeWithNoReplicaRowIsStillFoundByNumberAndCarriesNullNames() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results = service.searchEmployees("EMP-0003", null, null, 0, 20)
+            List<EmployeeSummaryDto> results = service.searchEmployees("EMP-0003", null, null, 0, 20, null)
                     .getPage()
                     .items();
 
@@ -1008,7 +1036,7 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             List<EmployeeSummaryDto> results =
-                    service.searchEmployees(null, null, null, 0, 20).getPage().items();
+                    service.searchEmployees(null, null, null, 0, 20, null).getPage().items();
 
             assertThat(results)
                     .filteredOn(dto -> dto.getEmployeeNumber().equals("EMP-0001"))
@@ -1026,7 +1054,7 @@ class EmployeeServiceImplTest {
 
             // lastName order: Doe, Smith, then the no-replica row (null last name sorts last).
             PagedResponse<EmployeeSummaryDto> firstPage =
-                    service.searchEmployees(null, null, null, 0, 2).getPage();
+                    service.searchEmployees(null, null, null, 0, 2, null).getPage();
             assertThat(firstPage.items())
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
                     .containsExactly("EMP-0002", "EMP-0001");
@@ -1034,7 +1062,7 @@ class EmployeeServiceImplTest {
             assertThat(firstPage.totalPages()).isEqualTo(2);
 
             PagedResponse<EmployeeSummaryDto> secondPage =
-                    service.searchEmployees(null, null, null, 1, 2).getPage();
+                    service.searchEmployees(null, null, null, 1, 2, null).getPage();
             assertThat(secondPage.items())
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
                     .containsExactly("EMP-0003");
@@ -1047,7 +1075,7 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             PagedResponse<EmployeeSummaryDto> page =
-                    service.searchEmployees(null, null, null, 5, 20).getPage();
+                    service.searchEmployees(null, null, null, 5, 20, null).getPage();
 
             assertThat(page.items()).isEmpty();
             assertThat(page.totalElements()).isEqualTo(3);
@@ -1068,7 +1096,7 @@ class EmployeeServiceImplTest {
             givenALargeDirectory();
 
             PagedResponse<EmployeeSummaryDto> page = service.searchEmployees(
-                            null, List.of(EmployeeStatus.DISABLED), null, 0, 2)
+                            null, List.of(EmployeeStatus.DISABLED), null, 0, 2, null)
                     .getPage();
 
             assertThat(page.items())
@@ -1079,7 +1107,7 @@ class EmployeeServiceImplTest {
             assertThat(page.totalPages()).isEqualTo(2);
 
             PagedResponse<EmployeeSummaryDto> secondPage = service.searchEmployees(
-                            null, List.of(EmployeeStatus.DISABLED), null, 1, 2)
+                            null, List.of(EmployeeStatus.DISABLED), null, 1, 2, null)
                     .getPage();
             assertThat(secondPage.items())
                     .extracting(EmployeeSummaryDto::getLastName)
@@ -1092,7 +1120,7 @@ class EmployeeServiceImplTest {
             givenALargeDirectory();
 
             PagedResponse<EmployeeSummaryDto> page = service.searchEmployees(
-                            null, List.of(EmployeeStatus.ACTIVE, EmployeeStatus.DISABLED), null, 0, 20)
+                            null, List.of(EmployeeStatus.ACTIVE, EmployeeStatus.DISABLED), null, 0, 20, null)
                     .getPage();
 
             // Every row in the fixture is ACTIVE or DISABLED, so requesting both is equivalent
@@ -1105,11 +1133,11 @@ class EmployeeServiceImplTest {
         void aNullOrEmptyStatusListAppliesNoFilter() {
             givenALargeDirectory();
 
-            assertThat(service.searchEmployees(null, null, null, 0, 20)
+            assertThat(service.searchEmployees(null, null, null, 0, 20, null)
                             .getPage()
                             .totalElements())
                     .isEqualTo(10);
-            assertThat(service.searchEmployees(null, List.of(), null, 0, 20)
+            assertThat(service.searchEmployees(null, List.of(), null, 0, 20, null)
                             .getPage()
                             .totalElements())
                     .isEqualTo(10);
@@ -1126,10 +1154,10 @@ class EmployeeServiceImplTest {
             givenALargeDirectory();
 
             PagedResponse<EmployeeSummaryDto> firstPage = service.searchEmployees(
-                            null, null, "lastName,desc", 0, 5)
+                            null, null, "lastName,desc", 0, 5, null)
                     .getPage();
             PagedResponse<EmployeeSummaryDto> secondPage = service.searchEmployees(
-                            null, null, "lastName,desc", 1, 5)
+                            null, null, "lastName,desc", 1, 5, null)
                     .getPage();
 
             assertThat(firstPage.items())
@@ -1150,9 +1178,9 @@ class EmployeeServiceImplTest {
             givenALargeDirectory();
 
             PagedResponse<EmployeeSummaryDto> withoutSort =
-                    service.searchEmployees(null, null, null, 0, 10).getPage();
+                    service.searchEmployees(null, null, null, 0, 10, null).getPage();
             PagedResponse<EmployeeSummaryDto> withExplicitAscSort = service.searchEmployees(
-                            null, null, "lastName,asc", 0, 10)
+                            null, null, "lastName,asc", 0, 10, null)
                     .getPage();
 
             assertThat(withoutSort.items())
@@ -1169,7 +1197,7 @@ class EmployeeServiceImplTest {
         void anUnsupportedSortFieldRaisesAValidationException() {
             givenALargeDirectory();
 
-            assertThatThrownBy(() -> service.searchEmployees(null, null, "employeeNumber,asc", 0, 20))
+            assertThatThrownBy(() -> service.searchEmployees(null, null, "employeeNumber,asc", 0, 20, null))
                     .isInstanceOf(RequestValidationException.class);
         }
 
@@ -1177,7 +1205,7 @@ class EmployeeServiceImplTest {
         void anUnsupportedSortDirectionRaisesAValidationException() {
             givenALargeDirectory();
 
-            assertThatThrownBy(() -> service.searchEmployees(null, null, "lastName,sideways", 0, 20))
+            assertThatThrownBy(() -> service.searchEmployees(null, null, "lastName,sideways", 0, 20, null))
                     .isInstanceOf(RequestValidationException.class);
         }
 
@@ -1192,7 +1220,7 @@ class EmployeeServiceImplTest {
             givenALargeDirectory();
 
             Map<EmployeeStatus, Long> counts = service.searchEmployees(
-                            null, List.of(EmployeeStatus.DISABLED), null, 0, 2)
+                            null, List.of(EmployeeStatus.DISABLED), null, 0, 2, null)
                     .getStatusCounts();
 
             assertThat(counts.get(EmployeeStatus.DISABLED)).isEqualTo(4L);
@@ -1205,9 +1233,9 @@ class EmployeeServiceImplTest {
         void statusHistogramIsUnaffectedByPaging() {
             givenALargeDirectory();
 
-            Map<EmployeeStatus, Long> firstPageCounts = service.searchEmployees(null, null, null, 0, 2)
+            Map<EmployeeStatus, Long> firstPageCounts = service.searchEmployees(null, null, null, 0, 2, null)
                     .getStatusCounts();
-            Map<EmployeeStatus, Long> secondPageCounts = service.searchEmployees(null, null, null, 1, 2)
+            Map<EmployeeStatus, Long> secondPageCounts = service.searchEmployees(null, null, null, 1, 2, null)
                     .getStatusCounts();
 
             assertThat(firstPageCounts).isEqualTo(secondPageCounts);
@@ -1222,13 +1250,324 @@ class EmployeeServiceImplTest {
             givenALargeDirectory();
 
             PagedResponse<EmployeeSummaryDto> legacyStyleCall =
-                    service.searchEmployees("First", null, null, 0, 10).getPage();
+                    service.searchEmployees("First", null, null, 0, 10, null).getPage();
 
             assertThat(legacyStyleCall.items())
                     .extracting(EmployeeSummaryDto::getLastName)
                     .containsExactly(
                             "Adams", "Baker", "Cole", "Davis", "Evans", "Foster", "Grant", "Hale", "Irwin", "Jones");
             assertThat(legacyStyleCall.totalElements()).isEqualTo(10);
+        }
+    }
+
+    /**
+     * durion#2155: the register-enrichment fields on {@link EmployeeSummaryDto} (username,
+     * contactInfo, roleAssignments, primaryLocation/otherLocationCount, jobRole), gated by
+     * {@code include=} and, for contactInfo, by {@code people:employee_pii:view} on top of that.
+     */
+    @Nested
+    @DisplayName("searchEmployees register enrichment")
+    class SearchEmployeesEnrichment {
+
+        private static final UUID JANE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f7001");
+        private static final UUID LOCATION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f8001");
+        private static final UUID OTHER_LOCATION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f8002");
+
+        @AfterEach
+        void clearCaller() {
+            SecurityContextHolder.clearContext();
+        }
+
+        /** Authenticates the current thread as a caller holding the given authorities. */
+        private void caller(String... authorities) {
+            TestingAuthenticationToken authentication = new TestingAuthenticationToken("tester", null, authorities);
+            authentication.setAuthenticated(true);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        private Employee employeeRow(UUID personId, String employeeNumber, UUID jobRoleId) {
+            return Employee.builder()
+                    .id(UUID.randomUUID())
+                    .personId(personId)
+                    .employeeNumber(employeeNumber)
+                    .status(EmployeeStatus.ACTIVE)
+                    .jobRoleId(jobRoleId)
+                    .build();
+        }
+
+        private ExtPersonReplica replicaRow(UUID personId, String firstName, String lastName) {
+            ExtPersonReplica person = new ExtPersonReplica();
+            person.setPersonId(personId);
+            person.setFirstName(firstName);
+            person.setLastName(lastName);
+            person.setPrimaryEmail(firstName.toLowerCase(java.util.Locale.ROOT) + "@example.com");
+            person.setPrimaryPhone("555-0100");
+            return person;
+        }
+
+        private EmployeeLocationAssignment assignment(UUID personId, UUID locationId, boolean primary) {
+            return EmployeeLocationAssignment.builder()
+                    .id(UUID.randomUUID())
+                    .employee(Employee.builder().personId(personId).build())
+                    .locationId(locationId)
+                    .role("TECHNICIAN")
+                    .isPrimary(primary)
+                    .effectiveFrom(LocalDate.of(2026, 1, 1))
+                    .status(AssignmentStatus.ACTIVE)
+                    .build();
+        }
+
+        private static final List<EmployeeSearchInclude> EVERY_INCLUDE = List.of(
+                EmployeeSearchInclude.USERNAME,
+                EmployeeSearchInclude.CONTACT_INFO,
+                EmployeeSearchInclude.ROLE_ASSIGNMENTS,
+                EmployeeSearchInclude.LOCATION,
+                EmployeeSearchInclude.JOB_ROLE);
+
+        @Test
+        @DisplayName("a full row renders every column in one service call")
+        void aFullRowRendersEveryColumnInOneServiceCall() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.EMPLOYEE_PII_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", JOB_ROLE_ID)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+            when(personUsernameService.usernamesByPersonId(any())).thenReturn(Map.of(JANE_ID, "jane.smith"));
+            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any()))
+                    .thenReturn(Map.of(
+                            "jane.smith",
+                            List.of(EmployeeRoleAssignmentDto.builder()
+                                    .assignmentId(UUID.randomUUID())
+                                    .roleId(UUID.randomUUID())
+                                    .roleName("SHOP_MANAGER")
+                                    .roleLocationScope("ALL")
+                                    .effectiveStartDate(LocalDateTime.of(2026, 1, 1, 0, 0))
+                                    .build())));
+            when(employeeLocationAssignmentRepository.findActiveByPersonIdIn(any(), any()))
+                    .thenReturn(List.of(assignment(JANE_ID, LOCATION_ID, true)));
+            when(locationReferenceService.findLocationNames(any())).thenReturn(Map.of(LOCATION_ID, "Charlotte Main"));
+            when(jobRoleRepository.findAllById(any())).thenReturn(List.of(jobRole()));
+
+            EmployeeSummaryDto row = service.searchEmployees(null, null, null, 0, 20, EVERY_INCLUDE)
+                    .getPage()
+                    .items()
+                    .get(0);
+
+            assertThat(row.getUsername()).isEqualTo("jane.smith");
+            assertThat(row.getContactInfo()).isNotNull();
+            assertThat(row.getContactInfo().getPrimaryEmail()).isEqualTo("jane@example.com");
+            assertThat(row.getContactInfo().getPrimaryPhone()).isEqualTo("555-0100");
+            assertThat(row.getRoleAssignments())
+                    .extracting(EmployeeRoleAssignmentDto::getRoleName)
+                    .containsExactly("SHOP_MANAGER");
+            assertThat(row.getPrimaryLocation()).isNotNull();
+            assertThat(row.getPrimaryLocation().getId()).isEqualTo(LOCATION_ID);
+            assertThat(row.getPrimaryLocation().getName()).isEqualTo("Charlotte Main");
+            assertThat(row.getOtherLocationCount()).isZero();
+            assertThat(row.getJobRole()).isNotNull();
+            assertThat(row.getJobRole().getId()).isEqualTo(JOB_ROLE_ID);
+            assertThat(row.getJobRole().getName()).isEqualTo("Lead Technician");
+        }
+
+        /**
+         * Pins the #2155 headline constraint: a batched enrichment lookup must be invoked with
+         * exactly the page window's usernames, never the whole q-/status-filtered result set's.
+         * Four employees match the search (page size 2), so a naive implementation that batches
+         * before paging would send all four usernames through; this asserts on the exact set
+         * received by the mocked collaborators instead of merely counting invocations, so it
+         * fails on that bug even though the total employee count (4) is small enough that a
+         * count-only assertion could accidentally still pass.
+         */
+        @Test
+        @DisplayName("the batch role lookup runs against exactly the window's usernames, not the whole result set")
+        void enrichmentBatchLookupTouchesOnlyTheWindow() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW);
+
+            UUID adamsId = UUID.randomUUID();
+            UUID bakerId = UUID.randomUUID();
+            UUID coleId = UUID.randomUUID();
+            UUID davisId = UUID.randomUUID();
+            when(employeeRepository.findAll())
+                    .thenReturn(List.of(
+                            employeeRow(adamsId, "EMP-1", null),
+                            employeeRow(bakerId, "EMP-2", null),
+                            employeeRow(coleId, "EMP-3", null),
+                            employeeRow(davisId, "EMP-4", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(
+                            replicaRow(adamsId, "A", "Adams"),
+                            replicaRow(bakerId, "B", "Baker"),
+                            replicaRow(coleId, "C", "Cole"),
+                            replicaRow(davisId, "D", "Davis")));
+
+            Map<UUID, String> usernamesByPersonId = new LinkedHashMap<>();
+            usernamesByPersonId.put(adamsId, "a.adams");
+            usernamesByPersonId.put(bakerId, "b.baker");
+            usernamesByPersonId.put(coleId, "c.cole");
+            usernamesByPersonId.put(davisId, "d.davis");
+            when(personUsernameService.usernamesByPersonId(any())).thenAnswer(invocation -> {
+                Collection<UUID> requested = invocation.getArgument(0);
+                Map<UUID, String> result = new LinkedHashMap<>();
+                requested.forEach(id -> result.put(id, usernamesByPersonId.get(id)));
+                return result;
+            });
+            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any())).thenReturn(Map.of());
+
+            // lastName order Adams, Baker, Cole, Davis; page size 2, page 0 -> window is [Adams, Baker].
+            service.searchEmployees(null, null, null, 0, 2, List.of(EmployeeSearchInclude.ROLE_ASSIGNMENTS));
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<UUID>> personIdsCaptor = ArgumentCaptor.forClass(Collection.class);
+            verify(personUsernameService).usernamesByPersonId(personIdsCaptor.capture());
+            assertThat(personIdsCaptor.getValue()).containsExactlyInAnyOrder(adamsId, bakerId);
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<String>> usernamesCaptor = ArgumentCaptor.forClass(Collection.class);
+            verify(roleAssignmentReplicaService).findActiveRoleAssignmentsByUsernames(usernamesCaptor.capture());
+            assertThat(usernamesCaptor.getValue()).containsExactlyInAnyOrder("a.adams", "b.baker");
+        }
+
+        @Test
+        @DisplayName("a caller without people:employee_pii:view gets 200 with email/phone absent")
+        void contactInfoAbsentWithoutThePiiPermission() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+
+            EmployeeSummaryDto row = service.searchEmployees(
+                            null, null, null, 0, 20, List.of(EmployeeSearchInclude.CONTACT_INFO))
+                    .getPage()
+                    .items()
+                    .get(0);
+
+            assertThat(row.getContactInfo()).isNull();
+        }
+
+        @Test
+        @DisplayName("include= absent leaves the response identical to the pre-#2155 thin shape")
+        void includeAbsentLeavesTheThinShapeUnchanged() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.EMPLOYEE_PII_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", JOB_ROLE_ID)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+
+            EmployeeSummaryDto row =
+                    service.searchEmployees(null, null, null, 0, 20, null).getPage().items().get(0);
+
+            assertThat(row.getUsername()).isNull();
+            assertThat(row.getContactInfo()).isNull();
+            assertThat(row.getRoleAssignments()).isNull();
+            assertThat(row.getPrimaryLocation()).isNull();
+            assertThat(row.getOtherLocationCount()).isNull();
+            assertThat(row.getJobRole()).isNull();
+            verifyNoInteractions(
+                    personUsernameService,
+                    roleAssignmentReplicaService,
+                    employeeLocationAssignmentRepository,
+                    locationReferenceService,
+                    jobRoleRepository);
+        }
+
+        /** Also true of an empty {@code include=} list, e.g. a client that sends the param with no values. */
+        @Test
+        @DisplayName("an empty include= list also leaves the response identical to the thin shape")
+        void anEmptyIncludeListAlsoLeavesTheThinShapeUnchanged() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.EMPLOYEE_PII_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+
+            EmployeeSummaryDto row = service.searchEmployees(null, null, null, 0, 20, List.of())
+                    .getPage()
+                    .items()
+                    .get(0);
+
+            assertThat(row.getUsername()).isNull();
+            assertThat(row.getRoleAssignments()).isNull();
+        }
+
+        @Test
+        @DisplayName("an employee with no user link, no roles, no job role and no location tolerates partial data")
+        void tolerantOfMissingReplicaData() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.EMPLOYEE_PII_VIEW);
+
+            // No replica row at all: exercises the contactInfo-null-from-missing-replica path too.
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any())).thenReturn(List.of());
+            when(personUsernameService.usernamesByPersonId(any())).thenReturn(Map.of());
+            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any())).thenReturn(Map.of());
+            when(employeeLocationAssignmentRepository.findActiveByPersonIdIn(any(), any())).thenReturn(List.of());
+
+            EmployeeSummaryDto row = service.searchEmployees(null, null, null, 0, 20, EVERY_INCLUDE)
+                    .getPage()
+                    .items()
+                    .get(0);
+
+            assertThat(row.getUsername()).isNull();
+            assertThat(row.getContactInfo()).isNull();
+            assertThat(row.getRoleAssignments()).isEmpty();
+            assertThat(row.getPrimaryLocation()).isNull();
+            assertThat(row.getOtherLocationCount()).isZero();
+            assertThat(row.getJobRole()).isNull();
+            verifyNoInteractions(jobRoleRepository);
+        }
+
+        @Test
+        @DisplayName("multiple active locations produce the correct otherLocationCount")
+        void multipleLocationsProduceTheCorrectOtherLocationCount() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+            when(employeeLocationAssignmentRepository.findActiveByPersonIdIn(any(), any()))
+                    .thenReturn(List.of(
+                            assignment(JANE_ID, LOCATION_ID, true),
+                            assignment(JANE_ID, OTHER_LOCATION_ID, false),
+                            assignment(JANE_ID, UUID.randomUUID(), false)));
+            when(locationReferenceService.findLocationNames(any())).thenReturn(Map.of(LOCATION_ID, "Charlotte Main"));
+
+            EmployeeSummaryDto row = service.searchEmployees(
+                            null, null, null, 0, 20, List.of(EmployeeSearchInclude.LOCATION))
+                    .getPage()
+                    .items()
+                    .get(0);
+
+            assertThat(row.getPrimaryLocation()).isNotNull();
+            assertThat(row.getPrimaryLocation().getId()).isEqualTo(LOCATION_ID);
+            assertThat(row.getPrimaryLocation().getName()).isEqualTo("Charlotte Main");
+            assertThat(row.getOtherLocationCount()).isEqualTo(2);
+        }
+
+        /**
+         * Defensive branch: DECISION-PEOPLE-004 expects at most one active primary per person, but
+         * a lagging replica or a person mid-reassignment could momentarily show none flagged. The
+         * row must still report the active count rather than guessing which assignment is primary.
+         */
+        @Test
+        @DisplayName("no assignment flagged primary yields no primaryLocation but still counts every active assignment")
+        void noFlaggedPrimaryYieldsNullPrimaryWithFullCount() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+            when(employeeLocationAssignmentRepository.findActiveByPersonIdIn(any(), any()))
+                    .thenReturn(List.of(
+                            assignment(JANE_ID, LOCATION_ID, false), assignment(JANE_ID, OTHER_LOCATION_ID, false)));
+
+            EmployeeSummaryDto row = service.searchEmployees(
+                            null, null, null, 0, 20, List.of(EmployeeSearchInclude.LOCATION))
+                    .getPage()
+                    .items()
+                    .get(0);
+
+            assertThat(row.getPrimaryLocation()).isNull();
+            assertThat(row.getOtherLocationCount()).isEqualTo(2);
         }
     }
 }

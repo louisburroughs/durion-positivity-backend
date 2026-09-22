@@ -7,6 +7,7 @@ import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.EmployeeSearchResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
+import com.positivity.people.internal.enums.EmployeeSearchInclude;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import java.util.List;
 import java.util.Optional;
@@ -63,8 +64,21 @@ public interface EmployeeService {
      *     Null or blank defaults to {@code "lastName,asc"}. Only {@code lastName} is supported
      *     today; an unsupported field or direction raises {@link
      *     com.positivity.people.internal.exception.RequestValidationException}.
+     * @param include (durion#2155) the register-enrichment categories to add to each returned
+     *     row: username, PII-gated contact info, active application roles, primary location, and
+     *     job role -- see {@link EmployeeSearchInclude}. Null or empty leaves every one of those
+     *     fields null on {@link com.positivity.people.internal.dto.EmployeeSummaryDto}, the
+     *     pre-#2155 thin shape. Whichever categories are requested are resolved with a fixed
+     *     small number of batched queries against the page window taken by {@code page}/{@code
+     *     size} -- never against the full q-/status-filtered result set -- so the response cost
+     *     stays flat as the tenant's employee count grows.
      */
     @NonNull
     EmployeeSearchResponse searchEmployees(
-            @Nullable String q, @Nullable List<EmployeeStatus> status, @Nullable String sort, int page, int size);
+            @Nullable String q,
+            @Nullable List<EmployeeStatus> status,
+            @Nullable String sort,
+            int page,
+            int size,
+            @Nullable List<EmployeeSearchInclude> include);
 }

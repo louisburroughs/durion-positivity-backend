@@ -7,39 +7,50 @@ import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeJobRoleDto;
+import com.positivity.people.internal.dto.EmployeeLocationDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
+import com.positivity.people.internal.dto.EmployeeRoleAssignmentDto;
 import com.positivity.people.internal.dto.EmployeeSearchResponse;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
+import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.JobRole;
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.DuplicatePolicy;
+import com.positivity.people.internal.enums.EmployeeSearchInclude;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
+import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.JobRoleRepository;
+import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -77,6 +88,16 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final PeopleEventPublisher peopleEventPublisher;
 
     private final JobRoleRepository jobRoleRepository;
+
+    // ── Register enrichment (durion#2155) -- see enrichWindow's javadoc ──
+
+    private final PersonUsernameService personUsernameService;
+
+    private final RoleAssignmentReplicaService roleAssignmentReplicaService;
+
+    private final EmployeeLocationAssignmentRepository employeeLocationAssignmentRepository;
+
+    private final LocationReferenceService locationReferenceService;
 
     @Override
     @Transactional(readOnly = true)
@@ -308,7 +329,12 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull EmployeeSearchResponse searchEmployees(
-            @Nullable String q, @Nullable List<EmployeeStatus> status, @Nullable String sort, int page, int size) {
+            @Nullable String q,
+            @Nullable List<EmployeeStatus> status,
+            @Nullable String sort,
+            int page,
+            int size,
+            @Nullable List<EmployeeSearchInclude> include) {
         // Employee counts (shop staff) are far smaller than the customer-directory volumes that
         // justified the same approach in pos-customer PartyServiceImpl#browseParties (ADR-0026 /
         // OQ3): load both sides, merge/filter/sort/page in memory rather than joining across
@@ -325,6 +351,11 @@ public class EmployeeServiceImpl implements EmployeeService {
         List<UUID> personIds = employees.stream().map(Employee::getPersonId).toList();
         Map<UUID, ExtPersonReplica> replicasByPersonId = extPersonReplicaRepository.findByPersonIdIn(personIds).stream()
                 .collect(Collectors.toMap(ExtPersonReplica::getPersonId, Function.identity(), (a, b) -> a));
+        // Reused by enrichWindow below for jobRole (id -> Employee.jobRoleId) and by
+        // buildContactInfo for contactInfo -- both already in memory from the two maps above, so
+        // building this lookup costs a map insert per employee, not a query.
+        Map<UUID, Employee> employeesByPersonId =
+                employees.stream().collect(Collectors.toMap(Employee::getPersonId, Function.identity(), (a, b) -> a));
 
         List<EmployeeSummaryDto> all = employees.stream()
                 .map(employee -> toSummary(employee, replicasByPersonId.get(employee.getPersonId())))
@@ -354,6 +385,12 @@ public class EmployeeServiceImpl implements EmployeeService {
         int toIndex = (int) Math.min((long) fromIndex + size, total);
         List<EmployeeSummaryDto> window = filtered.subList(fromIndex, toIndex);
 
+        // durion#2155: enrichment runs HERE, against `window` (the page actually returned, at
+        // most `size` rows) -- never against `all`/`filtered`/`employees` above, which hold every
+        // employee the search matched. See enrichWindow's javadoc for why that ordering is the
+        // whole point of this feature.
+        enrichWindow(window, resolveIncludes(include), employeesByPersonId, replicasByPersonId);
+
         int totalPages = size == 0 ? 0 : (int) Math.ceil((double) total / size);
         PagedResponse<EmployeeSummaryDto> pagedResponse = new PagedResponse<>(window, page, size, total, totalPages);
         return new EmployeeSearchResponse(pagedResponse, statusCounts);
@@ -369,6 +406,171 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .preferredName(person != null ? person.getPreferredName() : null)
                 .status(employee.getStatus() != null ? employee.getStatus().name() : null)
                 .active(employee.getStatus() == EmployeeStatus.ACTIVE)
+                .build();
+    }
+
+    private static final Set<EmployeeSearchInclude> NO_INCLUDES = Set.of();
+
+    /** Null/empty {@code include} means "the pre-#2155 thin row" -- see {@link #enrichWindow}. */
+    private Set<EmployeeSearchInclude> resolveIncludes(@Nullable List<EmployeeSearchInclude> include) {
+        return (include == null || include.isEmpty()) ? NO_INCLUDES : EnumSet.copyOf(include);
+    }
+
+    /**
+     * Widens each row of the already-taken page window with the employee register's extra
+     * columns (durion#2155): username, PII-gated contact info, active application roles, primary
+     * location, and job role. One batched lookup per requested category, scoped to {@code
+     * window}'s employees only -- this MUST be called with the page window taken by {@code
+     * searchEmployees} (at most {@code size} rows), never with {@code all}/{@code filtered}/
+     * {@code employees} there, which hold every employee the search matched (214+ and growing).
+     * An enrichment batched against the full matched set instead of the window defeats the reason
+     * #2155 exists: it turns a bounded, page-sized cost back into one that scales with tenant
+     * size, exactly like the per-row calls this feature replaces. See the {@code findAll()}
+     * comment in {@code searchEmployees} for the fuller warning.
+     *
+     * @param employeesByPersonId every employee the current search matched, keyed by person id
+     *     (already in memory in {@code searchEmployees} -- reading {@code Employee.jobRoleId} off
+     *     it below costs a map lookup, not a query)
+     * @param replicasByPersonId every identity replica row the current search matched, keyed by
+     *     person id (also already in memory -- {@code searchEmployees} loads it for name
+     *     filtering/sorting, and {@code buildContactInfo} below is the same helper {@code
+     *     getEmployee} uses to build the full-profile contact block)
+     */
+    private void enrichWindow(
+            List<EmployeeSummaryDto> window,
+            Set<EmployeeSearchInclude> includes,
+            Map<UUID, Employee> employeesByPersonId,
+            Map<UUID, ExtPersonReplica> replicasByPersonId) {
+        if (window.isEmpty() || includes.isEmpty()) {
+            return;
+        }
+
+        List<UUID> windowPersonIds = window.stream().map(EmployeeSummaryDto::getPersonId).toList();
+
+        // Username backs both its own column and the join key role assignments are keyed by
+        // (RoleAssignmentReplicaService takes usernames, not person ids) -- resolve it once
+        // whenever either is requested rather than twice.
+        boolean needsUsername = includes.contains(EmployeeSearchInclude.USERNAME)
+                || includes.contains(EmployeeSearchInclude.ROLE_ASSIGNMENTS);
+        Map<UUID, String> usernamesByPersonId =
+                needsUsername ? personUsernameService.usernamesByPersonId(windowPersonIds) : Map.of();
+
+        Map<String, List<EmployeeRoleAssignmentDto>> roleAssignmentsByUsername =
+                includes.contains(EmployeeSearchInclude.ROLE_ASSIGNMENTS)
+                        ? roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(
+                                usernamesByPersonId.values())
+                        : Map.of();
+
+        boolean includeContactInfo = includes.contains(EmployeeSearchInclude.CONTACT_INFO);
+        // #1898: email/phone are gated on the narrow PII permission, never the structural
+        // people:employee:view this whole endpoint already requires. A caller that requested
+        // CONTACT_INFO but lacks people:employee_pii:view still gets 200 with the field simply
+        // absent from every row -- never a 403 on a row, and never on the request.
+        boolean callerHoldsPii =
+                includeContactInfo && SecurityContextHelper.hasAuthority(PeoplePermissions.EMPLOYEE_PII_VIEW);
+
+        boolean includeLocation = includes.contains(EmployeeSearchInclude.LOCATION);
+        Map<UUID, List<EmployeeLocationAssignment>> activeAssignmentsByPersonId =
+                includeLocation ? activeAssignmentsByPersonId(windowPersonIds) : Map.of();
+        Map<UUID, String> locationNamesById =
+                includeLocation ? locationNamesFor(activeAssignmentsByPersonId) : Map.of();
+
+        boolean includeJobRole = includes.contains(EmployeeSearchInclude.JOB_ROLE);
+        Map<UUID, JobRole> jobRolesById = includeJobRole ? jobRolesFor(window, employeesByPersonId) : Map.of();
+
+        for (EmployeeSummaryDto row : window) {
+            UUID personId = row.getPersonId();
+            if (includes.contains(EmployeeSearchInclude.USERNAME)) {
+                row.setUsername(usernamesByPersonId.get(personId));
+            }
+            if (includeContactInfo && callerHoldsPii) {
+                row.setContactInfo(buildContactInfo(replicasByPersonId.get(personId)));
+            }
+            if (includes.contains(EmployeeSearchInclude.ROLE_ASSIGNMENTS)) {
+                String username = usernamesByPersonId.get(personId);
+                row.setRoleAssignments(
+                        username == null ? List.of() : roleAssignmentsByUsername.getOrDefault(username, List.of()));
+            }
+            if (includeLocation) {
+                applyLocation(row, activeAssignmentsByPersonId.getOrDefault(personId, List.of()), locationNamesById);
+            }
+            if (includeJobRole) {
+                UUID jobRoleId = Optional.ofNullable(employeesByPersonId.get(personId))
+                        .map(Employee::getJobRoleId)
+                        .orElse(null);
+                row.setJobRole(jobRoleId == null ? null : toJobRoleRef(jobRoleId, jobRolesById.get(jobRoleId)));
+            }
+        }
+    }
+
+    /** {@code personId -> its active staffing assignments}, batched for {@code personIds}. */
+    private Map<UUID, List<EmployeeLocationAssignment>> activeAssignmentsByPersonId(
+            Collection<UUID> personIds) {
+        List<EmployeeLocationAssignment> active =
+                employeeLocationAssignmentRepository.findActiveByPersonIdIn(personIds, LocalDate.now(clock));
+        Map<UUID, List<EmployeeLocationAssignment>> byPersonId = new LinkedHashMap<>();
+        for (EmployeeLocationAssignment assignment : active) {
+            byPersonId
+                    .computeIfAbsent(assignment.getPersonId(), ignored -> new ArrayList<>())
+                    .add(assignment);
+        }
+        return byPersonId;
+    }
+
+    /** Display names for every distinct location named by {@code assignmentsByPersonId}. */
+    private Map<UUID, String> locationNamesFor(Map<UUID, List<EmployeeLocationAssignment>> assignmentsByPersonId) {
+        Set<UUID> locationIds = assignmentsByPersonId.values().stream()
+                .flatMap(List::stream)
+                .map(EmployeeLocationAssignment::getLocationId)
+                .collect(Collectors.toSet());
+        return locationReferenceService.findLocationNames(locationIds);
+    }
+
+    /**
+     * DECISION-PEOPLE-004: the register shows one primary location plus a count of the rest
+     * ("Charlotte Main &middot; +1 more"), never the person's full assignment list. The primary
+     * is whichever active assignment is flagged {@code isPrimary} -- {@link
+     * StaffingAssignmentServiceImpl} enforces at most one active primary per person at a time --
+     * and every other active assignment counts toward {@code otherLocationCount}, including the
+     * defensive case where none is currently flagged primary (a lagging replica, or a person
+     * mid-reassignment): the row then shows no primary location but still reports how many active
+     * assignments exist, rather than guessing which one to call primary.
+     */
+    private void applyLocation(
+            EmployeeSummaryDto row,
+            List<EmployeeLocationAssignment> active,
+            Map<UUID, String> locationNamesById) {
+        Optional<EmployeeLocationAssignment> primary =
+                active.stream().filter(EmployeeLocationAssignment::isPrimary).findFirst();
+        row.setPrimaryLocation(primary.map(assignment -> EmployeeLocationDto.builder()
+                        .id(assignment.getLocationId())
+                        .name(locationNamesById.get(assignment.getLocationId()))
+                        .build())
+                .orElse(null));
+        row.setOtherLocationCount(active.size() - (primary.isPresent() ? 1 : 0));
+    }
+
+    /** Job roles for every distinct {@code jobRoleId} named by {@code window}'s employees. */
+    private Map<UUID, JobRole> jobRolesFor(List<EmployeeSummaryDto> window, Map<UUID, Employee> employeesByPersonId) {
+        Set<UUID> jobRoleIds = window.stream()
+                .map(row -> employeesByPersonId.get(row.getPersonId()))
+                .filter(Objects::nonNull)
+                .map(Employee::getJobRoleId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (jobRoleIds.isEmpty()) {
+            return Map.of();
+        }
+        return jobRoleRepository.findAllById(jobRoleIds).stream()
+                .collect(Collectors.toMap(JobRole::getId, Function.identity(), (a, b) -> a));
+    }
+
+    /** Same degrade-to-id-alone behavior as {@link #buildJobRoleRef}, from a pre-fetched batch. */
+    private EmployeeJobRoleDto toJobRoleRef(UUID jobRoleId, @Nullable JobRole jobRole) {
+        return EmployeeJobRoleDto.builder()
+                .id(jobRoleId)
+                .code(jobRole != null ? jobRole.getCode() : null)
+                .name(jobRole != null ? jobRole.getName() : null)
                 .build();
     }
 

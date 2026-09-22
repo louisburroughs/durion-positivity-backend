@@ -8,6 +8,7 @@ import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.EmployeeSearchResponse;
 import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
+import com.positivity.people.internal.enums.EmployeeSearchInclude;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.security.PeoplePermissions;
@@ -130,6 +131,17 @@ public class EmployeeController {
                     ordering are both correct for a result set spanning more than one page.
                     Emits a PEOPLE_EMPLOYEE_SEARCH audit event but changes no state; this is a read-only projection \
                     merged in memory from local employment rows and the pos-people-contact identity replica.
+                    Register enrichment (durion#2155): include= repeatable tokens (USERNAME, CONTACT_INFO, \
+                    ROLE_ASSIGNMENTS, LOCATION, JOB_ROLE) each turn on one extra field/group on the returned rows \
+                    -- username, contact info, active application roles, a single primary location plus a count \
+                    of the rest, and job role -- so the register can render a full page in this one call instead \
+                    of one follow-up call per row per column. Omitted, every one of those fields is null: the \
+                    pre-#2155 thin row, byte for byte, so an existing caller (e.g. HrFacadeTool.searchEmployees) \
+                    sees no change. Whichever categories are requested are resolved against the page actually \
+                    returned, never the whole matching set, so the response cost stays flat as the tenant grows. \
+                    CONTACT_INFO carries a second, narrower gate: email/phone appear only when the caller also \
+                    holds people:employee_pii:view (#1898) -- requesting it without that permission still \
+                    returns 200, just with the field absent from every row, never a 403.
                     Returns 200 with an empty items list and correct totals when the page, query, or status \
                     filter matches nothing.
                     """)
@@ -159,8 +171,19 @@ public class EmployeeController {
             @Parameter(description = "Zero-based page index") @PositiveOrZero @RequestParam(defaultValue = "0")
                     int page,
             @Parameter(description = "Page size, up to 100") @Positive @Max(100) @RequestParam(defaultValue = "20")
-                    int size) {
-        return ResponseEntity.ok(employeeService.searchEmployees(q, status, sort, page, size));
+                    int size,
+            @Parameter(
+                            description =
+                                    "Register-enrichment categories (durion#2155); repeatable "
+                                            + "(?include=USERNAME&include=ROLE_ASSIGNMENTS), matching how `status` "
+                                            + "above is passed. Omitted or empty returns the thin pre-#2155 row: "
+                                            + "username, contactInfo, roleAssignments, primaryLocation, "
+                                            + "otherLocationCount and jobRole are all null. CONTACT_INFO additionally "
+                                            + "requires people:employee_pii:view (#1898); without it the field is "
+                                            + "simply absent, never a 403.")
+                    @RequestParam(required = false)
+                    List<EmployeeSearchInclude> include) {
+        return ResponseEntity.ok(employeeService.searchEmployees(q, status, sort, page, size, include));
     }
 
     @PutMapping("/{employeeId}")
