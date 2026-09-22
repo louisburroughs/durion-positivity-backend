@@ -25,6 +25,7 @@ import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.JobRole;
+import com.positivity.people.internal.enums.AllowedAction;
 import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.DuplicatePolicy;
@@ -52,6 +53,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +61,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -108,6 +112,15 @@ class EmployeeServiceImplTest {
     @Mock
     private LocationReferenceService locationReferenceService;
 
+    /**
+     * A real instance, not a mock (durion#2159): {@link EmployeeActionPolicy} is a pure function
+     * of (authorities, status) plus a fail-soft security-context read, so it needs no stubbing.
+     * The nested {@code ActionPolicyAgreesWithServiceGuards} class below cross-checks it directly
+     * against {@code disableEmployee}/{@code enableEmployee}'s real guards; {@code
+     * EmployeeActionPolicyTest} covers the full matrix in isolation.
+     */
+    private final EmployeeActionPolicy employeeActionPolicy = new EmployeeActionPolicy();
+
     private EmployeeServiceImpl service;
 
     private static final UUID JOB_ROLE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01");
@@ -124,7 +137,8 @@ class EmployeeServiceImplTest {
                 personUsernameService,
                 roleAssignmentReplicaService,
                 employeeLocationAssignmentRepository,
-                locationReferenceService);
+                locationReferenceService,
+                employeeActionPolicy);
         when(employeeRepository.save(any(Employee.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -866,6 +880,70 @@ class EmployeeServiceImplTest {
         }
     }
 
+    /**
+     * durion#2159's whole point: {@link EmployeeActionPolicy}'s DISABLE/ENABLE flags must never
+     * disagree with what {@code disableEmployee}/{@code enableEmployee} actually do. Rather than
+     * hand-copying the matrix from the policy's javadoc into assertions here (which would only
+     * prove the policy agrees with itself), this drives the real service methods for every {@link
+     * EmployeeStatus} and compares the outcome to the policy's answer directly -- so a future
+     * change to either side that breaks the agreement fails here, not just in production.
+     */
+    @Nested
+    @DisplayName("EmployeeActionPolicy agrees with disableEmployee/enableEmployee's real guards")
+    class ActionPolicyAgreesWithServiceGuards {
+
+        private static final Set<String> HOLDS_ACTIVATION = Set.of(PeoplePermissions.EMPLOYEE_ACTIVATION);
+
+        @ParameterizedTest
+        @EnumSource(EmployeeStatus.class)
+        @DisplayName("DISABLE is offered iff disableEmployee actually succeeds")
+        void disableFlagAgreesWithTheGuard(EmployeeStatus status) {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(status)));
+            when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.of(replica()));
+            DisableEmployeeRequestDto request = new DisableEmployeeRequestDto();
+            request.setAssignmentPolicy(AssignmentTerminationPolicy.IMMEDIATE);
+
+            boolean policyOffersDisable = employeeActionPolicy
+                    .allowedActions(status, HOLDS_ACTIVATION)
+                    .contains(AllowedAction.DISABLE);
+            boolean guardAllowsDisable = true;
+            try {
+                service.disableEmployee(PERSON_ID, request);
+            } catch (ResourceStateConflictException ex) {
+                guardAllowsDisable = false;
+            }
+
+            assertThat(policyOffersDisable)
+                    .as("policy DISABLE flag vs. disableEmployee outcome for status %s", status)
+                    .isEqualTo(guardAllowsDisable);
+        }
+
+        @ParameterizedTest
+        @EnumSource(EmployeeStatus.class)
+        @DisplayName("ENABLE is offered iff enableEmployee actually succeeds")
+        void enableFlagAgreesWithTheGuard(EmployeeStatus status) {
+            Employee employee = employee(status);
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee));
+            when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.of(replica()));
+            EnableEmployeeRequestDto request = new EnableEmployeeRequestDto();
+            request.setUpdatedAt(employee.getUpdatedAt());
+
+            boolean policyOffersEnable = employeeActionPolicy
+                    .allowedActions(status, HOLDS_ACTIVATION)
+                    .contains(AllowedAction.ENABLE);
+            boolean guardAllowsEnable = true;
+            try {
+                service.enableEmployee(PERSON_ID, request);
+            } catch (ResourceStateConflictException ex) {
+                guardAllowsEnable = false;
+            }
+
+            assertThat(policyOffersEnable)
+                    .as("policy ENABLE flag vs. enableEmployee outcome for status %s", status)
+                    .isEqualTo(guardAllowsEnable);
+        }
+    }
+
     @Nested
     @DisplayName("searchEmployees")
     class SearchEmployees {
@@ -1035,8 +1113,9 @@ class EmployeeServiceImplTest {
         void activeMirrorsTheEmployeeStatus() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results =
-                    service.searchEmployees(null, null, null, 0, 20, null).getPage().items();
+            List<EmployeeSummaryDto> results = service.searchEmployees(null, null, null, 0, 20, null)
+                    .getPage()
+                    .items();
 
             assertThat(results)
                     .filteredOn(dto -> dto.getEmployeeNumber().equals("EMP-0001"))
@@ -1099,9 +1178,7 @@ class EmployeeServiceImplTest {
                             null, List.of(EmployeeStatus.DISABLED), null, 0, 2, null)
                     .getPage();
 
-            assertThat(page.items())
-                    .extracting(EmployeeSummaryDto::getLastName)
-                    .containsExactly("Baker", "Davis");
+            assertThat(page.items()).extracting(EmployeeSummaryDto::getLastName).containsExactly("Baker", "Davis");
             assertThat(page.items()).allMatch(dto -> "DISABLED".equals(dto.getStatus()));
             assertThat(page.totalElements()).isEqualTo(4);
             assertThat(page.totalPages()).isEqualTo(2);
@@ -1189,8 +1266,9 @@ class EmployeeServiceImplTest {
                             "Adams", "Baker", "Cole", "Davis", "Evans", "Foster", "Grant", "Hale", "Irwin", "Jones");
             assertThat(withExplicitAscSort.items())
                     .extracting(EmployeeSummaryDto::getLastName)
-                    .containsExactlyElementsOf(
-                            withoutSort.items().stream().map(EmployeeSummaryDto::getLastName).toList());
+                    .containsExactlyElementsOf(withoutSort.items().stream()
+                            .map(EmployeeSummaryDto::getLastName)
+                            .toList());
         }
 
         @Test
@@ -1233,10 +1311,10 @@ class EmployeeServiceImplTest {
         void statusHistogramIsUnaffectedByPaging() {
             givenALargeDirectory();
 
-            Map<EmployeeStatus, Long> firstPageCounts = service.searchEmployees(null, null, null, 0, 2, null)
-                    .getStatusCounts();
-            Map<EmployeeStatus, Long> secondPageCounts = service.searchEmployees(null, null, null, 1, 2, null)
-                    .getStatusCounts();
+            Map<EmployeeStatus, Long> firstPageCounts =
+                    service.searchEmployees(null, null, null, 0, 2, null).getStatusCounts();
+            Map<EmployeeStatus, Long> secondPageCounts =
+                    service.searchEmployees(null, null, null, 1, 2, null).getStatusCounts();
 
             assertThat(firstPageCounts).isEqualTo(secondPageCounts);
         }
@@ -1411,7 +1489,8 @@ class EmployeeServiceImplTest {
                 requested.forEach(id -> result.put(id, usernamesByPersonId.get(id)));
                 return result;
             });
-            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any())).thenReturn(Map.of());
+            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any()))
+                    .thenReturn(Map.of());
 
             // lastName order Adams, Baker, Cole, Davis; page size 2, page 0 -> window is [Adams, Baker].
             service.searchEmployees(null, null, null, 0, 2, List.of(EmployeeSearchInclude.ROLE_ASSIGNMENTS));
@@ -1454,8 +1533,10 @@ class EmployeeServiceImplTest {
             when(extPersonReplicaRepository.findByPersonIdIn(any()))
                     .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
 
-            EmployeeSummaryDto row =
-                    service.searchEmployees(null, null, null, 0, 20, null).getPage().items().get(0);
+            EmployeeSummaryDto row = service.searchEmployees(null, null, null, 0, 20, null)
+                    .getPage()
+                    .items()
+                    .get(0);
 
             assertThat(row.getUsername()).isNull();
             assertThat(row.getContactInfo()).isNull();
@@ -1499,8 +1580,10 @@ class EmployeeServiceImplTest {
             when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
             when(extPersonReplicaRepository.findByPersonIdIn(any())).thenReturn(List.of());
             when(personUsernameService.usernamesByPersonId(any())).thenReturn(Map.of());
-            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any())).thenReturn(Map.of());
-            when(employeeLocationAssignmentRepository.findActiveByPersonIdIn(any(), any())).thenReturn(List.of());
+            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any()))
+                    .thenReturn(Map.of());
+            when(employeeLocationAssignmentRepository.findActiveByPersonIdIn(any(), any()))
+                    .thenReturn(List.of());
 
             EmployeeSummaryDto row = service.searchEmployees(null, null, null, 0, 20, EVERY_INCLUDE)
                     .getPage()

@@ -67,6 +67,14 @@ class EmployeeProfileMappingTest {
     @Mock
     private LocationReferenceService locationReferenceService;
 
+    /**
+     * A real instance, not a mock: durion#2159's policy is a pure function of (authorities,
+     * status) plus a fail-soft security-context read (see its javadoc), so it needs no stubbing
+     * and behaves the same here as it does with no authenticated caller in these tests --
+     * {@code allowedActions} on the returned profile is simply empty.
+     */
+    private final EmployeeActionPolicy employeeActionPolicy = new EmployeeActionPolicy();
+
     private EmployeeServiceImpl service() {
         return new EmployeeServiceImpl(
                 TEST_CLOCK,
@@ -78,7 +86,8 @@ class EmployeeProfileMappingTest {
                 personUsernameService,
                 roleAssignmentReplicaService,
                 employeeLocationAssignmentRepository,
-                locationReferenceService);
+                locationReferenceService,
+                employeeActionPolicy);
     }
 
     private ExtPersonReplica person() {

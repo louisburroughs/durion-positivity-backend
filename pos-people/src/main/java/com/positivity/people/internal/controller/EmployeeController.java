@@ -131,17 +131,23 @@ public class EmployeeController {
                     ordering are both correct for a result set spanning more than one page.
                     Emits a PEOPLE_EMPLOYEE_SEARCH audit event but changes no state; this is a read-only projection \
                     merged in memory from local employment rows and the pos-people-contact identity replica.
-                    Register enrichment (durion#2155): include= repeatable tokens (USERNAME, CONTACT_INFO, \
-                    ROLE_ASSIGNMENTS, LOCATION, JOB_ROLE) each turn on one extra field/group on the returned rows \
-                    -- username, contact info, active application roles, a single primary location plus a count \
-                    of the rest, and job role -- so the register can render a full page in this one call instead \
-                    of one follow-up call per row per column. Omitted, every one of those fields is null: the \
-                    pre-#2155 thin row, byte for byte, so an existing caller (e.g. HrFacadeTool.searchEmployees) \
+                    Register enrichment (durion#2155, plus ALLOWED_ACTIONS from durion#2159): include= repeatable \
+                    tokens (USERNAME, CONTACT_INFO, ROLE_ASSIGNMENTS, LOCATION, JOB_ROLE, ALLOWED_ACTIONS) each \
+                    turn on one extra field/group on the returned rows -- username, contact info, active \
+                    application roles, a single primary location plus a count of the rest, job role, and the \
+                    caller's allowed actions on the row -- so the register can render a full page in this one call \
+                    instead of one follow-up call per row per column. Omitted, every one of those fields is null: \
+                    the pre-#2155 thin row, byte for byte, so an existing caller (e.g. HrFacadeTool.searchEmployees) \
                     sees no change. Whichever categories are requested are resolved against the page actually \
                     returned, never the whole matching set, so the response cost stays flat as the tenant grows. \
                     CONTACT_INFO carries a second, narrower gate: email/phone appear only when the caller also \
                     holds people:employee_pii:view (#1898) -- requesting it without that permission still \
-                    returns 200, just with the field absent from every row, never a 403.
+                    returns 200, just with the field absent from every row, never a 403. ALLOWED_ACTIONS is a \
+                    RENDERING HINT ONLY -- computed by EmployeeActionPolicy from the caller's permissions and each \
+                    row's status, never a substitute for the @PreAuthorize and service-level guards those actions \
+                    still enforce independently -- and does not account for location-scoped access enforced \
+                    elsewhere in this module, so a location-scoped caller may occasionally see an action listed \
+                    that their scope does not actually cover for that employee.
                     Returns 200 with an empty items list and correct totals when the page, query, or status \
                     filter matches nothing.
                     """)
@@ -173,14 +179,15 @@ public class EmployeeController {
             @Parameter(description = "Page size, up to 100") @Positive @Max(100) @RequestParam(defaultValue = "20")
                     int size,
             @Parameter(
-                            description =
-                                    "Register-enrichment categories (durion#2155); repeatable "
-                                            + "(?include=USERNAME&include=ROLE_ASSIGNMENTS), matching how `status` "
-                                            + "above is passed. Omitted or empty returns the thin pre-#2155 row: "
-                                            + "username, contactInfo, roleAssignments, primaryLocation, "
-                                            + "otherLocationCount and jobRole are all null. CONTACT_INFO additionally "
-                                            + "requires people:employee_pii:view (#1898); without it the field is "
-                                            + "simply absent, never a 403.")
+                            description = "Register-enrichment categories (durion#2155, plus ALLOWED_ACTIONS from "
+                                    + "durion#2159); repeatable "
+                                    + "(?include=USERNAME&include=ROLE_ASSIGNMENTS), matching how `status` "
+                                    + "above is passed. Omitted or empty returns the thin pre-#2155 row: "
+                                    + "username, contactInfo, roleAssignments, primaryLocation, "
+                                    + "otherLocationCount, jobRole and allowedActions are all null. "
+                                    + "CONTACT_INFO additionally requires people:employee_pii:view (#1898); "
+                                    + "without it the field is simply absent, never a 403. ALLOWED_ACTIONS "
+                                    + "is a rendering hint only -- see EmployeeSummaryDto.allowedActions.")
                     @RequestParam(required = false)
                     List<EmployeeSearchInclude> include) {
         return ResponseEntity.ok(employeeService.searchEmployees(q, status, sort, page, size, include));
@@ -369,10 +376,7 @@ public class EmployeeController {
 
     @PostMapping("/{employeeId}/enable")
     @EmitEvent(id = "PEOPLE_EMPLOYEE_ENABLE", apiVersion = "1")
-    @Operation(
-            operationId = "enableEmployee",
-            summary = "Enable A Disabled Employee",
-            description = """
+    @Operation(operationId = "enableEmployee", summary = "Enable A Disabled Employee", description = """
                     Reactivates a DISABLED employee, setting status ACTIVE with a fresh statusEffectiveAt. This is \
                     the explicit DISABLED -> ACTIVE transition DECISION-PEOPLE-001 calls for, and the direct \
                     inverse of disableEmployee: staffing assignments are left exactly as disableEmployee's \
@@ -420,8 +424,7 @@ public class EmployeeController {
                                             examples =
                                                     @ExampleObject(
                                                             name = "Reactivate with last-known updatedAt",
-                                                            value =
-                                                                    """
+                                                            value = """
                                                                     {"updatedAt":"2026-02-01T14:05:00Z"}
                                                                     """)))
                     @Valid
