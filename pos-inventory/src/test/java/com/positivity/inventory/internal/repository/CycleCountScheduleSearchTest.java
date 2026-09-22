@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.positivity.inventory.PostgresSliceTestBase;
 import com.positivity.inventory.internal.entity.CycleCountSchedule;
 import com.positivity.inventory.internal.entity.ExtStorageLocationReplica;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -42,6 +44,9 @@ class CycleCountScheduleSearchTest extends PostgresSliceTestBase {
     @Autowired
     private ExtStorageLocationReplicaRepository storageLocations;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     private UUID siteA;
     private UUID siteB;
     private UUID binUnderSiteA;
@@ -75,7 +80,7 @@ class CycleCountScheduleSearchTest extends PostgresSliceTestBase {
 
     private UUID save(UUID locationId, boolean active, LocalDate nextDueDate, int minutesAgo) {
         Instant createdAt = Instant.parse("2026-03-10T12:00:00Z").minus(minutesAgo, ChronoUnit.MINUTES);
-        return schedules
+        UUID scheduleId = schedules
                 .saveAndFlush(CycleCountSchedule.builder()
                         .locationId(locationId)
                         .frequencyDays(30)
@@ -87,6 +92,20 @@ class CycleCountScheduleSearchTest extends PostgresSliceTestBase {
                         .updatedAt(createdAt)
                         .build())
                 .getScheduleId();
+        // Pin the minted instant in the row. The entity audits createdAt through Spring Data's
+        // AuditingEntityListener, which is AspectJ-woven as @Configurable: once any full
+        // application context in this JVM has enabled JPA auditing, the aspect's JVM-wide bean
+        // configurer injects that context's handler into every listener Hibernate constructs
+        // afterwards — this slice's included, although the slice registers no auditing of its
+        // own — and the persist stamps "now" over the value minted above. The listing's order is
+        // what these tests are about, so it must not depend on which test class ran first.
+        entityManager
+                .createNativeQuery("update cycle_count_schedule set created_at = :at where schedule_id = :id")
+                .setParameter("at", createdAt)
+                .setParameter("id", scheduleId)
+                .executeUpdate();
+        entityManager.clear();
+        return scheduleId;
     }
 
     private static List<UUID> ids(Page<CycleCountSchedule> page) {
