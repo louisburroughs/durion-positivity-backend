@@ -43,8 +43,12 @@ public final class PeoplePermissions {
      * technician could enumerate colleagues through the search endpoint and then pull each one's
      * home address and emergency contact (#1898).
      *
-     * <p>Seeded to ADMIN, GENERAL_MANAGER, MANAGER and SHOP_MANAGER: the roles whose job is
-     * managing people. That set is a strict subset of today's {@link #EMPLOYEE_VIEW} holders, so
+     * <p>Seeded to ADMIN and SHOP_MANAGER: the roles whose job is managing people. (This list
+     * previously also named GENERAL_MANAGER and MANAGER, neither of which exists — the seeded
+     * roles are ADMIN, CONTROLLER, DISPATCHER, SELF_SERVICE_CUSTOMER, SHOP_MANAGER, SUPPORT and
+     * SYSTEM_ADMINISTRATOR. Check {@code R__seed_role_permissions.sql} before naming a role here;
+     * an invented name is silently dropped by the permission sync rather than failing.) That set
+     * is a strict subset of today's {@link #EMPLOYEE_VIEW} holders, so
      * the split takes reach away and gives none — no role can read anything it could not read
      * before. The structural reads are untouched, so a technician keeps the employee search and
      * the assignment reads and loses only the contact block.
