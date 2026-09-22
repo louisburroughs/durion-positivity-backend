@@ -1017,7 +1017,7 @@ paths:
 
         Emits a WORKORDER_CREATE event and marks the workorder fact changed for downstream replication.
 
-        Returns 200 with the created or replayed workorder, and 400 when the estimate cannot be found.
+        Returns 200 with the created or replayed workorder, 400 when the estimate cannot be found, and 409 with code DOCUMENT_NUMBER_CONFLICT and a Retry-After header when a concurrent create took the workorder number — re-send the same request.
 
         '
       operationId: createWorkorder
@@ -1049,6 +1049,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkorderResponse'
           description: Work order created successfully, or existing work order returned if idempotency key was previously processed.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict - a concurrent create took the workorder number (DOCUMENT_NUMBER_CONFLICT, retryable).
       security:
       - bearerAuth:
         - workorder:workorder:create
@@ -1671,7 +1677,7 @@ paths:
 
         Emits a WORKORDER_ESTIMATE_CREATE event.
 
-        Returns 201 with the estimate, 400 with code VALIDATION_ERROR when required fields are missing or negative, and 409 with code CONFLICT when totals are inconsistent or an integrity constraint fails.
+        Returns 201 with the estimate, 400 with code VALIDATION_ERROR when required fields are missing or negative, 409 with code CONFLICT when totals are inconsistent or an integrity constraint fails, and 409 with code DOCUMENT_NUMBER_CONFLICT and a Retry-After header when a concurrent create took the estimate number — re-send the same request.
 
         '
       operationId: createEstimate
@@ -1725,7 +1731,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Conflict - estimate could not be created due to state or integrity constraints.
+          description: Conflict - estimate could not be created due to state or integrity constraints (CONFLICT), or a concurrent create took its number (DOCUMENT_NUMBER_CONFLICT, retryable).
         '500':
           content:
             application/json:
@@ -2596,7 +2602,7 @@ paths:
 
         Emits a WORKORDER_ESTIMATE_PROMOTE event.
 
-        Returns 200 with the workorder (also on ALREADY_PROMOTED replays that can resolve the existing workorder), 404 when the estimate does not exist, 409 when a promotion precondition or the customer''s requirements verdict refuses it, and 503 when that verdict has not replicated yet — a retryable condition, and the only one worth retrying.
+        Returns 200 with the workorder (also on ALREADY_PROMOTED replays that can resolve the existing workorder), 404 when the estimate does not exist, 409 when a promotion precondition or the customer''s requirements verdict refuses it, 409 with code DOCUMENT_NUMBER_CONFLICT and a Retry-After header when a concurrent create took the workorder number, and 503 when the requirements verdict has not replicated yet. Those last two are the only answers worth retrying.
 
         Every non-2xx answer carries the ApiError envelope with a machine-readable code and the correlation id that also appears in the server log line.
 
@@ -2636,7 +2642,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'A promotion precondition refused the request. The envelope''s code names which: ALREADY_PROMOTED, APPROVAL_EXPIRED, APPROVAL_INVALID, APPROVAL_NOT_FOUND, NO_APPROVED_ITEMS, INVALID_STATE, CUSTOMER_REQUIREMENTS_NOT_MET, or CUSTOMER_APPROVAL_INVALID. None of these is resolved by retrying.'
+          description: 'A promotion precondition refused the request. The envelope''s code names which: ALREADY_PROMOTED, APPROVAL_EXPIRED, APPROVAL_INVALID, APPROVAL_NOT_FOUND, NO_APPROVED_ITEMS, INVALID_STATE, CUSTOMER_REQUIREMENTS_NOT_MET, or CUSTOMER_APPROVAL_INVALID. None of these is resolved by retrying. DOCUMENT_NUMBER_CONFLICT (with Retry-After) is the exception: a concurrent create took the workorder number, and re-sending succeeds.'
         '503':
           content:
             application/json:
