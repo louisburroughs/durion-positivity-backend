@@ -52,6 +52,28 @@ public final class PeoplePermissions {
     public static final String EMPLOYEE_PII_VIEW = "people:employee_pii:view";
 
     /**
+     * Add and edit job roles on the tenant's own list (durion#2157): HR master data such as
+     * "Lead Technician" or "Parts Counter", never a permission-bearing role.
+     *
+     * <p>Guards {@code POST /v1/people/job-roles}. Held by the roles that manage people, the same
+     * set as {@link #EMPLOYEE_PII_VIEW}: setting up the org chart's job titles is a management
+     * action, not something every staff role should be able to do just because it can see the
+     * list ({@link #JOBROLE_VIEW}).
+     */
+    public static final String JOBROLE_MANAGE = "people:jobRole:manage";
+
+    /**
+     * Read the tenant's job-role list (durion#2157): the vocabulary {@code EmployeeProfileDto}
+     * names an employee's job role from.
+     *
+     * <p>Guards {@code GET /v1/people/job-roles}. Granted alongside {@link #EMPLOYEE_VIEW} to the
+     * staff roles that already see employee structure -- assigning or filtering by job role needs
+     * to see the list first -- following {@link #SKILL_VIEW}'s precedent (CAP-328) for a
+     * reference-list read.
+     */
+    public static final String JOBROLE_VIEW = "people:jobRole:view";
+
+    /**
      * View employee records: the structural reads over other people.
      *
      * <p>Staffing assignments, location assignments, the paged employee search and the

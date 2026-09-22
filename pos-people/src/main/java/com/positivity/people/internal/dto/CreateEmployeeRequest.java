@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
+import java.util.UUID;
 import lombok.Data;
 
 @Data
@@ -60,6 +61,15 @@ public class CreateEmployeeRequest {
     @Valid
     @Schema(description = "Contact information for the employee", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private EmployeeContactInfoDto contactInfo;
+
+    /**
+     * Id of a job role on the calling tenant's own list ({@code GET /v1/people/job-roles}).
+     * Optional: HR master data, not a permission -- an employee with no job role set is valid.
+     */
+    @Schema(
+            description = "Id of the employee's job role, from the tenant's job-role list; omit for none",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private UUID jobRoleId;
 
     /**
      * Defines the policy for handling duplicate employee records during creation.

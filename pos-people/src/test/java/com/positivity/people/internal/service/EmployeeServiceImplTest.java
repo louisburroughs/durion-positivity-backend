@@ -21,15 +21,18 @@ import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.entity.ExtPersonReplica;
+import com.positivity.people.internal.entity.JobRole;
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.DuplicatePolicy;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.people.internal.repository.JobRoleRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -74,7 +77,12 @@ class EmployeeServiceImplTest {
     @Mock
     private PeopleEventPublisher peopleEventPublisher;
 
+    @Mock
+    private JobRoleRepository jobRoleRepository;
+
     private EmployeeServiceImpl service;
+
+    private static final UUID JOB_ROLE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01");
 
     @BeforeEach
     void setUp() {
@@ -83,8 +91,18 @@ class EmployeeServiceImplTest {
                 extPersonReplicaRepository,
                 employeeRepository,
                 offboardingRetryRepository,
-                peopleEventPublisher);
+                peopleEventPublisher,
+                jobRoleRepository);
         when(employeeRepository.save(any(Employee.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private static JobRole jobRole() {
+        return JobRole.builder()
+                .id(JOB_ROLE_ID)
+                .code("LEAD_TECH")
+                .name("Lead Technician")
+                .active(true)
+                .build();
     }
 
     private static CreateEmployeeRequest createRequest() {
@@ -319,6 +337,44 @@ class EmployeeServiceImplTest {
 
             assertThatThrownBy(() -> service.createEmployee(request)).isInstanceOf(IllegalStateException.class);
         }
+
+        @Test
+        void roundTripsAJobRoleFromTheTenantsList() {
+            when(jobRoleRepository.existsById(JOB_ROLE_ID)).thenReturn(true);
+            when(jobRoleRepository.findById(JOB_ROLE_ID)).thenReturn(Optional.of(jobRole()));
+
+            CreateEmployeeRequest request = createRequest();
+            request.setJobRoleId(JOB_ROLE_ID);
+
+            EmployeeProfileDto profile = service.createEmployee(request);
+
+            ArgumentCaptor<Employee> saved = ArgumentCaptor.forClass(Employee.class);
+            verify(employeeRepository).save(saved.capture());
+            assertThat(saved.getValue().getJobRoleId()).isEqualTo(JOB_ROLE_ID);
+            assertThat(profile.getJobRole()).isNotNull();
+            assertThat(profile.getJobRole().getId()).isEqualTo(JOB_ROLE_ID);
+            assertThat(profile.getJobRole().getCode()).isEqualTo("LEAD_TECH");
+            assertThat(profile.getJobRole().getName()).isEqualTo("Lead Technician");
+        }
+
+        @Test
+        void aNullJobRoleIsAcceptedAndReadBackAsNull() {
+            EmployeeProfileDto profile = service.createEmployee(createRequest());
+
+            assertThat(profile.getJobRole()).isNull();
+            verifyNoInteractions(jobRoleRepository);
+        }
+
+        @Test
+        void rejectsAJobRoleIdThatIsNotOnTheTenantsList() {
+            when(jobRoleRepository.existsById(JOB_ROLE_ID)).thenReturn(false);
+
+            CreateEmployeeRequest request = createRequest();
+            request.setJobRoleId(JOB_ROLE_ID);
+
+            assertThatThrownBy(() -> service.createEmployee(request)).isInstanceOf(NotFoundException.class);
+            verify(employeeRepository, never()).save(any());
+        }
     }
 
     @Nested
@@ -383,6 +439,30 @@ class EmployeeServiceImplTest {
             when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getEmployee(PERSON_ID)).isInstanceOf(PersonNotFoundException.class);
+        }
+
+        @Test
+        void mapsTheJobRoleFromTheTenantsList() {
+            when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.of(replica()));
+            Employee employee = employee(EmployeeStatus.ACTIVE);
+            employee.setJobRoleId(JOB_ROLE_ID);
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee));
+            when(jobRoleRepository.findById(JOB_ROLE_ID)).thenReturn(Optional.of(jobRole()));
+
+            EmployeeProfileDto profile = service.getEmployee(PERSON_ID);
+
+            assertThat(profile.getJobRole()).isNotNull();
+            assertThat(profile.getJobRole().getId()).isEqualTo(JOB_ROLE_ID);
+            assertThat(profile.getJobRole().getName()).isEqualTo("Lead Technician");
+        }
+
+        @Test
+        void anEmployeeWithNoJobRoleReadsBackNull() {
+            when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.of(replica()));
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
+
+            assertThat(service.getEmployee(PERSON_ID).getJobRole()).isNull();
+            verifyNoInteractions(jobRoleRepository);
         }
     }
 
@@ -489,6 +569,49 @@ class EmployeeServiceImplTest {
 
             assertThat(service.updateEmployee(PERSON_ID, request).getWarnings())
                     .containsExactly("Ambiguous duplicate match detected by name similarity");
+        }
+
+        @Test
+        void roundTripsAJobRoleChange() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
+            when(jobRoleRepository.existsById(JOB_ROLE_ID)).thenReturn(true);
+            when(jobRoleRepository.findById(JOB_ROLE_ID)).thenReturn(Optional.of(jobRole()));
+
+            UpdateEmployeeRequest request = updateRequest();
+            request.setJobRoleId(JOB_ROLE_ID);
+
+            EmployeeProfileDto profile = service.updateEmployee(PERSON_ID, request);
+
+            ArgumentCaptor<Employee> saved = ArgumentCaptor.forClass(Employee.class);
+            verify(employeeRepository).save(saved.capture());
+            assertThat(saved.getValue().getJobRoleId()).isEqualTo(JOB_ROLE_ID);
+            assertThat(profile.getJobRole().getId()).isEqualTo(JOB_ROLE_ID);
+        }
+
+        @Test
+        void omittingTheJobRoleClearsAPreviouslySetOne() {
+            Employee existing = employee(EmployeeStatus.ACTIVE);
+            existing.setJobRoleId(JOB_ROLE_ID);
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(existing));
+
+            EmployeeProfileDto profile = service.updateEmployee(PERSON_ID, updateRequest());
+
+            ArgumentCaptor<Employee> saved = ArgumentCaptor.forClass(Employee.class);
+            verify(employeeRepository).save(saved.capture());
+            assertThat(saved.getValue().getJobRoleId()).isNull();
+            assertThat(profile.getJobRole()).isNull();
+        }
+
+        @Test
+        void rejectsAJobRoleIdThatIsNotOnTheTenantsList() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
+            when(jobRoleRepository.existsById(JOB_ROLE_ID)).thenReturn(false);
+
+            UpdateEmployeeRequest request = updateRequest();
+            request.setJobRoleId(JOB_ROLE_ID);
+
+            assertThatThrownBy(() -> service.updateEmployee(PERSON_ID, request)).isInstanceOf(NotFoundException.class);
+            verify(employeeRepository, never()).save(any());
         }
     }
 

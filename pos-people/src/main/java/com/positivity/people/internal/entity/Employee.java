@@ -58,6 +58,15 @@ public class Employee extends TenantScopedEntity {
     @Column(name = "employee_number")
     private String employeeNumber;
 
+    /**
+     * The employee's job role, from the tenant's own {@code job_role} list (durion#2157); null
+     * when none is set. A plain id column rather than a JPA association, matching {@link
+     * #personId}: the referenced row is looked up through {@code JobRoleRepository} only where
+     * its name is needed for display, instead of joining it onto every employee load.
+     */
+    @Column(name = "job_role_id")
+    private UUID jobRoleId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private EmployeeStatus status;

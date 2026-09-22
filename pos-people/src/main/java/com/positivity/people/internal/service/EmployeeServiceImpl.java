@@ -6,6 +6,7 @@ import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
+import com.positivity.people.internal.dto.EmployeeJobRoleDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.PagedResponse;
@@ -13,15 +14,18 @@ import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.entity.ExtPersonReplica;
+import com.positivity.people.internal.entity.JobRole;
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.DuplicatePolicy;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.people.internal.repository.JobRoleRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
@@ -68,6 +72,8 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     private final PeopleEventPublisher peopleEventPublisher;
 
+    private final JobRoleRepository jobRoleRepository;
+
     @Override
     @Transactional(readOnly = true)
     public @NonNull Optional<EmployeeIdentityDto> resolveByEmployeeNumber(@NonNull String employeeNumber) {
@@ -89,6 +95,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Transactional
     public @NonNull EmployeeProfileDto createEmployee(@NonNull CreateEmployeeRequest request) {
         validateEmployeeRequest(request.getHireDate(), request.getTerminationDate());
+        requireJobRoleExists(request.getJobRoleId());
         List<String> warnings = evaluateDuplicatePolicy(
                 null,
                 request.getDuplicatePolicy(),
@@ -113,7 +120,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                 request.getEmployeeNumber(),
                 request.getStatus(),
                 request.getHireDate(),
-                request.getTerminationDate());
+                request.getTerminationDate(),
+                request.getJobRoleId());
         Employee savedEmployee = employeeRepository.save(employee);
         peopleEventPublisher.publishEmployeeUpdated(savedEmployee);
 
@@ -147,6 +155,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     public @NonNull EmployeeProfileDto updateEmployee(
             @NonNull UUID employeeId, @NonNull UpdateEmployeeRequest request) {
         validateEmployeeRequest(request.getHireDate(), request.getTerminationDate());
+        requireJobRoleExists(request.getJobRoleId());
 
         Employee employee = employeeRepository.findByPersonId(employeeId).orElse(null);
         if (employee == null && !extPersonReplicaRepository.existsById(employeeId)) {
@@ -177,7 +186,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                 request.getEmployeeNumber(),
                 request.getStatus(),
                 request.getHireDate(),
-                request.getTerminationDate());
+                request.getTerminationDate(),
+                request.getJobRoleId());
         if (previousStatus != request.getStatus()) {
             employee.setStatusEffectiveAt(Instant.now(clock));
         }
@@ -390,14 +400,43 @@ public class EmployeeServiceImpl implements EmployeeService {
             String employeeNumber,
             EmployeeStatus status,
             java.time.LocalDate hireDate,
-            java.time.LocalDate terminationDate) {
+            java.time.LocalDate terminationDate,
+            @Nullable UUID jobRoleId) {
         employee.setEmployeeNumber(employeeNumber);
         employee.setStatus(status);
         employee.setHireDate(hireDate);
         employee.setTerminationDate(terminationDate);
+        employee.setJobRoleId(jobRoleId);
         if (employee.getStatusEffectiveAt() == null) {
             employee.setStatusEffectiveAt(Instant.now(clock));
         }
+    }
+
+    /**
+     * A non-null {@code jobRoleId} must already name a row on the tenant's job-role list
+     * (durion#2157) -- HR master data the caller picks from {@code GET /v1/people/job-roles},
+     * never a value it invents. {@code null} (no job role set) always passes.
+     */
+    private void requireJobRoleExists(@Nullable UUID jobRoleId) {
+        if (jobRoleId != null && !jobRoleRepository.existsById(jobRoleId)) {
+            throw new NotFoundException("Job role not found: " + jobRoleId);
+        }
+    }
+
+    /** The nested job-role reference for a profile response, or null when none is set. */
+    private @Nullable EmployeeJobRoleDto buildJobRoleRef(@Nullable UUID jobRoleId) {
+        if (jobRoleId == null) {
+            return null;
+        }
+        // requireJobRoleExists already rejected a create/update naming an unknown id, so a miss
+        // here only happens for a row this read raced against; degrade to the id alone rather
+        // than failing a read over a write that is someone else's problem to resolve.
+        JobRole jobRole = jobRoleRepository.findById(jobRoleId).orElse(null);
+        return EmployeeJobRoleDto.builder()
+                .id(jobRoleId)
+                .code(jobRole != null ? jobRole.getCode() : null)
+                .name(jobRole != null ? jobRole.getName() : null)
+                .build();
     }
 
     /** Primary + secondary phone from contact info, normalized and blank-filtered. */
@@ -445,6 +484,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .hireDate(employee != null ? employee.getHireDate() : null)
                 .terminationDate(employee != null ? employee.getTerminationDate() : null)
                 .contactInfo(contactInfo)
+                .jobRole(employee != null ? buildJobRoleRef(employee.getJobRoleId()) : null)
                 .statusEffectiveAt(employee != null ? employee.getStatusEffectiveAt() : null)
                 .createdAt(employee != null ? employee.getCreatedAt() : null)
                 .updatedAt(employee != null ? employee.getUpdatedAt() : null)
@@ -465,6 +505,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .hireDate(employee != null ? employee.getHireDate() : null)
                 .terminationDate(employee != null ? employee.getTerminationDate() : null)
                 .contactInfo(buildContactInfo(person))
+                .jobRole(employee != null ? buildJobRoleRef(employee.getJobRoleId()) : null)
                 .statusEffectiveAt(employee != null ? employee.getStatusEffectiveAt() : null)
                 .createdAt(
                         person != null

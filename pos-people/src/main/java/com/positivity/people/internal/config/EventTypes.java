@@ -149,6 +149,12 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead("PEOPLE_CREDENTIAL_LIST", "List the credentials a person holds")
                         .build(),
                 EventTypeRegistration.write("PEOPLE_CREDENTIAL_BULK_INGEST", "Bulk import the credentials people hold")
+                        .build(),
+
+                // JobRoleController (durion#2157) - 2 events
+                EventTypeRegistration.fastRead("PEOPLE_JOB_ROLE_LIST", "List the tenant's job-role list")
+                        .build(),
+                EventTypeRegistration.write("PEOPLE_JOB_ROLE_CREATE", "Add a job role to the tenant's list")
                         .build());
     }
 }
