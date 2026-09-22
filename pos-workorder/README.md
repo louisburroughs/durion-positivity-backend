@@ -629,6 +629,8 @@ scope: `EST-{year}-{locationId}` for estimates, `WO-{year}` for workorders. `Doc
 reads the row `FOR UPDATE` and advances it in the transaction that inserts the numbered row, so concurrent
 creates in one scope wait on the lock instead of probing for a free number and colliding. A scope's row
 is created on first use at 1000; the first allocation skips numbers issued before the counter existed.
+Estimates seeded from an appointment (`createEstimateFromAppointment`) are created without a number, as they
+were before the counter; only `createEstimate` assigns one.
 
 ## Development
 

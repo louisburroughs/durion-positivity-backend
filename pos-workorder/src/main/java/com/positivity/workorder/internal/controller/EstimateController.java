@@ -616,8 +616,10 @@ public class EstimateController {
                     Emits a WORKORDER_ESTIMATE_PROMOTE event.
                     Returns 200 with the workorder (also on ALREADY_PROMOTED replays that can resolve the \
                     existing workorder), 404 when the estimate does not exist, 409 when a promotion \
-                    precondition or the customer's requirements verdict refuses it, and 503 when that verdict \
-                    has not replicated yet — a retryable condition, and the only one worth retrying.
+                    precondition or the customer's requirements verdict refuses it, 409 with code \
+                    DOCUMENT_NUMBER_CONFLICT and a Retry-After header when a concurrent create took the \
+                    workorder number, and 503 when the requirements verdict has not replicated yet. Those last \
+                    two are the only answers worth retrying.
                     Every non-2xx answer carries the ApiError envelope with a machine-readable code and the \
                     correlation id that also appears in the server log line.
                     """)
@@ -635,7 +637,9 @@ public class EstimateController {
                                 which: ALREADY_PROMOTED, APPROVAL_EXPIRED, APPROVAL_INVALID, \
                                 APPROVAL_NOT_FOUND, NO_APPROVED_ITEMS, INVALID_STATE, \
                                 CUSTOMER_REQUIREMENTS_NOT_MET, or CUSTOMER_APPROVAL_INVALID. None of these \
-                                is resolved by retrying.""",
+                                is resolved by retrying. DOCUMENT_NUMBER_CONFLICT (with Retry-After) is the \
+                                exception: a concurrent create took the workorder number, and re-sending \
+                                succeeds.""",
                         content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "503",

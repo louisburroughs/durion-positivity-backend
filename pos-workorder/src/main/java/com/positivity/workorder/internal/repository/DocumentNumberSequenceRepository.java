@@ -4,6 +4,7 @@ import com.positivity.workorder.internal.entity.DocumentNumberSequence;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 
@@ -16,5 +17,5 @@ public interface DocumentNumberSequenceRepository extends JpaRepository<Document
      * @return the locked row, or empty if the scope has never issued a number
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<DocumentNumberSequence> findByScopeKey(String scopeKey);
+    Optional<DocumentNumberSequence> findByScopeKey(@NonNull String scopeKey);
 }
