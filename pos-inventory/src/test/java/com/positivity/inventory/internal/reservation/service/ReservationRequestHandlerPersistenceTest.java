@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -35,8 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 @DisplayName("ReservationRequestHandler against real persistence")
 class ReservationRequestHandlerPersistenceTest {
 
-    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
-
     @Autowired
     private ReservationRequestService reservationRequestService;
 
@@ -48,7 +47,7 @@ class ReservationRequestHandlerPersistenceTest {
 
     @BeforeEach
     void bindTenant() {
-        TenantContext.bind(TENANT);
+        TenantContext.bind(TenantTestSupport.TENANT_A);
     }
 
     @AfterEach

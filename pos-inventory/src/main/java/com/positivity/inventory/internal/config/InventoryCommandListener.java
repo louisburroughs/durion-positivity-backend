@@ -69,7 +69,9 @@ import tools.jackson.databind.ObjectMapper;
  * after the catch throw {@code UnexpectedRollbackException}, which the container's error handler
  * retried through its whole back-off ladder (1+2+4+8+16 s) before dead-lettering the record —
  * 31 s of the partition per failed command, with the processed mark rolled back every time. With
- * the handler isolated, its failure rolls back only its own work and the mark still commits.
+ * the handler isolated, its failure rolls back only its own work and the mark still commits. The
+ * price is an at-least-once window between the two commits, which the handlers' own idempotency
+ * covers; see {@link #handleDeduplicated}.
  */
 @Slf4j
 @Component
@@ -219,12 +221,20 @@ public class InventoryCommandListener {
     }
 
     /**
-     * Command-id dedupe shared by the pick commands: at-most-once per commandId.
+     * Command-id dedupe shared by the pick commands: a commandId whose mark is in
+     * {@code processed_events} is never applied again.
      *
      * <p>The handler runs in its own transaction so that a permanent failure inside it cannot
      * poison the transaction the processed mark is written in (see the class doc). A transient
      * failure still propagates, so the container retries the record and the mark is never written
      * for a command that was not applied.
+     *
+     * <p>Because the handler and the mark commit separately, the guarantee is at-least-once, not
+     * at-most-once: if the mark's own commit fails after the handler committed, the redelivered
+     * record runs the handler again. Every handler tolerates that — pick-list generation skips a
+     * workorder that already has a list, a reservation request updates the line's existing
+     * reservation, and confirm/consume check the task's state — so the window costs a repeated
+     * no-op, never a doubled effect.
      */
     private void handleDeduplicated(@NonNull JsonNode root, @NonNull Consumer<JsonNode> handler) {
         String commandId = root.path("commandId").stringValue(null);

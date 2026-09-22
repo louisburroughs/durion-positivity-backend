@@ -11,6 +11,7 @@ import com.positivity.inventory.internal.config.PickListService;
 import com.positivity.inventory.internal.config.ReservationRequestService;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
 import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.UUID;
@@ -51,8 +52,6 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("InventoryCommandListener transaction shape")
 class InventoryCommandListenerTransactionTest {
 
-    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
-
     @Autowired
     private PlatformTransactionManager transactionManager;
 
@@ -79,7 +78,7 @@ class InventoryCommandListenerTransactionTest {
 
     @BeforeEach
     void setUp() {
-        TenantContext.bind(TENANT);
+        TenantContext.bind(TenantTestSupport.TENANT_A);
         commandId = UUID.randomUUID().toString();
         listener = new InventoryCommandListener(
                 Clock.systemUTC(),
