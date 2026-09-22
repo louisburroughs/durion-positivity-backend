@@ -23,11 +23,11 @@ public final class PeoplePermissions {
     /** View identity-compliance reports (active users linked to inactive persons). */
     public static final String COMPLIANCE_VIEW = "people:compliance:view";
 
+    /** Activate and deactivate employee records. */
+    public static final String EMPLOYEE_ACTIVATION = "people:employee:activation";
+
     /** Create employee records. */
     public static final String EMPLOYEE_CREATE = "people:employee:create";
-
-    /** Deactivate employee records. */
-    public static final String EMPLOYEE_DEACTIVATE = "people:employee:deactivate";
 
     /** Edit employee records. */
     public static final String EMPLOYEE_EDIT = "people:employee:edit";

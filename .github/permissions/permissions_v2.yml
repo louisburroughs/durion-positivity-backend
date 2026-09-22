@@ -395,11 +395,11 @@ permissions_by_domain:
     description: View price override history and reports
     source: pos-order/src/main/resources/permissions.yaml
   people:
+  - name: people:employee:activation
+    description: Activate and deactivate employee records
+    source: pos-people/src/main/resources/permissions.yaml
   - name: people:employee:create
     description: Create employee records
-    source: pos-people/src/main/resources/permissions.yaml
-  - name: people:employee:deactivate
-    description: Deactivate employee records
     source: pos-people/src/main/resources/permissions.yaml
   - name: people:employee:edit
     description: Edit employee records

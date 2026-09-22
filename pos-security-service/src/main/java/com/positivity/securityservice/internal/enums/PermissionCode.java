@@ -272,7 +272,7 @@ public enum PermissionCode {
     PEOPLE__EMPLOYEE__VIEW(116, "people:employee:view"),
     PEOPLE__EMPLOYEE__CREATE(117, "people:employee:create"),
     PEOPLE__EMPLOYEE__EDIT(118, "people:employee:edit"),
-    PEOPLE__EMPLOYEE__DEACTIVATE(119, "people:employee:deactivate"),
+    PEOPLE__EMPLOYEE__ACTIVATION(119, "people:employee:activation"),
     /**
      * Superseded by {@link #SECURITY__ROLE__VIEW} — no people-module role
      * endpoints exist; role management lives in pos-security-service.
@@ -506,7 +506,7 @@ public enum PermissionCode {
     @Deprecated
     PEOPLE__PERSON__EDIT(235, "people:person:edit"),
     /**
-     * INFERRED successor {@link #PEOPLE__EMPLOYEE__DEACTIVATE} — employee
+     * INFERRED successor {@link #PEOPLE__EMPLOYEE__ACTIVATION} — employee
      * has no delete action, only deactivate; no supersededBy mapping is
      * recorded for this one in the manifest layer, since deactivate is not
      * a literal 1:1 match for delete. Audit doc §3.

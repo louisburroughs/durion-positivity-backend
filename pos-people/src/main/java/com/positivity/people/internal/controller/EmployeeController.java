@@ -301,8 +301,8 @@ public class EmployeeController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"people:employee:deactivate"})
-    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_DEACTIVATE + "')")
+            scopes = {"people:employee:activation"})
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_ACTIVATION + "')")
     public ResponseEntity<EmployeeProfileDto> disableEmployee(
             @PathVariable UUID employeeId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
