@@ -2,6 +2,8 @@ package com.positivity.workorder.internal.config;
 
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantResolver;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -39,6 +41,7 @@ public class InvoiceCommandPublisher {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
+    private final TenantResolver tenantResolver;
 
     @Value("${workorder.kafka.invoice-commands-topic:invoice.commands.v1}")
     private String invoiceCommandsTopic;
@@ -59,7 +62,11 @@ public class InvoiceCommandPublisher {
             String command = objectMapper.writeValueAsString(
                     new GenerationCommand(commandId.toString(), GENERATION_COMMAND_TYPE, request));
             kafkaTemplate
-                    .send(invoiceCommandsTopic, request.getWorkorderId().toString(), command)
+                    .send(TenantKafkaHeaders.record(
+                            invoiceCommandsTopic,
+                            request.getWorkorderId().toString(),
+                            command,
+                            tenantResolver.require()))
                     .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
             log.info("Queued invoice generation command {} for workorder {}", commandId, request.getWorkorderId());
         } catch (InterruptedException e) {
