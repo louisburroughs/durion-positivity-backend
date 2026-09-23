@@ -158,11 +158,12 @@ public class CycleCountAdjustmentController {
             operationId = "approveCycleCountAdjustment",
             summary = "Approve adjustment",
             description = """
-                    Approves a PENDING_APPROVAL cycle count adjustment and posts its COUNT_VARIANCE_IN or \
+                    Approves a PENDING_APPROVAL or FAILED cycle count adjustment and posts its COUNT_VARIANCE_IN or \
                     COUNT_VARIANCE_OUT entry to the inventory ledger, marking the linked task APPROVED.
                     Use this tool after reviewing a pending adjustment; do not use rejectCycleCountAdjustment, \
                     which discards it without touching inventory.
-                    Preconditions: the adjustment must be in PENDING_APPROVAL; for a task-linked adjustment the \
+                    Preconditions: the adjustment must be in PENDING_APPROVAL, or FAILED to retry a posting that \
+                    failed unexpectedly; for a task-linked adjustment the \
                     conflict gate applies — a first approval that detects in-window stock movements flags the task \
                     CONFLICT and aborts, and re-approving a CONFLICT task recomputes the variance against current \
                     on-hand rather than the stale snapshot (a recomputed zero variance approves without posting \
@@ -173,8 +174,9 @@ public class CycleCountAdjustmentController {
                     Emits an INVENTORY_CYCLE_COUNT_ADJUSTMENT_APPROVE event plus a MovementAdjusted audit event, \
                     and the posting changes on-hand immediately.
                     Returns 400 when no adjustment exists for the id (the unknown id maps to a validation error, \
-                    not 404), and 409 when the adjustment is not PENDING_APPROVAL or the conflict gate rejects the \
-                    first approval (CYCLE_COUNT_CONFLICT).
+                    not 404), 409 when the adjustment is not PENDING_APPROVAL or FAILED or the conflict gate \
+                    rejects the first approval (CYCLE_COUNT_CONFLICT), and 500 (ADJUSTMENT_LEDGER_POST_FAILED) when \
+                    the posting fails unexpectedly, which leaves the adjustment FAILED with the cause in errorMessage.
                     """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "200", description = "Adjustment approved and posted")
@@ -188,7 +190,7 @@ public class CycleCountAdjustmentController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Adjustment not PENDING_APPROVAL, or conflict gate rejected the approval"
+            description = "Adjustment not PENDING_APPROVAL or FAILED, or conflict gate rejected the approval"
                     + " (CYCLE_COUNT_CONFLICT)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AdjustmentResponse> approveAdjustment(

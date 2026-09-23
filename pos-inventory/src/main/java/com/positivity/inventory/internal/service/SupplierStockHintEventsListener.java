@@ -124,7 +124,7 @@ public class SupplierStockHintEventsListener {
             log.warn("Skipping supplier event without eventId: type={}", eventType);
             return;
         }
-        if (processedEventRepository.existsById(eventId)) {
+        if (processedEventRepository.existsByEventIdAndOwner(eventId, OWNER)) {
             return;
         }
 

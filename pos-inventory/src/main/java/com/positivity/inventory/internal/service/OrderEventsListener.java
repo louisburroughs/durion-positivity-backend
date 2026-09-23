@@ -104,7 +104,7 @@ public class OrderEventsListener {
             log.warn("Skipping order event without eventId");
             return;
         }
-        if (processedEventRepository.existsById(eventId)) {
+        if (processedEventRepository.existsByEventIdAndOwner(eventId, OWNER)) {
             return;
         }
 

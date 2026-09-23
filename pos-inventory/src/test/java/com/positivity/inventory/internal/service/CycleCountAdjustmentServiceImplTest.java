@@ -77,6 +77,9 @@ class CycleCountAdjustmentServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.LocationScopeService locationScopeService;
 
+    @Mock
+    private com.positivity.inventory.internal.service.LedgerPostingFailureRecorder failureRecorder;
+
     private CycleCountAdjustmentServiceImpl service;
     private Clock fixedClock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
@@ -94,7 +97,8 @@ class CycleCountAdjustmentServiceImplTest {
                 costStateRepository,
                 methodResolver,
                 baseUnitOfMeasureResolver,
-                locationScopeService);
+                locationScopeService,
+                failureRecorder);
     }
 
     @AfterEach

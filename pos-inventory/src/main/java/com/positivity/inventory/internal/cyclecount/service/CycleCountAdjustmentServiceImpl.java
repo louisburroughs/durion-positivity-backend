@@ -28,6 +28,7 @@ import com.positivity.inventory.internal.service.ApprovalThresholdEvaluator;
 import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
 import com.positivity.inventory.internal.service.CostingMethodResolver;
 import com.positivity.inventory.internal.service.CycleCountConflictDetector;
+import com.positivity.inventory.internal.service.LedgerPostingFailureRecorder;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.Quantities;
@@ -70,6 +71,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     private final CostingMethodResolver methodResolver;
     private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
     private final LocationScopeService locationScopeService;
+    private final LedgerPostingFailureRecorder failureRecorder;
 
     @Override
     @Transactional
@@ -177,7 +179,10 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                 .findById(adjustmentId)
                 .orElseThrow(() -> new IllegalArgumentException(ADJUSTMENT_NOT_FOUND + adjustmentId));
 
-        if (adjustment.getStatus() != AdjustmentStatus.PENDING_APPROVAL) {
+        // FAILED is approvable: an unexpected posting failure is the retryable case (#2170), and
+        // approving again is how it is retried.
+        if (adjustment.getStatus() != AdjustmentStatus.PENDING_APPROVAL
+                && adjustment.getStatus() != AdjustmentStatus.FAILED) {
             throw new IllegalStateException("Cannot approve adjustment in status: " + adjustment.getStatus());
         }
 
@@ -366,6 +371,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
             adjustment.setLedgerEntryId(ledgerEntry.getLedgerEntryId());
             adjustment.setStatus(AdjustmentStatus.POSTED);
             adjustment.setPostedAt(Instant.now(clock));
+            adjustment.setErrorMessage(null);
             adjustmentRepository.save(adjustment);
 
             log.info(
@@ -384,10 +390,13 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                     e.getMessage());
             throw e;
         } catch (Exception e) {
+            // An unexpected failure rolls this transaction back, so FAILED is written after the
+            // rollback, in a transaction of its own; saved here, it was rolled back with the rest
+            // and never persisted (#2170).
             log.error("Failed to post adjustment {} to ledger", adjustment.getAdjustmentId(), e);
             adjustment.setStatus(AdjustmentStatus.FAILED);
             adjustment.setErrorMessage(e.getMessage());
-            adjustmentRepository.save(adjustment);
+            failureRecorder.recordAdjustmentFailure(adjustment, e.getMessage());
             throw new AdjustmentLedgerPostingException(
                     adjustment.getAdjustmentId(), "Failed to post adjustment to ledger", e);
         }

@@ -25,6 +25,7 @@ import com.positivity.inventory.internal.service.ApprovalThresholdEvaluator;
 import com.positivity.inventory.internal.service.CostingMethodResolver;
 import com.positivity.inventory.internal.service.InventoryFactPublisher;
 import com.positivity.inventory.internal.service.InventoryLotOutboundService;
+import com.positivity.inventory.internal.service.LedgerPostingFailureRecorder;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.Quantities;
@@ -103,6 +104,7 @@ public class ScrapServiceImpl implements ScrapService {
     private final Clock clock;
     private final CostingMethodResolver methodResolver;
     private final LocationScopeService locationScopeService;
+    private final LedgerPostingFailureRecorder failureRecorder;
     private final @Nullable InventoryLotOutboundService lotOutboundService;
 
     /**
@@ -122,7 +124,8 @@ public class ScrapServiceImpl implements ScrapService {
             ReplenishmentService replenishmentService,
             Clock clock,
             CostingMethodResolver methodResolver,
-            LocationScopeService locationScopeService) {
+            LocationScopeService locationScopeService,
+            LedgerPostingFailureRecorder failureRecorder) {
         this(
                 scrapRepository,
                 ledgerRepository,
@@ -133,6 +136,7 @@ public class ScrapServiceImpl implements ScrapService {
                 clock,
                 methodResolver,
                 locationScopeService,
+                failureRecorder,
                 null);
     }
 
@@ -206,7 +210,9 @@ public class ScrapServiceImpl implements ScrapService {
         String actor = currentActor();
         ScrapRecord scrap = scrapRepository.findById(scrapId).orElseThrow(() -> new ScrapNotFoundException(scrapId));
 
-        if (scrap.getStatus() != ScrapStatus.PENDING_APPROVAL) {
+        // FAILED is approvable: an unexpected posting failure is the retryable case (#2170), and
+        // approving again is how it is retried.
+        if (scrap.getStatus() != ScrapStatus.PENDING_APPROVAL && scrap.getStatus() != ScrapStatus.FAILED) {
             throw new IllegalStateException("Cannot approve scrap in status: " + scrap.getStatus());
         }
 
@@ -351,8 +357,10 @@ public class ScrapServiceImpl implements ScrapService {
      * 422 — on approve, the scrap stays {@code PENDING_APPROVAL}. Unexpected
      * posting failures
      * follow the cycle-count FAILED pattern
-     * ({@link CycleCountAdjustmentServiceImpl}) and
-     * surface as {@link ScrapLedgerPostingException}.
+     * ({@link CycleCountAdjustmentServiceImpl}): the scrap is left {@code FAILED} with the cause in
+     * {@code errorMessage} by {@link LedgerPostingFailureRecorder} once the transaction has rolled
+     * back (#2170), and the call surfaces as {@link ScrapLedgerPostingException}. Approving a
+     * {@code FAILED} scrap retries the posting.
      */
     private void postApprovedScrap(ScrapRecord scrap, boolean overrideRequested) {
         boolean negativeStockOverride = resolveNegativeStockOverride(overrideRequested);
@@ -393,9 +401,11 @@ public class ScrapServiceImpl implements ScrapService {
             throw e;
         } catch (RuntimeException e) {
             log.error("Failed to post scrap {} to ledger", scrap.getScrapId(), e);
+            // Written after this transaction rolls back, in one of its own (#2170); see
+            // LedgerPostingFailureRecorder.
             scrap.setStatus(ScrapStatus.FAILED);
             scrap.setErrorMessage(e.getMessage());
-            scrapRepository.save(scrap);
+            failureRecorder.recordScrapFailure(scrap, e.getMessage());
             throw new ScrapLedgerPostingException(scrap.getScrapId(), "Failed to post scrap to ledger", e);
         }
 
@@ -404,6 +414,7 @@ public class ScrapServiceImpl implements ScrapService {
         scrap.setStatus(ScrapStatus.POSTED);
         scrap.setLedgerEntryId(saved.getLedgerEntryId());
         scrap.setPostedAt(postedAt);
+        scrap.setErrorMessage(null);
         scrapRepository.save(scrap);
 
         // odoo-parity J3 (#1053): the fact carries the J1 engine's method-derived cost

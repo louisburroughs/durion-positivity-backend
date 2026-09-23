@@ -105,7 +105,8 @@ class LocationEventsListenerTest {
     @Test
     @DisplayName("The capability trio lands on the ext_storage_location replica")
     void replicatesTheCapabilityTrio() {
-        when(processedEvents.existsById("l-1")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("l-1", LocationEventsListener.OWNER))
+                .thenReturn(false);
         when(extStorageLocations.findById(STORAGE_LOCATION_ID)).thenReturn(Optional.empty());
 
         listener.onLocationEvent(capabilityEvent("l-1", 100, "BATTERY_RACK"));
@@ -125,7 +126,8 @@ class LocationEventsListenerTest {
     @Test
     @DisplayName("An unrecognised storage category is replicated verbatim, not rejected")
     void unknownStorageCategoryIsReplicatedVerbatim() {
-        when(processedEvents.existsById("l-unknown")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("l-unknown", LocationEventsListener.OWNER))
+                .thenReturn(false);
         when(extStorageLocations.findById(STORAGE_LOCATION_ID)).thenReturn(Optional.empty());
 
         listener.onLocationEvent(capabilityEvent("l-unknown", 100, "CRYO_VAULT"));
@@ -138,7 +140,8 @@ class LocationEventsListenerTest {
     @Test
     @DisplayName("A producer predating the trio replicates nulls, not defaults")
     void preCapabilityFactReplicatesNulls() {
-        when(processedEvents.existsById("l-old")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("l-old", LocationEventsListener.OWNER))
+                .thenReturn(false);
         when(extStorageLocations.findById(STORAGE_LOCATION_ID)).thenReturn(Optional.empty());
 
         listener.onLocationEvent(preCapabilityEvent("l-old", 100));
@@ -153,7 +156,8 @@ class LocationEventsListenerTest {
     @Test
     @DisplayName("The stale guard still holds: a lower-version fact cannot change the capability")
     void staleFactCannotChangeTheCapability() {
-        when(processedEvents.existsById("l-stale")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("l-stale", LocationEventsListener.OWNER))
+                .thenReturn(false);
         when(extStorageLocations.findById(STORAGE_LOCATION_ID)).thenReturn(Optional.of(existingReplica(200)));
 
         listener.onLocationEvent(capabilityEvent("l-stale", 100, "GENERAL"));
@@ -165,7 +169,8 @@ class LocationEventsListenerTest {
     @Test
     @DisplayName("An equal-version fact applies, so a replay repairs a replica missing the trio")
     void equalVersionApplies() {
-        when(processedEvents.existsById("l-equal")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("l-equal", LocationEventsListener.OWNER))
+                .thenReturn(false);
         when(extStorageLocations.findById(STORAGE_LOCATION_ID)).thenReturn(Optional.of(existingReplica(100)));
 
         listener.onLocationEvent(capabilityEvent("l-equal", 100, "BATTERY_RACK"));
@@ -178,7 +183,8 @@ class LocationEventsListenerTest {
     @Test
     @DisplayName("A duplicate eventId is skipped entirely, capability trio included")
     void skipsDuplicates() {
-        when(processedEvents.existsById("l-dup")).thenReturn(true);
+        when(processedEvents.existsByEventIdAndOwner("l-dup", LocationEventsListener.OWNER))
+                .thenReturn(true);
 
         listener.onLocationEvent(capabilityEvent("l-dup", 100, "BATTERY_RACK"));
 
@@ -189,7 +195,8 @@ class LocationEventsListenerTest {
     @Test
     @DisplayName("Propagates transient DB errors so the container retries")
     void propagatesTransientErrors() {
-        when(processedEvents.existsById("l-transient")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("l-transient", LocationEventsListener.OWNER))
+                .thenReturn(false);
         when(extStorageLocations.findById(STORAGE_LOCATION_ID)).thenReturn(Optional.empty());
         when(extStorageLocations.save(any())).thenThrow(new QueryTimeoutException("db"));
 
@@ -202,7 +209,8 @@ class LocationEventsListenerTest {
     @Test
     @DisplayName("Records the owner on the processed_events row")
     void recordsTheOwner() {
-        when(processedEvents.existsById("l-owner")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("l-owner", LocationEventsListener.OWNER))
+                .thenReturn(false);
         when(extStorageLocations.findById(STORAGE_LOCATION_ID)).thenReturn(Optional.empty());
 
         listener.onLocationEvent(capabilityEvent("l-owner", 100, "GENERAL"));

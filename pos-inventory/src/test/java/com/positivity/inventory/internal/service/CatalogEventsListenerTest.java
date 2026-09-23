@@ -122,7 +122,8 @@ class CatalogEventsListenerTest {
     @Test
     @DisplayName("Creates the ext_product replica with UoM and substitution children from a v2 fact")
     void createsReplicaWithChildren() {
-        when(processedEvents.existsById("e-1")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-1", CatalogEventsListener.OWNER))
+                .thenReturn(false);
         when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.empty());
 
         listener.onCatalogEvent(v2Event("e-1", 100));
@@ -163,7 +164,8 @@ class CatalogEventsListenerTest {
     @Test
     @DisplayName("Newer fact replaces the replica and its child sets wholesale")
     void updateReplacesChildrenWholesale() {
-        when(processedEvents.existsById("e-2")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-2", CatalogEventsListener.OWNER))
+                .thenReturn(false);
         when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.of(existingReplica(50)));
 
         listener.onCatalogEvent(v2Event("e-2", 100));
@@ -178,7 +180,8 @@ class CatalogEventsListenerTest {
     @Test
     @DisplayName("Drops a strictly-lower fact but still records it processed")
     void dropsStaleFact() {
-        when(processedEvents.existsById("e-stale")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-stale", CatalogEventsListener.OWNER))
+                .thenReturn(false);
         when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.of(existingReplica(200)));
 
         listener.onCatalogEvent(v2Event("e-stale", 100));
@@ -192,7 +195,8 @@ class CatalogEventsListenerTest {
     @Test
     @DisplayName("Applies an equal-version fact — catalog fans out same-millisecond facts on membership changes")
     void equalVersionApplies() {
-        when(processedEvents.existsById("e-equal")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-equal", CatalogEventsListener.OWNER))
+                .thenReturn(false);
         when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.of(existingReplica(100)));
 
         listener.onCatalogEvent(v2Event("e-equal", 100));
@@ -205,7 +209,8 @@ class CatalogEventsListenerTest {
     @Test
     @DisplayName("Pre-v2 fact: trackingLevel null ⇒ NONE, null child sets ⇒ children cleared")
     void nullToleranceForPreV2Facts() {
-        when(processedEvents.existsById("e-v1")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-v1", CatalogEventsListener.OWNER))
+                .thenReturn(false);
         when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.empty());
 
         listener.onCatalogEvent(v1Event("e-v1", 100));
@@ -225,7 +230,8 @@ class CatalogEventsListenerTest {
     @Test
     @DisplayName("Category and subcategory land on the ext_product replica (#1514)")
     void replicatesCategoryAndSubcategory() {
-        when(processedEvents.existsById("e-cat")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-cat", CatalogEventsListener.OWNER))
+                .thenReturn(false);
         when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.empty());
 
         listener.onCatalogEvent(v2Event("e-cat", 100));
@@ -241,7 +247,8 @@ class CatalogEventsListenerTest {
     @Test
     @DisplayName("A fact with no category pair replicates nulls rather than blanks")
     void uncategorisedProductReplicatesNulls() {
-        when(processedEvents.existsById("e-nocat")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-nocat", CatalogEventsListener.OWNER))
+                .thenReturn(false);
         when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.empty());
 
         listener.onCatalogEvent(v1Event("e-nocat", 100));
@@ -257,7 +264,8 @@ class CatalogEventsListenerTest {
     @Test
     @DisplayName("Recategorisation is a full overwrite — the previous category does not survive")
     void recategorisationOverwritesThePreviousCategory() {
-        when(processedEvents.existsById("e-recat")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-recat", CatalogEventsListener.OWNER))
+                .thenReturn(false);
         ExtProductReplica stale = existingReplica(50);
         stale.setCategoryId(UUID.fromString("018f0000-0000-7000-8000-0000000000ff"));
         stale.setCategoryName("Filters");
@@ -276,7 +284,8 @@ class CatalogEventsListenerTest {
     @Test
     @DisplayName("The stale guard still holds with the category fields: a lower version cannot recategorise")
     void staleFactCannotRecategorise() {
-        when(processedEvents.existsById("e-stale-cat")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-stale-cat", CatalogEventsListener.OWNER))
+                .thenReturn(false);
         when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.of(existingReplica(200)));
 
         listener.onCatalogEvent(v2Event("e-stale-cat", 100));
@@ -288,7 +297,8 @@ class CatalogEventsListenerTest {
     @Test
     @DisplayName("Skips duplicate events by eventId (idempotent replay)")
     void skipsDuplicates() {
-        when(processedEvents.existsById("e-dup")).thenReturn(true);
+        when(processedEvents.existsByEventIdAndOwner("e-dup", CatalogEventsListener.OWNER))
+                .thenReturn(true);
 
         listener.onCatalogEvent(v2Event("e-dup", 100));
 
@@ -300,7 +310,8 @@ class CatalogEventsListenerTest {
     @Test
     @DisplayName("Ignores other event types but still records them processed for the owner's manifest")
     void ignoresOtherEventTypesButRecordsThem() {
-        when(processedEvents.existsById("e-other")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-other", CatalogEventsListener.OWNER))
+                .thenReturn(false);
 
         listener.onCatalogEvent("""
                 {"eventId":"e-other","eventType":"catalog.category.updated","schemaVersion":1,
@@ -314,7 +325,8 @@ class CatalogEventsListenerTest {
     @Test
     @DisplayName("Propagates transient DB errors so the container retries")
     void propagatesTransientErrors() {
-        when(processedEvents.existsById("e-transient")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-transient", CatalogEventsListener.OWNER))
+                .thenReturn(false);
         when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.empty());
         when(extProduct.save(any())).thenThrow(new QueryTimeoutException("db"));
 

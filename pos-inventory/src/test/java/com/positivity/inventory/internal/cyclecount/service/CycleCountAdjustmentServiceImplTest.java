@@ -91,6 +91,9 @@ class CycleCountAdjustmentServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.LocationScopeService locationScopeService;
 
+    @Mock
+    private com.positivity.inventory.internal.service.LedgerPostingFailureRecorder failureRecorder;
+
     private CycleCountAdjustmentServiceImpl service;
 
     private static final String ACTOR_USER_ID = "actor-person-id-001";
@@ -112,7 +115,8 @@ class CycleCountAdjustmentServiceImplTest {
                 costStateRepository,
                 methodResolver,
                 baseUnitOfMeasureResolver,
-                locationScopeService);
+                locationScopeService,
+                failureRecorder);
     }
 
     @AfterEach
@@ -300,6 +304,8 @@ class CycleCountAdjustmentServiceImplTest {
         assertThatThrownBy(() -> service.approveAdjustment(adjustmentId, request, "corr-id-001"))
                 .isInstanceOf(AdjustmentLedgerPostingException.class);
         assertThat(adjustment.getStatus()).isEqualTo(AdjustmentStatus.FAILED);
+        // #2170: FAILED is persisted by the recorder, after this transaction rolls back.
+        verify(failureRecorder).recordAdjustmentFailure(adjustment, "summary row lock timed out");
     }
 
     @Test

@@ -128,7 +128,7 @@ public class LocationEventsListener {
             log.warn("Skipping location event without eventId: {}", message);
             return;
         }
-        if (processedEventRepository.existsById(eventId)) {
+        if (processedEventRepository.existsByEventIdAndOwner(eventId, OWNER)) {
             return;
         }
 

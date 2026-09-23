@@ -165,11 +165,12 @@ public class ScrapController {
             operationId = "approveScrap",
             summary = "Approve scrap",
             description = """
-                    Approves a PENDING_APPROVAL scrap and posts its SCRAP_OUT entry to the inventory ledger, \
+                    Approves a PENDING_APPROVAL or FAILED scrap and posts its SCRAP_OUT entry to the inventory ledger, \
                     reducing on-hand at the posting location and emitting a ScrapPostedV1 fact.
                     Use this tool after reviewing an above-threshold or unknown-value scrap; do not use \
                     rejectScrap, which discards it without touching inventory.
-                    Preconditions: the scrap must exist and be in PENDING_APPROVAL status, and sufficient on-hand \
+                    Preconditions: the scrap must exist and be in PENDING_APPROVAL status (or FAILED, to retry a \
+                    posting that failed unexpectedly), and sufficient on-hand \
                     must exist at the posting location unless an authorized negative-stock override is passed — an \
                     insufficient-stock rejection rolls back and the scrap stays PENDING_APPROVAL.
                     Required inputs: scrapId (UUID) path parameter; the body carries only negativeStockOverride \
@@ -177,9 +178,11 @@ public class ScrapController {
                     approving actor comes from the authenticated context.
                     Emits an INVENTORY_SCRAP_APPROVE event plus the ScrapPostedV1 fact on the posting, and a scrap \
                     created with shouldReplenish triggers a best-effort replenishment evaluation.
-                    Returns 404 when the scrap does not exist, 409 when it is not PENDING_APPROVAL, 403 when the \
-                    override is requested without the permission, and 422 (SCRAP_INSUFFICIENT_STOCK) when on-hand \
-                    is insufficient — reconcile via cycle count or adjustment, or use an authorized override.
+                    Returns 404 when the scrap does not exist, 409 when it is not PENDING_APPROVAL or FAILED, 403 \
+                    when the override is requested without the permission, 422 (SCRAP_INSUFFICIENT_STOCK) when \
+                    on-hand is insufficient — reconcile via cycle count or adjustment, or use an authorized \
+                    override — and 500 (SCRAP_LEDGER_POST_FAILED) when the posting fails unexpectedly, which leaves \
+                    the scrap FAILED with the cause in errorMessage.
                     """,
             tags = {"Scraps"})
     @ApiResponse(responseCode = "200", description = "Scrap approved and posted")

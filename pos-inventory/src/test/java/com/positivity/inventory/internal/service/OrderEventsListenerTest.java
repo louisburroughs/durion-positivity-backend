@@ -64,7 +64,7 @@ class OrderEventsListenerTest {
                 counterSaleIssuePoster,
                 outboxEventWriter,
                 org.mockito.Mockito.mock(PlatformTransactionManager.class));
-        when(processedEventRepository.existsById(any())).thenReturn(false);
+        when(processedEventRepository.existsByEventIdAndOwner(any(), any())).thenReturn(false);
         when(outboxEventWriter.getIfAvailable()).thenReturn(null);
         posted.clear();
         org.mockito.Mockito.doAnswer(inv -> {
@@ -124,7 +124,8 @@ class OrderEventsListenerTest {
     @Test
     @DisplayName("HIL-003: replayed eventId no-ops")
     void replayedEvent_noOps() {
-        when(processedEventRepository.existsById("evt-1")).thenReturn(true);
+        when(processedEventRepository.existsByEventIdAndOwner("evt-1", OrderEventsListener.OWNER))
+                .thenReturn(true);
 
         listener.onOrderEvent(completedEnvelope("evt-1", line("SKU-1", 1, true, null)));
 

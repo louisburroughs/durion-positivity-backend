@@ -6,9 +6,11 @@ import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -17,12 +19,16 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Idempotency log for replica consumers (ADR-0044 §4): one row per applied envelope, keyed by the
- * envelope's {@code eventId} and written in the same transaction as the replica update, so
- * redelivery is harmless.
+ * Idempotency log for replica consumers (ADR-0044 §4): one row per applied envelope per consumer,
+ * keyed by the envelope's {@code eventId} and the consumer's {@code owner}, and written in the same
+ * transaction as the replica update, so redelivery is harmless.
  *
  * <p>{@code owner} is the producing domain (e.g. {@code vehicle}); reconciliation-manifest window
- * scans filter on it so one owner's manifest math never sees another owner's eventIds.
+ * scans filter on it so one owner's manifest math never sees another owner's eventIds. When a second
+ * consumer in this module reads the same domain's events it takes an owner of its own, qualified by
+ * what it applies (e.g. {@code order:purchase-order-projection}), because the owner is part of the
+ * key: a shared owner would let whichever consumer marked an event first make the other skip it
+ * (#2176).
  */
 @Data
 @Builder
@@ -33,12 +39,14 @@ import lombok.NoArgsConstructor;
         reason = "consumer idempotency ledger keyed by eventId, deduplicated across tenants; the tenant the fact"
                 + " was applied under is carried as data for per-tenant reconciliation (db/tenancy-global-tables.txt)")
 @Table(name = "processed_events")
+@IdClass(ProcessedEvent.Key.class)
 public class ProcessedEvent {
 
     @Id
     @Column(name = "event_id", nullable = false, updatable = false, length = 36)
     private String eventId;
 
+    @Id
     @Column(name = "owner", nullable = false, updatable = false, length = 64)
     private String owner;
 
@@ -70,5 +78,14 @@ public class ProcessedEvent {
     @Transient
     public Class<?> uuidv7Dependency() {
         return UUIDv7Generator.class;
+    }
+
+    /** Composite key: one mark per event per consuming owner (#2176). */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Key implements Serializable {
+        private String eventId;
+        private String owner;
     }
 }
