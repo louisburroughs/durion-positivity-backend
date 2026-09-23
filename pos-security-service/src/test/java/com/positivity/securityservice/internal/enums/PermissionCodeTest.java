@@ -32,7 +32,9 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    // 534 / 89: catalog v89 added workorder:position:assign (533, #2059 — placing a workorder on a
+    // 536 / 90: catalog v90 added people:jobRole:view and people:jobRole:manage (534-535,
+    // durion#2157 — the tenant's own job-role vocabulary, HR master data that carries no
+    // permission of its own), on top of v89's workorder:position:assign (533, #2059 — placing a workorder on a
     // service position, split off the manager operational-context override grant), on top of v87's
     // shop:conflict:override (531, CAP-326 conflict override) and v88's
     // catalog:service_requirement:manage (532, CAP-329 service skill requirements), and before them
@@ -43,8 +45,8 @@ class PermissionCodeTest {
     // people:employee_pii:view (519), v82's crm:fact:replay (518), v81's people:self:view (517)
     // and v80's catalog:service:ingest (516). Both numbers move together by design: the version
     // bump is what tells a running gateway its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 534;
-    private static final int EXPECTED_CATALOG_VERSION = 89;
+    private static final int EXPECTED_PERMISSION_COUNT = 536;
+    private static final int EXPECTED_CATALOG_VERSION = 90;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

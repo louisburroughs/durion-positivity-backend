@@ -144,7 +144,8 @@ class RoleAssignmentEventEmitterTest {
         ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
         verify(writer).publish(eq("security.events.v1"), captor.capture());
 
-        RoleAssignmentChangedV1 payload = (RoleAssignmentChangedV1) captor.getValue().payload();
+        RoleAssignmentChangedV1 payload =
+                (RoleAssignmentChangedV1) captor.getValue().payload();
         assertThat(payload.username()).isEqualTo("jane.doe");
         assertThat(payload.effectiveEndDate()).isEqualTo(endDate);
         assertThat(payload.revokedAt()).isEqualTo(revokedAt);
@@ -237,7 +238,8 @@ class RoleAssignmentEventEmitterTest {
 
         ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
         verify(writer).publish(any(), captor.capture());
-        RoleAssignmentChangedV1 payload = (RoleAssignmentChangedV1) captor.getValue().payload();
+        RoleAssignmentChangedV1 payload =
+                (RoleAssignmentChangedV1) captor.getValue().payload();
         assertThat(payload.tenantId()).isEqualTo(assignment.getTenantId());
     }
 }
