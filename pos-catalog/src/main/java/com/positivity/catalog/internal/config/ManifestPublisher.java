@@ -34,14 +34,21 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Publishes reconciliation manifests for the catalog fact topic (ADR-0044 §4, #924).
+ * Publishes reconciliation manifests for the catalog fact topic (ADR-0044 §4,
+ * #924).
  *
- * <p>Each closed window gets one {@link ReconciliationManifestV1} per tenant on {@code catalog.manifest.v1}
- * summarizing the events published from {@code event_outbox} whose eventId (UUIDv7) timestamp falls
- * in the window. Consumers recompute the summary from their processed-events log and alert on drift. Every
- * active tenant of the {@link TenantRegistry} gets a manifest each window, zero-count when it
+ * <p>
+ * Each closed window gets one {@link ReconciliationManifestV1} per tenant on
+ * {@code catalog.manifest.v1}
+ * summarizing the events published from {@code event_outbox} whose eventId
+ * (UUIDv7) timestamp falls
+ * in the window. Consumers recompute the summary from their processed-events
+ * log and alert on drift. Every
+ * active tenant of the {@link TenantRegistry} gets a manifest each window,
+ * zero-count when it
  * published nothing (ADR-0062 §3).
- * Manifests are sent directly (no outbox): a lost manifest is self-healing on the next run.
+ * Manifests are sent directly (no outbox): a lost manifest is self-healing on
+ * the next run.
  */
 @Slf4j
 @Component
@@ -104,10 +111,9 @@ public class ManifestPublisher {
     }
 
     @Scheduled(fixedDelayString = "${pos.catalog.manifest.poll-interval-ms:300000}")
-    @PlatformScoped(
-            reason = "reads event_outbox, a global table, for every tenant's rows of the window, then publishes one"
-                    + " manifest per tenant, each stamped with its tenant; the ledger it summarises carries the"
-                    + " tenant as data, so no tenant-scoped table is touched")
+    @PlatformScoped(reason = "reads event_outbox, a global table, for every tenant's rows of the window, then publishes one"
+            + " manifest per tenant, each stamped with its tenant; the ledger it summarises carries the"
+            + " tenant as data, so no tenant-scoped table is touched")
     public void publishDueManifest() {
         Instant latestClosed = latestClosedWindowEnd();
         if (latestClosed == null || (lastPublishedWindowEnd != null && !latestClosed.isAfter(lastPublishedWindowEnd))) {
@@ -132,7 +138,7 @@ public class ManifestPublisher {
             }
         }
         if (!windowEnd.isAfter(latestClosed)) {
-            log.info("Manifest catch-up capped at {} windows this run; continuing next poll", MAX_WINDOWS_PER_RUN);
+            log.warn("Manifest catch-up capped at {} windows this run; continuing next poll", MAX_WINDOWS_PER_RUN);
         }
     }
 
@@ -144,9 +150,12 @@ public class ManifestPublisher {
     }
 
     /**
-     * One manifest per tenant for the window (ADR-0062 §3): the window's published rows are grouped
-     * by the tenant each outbox row carries, and every active tenant of the registry gets a manifest
-     * too, zero-count when it published nothing, so a consumer can alert on manifest absence per
+     * One manifest per tenant for the window (ADR-0062 §3): the window's published
+     * rows are grouped
+     * by the tenant each outbox row carries, and every active tenant of the
+     * registry gets a manifest
+     * too, zero-count when it published nothing, so a consumer can alert on
+     * manifest absence per
      * tenant rather than reading silence as health.
      */
     private void publishManifests(Instant windowStart, Instant windowEnd) throws Exception {
@@ -158,7 +167,8 @@ public class ManifestPublisher {
             perTenant.put(tenantId, new WindowSummary());
         }
         for (OutboxEvent row : candidates) {
-            // One malformed row must not block the window's manifest forever: skip it with a
+            // One malformed row must not block the window's manifest forever: skip it with
+            // a
             // warning; the consumer-side mismatch it may cause is visible drift.
             try {
                 JsonNode envelope = objectMapper.readTree(row.getPayload());
@@ -204,9 +214,12 @@ public class ManifestPublisher {
                 ReconciliationManifestV1.checksumOf(summary.eventIds),
                 summary.eventTypeCounts.isEmpty() ? null : summary.eventTypeCounts);
 
-        // A manifest is sent straight to Kafka, bypassing the outbox writer that would otherwise
-        // stamp the tenant: envelope and header both carry the manifest's tenant, so the
-        // consumer's record interceptor binds it and the listener compares that tenant's ledger.
+        // A manifest is sent straight to Kafka, bypassing the outbox writer that would
+        // otherwise
+        // stamp the tenant: envelope and header both carry the manifest's tenant, so
+        // the
+        // consumer's record interceptor binds it and the listener compares that
+        // tenant's ledger.
         DomainEventEnvelope<ReconciliationManifestV1> envelope = DomainEventEnvelope.of(
                 ReconciliationManifestV1.eventTypeFor(DOMAIN),
                 ReconciliationManifestV1.SCHEMA_VERSION,
@@ -234,8 +247,10 @@ public class ManifestPublisher {
     }
 
     /**
-     * Deterministic per-tenant, per-window aggregate id: re-published manifests key to the same
-     * partition, and one window's manifests for different tenants land on distinct keys.
+     * Deterministic per-tenant, per-window aggregate id: re-published manifests key
+     * to the same
+     * partition, and one window's manifests for different tenants land on distinct
+     * keys.
      */
     private UUID manifestAggregateId(UUID tenantId, Instant windowStart) {
         return UUID.nameUUIDFromBytes((DOMAIN + ".manifest:" + eventsTopic + ":" + windowStart + ":" + tenantId)

@@ -34,18 +34,30 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Publishes reconciliation manifests for the invoice fact topic (ADR-0044 §4, issue #900).
+ * Publishes reconciliation manifests for the invoice fact topic (ADR-0044 §4,
+ * issue #900).
  *
- * <p>Each closed window gets one {@link ReconciliationManifestV1} per tenant on {@code invoice.manifest.v1}
- * summarizing the events published from {@code event_outbox} whose eventId (UUIDv7) timestamp
- * falls in the window. Consumers recompute the summary from their processed-events log and
- * request an outbox replay over {@code invoice.commands.v1} on drift. Every active tenant of the
- * {@link TenantRegistry} gets a manifest each window, zero-count when it published nothing (ADR-0062 §3).
+ * <p>
+ * Each closed window gets one {@link ReconciliationManifestV1} per tenant on
+ * {@code invoice.manifest.v1}
+ * summarizing the events published from {@code event_outbox} whose eventId
+ * (UUIDv7) timestamp
+ * falls in the window. Consumers recompute the summary from their
+ * processed-events log and
+ * request an outbox replay over {@code invoice.commands.v1} on drift. Every
+ * active tenant of the
+ * {@link TenantRegistry} gets a manifest each window, zero-count when it
+ * published nothing (ADR-0062 §3).
  *
- * <p>Manifests are sent directly (no outbox): a lost manifest is self-healing — the next run
- * re-publishes it, and consumers can additionally alert on manifest absence. Publication waits
- * {@code grace} after window close so in-flight publishes and consumer lag settle before the
- * comparison, avoiding false drift. Re-publishing the same window (e.g. after a restart) is
+ * <p>
+ * Manifests are sent directly (no outbox): a lost manifest is self-healing —
+ * the next run
+ * re-publishes it, and consumers can additionally alert on manifest absence.
+ * Publication waits
+ * {@code grace} after window close so in-flight publishes and consumer lag
+ * settle before the
+ * comparison, avoiding false drift. Re-publishing the same window (e.g. after a
+ * restart) is
  * harmless because the consumer-side comparison is stateless and idempotent.
  */
 @Slf4j
@@ -53,12 +65,18 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "pos.invoice.kafka", name = "enabled", havingValue = "true")
 public class ManifestPublisher {
 
-    /** Covers the sub-millisecond skew between outbox {@code createdAt} and the eventId timestamp. */
+    /**
+     * Covers the sub-millisecond skew between outbox {@code createdAt} and the
+     * eventId timestamp.
+     */
     private static final Duration CREATED_AT_SLACK = Duration.ofSeconds(1);
 
     private static final String DOMAIN = "invoice";
 
-    /** Catch-up bound per run — 24 windows covers a day-long outage at the default 1h window. */
+    /**
+     * Catch-up bound per run — 24 windows covers a day-long outage at the default
+     * 1h window.
+     */
     private static final int MAX_WINDOWS_PER_RUN = 24;
 
     private final OutboxEventRepository outboxEventRepository;
@@ -114,18 +132,19 @@ public class ManifestPublisher {
                         .register(registry);
     }
 
-    @PlatformScoped(
-            reason = "reads event_outbox, a global table, for every tenant's rows of the window, then publishes one"
-                    + " manifest per tenant, each stamped with its tenant; the ledger it summarises carries the"
-                    + " tenant as data, so no tenant-scoped table is touched")
+    @PlatformScoped(reason = "reads event_outbox, a global table, for every tenant's rows of the window, then publishes one"
+            + " manifest per tenant, each stamped with its tenant; the ledger it summarises carries the"
+            + " tenant as data, so no tenant-scoped table is touched")
     @Scheduled(fixedDelayString = "${pos.invoice.manifest.poll-interval-ms:300000}")
     public void publishDueManifest() {
         Instant latestClosed = latestClosedWindowEnd();
         if (latestClosed == null || (lastPublishedWindowEnd != null && !latestClosed.isAfter(lastPublishedWindowEnd))) {
             return;
         }
-        // First run publishes only the latest closed window (no historic backfill on boot);
-        // afterwards every window is published in order so scheduler gaps cannot skip one
+        // First run publishes only the latest closed window (no historic backfill on
+        // boot);
+        // afterwards every window is published in order so scheduler gaps cannot skip
+        // one
         // permanently.
         Instant windowEnd = lastPublishedWindowEnd == null ? latestClosed : lastPublishedWindowEnd.plus(window);
         int published = 0;
@@ -147,11 +166,14 @@ public class ManifestPublisher {
             }
         }
         if (!windowEnd.isAfter(latestClosed)) {
-            log.info("Manifest catch-up capped at {} windows this run; continuing next poll", MAX_WINDOWS_PER_RUN);
+            log.warn("Manifest catch-up capped at {} windows this run; continuing next poll", MAX_WINDOWS_PER_RUN);
         }
     }
 
-    /** End of the most recent window that closed at least {@code grace} ago, aligned to the window length. */
+    /**
+     * End of the most recent window that closed at least {@code grace} ago, aligned
+     * to the window length.
+     */
     private @Nullable Instant latestClosedWindowEnd() {
         long windowMillis = window.toMillis();
         long cutoff = Instant.now(clock).minus(grace).toEpochMilli();
@@ -160,9 +182,12 @@ public class ManifestPublisher {
     }
 
     /**
-     * One manifest per tenant for the window (ADR-0062 §3): the window's published rows are grouped
-     * by the tenant each outbox row carries, and every active tenant of the registry gets a manifest
-     * too, zero-count when it published nothing, so a consumer can alert on manifest absence per
+     * One manifest per tenant for the window (ADR-0062 §3): the window's published
+     * rows are grouped
+     * by the tenant each outbox row carries, and every active tenant of the
+     * registry gets a manifest
+     * too, zero-count when it published nothing, so a consumer can alert on
+     * manifest absence per
      * tenant rather than reading silence as health.
      */
     private void publishManifests(Instant windowStart, Instant windowEnd) throws Exception {
@@ -174,7 +199,8 @@ public class ManifestPublisher {
             perTenant.put(tenantId, new WindowSummary());
         }
         for (OutboxEvent row : candidates) {
-            // One malformed row must not block the window's manifest forever: skip it with a
+            // One malformed row must not block the window's manifest forever: skip it with
+            // a
             // warning; the consumer-side mismatch it may cause is visible drift.
             try {
                 JsonNode envelope = objectMapper.readTree(row.getPayload());
@@ -220,9 +246,12 @@ public class ManifestPublisher {
                 ReconciliationManifestV1.checksumOf(summary.eventIds),
                 summary.eventTypeCounts.isEmpty() ? null : summary.eventTypeCounts);
 
-        // A manifest is sent straight to Kafka, bypassing the outbox writer that would otherwise
-        // stamp the tenant: envelope and header both carry the manifest's tenant, so the
-        // consumer's record interceptor binds it and the listener compares that tenant's ledger.
+        // A manifest is sent straight to Kafka, bypassing the outbox writer that would
+        // otherwise
+        // stamp the tenant: envelope and header both carry the manifest's tenant, so
+        // the
+        // consumer's record interceptor binds it and the listener compares that
+        // tenant's ledger.
         DomainEventEnvelope<ReconciliationManifestV1> envelope = DomainEventEnvelope.of(
                 ReconciliationManifestV1.eventTypeFor(DOMAIN),
                 ReconciliationManifestV1.SCHEMA_VERSION,
@@ -250,8 +279,10 @@ public class ManifestPublisher {
     }
 
     /**
-     * Deterministic per-tenant, per-window aggregate id: re-published manifests key to the same
-     * partition, and one window's manifests for different tenants land on distinct keys.
+     * Deterministic per-tenant, per-window aggregate id: re-published manifests key
+     * to the same
+     * partition, and one window's manifests for different tenants land on distinct
+     * keys.
      */
     private UUID manifestAggregateId(UUID tenantId, Instant windowStart) {
         return UUID.nameUUIDFromBytes((DOMAIN + ".manifest:" + eventsTopic + ":" + windowStart + ":" + tenantId)
