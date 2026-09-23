@@ -147,6 +147,10 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
     }
 
     private void assignTechnician(UUID personId, UUID locationId) {
+        assignTechnician(personId, locationId, null, null);
+    }
+
+    private void assignTechnician(UUID personId, UUID locationId, LocalDate effectiveFrom, LocalDate effectiveTo) {
         staffingAssignments.saveAndFlush(ExtStaffingAssignmentReplica.builder()
                 .assignmentId(UUID.randomUUID())
                 .employeeId(UUID.randomUUID())
@@ -155,6 +159,8 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
                 .role("TECHNICIAN")
                 .primary(true)
                 .status("ACTIVE")
+                .effectiveFrom(effectiveFrom)
+                .effectiveTo(effectiveTo)
                 .aggregateVersion(1)
                 .updatedAt(Instant.now())
                 .build());
@@ -377,6 +383,48 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
                                     shop.getId(), MechanicStatus.ACTIVE, BRAKES, ON_DATE, PageRequest.of(0, 50))
                             .getContent())
                     .isEmpty();
+        }
+
+        @Test
+        @DisplayName("an assignment that begins after the roster date is not on the roster (#2140)")
+        void assignmentBeginningAfterTheDateIsExcluded() {
+            Shop shop = shop();
+            Mechanic future = mechanic(UUID.randomUUID(), MechanicStatus.ACTIVE, null);
+            assignTechnician(future.getPersonId(), shop.getId(), ON_DATE.plusDays(1), null);
+
+            assertThat(mechanics
+                            .findRosterByLocation(
+                                    shop.getId(), MechanicStatus.ACTIVE, null, ON_DATE, PageRequest.of(0, 50))
+                            .getContent())
+                    .doesNotContain(future);
+        }
+
+        @Test
+        @DisplayName("an assignment that ended before the roster date is not on the roster")
+        void assignmentEndedBeforeTheDateIsExcluded() {
+            Shop shop = shop();
+            Mechanic ended = mechanic(UUID.randomUUID(), MechanicStatus.ACTIVE, null);
+            assignTechnician(ended.getPersonId(), shop.getId(), null, ON_DATE.minusDays(1));
+
+            assertThat(mechanics
+                            .findRosterByLocation(
+                                    shop.getId(), MechanicStatus.ACTIVE, null, ON_DATE, PageRequest.of(0, 50))
+                            .getContent())
+                    .doesNotContain(ended);
+        }
+
+        @Test
+        @DisplayName("an assignment whose range starts and ends on the roster date is on the roster")
+        void assignmentBoundsAreInclusive() {
+            Shop shop = shop();
+            Mechanic oneDay = mechanic(UUID.randomUUID(), MechanicStatus.ACTIVE, null);
+            assignTechnician(oneDay.getPersonId(), shop.getId(), ON_DATE, ON_DATE);
+
+            assertThat(mechanics
+                            .findRosterByLocation(
+                                    shop.getId(), MechanicStatus.ACTIVE, null, ON_DATE, PageRequest.of(0, 50))
+                            .getContent())
+                    .containsExactly(oneDay);
         }
 
         @Test

@@ -48,7 +48,8 @@ public class TechnicianController {
             operationId = "listLocationTechnicians",
             summary = "List technicians assigned to a location",
             description = """
-                    Returns the technicians assigned to one shop location on a date, enriched with mechanic \
+                    Returns the technicians whose ACTIVE technician staffing assignment at one shop location is \
+                    effective on a date, the same assignments a booking on that date counts, enriched with mechanic \
                     identity and skills from the eventually consistent HR read model, plus a PLACEHOLDER shift \
                     window per technician.
                     PLACEHOLDER: shiftStart, shiftEnd, shiftMinutes, shiftSource and shiftStatus are derived from \
