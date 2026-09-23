@@ -25,6 +25,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /** Unit tests for the staffing-assignment read-model consumer (ADR-0061 §1, #1867). */
@@ -52,7 +53,8 @@ class PeopleEventsListenerTest {
                 processedEventRepository,
                 replicaRepository,
                 revocationService,
-                mock(ObjectProvider.class));
+                mock(ObjectProvider.class),
+                mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(replicaRepository.findById(any())).thenReturn(Optional.empty());
     }

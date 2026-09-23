@@ -16,7 +16,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -27,6 +29,13 @@ import tools.jackson.databind.ObjectMapper;
  * deactivation arrives as {@code active=false}. Idempotent via {@code processed_events};
  * strictly-below stale guard on the aggregateVersion (the owner's JPA optimistic-lock version);
  * transient errors rethrown for retry/DLQ.
+ *
+ * <p><strong>Transaction shape (#2146).</strong> The listener method is not {@code @Transactional}:
+ * the handler's work and the {@code processed_events} mark commit together in a
+ * {@code REQUIRES_NEW} transaction of their own, so neither lands without the other. A permanent
+ * failure rolls back only that work and is recorded in a separate transaction, instead of
+ * poisoning a shared transaction whose commit then throws and sends the record through retry and
+ * dead-lettering. Transient database errors still propagate, unrecorded, for container retry.
  */
 @Slf4j
 @Component
@@ -41,16 +50,22 @@ public class VehicleEventsListener {
     private final ExtVehicleReplicaRepository extVehicleReplicaRepository;
     private final Counter payloadRejectedCounter;
 
+    /** Runs the handler with its processed mark, and records a failure; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public VehicleEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtVehicleReplicaRepository extVehicleReplicaRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extVehicleReplicaRepository = extVehicleReplicaRepository;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -65,7 +80,6 @@ public class VehicleEventsListener {
     @KafkaListener(
             topics = "${pos.shop-manager.kafka.vehicle-events-topic:vehicle.events.v1}",
             groupId = "${pos.shop-manager.kafka.vehicle-events-consumer-group:pos-shop-manager-vehicle-events}")
-    @Transactional
     public void onVehicleEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -85,11 +99,14 @@ public class VehicleEventsListener {
         }
 
         try {
-            if (VehicleUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyVehicleUpdated(envelope);
-            } else {
-                log.debug("Ignoring vehicle event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (VehicleUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    applyVehicleUpdated(envelope);
+                } else {
+                    log.debug("Ignoring vehicle event type={} eventId={}", eventType, eventId);
+                }
+                processedEventRepository.save(processedMark(eventId));
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -97,14 +114,24 @@ public class VehicleEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed vehicle event payload eventId={}: {}", eventId, e.getMessage(), e);
+            recordFailed(eventId);
         } catch (Exception e) {
             log.warn("Skipping malformed vehicle event eventId={}", eventId, e);
+            recordFailed(eventId);
         }
-        processedEventRepository.save(ProcessedEvent.builder()
+    }
+
+    private ProcessedEvent processedMark(String eventId) {
+        return ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)
                 .processedAt(Instant.now(clock))
-                .build());
+                .build();
+    }
+
+    /** Records a permanently failed event in a transaction of its own; see the class doc. */
+    private void recordFailed(String eventId) {
+        handlerTransaction.executeWithoutResult(_ -> processedEventRepository.save(processedMark(eventId)));
     }
 
     private void applyVehicleUpdated(JsonNode envelope) {

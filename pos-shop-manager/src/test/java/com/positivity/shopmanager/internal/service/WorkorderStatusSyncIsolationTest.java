@@ -109,7 +109,8 @@ class WorkorderStatusSyncIsolationTest {
                 processedEventRepository,
                 extWorkorderReplicaRepository,
                 applicationEventPublisher,
-                Mockito.mock(ObjectProvider.class));
+                Mockito.mock(ObjectProvider.class),
+                transactionManager);
         // A hand-built instance gets no @Transactional proxy, so the transaction the production
         // listener runs inside is supplied here explicitly. Its commit is where the broken shape
         // used to blow up with UnexpectedRollbackException.

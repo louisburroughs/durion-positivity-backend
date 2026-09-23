@@ -17,7 +17,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -37,8 +39,15 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Other event types on the topic (e.g. {@code people.employee.updated}) are ignored but still
  * recorded in {@code processed_events}: the owner's manifest counts every fact in the window, so
  * skipping the insert would register as replica drift and trigger a pointless replay.
- * Idempotent via {@code processed_events} in the apply transaction; transient DB errors rethrow
+ * Idempotent via {@code processed_events}; transient DB errors rethrow
  * for container retry/DLQ (ADR-0044 §4).
+ *
+ * <p><strong>Transaction shape (#2146).</strong> The listener method is not {@code @Transactional}:
+ * the handler's work and the {@code processed_events} mark commit together in a
+ * {@code REQUIRES_NEW} transaction of their own, so neither lands without the other. A permanent
+ * failure rolls back only that work and is recorded in a separate transaction, instead of
+ * poisoning a shared transaction whose commit then throws and sends the record through retry and
+ * dead-lettering. Transient database errors still propagate, unrecorded, for container retry.
  */
 @Slf4j
 @Component
@@ -56,18 +65,24 @@ public class PeopleEventsListener {
     private final PersonTokenRevocationService personTokenRevocationService;
     private final Counter payloadRejectedCounter;
 
+    /** Runs the handler with its processed mark, and records a failure; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public PeopleEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtStaffingAssignmentReplicaRepository extStaffingAssignmentReplicaRepository,
             PersonTokenRevocationService personTokenRevocationService,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extStaffingAssignmentReplicaRepository = extStaffingAssignmentReplicaRepository;
         this.personTokenRevocationService = personTokenRevocationService;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -82,7 +97,6 @@ public class PeopleEventsListener {
     @KafkaListener(
             topics = "${pos.security-service.kafka.people-events-topic:people.events.v1}",
             groupId = "${pos.security-service.kafka.people-events-consumer-group:pos-security-people-events}")
-    @Transactional
     public void onPeopleEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -103,11 +117,14 @@ public class PeopleEventsListener {
         }
 
         try {
-            if (StaffingAssignmentUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyStaffingAssignmentUpdated(envelope);
-            } else {
-                log.debug("Ignoring people event type={}", eventType);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (StaffingAssignmentUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    applyStaffingAssignmentUpdated(envelope);
+                } else {
+                    log.debug("Ignoring people event type={}", eventType);
+                }
+                processedEventRepository.save(processedMark(eventId));
+            });
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;
@@ -116,14 +133,24 @@ public class PeopleEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed people event payload eventId={}: {}", eventId, e.getMessage(), e);
+            recordFailed(eventId);
         } catch (Exception e) {
             log.warn("Skipping malformed people event eventId={}", eventId, e);
+            recordFailed(eventId);
         }
-        processedEventRepository.save(ProcessedEvent.builder()
+    }
+
+    private ProcessedEvent processedMark(String eventId) {
+        return ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)
                 .processedAt(Instant.now(clock))
-                .build());
+                .build();
+    }
+
+    /** Records a permanently failed event in a transaction of its own; see the class doc. */
+    private void recordFailed(String eventId) {
+        handlerTransaction.executeWithoutResult(_ -> processedEventRepository.save(processedMark(eventId)));
     }
 
     private void applyStaffingAssignmentUpdated(JsonNode envelope) {

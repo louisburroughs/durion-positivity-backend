@@ -23,6 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /** CAP-329: {@code catalog.service.updated} (v3) mirrors the service and replace-sets its skill requirement. */
@@ -47,7 +48,8 @@ class CatalogEventsListenerTest {
                 processedEventRepository,
                 serviceRepository,
                 skillRepository,
-                mock(ObjectProvider.class));
+                mock(ObjectProvider.class),
+                mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(serviceRepository.findById(any())).thenReturn(Optional.empty());
     }

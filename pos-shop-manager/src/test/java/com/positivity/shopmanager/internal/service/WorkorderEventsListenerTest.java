@@ -29,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -79,7 +80,8 @@ class WorkorderEventsListenerTest {
                 processedEventRepository,
                 workorderRepository,
                 applicationEventPublisher,
-                Mockito.mock(ObjectProvider.class));
+                Mockito.mock(ObjectProvider.class),
+                Mockito.mock(PlatformTransactionManager.class));
     }
 
     @Test

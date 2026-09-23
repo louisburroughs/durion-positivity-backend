@@ -21,6 +21,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -47,7 +48,8 @@ class PeopleContactEventsListenerTest {
                 processedEventRepository,
                 extPersonReplicaRepository,
                 userRepository,
-                mock(ObjectProvider.class));
+                mock(ObjectProvider.class),
+                mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
     }
 
