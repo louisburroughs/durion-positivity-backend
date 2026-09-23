@@ -22,14 +22,15 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -72,10 +73,22 @@ import tools.jackson.databind.ObjectMapper;
  * decide whether a line is covered at the selling location or must be admitted as a backorder.
  * Snapshots are full state rather than deltas, so a stale one is discarded outright via the
  * strictly-below {@code aggregateVersion} guard instead of being applied out of order.
+ *
+ * <h2>Transaction shape (#2146)</h2>
+ *
+ * <p>The listener method is not {@code @Transactional}; the handler and its
+ * {@code processed_events} mark commit together in a {@code REQUIRES_NEW} transaction of their
+ * own, and a permanent failure — even one thrown through a transactional repository or service —
+ * rolls back only that transaction and is then recorded in a second one, rather than marking a
+ * listener-wide transaction rollback-only, whose commit would throw
+ * {@code UnexpectedRollbackException} and send the record through the container's retry and
+ * dead-letter ladder with the mark rolled back each time. Transient database errors still
+ * propagate for container retry. The mark commits with the work, not after it, because a goods
+ * receipt is a delta: a mark lost after its receipt committed would let redelivery decrement the
+ * order twice.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
 public class InventoryEventsListener {
     private static final String PAYLOAD = "payload";
@@ -91,10 +104,32 @@ public class InventoryEventsListener {
     private final ExtInventoryAvailabilityRepository extInventoryAvailabilityRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
 
+    /** The event's handler work and its processed mark, in a transaction of their own; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
+    public InventoryEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            PurchaseOrderRepository purchaseOrderRepository,
+            PurchaseOrderFactPublisher purchaseOrderFactPublisher,
+            ExtInventoryAvailabilityRepository extInventoryAvailabilityRepository,
+            SalesOrderLineRepository salesOrderLineRepository,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.purchaseOrderRepository = purchaseOrderRepository;
+        this.purchaseOrderFactPublisher = purchaseOrderFactPublisher;
+        this.extInventoryAvailabilityRepository = extInventoryAvailabilityRepository;
+        this.salesOrderLineRepository = salesOrderLineRepository;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.order.kafka.inventory-events-topic:inventory.events.v1}",
             groupId = "${pos.order.kafka.inventory-events-consumer-group:pos-order-inventory-events}")
-    @Transactional
     public void onInventoryEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -114,14 +149,17 @@ public class InventoryEventsListener {
         }
 
         try {
-            switch (eventType == null ? "" : eventType) {
-                case GoodsReceiptRecordedV1.EVENT_TYPE -> apply(envelope);
-                case InventoryAvailabilityUpdatedV1.EVENT_TYPE -> applyAvailabilityUpdated(envelope);
-                case ReservationOutcomeV1.EVENT_TYPE -> applyReservationOutcome(envelope);
-                // Ignored types still fall through to the processed_events insert below: the
-                // owner's reconciliation manifest counts every fact this module was offered.
-                default -> log.debug("Ignoring inventory event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                switch (eventType == null ? "" : eventType) {
+                    case GoodsReceiptRecordedV1.EVENT_TYPE -> apply(envelope);
+                    case InventoryAvailabilityUpdatedV1.EVENT_TYPE -> applyAvailabilityUpdated(envelope);
+                    case ReservationOutcomeV1.EVENT_TYPE -> applyReservationOutcome(envelope);
+                    // Ignored types still fall through to the processed_events insert below: the
+                    // owner's reconciliation manifest counts every fact this module was offered.
+                    default -> log.debug("Ignoring inventory event type={} eventId={}", eventType, eventId);
+                }
+                markProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             // Rethrown so the container retries. Recording this as processed would leave goods on
             // the shelf that the order still believes are outstanding, and no later event would
@@ -129,8 +167,11 @@ public class InventoryEventsListener {
             throw e;
         } catch (Exception e) {
             log.warn("Skipping malformed inventory event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }
+    }
 
+    private void markProcessed(String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)

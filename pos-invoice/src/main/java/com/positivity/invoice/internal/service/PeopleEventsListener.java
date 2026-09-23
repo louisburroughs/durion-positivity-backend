@@ -16,7 +16,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -28,6 +30,13 @@ import tools.jackson.databind.ObjectMapper;
  * replication purposes but still recorded — see {@link #onPeopleEvent}. Idempotent via
  * {@code processed_events}; strictly-below stale guard on the emission-timestamp
  * aggregateVersion; transient errors rethrown for retry/DLQ.
+ *
+ * <p><b>Transaction shape (#2146).</b> The listener method is not {@code @Transactional}: the
+ * handler and its {@code processed_events} mark commit together in their own {@code REQUIRES_NEW}
+ * transaction, so neither can commit without the other. A permanent failure rolls back only that
+ * work and is then recorded in a separate transaction, instead of leaving a shared transaction
+ * rollback-only and sending the record through the container's retry ladder to the DLQ. Transient
+ * failures still propagate for container retry.
  */
 @Slf4j
 @Component
@@ -42,12 +51,16 @@ public class PeopleEventsListener {
     private final ExtEmployeeReplicaRepository extEmployeeReplicaRepository;
     private final Counter payloadRejectedCounter;
 
+    /** The handler and its processed mark commit in one transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public PeopleEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtEmployeeReplicaRepository extEmployeeReplicaRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -61,12 +74,13 @@ public class PeopleEventsListener {
                         .tag("owner", OWNER)
                         .tag("entity", "people-events")
                         .register(registry);
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${pos.invoice.kafka.people-events-topic:people.events.v1}",
             groupId = "${pos.invoice.kafka.people-events-consumer-group:pos-invoice-people-events}")
-    @Transactional
     public void onPeopleEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -86,15 +100,18 @@ public class PeopleEventsListener {
         }
 
         try {
-            switch (eventType == null ? "" : eventType) {
-                case EmployeeUpdatedV1.EVENT_TYPE -> applyEmployeeUpdated(envelope);
-                default ->
-                    // Ignored types (e.g. people.staffing-assignment.updated) still fall through
-                    // to the processed_events insert below: the owner's manifest counts every
-                    // fact in the window, so skipping the insert would register as replica
-                    // drift and trigger a pointless replay.
-                    log.debug("Ignoring people event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                switch (eventType == null ? "" : eventType) {
+                    case EmployeeUpdatedV1.EVENT_TYPE -> applyEmployeeUpdated(envelope);
+                    default ->
+                        // Ignored types (e.g. people.staffing-assignment.updated) still fall through
+                        // to the processed_events insert below: the owner's manifest counts every
+                        // fact in the window, so skipping the insert would register as replica
+                        // drift and trigger a pointless replay.
+                        log.debug("Ignoring people event type={} eventId={}", eventType, eventId);
+                }
+                recordProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -102,9 +119,14 @@ public class PeopleEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed people event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         } catch (Exception e) {
             log.warn("Skipping malformed people event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         }
+    }
+
+    private void recordProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)

@@ -63,6 +63,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -154,13 +155,15 @@ class ReplicaAndManifestListenerContractTest {
                 personRepository,
                 userLinkRepository,
                 assignmentRepository,
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                org.mockito.Mockito.mock(PlatformTransactionManager.class));
         customerListener = new CustomerEventsListener(
                 clock,
                 objectMapper,
                 processedEventRepository,
                 customerRepository,
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                org.mockito.Mockito.mock(PlatformTransactionManager.class));
         // The real registry, not a null provider: the rejection counter is the only signal that a
         // bay or mobile-unit fact arrived in a shape this module cannot use (#1668), so it has to be
         // assertable here.
@@ -173,7 +176,8 @@ class ReplicaAndManifestListenerContractTest {
                 locationHierarchyService,
                 bayRepository,
                 mobileUnitRepository,
-                meterRegistryProvider);
+                meterRegistryProvider,
+                org.mockito.Mockito.mock(PlatformTransactionManager.class));
     }
 
     private static String envelope(String eventId, String eventType, String payload) {

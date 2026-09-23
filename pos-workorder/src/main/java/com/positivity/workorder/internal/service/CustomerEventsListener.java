@@ -17,7 +17,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -28,6 +30,11 @@ import tools.jackson.databind.ObjectMapper;
  * {@code processed_events}; strictly-below stale guard on the emission-timestamp
  * aggregateVersion; transient errors rethrown for retry/DLQ. Ignored event types on the topic
  * still record their eventId so manifest reconciliation cannot read them as drift.
+ *
+ * <p>Transaction shape (#2146): the handler and its {@code processed_events} mark commit together
+ * in a transaction of their own ({@code REQUIRES_NEW}) rather than the listener's, so there is no
+ * at-least-once window. A permanent failure rolls back only that work, and the failed record's mark
+ * is written in a separate transaction; transient failures still propagate for container retry.
  */
 @Slf4j
 @Component
@@ -42,12 +49,16 @@ public class CustomerEventsListener {
     private final ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
     private final Counter payloadRejectedCounter;
 
+    /** One transaction for the handler and its mark, one for a failed record's mark; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public CustomerEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -61,12 +72,13 @@ public class CustomerEventsListener {
                         .tag("owner", OWNER)
                         .tag("entity", "customer-events")
                         .register(registry);
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${workorder.kafka.customer-events-topic:customer.events.v1}",
             groupId = "${workorder.kafka.customer-events-consumer-group:pos-workorder-customer-events}")
-    @Transactional
     public void onCustomerEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -86,11 +98,14 @@ public class CustomerEventsListener {
         }
 
         try {
-            switch (eventType == null ? "" : eventType) {
-                case CustomerPartyUpdatedV1.EVENT_TYPE -> applyPartyUpdated(envelope);
-                case CustomerPartyDeletedV1.EVENT_TYPE -> applyPartyDeleted(envelope);
-                default -> log.debug("Ignoring customer event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                switch (eventType == null ? "" : eventType) {
+                    case CustomerPartyUpdatedV1.EVENT_TYPE -> applyPartyUpdated(envelope);
+                    case CustomerPartyDeletedV1.EVENT_TYPE -> applyPartyDeleted(envelope);
+                    default -> log.debug("Ignoring customer event type={} eventId={}", eventType, eventId);
+                }
+                processedEventRepository.save(processedMark(eventId));
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -98,14 +113,24 @@ public class CustomerEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed customer event payload eventId={}: {}", eventId, e.getMessage(), e);
+            recordFailure(eventId);
         } catch (Exception e) {
             log.warn("Skipping malformed customer event eventId={}", eventId, e);
+            recordFailure(eventId);
         }
-        processedEventRepository.save(ProcessedEvent.builder()
+    }
+
+    /** A permanently failed record's mark, in its own transaction: the handler's rolled back. */
+    private void recordFailure(String eventId) {
+        handlerTransaction.executeWithoutResult(_ -> processedEventRepository.save(processedMark(eventId)));
+    }
+
+    private ProcessedEvent processedMark(String eventId) {
+        return ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)
                 .processedAt(Instant.now(clock))
-                .build());
+                .build();
     }
 
     private void applyPartyUpdated(JsonNode envelope) {

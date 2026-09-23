@@ -45,6 +45,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -139,7 +140,8 @@ class ReplicaListenerContractTest {
                                 objectMapper,
                                 processedEventRepository,
                                 customerRepository,
-                                org.mockito.Mockito.mock(ObjectProvider.class))::onCustomerEvent,
+                                org.mockito.Mockito.mock(ObjectProvider.class),
+                                org.mockito.Mockito.mock(PlatformTransactionManager.class))::onCustomerEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(customerRepository)
                                 .findById(any()));
@@ -156,7 +158,8 @@ class ReplicaListenerContractTest {
                                 locationRepository,
                                 locationParentRepository,
                                 locationHierarchyService,
-                                org.mockito.Mockito.mock(ObjectProvider.class))::onLocationEvent,
+                                org.mockito.Mockito.mock(ObjectProvider.class),
+                                org.mockito.Mockito.mock(PlatformTransactionManager.class))::onLocationEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(locationRepository)
                                 .findById(any()));
@@ -171,7 +174,8 @@ class ReplicaListenerContractTest {
                                 objectMapper,
                                 processedEventRepository,
                                 employeeRepository,
-                                org.mockito.Mockito.mock(ObjectProvider.class))::onPeopleEvent,
+                                org.mockito.Mockito.mock(ObjectProvider.class),
+                                org.mockito.Mockito.mock(PlatformTransactionManager.class))::onPeopleEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(employeeRepository)
                                 .findById(any()));
@@ -186,7 +190,8 @@ class ReplicaListenerContractTest {
                                 objectMapper,
                                 processedEventRepository,
                                 workorderRepository,
-                                org.mockito.Mockito.mock(ObjectProvider.class))::onWorkorderEvent,
+                                org.mockito.Mockito.mock(ObjectProvider.class),
+                                org.mockito.Mockito.mock(PlatformTransactionManager.class))::onWorkorderEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(workorderRepository)
                                 .findById(any()));
@@ -277,7 +282,8 @@ class ReplicaListenerContractTest {
                 objectMapper,
                 processedEventRepository,
                 customerRepository,
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                org.mockito.Mockito.mock(PlatformTransactionManager.class));
 
         listener.onCustomerEvent("""
                 {"eventId":"evt-1","eventType":"%s","aggregateVersion":3,
@@ -307,7 +313,8 @@ class ReplicaListenerContractTest {
                 locationRepository,
                 locationParentRepository,
                 locationHierarchyService,
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                org.mockito.Mockito.mock(PlatformTransactionManager.class));
 
         listener.onLocationEvent("""
                 {"eventId":"evt-1","eventType":"%s","aggregateVersion":2,
@@ -345,7 +352,8 @@ class ReplicaListenerContractTest {
                         objectMapper,
                         processedEventRepository,
                         employeeRepository,
-                        org.mockito.Mockito.mock(ObjectProvider.class))
+                        org.mockito.Mockito.mock(ObjectProvider.class),
+                        org.mockito.Mockito.mock(PlatformTransactionManager.class))
                 .onPeopleEvent("""
                         {"eventId":"evt-1","eventType":"%s","aggregateVersion":1,
                          "payload":{"employeeId":"%s","personId":"%s","employeeNumber":"E-1001",
@@ -368,7 +376,8 @@ class ReplicaListenerContractTest {
                         objectMapper,
                         processedEventRepository,
                         employeeRepository,
-                        org.mockito.Mockito.mock(ObjectProvider.class))
+                        org.mockito.Mockito.mock(ObjectProvider.class),
+                        org.mockito.Mockito.mock(PlatformTransactionManager.class))
                 .onPeopleEvent("""
                         {"eventId":"evt-9","eventType":"people.staffing-assignment.updated","payload":{}}""");
 
@@ -389,7 +398,8 @@ class ReplicaListenerContractTest {
                         objectMapper,
                         processedEventRepository,
                         workorderRepository,
-                        org.mockito.Mockito.mock(ObjectProvider.class))
+                        org.mockito.Mockito.mock(ObjectProvider.class),
+                        org.mockito.Mockito.mock(PlatformTransactionManager.class))
                 .onWorkorderEvent("""
                         {"eventId":"evt-1","eventType":"%s","aggregateVersion":6,
                          "payload":{"workorderId":"%s","workorderNumber":"WO-1001","status":"CLOSED",
@@ -416,7 +426,8 @@ class ReplicaListenerContractTest {
                         objectMapper,
                         processedEventRepository,
                         workorderRepository,
-                        org.mockito.Mockito.mock(ObjectProvider.class))
+                        org.mockito.Mockito.mock(ObjectProvider.class),
+                        org.mockito.Mockito.mock(PlatformTransactionManager.class))
                 .onWorkorderEvent("""
                         {"eventId":"evt-1","eventType":"%s","aggregateVersion":6,
                          "payload":{"workorderId":"%s","workorderNumber":"WO-1001","status":"CLOSED",
@@ -443,7 +454,8 @@ class ReplicaListenerContractTest {
                 objectMapper,
                 processedEventRepository,
                 workorderRepository,
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                org.mockito.Mockito.mock(PlatformTransactionManager.class));
         String template = """
                 {"eventId":"evt-%d","eventType":"%s","aggregateVersion":%d,
                  "payload":{"workorderId":"%s","workorderNumber":"WO-1001","status":"CLOSED",

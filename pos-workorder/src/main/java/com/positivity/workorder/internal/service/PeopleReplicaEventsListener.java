@@ -24,7 +24,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -35,6 +37,11 @@ import tools.jackson.databind.ObjectMapper;
  * feeds staffing assignments. Same consumer contract as the pos-customer vehicle listener:
  * idempotent via {@code processed_events}, strictly-below stale guard (the producers'
  * aggregateVersion is an emission-timestamp LWW hint), transient errors rethrown for retry/DLQ.
+ *
+ * <p>Transaction shape (#2146): the handler and its {@code processed_events} mark commit together
+ * in a transaction of their own ({@code REQUIRES_NEW}) rather than the listener's, so there is no
+ * at-least-once window. A permanent failure rolls back only that work, and the failed record's mark
+ * is written in a separate transaction; transient failures still propagate for container retry.
  */
 @Slf4j
 @Component
@@ -56,6 +63,9 @@ public class PeopleReplicaEventsListener {
     private final Counter payloadRejectedCounterPeopleContact;
     private final Counter payloadRejectedCounterPeople;
 
+    /** One transaction for the handler and its mark, one for a failed record's mark; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public PeopleReplicaEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
@@ -63,7 +73,8 @@ public class PeopleReplicaEventsListener {
             ExtPersonReplicaRepository extPersonReplicaRepository,
             ExtUserLinkReplicaRepository extUserLinkReplicaRepository,
             ExtStaffingAssignmentReplicaRepository extStaffingAssignmentReplicaRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -87,12 +98,13 @@ public class PeopleReplicaEventsListener {
                         .tag("owner", OWNER_PEOPLE)
                         .tag("entity", "people-events")
                         .register(registry);
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${workorder.kafka.people-contact-events-topic:people-contact.events.v1}",
             groupId = "${workorder.kafka.people-contact-events-consumer-group:pos-workorder-people-contact-events}")
-    @Transactional
     public void onPeopleContactEvent(@NonNull String message) {
         handle(message, OWNER_PEOPLE_CONTACT);
     }
@@ -100,7 +112,6 @@ public class PeopleReplicaEventsListener {
     @KafkaListener(
             topics = "${workorder.kafka.people-events-topic:people.events.v1}",
             groupId = "${workorder.kafka.people-events-consumer-group:pos-workorder-people-events}")
-    @Transactional
     public void onPeopleEvent(@NonNull String message) {
         handle(message, OWNER_PEOPLE);
     }
@@ -124,18 +135,21 @@ public class PeopleReplicaEventsListener {
         }
 
         try {
-            switch (eventType == null ? "" : eventType) {
-                case PersonUpdatedV1.EVENT_TYPE -> applyPersonUpdated(envelope);
-                case PersonDeletedV1.EVENT_TYPE -> applyPersonDeleted(envelope);
-                case UserPersonLinkUpdatedV1.EVENT_TYPE -> applyLinkUpdated(envelope);
-                case UserPersonLinkRemovedV1.EVENT_TYPE -> applyLinkRemoved(envelope);
-                case StaffingAssignmentUpdatedV1.EVENT_TYPE -> applyAssignmentUpdated(envelope);
-                default ->
-                    // Ignored types still fall through to the processed_events insert below: the
-                    // owner's manifest counts every fact in the window, so skipping the insert
-                    // would register as replica drift and trigger a pointless replay.
-                    log.debug("Ignoring {} event type={}", owner, eventType);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                switch (eventType == null ? "" : eventType) {
+                    case PersonUpdatedV1.EVENT_TYPE -> applyPersonUpdated(envelope);
+                    case PersonDeletedV1.EVENT_TYPE -> applyPersonDeleted(envelope);
+                    case UserPersonLinkUpdatedV1.EVENT_TYPE -> applyLinkUpdated(envelope);
+                    case UserPersonLinkRemovedV1.EVENT_TYPE -> applyLinkRemoved(envelope);
+                    case StaffingAssignmentUpdatedV1.EVENT_TYPE -> applyAssignmentUpdated(envelope);
+                    default ->
+                        // Ignored types still fall through to the processed_events insert below: the
+                        // owner's manifest counts every fact in the window, so skipping the insert
+                        // would register as replica drift and trigger a pointless replay.
+                        log.debug("Ignoring {} event type={}", owner, eventType);
+                }
+                processedEventRepository.save(processedMark(eventId, owner));
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -146,14 +160,24 @@ public class PeopleReplicaEventsListener {
                 counter.increment();
             }
             log.error("Rejected malformed {} event payload eventId={}: {}", owner, eventId, e.getMessage(), e);
+            recordFailure(eventId, owner);
         } catch (Exception e) {
             log.warn("Skipping malformed {} event eventId={}", owner, eventId, e);
+            recordFailure(eventId, owner);
         }
-        processedEventRepository.save(ProcessedEvent.builder()
+    }
+
+    /** A permanently failed record's mark, in its own transaction: the handler's rolled back. */
+    private void recordFailure(String eventId, String owner) {
+        handlerTransaction.executeWithoutResult(_ -> processedEventRepository.save(processedMark(eventId, owner)));
+    }
+
+    private ProcessedEvent processedMark(String eventId, String owner) {
+        return ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(owner)
                 .processedAt(Instant.now(clock))
-                .build());
+                .build();
     }
 
     private void applyPersonUpdated(JsonNode envelope) {

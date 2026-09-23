@@ -21,6 +21,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -41,7 +42,12 @@ class OrderEventsListenerTest {
     @BeforeEach
     void setUp() {
         listener = new OrderEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, stateMachine, mock(ObjectProvider.class));
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                stateMachine,
+                mock(ObjectProvider.class),
+                mock(PlatformTransactionManager.class));
     }
 
     private String orderCompleted(String eventId, String workorderIdJson) {

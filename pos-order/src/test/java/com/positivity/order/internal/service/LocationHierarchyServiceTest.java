@@ -1,6 +1,7 @@
 package com.positivity.order.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.domainevents.location.LocationUpdatedV1;
@@ -20,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -84,7 +86,8 @@ class LocationHierarchyServiceTest {
                 processedEventRepository,
                 extLocationRepository,
                 extLocationParentReplicaRepository,
-                service);
+                service,
+                mock(PlatformTransactionManager.class));
     }
 
     /** Feeds one {@code location.location.updated} fact; {@code edges} are {@code "parentId:TYPE"}. */
