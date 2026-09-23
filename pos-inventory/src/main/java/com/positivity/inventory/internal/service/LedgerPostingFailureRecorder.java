@@ -66,11 +66,16 @@ public class LedgerPostingFailureRecorder {
     /**
      * Records {@code attempted} as {@code FAILED} once the current transaction has rolled back. The
      * state is copied now, so later changes to {@code attempted} do not leak into the record.
+     *
+     * <p>The posting fields ({@code ledgerEntryId}, {@code postedAt}) are cleared: a failure after the
+     * ledger post returned rolls that ledger entry back too, so a FAILED record must not point at it.
      */
     public void recordAdjustmentFailure(@NonNull CycleCountAdjustment attempted, @Nullable String errorMessage) {
         CycleCountAdjustment failed = attempted.toBuilder()
                 .status(AdjustmentStatus.FAILED)
                 .errorMessage(errorMessage)
+                .ledgerEntryId(null)
+                .postedAt(null)
                 .build();
         afterRollback(
                 "adjustment " + failed.getAdjustmentId(),
@@ -82,6 +87,8 @@ public class LedgerPostingFailureRecorder {
                                     row.setErrorMessage(errorMessage);
                                     row.setApprovedByUserId(failed.getApprovedByUserId());
                                     row.setApprovedAt(failed.getApprovedAt());
+                                    row.setLedgerEntryId(null);
+                                    row.setPostedAt(null);
                                     adjustmentRepository.save(row);
                                 },
                                 () -> entityManager.persist(failed)));
@@ -92,6 +99,8 @@ public class LedgerPostingFailureRecorder {
         ScrapRecord failed = attempted.toBuilder()
                 .status(ScrapStatus.FAILED)
                 .errorMessage(errorMessage)
+                .ledgerEntryId(null)
+                .postedAt(null)
                 .build();
         afterRollback(
                 "scrap " + failed.getScrapId(),
@@ -103,6 +112,8 @@ public class LedgerPostingFailureRecorder {
                                     row.setErrorMessage(errorMessage);
                                     row.setApprovedBy(failed.getApprovedBy());
                                     row.setApprovedAt(failed.getApprovedAt());
+                                    row.setLedgerEntryId(null);
+                                    row.setPostedAt(null);
                                     scrapRepository.save(row);
                                 },
                                 () -> entityManager.persist(failed)));

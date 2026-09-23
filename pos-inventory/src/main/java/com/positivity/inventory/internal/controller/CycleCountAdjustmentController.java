@@ -112,6 +112,11 @@ public class CycleCountAdjustmentController {
             responseCode = "409",
             description = "In-window stock movements detected on auto-approval (CYCLE_COUNT_CONFLICT)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "Ledger posting failed unexpectedly (ADJUSTMENT_LEDGER_POST_FAILED); the adjustment is left"
+                    + " FAILED with the cause in errorMessage, and approving it retries",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AdjustmentResponse> createAdjustment(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Cycle count variance to turn into an inventory adjustment, with the"
@@ -192,6 +197,11 @@ public class CycleCountAdjustmentController {
             responseCode = "409",
             description = "Adjustment not PENDING_APPROVAL or FAILED, or conflict gate rejected the approval"
                     + " (CYCLE_COUNT_CONFLICT)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "Ledger posting failed unexpectedly (ADJUSTMENT_LEDGER_POST_FAILED); the adjustment is left"
+                    + " FAILED with the cause in errorMessage, and approving it again retries",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AdjustmentResponse> approveAdjustment(
             @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId,

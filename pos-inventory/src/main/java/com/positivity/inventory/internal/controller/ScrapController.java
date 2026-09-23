@@ -120,6 +120,14 @@ public class ScrapController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "The auto-approved posting failed unexpectedly (SCRAP_LEDGER_POST_FAILED); the scrap is"
+                    + " recorded FAILED with the cause in errorMessage, and approving it retries",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ScrapResponse> createScrap(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Stock write-off to record: what is scrapped, where, how much, and why.",
@@ -172,7 +180,8 @@ public class ScrapController {
                     Preconditions: the scrap must exist and be in PENDING_APPROVAL status (or FAILED, to retry a \
                     posting that failed unexpectedly), and sufficient on-hand \
                     must exist at the posting location unless an authorized negative-stock override is passed — an \
-                    insufficient-stock rejection rolls back and the scrap stays PENDING_APPROVAL.
+                    insufficient-stock rejection rolls back and the scrap keeps the state it had (PENDING_APPROVAL \
+                    or FAILED).
                     Required inputs: scrapId (UUID) path parameter; the body carries only negativeStockOverride \
                     (default false), honored only when the caller holds inventory:adjustment:override; the \
                     approving actor comes from the authenticated context.
@@ -212,6 +221,14 @@ public class ScrapController {
             responseCode = "422",
             description = "Insufficient on-hand (SCRAP_INSUFFICIENT_STOCK): reconcile via cycle count or"
                     + " adjustment, or use an authorized negative-stock override",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "Ledger posting failed unexpectedly (SCRAP_LEDGER_POST_FAILED); the scrap is left FAILED"
+                    + " with the cause in errorMessage, and approving it again retries",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,

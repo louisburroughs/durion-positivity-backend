@@ -148,8 +148,8 @@ class LedgerPostingFailurePersistenceIT extends BaseContractIntegrationTest {
     // ─── Scrap ────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("approve: the scrap is left FAILED with the cause")
-    void approveScrap_postingFails_leavesFailed() throws Exception {
+    @DisplayName("approve: the scrap is left FAILED with the cause, and approving again retries it")
+    void approveScrap_postingFails_leavesFailedAndRetries() throws Exception {
         seedScrapThreshold();
         // No cost on record: an unknown value always needs approval.
         MvcResult created = mockMvc.perform(withGatewayAuth(post("/v1/inventory/scraps"))
@@ -168,6 +168,21 @@ class LedgerPostingFailurePersistenceIT extends BaseContractIntegrationTest {
         assertThat(failed.getStatus()).isEqualTo(ScrapStatus.FAILED);
         assertThat(failed.getErrorMessage()).isEqualTo(CAUSE);
         assertThat(failed.getApprovedBy()).isEqualTo("contract-test-user");
+
+        // Approving the FAILED scrap retries the posting.
+        doAnswer(invocation -> {
+                    InventoryLedgerEntry entry = invocation.getArgument(0);
+                    entry.setLedgerEntryId(UUID.randomUUID());
+                    return entry;
+                })
+                .when(ledgerPostingService)
+                .post(any(), anyBoolean());
+        mockMvc.perform(approve("/v1/inventory/scraps/{id}/approve", scrapId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("POSTED"));
+        ScrapRecord posted = scrapRepository.findById(scrapId).orElseThrow();
+        assertThat(posted.getStatus()).isEqualTo(ScrapStatus.POSTED);
+        assertThat(posted.getErrorMessage()).isNull();
     }
 
     @Test
