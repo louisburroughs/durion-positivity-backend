@@ -23,7 +23,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -42,6 +44,14 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Deletions remove the replica row outright; a stale post-delete update can transiently
  * resurrect it until the next reconciliation window repairs the drift — accepted, deletes are
  * rare and reconciliation is mandatory (ADR-0044 §4).
+ *
+ * <p>Transaction shape (#2146): the listener method is not {@code @Transactional}. The handler
+ * and its {@code processed_events} mark commit together in a {@code REQUIRES_NEW} transaction of
+ * their own, so a permanent failure rolls back only that work instead of leaving a shared
+ * transaction rollback-only (whose commit threw, making the container retry and dead-letter the
+ * record), and the failure is then recorded in a separate transaction. Transient failures still
+ * propagate unrecorded for container retry; there is no at-least-once window between handler and
+ * mark.
  */
 @Slf4j
 @Component
@@ -58,18 +68,24 @@ public class PeopleContactEventsListener {
     private final ExtUserLinkReplicaRepository extUserLinkReplicaRepository;
     private final Counter payloadRejectedCounter;
 
+    /** The handler and its processed mark share one transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public PeopleContactEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtPersonReplicaRepository extPersonReplicaRepository,
             ExtUserLinkReplicaRepository extUserLinkReplicaRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extPersonReplicaRepository = extPersonReplicaRepository;
         this.extUserLinkReplicaRepository = extUserLinkReplicaRepository;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -84,7 +100,6 @@ public class PeopleContactEventsListener {
     @KafkaListener(
             topics = "${pos.people.kafka.people-contact-events-topic:people-contact.events.v1}",
             groupId = "${pos.people.kafka.people-contact-events-consumer-group:pos-people-people-contact-events}")
-    @Transactional
     public void onPeopleContactEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -105,17 +120,20 @@ public class PeopleContactEventsListener {
         }
 
         try {
-            switch (eventType == null ? "" : eventType) {
-                case PersonUpdatedV1.EVENT_TYPE -> applyPersonUpdated(envelope);
-                case PersonDeletedV1.EVENT_TYPE -> applyPersonDeleted(envelope);
-                case UserPersonLinkUpdatedV1.EVENT_TYPE -> applyLinkUpdated(envelope);
-                case UserPersonLinkRemovedV1.EVENT_TYPE -> applyLinkRemoved(envelope);
-                default ->
-                    // Ignored types still fall through to the processed_events insert below: the
-                    // owner's manifest counts every fact in the window, so skipping the insert
-                    // would register as replica drift and trigger a pointless replay.
-                    log.debug("Ignoring people-contact event type={}", eventType);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                switch (eventType == null ? "" : eventType) {
+                    case PersonUpdatedV1.EVENT_TYPE -> applyPersonUpdated(envelope);
+                    case PersonDeletedV1.EVENT_TYPE -> applyPersonDeleted(envelope);
+                    case UserPersonLinkUpdatedV1.EVENT_TYPE -> applyLinkUpdated(envelope);
+                    case UserPersonLinkRemovedV1.EVENT_TYPE -> applyLinkRemoved(envelope);
+                    default ->
+                        // Ignored types still fall through to the processed_events insert below: the
+                        // owner's manifest counts every fact in the window, so skipping the insert
+                        // would register as replica drift and trigger a pointless replay.
+                        log.debug("Ignoring people-contact event type={}", eventType);
+                }
+                markProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;
@@ -124,9 +142,14 @@ public class PeopleContactEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed people-contact event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         } catch (Exception e) {
             log.warn("Skipping malformed people-contact event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }
+    }
+
+    private void markProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)

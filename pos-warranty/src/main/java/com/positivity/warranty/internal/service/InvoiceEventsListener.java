@@ -20,7 +20,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -35,6 +37,14 @@ import tools.jackson.databind.ObjectMapper;
  * (owner {@code invoice}) in the apply transaction, strictly-below stale guard on the fact's JPA
  * optimistic-lock {@code aggregateVersion}, transient DB errors rethrown for container retry/DLQ.
  * Unsupported event types still record their eventIds so the owner's manifest reconciles.
+ *
+ * <p>Transaction shape (#2146): the listener method is not {@code @Transactional}. The handler
+ * and its {@code processed_events} mark commit together in a {@code REQUIRES_NEW} transaction of
+ * their own, so a permanent failure rolls back only that work instead of leaving a shared
+ * transaction rollback-only (whose commit threw, making the container retry and dead-letter the
+ * record), and the failure is then recorded in a separate transaction. Transient failures still
+ * propagate unrecorded for container retry; there is no at-least-once window between handler and
+ * mark.
  */
 @Slf4j
 @Component
@@ -51,18 +61,24 @@ public class InvoiceEventsListener {
     private final ExtInvoiceLineReplicaRepository extInvoiceLineReplicaRepository;
     private final Counter payloadRejectedCounter;
 
+    /** The handler and its processed mark share one transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public InvoiceEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtInvoiceReplicaRepository extInvoiceReplicaRepository,
             ExtInvoiceLineReplicaRepository extInvoiceLineReplicaRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extInvoiceReplicaRepository = extInvoiceReplicaRepository;
         this.extInvoiceLineReplicaRepository = extInvoiceLineReplicaRepository;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -77,7 +93,6 @@ public class InvoiceEventsListener {
     @KafkaListener(
             topics = "${pos.warranty.kafka.invoice-events-topic:invoice.events.v1}",
             groupId = "${pos.warranty.kafka.invoice-events-consumer-group:pos-warranty-invoice-events}")
-    @Transactional
     public void onInvoiceEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -97,15 +112,19 @@ public class InvoiceEventsListener {
         }
 
         try {
-            if (InvoiceUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                InvoiceUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), InvoiceUpdatedV1.class);
-                long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
-                applyInvoiceReplica(payload, aggregateVersion);
-            } else {
-                // Ignored types still fall through to the processed_events insert below: the
-                // owner's manifest counts every fact in the window.
-                log.debug("Ignoring invoice event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (InvoiceUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    InvoiceUpdatedV1 payload =
+                            objectMapper.treeToValue(envelope.path("payload"), InvoiceUpdatedV1.class);
+                    long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+                    applyInvoiceReplica(payload, aggregateVersion);
+                } else {
+                    // Ignored types still fall through to the processed_events insert below: the
+                    // owner's manifest counts every fact in the window.
+                    log.debug("Ignoring invoice event type={} eventId={}", eventType, eventId);
+                }
+                markProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -113,9 +132,14 @@ public class InvoiceEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed invoice event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         } catch (Exception e) {
             log.warn("Skipping malformed invoice event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }
+    }
+
+    private void markProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)

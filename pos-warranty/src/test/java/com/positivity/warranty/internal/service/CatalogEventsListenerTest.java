@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -45,7 +46,12 @@ class CatalogEventsListenerTest {
     @BeforeEach
     void setUp() {
         listener = new CatalogEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, extCatalog, mock(ObjectProvider.class));
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                extCatalog,
+                mock(ObjectProvider.class),
+                mock(PlatformTransactionManager.class));
     }
 
     private static String updatedEvent(String eventId, long aggregateVersion) {
