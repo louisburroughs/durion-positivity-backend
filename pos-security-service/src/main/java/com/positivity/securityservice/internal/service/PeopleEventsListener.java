@@ -141,6 +141,11 @@ public class PeopleEventsListener {
                     existing.getAggregateVersion());
             return;
         }
+        // Decided before the upsert: inside a transaction `existing` is the managed row, and
+        // saving the new snapshot merges onto it, so read afterwards it already carries the incoming
+        // fact and a narrowing change would never be seen as one.
+        LocalDate today = LocalDate.ofInstant(Instant.now(clock), clock.getZone());
+        boolean narrowsReach = StaffingAssignmentReachChange.narrows(existing, payload, today);
         // locationId is the assigned node as pos-people recorded it — shop or parent node alike.
         // No hierarchy expansion here (ADR-0061 §2); is_primary is kept verbatim and does not
         // narrow anything (see ExtStaffingAssignmentReplica).
@@ -164,8 +169,7 @@ public class PeopleEventsListener {
         // ADR-0061 §4 second mechanism (#1874): a narrowing change revokes the person's live
         // tokens after the projection is updated, so a re-login sees the new reach. Widening never
         // revokes. Redis-unavailable is fail-open inside the revocation service.
-        LocalDate today = LocalDate.ofInstant(Instant.now(clock), clock.getZone());
-        if (StaffingAssignmentReachChange.narrows(existing, payload, today)) {
+        if (narrowsReach) {
             int revoked = personTokenRevocationService.revokeLiveTokens(payload.personId());
             log.info(
                     "Staffing assignment narrowed reach; revoked live tokens personId={} assignmentId={} tokens={}",
