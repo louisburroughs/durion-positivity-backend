@@ -1474,7 +1474,10 @@ class EmployeeServiceImplTest {
         @Test
         @DisplayName("a full row renders every column in one service call")
         void aFullRowRendersEveryColumnInOneServiceCall() {
-            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.EMPLOYEE_PII_VIEW);
+            caller(
+                    PeoplePermissions.EMPLOYEE_VIEW,
+                    PeoplePermissions.EMPLOYEE_PII_VIEW,
+                    PeoplePermissions.ROLE_ASSIGNMENTS_VIEW);
 
             when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", JOB_ROLE_ID)));
             when(extPersonReplicaRepository.findByPersonIdIn(any()))
@@ -1527,7 +1530,7 @@ class EmployeeServiceImplTest {
         @Test
         @DisplayName("the batch role lookup runs against exactly the window's usernames, not the whole result set")
         void enrichmentBatchLookupTouchesOnlyTheWindow() {
-            caller(PeoplePermissions.EMPLOYEE_VIEW);
+            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.ROLE_ASSIGNMENTS_VIEW);
 
             UUID adamsId = UUID.randomUUID();
             UUID bakerId = UUID.randomUUID();
@@ -1591,6 +1594,64 @@ class EmployeeServiceImplTest {
             assertThat(row.getContactInfo()).isNull();
         }
 
+        /**
+         * durion#2155 acceptance, and the #2163 review finding that it was unimplemented: the roles
+         * column must be absent for a caller without the roles-view permission. Gated like
+         * contactInfo -- the field is omitted and the answer is still 200, never a 403 -- because
+         * `people:employee:view` is held by staff roles generally, so without this any of them
+         * could read every employee's application roles by passing ?include=ROLE_ASSIGNMENTS. That
+         * is the shape of #1898, which this module has been bitten by once already.
+         */
+        @Test
+        @DisplayName("a caller without people-contact:role:view gets 200 with roleAssignments absent")
+        void roleAssignmentsAbsentWithoutTheRolesViewPermission() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+
+            EmployeeSummaryDto row = service.searchEmployees(
+                            null, null, null, 0, 20, List.of(EmployeeSearchInclude.ROLE_ASSIGNMENTS))
+                    .items()
+                    .get(0);
+
+            assertThat(row.getRoleAssignments()).isNull();
+            // The replica is never consulted, rather than consulted and its result discarded -- an
+            // ungated caller must not be able to make this endpoint read role data at all.
+            verify(roleAssignmentReplicaService, never()).findActiveRoleAssignmentsByUsernames(any());
+        }
+
+        @Test
+        @DisplayName("the same request with people-contact:role:view returns the roles")
+        void roleAssignmentsPresentWithTheRolesViewPermission() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.ROLE_ASSIGNMENTS_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+            when(personUsernameService.usernamesByPersonId(any())).thenReturn(Map.of(JANE_ID, "jane.smith"));
+            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any()))
+                    .thenReturn(Map.of(
+                            "jane.smith",
+                            List.of(EmployeeRoleAssignmentDto.builder()
+                                    .assignmentId(UUID.randomUUID())
+                                    .roleId(UUID.randomUUID())
+                                    .roleName("SHOP_MANAGER")
+                                    .roleLocationScope("ALL")
+                                    .effectiveStartDate(LocalDateTime.of(2026, 1, 1, 0, 0))
+                                    .build())));
+
+            EmployeeSummaryDto row = service.searchEmployees(
+                            null, null, null, 0, 20, List.of(EmployeeSearchInclude.ROLE_ASSIGNMENTS))
+                    .items()
+                    .get(0);
+
+            assertThat(row.getRoleAssignments())
+                    .extracting(EmployeeRoleAssignmentDto::getRoleName)
+                    .containsExactly("SHOP_MANAGER");
+        }
+
         @Test
         @DisplayName("include= absent leaves the response identical to the pre-#2155 thin shape")
         void includeAbsentLeavesTheThinShapeUnchanged() {
@@ -1639,7 +1700,10 @@ class EmployeeServiceImplTest {
         @Test
         @DisplayName("an employee with no user link, no roles, no job role and no location tolerates partial data")
         void tolerantOfMissingReplicaData() {
-            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.EMPLOYEE_PII_VIEW);
+            caller(
+                    PeoplePermissions.EMPLOYEE_VIEW,
+                    PeoplePermissions.EMPLOYEE_PII_VIEW,
+                    PeoplePermissions.ROLE_ASSIGNMENTS_VIEW);
 
             // No replica row at all: exercises the contactInfo-null-from-missing-replica path too.
             when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
