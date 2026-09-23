@@ -61,7 +61,8 @@ class UserRoleGrantServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        sut = new UserRoleGrantServiceImpl(roleAssignmentRepository, TEST_CLOCK, eventPublisher, roleAssignmentEventEmitter);
+        sut = new UserRoleGrantServiceImpl(
+                roleAssignmentRepository, TEST_CLOCK, eventPublisher, roleAssignmentEventEmitter);
         user = new User();
         user.setId(UUID.randomUUID());
         roleA = new Role();

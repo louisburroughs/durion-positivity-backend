@@ -26,6 +26,8 @@ tags:
   name: Time Period Management API
 - description: Bulk import of the credentials people hold
   name: Person Credential Bulk Ingest API
+- description: The tenant's own job-role list (HR master data)
+  name: Job Role API
 - description: Identity-compliance reports (ADR-0015 §4)
   name: People Compliance API
 - description: Bulk import person-to-location assignments
@@ -292,17 +294,17 @@ paths:
       - people:employee:edit
   /v1/people/employees:
     get:
-      description: 'Returns a paged list of slim employee rows matching a case-insensitive substring search across first name, last name, preferred name, and employee number.
+      description: 'Returns a paged list of slim employee rows matching a case-insensitive substring search across first name, last name, preferred name, and employee number, optionally narrowed to one or more employment statuses and sorted, plus a status histogram for the register''s stat tiles.
 
-        Use this tool when listing or typeahead-filtering employees; do not use getEmployee, which requires the person id already be known, and do not use getEmployeeByNumber, which resolves one exact employee number rather than searching.
+        Use this tool when listing, filtering, sorting, or typeahead-filtering employees; do not use getEmployee, which requires the person id already be known, and do not use getEmployeeByNumber, which resolves one exact employee number rather than searching.
 
         Preconditions: none; an empty result set is returned rather than an error when nothing matches.
 
-        Required inputs: none are mandatory; q defaults to blank, which lists every employee, page defaults to 0, and size defaults to 20 with a maximum of 100.
+        Required inputs: none are mandatory; q defaults to blank, which lists every employee; status defaults to none, which applies no status filter; sort defaults to lastName,asc; page defaults to 0, and size defaults to 20 with a maximum of 100. The status filter and sort are applied across every matching employee, not just the returned page, so totalElements and ordering are both correct for a result set spanning more than one page.
 
         Emits a PEOPLE_EMPLOYEE_SEARCH audit event but changes no state; this is a read-only projection merged in memory from local employment rows and the pos-people-contact identity replica.
 
-        Returns 200 with an empty items list and correct totals when the page or query matches nothing.
+        Returns 200 with an empty items list and correct totals when the page, query, or status filter matches nothing.
 
         '
       operationId: searchEmployees
@@ -312,6 +314,27 @@ paths:
         name: q
         required: false
         schema:
+          type: string
+      - description: Employment status filter; repeatable (?status=ACTIVE&status=DISABLED). Omitted or empty applies no status filter and lists every status.
+        in: query
+        name: status
+        required: false
+        schema:
+          items:
+            enum:
+            - ACTIVE
+            - ON_LEAVE
+            - SUSPENDED
+            - TERMINATED
+            - DISABLED
+            type: string
+          type: array
+      - description: Sort field with optional direction, e.g. 'lastName,desc'. Only lastName is supported today. Direction defaults to asc.
+        in: query
+        name: sort
+        required: false
+        schema:
+          default: lastName,asc
           type: string
       - description: Zero-based page index
         in: query
@@ -337,8 +360,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagedResponseEmployeeSummaryDto'
+                $ref: '#/components/schemas/EmployeeSearchResponse'
           description: Employees returned (possibly empty)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unsupported sort field or direction
       security:
       - bearerAuth:
         - people:employee:view
@@ -638,12 +667,74 @@ paths:
           description: Employee is not currently ACTIVE
       security:
       - bearerAuth:
-        - people:employee:deactivate
+        - people:employee:activation
       summary: Disable Employee And Offboard Assignments
       tags:
       - Employee API
       x-required-permissions:
-      - people:employee:deactivate
+      - people:employee:activation
+  /v1/people/employees/{employeeId}/enable:
+    post:
+      description: 'Reactivates a DISABLED employee, setting status ACTIVE with a fresh statusEffectiveAt. This is the explicit DISABLED -> ACTIVE transition DECISION-PEOPLE-001 calls for, and the direct inverse of disableEmployee: staffing assignments are left exactly as disableEmployee''s offboarding policy left them, never silently resurrected.
+
+        Use this tool to bring a DISABLED employee back to ACTIVE; do not use updateEmployee to force the status field, which is gated on the broader profile-edit permission rather than this activation permission and runs no confirmation semantics, and do not use this tool for ON_LEAVE or SUSPENDED employees, which carry dates and a reason that only updateEmployee collects.
+
+        Preconditions: the employee must exist and currently be DISABLED; TERMINATED is rejected as irreversible, ACTIVE is rejected as already active, and ON_LEAVE or SUSPENDED are rejected in favor of updateEmployee.
+
+        Required inputs: employeeId (UUID) path parameter; the request body is required and carries updatedAt, the concurrency token also returned as EmployeeProfileDto.updatedAt — submit back the value most recently read for this employee so a change made in the meantime is caught rather than silently overwritten.
+
+        Emits a PEOPLE_EMPLOYEE_ENABLE event and publishes a people.employee.updated fact, so the downstream replicas disableEmployee notified converge back to ACTIVE without a manual replay.
+
+        Returns 404 when the employee does not exist, and 409 when the employee is TERMINATED (irreversible), ON_LEAVE or SUSPENDED (use updateEmployee instead), already ACTIVE, or when the submitted updatedAt no longer matches the employee''s current value.
+
+        '
+      operationId: enableEmployee
+      parameters:
+      - in: path
+        name: employeeId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Reactivate with last-known updatedAt:
+                description: Reactivate with last-known updatedAt
+                value:
+                  updatedAt: '2026-02-01T14:05:00Z'
+            schema:
+              $ref: '#/components/schemas/EnableEmployeeRequestDto'
+        description: 'Concurrency token guarding the reactivation: the updatedAt value most recently read for this employee.'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeProfileDto'
+          description: Employee enabled
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Employee not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Employee is not currently DISABLED, or the concurrency token is stale
+      security:
+      - bearerAuth:
+        - people:employee:activation
+      summary: Enable A Disabled Employee
+      tags:
+      - Employee API
+      x-required-permissions:
+      - people:employee:activation
   /v1/people/exceptions:
     get:
       description: 'Lists time entry exceptions, either all of them or those recorded for one employee.
@@ -930,6 +1021,87 @@ paths:
       - People - Exceptions
       x-required-permissions:
       - people:timeException:resolve
+  /v1/people/job-roles:
+    get:
+      description: 'Returns every active job role on the calling tenant''s own list, ordered by name.
+
+        Use this tool to populate a job-role picker when creating or editing an employee, or to look up the id createJobRole needs; do not use it to look up application roles or permissions, which live in pos-security-service and are a different concept entirely.
+
+        Preconditions: the caller holds people:jobRole:view.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        No events are emitted beyond the audit read and no state changes; this is a read-only projection scoped to the caller''s tenant.
+
+        Returns 200 with the list, empty when the tenant has defined none, and 403 without the authority.
+
+        '
+      operationId: listJobRoles
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/JobRoleDto'
+                type: array
+          description: The tenant's active job roles.
+      security:
+      - bearerAuth:
+        - people:jobRole:view
+      summary: List The Tenant's Job Roles
+      tags:
+      - Job Role API
+      x-required-permissions:
+      - people:jobRole:view
+    post:
+      description: 'Adds a job role to the calling tenant''s own list: a code, a display name and an optional description. HR master data only -- it carries no permissions and is never evaluated by security decisions.
+
+        Use this tool to set up the tenant''s job titles before assigning them to employees; do not use it to create an application role or a permission, which are pos-security-service concepts.
+
+        Preconditions: the caller holds people:jobRole:manage; the code must not already be used by another job role in this tenant (another tenant may reuse the same code freely).
+
+        Required inputs: code and name; description is optional.
+
+        Emits a PEOPLE_JOB_ROLE_CREATE event; no other state changes.
+
+        Returns 422 when the code is already in use within this tenant.
+
+        '
+      operationId: createJobRole
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJobRoleRequest'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobRoleDto'
+          description: Job role created
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Job role code already in use in this tenant
+      security:
+      - bearerAuth:
+        - people:jobRole:manage
+      summary: Add A Job Role To The Tenant's List
+      tags:
+      - Job Role API
+      x-required-permissions:
+      - people:jobRole:manage
   /v1/people/me/locations:
     get:
       description: 'Lists the authenticated caller''s staffing assignments that are active today, primary first.
@@ -3318,6 +3490,10 @@ components:
           example: '2026-01-15'
           format: date
           type: string
+        jobRoleId:
+          description: Id of the employee's job role, from the tenant's job-role list; omit for none
+          format: uuid
+          type: string
         lastName:
           description: Last (family) name of the employee
           example: Smith
@@ -3348,6 +3524,30 @@ components:
       - hireDate
       - lastName
       - status
+      type: object
+    CreateJobRoleRequest:
+      description: Request to add a job role to the calling tenant's own list
+      properties:
+        code:
+          description: Tenant's own short code
+          example: LEAD_TECH
+          maxLength: 64
+          minLength: 0
+          type: string
+        description:
+          description: Optional description of the role's responsibilities
+          example: Senior technician who leads a repair bay
+          maxLength: 1000
+          minLength: 0
+          type: string
+        name:
+          description: Display name
+          example: Lead Technician
+          minLength: 1
+          type: string
+      required:
+      - code
+      - name
       type: object
     CreateStaffingAssignmentRequest:
       description: Request to create a staffing assignment
@@ -3560,6 +3760,26 @@ components:
       - personId
       - status
       type: object
+    EmployeeJobRoleDto:
+      description: The job role named on an employee profile
+      properties:
+        code:
+          description: Tenant's own short code
+          example: LEAD_TECH
+          type: string
+        id:
+          description: Job role id
+          format: uuid
+          type: string
+        name:
+          description: Display name
+          example: Lead Technician
+          type: string
+      required:
+      - code
+      - id
+      - name
+      type: object
     EmployeeProfileDto:
       description: Employee profile returned by employee read and write operations
       properties:
@@ -3588,6 +3808,8 @@ components:
           example: 01960011-0000-7000-8000-000000000001
           format: uuid
           type: string
+        jobRole:
+          $ref: '#/components/schemas/EmployeeJobRoleDto'
         lastName:
           description: Last (family) name of the employee
           example: Smith
@@ -3636,6 +3858,21 @@ components:
       - lastName
       - status
       type: object
+    EmployeeSearchResponse:
+      description: A page of employee search results, plus a status histogram over the q-filtered set
+      properties:
+        page:
+          $ref: '#/components/schemas/PagedResponseEmployeeSummaryDto'
+        statusCounts:
+          additionalProperties:
+            format: int64
+            type: integer
+          description: Employee count per status, for the register's stat tiles. Computed over the q-filtered set BEFORE the status filter, so a tile for a status the caller did not select still shows what selecting it would return, and the counts sum to the q-filtered total regardless of which statuses were requested — not to the (possibly smaller) status-filtered page total. An employee with no status recorded (the column is nullable; every create/update path requires one, so this is a defensive case rather than an expected one) is still returned by the search but cannot be classified into one of these buckets, so it is excluded here; the sum-to-total invariant holds whenever every matching employee has a status.
+          type: object
+      required:
+      - page
+      - statusCounts
+      type: object
     EmployeeSummaryDto:
       description: Slim employee row for search results
       properties:
@@ -3677,6 +3914,17 @@ components:
       - active
       - employeeId
       - personId
+      type: object
+    EnableEmployeeRequestDto:
+      description: Request to reactivate a DISABLED employee, carrying the optimistic-concurrency token
+      properties:
+        updatedAt:
+          description: 'Concurrency token: the `updatedAt` value from the employee profile most recently read by the caller (EmployeeProfileDto.updatedAt). A value that no longer matches the employee''s current updatedAt means the record changed since it was read, and the request is rejected with 409 rather than silently overwriting that change.'
+          example: '2026-02-01T14:05:00Z'
+          format: date-time
+          type: string
+      required:
+      - updatedAt
       type: object
     FieldError:
       description: Validation error for a specific request field
@@ -3729,6 +3977,42 @@ components:
       - linkId
       - personId
       - username
+      type: object
+    JobRoleDto:
+      description: A tenant-defined job role, e.g. 'Lead Technician' or 'Parts Counter'
+      properties:
+        active:
+          description: Whether the role can still be assigned to employees
+          type: boolean
+        code:
+          description: Tenant's own short code
+          example: LEAD_TECH
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        description:
+          description: Optional description of the role's responsibilities
+          example: Senior technician who leads a repair bay
+          type: string
+        id:
+          description: Job role id
+          format: uuid
+          type: string
+        name:
+          description: Display name
+          example: Lead Technician
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      required:
+      - active
+      - code
+      - createdAt
+      - id
+      - name
+      - updatedAt
       type: object
     PagedResponseEmployeeSummaryDto:
       description: A page of results
@@ -4780,6 +5064,10 @@ components:
           description: Date the employee was hired
           example: '2026-01-15'
           format: date
+          type: string
+        jobRoleId:
+          description: Id of the employee's job role, from the tenant's job-role list; omit to clear it
+          format: uuid
           type: string
         lastName:
           description: Last (family) name of the employee
