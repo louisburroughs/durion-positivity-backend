@@ -275,7 +275,7 @@ but the event consumer writes them, and no synchronous call crosses a domain wal
 | --- | --- | --- |
 | `ext_customer_party` | `customer.events.v1` | `CustomerEventsListener` |
 | `ext_vehicle` | `vehicle.events.v1` | `VehicleEventsListener` |
-| `ext_people_staffing_assignment` | `people.events.v1` | `PeopleEventsListener` |
+| `ext_people_staffing_assignment` | `people.events.v1` | `PeopleEventsListener` (role stored trimmed and upper-cased, #2173) |
 | `ext_person_credential` | `people.events.v1` | `PeopleEventsListener` |
 | `ext_catalog_service`, `ext_catalog_service_skill` | `catalog.events.v1` | `CatalogEventsListener` |
 | `ext_people_contact_person` | `people-contact.events.v1` | `PeopleContactEventsListener` |

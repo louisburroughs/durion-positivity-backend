@@ -14,7 +14,10 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
   and exceptions per employee. Time a technician spends on a workorder task is a separate record
   owned by pos-workorder; a time entry carries no workorder reference (#1573).
 - Record work sessions (clock-in/clock-out) and compute job time totals
-- Manage staffing assignments across locations
+- Manage staffing assignments across locations. The assignment `role` is a code consumers match
+  on (pos-shop-manager keys technicians on `TECHNICIAN`), so it is stored and published trimmed and
+  upper-cased whatever casing the caller sent; the `employee_location_assignment_role_canonical`
+  CHECK (V9) refuses any other form (#2173).
 - Evaluate employee availability for scheduling
 - Publish `people.employee.updated` / `people.staffing-assignment.updated` /
   `people.person-credential.updated` facts on `people.events.v1` via a transactional
