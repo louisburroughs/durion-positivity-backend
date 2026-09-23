@@ -16,6 +16,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -62,11 +63,12 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
             @NonNull CreateStaffingAssignmentRequest request, @NonNull String actor) {
         Employee employee = validatePersonAndLocation(request.getPersonId(), request.getLocationId());
         requireLocationInReach(request.getLocationId());
+        String role = canonicalRole(request.getRole());
 
         if (repository.existsOverlapping(
                 request.getPersonId(),
                 request.getLocationId(),
-                request.getRole(),
+                role,
                 request.getEffectiveFrom(),
                 request.getEffectiveTo())) {
             throw new ResponseStatusException(
@@ -112,7 +114,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         EmployeeLocationAssignment assignment = EmployeeLocationAssignment.builder()
                 .employee(employee)
                 .locationId(request.getLocationId())
-                .role(request.getRole())
+                .role(role)
                 .isPrimary(primary)
                 .effectiveFrom(request.getEffectiveFrom())
                 .effectiveTo(request.getEffectiveTo())
@@ -163,12 +165,13 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         requireLocationInReach(existingAssignment.get().getLocationId());
         Employee employee = validatePersonAndLocation(request.getPersonId(), request.getLocationId());
         requireLocationInReach(request.getLocationId());
+        String role = canonicalRole(request.getRole());
 
         if (repository.existsOverlappingExcludingId(
                 assignmentId,
                 request.getPersonId(),
                 request.getLocationId(),
-                request.getRole(),
+                role,
                 request.getEffectiveFrom(),
                 request.getEffectiveTo())) {
             throw new ResponseStatusException(
@@ -205,7 +208,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
         assignment.setEmployee(employee);
         assignment.setLocationId(request.getLocationId());
-        assignment.setRole(request.getRole());
+        assignment.setRole(role);
         assignment.setPrimary(request.isPrimary());
         assignment.setEffectiveFrom(request.getEffectiveFrom());
         assignment.setEffectiveTo(request.getEffectiveTo());
@@ -257,6 +260,18 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
      * Gate: the caller's {@code people:employee:edit} must cover {@code locationId}, or this is a
      * 403 {@code LOCATION_SCOPE_DENIED}. A global or pre-rollout caller always passes.
      */
+    /**
+     * The stored and published form of a staffing role: trimmed and upper-cased (#2173). Role is a
+     * code every consumer matches on — pos-shop-manager keys its mechanic projection, roster and
+     * booking presence check on {@code TECHNICIAN} — so a caller's {@code "technician"} must not
+     * become a different role. The overlap check uses the same form, so two differently-cased
+     * submissions of one assignment collide. {@code employee_location_assignment_role_canonical}
+     * (V9) is the backstop for any write path that bypasses this.
+     */
+    static String canonicalRole(String role) {
+        return role == null ? null : role.strip().toUpperCase(Locale.ROOT);
+    }
+
     private static void requireLocationInReach(@NonNull UUID locationId) {
         LocationScope scope = SecurityContextHelper.locationScope();
         scope.require(PeoplePermissions.EMPLOYEE_EDIT, locationId);

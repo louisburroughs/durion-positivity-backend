@@ -1020,7 +1020,7 @@ paths:
       - shop:technician:view
   /v1/shop-manager/{locationId}/technicians:
     get:
-      description: 'Returns the technicians assigned to one shop location on a date, enriched with mechanic identity and skills from the eventually consistent HR read model, plus a PLACEHOLDER shift window per technician.
+      description: 'Returns the technicians whose ACTIVE technician staffing assignment at one shop location is effective on a date, the same assignments a booking on that date counts, enriched with mechanic identity and skills from the eventually consistent HR read model, plus a PLACEHOLDER shift window per technician.
 
         PLACEHOLDER: shiftStart, shiftEnd, shiftMinutes, shiftSource and shiftStatus are derived from the shop location''s operating hours for the requested date, not from the person''s own roster, so every technician at the location carries the same window and staggered shifts, part-time hours, overtime and PTO are invisible to it; shiftSource reads LOCATION_HOURS until the real per-person shift schedule (issue 71, blocked on issue 271) replaces it, so read that field rather than this prose to tell a placeholder window from a real one; an unknown timezone or unreadable hours give shiftStatus UNKNOWN with null bounds rather than a default window, and a dated holiday closure gives CLOSED.
 

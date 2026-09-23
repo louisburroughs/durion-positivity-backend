@@ -16,6 +16,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -142,12 +143,13 @@ public class PeopleEventsListener {
             // backwards — skip both, matching the stale-guard intent end to end.
             return;
         }
+        String role = canonicalRole(payload.role());
         assignmentReplicaRepository.save(ExtStaffingAssignmentReplica.builder()
                 .assignmentId(payload.assignmentId())
                 .employeeId(payload.employeeId())
                 .personId(payload.personId())
                 .locationId(payload.locationId())
-                .role(payload.role())
+                .role(role)
                 .primary(payload.primary())
                 .status(payload.status())
                 .effectiveFrom(payload.effectiveFrom())
@@ -155,7 +157,17 @@ public class PeopleEventsListener {
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
-        syncMechanicFromAssignment(payload, aggregateVersion, eventId);
+        syncMechanicFromAssignment(payload, role, aggregateVersion, eventId);
+    }
+
+    /**
+     * The role as every reader here matches it: trimmed and upper-cased (#2173). pos-people now
+     * publishes it in that form; canonicalizing on ingest as well keeps an event published before
+     * that change, or replayed from the topic, from becoming a technician who counts for bookings
+     * but never gets a mechanic row.
+     */
+    static String canonicalRole(String role) {
+        return role == null ? null : role.strip().toUpperCase(Locale.ROOT);
     }
 
     /**
@@ -168,8 +180,8 @@ public class PeopleEventsListener {
      * remaining-actives check sees current state).
      */
     private void syncMechanicFromAssignment(
-            @NonNull StaffingAssignmentUpdatedV1 payload, long aggregateVersion, @NonNull String eventId) {
-        if (!TECHNICIAN_ROLE.equals(payload.role())) {
+            @NonNull StaffingAssignmentUpdatedV1 payload, String role, long aggregateVersion, @NonNull String eventId) {
+        if (!TECHNICIAN_ROLE.equals(role)) {
             return;
         }
         if (ASSIGNMENT_STATUS_ACTIVE.equals(payload.status())) {

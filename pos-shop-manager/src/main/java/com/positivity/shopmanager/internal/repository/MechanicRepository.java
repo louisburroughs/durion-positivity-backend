@@ -57,7 +57,10 @@ public interface MechanicRepository extends JpaRepository<Mechanic, UUID> {
      * One location's technicians: mechanics whose person holds an ACTIVE TECHNICIAN staffing
      * assignment at {@code locationId} on the {@code ext_people_staffing_assignment} replica —
      * the one place this module learns who works where (CAP-328 replaces the unwritten {@code
-     * technician} table and its cast cross-join). The credential filter is {@link #findRoster}'s.
+     * technician} table and its cast cross-join). The assignment must be effective on {@code
+     * onDate} (open-ended bounds allowed), the same coverage {@code SkillRequirementResolver.covers}
+     * applies when a booking is judged, so the roster never lists a technician that a booking on
+     * that date would not count (#2140). The credential filter is {@link #findRoster}'s.
      * Ordered by mechanic name then person id; callers pass a sort-free {@link Pageable}.
      */
     @Query("""
@@ -70,7 +73,9 @@ public interface MechanicRepository extends JpaRepository<Mechanic, UUID> {
                 WHERE assignment.locationId = :locationId
                   AND assignment.personId = mechanic.personId
                   AND assignment.role = 'TECHNICIAN'
-                  AND assignment.status = 'ACTIVE')
+                  AND assignment.status = 'ACTIVE'
+                  AND (assignment.effectiveFrom IS NULL OR assignment.effectiveFrom <= :onDate)
+                  AND (assignment.effectiveTo IS NULL OR assignment.effectiveTo >= :onDate))
               AND (:skillCode IS NULL OR EXISTS (
                 SELECT credential.credentialId
                 FROM ExtPersonCredentialReplica credential

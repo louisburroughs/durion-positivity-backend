@@ -110,9 +110,9 @@ things about that text are contractual:
   assignments begin after the date being asked about is staffed, and "no mechanic is present" was not
   something a caller could act on. Effective dates are read as written and never adjusted toward the
   question, so a date before an assignment begins genuinely has nobody assigned on it — as true of a
-  historical query as of a booking. The `/{locationId}/technicians` roster does not date-filter
-  (CAP-328), so it can list a technician the evaluator does not count for a given date; that is the
-  difference between "works here" and "assigned on that date".
+  historical query as of a booking. The `/{locationId}/technicians` roster applies the same
+  effective-date coverage for its roster `date`, so the board and a booking on that date count the
+  same technicians (#2140).
 
 `BAY_DOUBLE_BOOKED` is enforced by the database: `appointment_resource_no_overlap` (V8) is an
 exclusion constraint on `(tenant_id, resource_id, tstzrange(start_at, end_at, '[)'))` over the
@@ -275,7 +275,7 @@ but the event consumer writes them, and no synchronous call crosses a domain wal
 | --- | --- | --- |
 | `ext_customer_party` | `customer.events.v1` | `CustomerEventsListener` |
 | `ext_vehicle` | `vehicle.events.v1` | `VehicleEventsListener` |
-| `ext_people_staffing_assignment` | `people.events.v1` | `PeopleEventsListener` |
+| `ext_people_staffing_assignment` | `people.events.v1` | `PeopleEventsListener` (role stored trimmed and upper-cased, #2173) |
 | `ext_person_credential` | `people.events.v1` | `PeopleEventsListener` |
 | `ext_catalog_service`, `ext_catalog_service_skill` | `catalog.events.v1` | `CatalogEventsListener` |
 | `ext_people_contact_person` | `people-contact.events.v1` | `PeopleContactEventsListener` |

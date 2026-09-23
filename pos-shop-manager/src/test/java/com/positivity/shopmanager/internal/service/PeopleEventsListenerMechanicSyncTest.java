@@ -122,6 +122,21 @@ class PeopleEventsListenerMechanicSyncTest {
     }
 
     @Test
+    void differentlyCasedTechnicianAssignment_isStoredCanonicalAndUpsertsMechanic() {
+        // #2173: an event carrying " technician " (published before pos-people canonicalized, or
+        // replayed) must land as TECHNICIAN in the replica and still produce the mechanic row.
+        listener.onPeopleEvent(assignmentEvent(" technician ", "ACTIVE"));
+
+        ArgumentCaptor<ExtStaffingAssignmentReplica> saved =
+                ArgumentCaptor.forClass(ExtStaffingAssignmentReplica.class);
+        verify(assignmentRepository).save(saved.capture());
+        assertThat(saved.getValue().getRole()).isEqualTo("TECHNICIAN");
+        ArgumentCaptor<HrMechanicEvent> captor = ArgumentCaptor.forClass(HrMechanicEvent.class);
+        verify(mechanicSyncService).processHrEvent(captor.capture());
+        assertThat(captor.getValue().getEventType()).isEqualTo(HrEventType.MECHANIC_UPSERTED);
+    }
+
+    @Test
     void nonTechnicianAssignment_doesNotTouchMechanicSync() {
         listener.onPeopleEvent(assignmentEvent("DISPATCHER", "ACTIVE"));
 

@@ -3,6 +3,7 @@ package com.positivity.people.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -353,6 +354,43 @@ class StaffingAssignmentLifecycleTest {
             service.update(ASSIGNMENT_ID, updateRequest(LocalDate.of(2026, 3, 1), null, true), ACTOR);
 
             assertThat(pastPrimary.getStatus()).isEqualTo(AssignmentStatus.ACTIVE);
+        }
+    }
+
+    @Nested
+    @DisplayName("role canonicalization (#2173)")
+    class RoleCanonicalization {
+
+        @Test
+        @DisplayName("create stores, publishes and overlap-checks the trimmed, upper-cased role")
+        void createCanonicalizesTheRole() {
+            when(repository.existsOverlapping(any(), any(), any(), any(), any()))
+                    .thenReturn(false);
+
+            StaffingAssignmentResponse response = service.create(
+                    new CreateStaffingAssignmentRequest(PERSON_ID, LOCATION_ID, " technician ", true, TODAY, null),
+                    ACTOR);
+
+            assertThat(response.getRole()).isEqualTo("TECHNICIAN");
+            verify(repository).existsOverlapping(PERSON_ID, LOCATION_ID, "TECHNICIAN", TODAY, null);
+            verify(peopleEventPublisher)
+                    .publishStaffingAssignmentUpdated(argThat(saved -> "TECHNICIAN".equals(saved.getRole())));
+        }
+
+        @Test
+        @DisplayName("update stores and overlap-checks the trimmed, upper-cased role")
+        void updateCanonicalizesTheRole() {
+            EmployeeLocationAssignment existing = assignment(ASSIGNMENT_ID, TODAY, null, false);
+            when(repository.findById(ASSIGNMENT_ID)).thenReturn(Optional.of(existing));
+
+            service.update(
+                    ASSIGNMENT_ID,
+                    new UpdateStaffingAssignmentRequest(PERSON_ID, LOCATION_ID, "Service_Writer", false, TODAY, null),
+                    ACTOR);
+
+            assertThat(existing.getRole()).isEqualTo("SERVICE_WRITER");
+            verify(repository)
+                    .existsOverlappingExcludingId(ASSIGNMENT_ID, PERSON_ID, LOCATION_ID, "SERVICE_WRITER", TODAY, null);
         }
     }
 
