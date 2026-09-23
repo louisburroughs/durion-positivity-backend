@@ -132,9 +132,10 @@ public class ManifestPublisher {
                         .register(registry);
     }
 
-    @PlatformScoped(reason = "reads event_outbox, a global table, for every tenant's rows of the window, then publishes one"
-            + " manifest per tenant, each stamped with its tenant; the ledger it summarises carries the"
-            + " tenant as data, so no tenant-scoped table is touched")
+    @PlatformScoped(
+            reason = "reads event_outbox, a global table, for every tenant's rows of the window, then publishes one"
+                    + " manifest per tenant, each stamped with its tenant; the ledger it summarises carries the"
+                    + " tenant as data, so no tenant-scoped table is touched")
     @Scheduled(fixedDelayString = "${pos.invoice.manifest.poll-interval-ms:300000}")
     public void publishDueManifest() {
         Instant latestClosed = latestClosedWindowEnd();

@@ -132,9 +132,10 @@ public class ManifestPublisher {
     private static final int MAX_WINDOWS_PER_RUN = 24;
 
     @Scheduled(fixedDelayString = "${workorder.manifest.poll-interval-ms:300000}")
-    @PlatformScoped(reason = "reads event_outbox, a global table, for every tenant's rows of the window, then publishes one"
-            + " manifest per tenant, each stamped with its tenant; the ledger it summarises carries the"
-            + " tenant as data, so no tenant-scoped table is touched")
+    @PlatformScoped(
+            reason = "reads event_outbox, a global table, for every tenant's rows of the window, then publishes one"
+                    + " manifest per tenant, each stamped with its tenant; the ledger it summarises carries the"
+                    + " tenant as data, so no tenant-scoped table is touched")
     public void publishDueManifest() {
         Instant latestClosed = latestClosedWindowEnd();
         if (latestClosed == null || (lastPublishedWindowEnd != null && !latestClosed.isAfter(lastPublishedWindowEnd))) {
