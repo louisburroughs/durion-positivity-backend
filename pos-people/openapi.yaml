@@ -294,15 +294,17 @@ paths:
       - people:employee:edit
   /v1/people/employees:
     get:
-      description: 'Returns a paged list of slim employee rows matching a case-insensitive substring search across first name, last name, preferred name, and employee number, optionally narrowed to one or more employment statuses and sorted, plus a status histogram for the register''s stat tiles.
+      description: 'Returns a paged list of slim employee rows matching a case-insensitive substring search across first name, last name, preferred name, and employee number, optionally narrowed to one or more employment statuses and sorted.
 
-        Use this tool when listing, filtering, sorting, or typeahead-filtering employees; do not use getEmployee, which requires the person id already be known, and do not use getEmployeeByNumber, which resolves one exact employee number rather than searching.
+        Use this tool when listing, filtering, sorting, or typeahead-filtering employees; do not use getEmployee, which requires the person id already be known, do not use getEmployeeByNumber, which resolves one exact employee number rather than searching, and do not use this tool to render the register''s stat tiles -- use getEmployeeStatusCounts instead, which returns the status histogram over the same q filter without changing this endpoint''s response shape.
 
         Preconditions: none; an empty result set is returned rather than an error when nothing matches.
 
         Required inputs: none are mandatory; q defaults to blank, which lists every employee; status defaults to none, which applies no status filter; sort defaults to lastName,asc; page defaults to 0, and size defaults to 20 with a maximum of 100. The status filter and sort are applied across every matching employee, not just the returned page, so totalElements and ordering are both correct for a result set spanning more than one page.
 
         Emits a PEOPLE_EMPLOYEE_SEARCH audit event but changes no state; this is a read-only projection merged in memory from local employment rows and the pos-people-contact identity replica.
+
+        Register enrichment (durion#2155): include= repeatable tokens (USERNAME, CONTACT_INFO, ROLE_ASSIGNMENTS, LOCATION, JOB_ROLE) each turn on one extra field/group on the returned rows -- username, contact info, active application roles, a single primary location plus a count of the rest, and job role -- so the register can render a full page in this one call instead of one follow-up call per row per column. Omitted, every one of those fields is null: the pre-#2155 thin row, byte for byte, so an existing caller (e.g. HrFacadeTool.searchEmployees) sees no change. Whichever categories are requested are resolved against the page actually returned, never the whole matching set, so the response cost stays flat as the tenant grows. Two categories carry a second, narrower gate, and both behave the same way: requesting one without its permission still returns 200, just with that field absent from every row, never a 403. CONTACT_INFO: email/phone appear only when the caller also holds people:employee_pii:view (#1898). ROLE_ASSIGNMENTS: application roles appear only when the caller also holds people-contact:role:view, the same permission that gates the equivalent read on pos-people-contact -- #2160 changed where this data is read from, not who may see it.
 
         Returns 200 with an empty items list and correct totals when the page, query, or status filter matches nothing.
 
@@ -355,12 +357,26 @@ paths:
           format: int32
           maximum: 100
           type: integer
+      - description: 'Register-enrichment categories (durion#2155); repeatable (?include=USERNAME&include=ROLE_ASSIGNMENTS), matching how `status` above is passed. Omitted or empty returns the thin pre-#2155 row: username, contactInfo, roleAssignments, primaryLocation, otherLocationCount and jobRole are all null. CONTACT_INFO additionally requires people:employee_pii:view (#1898) and ROLE_ASSIGNMENTS additionally requires people-contact:role:view; without the relevant permission that field is simply absent, never a 403.'
+        in: query
+        name: include
+        required: false
+        schema:
+          items:
+            enum:
+            - USERNAME
+            - CONTACT_INFO
+            - ROLE_ASSIGNMENTS
+            - LOCATION
+            - JOB_ROLE
+            type: string
+          type: array
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeSearchResponse'
+                $ref: '#/components/schemas/PagedResponseEmployeeSummaryDto'
           description: Employees returned (possibly empty)
         '400':
           content:
@@ -484,6 +500,44 @@ paths:
       - bearerAuth:
         - people:employee:view
       summary: Resolve Employee By Employee Number
+      tags:
+      - Employee API
+      x-required-permissions:
+      - people:employee:view
+  /v1/people/employees/status-counts:
+    get:
+      description: 'Returns a per-status employee count for the employee register''s stat tiles, computed over the same case-insensitive name/employee-number q filter searchEmployees applies, before any status filter -- so every tile reports what selecting that status would return out of the current search, including for a status not currently selected.
+
+        Use this tool alongside searchEmployees to render the register''s stat-tile row; do not use it in place of searchEmployees, which alone returns the paged row list (durion#2158: this histogram used to be folded into that endpoint''s response, which changed its shape for every caller -- it is now this separate, additive endpoint instead).
+
+        Preconditions: none; an empty tenant, or a q that matches nothing, returns an empty counts map rather than an error.
+
+        Required inputs: none are mandatory; q defaults to blank, which counts every employee. Unlike searchEmployees this endpoint takes no status, sort, page, size, or include parameters -- the histogram always covers the whole q-filtered set, never one page of it.
+
+        Emits a PEOPLE_EMPLOYEE_STATUS_COUNTS audit event but changes no state; this is a read-only projection merged in memory the same way searchEmployees is, and carries a bucket for an employee with no status recorded (a legacy row) so the counts always sum to the q-filtered total.
+
+        Returns 200 with an empty counts map when q matches nothing.
+
+        '
+      operationId: getEmployeeStatusCounts
+      parameters:
+      - description: Case-insensitive substring match on name or employee number; blank counts all
+        in: query
+        name: q
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeStatusCountsResponse'
+          description: Status histogram returned (possibly empty)
+      security:
+      - bearerAuth:
+        - people:employee:view
+      summary: Get Employee Status Histogram For The Register
       tags:
       - Employee API
       x-required-permissions:
@@ -3780,6 +3834,20 @@ components:
       - id
       - name
       type: object
+    EmployeeLocationDto:
+      description: The employee's primary staffing location
+      properties:
+        id:
+          description: Location id
+          format: uuid
+          type: string
+        name:
+          description: Display name, from the location replica; null when the replica has not caught up
+          example: Charlotte Main
+          type: string
+      required:
+      - id
+      type: object
     EmployeeProfileDto:
       description: Employee profile returned by employee read and write operations
       properties:
@@ -3858,28 +3926,69 @@ components:
       - lastName
       - status
       type: object
-    EmployeeSearchResponse:
-      description: A page of employee search results, plus a status histogram over the q-filtered set
+    EmployeeRoleAssignmentDto:
+      description: One application-role assignment shown on the employee register
       properties:
-        page:
-          $ref: '#/components/schemas/PagedResponseEmployeeSummaryDto'
-        statusCounts:
+        assignmentId:
+          description: Role assignment id
+          format: uuid
+          type: string
+        effectiveEndDate:
+          description: Exclusive end of the effective window; null while open-ended
+          format: date-time
+          type:
+          - string
+          - 'null'
+        effectiveStartDate:
+          description: When this assignment becomes or became effective
+          format: date-time
+          type: string
+        revokedAt:
+          description: When the revocation was entered; null while the assignment stands
+          format: date-time
+          type:
+          - string
+          - 'null'
+        roleId:
+          description: Assigned role id
+          format: uuid
+          type: string
+        roleLocationScope:
+          description: 'The role''s location scope: ALL (applies everywhere) or LOCATION (particular locations)'
+          example: ALL
+          type: string
+        roleName:
+          description: Assigned role name
+          example: SHOP_MANAGER
+          type: string
+      required:
+      - assignmentId
+      - effectiveStartDate
+      - roleId
+      - roleLocationScope
+      - roleName
+      type: object
+    EmployeeStatusCountsResponse:
+      description: Employee status histogram over the q-filtered set, for the register's stat tiles
+      properties:
+        counts:
           additionalProperties:
             format: int64
             type: integer
-          description: Employee count per status, for the register's stat tiles. Computed over the q-filtered set BEFORE the status filter, so a tile for a status the caller did not select still shows what selecting it would return, and the counts sum to the q-filtered total regardless of which statuses were requested — not to the (possibly smaller) status-filtered page total. An employee with no status recorded (the column is nullable; every create/update path requires one, so this is a defensive case rather than an expected one) is still returned by the search but cannot be classified into one of these buckets, so it is excluded here; the sum-to-total invariant holds whenever every matching employee has a status.
+          description: Employee count per status name (plus the UNKNOWN bucket for a row with no status recorded), for the register's stat tiles. Computed over the q-filtered set — the same `q` match searchEmployees applies, before any status filter — so a tile for a status the caller has not selected on searchEmployees still shows what selecting it would return, and the counts always sum to the q-filtered total.
           type: object
       required:
-      - page
-      - statusCounts
+      - counts
       type: object
     EmployeeSummaryDto:
-      description: Slim employee row for search results
+      description: Employee row for search results; the fields below `active` are populated only when requested via `include=` (and, for `contactInfo`, only when the caller also holds `people:employee_pii:view`)
       properties:
         active:
           description: True when the employee is in an ACTIVE employment status
           example: true
           type: boolean
+        contactInfo:
+          $ref: '#/components/schemas/EmployeeContactInfoDto'
         employeeId:
           description: Employee record identifier
           example: 01960011-0000-7000-8000-000000000001
@@ -3893,10 +4002,19 @@ components:
           description: First (given) name, from the identity replica; null when the replica has not caught up
           example: Jane
           type: string
+        jobRole:
+          $ref: '#/components/schemas/EmployeeJobRoleDto'
         lastName:
           description: Last (family) name, from the identity replica; null when the replica has not caught up
           example: Smith
           type: string
+        otherLocationCount:
+          description: Count of the person's other active staffing assignments beyond primaryLocation ("Charlotte Main · +1 more"); null unless `include=LOCATION` was requested, 0 when requested but the person has no other active assignment
+          example: 1
+          format: int32
+          type:
+          - integer
+          - 'null'
         personId:
           description: Stable person identifier the employee maps to
           example: 01960011-0000-7000-8000-000000000002
@@ -3906,10 +4024,25 @@ components:
           description: Preferred name, from the identity replica
           example: Janie
           type: string
+        primaryLocation:
+          $ref: '#/components/schemas/EmployeeLocationDto'
+        roleAssignments:
+          description: Active application-role assignments (DECISION-PEOPLE-026); null unless `include=ROLE_ASSIGNMENTS` was requested, empty when requested but the person holds none
+          items:
+            $ref: '#/components/schemas/EmployeeRoleAssignmentDto'
+          type:
+          - array
+          - 'null'
         status:
           description: Employment status
           example: ACTIVE
           type: string
+        username:
+          description: Login username, from the identity replica; null unless `include=USERNAME` was requested or the person has no linked user account
+          example: jane.smith
+          type:
+          - string
+          - 'null'
       required:
       - active
       - employeeId

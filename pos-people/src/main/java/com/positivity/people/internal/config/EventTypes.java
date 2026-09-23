@@ -54,6 +54,10 @@ public final class EventTypes {
                                 "PEOPLE_EMPLOYEE_SEARCH",
                                 "Search employees by name, preferred name, or employee number")
                         .build(),
+                EventTypeRegistration.search(
+                                "PEOPLE_EMPLOYEE_STATUS_COUNTS",
+                                "Employee status histogram for the register's stat tiles (durion#2158)")
+                        .build(),
 
                 // WorkSessionController - 4 events
                 EventTypeRegistration.write("PEOPLE_WORK_SESSION_START", "Start a work session for a person")

@@ -11,6 +11,7 @@ import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
@@ -54,6 +55,18 @@ class EmployeeProfileMappingTest {
     @Mock
     private JobRoleRepository jobRoleRepository;
 
+    @Mock
+    private PersonUsernameService personUsernameService;
+
+    @Mock
+    private RoleAssignmentReplicaService roleAssignmentReplicaService;
+
+    @Mock
+    private EmployeeLocationAssignmentRepository employeeLocationAssignmentRepository;
+
+    @Mock
+    private LocationReferenceService locationReferenceService;
+
     private EmployeeServiceImpl service() {
         return new EmployeeServiceImpl(
                 TEST_CLOCK,
@@ -61,7 +74,11 @@ class EmployeeProfileMappingTest {
                 employeeRepository,
                 offboardingRetryRepository,
                 peopleEventPublisher,
-                jobRoleRepository);
+                jobRoleRepository,
+                personUsernameService,
+                roleAssignmentReplicaService,
+                employeeLocationAssignmentRepository,
+                locationReferenceService);
     }
 
     private ExtPersonReplica person() {

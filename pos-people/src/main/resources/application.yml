@@ -112,6 +112,9 @@ pos:
       people-contact-manifest-topic: ${POS_PEOPLE_PC_MANIFEST_TOPIC:people-contact.manifest.v1}
       people-contact-manifest-consumer-group: ${POS_PEOPLE_PC_MANIFEST_CONSUMER_GROUP:pos-people-people-contact-manifests}
       people-contact-commands-topic: ${POS_PEOPLE_PC_COMMANDS_TOPIC:people-contact.commands.v1}
+      # Role-assignment replica feed (ADR-0044 §6, durion#2155/#2160)
+      security-events-topic: ${POS_PEOPLE_SECURITY_EVENTS_TOPIC:security.events.v1}
+      security-events-consumer-group: ${POS_PEOPLE_SECURITY_EVENTS_CONSUMER_GROUP:pos-people-security-events}
       workorder-events-topic: ${POS_PEOPLE_WO_EVENTS_TOPIC:workorder.events.v1}
       workorder-events-consumer-group: ${POS_PEOPLE_WO_EVENTS_CONSUMER_GROUP:pos-people-workorder-events}
       # Location replica feed + reconciliation (ADR-0044 §6, #892)

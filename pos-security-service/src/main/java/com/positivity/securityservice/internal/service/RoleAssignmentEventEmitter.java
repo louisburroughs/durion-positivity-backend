@@ -53,7 +53,13 @@ public class RoleAssignmentEventEmitter {
      *
      * <p>Must be called from within the assignment write's transaction — {@link
      * OutboxEventWriter#publish} is {@code MANDATORY} precisely so an event cannot outlive a
-     * rolled-back change.
+     * rolled-back change. That same open transaction is also why {@code assignment.getRole()} can
+     * be read here despite {@code RoleAssignment.role} being {@code @ManyToOne(fetch = LAZY)}: every
+     * caller — {@code UserRoleGrantServiceImpl.grant} and {@code .revoke}/{@code .reconcile} (via
+     * {@code revokeEffective}), and {@code RoleManagementServiceImpl.createRoleAssignment} and
+     * {@code .revokeRoleAssignment}, which write {@code role_assignments} directly instead of going
+     * through {@code UserRoleGrantService} — calls this method before its own {@code @Transactional}
+     * method returns, so the persistence context is still open and the lazy proxy resolves normally.
      */
     public void roleAssignmentChanged(@NonNull RoleAssignment assignment) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
@@ -68,6 +74,7 @@ public class RoleAssignmentEventEmitter {
                 assignment.getUser().getUsername(),
                 assignment.getRole().getId(),
                 assignment.getRole().getName(),
+                assignment.getRole().getLocationScope().name(),
                 assignment.getEffectiveStartDate(),
                 assignment.getEffectiveEndDate(),
                 assignment.getRevokedAt(),

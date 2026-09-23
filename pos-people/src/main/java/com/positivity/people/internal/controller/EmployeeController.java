@@ -5,9 +5,12 @@ import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
-import com.positivity.people.internal.dto.EmployeeSearchResponse;
+import com.positivity.people.internal.dto.EmployeeStatusCountsResponse;
+import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
+import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
+import com.positivity.people.internal.enums.EmployeeSearchInclude;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.security.PeoplePermissions;
@@ -118,10 +121,12 @@ public class EmployeeController {
     @Operation(operationId = "searchEmployees", summary = "Search Employees By Name Or Number", description = """
                     Returns a paged list of slim employee rows matching a case-insensitive substring search across \
                     first name, last name, preferred name, and employee number, optionally narrowed to one or more \
-                    employment statuses and sorted, plus a status histogram for the register's stat tiles.
+                    employment statuses and sorted.
                     Use this tool when listing, filtering, sorting, or typeahead-filtering employees; do not use \
-                    getEmployee, which requires the person id already be known, and do not use \
-                    getEmployeeByNumber, which resolves one exact employee number rather than searching.
+                    getEmployee, which requires the person id already be known, do not use getEmployeeByNumber, \
+                    which resolves one exact employee number rather than searching, and do not use this tool to \
+                    render the register's stat tiles -- use getEmployeeStatusCounts instead, which returns the \
+                    status histogram over the same q filter without changing this endpoint's response shape.
                     Preconditions: none; an empty result set is returned rather than an error when nothing matches.
                     Required inputs: none are mandatory; q defaults to blank, which lists every employee; status \
                     defaults to none, which applies no status filter; sort defaults to lastName,asc; page \
@@ -130,6 +135,20 @@ public class EmployeeController {
                     ordering are both correct for a result set spanning more than one page.
                     Emits a PEOPLE_EMPLOYEE_SEARCH audit event but changes no state; this is a read-only projection \
                     merged in memory from local employment rows and the pos-people-contact identity replica.
+                    Register enrichment (durion#2155): include= repeatable tokens (USERNAME, CONTACT_INFO, \
+                    ROLE_ASSIGNMENTS, LOCATION, JOB_ROLE) each turn on one extra field/group on the returned rows \
+                    -- username, contact info, active application roles, a single primary location plus a count \
+                    of the rest, and job role -- so the register can render a full page in this one call instead \
+                    of one follow-up call per row per column. Omitted, every one of those fields is null: the \
+                    pre-#2155 thin row, byte for byte, so an existing caller (e.g. HrFacadeTool.searchEmployees) \
+                    sees no change. Whichever categories are requested are resolved against the page actually \
+                    returned, never the whole matching set, so the response cost stays flat as the tenant grows. \
+                    Two categories carry a second, narrower gate, and both behave the same way: requesting \
+                    one without its permission still returns 200, just with that field absent from every row, \
+                    never a 403. CONTACT_INFO: email/phone appear only when the caller also holds \
+                    people:employee_pii:view (#1898). ROLE_ASSIGNMENTS: application roles appear only when the \
+                    caller also holds people-contact:role:view, the same permission that gates the equivalent \
+                    read on pos-people-contact -- #2160 changed where this data is read from, not who may see it.
                     Returns 200 with an empty items list and correct totals when the page, query, or status \
                     filter matches nothing.
                     """)
@@ -142,7 +161,7 @@ public class EmployeeController {
             name = "bearerAuth",
             scopes = {"people:employee:view"})
     @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
-    public ResponseEntity<EmployeeSearchResponse> searchEmployees(
+    public ResponseEntity<PagedResponse<EmployeeSummaryDto>> searchEmployees(
             @Parameter(description = "Case-insensitive substring match on name or employee number; blank lists all")
                     @RequestParam(required = false)
                     String q,
@@ -159,8 +178,56 @@ public class EmployeeController {
             @Parameter(description = "Zero-based page index") @PositiveOrZero @RequestParam(defaultValue = "0")
                     int page,
             @Parameter(description = "Page size, up to 100") @Positive @Max(100) @RequestParam(defaultValue = "20")
-                    int size) {
-        return ResponseEntity.ok(employeeService.searchEmployees(q, status, sort, page, size));
+                    int size,
+            @Parameter(
+                            description = "Register-enrichment categories (durion#2155); repeatable "
+                                    + "(?include=USERNAME&include=ROLE_ASSIGNMENTS), matching how `status` "
+                                    + "above is passed. Omitted or empty returns the thin pre-#2155 row: "
+                                    + "username, contactInfo, roleAssignments, primaryLocation, "
+                                    + "otherLocationCount and jobRole are all null. CONTACT_INFO additionally "
+                                    + "requires people:employee_pii:view (#1898) and ROLE_ASSIGNMENTS additionally "
+                                    + "requires people-contact:role:view; without the relevant permission that "
+                                    + "field is simply absent, never a 403.")
+                    @RequestParam(required = false)
+                    List<EmployeeSearchInclude> include) {
+        return ResponseEntity.ok(employeeService.searchEmployees(q, status, sort, page, size, include));
+    }
+
+    @GetMapping("/status-counts")
+    @EmitEvent(id = "PEOPLE_EMPLOYEE_STATUS_COUNTS", apiVersion = "1")
+    @Operation(
+            operationId = "getEmployeeStatusCounts",
+            summary = "Get Employee Status Histogram For The Register",
+            description = """
+                    Returns a per-status employee count for the employee register's stat tiles, computed over the \
+                    same case-insensitive name/employee-number q filter searchEmployees applies, before any status \
+                    filter -- so every tile reports what selecting that status would return out of the current \
+                    search, including for a status not currently selected.
+                    Use this tool alongside searchEmployees to render the register's stat-tile row; do not use it \
+                    in place of searchEmployees, which alone returns the paged row list (durion#2158: this \
+                    histogram used to be folded into that endpoint's response, which changed its shape for every \
+                    caller -- it is now this separate, additive endpoint instead).
+                    Preconditions: none; an empty tenant, or a q that matches nothing, returns an empty counts map \
+                    rather than an error.
+                    Required inputs: none are mandatory; q defaults to blank, which counts every employee. Unlike \
+                    searchEmployees this endpoint takes no status, sort, page, size, or include parameters -- the \
+                    histogram always covers the whole q-filtered set, never one page of it.
+                    Emits a PEOPLE_EMPLOYEE_STATUS_COUNTS audit event but changes no state; this is a read-only \
+                    projection merged in memory the same way searchEmployees is, and carries a bucket for an \
+                    employee with no status recorded (a legacy row) so the counts always sum to the q-filtered \
+                    total.
+                    Returns 200 with an empty counts map when q matches nothing.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Status histogram returned (possibly empty)")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:employee:view"})
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
+    public ResponseEntity<EmployeeStatusCountsResponse> getEmployeeStatusCounts(
+            @Parameter(description = "Case-insensitive substring match on name or employee number; blank counts all")
+                    @RequestParam(required = false)
+                    String q) {
+        return ResponseEntity.ok(employeeService.employeeStatusCounts(q));
     }
 
     @PutMapping("/{employeeId}")

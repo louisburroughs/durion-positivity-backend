@@ -79,6 +79,9 @@ class RoleManagementServiceImplTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private RoleAssignmentEventEmitter roleAssignmentEventEmitter;
+
     @InjectMocks
     private RoleManagementServiceImpl roleManagementService;
 
@@ -240,6 +243,79 @@ class RoleManagementServiceImplTest {
                 ArgumentCaptor.forClass(RoleAssignmentRevokedEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getUserId()).isEqualTo(userId);
+    }
+
+    /**
+     * Issue #2160 (Finding 1, follow-up review): {@code createRoleAssignment} writes {@code
+     * role_assignments} directly rather than through {@link UserRoleGrantService}, so it must emit
+     * the fact itself or a consumer's replica silently drifts.
+     */
+    @Test
+    @DisplayName("createRoleAssignment emits a role-assignment-changed fact")
+    void createRoleAssignment_emitsRoleAssignmentChangedFact() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000021");
+        UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000022");
+
+        User user = new User();
+        user.setId(userId);
+        user.setUsername("bob");
+
+        Role role = new Role();
+        role.setId(roleId);
+        role.setName("CLERK");
+
+        RoleAssignmentRequest request = new RoleAssignmentRequest(
+                userId, roleId, LocalDateTime.now(TEST_CLOCK).minusHours(1), null);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
+        when(roleAssignmentRepository.findByUser_IdAndRole_Id(userId, roleId)).thenReturn(List.of());
+        when(roleAssignmentRepository.save(any(RoleAssignment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        roleManagementService.createRoleAssignment(request);
+
+        ArgumentCaptor<RoleAssignment> assignmentCaptor = ArgumentCaptor.forClass(RoleAssignment.class);
+        verify(roleAssignmentEventEmitter).roleAssignmentChanged(assignmentCaptor.capture());
+        assertThat(assignmentCaptor.getValue().getUser().getId()).isEqualTo(userId);
+        assertThat(assignmentCaptor.getValue().getRole().getId()).isEqualTo(roleId);
+    }
+
+    /**
+     * Issue #2160 (Finding 1, follow-up review): {@code revokeRoleAssignment} likewise writes {@code
+     * role_assignments} directly (by assignment id, not through {@link UserRoleGrantService}), so it
+     * must emit the fact itself too.
+     */
+    @Test
+    @DisplayName("revokeRoleAssignment emits a role-assignment-changed fact")
+    void revokeRoleAssignment_emitsRoleAssignmentChangedFact() {
+        UUID assignmentId = UUID.fromString("00000000-0000-0000-0000-000000000023");
+
+        User user = new User();
+        user.setId(UUID.fromString("00000000-0000-0000-0000-000000000024"));
+        user.setUsername("carol");
+
+        Role role = new Role();
+        role.setId(UUID.fromString("00000000-0000-0000-0000-000000000025"));
+        role.setName("CLERK");
+
+        RoleAssignment assignment = new RoleAssignment();
+        assignment.setId(assignmentId);
+        assignment.setUser(user);
+        assignment.setRole(role);
+        assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
+
+        when(roleAssignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+        when(roleAssignmentRepository.save(any(RoleAssignment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        roleManagementService.revokeRoleAssignment(
+                assignmentId, LocalDateTime.now(TEST_CLOCK).plusDays(1));
+
+        ArgumentCaptor<RoleAssignment> assignmentCaptor = ArgumentCaptor.forClass(RoleAssignment.class);
+        verify(roleAssignmentEventEmitter).roleAssignmentChanged(assignmentCaptor.capture());
+        assertThat(assignmentCaptor.getValue().getId()).isEqualTo(assignmentId);
+        assertThat(assignmentCaptor.getValue().getRevokedAt()).isNotNull();
     }
 
     @Test

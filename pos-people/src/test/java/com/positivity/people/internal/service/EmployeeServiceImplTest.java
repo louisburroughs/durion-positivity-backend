@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -15,35 +16,46 @@ import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
+import com.positivity.people.internal.dto.EmployeeRoleAssignmentDto;
+import com.positivity.people.internal.dto.EmployeeStatusCountsResponse;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
+import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.JobRole;
+import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.DuplicatePolicy;
+import com.positivity.people.internal.enums.EmployeeSearchInclude;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
+import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.JobRoleRepository;
+import com.positivity.people.internal.security.PeoplePermissions;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -54,6 +66,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Employment lifecycle unit coverage (ADR-0044 §6 Phase 3.2, #875): identity writes leave as
@@ -84,6 +98,18 @@ class EmployeeServiceImplTest {
     @Mock
     private JobRoleRepository jobRoleRepository;
 
+    @Mock
+    private PersonUsernameService personUsernameService;
+
+    @Mock
+    private RoleAssignmentReplicaService roleAssignmentReplicaService;
+
+    @Mock
+    private EmployeeLocationAssignmentRepository employeeLocationAssignmentRepository;
+
+    @Mock
+    private LocationReferenceService locationReferenceService;
+
     private EmployeeServiceImpl service;
 
     private static final UUID JOB_ROLE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01");
@@ -96,7 +122,11 @@ class EmployeeServiceImplTest {
                 employeeRepository,
                 offboardingRetryRepository,
                 peopleEventPublisher,
-                jobRoleRepository);
+                jobRoleRepository,
+                personUsernameService,
+                roleAssignmentReplicaService,
+                employeeLocationAssignmentRepository,
+                locationReferenceService);
         when(employeeRepository.save(any(Employee.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -759,17 +789,68 @@ class EmployeeServiceImplTest {
         void movesADisabledEmployeeToActiveAndPublishesTheFact() {
             when(employeeRepository.findByPersonId(PERSON_ID))
                     .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.DISABLED, CURRENT_UPDATED_AT)));
+            // #2158 finding C: the reactivation write is now this one atomic conditional UPDATE,
+            // not a load-compare-then-save() -- see EmployeeRepository#reactivateIfDisabledAndTokenMatches.
+            when(employeeRepository.reactivateIfDisabledAndTokenMatches(PERSON_ID, CURRENT_UPDATED_AT, NOW))
+                    .thenReturn(1);
             when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.of(replica()));
 
             EmployeeProfileDto profile = service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT));
 
-            ArgumentCaptor<Employee> saved = ArgumentCaptor.forClass(Employee.class);
-            verify(employeeRepository).save(saved.capture());
-            assertThat(saved.getValue().getStatus()).isEqualTo(EmployeeStatus.ACTIVE);
-            assertThat(saved.getValue().getStatusEffectiveAt()).isEqualTo(NOW);
-            verify(peopleEventPublisher).publishEmployeeUpdated(saved.getValue());
+            verify(employeeRepository).reactivateIfDisabledAndTokenMatches(PERSON_ID, CURRENT_UPDATED_AT, NOW);
+            // No redundant second write: the conditional UPDATE above already persisted the new
+            // status/statusEffectiveAt/updatedAt in one statement.
+            verify(employeeRepository, never()).save(any());
+            ArgumentCaptor<Employee> published = ArgumentCaptor.forClass(Employee.class);
+            verify(peopleEventPublisher).publishEmployeeUpdated(published.capture());
+            assertThat(published.getValue().getStatus()).isEqualTo(EmployeeStatus.ACTIVE);
+            assertThat(published.getValue().getStatusEffectiveAt()).isEqualTo(NOW);
+            assertThat(published.getValue().getUpdatedAt()).isEqualTo(NOW);
             assertThat(profile.getStatus()).isEqualTo(EmployeeStatus.ACTIVE);
+            // profile.updatedAt comes from the identity replica (person.personUpdatedAt) when a
+            // replica row exists, not from the employee row -- see profileFromReplica -- so it is
+            // NOT asserted against `now` here; published.getValue().getUpdatedAt() above already
+            // pins the employee-side value the atomic update wrote.
             assertThat(profile.getFirstName()).isEqualTo("Jane");
+        }
+
+        /**
+         * #2158 finding C, the closest a mocked-repository test can get to the actual race: two
+         * concurrent enableEmployee calls that both read the same DISABLED row with the same
+         * updatedAt token both pass every in-memory guard (TERMINATED/ON_LEAVE/SUSPENDED/ACTIVE
+         * are all ruled out identically on both reads), so nothing in the guard checks above can
+         * tell them apart -- only the atomic conditional UPDATE can, since a real database would
+         * let exactly one of the two racing UPDATEs still find a matching row. This pins that the
+         * service trusts that return value rather than the in-memory guards: stubbing the second
+         * call to reactivateIfDisabledAndTokenMatches with 0 (what the DB would return for the
+         * loser of the race) must 409 the second attempt even though its own guard checks, run
+         * against the same stale DISABLED snapshot, all pass.
+         */
+        @Test
+        void twoSequentialAttemptsWithTheSameTokenCannotBothSucceed() {
+            // A fresh Employee instance per call (thenAnswer, not thenReturn of one shared
+            // instance): a real repository read returns an independent object each time, and the
+            // first call's in-memory field mutations (see enableEmployee) must not leak into what
+            // the second call reads -- only the stubbed reactivateIfDisabledAndTokenMatches below
+            // should be what tells the two calls apart, exactly as the real atomic UPDATE would.
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenAnswer(invocation ->
+                            Optional.of(employeeWithUpdatedAt(EmployeeStatus.DISABLED, CURRENT_UPDATED_AT)));
+            when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.of(replica()));
+            when(employeeRepository.reactivateIfDisabledAndTokenMatches(PERSON_ID, CURRENT_UPDATED_AT, NOW))
+                    .thenReturn(1)
+                    .thenReturn(0);
+
+            EmployeeProfileDto first = service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT));
+            assertThat(first.getStatus()).isEqualTo(EmployeeStatus.ACTIVE);
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT)))
+                    .isInstanceOf(ResourceStateConflictException.class)
+                    .hasMessageContaining("updatedAt");
+
+            verify(employeeRepository, times(2))
+                    .reactivateIfDisabledAndTokenMatches(PERSON_ID, CURRENT_UPDATED_AT, NOW);
+            verify(peopleEventPublisher, times(1)).publishEmployeeUpdated(any());
         }
 
         @Test
@@ -917,8 +998,7 @@ class EmployeeServiceImplTest {
         void aBlankQueryListsEveryEmployee() {
             givenTheDirectory();
 
-            PagedResponse<EmployeeSummaryDto> page =
-                    service.searchEmployees("  ", null, null, 0, 20).getPage();
+            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees("  ", null, null, 0, 20, null);
 
             assertThat(page.items()).hasSize(3);
             assertThat(page.totalElements()).isEqualTo(3);
@@ -929,9 +1009,7 @@ class EmployeeServiceImplTest {
         void aNullQueryListsEveryEmployee() {
             givenTheDirectory();
 
-            assertThat(service.searchEmployees(null, null, null, 0, 20)
-                            .getPage()
-                            .items())
+            assertThat(service.searchEmployees(null, null, null, 0, 20, null).items())
                     .hasSize(3);
         }
 
@@ -939,9 +1017,8 @@ class EmployeeServiceImplTest {
         void matchesByLastName() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results = service.searchEmployees("smith", null, null, 0, 20)
-                    .getPage()
-                    .items();
+            List<EmployeeSummaryDto> results =
+                    service.searchEmployees("smith", null, null, 0, 20, null).items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -952,9 +1029,8 @@ class EmployeeServiceImplTest {
         void matchesByPreferredName() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results = service.searchEmployees("Janie", null, null, 0, 20)
-                    .getPage()
-                    .items();
+            List<EmployeeSummaryDto> results =
+                    service.searchEmployees("Janie", null, null, 0, 20, null).items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -966,7 +1042,7 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             List<EmployeeSummaryDto> results =
-                    service.searchEmployees("0002", null, null, 0, 20).getPage().items();
+                    service.searchEmployees("0002", null, null, 0, 20, null).items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -978,7 +1054,7 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             List<EmployeeSummaryDto> results =
-                    service.searchEmployees("DOE", null, null, 0, 20).getPage().items();
+                    service.searchEmployees("DOE", null, null, 0, 20, null).items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -989,9 +1065,8 @@ class EmployeeServiceImplTest {
         void anEmployeeWithNoReplicaRowIsStillFoundByNumberAndCarriesNullNames() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results = service.searchEmployees("EMP-0003", null, null, 0, 20)
-                    .getPage()
-                    .items();
+            List<EmployeeSummaryDto> results =
+                    service.searchEmployees("EMP-0003", null, null, 0, 20, null).items();
 
             assertThat(results).hasSize(1);
             EmployeeSummaryDto found = results.get(0);
@@ -1006,7 +1081,7 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             List<EmployeeSummaryDto> results =
-                    service.searchEmployees(null, null, null, 0, 20).getPage().items();
+                    service.searchEmployees(null, null, null, 0, 20, null).items();
 
             assertThat(results)
                     .filteredOn(dto -> dto.getEmployeeNumber().equals("EMP-0001"))
@@ -1023,16 +1098,14 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             // lastName order: Doe, Smith, then the no-replica row (null last name sorts last).
-            PagedResponse<EmployeeSummaryDto> firstPage =
-                    service.searchEmployees(null, null, null, 0, 2).getPage();
+            PagedResponse<EmployeeSummaryDto> firstPage = service.searchEmployees(null, null, null, 0, 2, null);
             assertThat(firstPage.items())
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
                     .containsExactly("EMP-0002", "EMP-0001");
             assertThat(firstPage.totalElements()).isEqualTo(3);
             assertThat(firstPage.totalPages()).isEqualTo(2);
 
-            PagedResponse<EmployeeSummaryDto> secondPage =
-                    service.searchEmployees(null, null, null, 1, 2).getPage();
+            PagedResponse<EmployeeSummaryDto> secondPage = service.searchEmployees(null, null, null, 1, 2, null);
             assertThat(secondPage.items())
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
                     .containsExactly("EMP-0003");
@@ -1044,8 +1117,7 @@ class EmployeeServiceImplTest {
         void anOutOfRangePageReturnsEmptyItemsWithCorrectTotals() {
             givenTheDirectory();
 
-            PagedResponse<EmployeeSummaryDto> page =
-                    service.searchEmployees(null, null, null, 5, 20).getPage();
+            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees(null, null, null, 5, 20, null);
 
             assertThat(page.items()).isEmpty();
             assertThat(page.totalElements()).isEqualTo(3);
@@ -1065,18 +1137,16 @@ class EmployeeServiceImplTest {
         void statusFilterAppliesAcrossTheWholeDirectoryNotJustThePage() {
             givenALargeDirectory();
 
-            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees(
-                            null, List.of(EmployeeStatus.DISABLED), null, 0, 2)
-                    .getPage();
+            PagedResponse<EmployeeSummaryDto> page =
+                    service.searchEmployees(null, List.of(EmployeeStatus.DISABLED), null, 0, 2, null);
 
             assertThat(page.items()).extracting(EmployeeSummaryDto::getLastName).containsExactly("Baker", "Davis");
             assertThat(page.items()).allMatch(dto -> "DISABLED".equals(dto.getStatus()));
             assertThat(page.totalElements()).isEqualTo(4);
             assertThat(page.totalPages()).isEqualTo(2);
 
-            PagedResponse<EmployeeSummaryDto> secondPage = service.searchEmployees(
-                            null, List.of(EmployeeStatus.DISABLED), null, 1, 2)
-                    .getPage();
+            PagedResponse<EmployeeSummaryDto> secondPage =
+                    service.searchEmployees(null, List.of(EmployeeStatus.DISABLED), null, 1, 2, null);
             assertThat(secondPage.items())
                     .extracting(EmployeeSummaryDto::getLastName)
                     .containsExactly("Foster", "Hale");
@@ -1088,8 +1158,7 @@ class EmployeeServiceImplTest {
             givenALargeDirectory();
 
             PagedResponse<EmployeeSummaryDto> page = service.searchEmployees(
-                            null, List.of(EmployeeStatus.ACTIVE, EmployeeStatus.DISABLED), null, 0, 20)
-                    .getPage();
+                    null, List.of(EmployeeStatus.ACTIVE, EmployeeStatus.DISABLED), null, 0, 20, null);
 
             // Every row in the fixture is ACTIVE or DISABLED, so requesting both is equivalent
             // to no status filter at all — proving the two statuses were OR'd together rather
@@ -1101,12 +1170,9 @@ class EmployeeServiceImplTest {
         void aNullOrEmptyStatusListAppliesNoFilter() {
             givenALargeDirectory();
 
-            assertThat(service.searchEmployees(null, null, null, 0, 20)
-                            .getPage()
-                            .totalElements())
+            assertThat(service.searchEmployees(null, null, null, 0, 20, null).totalElements())
                     .isEqualTo(10);
-            assertThat(service.searchEmployees(null, List.of(), null, 0, 20)
-                            .getPage()
+            assertThat(service.searchEmployees(null, List.of(), null, 0, 20, null)
                             .totalElements())
                     .isEqualTo(10);
         }
@@ -1122,9 +1188,9 @@ class EmployeeServiceImplTest {
             givenALargeDirectory();
 
             PagedResponse<EmployeeSummaryDto> firstPage =
-                    service.searchEmployees(null, null, "lastName,desc", 0, 5).getPage();
+                    service.searchEmployees(null, null, "lastName,desc", 0, 5, null);
             PagedResponse<EmployeeSummaryDto> secondPage =
-                    service.searchEmployees(null, null, "lastName,desc", 1, 5).getPage();
+                    service.searchEmployees(null, null, "lastName,desc", 1, 5, null);
 
             assertThat(firstPage.items())
                     .extracting(EmployeeSummaryDto::getLastName)
@@ -1143,10 +1209,9 @@ class EmployeeServiceImplTest {
         void ascendingSortIsTheDefaultAndMatchesLegacyOrdering() {
             givenALargeDirectory();
 
-            PagedResponse<EmployeeSummaryDto> withoutSort =
-                    service.searchEmployees(null, null, null, 0, 10).getPage();
+            PagedResponse<EmployeeSummaryDto> withoutSort = service.searchEmployees(null, null, null, 0, 10, null);
             PagedResponse<EmployeeSummaryDto> withExplicitAscSort =
-                    service.searchEmployees(null, null, "lastName,asc", 0, 10).getPage();
+                    service.searchEmployees(null, null, "lastName,asc", 0, 10, null);
 
             assertThat(withoutSort.items())
                     .extracting(EmployeeSummaryDto::getLastName)
@@ -1163,7 +1228,7 @@ class EmployeeServiceImplTest {
         void anUnsupportedSortFieldRaisesAValidationException() {
             givenALargeDirectory();
 
-            assertThatThrownBy(() -> service.searchEmployees(null, null, "employeeNumber,asc", 0, 20))
+            assertThatThrownBy(() -> service.searchEmployees(null, null, "employeeNumber,asc", 0, 20, null))
                     .isInstanceOf(RequestValidationException.class);
         }
 
@@ -1171,40 +1236,8 @@ class EmployeeServiceImplTest {
         void anUnsupportedSortDirectionRaisesAValidationException() {
             givenALargeDirectory();
 
-            assertThatThrownBy(() -> service.searchEmployees(null, null, "lastName,sideways", 0, 20))
+            assertThatThrownBy(() -> service.searchEmployees(null, null, "lastName,sideways", 0, 20, null))
                     .isInstanceOf(RequestValidationException.class);
-        }
-
-        /**
-         * The histogram is taken over the q-filtered set BEFORE the status filter: requesting
-         * only DISABLED rows must not make the ACTIVE tile disappear or shrink to zero, and the
-         * counts must always sum to the q-filtered total (10 here), never to the smaller
-         * status-filtered page total (4).
-         */
-        @Test
-        void statusHistogramCoversTheQFilteredSetRegardlessOfTheStatusFilter() {
-            givenALargeDirectory();
-
-            Map<EmployeeStatus, Long> counts = service.searchEmployees(
-                            null, List.of(EmployeeStatus.DISABLED), null, 0, 2)
-                    .getStatusCounts();
-
-            assertThat(counts.get(EmployeeStatus.DISABLED)).isEqualTo(4L);
-            assertThat(counts.get(EmployeeStatus.ACTIVE)).isEqualTo(6L);
-            assertThat(counts.values().stream().mapToLong(Long::longValue).sum())
-                    .isEqualTo(10L);
-        }
-
-        @Test
-        void statusHistogramIsUnaffectedByPaging() {
-            givenALargeDirectory();
-
-            Map<EmployeeStatus, Long> firstPageCounts =
-                    service.searchEmployees(null, null, null, 0, 2).getStatusCounts();
-            Map<EmployeeStatus, Long> secondPageCounts =
-                    service.searchEmployees(null, null, null, 1, 2).getStatusCounts();
-
-            assertThat(firstPageCounts).isEqualTo(secondPageCounts);
         }
 
         /**
@@ -1216,13 +1249,534 @@ class EmployeeServiceImplTest {
             givenALargeDirectory();
 
             PagedResponse<EmployeeSummaryDto> legacyStyleCall =
-                    service.searchEmployees("First", null, null, 0, 10).getPage();
+                    service.searchEmployees("First", null, null, 0, 10, null);
 
             assertThat(legacyStyleCall.items())
                     .extracting(EmployeeSummaryDto::getLastName)
                     .containsExactly(
                             "Adams", "Baker", "Cole", "Davis", "Evans", "Foster", "Grant", "Hale", "Irwin", "Jones");
             assertThat(legacyStyleCall.totalElements()).isEqualTo(10);
+        }
+    }
+
+    /**
+     * durion#2158, corrected: the status histogram for the register's stat tiles, now its own
+     * {@code employeeStatusCounts} call rather than folded into {@code searchEmployees}'s
+     * response (finding A) -- and keyed by {@code String} with an explicit bucket for a
+     * null-status row rather than silently dropping it (finding B).
+     */
+    @Nested
+    @DisplayName("employeeStatusCounts")
+    class EmployeeStatusCounts {
+
+        private Employee employeeRow(UUID personId, String employeeNumber, EmployeeStatus status) {
+            return Employee.builder()
+                    .id(UUID.randomUUID())
+                    .personId(personId)
+                    .employeeNumber(employeeNumber)
+                    .status(status)
+                    .build();
+        }
+
+        private ExtPersonReplica replicaRow(UUID personId, String firstName, String lastName) {
+            ExtPersonReplica person = new ExtPersonReplica();
+            person.setPersonId(personId);
+            person.setFirstName(firstName);
+            person.setLastName(lastName);
+            return person;
+        }
+
+        /**
+         * Ten employees, ACTIVE/DISABLED alternating (same shape as SearchEmployees'
+         * givenALargeDirectory, duplicated here rather than shared -- see
+         * SearchEmployeesEnrichment for the same pattern in this file): 6 ACTIVE, 4 DISABLED.
+         */
+        private void givenALargeDirectory() {
+            String[] lastNames = {
+                "Adams", "Baker", "Cole", "Davis", "Evans", "Foster", "Grant", "Hale", "Irwin", "Jones"
+            };
+            EmployeeStatus[] statuses = {
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.DISABLED,
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.DISABLED,
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.DISABLED,
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.DISABLED,
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.ACTIVE
+            };
+            List<Employee> employees = new ArrayList<>();
+            List<ExtPersonReplica> replicas = new ArrayList<>();
+            for (int i = 0; i < lastNames.length; i++) {
+                UUID personId = UUID.randomUUID();
+                employees.add(employeeRow(personId, "EMP-1%03d".formatted(i), statuses[i]));
+                replicas.add(replicaRow(personId, "First" + i, lastNames[i]));
+            }
+            when(employeeRepository.findAll()).thenReturn(employees);
+            when(extPersonReplicaRepository.findByPersonIdIn(any())).thenReturn(replicas);
+        }
+
+        /**
+         * The headline invariant: requesting only DISABLED rows on searchEmployees must not make
+         * the ACTIVE tile disappear or shrink to zero, and the counts must always sum to the
+         * q-filtered total (10 here) -- this endpoint takes no status filter at all, which is
+         * what guarantees that.
+         */
+        @Test
+        void coversTheWholeQFilteredSetRegardlessOfAnyStatusFilterOnSearchEmployees() {
+            givenALargeDirectory();
+
+            Map<String, Long> counts = service.employeeStatusCounts(null).getCounts();
+
+            assertThat(counts.get("DISABLED")).isEqualTo(4L);
+            assertThat(counts.get("ACTIVE")).isEqualTo(6L);
+            assertThat(counts.values().stream().mapToLong(Long::longValue).sum())
+                    .isEqualTo(10L);
+        }
+
+        @Test
+        void isUnaffectedByWhichPageSearchEmployeesWouldTake() {
+            givenALargeDirectory();
+
+            // employeeStatusCounts takes no page/size at all -- calling it twice must be
+            // idempotent over the same q, unlike the old per-page-call histogram it replaced.
+            Map<String, Long> firstCall = service.employeeStatusCounts(null).getCounts();
+            Map<String, Long> secondCall = service.employeeStatusCounts(null).getCounts();
+
+            assertThat(firstCall).isEqualTo(secondCall);
+        }
+
+        /**
+         * Finding B: {@code Employee.status} is nullable (a legacy row predating status becoming
+         * a required field), and the original #2158 delivery filtered such rows out of the
+         * histogram entirely, silently breaking "the counts sum to the q-filtered total" for any
+         * tenant carrying one. A null-status row must land in {@link
+         * EmployeeStatusCountsResponse#UNKNOWN_STATUS} instead, so the invariant holds
+         * unconditionally.
+         */
+        @Test
+        void countsSumToTheQFilteredTotal_includingANullStatusRow() {
+            UUID activeId = UUID.randomUUID();
+            UUID disabledId = UUID.randomUUID();
+            UUID unknownStatusId = UUID.randomUUID();
+            when(employeeRepository.findAll())
+                    .thenReturn(List.of(
+                            employeeRow(activeId, "EMP-3001", EmployeeStatus.ACTIVE),
+                            employeeRow(disabledId, "EMP-3002", EmployeeStatus.DISABLED),
+                            employeeRow(unknownStatusId, "EMP-3003", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(
+                            replicaRow(activeId, "Ann", "One"),
+                            replicaRow(disabledId, "Bea", "Two"),
+                            replicaRow(unknownStatusId, "Cid", "Three")));
+
+            Map<String, Long> counts = service.employeeStatusCounts(null).getCounts();
+
+            assertThat(counts.get("ACTIVE")).isEqualTo(1L);
+            assertThat(counts.get("DISABLED")).isEqualTo(1L);
+            assertThat(counts.get(EmployeeStatusCountsResponse.UNKNOWN_STATUS)).isEqualTo(1L);
+            assertThat(counts.values().stream().mapToLong(Long::longValue).sum())
+                    .isEqualTo(3L);
+        }
+
+        @Test
+        void aBlankOrNullQCountsEveryEmployee() {
+            givenALargeDirectory();
+
+            assertThat(service.employeeStatusCounts(null).getCounts().values().stream()
+                            .mapToLong(Long::longValue)
+                            .sum())
+                    .isEqualTo(10L);
+            assertThat(service.employeeStatusCounts("  ").getCounts().values().stream()
+                            .mapToLong(Long::longValue)
+                            .sum())
+                    .isEqualTo(10L);
+        }
+
+        @Test
+        void aQFilterNarrowsTheCountsLikeSearchEmployeesWould() {
+            givenALargeDirectory();
+
+            Map<String, Long> counts = service.employeeStatusCounts("Baker").getCounts();
+
+            assertThat(counts.values().stream().mapToLong(Long::longValue).sum())
+                    .isEqualTo(1L);
+            assertThat(counts.get("DISABLED")).isEqualTo(1L);
+        }
+    }
+
+    /**
+     * durion#2155: the register-enrichment fields on {@link EmployeeSummaryDto} (username,
+     * contactInfo, roleAssignments, primaryLocation/otherLocationCount, jobRole), gated by
+     * {@code include=} and, for contactInfo, by {@code people:employee_pii:view} on top of that.
+     */
+    @Nested
+    @DisplayName("searchEmployees register enrichment")
+    class SearchEmployeesEnrichment {
+
+        private static final UUID JANE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f7001");
+        private static final UUID LOCATION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f8001");
+        private static final UUID OTHER_LOCATION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f8002");
+
+        @AfterEach
+        void clearCaller() {
+            SecurityContextHolder.clearContext();
+        }
+
+        /** Authenticates the current thread as a caller holding the given authorities. */
+        private void caller(String... authorities) {
+            TestingAuthenticationToken authentication = new TestingAuthenticationToken("tester", null, authorities);
+            authentication.setAuthenticated(true);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        private Employee employeeRow(UUID personId, String employeeNumber, UUID jobRoleId) {
+            return Employee.builder()
+                    .id(UUID.randomUUID())
+                    .personId(personId)
+                    .employeeNumber(employeeNumber)
+                    .status(EmployeeStatus.ACTIVE)
+                    .jobRoleId(jobRoleId)
+                    .build();
+        }
+
+        private ExtPersonReplica replicaRow(UUID personId, String firstName, String lastName) {
+            ExtPersonReplica person = new ExtPersonReplica();
+            person.setPersonId(personId);
+            person.setFirstName(firstName);
+            person.setLastName(lastName);
+            person.setPrimaryEmail(firstName.toLowerCase(java.util.Locale.ROOT) + "@example.com");
+            person.setPrimaryPhone("555-0100");
+            return person;
+        }
+
+        private EmployeeLocationAssignment assignment(UUID personId, UUID locationId, boolean primary) {
+            return EmployeeLocationAssignment.builder()
+                    .id(UUID.randomUUID())
+                    .employee(Employee.builder().personId(personId).build())
+                    .locationId(locationId)
+                    .role("TECHNICIAN")
+                    .isPrimary(primary)
+                    .effectiveFrom(LocalDate.of(2026, 1, 1))
+                    .status(AssignmentStatus.ACTIVE)
+                    .build();
+        }
+
+        private static final List<EmployeeSearchInclude> EVERY_INCLUDE = List.of(
+                EmployeeSearchInclude.USERNAME,
+                EmployeeSearchInclude.CONTACT_INFO,
+                EmployeeSearchInclude.ROLE_ASSIGNMENTS,
+                EmployeeSearchInclude.LOCATION,
+                EmployeeSearchInclude.JOB_ROLE);
+
+        @Test
+        @DisplayName("a full row renders every column in one service call")
+        void aFullRowRendersEveryColumnInOneServiceCall() {
+            caller(
+                    PeoplePermissions.EMPLOYEE_VIEW,
+                    PeoplePermissions.EMPLOYEE_PII_VIEW,
+                    PeoplePermissions.ROLE_ASSIGNMENTS_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", JOB_ROLE_ID)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+            when(personUsernameService.usernamesByPersonId(any())).thenReturn(Map.of(JANE_ID, "jane.smith"));
+            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any()))
+                    .thenReturn(Map.of(
+                            "jane.smith",
+                            List.of(EmployeeRoleAssignmentDto.builder()
+                                    .assignmentId(UUID.randomUUID())
+                                    .roleId(UUID.randomUUID())
+                                    .roleName("SHOP_MANAGER")
+                                    .roleLocationScope("ALL")
+                                    .effectiveStartDate(LocalDateTime.of(2026, 1, 1, 0, 0))
+                                    .build())));
+            when(employeeLocationAssignmentRepository.findActiveByPersonIdIn(any(), any()))
+                    .thenReturn(List.of(assignment(JANE_ID, LOCATION_ID, true)));
+            when(locationReferenceService.findLocationNames(any())).thenReturn(Map.of(LOCATION_ID, "Charlotte Main"));
+            when(jobRoleRepository.findAllById(any())).thenReturn(List.of(jobRole()));
+
+            EmployeeSummaryDto row = service.searchEmployees(null, null, null, 0, 20, EVERY_INCLUDE)
+                    .items()
+                    .get(0);
+
+            assertThat(row.getUsername()).isEqualTo("jane.smith");
+            assertThat(row.getContactInfo()).isNotNull();
+            assertThat(row.getContactInfo().getPrimaryEmail()).isEqualTo("jane@example.com");
+            assertThat(row.getContactInfo().getPrimaryPhone()).isEqualTo("555-0100");
+            assertThat(row.getRoleAssignments())
+                    .extracting(EmployeeRoleAssignmentDto::getRoleName)
+                    .containsExactly("SHOP_MANAGER");
+            assertThat(row.getPrimaryLocation()).isNotNull();
+            assertThat(row.getPrimaryLocation().getId()).isEqualTo(LOCATION_ID);
+            assertThat(row.getPrimaryLocation().getName()).isEqualTo("Charlotte Main");
+            assertThat(row.getOtherLocationCount()).isZero();
+            assertThat(row.getJobRole()).isNotNull();
+            assertThat(row.getJobRole().getId()).isEqualTo(JOB_ROLE_ID);
+            assertThat(row.getJobRole().getName()).isEqualTo("Lead Technician");
+        }
+
+        /**
+         * Pins the #2155 headline constraint: a batched enrichment lookup must be invoked with
+         * exactly the page window's usernames, never the whole q-/status-filtered result set's.
+         * Four employees match the search (page size 2), so a naive implementation that batches
+         * before paging would send all four usernames through; this asserts on the exact set
+         * received by the mocked collaborators instead of merely counting invocations, so it
+         * fails on that bug even though the total employee count (4) is small enough that a
+         * count-only assertion could accidentally still pass.
+         */
+        @Test
+        @DisplayName("the batch role lookup runs against exactly the window's usernames, not the whole result set")
+        void enrichmentBatchLookupTouchesOnlyTheWindow() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.ROLE_ASSIGNMENTS_VIEW);
+
+            UUID adamsId = UUID.randomUUID();
+            UUID bakerId = UUID.randomUUID();
+            UUID coleId = UUID.randomUUID();
+            UUID davisId = UUID.randomUUID();
+            when(employeeRepository.findAll())
+                    .thenReturn(List.of(
+                            employeeRow(adamsId, "EMP-1", null),
+                            employeeRow(bakerId, "EMP-2", null),
+                            employeeRow(coleId, "EMP-3", null),
+                            employeeRow(davisId, "EMP-4", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(
+                            replicaRow(adamsId, "A", "Adams"),
+                            replicaRow(bakerId, "B", "Baker"),
+                            replicaRow(coleId, "C", "Cole"),
+                            replicaRow(davisId, "D", "Davis")));
+
+            Map<UUID, String> usernamesByPersonId = new LinkedHashMap<>();
+            usernamesByPersonId.put(adamsId, "a.adams");
+            usernamesByPersonId.put(bakerId, "b.baker");
+            usernamesByPersonId.put(coleId, "c.cole");
+            usernamesByPersonId.put(davisId, "d.davis");
+            when(personUsernameService.usernamesByPersonId(any())).thenAnswer(invocation -> {
+                Collection<UUID> requested = invocation.getArgument(0);
+                Map<UUID, String> result = new LinkedHashMap<>();
+                requested.forEach(id -> result.put(id, usernamesByPersonId.get(id)));
+                return result;
+            });
+            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any()))
+                    .thenReturn(Map.of());
+
+            // lastName order Adams, Baker, Cole, Davis; page size 2, page 0 -> window is [Adams, Baker].
+            service.searchEmployees(null, null, null, 0, 2, List.of(EmployeeSearchInclude.ROLE_ASSIGNMENTS));
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<UUID>> personIdsCaptor = ArgumentCaptor.forClass(Collection.class);
+            verify(personUsernameService).usernamesByPersonId(personIdsCaptor.capture());
+            assertThat(personIdsCaptor.getValue()).containsExactlyInAnyOrder(adamsId, bakerId);
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<String>> usernamesCaptor = ArgumentCaptor.forClass(Collection.class);
+            verify(roleAssignmentReplicaService).findActiveRoleAssignmentsByUsernames(usernamesCaptor.capture());
+            assertThat(usernamesCaptor.getValue()).containsExactlyInAnyOrder("a.adams", "b.baker");
+        }
+
+        @Test
+        @DisplayName("a caller without people:employee_pii:view gets 200 with email/phone absent")
+        void contactInfoAbsentWithoutThePiiPermission() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+
+            EmployeeSummaryDto row = service.searchEmployees(
+                            null, null, null, 0, 20, List.of(EmployeeSearchInclude.CONTACT_INFO))
+                    .items()
+                    .get(0);
+
+            assertThat(row.getContactInfo()).isNull();
+        }
+
+        /**
+         * durion#2155 acceptance, and the #2163 review finding that it was unimplemented: the roles
+         * column must be absent for a caller without the roles-view permission. Gated like
+         * contactInfo -- the field is omitted and the answer is still 200, never a 403 -- because
+         * `people:employee:view` is held by staff roles generally, so without this any of them
+         * could read every employee's application roles by passing ?include=ROLE_ASSIGNMENTS. That
+         * is the shape of #1898, which this module has been bitten by once already.
+         */
+        @Test
+        @DisplayName("a caller without people-contact:role:view gets 200 with roleAssignments absent")
+        void roleAssignmentsAbsentWithoutTheRolesViewPermission() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+
+            EmployeeSummaryDto row = service.searchEmployees(
+                            null, null, null, 0, 20, List.of(EmployeeSearchInclude.ROLE_ASSIGNMENTS))
+                    .items()
+                    .get(0);
+
+            assertThat(row.getRoleAssignments()).isNull();
+            // The replica is never consulted, rather than consulted and its result discarded -- an
+            // ungated caller must not be able to make this endpoint read role data at all.
+            verify(roleAssignmentReplicaService, never()).findActiveRoleAssignmentsByUsernames(any());
+        }
+
+        @Test
+        @DisplayName("the same request with people-contact:role:view returns the roles")
+        void roleAssignmentsPresentWithTheRolesViewPermission() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.ROLE_ASSIGNMENTS_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+            when(personUsernameService.usernamesByPersonId(any())).thenReturn(Map.of(JANE_ID, "jane.smith"));
+            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any()))
+                    .thenReturn(Map.of(
+                            "jane.smith",
+                            List.of(EmployeeRoleAssignmentDto.builder()
+                                    .assignmentId(UUID.randomUUID())
+                                    .roleId(UUID.randomUUID())
+                                    .roleName("SHOP_MANAGER")
+                                    .roleLocationScope("ALL")
+                                    .effectiveStartDate(LocalDateTime.of(2026, 1, 1, 0, 0))
+                                    .build())));
+
+            EmployeeSummaryDto row = service.searchEmployees(
+                            null, null, null, 0, 20, List.of(EmployeeSearchInclude.ROLE_ASSIGNMENTS))
+                    .items()
+                    .get(0);
+
+            assertThat(row.getRoleAssignments())
+                    .extracting(EmployeeRoleAssignmentDto::getRoleName)
+                    .containsExactly("SHOP_MANAGER");
+        }
+
+        @Test
+        @DisplayName("include= absent leaves the response identical to the pre-#2155 thin shape")
+        void includeAbsentLeavesTheThinShapeUnchanged() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.EMPLOYEE_PII_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", JOB_ROLE_ID)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+
+            EmployeeSummaryDto row = service.searchEmployees(null, null, null, 0, 20, null)
+                    .items()
+                    .get(0);
+
+            assertThat(row.getUsername()).isNull();
+            assertThat(row.getContactInfo()).isNull();
+            assertThat(row.getRoleAssignments()).isNull();
+            assertThat(row.getPrimaryLocation()).isNull();
+            assertThat(row.getOtherLocationCount()).isNull();
+            assertThat(row.getJobRole()).isNull();
+            verifyNoInteractions(
+                    personUsernameService,
+                    roleAssignmentReplicaService,
+                    employeeLocationAssignmentRepository,
+                    locationReferenceService,
+                    jobRoleRepository);
+        }
+
+        /** Also true of an empty {@code include=} list, e.g. a client that sends the param with no values. */
+        @Test
+        @DisplayName("an empty include= list also leaves the response identical to the thin shape")
+        void anEmptyIncludeListAlsoLeavesTheThinShapeUnchanged() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.EMPLOYEE_PII_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+
+            EmployeeSummaryDto row = service.searchEmployees(null, null, null, 0, 20, List.of())
+                    .items()
+                    .get(0);
+
+            assertThat(row.getUsername()).isNull();
+            assertThat(row.getRoleAssignments()).isNull();
+        }
+
+        @Test
+        @DisplayName("an employee with no user link, no roles, no job role and no location tolerates partial data")
+        void tolerantOfMissingReplicaData() {
+            caller(
+                    PeoplePermissions.EMPLOYEE_VIEW,
+                    PeoplePermissions.EMPLOYEE_PII_VIEW,
+                    PeoplePermissions.ROLE_ASSIGNMENTS_VIEW);
+
+            // No replica row at all: exercises the contactInfo-null-from-missing-replica path too.
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any())).thenReturn(List.of());
+            when(personUsernameService.usernamesByPersonId(any())).thenReturn(Map.of());
+            when(roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(any()))
+                    .thenReturn(Map.of());
+            when(employeeLocationAssignmentRepository.findActiveByPersonIdIn(any(), any()))
+                    .thenReturn(List.of());
+
+            EmployeeSummaryDto row = service.searchEmployees(null, null, null, 0, 20, EVERY_INCLUDE)
+                    .items()
+                    .get(0);
+
+            assertThat(row.getUsername()).isNull();
+            assertThat(row.getContactInfo()).isNull();
+            assertThat(row.getRoleAssignments()).isEmpty();
+            assertThat(row.getPrimaryLocation()).isNull();
+            assertThat(row.getOtherLocationCount()).isZero();
+            assertThat(row.getJobRole()).isNull();
+            verifyNoInteractions(jobRoleRepository);
+        }
+
+        @Test
+        @DisplayName("multiple active locations produce the correct otherLocationCount")
+        void multipleLocationsProduceTheCorrectOtherLocationCount() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+            when(employeeLocationAssignmentRepository.findActiveByPersonIdIn(any(), any()))
+                    .thenReturn(List.of(
+                            assignment(JANE_ID, LOCATION_ID, true),
+                            assignment(JANE_ID, OTHER_LOCATION_ID, false),
+                            assignment(JANE_ID, UUID.randomUUID(), false)));
+            when(locationReferenceService.findLocationNames(any())).thenReturn(Map.of(LOCATION_ID, "Charlotte Main"));
+
+            EmployeeSummaryDto row = service.searchEmployees(
+                            null, null, null, 0, 20, List.of(EmployeeSearchInclude.LOCATION))
+                    .items()
+                    .get(0);
+
+            assertThat(row.getPrimaryLocation()).isNotNull();
+            assertThat(row.getPrimaryLocation().getId()).isEqualTo(LOCATION_ID);
+            assertThat(row.getPrimaryLocation().getName()).isEqualTo("Charlotte Main");
+            assertThat(row.getOtherLocationCount()).isEqualTo(2);
+        }
+
+        /**
+         * Defensive branch: DECISION-PEOPLE-004 expects at most one active primary per person, but
+         * a lagging replica or a person mid-reassignment could momentarily show none flagged. The
+         * row must still report the active count rather than guessing which assignment is primary.
+         */
+        @Test
+        @DisplayName("no assignment flagged primary yields no primaryLocation but still counts every active assignment")
+        void noFlaggedPrimaryYieldsNullPrimaryWithFullCount() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW);
+
+            when(employeeRepository.findAll()).thenReturn(List.of(employeeRow(JANE_ID, "EMP-1000", null)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Jane", "Smith")));
+            when(employeeLocationAssignmentRepository.findActiveByPersonIdIn(any(), any()))
+                    .thenReturn(List.of(
+                            assignment(JANE_ID, LOCATION_ID, false), assignment(JANE_ID, OTHER_LOCATION_ID, false)));
+
+            EmployeeSummaryDto row = service.searchEmployees(
+                            null, null, null, 0, 20, List.of(EmployeeSearchInclude.LOCATION))
+                    .items()
+                    .get(0);
+
+            assertThat(row.getPrimaryLocation()).isNull();
+            assertThat(row.getOtherLocationCount()).isEqualTo(2);
         }
     }
 }

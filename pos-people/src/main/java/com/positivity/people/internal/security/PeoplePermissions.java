@@ -56,6 +56,16 @@ public final class PeoplePermissions {
     public static final String EMPLOYEE_PII_VIEW = "people:employee_pii:view";
 
     /**
+     * Reading another person's application-role assignments. Deliberately the existing
+     * {@code people-contact} permission (catalog bit 355) rather than a new {@code people:} one:
+     * durion#2155's acceptance criterion names it, {@code PersonAccessController} already gates the
+     * equivalent read on it, and the gateway already decodes it -- so enforcing it here needs no new
+     * catalog bit, no CATALOG_VERSION bump and no seed rows. #2160 moved where the data comes from
+     * (a local replica rather than a call into pos-people-contact); it did not change who may see it.
+     */
+    public static final String ROLE_ASSIGNMENTS_VIEW = "people-contact:role:view";
+
+    /**
      * Add and edit job roles on the tenant's own list (durion#2157): HR master data such as
      * "Lead Technician" or "Parts Counter", never a permission-bearing role.
      *

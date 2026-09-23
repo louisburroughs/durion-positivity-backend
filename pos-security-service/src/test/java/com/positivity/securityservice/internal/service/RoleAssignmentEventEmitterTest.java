@@ -1,8 +1,10 @@
 package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -13,6 +15,7 @@ import com.positivity.securityservice.internal.config.OutboxEventWriter;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.enums.LocationScope;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -47,6 +50,10 @@ class RoleAssignmentEventEmitterTest {
     }
 
     private static RoleAssignment assignment() {
+        return assignment(LocationScope.ALL);
+    }
+
+    private static RoleAssignment assignment(LocationScope locationScope) {
         User user = new User();
         user.setId(USER_ID);
         user.setUsername("jane.doe");
@@ -54,6 +61,7 @@ class RoleAssignmentEventEmitterTest {
         Role role = new Role();
         role.setId(ROLE_ID);
         role.setName("SHOP_MANAGER");
+        role.setLocationScope(locationScope);
 
         RoleAssignment assignment = new RoleAssignment();
         assignment.setId(ASSIGNMENT_ID);
@@ -101,8 +109,27 @@ class RoleAssignmentEventEmitterTest {
         assertThat(payload.username()).isEqualTo("jane.doe");
         assertThat(payload.roleId()).isEqualTo(ROLE_ID);
         assertThat(payload.roleName()).isEqualTo("SHOP_MANAGER");
+        // The role's location scope, denormalized from Role — not a property of the assignment
+        // (V38/#1875 dropped that from RoleAssignment; see ADR-0061 §1).
+        assertThat(payload.roleLocationScope()).isEqualTo("ALL");
         assertThat(payload.revokedAt()).isNull();
         assertThat(payload.effectiveEndDate()).isNull();
+    }
+
+    @Test
+    @DisplayName("publishes the role's LOCATION scope on grant, not just ALL")
+    void publishesLocationScopedRoleOnGrant() {
+        OutboxEventWriter writer = mock(OutboxEventWriter.class);
+        var emitter = new RoleAssignmentEventEmitter(TEST_CLOCK, providerFor(writer), "security.events.v1");
+        RoleAssignment assignment = assignment(LocationScope.LOCATION);
+
+        emitter.roleAssignmentChanged(assignment);
+
+        ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(eq("security.events.v1"), captor.capture());
+        RoleAssignmentChangedV1 payload =
+                (RoleAssignmentChangedV1) captor.getValue().payload();
+        assertThat(payload.roleLocationScope()).isEqualTo("LOCATION");
     }
 
     @Test
@@ -125,6 +152,37 @@ class RoleAssignmentEventEmitterTest {
         assertThat(payload.username()).isEqualTo("jane.doe");
         assertThat(payload.effectiveEndDate()).isEqualTo(endDate);
         assertThat(payload.revokedAt()).isEqualTo(revokedAt);
+        assertThat(payload.roleLocationScope()).isEqualTo("ALL");
+    }
+
+    @Test
+    @DisplayName("publishes the role's LOCATION scope on revoke, not just ALL")
+    void publishesLocationScopedRoleOnRevoke() {
+        OutboxEventWriter writer = mock(OutboxEventWriter.class);
+        var emitter = new RoleAssignmentEventEmitter(TEST_CLOCK, providerFor(writer), "security.events.v1");
+        RoleAssignment assignment = assignment(LocationScope.LOCATION);
+        assignment.revoke(LocalDateTime.parse("2026-09-22T12:00:00"), Instant.parse("2026-09-22T12:00:00Z"));
+
+        emitter.roleAssignmentChanged(assignment);
+
+        ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(eq("security.events.v1"), captor.capture());
+        RoleAssignmentChangedV1 payload =
+                (RoleAssignmentChangedV1) captor.getValue().payload();
+        assertThat(payload.roleLocationScope()).isEqualTo("LOCATION");
+    }
+
+    @Test
+    @DisplayName("a publish failure (serialization/envelope) is swallowed, not propagated to the caller")
+    void publishFailureIsSwallowed() {
+        OutboxEventWriter writer = mock(OutboxEventWriter.class);
+        doThrow(new IllegalStateException("boom")).when(writer).publish(any(), any());
+        var emitter = new RoleAssignmentEventEmitter(TEST_CLOCK, providerFor(writer), "security.events.v1");
+        RoleAssignment assignment = assignment();
+
+        assertThatCode(() -> emitter.roleAssignmentChanged(assignment)).doesNotThrowAnyException();
+
+        verify(writer).publish(any(), any());
     }
 
     @Test
