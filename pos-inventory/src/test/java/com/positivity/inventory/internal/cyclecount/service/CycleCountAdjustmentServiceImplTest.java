@@ -12,9 +12,14 @@ import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest
 import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest;
 import com.positivity.inventory.internal.entity.CycleCountAdjustment;
+import com.positivity.inventory.internal.entity.CycleCountTask;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.AdjustmentStatus;
 import com.positivity.inventory.internal.enums.ApprovalTier;
+import com.positivity.inventory.internal.enums.TaskStatus;
+import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
+import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
+import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.ApprovalThresholdEvaluator;
@@ -30,6 +35,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -247,6 +253,119 @@ class CycleCountAdjustmentServiceImplTest {
     }
 
     @Test
+    void approveAdjustment_negativeStockPolicyRejection_surfacesPolicyViolationNotPostingFailure() {
+        // #2167: a count the ledger refuses (would drive on-hand negative) must reach the handler as
+        // the 422 policy violation, not be wrapped into ADJUSTMENT_LEDGER_POST_FAILED / 500.
+        setUpAuthenticatedActor();
+        UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CycleCountAdjustment adjustment = pendingAdjustment(adjustmentId);
+        NegativeStockPolicyViolationException rejection = new NegativeStockPolicyViolationException(
+                NegativeStockPolicyViolationException.FLOOR_VIOLATION, "would take on-hand to -3.0000");
+
+        when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.of(adjustment));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerRepository.calculateOnHandQuantity(STOCK_ITEM_ID)).thenReturn(new BigDecimal("1"));
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenThrow(rejection);
+
+        ApproveAdjustmentRequest request = ApproveAdjustmentRequest.builder().build();
+
+        assertThatThrownBy(() -> service.approveAdjustment(adjustmentId, request, "corr-id-001"))
+                .isSameAs(rejection);
+        assertThat(adjustment.getStatus()).isNotEqualTo(AdjustmentStatus.FAILED);
+        assertThat(adjustment.getErrorMessage()).isNull();
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void approveAdjustment_unexpectedPostingFailure_stillWrapsAsLedgerPostingException() {
+        setUpAuthenticatedActor();
+        UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CycleCountAdjustment adjustment = pendingAdjustment(adjustmentId);
+
+        when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.of(adjustment));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerRepository.calculateOnHandQuantity(STOCK_ITEM_ID)).thenReturn(new BigDecimal("10"));
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class)))
+                .thenThrow(new IllegalStateException("summary row lock timed out"));
+
+        ApproveAdjustmentRequest request = ApproveAdjustmentRequest.builder().build();
+
+        assertThatThrownBy(() -> service.approveAdjustment(adjustmentId, request, "corr-id-001"))
+                .isInstanceOf(AdjustmentLedgerPostingException.class);
+        assertThat(adjustment.getStatus()).isEqualTo(AdjustmentStatus.FAILED);
+    }
+
+    @Test
+    void createAdjustment_withoutTask_postsAgainstRequestedLocation() {
+        // #2167: a task-less adjustment naming a location posts against that shelf, not the
+        // stock item's location-less balance.
+        UUID locationId = UUID.fromString("01960003-0000-7000-8000-000000000012");
+        CreateAdjustmentRequest request = createRequest(8, 10);
+        request.setLocationId(locationId);
+
+        when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
+                .thenReturn(Optional.empty());
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(STOCK_ITEM_ID, locationId))
+                .thenReturn(new BigDecimal("10"));
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AdjustmentResponse response = service.createAdjustment(request);
+
+        ArgumentCaptor<InventoryLedgerEntry> posted = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService).post(posted.capture());
+        assertThat(posted.getValue().getLocationId()).isEqualTo(locationId);
+        assertThat(posted.getValue().getQuantityAfter()).isEqualByComparingTo("8");
+        assertThat(response.getLocationId()).isEqualTo(locationId);
+        verify(ledgerRepository, never()).calculateOnHandQuantity(STOCK_ITEM_ID);
+    }
+
+    @Test
+    void createAdjustment_taskBinLocation_isRecordedWhenRequestOmitsLocation() {
+        UUID taskId = UUID.fromString("01960003-0000-7000-8000-000000000009");
+        UUID binLocation = UUID.fromString("01960003-0000-7000-8000-000000000012");
+        CreateAdjustmentRequest request = createRequest(5, 10);
+        request.setTaskId(taskId);
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task(taskId, binLocation.toString())));
+        when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
+                .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AdjustmentResponse response = service.createAdjustment(request);
+
+        assertThat(response.getLocationId()).isEqualTo(binLocation);
+    }
+
+    @Test
+    void createAdjustment_requestLocationContradictingTaskBin_isRejected() {
+        UUID taskId = UUID.fromString("01960003-0000-7000-8000-000000000009");
+        CreateAdjustmentRequest request = createRequest(5, 10);
+        request.setTaskId(taskId);
+        request.setLocationId(UUID.fromString("01960003-0000-7000-8000-000000000099"));
+
+        when(taskRepository.findById(taskId))
+                .thenReturn(Optional.of(task(taskId, "01960003-0000-7000-8000-000000000012")));
+
+        assertThatThrownBy(() -> service.createAdjustment(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("does not match task");
+        verify(adjustmentRepository, never()).save(any());
+    }
+
+    @Test
+    void createAdjustment_unknownTask_throwsTaskNotFound() {
+        UUID taskId = UUID.fromString("01960003-0000-7000-8000-000000000009");
+        CreateAdjustmentRequest request = createRequest(5, 10);
+        request.setTaskId(taskId);
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createAdjustment(request)).isInstanceOf(TaskNotFoundException.class);
+        verify(adjustmentRepository, never()).save(any());
+    }
+
+    @Test
     void rejectAdjustment_nonExistentAdjustment_throwsIllegalArgumentException() {
         UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
@@ -329,6 +448,17 @@ class CycleCountAdjustmentServiceImplTest {
                 .countedQuantity(new BigDecimal("8"))
                 .createdByUserId("counter-user-1")
                 .status(AdjustmentStatus.PENDING_APPROVAL)
+                .build();
+    }
+
+    private CycleCountTask task(UUID taskId, String binLocation) {
+        return CycleCountTask.builder()
+                .taskId(taskId)
+                .binLocation(binLocation)
+                .itemSku(STOCK_ITEM_ID)
+                .expectedQuantity(new BigDecimal("10"))
+                .auditorId("counter-user-1")
+                .status(TaskStatus.COUNTED_PENDING_REVIEW)
                 .build();
     }
 

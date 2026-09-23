@@ -38,6 +38,15 @@ public class CreateAdjustmentRequest {
     private UUID taskId;
 
     @Schema(
+            description = "Storage location whose stock was counted. Required for the variance to post against"
+                    + " a shelf when the adjustment has no task; when the task's bin names a location this may be"
+                    + " omitted, and if supplied must match it. Omitted with no task, the variance posts against"
+                    + " the stock item's location-less balance.",
+            example = "01960003-0000-7000-8000-000000000012",
+            requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED)
+    private UUID locationId;
+
+    @Schema(
             description = "Reason code explaining why the adjustment is being made",
             example = "CYCLE_COUNT_VARIANCE",
             requiredMode = REQUIRED)

@@ -143,6 +143,25 @@ how a new grant reaches an existing tenant is
 `FORBIDDEN` is a missing authority; a location-scope refusal is `403 LOCATION_SCOPE_DENIED` and says
 which permission and location it denied.
 
+### A count the ledger refuses is a 422, not a posting failure (#2167)
+
+Approving a cycle count adjustment (or creating one below the approval threshold, which posts at
+once) runs the variance through the ledger's negative-stock policy. `COUNT_VARIANCE_OUT` is
+floor-at-zero: a count may zero a shelf but never drive it negative, and no override lifts that.
+When the policy refuses, the caller gets `422 NEGATIVE_STOCK_FLOOR_VIOLATION` with the projected
+on-hand in the message, and the transaction rolls back — the adjustment stays `PENDING_APPROVAL`.
+The count is what is wrong (usually a `quantityOnHandBefore` that did not match the ledger), so
+retrying the approval will not help; recount or reject it. `500 ADJUSTMENT_LEDGER_POST_FAILED` now
+means only an unexpected posting failure.
+
+**Which shelf the variance posts against.** An adjustment created from a task takes the task's bin
+location. A task-less adjustment takes the optional `locationId` on the create request; without
+one it posts against the stock item's location-less balance, which is almost never where counted
+stock sits, and the policy then judges the count against that balance (the `at location null` in
+#2167's rejection). Name the location. A `locationId` that contradicts the task's bin is refused
+with `400 VALIDATION_ERROR`. The resolved location is stored on the adjustment
+(`cycle_count_adjustment.location_id`) and returned as `locationId`.
+
 ## Lot Tracking — Inbound Capture (odoo-parity E1)
 
 Products whose catalog replica (`ext_product.tracking_level`) says `LOT` require a `lotNumber`
@@ -485,7 +504,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ROLLUP_EXPANSION_TOO_LARGE` | 422 | `expand=tree` was requested on a parent-location rollup whose descendant site count exceeds the configured cap |
 | `INSUFFICIENT_STOCK` | 422 | Not enough on-hand stock to fulfill |
 | `NEGATIVE_STOCK_OVERRIDE_REQUIRED` | 422 | The movement would drive stock negative and the policy requires an explicit override |
-| `NEGATIVE_STOCK_FLOOR_VIOLATION` | 422 | The movement would breach the negative-stock floor, which no override lifts |
+| `NEGATIVE_STOCK_FLOOR_VIOLATION` | 422 | The movement would breach the negative-stock floor, which no override lifts; also answered when approving a cycle count adjustment whose variance would take on-hand below zero (the adjustment stays `PENDING_APPROVAL`) |
 | `AS_OF_IN_FUTURE` | 422 | A point-in-time query names a future instant |
 | `VALUATION_AS_OF_SKU_CAP_EXCEEDED` | 422 | An as-of valuation covers more SKUs than the cap allows |
 | `REPLENISHMENT_SNOOZE_NOT_IN_FUTURE` | 422 | A replenishment snooze instant is not in the future |

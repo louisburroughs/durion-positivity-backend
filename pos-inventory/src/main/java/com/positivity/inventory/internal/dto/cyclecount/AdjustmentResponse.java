@@ -32,6 +32,13 @@ public class AdjustmentResponse {
     private UUID taskId;
 
     @Schema(
+            description = "Storage location the variance posts against: the task's bin, or the location named"
+                    + " on the create request. Absent when neither named one.",
+            example = "01960003-0000-7000-8000-000000000012",
+            requiredMode = NOT_REQUIRED)
+    private UUID locationId;
+
+    @Schema(
             description = "Unique identifier of the adjustment record",
             example = "01960003-0000-7000-8000-000000000001",
             requiredMode = REQUIRED)
