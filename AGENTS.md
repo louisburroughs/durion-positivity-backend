@@ -74,7 +74,10 @@
   `@Transactional`, a handler exception crossing a `@Transactional` service or a Spring Data repository would mark
   the shared transaction rollback-only. The commit after the catch would then throw, and the container would retry
   and dead-letter a record the log calls "failed permanently". Don't write the mark in a second transaction after
-  a successful handler: that opens an at-least-once window, and a handler that applies deltas would apply twice. Pin the shape with a Spring-backed test that uses a real transaction
+  a successful handler: that opens an at-least-once window, and a handler that applies deltas would apply twice.
+  The one deliberate exception is `pos-inventory`'s `InventoryCommandListener` (#2145), whose pick-command handlers
+  are idempotent by state check and document the window; keep it, and don't copy its shape to a new listener.
+  Pin the shape with a Spring-backed test that uses a real transaction
   manager, runs the listener inside an enclosing transaction, and makes a `@Transactional` handler throw; a mock
   transaction manager cannot see the defect. Test template: `pos-inventory`'s
   `InventoryCommandListenerTransactionTest`; listener exemplar: `pos-order`'s `PurchaseOrderCommandListener`.
