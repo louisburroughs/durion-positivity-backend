@@ -11,6 +11,7 @@ import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
@@ -379,7 +380,9 @@ public class CatalogCommandListener {
      * publisher's header all follow that binding, so a follow-up page sent without the header
      * would be consumed under the default tenant and continue another tenant's replay. A command
      * consumed unbound (no header, no default tenant, enforcement off) continues unbound: the
-     * interceptor then treats the continuation exactly as it treated the original.
+     * interceptor then treats the continuation exactly as it treated the original. That mode is the
+     * one place this sends a record without the header; whenever a tenant resolves, the header is
+     * stamped (#2147).
      *
      * <p>A failed publish here is swallowed, not propagated — matching {@code
      * CatalogManifestListener}'s existing convention for this same topic: the chain simply stops:
@@ -419,7 +422,10 @@ public class CatalogCommandListener {
             String command =
                     objectMapper.writeValueAsString(new ReplayContinuationCommand(REPLAY_COMMAND_TYPE, payload));
             String key = since == null ? scope : scope + ":" + since;
-            kafkaTemplate.send(TenantKafkaHeaders.record(commandsTopic, key, command, tenantResolver.require()));
+            kafkaTemplate.send(tenantResolver
+                    .resolve()
+                    .map(tenantId -> TenantKafkaHeaders.record(commandsTopic, key, command, tenantId))
+                    .orElseGet(() -> new ProducerRecord<>(commandsTopic, key, command)));
         } catch (Exception e) {
             log.warn(
                     "Failed to publish replay continuation scope={} since={} continuation={} cursor={}",

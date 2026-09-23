@@ -300,6 +300,43 @@ class CatalogCommandListenerTest {
         assertThat(payload.path("continuation").intValue()).isEqualTo(1);
     }
 
+    /**
+     * With enforcement off and no default tenant, the record interceptor runs this listener unbound,
+     * and the class promises the replay continues unbound. The continuation must still be published
+     * (without a header, since there is no tenant to stamp) rather than dropped by a tenant lookup
+     * that cannot succeed.
+     */
+    @Test
+    @DisplayName("#2147: an unbound replay (no tenant, no default) still publishes its continuation, unbound")
+    void unboundReplayStillPublishesItsContinuation() {
+        CatalogCommandListener unboundListener = new CatalogCommandListener(
+                objectMapper,
+                productFactReplayService,
+                serviceFactReplayService,
+                supplierArticleCodeReplayService,
+                kafkaTemplate,
+                new TenantResolver(new TenancyProperties()));
+        ReflectionTestUtils.setField(unboundListener, "commandsTopic", COMMANDS_TOPIC);
+        UUID cursor = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");
+        when(productFactReplayService.replayPage(isNull(), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(new ProductFactReplayResultDto(1000, cursor, false, null, Instant.now()));
+
+        unboundListener.onCommand("""
+                {"commandType":"catalog.outbox.replay-requested",
+                 "payload":{"since":"2026-07-13T10:00:00Z","scope":"PRODUCT"}}
+                """);
+
+        ProducerRecord<String, String> sent = sentRecord();
+        assertThat(sent.topic()).isEqualTo(COMMANDS_TOPIC);
+        assertThat(TenantKafkaHeaders.read(sent.headers())).isEmpty();
+        assertThat(objectMapper
+                        .readTree(sent.value())
+                        .path("payload")
+                        .path("afterProductId")
+                        .stringValue())
+                .isEqualTo(cursor.toString());
+    }
+
     @Test
     @DisplayName("ADR-0062: every continuation of a tenant's replay carries that tenant's header, so a"
             + " multi-page replay stays the requesting tenant's page after page")
