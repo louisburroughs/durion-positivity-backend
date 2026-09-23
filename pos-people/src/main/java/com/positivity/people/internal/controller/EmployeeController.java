@@ -120,43 +120,29 @@ public class EmployeeController {
     @EmitEvent(id = "PEOPLE_EMPLOYEE_SEARCH", apiVersion = "1")
     @Operation(operationId = "searchEmployees", summary = "Search Employees By Name Or Number", description = """
                     Returns a paged list of slim employee rows matching a case-insensitive substring search across \
-                    first name, last name, preferred name, and employee number, optionally narrowed to one or more \
-                    employment statuses and sorted.
+                    first name, last name, preferred name, and employee number, optionally narrowed to one or \
+                    more employment statuses and sorted.
                     Use this tool when listing, filtering, sorting, or typeahead-filtering employees; do not use \
-                    getEmployee, which requires the person id already be known, do not use getEmployeeByNumber, \
-                    which resolves one exact employee number rather than searching, and do not use this tool to \
-                    render the register's stat tiles -- use getEmployeeStatusCounts instead, which returns the \
-                    status histogram over the same q filter without changing this endpoint's response shape.
+                    getEmployee, which requires the person id already be known, or getEmployeeByNumber, which \
+                    resolves one exact employee number rather than searching, and use getEmployeeStatusCounts \
+                    instead of this endpoint to render the register's stat tiles.
                     Preconditions: none; an empty result set is returned rather than an error when nothing matches.
-                    Required inputs: none are mandatory; q defaults to blank, which lists every employee; status \
-                    defaults to none, which applies no status filter; sort defaults to lastName,asc; page \
-                    defaults to 0, and size defaults to 20 with a maximum of 100. The status filter and sort are \
-                    applied across every matching employee, not just the returned page, so totalElements and \
-                    ordering are both correct for a result set spanning more than one page.
-                    Emits a PEOPLE_EMPLOYEE_SEARCH audit event but changes no state; this is a read-only projection \
-                    merged in memory from local employment rows and the pos-people-contact identity replica.
-                    Register enrichment (durion#2155, plus ALLOWED_ACTIONS from durion#2159): include= repeatable \
-                    tokens (USERNAME, CONTACT_INFO, ROLE_ASSIGNMENTS, LOCATION, JOB_ROLE, ALLOWED_ACTIONS) each \
-                    turn on one extra field/group on the returned rows -- username, contact info, active \
-                    application roles, a single primary location plus a count of the rest, job role, and the \
-                    caller's allowed actions on the row -- so the register can render a full page in this one call \
-                    instead of one follow-up call per row per column. Omitted, every one of those fields is null: \
-                    the pre-#2155 thin row, byte for byte, so an existing caller (e.g. HrFacadeTool.searchEmployees) \
-                    sees no change. Whichever categories are requested are resolved against the page actually \
-                    returned, never the whole matching set, so the response cost stays flat as the tenant grows. \
-                    Two categories carry a second, narrower gate, and both behave the same way: requesting \
-                    one without its permission still returns 200, just with that field absent from every row, \
-                    never a 403. CONTACT_INFO: email/phone appear only when the caller also holds \
-                    people:employee_pii:view (#1898). ROLE_ASSIGNMENTS: application roles appear only when the \
-                    caller also holds people-contact:role:view, the same permission that gates the equivalent \
-                    read on pos-people-contact -- #2160 changed where this data is read from, not who may see it. \
-                    ALLOWED_ACTIONS is different again: a RENDERING HINT ONLY -- computed by EmployeeActionPolicy \
-                    from the caller's permissions and each row's status, never a substitute for the @PreAuthorize \
-                    and service-level guards those actions still enforce independently -- and it does not account \
-                    for location-scoped access enforced elsewhere in this module, so a location-scoped caller may \
-                    occasionally see an action listed that their scope does not actually cover for that employee.
+                    Required inputs: none are mandatory -- q defaults to blank and lists every employee, status \
+                    defaults to no filter, sort defaults to lastName,asc, page defaults to 0, and size defaults \
+                    to 20 with a maximum of 100; the repeatable include parameter (durion#2155, plus \
+                    ALLOWED_ACTIONS from durion#2159) adds one extra field group per token (USERNAME, \
+                    CONTACT_INFO, ROLE_ASSIGNMENTS, LOCATION, JOB_ROLE, ALLOWED_ACTIONS) to the returned rows, \
+                    with CONTACT_INFO gated by people:employee_pii:view (#1898) and ROLE_ASSIGNMENTS gated by \
+                    people-contact:role:view, each silently omitted rather than returning 403 when the caller \
+                    lacks that permission, and ALLOWED_ACTIONS is a rendering hint computed by \
+                    EmployeeActionPolicy that never substitutes for the @PreAuthorize and service-level guards \
+                    those actions still enforce independently.
+                    Emits a PEOPLE_EMPLOYEE_SEARCH audit event but changes no state, merging local employment \
+                    rows with the pos-people-contact identity replica in memory, with every requested include \
+                    category resolved only against the page actually returned so response cost stays flat as \
+                    the tenant grows.
                     Returns 200 with an empty items list and correct totals when the page, query, or status \
-                    filter matches nothing.
+                    filter matches nothing, and returns 400 for an unsupported sort field or direction.
                     """)
     @ApiResponse(responseCode = "200", description = "Employees returned (possibly empty)")
     @ApiResponse(

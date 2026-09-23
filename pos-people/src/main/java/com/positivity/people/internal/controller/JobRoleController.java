@@ -9,6 +9,7 @@ import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -96,7 +97,22 @@ public class JobRoleController {
             responseCode = "422",
             description = "Job role code already in use in this tenant",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<JobRoleDto> createJobRole(@Valid @RequestBody @NonNull CreateJobRoleRequest request) {
+    public ResponseEntity<JobRoleDto> createJobRole(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Job role to add to the calling tenant's own list: a code, a display "
+                                    + "name and an optional description.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Lead technician", value = """
+                                                                    {"code":"LEAD_TECH","name":"Lead Technician",
+                                                                     "description":"Senior technician who leads a repair bay"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    CreateJobRoleRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(jobRoleService.create(request));
     }
 }

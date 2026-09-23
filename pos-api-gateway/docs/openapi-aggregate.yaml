@@ -1115,10 +1115,14 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1employees
   /v1/people/employees/by-number/{employeeNumber}:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1employees~1by-number~1{employeeNumber}
+  /v1/people/employees/status-counts:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1employees~1status-counts
   /v1/people/employees/{employeeId}:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1employees~1{employeeId}
   /v1/people/employees/{employeeId}/disable:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1employees~1{employeeId}~1disable
+  /v1/people/employees/{employeeId}/enable:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1employees~1{employeeId}~1enable
   /v1/people/exceptions:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1exceptions
   /v1/people/exceptions/{exceptionId}/acknowledge:
@@ -1127,6 +1131,8 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1exceptions~1{exceptionId}~1resolve
   /v1/people/exceptions/{exceptionId}/waive:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1exceptions~1{exceptionId}~1waive
+  /v1/people/job-roles:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1job-roles
   /v1/people/me/locations:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1me~1locations
   /v1/people/me/primary-location:
