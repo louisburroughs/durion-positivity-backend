@@ -304,6 +304,8 @@ paths:
 
         Emits a PEOPLE_EMPLOYEE_SEARCH audit event but changes no state; this is a read-only projection merged in memory from local employment rows and the pos-people-contact identity replica.
 
+        Register enrichment (durion#2155): include= repeatable tokens (USERNAME, CONTACT_INFO, ROLE_ASSIGNMENTS, LOCATION, JOB_ROLE) each turn on one extra field/group on the returned rows -- username, contact info, active application roles, a single primary location plus a count of the rest, and job role -- so the register can render a full page in this one call instead of one follow-up call per row per column. Omitted, every one of those fields is null: the pre-#2155 thin row, byte for byte, so an existing caller (e.g. HrFacadeTool.searchEmployees) sees no change. Whichever categories are requested are resolved against the page actually returned, never the whole matching set, so the response cost stays flat as the tenant grows. CONTACT_INFO carries a second, narrower gate: email/phone appear only when the caller also holds people:employee_pii:view (#1898) -- requesting it without that permission still returns 200, just with the field absent from every row, never a 403.
+
         Returns 200 with an empty items list and correct totals when the page, query, or status filter matches nothing.
 
         '
@@ -355,6 +357,20 @@ paths:
           format: int32
           maximum: 100
           type: integer
+      - description: 'Register-enrichment categories (durion#2155); repeatable (?include=USERNAME&include=ROLE_ASSIGNMENTS), matching how `status` above is passed. Omitted or empty returns the thin pre-#2155 row: username, contactInfo, roleAssignments, primaryLocation, otherLocationCount and jobRole are all null. CONTACT_INFO additionally requires people:employee_pii:view (#1898); without it the field is simply absent, never a 403.'
+        in: query
+        name: include
+        required: false
+        schema:
+          items:
+            enum:
+            - USERNAME
+            - CONTACT_INFO
+            - ROLE_ASSIGNMENTS
+            - LOCATION
+            - JOB_ROLE
+            type: string
+          type: array
       responses:
         '200':
           content:
@@ -3780,6 +3796,20 @@ components:
       - id
       - name
       type: object
+    EmployeeLocationDto:
+      description: The employee's primary staffing location
+      properties:
+        id:
+          description: Location id
+          format: uuid
+          type: string
+        name:
+          description: Display name, from the location replica; null when the replica has not caught up
+          example: Charlotte Main
+          type: string
+      required:
+      - id
+      type: object
     EmployeeProfileDto:
       description: Employee profile returned by employee read and write operations
       properties:
@@ -3858,6 +3888,48 @@ components:
       - lastName
       - status
       type: object
+    EmployeeRoleAssignmentDto:
+      description: One application-role assignment shown on the employee register
+      properties:
+        assignmentId:
+          description: Role assignment id
+          format: uuid
+          type: string
+        effectiveEndDate:
+          description: Exclusive end of the effective window; null while open-ended
+          format: date-time
+          type:
+          - string
+          - 'null'
+        effectiveStartDate:
+          description: When this assignment becomes or became effective
+          format: date-time
+          type: string
+        revokedAt:
+          description: When the revocation was entered; null while the assignment stands
+          format: date-time
+          type:
+          - string
+          - 'null'
+        roleId:
+          description: Assigned role id
+          format: uuid
+          type: string
+        roleLocationScope:
+          description: 'The role''s location scope: ALL (applies everywhere) or LOCATION (particular locations)'
+          example: ALL
+          type: string
+        roleName:
+          description: Assigned role name
+          example: SHOP_MANAGER
+          type: string
+      required:
+      - assignmentId
+      - effectiveStartDate
+      - roleId
+      - roleLocationScope
+      - roleName
+      type: object
     EmployeeSearchResponse:
       description: A page of employee search results, plus a status histogram over the q-filtered set
       properties:
@@ -3874,12 +3946,14 @@ components:
       - statusCounts
       type: object
     EmployeeSummaryDto:
-      description: Slim employee row for search results
+      description: Employee row for search results; the fields below `active` are populated only when requested via `include=` (and, for `contactInfo`, only when the caller also holds `people:employee_pii:view`)
       properties:
         active:
           description: True when the employee is in an ACTIVE employment status
           example: true
           type: boolean
+        contactInfo:
+          $ref: '#/components/schemas/EmployeeContactInfoDto'
         employeeId:
           description: Employee record identifier
           example: 01960011-0000-7000-8000-000000000001
@@ -3893,10 +3967,19 @@ components:
           description: First (given) name, from the identity replica; null when the replica has not caught up
           example: Jane
           type: string
+        jobRole:
+          $ref: '#/components/schemas/EmployeeJobRoleDto'
         lastName:
           description: Last (family) name, from the identity replica; null when the replica has not caught up
           example: Smith
           type: string
+        otherLocationCount:
+          description: Count of the person's other active staffing assignments beyond primaryLocation ("Charlotte Main · +1 more"); null unless `include=LOCATION` was requested, 0 when requested but the person has no other active assignment
+          example: 1
+          format: int32
+          type:
+          - integer
+          - 'null'
         personId:
           description: Stable person identifier the employee maps to
           example: 01960011-0000-7000-8000-000000000002
@@ -3906,10 +3989,25 @@ components:
           description: Preferred name, from the identity replica
           example: Janie
           type: string
+        primaryLocation:
+          $ref: '#/components/schemas/EmployeeLocationDto'
+        roleAssignments:
+          description: Active application-role assignments (DECISION-PEOPLE-026); null unless `include=ROLE_ASSIGNMENTS` was requested, empty when requested but the person holds none
+          items:
+            $ref: '#/components/schemas/EmployeeRoleAssignmentDto'
+          type:
+          - array
+          - 'null'
         status:
           description: Employment status
           example: ACTIVE
           type: string
+        username:
+          description: Login username, from the identity replica; null unless `include=USERNAME` was requested or the person has no linked user account
+          example: jane.smith
+          type:
+          - string
+          - 'null'
       required:
       - active
       - employeeId
