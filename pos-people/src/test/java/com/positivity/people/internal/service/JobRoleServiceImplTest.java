@@ -3,6 +3,7 @@ package com.positivity.people.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -98,5 +99,30 @@ class JobRoleServiceImplTest {
         assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(DuplicateJobRoleCodeException.class)
                 .hasMessageContaining("LEAD_TECH");
+    }
+
+    /**
+     * durion#2157 code review fix: the pre-check is case-insensitive (V8__job_role_code_case
+     * _insensitive_unique.sql now backs it with a matching database constraint), so a
+     * differently-cased code must be rejected exactly like an exact repeat -- "lead_tech" is a
+     * duplicate of an existing "LEAD_TECH" every bit as much as a second "LEAD_TECH" would be.
+     * This pins the service's own lookup/rejection behaviour with a mocked repository; that the
+     * database itself now refuses two rows differing only by case (job_role_tenant_code_ci_key)
+     * cannot be exercised without a real Postgres and is left to CI/manual verification.
+     */
+    @Test
+    @DisplayName("create: a code that differs only by case from an existing one is still a duplicate")
+    void createRejectsADifferentlyCasedDuplicateCode() {
+        when(jobRoleRepository.existsByCodeIgnoreCase("lead_tech")).thenReturn(true);
+
+        CreateJobRoleRequest request = new CreateJobRoleRequest();
+        request.setCode("lead_tech");
+        request.setName("Lead Technician (lower-case)");
+
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(DuplicateJobRoleCodeException.class)
+                .hasMessageContaining("lead_tech");
+
+        verify(jobRoleRepository, never()).save(any(JobRole.class));
     }
 }

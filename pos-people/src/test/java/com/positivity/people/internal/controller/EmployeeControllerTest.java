@@ -13,7 +13,7 @@ import com.positivity.people.internal.dto.EmployeeAddressDto;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.EmployeeEmergencyContactDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
-import com.positivity.people.internal.dto.EmployeeSearchResponse;
+import com.positivity.people.internal.dto.EmployeeStatusCountsResponse;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.enums.EmployeeSearchInclude;
@@ -110,36 +110,35 @@ class EmployeeControllerTest {
     @Test
     void searchEmployees_returnsOkWithMatchingResults_whenCallerHoldsThePermission() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
-        EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
         when(employeeService.searchEmployees(eq("smith"), eq(null), eq("lastName,asc"), eq(0), eq(20), eq(null)))
-                .thenReturn(response);
+                .thenReturn(page);
 
         mockMvc.perform(get("/v1/people/employees").param("q", "smith").header("X-Authorities", "people:employee:view"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.page.items[0].employeeNumber").value("EMP-0001"))
-                .andExpect(jsonPath("$.page.items[0].firstName").value("Jane"))
-                .andExpect(jsonPath("$.page.totalElements").value(1))
-                .andExpect(jsonPath("$.page.page").value(0))
-                .andExpect(jsonPath("$.page.size").value(20))
-                .andExpect(jsonPath("$.statusCounts.ACTIVE").value(1));
+                .andExpect(jsonPath("$.items[0].employeeNumber").value("EMP-0001"))
+                .andExpect(jsonPath("$.items[0].firstName").value("Jane"))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                // #2158 finding A: the response is the flat PagedResponse from before #2158, not
+                // wrapped in an envelope carrying a status histogram alongside it.
+                .andExpect(jsonPath("$.statusCounts").doesNotExist());
     }
 
     @Test
     void searchEmployees_appliesDefaultPagingWhenOmitted() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(), 0, 20, 0, 0);
-        EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of());
         when(employeeService.searchEmployees(eq(null), eq(null), eq("lastName,asc"), eq(0), eq(20), eq(null)))
-                .thenReturn(response);
+                .thenReturn(page);
 
         mockMvc.perform(get("/v1/people/employees").header("X-Authorities", "people:employee:view"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.page.items").isEmpty());
+                .andExpect(jsonPath("$.items").isEmpty());
     }
 
     @Test
     void searchEmployees_passesRepeatedStatusParamsAndAnExplicitSortThrough() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
-        EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
         when(employeeService.searchEmployees(
                         eq(null),
                         eq(List.of(EmployeeStatus.ACTIVE, EmployeeStatus.DISABLED)),
@@ -147,14 +146,14 @@ class EmployeeControllerTest {
                         eq(0),
                         eq(20),
                         eq(null)))
-                .thenReturn(response);
+                .thenReturn(page);
 
         mockMvc.perform(get("/v1/people/employees")
                         .param("status", "ACTIVE", "DISABLED")
                         .param("sort", "lastName,desc")
                         .header("X-Authorities", "people:employee:view"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.page.items[0].employeeNumber").value("EMP-0001"));
+                .andExpect(jsonPath("$.items[0].employeeNumber").value("EMP-0001"));
     }
 
     // ─── GET /v1/people/employees?include= — register enrichment (durion#2155) ────
@@ -162,7 +161,6 @@ class EmployeeControllerTest {
     @Test
     void searchEmployees_passesRepeatedIncludeParamsThrough() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
-        EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
         when(employeeService.searchEmployees(
                         eq(null),
                         eq(null),
@@ -170,31 +168,30 @@ class EmployeeControllerTest {
                         eq(0),
                         eq(20),
                         eq(List.of(EmployeeSearchInclude.USERNAME, EmployeeSearchInclude.ROLE_ASSIGNMENTS))))
-                .thenReturn(response);
+                .thenReturn(page);
 
         mockMvc.perform(get("/v1/people/employees")
                         .param("include", "USERNAME", "ROLE_ASSIGNMENTS")
                         .header("X-Authorities", "people:employee:view"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.page.items[0].employeeNumber").value("EMP-0001"));
+                .andExpect(jsonPath("$.items[0].employeeNumber").value("EMP-0001"));
     }
 
     /** The controller-level half of "include= absent leaves the response identical to today's thin shape". */
     @Test
     void searchEmployees_omitsEveryEnrichmentField_whenIncludeIsAbsent() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
-        EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
         when(employeeService.searchEmployees(eq(null), eq(null), eq("lastName,asc"), eq(0), eq(20), eq(null)))
-                .thenReturn(response);
+                .thenReturn(page);
 
         mockMvc.perform(get("/v1/people/employees").header("X-Authorities", "people:employee:view"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.page.items[0].username").doesNotExist())
-                .andExpect(jsonPath("$.page.items[0].contactInfo").doesNotExist())
-                .andExpect(jsonPath("$.page.items[0].roleAssignments").doesNotExist())
-                .andExpect(jsonPath("$.page.items[0].primaryLocation").doesNotExist())
-                .andExpect(jsonPath("$.page.items[0].otherLocationCount").doesNotExist())
-                .andExpect(jsonPath("$.page.items[0].jobRole").doesNotExist());
+                .andExpect(jsonPath("$.items[0].username").doesNotExist())
+                .andExpect(jsonPath("$.items[0].contactInfo").doesNotExist())
+                .andExpect(jsonPath("$.items[0].roleAssignments").doesNotExist())
+                .andExpect(jsonPath("$.items[0].primaryLocation").doesNotExist())
+                .andExpect(jsonPath("$.items[0].otherLocationCount").doesNotExist())
+                .andExpect(jsonPath("$.items[0].jobRole").doesNotExist());
     }
 
     @Test
@@ -278,16 +275,48 @@ class EmployeeControllerTest {
     @Test
     void searchEmployees_stillSucceeds_forTheTechnicianAuthoritiesDeniedTheProfile() throws Exception {
         PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summary()), 0, 20, 1, 1);
-        EmployeeSearchResponse response = new EmployeeSearchResponse(page, Map.of(EmployeeStatus.ACTIVE, 1L));
         when(employeeService.searchEmployees(eq("smith"), eq(null), eq("lastName,asc"), eq(0), eq(20), eq(null)))
-                .thenReturn(response);
+                .thenReturn(page);
 
         mockMvc.perform(get("/v1/people/employees").param("q", "smith").header("X-Authorities", TECHNICIAN_AUTHORITIES))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.page.items[0].employeeNumber").value("EMP-0001"))
+                .andExpect(jsonPath("$.items[0].employeeNumber").value("EMP-0001"))
                 // the summary row carries no contact block at all, which is why it can stay on the
                 // permission every staff role holds
-                .andExpect(jsonPath("$.page.items[0].contactInfo").doesNotExist());
+                .andExpect(jsonPath("$.items[0].contactInfo").doesNotExist());
+    }
+
+    // ─── GET /v1/people/employees/status-counts — the histogram sibling endpoint (#2158 finding A) ─
+
+    @Test
+    void getEmployeeStatusCounts_returnsOkWithTheHistogram_whenCallerHoldsThePermission() throws Exception {
+        EmployeeStatusCountsResponse response = new EmployeeStatusCountsResponse(Map.of("ACTIVE", 3L, "DISABLED", 1L));
+        when(employeeService.employeeStatusCounts(eq("smith"))).thenReturn(response);
+
+        mockMvc.perform(get("/v1/people/employees/status-counts")
+                        .param("q", "smith")
+                        .header("X-Authorities", "people:employee:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.counts.ACTIVE").value(3))
+                .andExpect(jsonPath("$.counts.DISABLED").value(1));
+    }
+
+    @Test
+    void getEmployeeStatusCounts_includesTheUnknownBucket_forNullStatusRows() throws Exception {
+        EmployeeStatusCountsResponse response =
+                new EmployeeStatusCountsResponse(Map.of("ACTIVE", 3L, EmployeeStatusCountsResponse.UNKNOWN_STATUS, 1L));
+        when(employeeService.employeeStatusCounts(eq(null))).thenReturn(response);
+
+        mockMvc.perform(get("/v1/people/employees/status-counts").header("X-Authorities", "people:employee:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.counts.ACTIVE").value(3))
+                .andExpect(jsonPath("$.counts.UNKNOWN").value(1));
+    }
+
+    @Test
+    void getEmployeeStatusCounts_returnsForbidden_whenCallerLacksThePermission() throws Exception {
+        mockMvc.perform(get("/v1/people/employees/status-counts").header("X-Authorities", "people:employee:create"))
+                .andExpect(status().isForbidden());
     }
 
     // ─── GET /v1/people/employees/by-number/{employeeNumber} — 404 envelope (#1720) ─
