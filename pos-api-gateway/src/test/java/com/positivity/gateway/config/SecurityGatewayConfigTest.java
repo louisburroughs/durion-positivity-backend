@@ -1613,9 +1613,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 89")
+    @DisplayName("CATALOG_VERSION is 90")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(89);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(90);
     }
 
     @Test
@@ -1930,8 +1930,12 @@ class SecurityGatewayConfigTest {
         // catalog v89 (#2059): placing a workorder on a service position, split off the manager
         // operational-context override grant (bit 533)
         assertThat(GatewayPermissionCatalog.authorityForBit(533)).isEqualTo("PERM_workorder:position:assign");
+        // catalog v90 (durion#2157): the tenant's own job-role vocabulary -- HR master data that
+        // carries no permission of its own (bits 534-535)
+        assertThat(GatewayPermissionCatalog.authorityForBit(534)).isEqualTo("PERM_people:jobRole:manage");
+        assertThat(GatewayPermissionCatalog.authorityForBit(535)).isEqualTo("PERM_people:jobRole:view");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(534)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(536)).isNull();
     }
 
     @Test

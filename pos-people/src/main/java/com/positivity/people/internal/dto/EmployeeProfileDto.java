@@ -63,6 +63,11 @@ public class EmployeeProfileDto {
     private EmployeeContactInfoDto contactInfo;
 
     @Schema(
+            description = "The employee's job role from the tenant's job-role list, or absent when none is set",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private EmployeeJobRoleDto jobRole;
+
+    @Schema(
             description = "Timestamp the current status became effective",
             example = "2026-01-15T09:30:00Z",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)

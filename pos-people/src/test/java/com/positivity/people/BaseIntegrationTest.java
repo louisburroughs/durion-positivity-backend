@@ -55,7 +55,7 @@ public abstract class BaseIntegrationTest {
             "people:employee:edit",
             "people:employee:view",
             "people:employee_pii:view",
-            "people:employee:deactivate",
+            "people:employee:activation",
             "people:userLink:write",
             "people:userLink:view",
             "people:availability:view",

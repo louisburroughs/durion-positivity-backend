@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -363,6 +364,11 @@ class DomainEventContractTest {
         }
         if (type == LocalDate.class) {
             return LocalDate.of(2026, 8, 12);
+        }
+        // RoleAssignmentChangedV1 (#2160) dates its effective window with LocalDateTime, matching
+        // how pos-security-service's RoleAssignment stores it -- no zone offset is persisted.
+        if (type == LocalDateTime.class) {
+            return LocalDateTime.of(2026, 8, 12, 12, 0);
         }
         if (type == String.class) {
             return stringSampleFor(component);

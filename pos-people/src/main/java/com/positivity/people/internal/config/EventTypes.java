@@ -39,7 +39,7 @@ public final class EventTypes {
                 EventTypeRegistration.write("PEOPLE_STAFFING_ASSIGNMENT_END", "End a staffing assignment")
                         .build(),
 
-                // EmployeeController - 5 events
+                // EmployeeController - 6 events
                 EventTypeRegistration.write("PEOPLE_EMPLOYEE_CREATE", "Create employee profile")
                         .build(),
                 EventTypeRegistration.fastRead("PEOPLE_EMPLOYEE_GET", "Get employee profile")
@@ -47,6 +47,8 @@ public final class EventTypes {
                 EventTypeRegistration.write("PEOPLE_EMPLOYEE_UPDATE", "Update employee profile")
                         .build(),
                 EventTypeRegistration.write("PEOPLE_EMPLOYEE_DISABLE", "Disable employee profile")
+                        .build(),
+                EventTypeRegistration.write("PEOPLE_EMPLOYEE_ENABLE", "Enable (reactivate) employee profile")
                         .build(),
                 EventTypeRegistration.search(
                                 "PEOPLE_EMPLOYEE_SEARCH",
@@ -149,6 +151,12 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead("PEOPLE_CREDENTIAL_LIST", "List the credentials a person holds")
                         .build(),
                 EventTypeRegistration.write("PEOPLE_CREDENTIAL_BULK_INGEST", "Bulk import the credentials people hold")
+                        .build(),
+
+                // JobRoleController (durion#2157) - 2 events
+                EventTypeRegistration.fastRead("PEOPLE_JOB_ROLE_LIST", "List the tenant's job-role list")
+                        .build(),
+                EventTypeRegistration.write("PEOPLE_JOB_ROLE_CREATE", "Add a job role to the tenant's list")
                         .build());
     }
 }

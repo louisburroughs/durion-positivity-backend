@@ -293,10 +293,11 @@ class JwtServiceImplLocationScopeTest {
         // platform:* families at bits 520-528 (83 → 84), WS2b-3 added platform:tenant:provision
         // at bit 529 (84 → 85), WS2b-4 platform:tenant:impersonate at bit 530 (85 → 86), CAP-326
         // shop:conflict:override at bit 531 (86 → 87), CAP-329 catalog:service_requirement:manage
-        // at bit 532 (87 → 88) and #2059 workorder:position:assign at bit 533 (88 → 89). What this
+        // at bit 532 (87 → 88), #2059 workorder:position:assign at bit 533 (88 → 89) and
+        // durion#2157 the people:jobRole:{view,manage} pair at bits 534-535 (89 → 90). What this
         // test guards is that the location-scope claims are not what moved it: they ride the same
         // catalog version.
-        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(89);
+        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(90);
         Claims claims = claims(token);
         assertThat(claims.get(JwtService.PERM_VER, Integer.class)).isEqualTo(PermissionCode.CATALOG_VERSION);
         // Both scope bitsets decode under that same version: same codec, same bit indexes.

@@ -14,6 +14,7 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.people.internal.repository.JobRoleRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -50,13 +51,17 @@ class EmployeeProfileMappingTest {
     @Mock
     private PeopleEventPublisher peopleEventPublisher;
 
+    @Mock
+    private JobRoleRepository jobRoleRepository;
+
     private EmployeeServiceImpl service() {
         return new EmployeeServiceImpl(
                 TEST_CLOCK,
                 extPersonReplicaRepository,
                 employeeRepository,
                 offboardingRetryRepository,
-                peopleEventPublisher);
+                peopleEventPublisher,
+                jobRoleRepository);
     }
 
     private ExtPersonReplica person() {

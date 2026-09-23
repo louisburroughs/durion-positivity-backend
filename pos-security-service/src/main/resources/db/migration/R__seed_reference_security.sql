@@ -483,7 +483,7 @@ INSERT INTO permissions (id, name, description, domain, resource, action, regist
 VALUES ('6710d7d0-039f-b6e8-ec31-9970f883c6ba'::uuid, 'people:employee:create', 'Create employee records', 'people', 'employee', 'create', NOW(), 'pos-people', '1.0', 117) 
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
 INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
-VALUES ('a30123b1-473f-f626-ae28-bb94202f2e8a'::uuid, 'people:employee:deactivate', 'Deactivate employee records', 'people', 'employee', 'deactivate', NOW(), 'pos-people', '1.0', 119) 
+VALUES ('a30123b1-473f-f626-ae28-bb94202f2e8a'::uuid, 'people:employee:activation', 'Activate and deactivate employee records', 'people', 'employee', 'activation', NOW(), 'pos-people', '1.0', 119) 
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
 INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
 VALUES ('f8cafad6-9f37-023a-c9e1-0142d788dec8'::uuid, 'people:employee:edit', 'Edit employee records', 'people', 'employee', 'edit', NOW(), 'pos-people', '1.0', 118) 

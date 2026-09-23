@@ -16,25 +16,32 @@ import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
+import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.entity.ExtPersonReplica;
+import com.positivity.people.internal.entity.JobRole;
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.DuplicatePolicy;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.people.internal.repository.JobRoleRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,7 +81,12 @@ class EmployeeServiceImplTest {
     @Mock
     private PeopleEventPublisher peopleEventPublisher;
 
+    @Mock
+    private JobRoleRepository jobRoleRepository;
+
     private EmployeeServiceImpl service;
+
+    private static final UUID JOB_ROLE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01");
 
     @BeforeEach
     void setUp() {
@@ -83,8 +95,18 @@ class EmployeeServiceImplTest {
                 extPersonReplicaRepository,
                 employeeRepository,
                 offboardingRetryRepository,
-                peopleEventPublisher);
+                peopleEventPublisher,
+                jobRoleRepository);
         when(employeeRepository.save(any(Employee.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private static JobRole jobRole() {
+        return JobRole.builder()
+                .id(JOB_ROLE_ID)
+                .code("LEAD_TECH")
+                .name("Lead Technician")
+                .active(true)
+                .build();
     }
 
     private static CreateEmployeeRequest createRequest() {
@@ -319,6 +341,44 @@ class EmployeeServiceImplTest {
 
             assertThatThrownBy(() -> service.createEmployee(request)).isInstanceOf(IllegalStateException.class);
         }
+
+        @Test
+        void roundTripsAJobRoleFromTheTenantsList() {
+            when(jobRoleRepository.existsById(JOB_ROLE_ID)).thenReturn(true);
+            when(jobRoleRepository.findById(JOB_ROLE_ID)).thenReturn(Optional.of(jobRole()));
+
+            CreateEmployeeRequest request = createRequest();
+            request.setJobRoleId(JOB_ROLE_ID);
+
+            EmployeeProfileDto profile = service.createEmployee(request);
+
+            ArgumentCaptor<Employee> saved = ArgumentCaptor.forClass(Employee.class);
+            verify(employeeRepository).save(saved.capture());
+            assertThat(saved.getValue().getJobRoleId()).isEqualTo(JOB_ROLE_ID);
+            assertThat(profile.getJobRole()).isNotNull();
+            assertThat(profile.getJobRole().getId()).isEqualTo(JOB_ROLE_ID);
+            assertThat(profile.getJobRole().getCode()).isEqualTo("LEAD_TECH");
+            assertThat(profile.getJobRole().getName()).isEqualTo("Lead Technician");
+        }
+
+        @Test
+        void aNullJobRoleIsAcceptedAndReadBackAsNull() {
+            EmployeeProfileDto profile = service.createEmployee(createRequest());
+
+            assertThat(profile.getJobRole()).isNull();
+            verifyNoInteractions(jobRoleRepository);
+        }
+
+        @Test
+        void rejectsAJobRoleIdThatIsNotOnTheTenantsList() {
+            when(jobRoleRepository.existsById(JOB_ROLE_ID)).thenReturn(false);
+
+            CreateEmployeeRequest request = createRequest();
+            request.setJobRoleId(JOB_ROLE_ID);
+
+            assertThatThrownBy(() -> service.createEmployee(request)).isInstanceOf(NotFoundException.class);
+            verify(employeeRepository, never()).save(any());
+        }
     }
 
     @Nested
@@ -383,6 +443,30 @@ class EmployeeServiceImplTest {
             when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getEmployee(PERSON_ID)).isInstanceOf(PersonNotFoundException.class);
+        }
+
+        @Test
+        void mapsTheJobRoleFromTheTenantsList() {
+            when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.of(replica()));
+            Employee employee = employee(EmployeeStatus.ACTIVE);
+            employee.setJobRoleId(JOB_ROLE_ID);
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee));
+            when(jobRoleRepository.findById(JOB_ROLE_ID)).thenReturn(Optional.of(jobRole()));
+
+            EmployeeProfileDto profile = service.getEmployee(PERSON_ID);
+
+            assertThat(profile.getJobRole()).isNotNull();
+            assertThat(profile.getJobRole().getId()).isEqualTo(JOB_ROLE_ID);
+            assertThat(profile.getJobRole().getName()).isEqualTo("Lead Technician");
+        }
+
+        @Test
+        void anEmployeeWithNoJobRoleReadsBackNull() {
+            when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.of(replica()));
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
+
+            assertThat(service.getEmployee(PERSON_ID).getJobRole()).isNull();
+            verifyNoInteractions(jobRoleRepository);
         }
     }
 
@@ -489,6 +573,49 @@ class EmployeeServiceImplTest {
 
             assertThat(service.updateEmployee(PERSON_ID, request).getWarnings())
                     .containsExactly("Ambiguous duplicate match detected by name similarity");
+        }
+
+        @Test
+        void roundTripsAJobRoleChange() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
+            when(jobRoleRepository.existsById(JOB_ROLE_ID)).thenReturn(true);
+            when(jobRoleRepository.findById(JOB_ROLE_ID)).thenReturn(Optional.of(jobRole()));
+
+            UpdateEmployeeRequest request = updateRequest();
+            request.setJobRoleId(JOB_ROLE_ID);
+
+            EmployeeProfileDto profile = service.updateEmployee(PERSON_ID, request);
+
+            ArgumentCaptor<Employee> saved = ArgumentCaptor.forClass(Employee.class);
+            verify(employeeRepository).save(saved.capture());
+            assertThat(saved.getValue().getJobRoleId()).isEqualTo(JOB_ROLE_ID);
+            assertThat(profile.getJobRole().getId()).isEqualTo(JOB_ROLE_ID);
+        }
+
+        @Test
+        void omittingTheJobRoleClearsAPreviouslySetOne() {
+            Employee existing = employee(EmployeeStatus.ACTIVE);
+            existing.setJobRoleId(JOB_ROLE_ID);
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(existing));
+
+            EmployeeProfileDto profile = service.updateEmployee(PERSON_ID, updateRequest());
+
+            ArgumentCaptor<Employee> saved = ArgumentCaptor.forClass(Employee.class);
+            verify(employeeRepository).save(saved.capture());
+            assertThat(saved.getValue().getJobRoleId()).isNull();
+            assertThat(profile.getJobRole()).isNull();
+        }
+
+        @Test
+        void rejectsAJobRoleIdThatIsNotOnTheTenantsList() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
+            when(jobRoleRepository.existsById(JOB_ROLE_ID)).thenReturn(false);
+
+            UpdateEmployeeRequest request = updateRequest();
+            request.setJobRoleId(JOB_ROLE_ID);
+
+            assertThatThrownBy(() -> service.updateEmployee(PERSON_ID, request)).isInstanceOf(NotFoundException.class);
+            verify(employeeRepository, never()).save(any());
         }
     }
 
@@ -605,6 +732,113 @@ class EmployeeServiceImplTest {
     }
 
     @Nested
+    @DisplayName("enableEmployee")
+    class EnableEmployee {
+
+        private static final Instant CURRENT_UPDATED_AT = Instant.parse("2026-02-15T10:00:00Z");
+
+        private Employee employeeWithUpdatedAt(EmployeeStatus status, Instant updatedAt) {
+            return Employee.builder()
+                    .id(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4aaa"))
+                    .personId(PERSON_ID)
+                    .employeeNumber("EMP-0001")
+                    .status(status)
+                    .hireDate(LocalDate.of(2026, 1, 15))
+                    .statusEffectiveAt(Instant.parse("2026-01-15T00:00:00Z"))
+                    .updatedAt(updatedAt)
+                    .build();
+        }
+
+        private EnableEmployeeRequestDto enableRequest(Instant updatedAt) {
+            EnableEmployeeRequestDto request = new EnableEmployeeRequestDto();
+            request.setUpdatedAt(updatedAt);
+            return request;
+        }
+
+        @Test
+        void movesADisabledEmployeeToActiveAndPublishesTheFact() {
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.DISABLED, CURRENT_UPDATED_AT)));
+            when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.of(replica()));
+
+            EmployeeProfileDto profile = service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT));
+
+            ArgumentCaptor<Employee> saved = ArgumentCaptor.forClass(Employee.class);
+            verify(employeeRepository).save(saved.capture());
+            assertThat(saved.getValue().getStatus()).isEqualTo(EmployeeStatus.ACTIVE);
+            assertThat(saved.getValue().getStatusEffectiveAt()).isEqualTo(NOW);
+            verify(peopleEventPublisher).publishEmployeeUpdated(saved.getValue());
+            assertThat(profile.getStatus()).isEqualTo(EmployeeStatus.ACTIVE);
+            assertThat(profile.getFirstName()).isEqualTo("Jane");
+        }
+
+        @Test
+        void failsWhenTheEmployeeDoesNotExist() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT)))
+                    .isInstanceOf(PersonNotFoundException.class);
+        }
+
+        @Test
+        void rejectsATerminatedEmployee() {
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.TERMINATED, CURRENT_UPDATED_AT)));
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT)))
+                    .isInstanceOf(ResourceStateConflictException.class)
+                    .hasMessageContaining("TERMINATED");
+            verify(employeeRepository, never()).save(any());
+        }
+
+        @Test
+        void rejectsAnOnLeaveEmployeePointingAtTheProfileUpdate() {
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.ON_LEAVE, CURRENT_UPDATED_AT)));
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT)))
+                    .isInstanceOf(ResourceStateConflictException.class)
+                    .hasMessageContaining("updateEmployee");
+            verify(employeeRepository, never()).save(any());
+        }
+
+        @Test
+        void rejectsASuspendedEmployeePointingAtTheProfileUpdate() {
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.SUSPENDED, CURRENT_UPDATED_AT)));
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT)))
+                    .isInstanceOf(ResourceStateConflictException.class)
+                    .hasMessageContaining("updateEmployee");
+            verify(employeeRepository, never()).save(any());
+        }
+
+        @Test
+        void rejectsAnAlreadyActiveEmployee() {
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.ACTIVE, CURRENT_UPDATED_AT)));
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(CURRENT_UPDATED_AT)))
+                    .isInstanceOf(ResourceStateConflictException.class)
+                    .hasMessageContaining("Only DISABLED employees can be enabled");
+            verify(employeeRepository, never()).save(any());
+        }
+
+        @Test
+        void rejectsAStaleConcurrencyToken() {
+            when(employeeRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.DISABLED, CURRENT_UPDATED_AT)));
+
+            Instant staleToken = CURRENT_UPDATED_AT.minusSeconds(60);
+
+            assertThatThrownBy(() -> service.enableEmployee(PERSON_ID, enableRequest(staleToken)))
+                    .isInstanceOf(ResourceStateConflictException.class)
+                    .hasMessageContaining("updatedAt");
+            verify(employeeRepository, never()).save(any());
+        }
+    }
+
+    @Nested
     @DisplayName("searchEmployees")
     class SearchEmployees {
 
@@ -642,11 +876,49 @@ class EmployeeServiceImplTest {
                             replicaRow(DOE_PERSON_ID, "John", "Doe", null)));
         }
 
+        /**
+         * Ten employees, lastName Adams..Jones alphabetically, with DISABLED employees scattered
+         * at non-adjacent positions (Baker, Davis, Foster, Hale — 2nd, 4th, 6th, 8th) rather than
+         * bunched at the front or back. A dataset this shape is what makes the #2158 regression
+         * visible: filtering only the current page (the bug) would return whichever disabled
+         * rows happened to land on that page, not the whole disabled population, and would look
+         * "kind of right" on a front-loaded or back-loaded fixture. The ordering also spans more
+         * than one page at every size used below (2, 3, or 5), which is what a sort or filter
+         * bug that "restarts" per page needs to be caught.
+         */
+        private void givenALargeDirectory() {
+            String[] lastNames = {
+                "Adams", "Baker", "Cole", "Davis", "Evans", "Foster", "Grant", "Hale", "Irwin", "Jones"
+            };
+            EmployeeStatus[] statuses = {
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.DISABLED,
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.DISABLED,
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.DISABLED,
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.DISABLED,
+                EmployeeStatus.ACTIVE,
+                EmployeeStatus.ACTIVE
+            };
+            List<Employee> employees = new ArrayList<>();
+            List<ExtPersonReplica> replicas = new ArrayList<>();
+            for (int i = 0; i < lastNames.length; i++) {
+                UUID personId = UUID.randomUUID();
+                employees.add(employeeRow(personId, "EMP-1%03d".formatted(i), statuses[i]));
+                replicas.add(replicaRow(personId, "First" + i, lastNames[i], null));
+            }
+            when(employeeRepository.findAll()).thenReturn(employees);
+            when(extPersonReplicaRepository.findByPersonIdIn(any())).thenReturn(replicas);
+        }
+
         @Test
         void aBlankQueryListsEveryEmployee() {
             givenTheDirectory();
 
-            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees("  ", 0, 20);
+            PagedResponse<EmployeeSummaryDto> page =
+                    service.searchEmployees("  ", null, null, 0, 20).getPage();
 
             assertThat(page.items()).hasSize(3);
             assertThat(page.totalElements()).isEqualTo(3);
@@ -657,15 +929,19 @@ class EmployeeServiceImplTest {
         void aNullQueryListsEveryEmployee() {
             givenTheDirectory();
 
-            assertThat(service.searchEmployees(null, 0, 20).items()).hasSize(3);
+            assertThat(service.searchEmployees(null, null, null, 0, 20)
+                            .getPage()
+                            .items())
+                    .hasSize(3);
         }
 
         @Test
         void matchesByLastName() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results =
-                    service.searchEmployees("smith", 0, 20).items();
+            List<EmployeeSummaryDto> results = service.searchEmployees("smith", null, null, 0, 20)
+                    .getPage()
+                    .items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -676,8 +952,9 @@ class EmployeeServiceImplTest {
         void matchesByPreferredName() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results =
-                    service.searchEmployees("Janie", 0, 20).items();
+            List<EmployeeSummaryDto> results = service.searchEmployees("Janie", null, null, 0, 20)
+                    .getPage()
+                    .items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -689,7 +966,7 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             List<EmployeeSummaryDto> results =
-                    service.searchEmployees("0002", 0, 20).items();
+                    service.searchEmployees("0002", null, null, 0, 20).getPage().items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -701,7 +978,7 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             List<EmployeeSummaryDto> results =
-                    service.searchEmployees("DOE", 0, 20).items();
+                    service.searchEmployees("DOE", null, null, 0, 20).getPage().items();
 
             assertThat(results)
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
@@ -712,8 +989,9 @@ class EmployeeServiceImplTest {
         void anEmployeeWithNoReplicaRowIsStillFoundByNumberAndCarriesNullNames() {
             givenTheDirectory();
 
-            List<EmployeeSummaryDto> results =
-                    service.searchEmployees("EMP-0003", 0, 20).items();
+            List<EmployeeSummaryDto> results = service.searchEmployees("EMP-0003", null, null, 0, 20)
+                    .getPage()
+                    .items();
 
             assertThat(results).hasSize(1);
             EmployeeSummaryDto found = results.get(0);
@@ -728,7 +1006,7 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             List<EmployeeSummaryDto> results =
-                    service.searchEmployees(null, 0, 20).items();
+                    service.searchEmployees(null, null, null, 0, 20).getPage().items();
 
             assertThat(results)
                     .filteredOn(dto -> dto.getEmployeeNumber().equals("EMP-0001"))
@@ -745,14 +1023,16 @@ class EmployeeServiceImplTest {
             givenTheDirectory();
 
             // lastName order: Doe, Smith, then the no-replica row (null last name sorts last).
-            PagedResponse<EmployeeSummaryDto> firstPage = service.searchEmployees(null, 0, 2);
+            PagedResponse<EmployeeSummaryDto> firstPage =
+                    service.searchEmployees(null, null, null, 0, 2).getPage();
             assertThat(firstPage.items())
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
                     .containsExactly("EMP-0002", "EMP-0001");
             assertThat(firstPage.totalElements()).isEqualTo(3);
             assertThat(firstPage.totalPages()).isEqualTo(2);
 
-            PagedResponse<EmployeeSummaryDto> secondPage = service.searchEmployees(null, 1, 2);
+            PagedResponse<EmployeeSummaryDto> secondPage =
+                    service.searchEmployees(null, null, null, 1, 2).getPage();
             assertThat(secondPage.items())
                     .extracting(EmployeeSummaryDto::getEmployeeNumber)
                     .containsExactly("EMP-0003");
@@ -764,13 +1044,185 @@ class EmployeeServiceImplTest {
         void anOutOfRangePageReturnsEmptyItemsWithCorrectTotals() {
             givenTheDirectory();
 
-            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees(null, 5, 20);
+            PagedResponse<EmployeeSummaryDto> page =
+                    service.searchEmployees(null, null, null, 5, 20).getPage();
 
             assertThat(page.items()).isEmpty();
             assertThat(page.totalElements()).isEqualTo(3);
             assertThat(page.totalPages()).isEqualTo(1);
             assertThat(page.page()).isEqualTo(5);
             assertThat(page.size()).isEqualTo(20);
+        }
+
+        /**
+         * The issue's headline acceptance criterion: totalElements for a status filter must be
+         * the full matching count (4, across the whole 10-row directory), not the count within
+         * the requested page window (2, for size=2). Asserting only the item count would pass
+         * even with the pre-fix in-page-only filter, since a page of 2 disabled rows out of 2
+         * requested still "looks" like 2 of 2 — the totals field is what exposes the bug.
+         */
+        @Test
+        void statusFilterAppliesAcrossTheWholeDirectoryNotJustThePage() {
+            givenALargeDirectory();
+
+            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees(
+                            null, List.of(EmployeeStatus.DISABLED), null, 0, 2)
+                    .getPage();
+
+            assertThat(page.items()).extracting(EmployeeSummaryDto::getLastName).containsExactly("Baker", "Davis");
+            assertThat(page.items()).allMatch(dto -> "DISABLED".equals(dto.getStatus()));
+            assertThat(page.totalElements()).isEqualTo(4);
+            assertThat(page.totalPages()).isEqualTo(2);
+
+            PagedResponse<EmployeeSummaryDto> secondPage = service.searchEmployees(
+                            null, List.of(EmployeeStatus.DISABLED), null, 1, 2)
+                    .getPage();
+            assertThat(secondPage.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactly("Foster", "Hale");
+            assertThat(secondPage.totalElements()).isEqualTo(4);
+        }
+
+        @Test
+        void repeatedStatusParamsCombineWithOrSemantics() {
+            givenALargeDirectory();
+
+            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees(
+                            null, List.of(EmployeeStatus.ACTIVE, EmployeeStatus.DISABLED), null, 0, 20)
+                    .getPage();
+
+            // Every row in the fixture is ACTIVE or DISABLED, so requesting both is equivalent
+            // to no status filter at all — proving the two statuses were OR'd together rather
+            // than (wrongly) intersected, which would return nothing.
+            assertThat(page.totalElements()).isEqualTo(10);
+        }
+
+        @Test
+        void aNullOrEmptyStatusListAppliesNoFilter() {
+            givenALargeDirectory();
+
+            assertThat(service.searchEmployees(null, null, null, 0, 20)
+                            .getPage()
+                            .totalElements())
+                    .isEqualTo(10);
+            assertThat(service.searchEmployees(null, List.of(), null, 0, 20)
+                            .getPage()
+                            .totalElements())
+                    .isEqualTo(10);
+        }
+
+        /**
+         * lastName,desc must order the WHOLE result set, not restart per page: page 0's last row
+         * (Foster) must sort strictly after page 1's first row (Evans) under descending order —
+         * i.e. continuing to descend across the page boundary rather than each page
+         * independently starting from Z.
+         */
+        @Test
+        void descendingSortOrdersAcrossTheWholeResultSetNotPerPage() {
+            givenALargeDirectory();
+
+            PagedResponse<EmployeeSummaryDto> firstPage =
+                    service.searchEmployees(null, null, "lastName,desc", 0, 5).getPage();
+            PagedResponse<EmployeeSummaryDto> secondPage =
+                    service.searchEmployees(null, null, "lastName,desc", 1, 5).getPage();
+
+            assertThat(firstPage.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactly("Jones", "Irwin", "Hale", "Grant", "Foster");
+            assertThat(secondPage.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactly("Evans", "Davis", "Cole", "Baker", "Adams");
+
+            String lastOfFirstPage =
+                    firstPage.items().get(firstPage.items().size() - 1).getLastName();
+            String firstOfSecondPage = secondPage.items().get(0).getLastName();
+            assertThat(lastOfFirstPage.compareToIgnoreCase(firstOfSecondPage)).isGreaterThan(0);
+        }
+
+        @Test
+        void ascendingSortIsTheDefaultAndMatchesLegacyOrdering() {
+            givenALargeDirectory();
+
+            PagedResponse<EmployeeSummaryDto> withoutSort =
+                    service.searchEmployees(null, null, null, 0, 10).getPage();
+            PagedResponse<EmployeeSummaryDto> withExplicitAscSort =
+                    service.searchEmployees(null, null, "lastName,asc", 0, 10).getPage();
+
+            assertThat(withoutSort.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactly(
+                            "Adams", "Baker", "Cole", "Davis", "Evans", "Foster", "Grant", "Hale", "Irwin", "Jones");
+            assertThat(withExplicitAscSort.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactlyElementsOf(withoutSort.items().stream()
+                            .map(EmployeeSummaryDto::getLastName)
+                            .toList());
+        }
+
+        @Test
+        void anUnsupportedSortFieldRaisesAValidationException() {
+            givenALargeDirectory();
+
+            assertThatThrownBy(() -> service.searchEmployees(null, null, "employeeNumber,asc", 0, 20))
+                    .isInstanceOf(RequestValidationException.class);
+        }
+
+        @Test
+        void anUnsupportedSortDirectionRaisesAValidationException() {
+            givenALargeDirectory();
+
+            assertThatThrownBy(() -> service.searchEmployees(null, null, "lastName,sideways", 0, 20))
+                    .isInstanceOf(RequestValidationException.class);
+        }
+
+        /**
+         * The histogram is taken over the q-filtered set BEFORE the status filter: requesting
+         * only DISABLED rows must not make the ACTIVE tile disappear or shrink to zero, and the
+         * counts must always sum to the q-filtered total (10 here), never to the smaller
+         * status-filtered page total (4).
+         */
+        @Test
+        void statusHistogramCoversTheQFilteredSetRegardlessOfTheStatusFilter() {
+            givenALargeDirectory();
+
+            Map<EmployeeStatus, Long> counts = service.searchEmployees(
+                            null, List.of(EmployeeStatus.DISABLED), null, 0, 2)
+                    .getStatusCounts();
+
+            assertThat(counts.get(EmployeeStatus.DISABLED)).isEqualTo(4L);
+            assertThat(counts.get(EmployeeStatus.ACTIVE)).isEqualTo(6L);
+            assertThat(counts.values().stream().mapToLong(Long::longValue).sum())
+                    .isEqualTo(10L);
+        }
+
+        @Test
+        void statusHistogramIsUnaffectedByPaging() {
+            givenALargeDirectory();
+
+            Map<EmployeeStatus, Long> firstPageCounts =
+                    service.searchEmployees(null, null, null, 0, 2).getStatusCounts();
+            Map<EmployeeStatus, Long> secondPageCounts =
+                    service.searchEmployees(null, null, null, 1, 2).getStatusCounts();
+
+            assertThat(firstPageCounts).isEqualTo(secondPageCounts);
+        }
+
+        /**
+         * A caller that only ever passed q/page/size (the pre-#2158 contract) must see identical
+         * results after this change: no status filter, default lastName-ascending order.
+         */
+        @Test
+        void anExistingCallerPassingOnlyQPageAndSizeSeesUnchangedBehaviour() {
+            givenALargeDirectory();
+
+            PagedResponse<EmployeeSummaryDto> legacyStyleCall =
+                    service.searchEmployees("First", null, null, 0, 10).getPage();
+
+            assertThat(legacyStyleCall.items())
+                    .extracting(EmployeeSummaryDto::getLastName)
+                    .containsExactly(
+                            "Adams", "Baker", "Cole", "Davis", "Evans", "Foster", "Grant", "Hale", "Irwin", "Jones");
+            assertThat(legacyStyleCall.totalElements()).isEqualTo(10);
         }
     }
 }

@@ -6,16 +6,22 @@ permissions:
     description: "View availability"
   - name: "people:compliance:view"
     description: "View identity-compliance reports (active users linked to inactive persons)"
+  - name: "people:employee:activation"
+    description: "Activate and deactivate employee records"
   - name: "people:employee:create"
     description: "Create employee records"
-  - name: "people:employee:deactivate"
-    description: "Deactivate employee records"
   - name: "people:employee:edit"
     description: "Edit employee records"
   - name: "people:employee:view"
     description: "View employee records"
   - name: "people:employee_pii:view"
     description: "View an employee's personal contact detail: address, personal phone numbers, personal email and emergency contact"
+  - name: "people:jobRole:manage"
+    description: "Add and edit job roles on the tenant's own list (durion#2157): HR master data, not a permission-bearing role"
+    grantTo: ["ADMIN"]
+  - name: "people:jobRole:view"
+    description: "Read the tenant's job-role list (durion#2157): the vocabulary an employee's job role is named from"
+    grantTo: ["ADMIN"]
   - name: "people:self:view"
     description: "View your own person record, staffing assignments and primary location"
   - name: "people:skill:assign"
@@ -24,7 +30,7 @@ permissions:
     description: "Edit skill assignments"
   - name: "people:skill:view"
     description: "Read the skill registry (CAP-328): codes, competences, GVWR class ranges and vendor cross-references"
-    grantTo: ["DISPATCHER", "SHOP_MANAGER", "SUPPORT", "LOCATION_MANAGER", "GENERAL_MANAGER", "SERVICE_ADVISOR"]
+    grantTo: ["ADMIN", "SHOP_MANAGER"]
   - name: "people:timeAdjustment:approve"
     description: "Approve timeAdjustment"
   - name: "people:timeAdjustment:create"
