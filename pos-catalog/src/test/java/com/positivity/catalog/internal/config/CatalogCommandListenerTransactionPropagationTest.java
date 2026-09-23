@@ -10,6 +10,8 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.catalog.internal.dto.ServiceFactReplayResultDto;
 import com.positivity.catalog.internal.dto.SupplierArticleCodeReplayResultDto;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Instant;
 import org.aopalliance.aop.Advice;
 import org.junit.jupiter.api.Test;
@@ -143,7 +145,8 @@ class CatalogCommandListenerTransactionPropagationTest {
                 transactionalReplayService,
                 serviceFactReplayService,
                 supplierArticleCodeReplayService,
-                kafkaTemplate);
+                kafkaTemplate,
+                new TenantResolver(new TenancyProperties()));
 
         // Simulates the pre-fix state: onCommand itself wrapped as REQUIRED-transactional, joining
         // the same InMemoryTransactionManager the inner replayPage call participates in — exactly
@@ -174,7 +177,8 @@ class CatalogCommandListenerTransactionPropagationTest {
                 transactionalReplayService,
                 serviceFactReplayService,
                 supplierArticleCodeReplayService,
-                kafkaTemplate);
+                kafkaTemplate,
+                new TenantResolver(new TenancyProperties()));
         // No transactional proxy wraps onCommand itself, matching the fixed production wiring:
         // onCommand carries no @Transactional, so replayPage's own REQUIRED transaction is the only
         // one in play and it fails/commits independently.
@@ -198,7 +202,8 @@ class CatalogCommandListenerTransactionPropagationTest {
                 productFactReplayService,
                 serviceFactReplayService,
                 supplierArticleCodeReplayService,
-                kafkaTemplate);
+                kafkaTemplate,
+                new TenantResolver(new TenancyProperties()));
 
         listener.onCommand("""
                 {"commandType":"catalog.outbox.replay-requested",
