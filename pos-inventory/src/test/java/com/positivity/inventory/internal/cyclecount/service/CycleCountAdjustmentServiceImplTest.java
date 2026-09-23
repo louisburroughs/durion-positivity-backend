@@ -3,8 +3,10 @@ package com.positivity.inventory.internal.cyclecount.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.cyclecount.AdjustmentResponse;
@@ -25,6 +27,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.service.ApprovalThresholdEvaluator;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.List;
@@ -85,6 +88,9 @@ class CycleCountAdjustmentServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
+    @Mock
+    private com.positivity.inventory.internal.service.LocationScopeService locationScopeService;
+
     private CycleCountAdjustmentServiceImpl service;
 
     private static final String ACTOR_USER_ID = "actor-person-id-001";
@@ -105,7 +111,8 @@ class CycleCountAdjustmentServiceImplTest {
                 conflictDetector,
                 costStateRepository,
                 methodResolver,
-                baseUnitOfMeasureResolver);
+                baseUnitOfMeasureResolver,
+                locationScopeService);
     }
 
     @AfterEach
@@ -317,6 +324,71 @@ class CycleCountAdjustmentServiceImplTest {
         assertThat(posted.getValue().getLocationId()).isEqualTo(locationId);
         assertThat(posted.getValue().getQuantityAfter()).isEqualByComparingTo("8");
         assertThat(response.getLocationId()).isEqualTo(locationId);
+        verify(ledgerRepository, never()).calculateOnHandQuantity(STOCK_ITEM_ID);
+    }
+
+    @Test
+    void createAdjustment_resolvedLocation_isGatedByCallerLocationScope() {
+        // #2167 (ADR-0061 gate): a caller-named shelf outside the caller's reach is refused
+        // before anything is recorded.
+        UUID locationId = UUID.fromString("01960003-0000-7000-8000-000000000012");
+        CreateAdjustmentRequest request = createRequest(5, 10);
+        request.setLocationId(locationId);
+        LocationScopeDeniedException denied =
+                new LocationScopeDeniedException("inventory:adjustment:create", locationId.toString());
+        doThrow(denied)
+                .when(locationScopeService)
+                .require(
+                        locationId,
+                        com.positivity.inventory.internal.security.InventoryPermissionRegistry.ADJUSTMENT_CREATE);
+
+        assertThatThrownBy(() -> service.createAdjustment(request)).isSameAs(denied);
+        verify(adjustmentRepository, never()).save(any());
+    }
+
+    @Test
+    void createAdjustment_withoutLocation_skipsScopeGate() {
+        CreateAdjustmentRequest request = createRequest(5, 10);
+        when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
+                .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.createAdjustment(request);
+
+        verifyNoInteractions(locationScopeService);
+    }
+
+    @Test
+    void approveAdjustment_conflictTaskWithFreeTextBin_recomputesAgainstPostingLocation() {
+        // #2167 review: a free-text bin resolves no location from the task, so the stored request
+        // location is what posts. The CONFLICT recompute must read on-hand at that same location,
+        // not the SKU-wide total, or the delta is computed over one scope and posted to another.
+        setUpAuthenticatedActor();
+        UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID taskId = UUID.fromString("01960003-0000-7000-8000-000000000009");
+        UUID locationId = UUID.fromString("01960003-0000-7000-8000-000000000012");
+        CycleCountAdjustment adjustment = pendingAdjustment(adjustmentId);
+        adjustment.setTaskId(taskId);
+        adjustment.setLocationId(locationId);
+        CycleCountTask task = task(taskId, "AISLE-3-SHELF-B");
+        task.setStatus(TaskStatus.CONFLICT);
+
+        when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.of(adjustment));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(STOCK_ITEM_ID, locationId))
+                .thenReturn(new BigDecimal("9"));
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.approveAdjustment(
+                adjustmentId, ApproveAdjustmentRequest.builder().build(), "corr-id-001");
+
+        // counted 8 against 9 on that shelf → -1, posted at the same shelf.
+        assertThat(adjustment.getQuantityChange()).isEqualByComparingTo("-1");
+        ArgumentCaptor<InventoryLedgerEntry> posted = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService).post(posted.capture());
+        assertThat(posted.getValue().getLocationId()).isEqualTo(locationId);
+        assertThat(posted.getValue().getQuantityAfter()).isEqualByComparingTo("8");
         verify(ledgerRepository, never()).calculateOnHandQuantity(STOCK_ITEM_ID);
     }
 

@@ -23,11 +23,13 @@ import com.positivity.inventory.internal.repository.CycleCountAdjustmentReposito
 import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.ApprovalThresholdEvaluator;
 import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
 import com.positivity.inventory.internal.service.CostingMethodResolver;
 import com.positivity.inventory.internal.service.CycleCountConflictDetector;
 import com.positivity.inventory.internal.service.LedgerPostingService;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.Quantities;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -67,6 +69,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     private final SkuCostStateRepository costStateRepository;
     private final CostingMethodResolver methodResolver;
     private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+    private final LocationScopeService locationScopeService;
 
     @Override
     @Transactional
@@ -83,6 +86,11 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         }
 
         UUID locationId = resolveLocation(request);
+        if (locationId != null) {
+            // ADR-0061 gate (#2167): the counted shelf — named on the request or taken from the
+            // task's bin — must lie within the caller's reach before anything is recorded or posted.
+            locationScopeService.require(locationId, InventoryPermissionRegistry.ADJUSTMENT_CREATE);
+        }
 
         // odoo-parity J3 (#1053): source costAtTimeOfAdjustment from the J1 costing engine's
         // per-SKU running cost (ADR-0048) instead of the interim client/latest-receipt source.
@@ -278,16 +286,14 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     /**
      * Replaces the stale snapshot math with current-on-hand math: quantityChange
      * becomes countedQuantity - currentOnHand, using the same on-hand
-     * aggregation the posting path uses for quantityAfter — scoped to the
-     * task's storage location when its bin holds a location UUID (a count of
-     * bin A must never be reconciled against the SKU's stock in bins B and C),
-     * global otherwise. The funnel's floor-at-zero matrix still applies when
+     * aggregation and location the posting path uses for quantityAfter
+     * ({@link #postingLocationOf}: a count of bin A must never be reconciled
+     * against the SKU's stock in bins B and C, nor computed over one scope and
+     * posted to another — #2167), global only when no location is known. The funnel's floor-at-zero matrix still applies when
      * the recomputed variance posts.
      */
     private void recomputeVarianceAgainstCurrentOnHand(CycleCountAdjustment adjustment, CycleCountTask task) {
-        BigDecimal currentOnHand = currentOnHand(
-                adjustment.getStockItemId(),
-                CycleCountConflictDetector.locationIdOf(task).orElse(null));
+        BigDecimal currentOnHand = currentOnHand(adjustment.getStockItemId(), postingLocationOf(adjustment));
         BigDecimal recomputedChange = adjustment.getCountedQuantity().subtract(currentOnHand);
         log.info(
                 "Adjustment {} approved on CONFLICT task {}: variance recomputed against current on-hand"

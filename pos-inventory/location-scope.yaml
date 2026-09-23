@@ -24,6 +24,10 @@ decisions:
     shape: gate
     permission: inventory:adjustment:create
     reason: locationId names the site the adjustment is raised at; denied outside the caller's reach (#1871).
+  - operation: CycleCountAdjustmentController.createAdjustment
+    shape: gate
+    permission: inventory:adjustment:create
+    reason: The optional body locationId, or the task's bin when it holds a location UUID, names the shelf the count variance posts against; gated in the service on the resolved location when there is one (#2167). A task-less adjustment naming no location posts against the location-less balance, as before.
   - operation: StockMovementController.approveAdjustmentRequest
     shape: gate
     permission: inventory:adjustment:approve

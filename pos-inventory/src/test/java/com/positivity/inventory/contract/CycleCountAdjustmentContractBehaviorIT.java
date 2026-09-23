@@ -1,5 +1,6 @@
 package com.positivity.inventory.contract;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -280,6 +281,26 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/cycleCountAdjustments/{adjustmentId}", adjustmentId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"));
+    }
+
+    /**
+     * Below the approval thresholds a create posts at once. When the ledger refuses that posting the
+     * whole create rolls back: the caller gets the same 422 and no adjustment is recorded, so a
+     * corrected count is simply resubmitted.
+     */
+    @Test
+    @DisplayName("#2167: an auto-approved create the ledger refuses returns 422 and records no adjustment")
+    void createAdjustment_autoApprovedVarianceBelowZero_returns422AndRecordsNothing() throws Exception {
+        seedHighThreshold();
+        String body = buildCreateRequestBody(UUID.fromString("00000000-0000-0000-0000-000000002170"), 0, 1, "10.00");
+
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountAdjustments"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("NEGATIVE_STOCK_FLOOR_VIOLATION"));
+
+        assertThat(adjustmentRepository.count()).isZero();
     }
 
     /** A task-less adjustment that names its location posts against it and returns it. */
