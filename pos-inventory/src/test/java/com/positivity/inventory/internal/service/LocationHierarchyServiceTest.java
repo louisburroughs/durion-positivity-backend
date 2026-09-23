@@ -26,6 +26,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -94,7 +95,8 @@ class LocationHierarchyServiceTest {
                 extLocationParentReplicaRepository,
                 extStorageLocationReplicaRepository,
                 service,
-                Mockito.mock(ObjectProvider.class));
+                Mockito.mock(ObjectProvider.class),
+                Mockito.mock(PlatformTransactionManager.class));
     }
 
     /** Feeds one {@code location.location.updated} fact; {@code edges} are {@code "parentId:TYPE"}. */

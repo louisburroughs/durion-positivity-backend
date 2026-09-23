@@ -15,7 +15,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -32,6 +34,13 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Consumer contract, matching the module's other listeners: {@code processed_events}
  * idempotency in the apply transaction, transient DB errors rethrown for container retry/DLQ,
  * unparsable or malformed payloads logged and dropped rather than poisoning the partition.
+ *
+ * <p>Transaction shape (#2146): the listener method is deliberately not {@code @Transactional}.
+ * Unlike the module's other listeners, this one records the eventId only when the apply succeeds,
+ * so the apply and its mark share one {@code REQUIRES_NEW} transaction: a permanent failure rolls
+ * both back and is logged, rather than poisoning an enclosing transaction whose commit then threw
+ * and sent the record through the container's retry ladder to the DLQ. Transient failures still
+ * propagate for container retry; a redelivery re-applies under the equal-applies version guard.
  */
 @Slf4j
 @Component
@@ -45,21 +54,26 @@ public class CatalogEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final ExtCatalogServiceReplicaRepository extCatalogServiceReplicaRepository;
 
+    /** Runs the apply and its processed mark in one transaction of their own; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public CatalogEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
-            ExtCatalogServiceReplicaRepository extCatalogServiceReplicaRepository) {
+            ExtCatalogServiceReplicaRepository extCatalogServiceReplicaRepository,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extCatalogServiceReplicaRepository = extCatalogServiceReplicaRepository;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${pos.location.kafka.catalog-events-topic:catalog.events.v1}",
             groupId = "${pos.location.kafka.catalog-events-consumer-group:pos-location-catalog-events}")
-    @Transactional
     public void onCatalogEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -82,12 +96,14 @@ public class CatalogEventsListener {
         }
 
         try {
-            applyCatalogService(envelope);
-            processedEventRepository.save(ProcessedEvent.builder()
-                    .eventId(eventId)
-                    .owner(OWNER)
-                    .processedAt(Instant.now(clock))
-                    .build());
+            handlerTransaction.executeWithoutResult(_ -> {
+                applyCatalogService(envelope);
+                processedEventRepository.save(ProcessedEvent.builder()
+                        .eventId(eventId)
+                        .owner(OWNER)
+                        .processedAt(Instant.now(clock))
+                        .build());
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (Exception e) {

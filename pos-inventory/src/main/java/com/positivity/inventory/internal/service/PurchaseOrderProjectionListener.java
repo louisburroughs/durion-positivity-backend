@@ -18,14 +18,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -57,10 +58,18 @@ import tools.jackson.databind.ObjectMapper;
  *   <li><strong>Transient database trouble</strong> — rethrown so the container retries. Recording
  *       the event as processed here would drop an order out of supply permanently.
  * </ul>
+ *
+ * <h2>Transaction shape</h2>
+ *
+ * Per #2146 the listener method is deliberately not {@code @Transactional}. The
+ * handler and its {@code processed_events} mark commit together in their own {@code REQUIRES_NEW}
+ * transaction, so a permanent failure rolls back only that work and is recorded in a separate
+ * transaction; before, it poisoned the listener's shared transaction, whose commit then threw and
+ * sent the record through the container's retry ladder to the DLQ. Transient failures still
+ * propagate for container retry, with nothing recorded.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.inventory.kafka", name = "enabled", havingValue = "true")
 public class PurchaseOrderProjectionListener {
 
@@ -75,10 +84,32 @@ public class PurchaseOrderProjectionListener {
     private final ExtPurchaseOrderReceiptRepository receiptRepository;
     private final InventoryFactPublisher inventoryFactPublisher;
 
+    /** Runs the handler with its processed mark in one transaction of their own; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
+    public PurchaseOrderProjectionListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            ExtPurchaseOrderRepository orderRepository,
+            ExtPurchaseOrderLineRepository lineRepository,
+            ExtPurchaseOrderReceiptRepository receiptRepository,
+            InventoryFactPublisher inventoryFactPublisher,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.orderRepository = orderRepository;
+        this.lineRepository = lineRepository;
+        this.receiptRepository = receiptRepository;
+        this.inventoryFactPublisher = inventoryFactPublisher;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.inventory.kafka.order-events-topic:order.events.v1}",
             groupId = "${pos.inventory.kafka.order-events-consumer-group:pos-inventory-order-events}")
-    @Transactional
     public void onOrderEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -98,11 +129,14 @@ public class PurchaseOrderProjectionListener {
         }
 
         try {
-            if (PurchaseOrderUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                apply(envelope);
-            } else {
-                log.debug("Ignoring order event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (PurchaseOrderUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    apply(envelope);
+                } else {
+                    log.debug("Ignoring order event type={} eventId={}", eventType, eventId);
+                }
+                recordProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             // Rethrown so the container retries. Recording this as processed would leave the order
             // out of the projection permanently, and availability-to-promise would keep quoting a
@@ -110,8 +144,12 @@ public class PurchaseOrderProjectionListener {
             throw e;
         } catch (Exception e) {
             log.warn("Skipping malformed order event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         }
+    }
 
+    /** The {@code processed_events} mark; callers supply the transaction. */
+    private void recordProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)
