@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.service;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.TransientDataAccessException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -54,7 +56,8 @@ class SupplierFleetAuthEventsListenerTest {
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 JsonMapper.builder().build(),
                 processedEventRepository,
-                fleetAuthorizationService);
+                fleetAuthorizationService,
+                mock(PlatformTransactionManager.class));
         when(processedEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 

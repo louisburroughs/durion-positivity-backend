@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -59,7 +60,8 @@ class PeopleEventsListenerMechanicSyncTest {
                 mechanicSyncService,
                 personReplicaRepository,
                 credentialReplicaRepository,
-                mock(ObjectProvider.class));
+                mock(ObjectProvider.class),
+                mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(assignmentRepository.findById(any())).thenReturn(Optional.empty());
         when(personReplicaRepository.findById(any())).thenReturn(Optional.empty());

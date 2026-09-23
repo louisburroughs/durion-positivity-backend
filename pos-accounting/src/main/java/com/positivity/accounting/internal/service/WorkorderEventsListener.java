@@ -21,7 +21,9 @@ import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -68,6 +70,11 @@ import tools.jackson.databind.ObjectMapper;
  * the resolving transaction, transient DB errors rethrown for container retry/DLQ, malformed
  * payloads logged and skipped. A fact for a workorder with no pending request is a harmless no-op
  * — still recorded as processed so redelivery does not reprocess it.
+ *
+ * <p><b>Transaction shape (#2146).</b> Same as {@link InvoiceEventsListener}: the resolution and
+ * its processed mark commit together in a {@code REQUIRES_NEW} transaction of their own, so a
+ * permanent failure rolls back only that work and is recorded in a separate transaction; transient
+ * failures still propagate for container retry, unrecorded.
  */
 @Slf4j
 @Component
@@ -79,6 +86,9 @@ public class WorkorderEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final InvoiceRegenerationRequestRepository invoiceRegenerationRequestRepository;
     private final TenantIterator tenantIterator;
+
+    /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
 
     /**
      * How long a {@code PENDING} regeneration request may go unresolved before {@link
@@ -92,18 +102,20 @@ public class WorkorderEventsListener {
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             InvoiceRegenerationRequestRepository invoiceRegenerationRequestRepository,
-            TenantIterator tenantIterator) {
+            TenantIterator tenantIterator,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.invoiceRegenerationRequestRepository = invoiceRegenerationRequestRepository;
         this.tenantIterator = tenantIterator;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${pos.accounting.kafka.workorder-events-topic:workorder.events.v1}",
             groupId = "pos-accounting-workorder-events")
-    @Transactional
     public void onWorkorderEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -129,13 +141,20 @@ public class WorkorderEventsListener {
         }
 
         try {
-            resolveRegenerationRequests(eventType, envelope);
+            handlerTransaction.executeWithoutResult(_ -> {
+                resolveRegenerationRequests(eventType, envelope);
+                markProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;
         } catch (Exception e) {
             log.warn("Skipping malformed workorder event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }
+    }
+
+    private void markProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .processedAt(Instant.now(clock))

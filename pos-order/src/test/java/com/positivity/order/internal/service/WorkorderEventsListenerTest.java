@@ -3,6 +3,7 @@ package com.positivity.order.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -32,6 +33,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -90,7 +92,8 @@ class WorkorderEventsListenerTest {
                 extWorkorderRepository,
                 extWorkorderLineRepository,
                 extEstimateRepository,
-                extEstimateLineRepository);
+                extEstimateLineRepository,
+                mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(extWorkorderRepository.findById(any())).thenReturn(Optional.empty());
         when(extEstimateRepository.findById(any())).thenReturn(Optional.empty());

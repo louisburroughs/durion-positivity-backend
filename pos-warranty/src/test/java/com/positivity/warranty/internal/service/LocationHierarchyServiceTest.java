@@ -34,6 +34,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -115,7 +116,8 @@ class LocationHierarchyServiceTest {
                 extLocationReplicaRepository,
                 extLocationParentReplicaRepository,
                 service,
-                Mockito.mock(ObjectProvider.class));
+                Mockito.mock(ObjectProvider.class),
+                Mockito.mock(PlatformTransactionManager.class));
     }
 
     /** Feeds one {@code location.location.updated} fact; {@code edges} are {@code "parentId:TYPE"}. */

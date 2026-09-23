@@ -34,6 +34,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -192,7 +193,12 @@ class PeopleManifestListenerTest {
         when(employeeRepository.findById(any())).thenReturn(Optional.empty());
         Clock clock = Clock.fixed(WINDOW_START, ZoneOffset.UTC);
         PeopleEventsListener eventsListener = new PeopleEventsListener(
-                clock, objectMapper, processedEvents, employeeRepository, mock(ObjectProvider.class));
+                clock,
+                objectMapper,
+                processedEvents,
+                employeeRepository,
+                mock(ObjectProvider.class),
+                mock(PlatformTransactionManager.class));
 
         eventsListener.onPeopleEvent("""
                 {"eventId":"019104d2-0000-7000-8000-000000000001","eventType":"%s","aggregateVersion":1,

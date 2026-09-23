@@ -16,7 +16,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -30,6 +32,13 @@ import tools.jackson.databind.ObjectMapper;
  * errors rethrown for container retry/DLQ. The topic carries many workorder fact types (job time,
  * sessions, estimates) this module ignores — their eventIds are still recorded so the owner's
  * manifest reconciles.
+ *
+ * <p><b>Transaction shape (#2146).</b> The listener method is not {@code @Transactional}: the
+ * handler and its {@code processed_events} mark commit together in their own {@code REQUIRES_NEW}
+ * transaction, so neither can commit without the other. A permanent failure rolls back only that
+ * work and is then recorded in a separate transaction, instead of leaving a shared transaction
+ * rollback-only and sending the record through the container's retry ladder to the DLQ. Transient
+ * failures still propagate for container retry.
  */
 @Slf4j
 @Component
@@ -44,12 +53,16 @@ public class WorkorderEventsListener {
     private final ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
     private final Counter payloadRejectedCounter;
 
+    /** The handler and its processed mark commit in one transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public WorkorderEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtWorkorderReplicaRepository extWorkorderReplicaRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -63,12 +76,13 @@ public class WorkorderEventsListener {
                         .tag("owner", OWNER)
                         .tag("entity", "workorder-events")
                         .register(registry);
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${pos.invoice.kafka.workorder-events-topic:workorder.events.v1}",
             groupId = "${pos.invoice.kafka.workorder-events-consumer-group:pos-invoice-workorder-events}")
-    @Transactional
     public void onWorkorderEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -88,13 +102,16 @@ public class WorkorderEventsListener {
         }
 
         try {
-            if (WorkorderUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyWorkorderUpdated(envelope);
-            } else {
-                // Ignored types still fall through to the processed_events insert below: the
-                // owner's manifest counts every fact in the window.
-                log.debug("Ignoring workorder event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (WorkorderUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    applyWorkorderUpdated(envelope);
+                } else {
+                    // Ignored types still fall through to the processed_events insert below: the
+                    // owner's manifest counts every fact in the window.
+                    log.debug("Ignoring workorder event type={} eventId={}", eventType, eventId);
+                }
+                recordProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -102,9 +119,14 @@ public class WorkorderEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed workorder event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         } catch (Exception e) {
             log.warn("Skipping malformed workorder event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         }
+    }
+
+    private void recordProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)

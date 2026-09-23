@@ -32,6 +32,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -59,7 +60,13 @@ class SupplierStockHintEventsListenerTest {
     @BeforeEach
     void setUp() {
         listener = new SupplierStockHintEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, hints, receipts, chunks);
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                hints,
+                receipts,
+                chunks,
+                org.mockito.Mockito.mock(PlatformTransactionManager.class));
     }
 
     // ---------------------------------------------------------------------

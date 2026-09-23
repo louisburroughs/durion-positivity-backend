@@ -20,7 +20,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -30,10 +32,15 @@ import tools.jackson.databind.ObjectMapper;
  * {@code ext_product_lead_time} replicas (ADR-0044 §6, #899), replacing the retired synchronous
  * {@code InventoryClientImpl} lookups behind product-detail display.
  *
- * <p>Phase 3.4 consumer contract: {@code processed_events} idempotency in the apply transaction,
+ * <p>Phase 3.4 consumer contract: {@code processed_events} idempotency,
  * strictly-below stale guard on the emission-timestamp {@code aggregateVersion}, transient DB
  * errors rethrown for container retry/DLQ. Storage-location on-hand facts on the topic are
  * ignored, but their eventIds are still recorded so the owner's manifest reconciles.
+ *
+ * <p><b>Transaction shape (#2146).</b> The replica write and its {@code processed_events} mark
+ * commit together in their own {@code REQUIRES_NEW} transaction, so a permanent failure rolls back
+ * only that work and is recorded in a separate transaction; there is no window between an applied
+ * fact and its mark. Transient failures still propagate for container retry.
  */
 @Slf4j
 @Component
@@ -49,13 +56,17 @@ public class InventoryEventsListener {
     private final ExtProductLeadTimeReplicaRepository extProductLeadTimeReplicaRepository;
     private final Counter payloadRejectedCounter;
 
+    /** The apply and its processed mark in one transaction; a failure's mark in its own. */
+    private final TransactionTemplate handlerTransaction;
+
     public InventoryEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtInventoryAvailabilityReplicaRepository extInventoryAvailabilityReplicaRepository,
             ExtProductLeadTimeReplicaRepository extProductLeadTimeReplicaRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -70,12 +81,13 @@ public class InventoryEventsListener {
                         .tag("owner", OWNER)
                         .tag("entity", "inventory-events")
                         .register(registry);
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${pos.catalog.kafka.inventory-events-topic:inventory.events.v1}",
             groupId = "${pos.catalog.kafka.inventory-events-consumer-group:pos-catalog-inventory-events}")
-    @Transactional
     public void onInventoryEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -95,13 +107,16 @@ public class InventoryEventsListener {
         }
 
         try {
-            switch (eventType == null ? "" : eventType) {
-                case InventoryAvailabilityUpdatedV1.EVENT_TYPE -> applyAvailabilityUpdated(envelope);
-                case LeadTimeUpdatedV1.EVENT_TYPE -> applyLeadTimeUpdated(envelope);
-                // Ignored types (e.g. storage-location on-hand facts) still fall through to the
-                // processed_events insert below: the owner's manifest counts every fact.
-                default -> log.debug("Ignoring inventory event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                switch (eventType == null ? "" : eventType) {
+                    case InventoryAvailabilityUpdatedV1.EVENT_TYPE -> applyAvailabilityUpdated(envelope);
+                    case LeadTimeUpdatedV1.EVENT_TYPE -> applyLeadTimeUpdated(envelope);
+                    // Ignored types (e.g. storage-location on-hand facts) still fall through to the
+                    // processed_events insert below: the owner's manifest counts every fact.
+                    default -> log.debug("Ignoring inventory event type={} eventId={}", eventType, eventId);
+                }
+                recordProcessed(eventId, OWNER);
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -109,12 +124,18 @@ public class InventoryEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed inventory event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, OWNER));
         } catch (Exception e) {
             log.warn("Skipping malformed inventory event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, OWNER));
         }
+    }
+
+    /** Records the eventId as processed, inside whichever transaction the caller runs. */
+    private void recordProcessed(@NonNull String eventId, @NonNull String owner) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
-                .owner(OWNER)
+                .owner(owner)
                 .processedAt(Instant.now(clock))
                 .build());
     }

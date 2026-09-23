@@ -28,7 +28,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -44,6 +46,13 @@ import tools.jackson.databind.ObjectMapper;
  * snapshot facts, transient DB errors rethrown for container retry/DLQ. This module processes
  * only the pick facts, yet the owner's manifest counts every fact in the window (availability,
  * on-hand, lead-time, ...), so ignored event types still record their eventIds.
+ *
+ * <p>Transaction shape (#2146): the handler and its {@code processed_events} mark commit together
+ * in a transaction of their own ({@code REQUIRES_NEW}) rather than the listener's, so there is no
+ * at-least-once window. A permanent failure rolls back only that work, and the failed record's mark
+ * is written in a separate transaction; transient failures still propagate for container retry. The
+ * single commit matters here: consumption facts accumulate and an uncovered reservation outcome
+ * subtracts from the issued quantity, so neither may be applied twice.
  */
 @Slf4j
 @Component
@@ -64,6 +73,9 @@ public class InventoryEventsListener {
     private final WorkorderPartRepository workorderPartRepository;
     private final Counter payloadRejectedCounter;
 
+    /** One transaction for the handler and its mark, one for a failed record's mark; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public InventoryEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
@@ -72,7 +84,8 @@ public class InventoryEventsListener {
             ExtPickTaskReplicaRepository pickTaskReplicaRepository,
             ExtInventoryAvailabilityReplicaRepository availabilityReplicaRepository,
             WorkorderPartRepository workorderPartRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -89,12 +102,13 @@ public class InventoryEventsListener {
                         .tag("owner", OWNER)
                         .tag("entity", "inventory-events")
                         .register(registry);
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${workorder.kafka.inventory-events-topic:inventory.events.v1}",
             groupId = "${workorder.kafka.inventory-events-consumer-group:pos-workorder-inventory-events}")
-    @Transactional
     public void onInventoryEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -114,21 +128,24 @@ public class InventoryEventsListener {
         }
 
         try {
-            if (PickListUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyPickListUpdated(envelope);
-            } else if (PickTaskUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyPickTaskUpdated(envelope);
-            } else if (ConsumptionRecordedV1.EVENT_TYPE.equals(eventType)) {
-                applyConsumptionRecorded(envelope);
-            } else if (InventoryAvailabilityUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyAvailabilityUpdated(envelope);
-            } else if (ReservationOutcomeV1.EVENT_TYPE.equals(eventType)) {
-                applyReservationOutcome(envelope);
-            } else {
-                // Ignored types still fall through to the processed_events insert below: the
-                // owner's manifest counts every fact in the window.
-                log.debug("Ignoring inventory event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (PickListUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    applyPickListUpdated(envelope);
+                } else if (PickTaskUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    applyPickTaskUpdated(envelope);
+                } else if (ConsumptionRecordedV1.EVENT_TYPE.equals(eventType)) {
+                    applyConsumptionRecorded(envelope);
+                } else if (InventoryAvailabilityUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    applyAvailabilityUpdated(envelope);
+                } else if (ReservationOutcomeV1.EVENT_TYPE.equals(eventType)) {
+                    applyReservationOutcome(envelope);
+                } else {
+                    // Ignored types still record their eventId: the owner's manifest counts every
+                    // fact in the window.
+                    log.debug("Ignoring inventory event type={} eventId={}", eventType, eventId);
+                }
+                processedEventRepository.save(processedMark(eventId));
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -136,14 +153,24 @@ public class InventoryEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed inventory event payload eventId={}: {}", eventId, e.getMessage(), e);
+            recordFailure(eventId);
         } catch (Exception e) {
             log.warn("Skipping malformed inventory event eventId={}", eventId, e);
+            recordFailure(eventId);
         }
-        processedEventRepository.save(ProcessedEvent.builder()
+    }
+
+    /** A permanently failed record's mark, in its own transaction: the handler's rolled back. */
+    private void recordFailure(String eventId) {
+        handlerTransaction.executeWithoutResult(_ -> processedEventRepository.save(processedMark(eventId)));
+    }
+
+    private ProcessedEvent processedMark(String eventId) {
+        return ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)
                 .processedAt(Instant.now(clock))
-                .build());
+                .build();
     }
 
     /**

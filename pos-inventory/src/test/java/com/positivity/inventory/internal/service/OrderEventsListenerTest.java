@@ -26,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -61,7 +62,8 @@ class OrderEventsListenerTest {
                 new ObjectMapper(),
                 processedEventRepository,
                 counterSaleIssuePoster,
-                outboxEventWriter);
+                outboxEventWriter,
+                org.mockito.Mockito.mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(outboxEventWriter.getIfAvailable()).thenReturn(null);
         posted.clear();

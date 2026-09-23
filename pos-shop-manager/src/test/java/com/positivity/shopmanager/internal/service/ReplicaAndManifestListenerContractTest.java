@@ -63,6 +63,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -190,7 +191,8 @@ class ReplicaAndManifestListenerContractTest {
                                 objectMapper,
                                 processedEventRepository,
                                 customerRepository,
-                                org.mockito.Mockito.mock(ObjectProvider.class))::onCustomerEvent,
+                                org.mockito.Mockito.mock(ObjectProvider.class),
+                                org.mockito.Mockito.mock(PlatformTransactionManager.class))::onCustomerEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(customerRepository)
                                 .findById(any()));
@@ -207,7 +209,8 @@ class ReplicaAndManifestListenerContractTest {
                                 objectMapper,
                                 processedEventRepository,
                                 vehicleRepository,
-                                org.mockito.Mockito.mock(ObjectProvider.class))::onVehicleEvent,
+                                org.mockito.Mockito.mock(ObjectProvider.class),
+                                org.mockito.Mockito.mock(PlatformTransactionManager.class))::onVehicleEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(vehicleRepository)
                                 .findById(any()));
@@ -227,7 +230,8 @@ class ReplicaAndManifestListenerContractTest {
                                 mechanicSyncService,
                                 personRepository,
                                 credentialReplicaRepository,
-                                org.mockito.Mockito.mock(ObjectProvider.class))::onPeopleEvent,
+                                org.mockito.Mockito.mock(ObjectProvider.class),
+                                org.mockito.Mockito.mock(PlatformTransactionManager.class))::onPeopleEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(assignmentRepository)
                                 .findById(any()));
@@ -244,7 +248,8 @@ class ReplicaAndManifestListenerContractTest {
                                 objectMapper,
                                 processedEventRepository,
                                 personRepository,
-                                org.mockito.Mockito.mock(ObjectProvider.class))::onPeopleContactEvent,
+                                org.mockito.Mockito.mock(ObjectProvider.class),
+                                org.mockito.Mockito.mock(PlatformTransactionManager.class))::onPeopleContactEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(personRepository)
                                 .findById(any()));
@@ -264,7 +269,8 @@ class ReplicaAndManifestListenerContractTest {
                                 processedEventRepository,
                                 workorderRepository,
                                 applicationEventPublisher,
-                                org.mockito.Mockito.mock(ObjectProvider.class))::onWorkorderEvent,
+                                org.mockito.Mockito.mock(ObjectProvider.class),
+                                org.mockito.Mockito.mock(PlatformTransactionManager.class))::onWorkorderEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(workorderRepository)
                                 .findById(any()));
@@ -284,7 +290,8 @@ class ReplicaAndManifestListenerContractTest {
                                 extLocationRepository,
                                 extLocationParentRepository,
                                 locationHierarchyService,
-                                org.mockito.Mockito.mock(ObjectProvider.class))::onLocationEvent,
+                                org.mockito.Mockito.mock(ObjectProvider.class),
+                                org.mockito.Mockito.mock(PlatformTransactionManager.class))::onLocationEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(bayRepository)
                                 .findById(any()));
@@ -304,7 +311,8 @@ class ReplicaAndManifestListenerContractTest {
                 extLocationRepository,
                 extLocationParentRepository,
                 locationHierarchyService,
-                org.mockito.Mockito.mock(ObjectProvider.class))::onLocationEvent;
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                org.mockito.Mockito.mock(PlatformTransactionManager.class))::onLocationEvent;
     }
 
     private String envelope(Replica replica, String eventId, String idValue) {
@@ -377,7 +385,8 @@ class ReplicaAndManifestListenerContractTest {
                     objectMapper,
                     processedEventRepository,
                     customerRepository,
-                    org.mockito.Mockito.mock(ObjectProvider.class));
+                    org.mockito.Mockito.mock(ObjectProvider.class),
+                    org.mockito.Mockito.mock(PlatformTransactionManager.class));
             Replica replica = replica("customer");
 
             replica.dispatch().accept(envelope(replica, "evt-1", ID.toString()));

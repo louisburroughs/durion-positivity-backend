@@ -1,16 +1,24 @@
 package com.positivity.order.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.TenantResolver;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,6 +43,9 @@ class InventoryCommandPublisherTest {
     private static final UUID LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
     private static final BigDecimal QUANTITY = new BigDecimal("2.00");
 
+    /** Deliberately not the transitional default tenant, so a header carrying it proves propagation. */
+    private static final UUID TENANT_ID = UUID.fromString("01900000-0000-7000-8000-0000000000b2");
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @SuppressWarnings("unchecked")
@@ -44,17 +55,29 @@ class InventoryCommandPublisherTest {
 
     @BeforeEach
     void setUp() {
-        publisher = new InventoryCommandPublisher(kafkaTemplate, objectMapper);
+        TenantContext.bind(TENANT_ID);
+        publisher =
+                new InventoryCommandPublisher(kafkaTemplate, objectMapper, new TenantResolver(new TenancyProperties()));
         ReflectionTestUtils.setField(publisher, "inventoryCommandsTopic", "inventory.commands.v1");
         ReflectionTestUtils.setField(publisher, "sendTimeoutMs", 10000L);
-        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+        when(kafkaTemplate.send(any(ProducerRecord.class)))
                 .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
     }
 
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
+    }
+
+    @SuppressWarnings("unchecked")
+    private ProducerRecord<String, String> sentRecord() {
+        ArgumentCaptor<ProducerRecord<String, String>> captor = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(captor.capture());
+        return captor.getValue();
+    }
+
     private JsonNode sentCommand() {
-        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(kafkaTemplate).send(anyString(), anyString(), captor.capture());
-        return objectMapper.readTree(captor.getValue());
+        return objectMapper.readTree(sentRecord().value());
     }
 
     private static UUID expectedCommandId(String idempotencyKey) {
@@ -98,5 +121,33 @@ class InventoryCommandPublisherTest {
         UUID expected = expectedCommandId(SALES_ORDER_LINE_ID + ":" + STOCK_ITEM_ID + ":2:QT");
         assertThat(command.path("commandId").stringValue(null)).isEqualTo(expected.toString());
         assertThat(command.path("payload").path("uomCode").stringValue(null)).isEqualTo("QT");
+    }
+
+    /**
+     * #2147: pos-inventory's record interceptor binds the tenant from this header, and falls back to
+     * the transitional default when it is absent, so a bare record would apply the command under the
+     * wrong tenant (and, once the default is unset, be rejected outright).
+     */
+    @Test
+    @DisplayName("the command record carries the requesting tenant's header, keyed on the sales-order line")
+    void commandRecordCarriesTheRequestingTenant() {
+        publisher.requestReservation(SALES_ORDER_LINE_ID, STOCK_ITEM_ID, QUANTITY, LOCATION_ID, null);
+
+        ProducerRecord<String, String> record = sentRecord();
+        assertThat(record.topic()).isEqualTo("inventory.commands.v1");
+        assertThat(record.key()).isEqualTo(SALES_ORDER_LINE_ID.toString());
+        assertThat(TenantKafkaHeaders.read(record.headers())).contains(TENANT_ID);
+    }
+
+    @Test
+    @DisplayName("with no tenant bound and no default configured, nothing is published")
+    void noResolvableTenantPublishesNothing() {
+        TenantContext.clear();
+
+        assertThatThrownBy(() ->
+                        publisher.requestReservation(SALES_ORDER_LINE_ID, STOCK_ITEM_ID, QUANTITY, LOCATION_ID, null))
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 }

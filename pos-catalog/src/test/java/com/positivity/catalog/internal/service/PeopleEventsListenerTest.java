@@ -20,6 +20,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /** CAP-329: {@code people.skill.updated} mirrors into {@code ext_skill}; other people facts are acknowledged. */
@@ -37,7 +38,12 @@ class PeopleEventsListenerTest {
     @BeforeEach
     void setUp() {
         listener = new PeopleEventsListener(
-                clock, new ObjectMapper(), processedEventRepository, skillRepository, mock(ObjectProvider.class));
+                clock,
+                new ObjectMapper(),
+                processedEventRepository,
+                skillRepository,
+                mock(ObjectProvider.class),
+                mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(skillRepository.findById(any())).thenReturn(Optional.empty());
     }

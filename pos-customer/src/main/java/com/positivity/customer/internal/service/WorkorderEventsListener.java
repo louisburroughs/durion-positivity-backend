@@ -28,7 +28,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -60,6 +62,13 @@ import tools.jackson.databind.ObjectMapper;
  * write transaction (a per-write {@code source_event_id} unique guard backs it up), transient DB
  * errors rethrown for container retry/DLQ, malformed payloads logged and skipped. All other
  * workorder fact types on the topic are ignored.
+ *
+ * <p><b>Transaction shape (#2146).</b> The listener method is not {@code @Transactional}: the
+ * handler and its {@code processed_events} mark commit together in their own {@code REQUIRES_NEW}
+ * transaction, so neither can commit without the other. A permanent failure rolls back only that
+ * work and is then recorded in a separate transaction, instead of leaving a shared transaction
+ * rollback-only and sending the record through the container's retry ladder to the DLQ. Transient
+ * failures still propagate for container retry.
  */
 @Slf4j
 @Component
@@ -78,6 +87,9 @@ public class WorkorderEventsListener {
     private final CustomerInteractionServiceImpl customerInteractionService;
     private final Counter payloadRejectedCounter;
 
+    /** The handler and its processed mark commit in one transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public WorkorderEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
@@ -86,7 +98,8 @@ public class WorkorderEventsListener {
             FollowUpTaskRepository followUpTaskRepository,
             PartyNoteRepository partyNoteRepository,
             CustomerInteractionServiceImpl customerInteractionService,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -103,12 +116,13 @@ public class WorkorderEventsListener {
                         .tag("owner", OWNER)
                         .tag("entity", "workorder-events")
                         .register(registry);
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${pos.customer.kafka.workorder-facts-topic:workorder.events.v1}",
             groupId = "${pos.customer.kafka.workorder-facts-consumer-group:pos-customer-workorder-facts}")
-    @Transactional
     public void onWorkorderEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -138,13 +152,16 @@ public class WorkorderEventsListener {
         }
 
         try {
-            if (WorkorderServiceCompletedV1.EVENT_TYPE.equals(eventType)) {
-                applyServiceCompleted(envelope, eventId);
-            } else if (WorkorderServiceLineDeclinedV1.EVENT_TYPE.equals(eventType)) {
-                applyServiceLineDeclined(envelope, eventId);
-            } else {
-                applyNoteAdded(envelope, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (WorkorderServiceCompletedV1.EVENT_TYPE.equals(eventType)) {
+                    applyServiceCompleted(envelope, eventId);
+                } else if (WorkorderServiceLineDeclinedV1.EVENT_TYPE.equals(eventType)) {
+                    applyServiceLineDeclined(envelope, eventId);
+                } else {
+                    applyNoteAdded(envelope, eventId);
+                }
+                recordProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;
@@ -153,9 +170,14 @@ public class WorkorderEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed workorder event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         } catch (Exception e) {
             log.warn("Skipping malformed workorder event eventId={} type={}", eventId, eventType, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         }
+    }
+
+    private void recordProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)
@@ -220,7 +242,7 @@ public class WorkorderEventsListener {
                     .build());
         }
         // Offered unconditionally: ingest has its own source_event_id guard, and both writes share
-        // this listener's transaction, so the worst case is one redundant SELECT.
+        // the handler's transaction, so the worst case is one redundant SELECT.
         customerInteractionService.ingest(CustomerInteraction.builder()
                 .partyId(payload.partyId())
                 .type(InteractionType.WORKORDER_NOTE)

@@ -11,9 +11,9 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * Bridges the in-process {@link WorkorderStatusChangedEvent} onto the appointment status sync.
  *
- * <p>The event is raised by the {@code workorder.events.v1} replica consumer, whose Kafka listener
- * method is itself {@code @Transactional} and writes both the {@code ext_workorder} row and the
- * {@code processed_events} idempotency row in that transaction. Running the appointment sync
+ * <p>The event is raised by the {@code workorder.events.v1} replica consumer from inside the
+ * transaction that writes both the {@code ext_workorder} row and the {@code processed_events}
+ * idempotency row. Running the appointment sync
  * inline inside it — the pre-#1658-review shape — coupled the two writes in the worst possible
  * way: an exception from the sync was caught and logged by the consumer's catch-all, but the
  * transaction was already marked rollback-only, so the {@code processed_events} insert failed at

@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -74,7 +76,8 @@ class SupplierInvoiceEventsListenerTest {
                 new ObjectMapper(),
                 processedEventRepository,
                 vendorBillRepository,
-                vendorRepository);
+                vendorRepository,
+                mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(vendorBillRepository.findByVendorIdAndBillNumber(any(), any())).thenReturn(Optional.empty());
         when(vendorRepository.existsById(any())).thenReturn(false);

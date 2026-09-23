@@ -7,7 +7,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -16,7 +15,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -34,10 +35,19 @@ import tools.jackson.databind.ObjectMapper;
  * with the same Idempotency-Key produce exactly one invoice; the created invoice's fact on
  * {@code invoice.events.v1} links the workorder.</li>
  * </ul>
+ *
+ * <h2>Transaction shape</h2>
+ *
+ * <p>The listener method is deliberately not {@code @Transactional} (#2146): {@code createInvoice}
+ * and the {@code processed_events} mark commit together in their own {@code REQUIRES_NEW}
+ * transaction. Joined to one listener transaction, a permanent failure caught below had already
+ * marked it rollback-only, so the commit's {@code UnexpectedRollbackException} sent the record
+ * through the container's retry ladder to the DLQ; isolated, the failure rolls back only its own
+ * work and is logged and dropped, left unrecorded as before. Transient failures still propagate
+ * for container retry.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.invoice.kafka", name = "enabled", havingValue = "true")
 public class InvoiceCommandListener {
 
@@ -62,10 +72,28 @@ public class InvoiceCommandListener {
     private final InvoiceService invoiceService;
     private final ProcessedEventRepository processedEventRepository;
 
+    /** The invoice creation and its processed mark commit in one transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
+    public InvoiceCommandListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            OutboxReplayService outboxReplayService,
+            InvoiceService invoiceService,
+            ProcessedEventRepository processedEventRepository,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.outboxReplayService = outboxReplayService;
+        this.invoiceService = invoiceService;
+        this.processedEventRepository = processedEventRepository;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.invoice.kafka.commands-topic:invoice.commands.v1}",
             groupId = "${pos.invoice.kafka.commands-consumer-group:pos-invoice-commands}")
-    @Transactional
     public void onCommand(@NonNull String message) {
         try {
             JsonNode root = objectMapper.readTree(message);
@@ -113,17 +141,21 @@ public class InvoiceCommandListener {
             log.warn("Ignoring invoice generation command with missing workorderId: {}", root);
             return;
         }
-        var response = invoiceService.createInvoice(request);
-        processedEventRepository.save(ProcessedEvent.builder()
-                .eventId(commandId)
-                .owner(COMMANDS_OWNER)
-                .processedAt(Instant.now(clock))
-                .build());
-        log.info(
-                "Invoice generation command processed commandId={} workorderId={} invoiceId={}",
-                commandId,
-                request.getWorkorderId(),
-                response.getInvoiceId());
+        // A failure propagates to onCommand's catch: transient ones are rethrown for retry, permanent
+        // ones logged and dropped, with nothing recorded (see the class doc).
+        handlerTransaction.executeWithoutResult(_ -> {
+            var response = invoiceService.createInvoice(request);
+            processedEventRepository.save(ProcessedEvent.builder()
+                    .eventId(commandId)
+                    .owner(COMMANDS_OWNER)
+                    .processedAt(Instant.now(clock))
+                    .build());
+            log.info(
+                    "Invoice generation command processed commandId={} workorderId={} invoiceId={}",
+                    commandId,
+                    request.getWorkorderId(),
+                    response.getInvoiceId());
+        });
     }
 
     private void handleOutboxReplayRequested(@NonNull JsonNode root) {

@@ -19,7 +19,6 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -27,7 +26,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -51,10 +52,22 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Confirmations and rejections are outcomes rather than observations and are applied whenever
  * they arrive: a vendor that has decided has decided, and a status poll from before that decision
  * must not overwrite it.
+ *
+ * <h2>Transaction shape (#2146)</h2>
+ *
+ * <p>The listener method is not {@code @Transactional}; the handler and its
+ * {@code processed_events} mark commit together in a {@code REQUIRES_NEW} transaction of their
+ * own, and a permanent failure — even one thrown through a transactional repository or service —
+ * rolls back only that transaction and is then recorded in a second one, rather than marking a
+ * listener-wide transaction rollback-only, whose commit would throw
+ * {@code UnexpectedRollbackException} and send the record through the container's retry and
+ * dead-letter ladder with the mark rolled back each time. Transient database errors still
+ * propagate for container retry. The mark commits with the work, not after it, because every
+ * observation appends a timeline row: a mark lost after its work committed would let redelivery
+ * append the row twice.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
 public class SupplierOrderResultListener {
     private static final String PAYLOAD = "payload";
@@ -68,10 +81,28 @@ public class SupplierOrderResultListener {
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderTransmissionEventRepository transmissionEventRepository;
 
+    /** The event's handler work and its processed mark, in a transaction of their own; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
+    public SupplierOrderResultListener(
+            java.time.Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            PurchaseOrderRepository purchaseOrderRepository,
+            PurchaseOrderTransmissionEventRepository transmissionEventRepository,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.purchaseOrderRepository = purchaseOrderRepository;
+        this.transmissionEventRepository = transmissionEventRepository;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.order.kafka.supplier-events-topic:supplier.events.v1}",
             groupId = "${pos.order.kafka.supplier-events-consumer-group:pos-order-supplier-events}")
-    @Transactional
     public void onSupplierEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -91,17 +122,20 @@ public class SupplierOrderResultListener {
         }
 
         try {
-            if (SupplierOrderConfirmedV1.EVENT_TYPE.equals(eventType)) {
-                applyConfirmed(envelope);
-            } else if (SupplierOrderRejectedV1.EVENT_TYPE.equals(eventType)) {
-                applyRejected(envelope);
-            } else if (SupplierOrderStatusChangedV1.EVENT_TYPE.equals(eventType)) {
-                applyStatusChanged(envelope);
-            } else if (SupplierOrderReviewRequiredV1.EVENT_TYPE.equals(eventType)) {
-                applyReviewRequired(envelope);
-            } else {
-                log.debug("Ignoring supplier event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (SupplierOrderConfirmedV1.EVENT_TYPE.equals(eventType)) {
+                    applyConfirmed(envelope);
+                } else if (SupplierOrderRejectedV1.EVENT_TYPE.equals(eventType)) {
+                    applyRejected(envelope);
+                } else if (SupplierOrderStatusChangedV1.EVENT_TYPE.equals(eventType)) {
+                    applyStatusChanged(envelope);
+                } else if (SupplierOrderReviewRequiredV1.EVENT_TYPE.equals(eventType)) {
+                    applyReviewRequired(envelope);
+                } else {
+                    log.debug("Ignoring supplier event type={} eventId={}", eventType, eventId);
+                }
+                markProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             // Rethrown so the container retries. Recording this as processed would leave the buyer
             // looking at an order that says it is still waiting for an answer the vendor has
@@ -109,8 +143,11 @@ public class SupplierOrderResultListener {
             throw e;
         } catch (Exception e) {
             log.warn("Skipping malformed supplier event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }
+    }
 
+    private void markProcessed(String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)

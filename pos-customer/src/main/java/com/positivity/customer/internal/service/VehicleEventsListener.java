@@ -28,7 +28,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -55,6 +57,13 @@ import tools.jackson.databind.ObjectMapper;
  * fact's — an equal version applies, both as an idempotent no-op for live traffic and because
  * {@code POST .../facts/replay} depends on it to repair a replica that holds the version number but
  * wrong or missing rows.
+ *
+ * <p><b>Transaction shape (#2146).</b> The listener method is not {@code @Transactional}: the
+ * handler and its {@code processed_events} mark commit together in their own {@code REQUIRES_NEW}
+ * transaction, so neither can commit without the other. A permanent failure rolls back only that
+ * work and is then recorded in a separate transaction, instead of leaving a shared transaction
+ * rollback-only and sending the record through the container's retry ladder to the DLQ. Transient
+ * failures still propagate for container retry.
  */
 @Slf4j
 @Component
@@ -72,6 +81,9 @@ public class VehicleEventsListener {
     private final CommercialPartyRepository commercialPartyRepository;
     private final Counter payloadRejectedCounter;
 
+    /** The handler and its processed mark commit in one transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public VehicleEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
@@ -80,7 +92,8 @@ public class VehicleEventsListener {
             ExtVehicleCarePreferenceRepository extVehicleCarePreferenceRepository,
             PersonPartyRepository personPartyRepository,
             CommercialPartyRepository commercialPartyRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -97,12 +110,13 @@ public class VehicleEventsListener {
                         .tag("owner", OWNER)
                         .tag("entity", "vehicle-events")
                         .register(registry);
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${pos.customer.kafka.vehicle-events-topic:vehicle.events.v1}",
             groupId = "${pos.customer.kafka.vehicle-events-consumer-group:pos-customer-vehicle-events}")
-    @Transactional
     public void onVehicleEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -123,15 +137,18 @@ public class VehicleEventsListener {
 
         String eventType = envelope.path("eventType").stringValue(null);
         try {
-            if (VehicleUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyVehicleUpdate(envelope);
-            } else if (VehicleCarePreferenceUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyCarePreferenceUpdate(envelope);
-            } else {
-                // Recorded below anyway: the owner's manifest counts every event on the topic,
-                // so an ignored-but-unrecorded eventId would read as drift every window (#1175).
-                log.debug("Ignoring vehicle event type={}", eventType);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (VehicleUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    applyVehicleUpdate(envelope);
+                } else if (VehicleCarePreferenceUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    applyCarePreferenceUpdate(envelope);
+                } else {
+                    // Recorded below anyway: the owner's manifest counts every event on the topic,
+                    // so an ignored-but-unrecorded eventId would read as drift every window (#1175).
+                    log.debug("Ignoring vehicle event type={}", eventType);
+                }
+                recordProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;
@@ -140,9 +157,14 @@ public class VehicleEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed vehicle event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         } catch (Exception e) {
             log.warn("Skipping malformed vehicle event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         }
+    }
+
+    private void recordProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)

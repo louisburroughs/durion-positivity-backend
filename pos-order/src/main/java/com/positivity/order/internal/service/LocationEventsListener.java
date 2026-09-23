@@ -12,14 +12,15 @@ import com.positivity.order.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -43,10 +44,18 @@ import tools.jackson.databind.ObjectMapper;
  * replicated descendant, so a re-parented node propagates and a parent arriving after its children
  * pushes its ancestry down to them. Ingestion never fails closed on a parent the replica has not
  * seen yet; the scope check does.
+ *
+ * <p>Transaction shape (#2146): the listener method is not {@code @Transactional}; the handler
+ * and its {@code processed_events} mark run together in a {@code REQUIRES_NEW} transaction of
+ * their own. A permanent failure thrown through a transactional repository or service therefore
+ * rolls back only that work and is logged and skipped, rather than marking a listener-wide
+ * transaction rollback-only, whose commit would throw {@code UnexpectedRollbackException} and
+ * send the record through the container's retry and dead-letter ladder. Transient database errors
+ * still propagate for container retry, and since the mark commits with the work there is no
+ * window in which one lands without the other.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
 public class LocationEventsListener {
 
@@ -59,10 +68,30 @@ public class LocationEventsListener {
     private final ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
     private final LocationHierarchyService locationHierarchyService;
 
+    /** The event's handler work and its processed mark, in a transaction of their own; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
+    public LocationEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            ExtLocationRepository extLocationRepository,
+            ExtLocationParentReplicaRepository extLocationParentReplicaRepository,
+            LocationHierarchyService locationHierarchyService,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.extLocationRepository = extLocationRepository;
+        this.extLocationParentReplicaRepository = extLocationParentReplicaRepository;
+        this.locationHierarchyService = locationHierarchyService;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.order.kafka.location-events-topic:location.events.v1}",
             groupId = "${pos.order.kafka.location-events-consumer-group:pos-order-location-events}")
-    @Transactional
     public void onLocationEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -87,16 +116,18 @@ public class LocationEventsListener {
         }
 
         try {
-            if (update) {
-                applyUpdate(envelope);
-            } else {
-                applyDelete(envelope);
-            }
-            processedEventRepository.save(ProcessedEvent.builder()
-                    .eventId(eventId)
-                    .owner(OWNER)
-                    .processedAt(Instant.now(clock))
-                    .build());
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (update) {
+                    applyUpdate(envelope);
+                } else {
+                    applyDelete(envelope);
+                }
+                processedEventRepository.save(ProcessedEvent.builder()
+                        .eventId(eventId)
+                        .owner(OWNER)
+                        .processedAt(Instant.now(clock))
+                        .build());
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (Exception e) {

@@ -5,14 +5,15 @@ import com.positivity.supplier.internal.entity.ProcessedEvent;
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
 import java.time.Instant;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -39,10 +40,18 @@ import tools.jackson.databind.ObjectMapper;
  * schedule. A fleet API being unreachable must never fail the handling of a workorder completion,
  * because the completion is a fact that already happened and refusing to record it does not make it
  * un-happen.
+ *
+ * <h2>Transaction shape (#2146)</h2>
+ *
+ * The listener method is not {@code @Transactional}: the apply and its {@code processed_events}
+ * mark commit together in their own {@code REQUIRES_NEW} transaction, so a permanent failure inside
+ * the {@code @Transactional} approver rolls back only that work — and is recorded in a separate
+ * transaction — instead of poisoning a shared transaction whose commit the container would retry
+ * to the DLQ. There is no window between a queued approval and its mark. Transient failures still
+ * propagate for container retry.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.supplier.kafka", name = "enabled", havingValue = "true")
 public class WorkorderCompletionEventsListener {
 
@@ -53,10 +62,26 @@ public class WorkorderCompletionEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final WorkorderCompletionApprover approver;
 
+    /** The apply and its processed mark in one transaction; a failure's mark in its own. */
+    private final TransactionTemplate handlerTransaction;
+
+    public WorkorderCompletionEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            WorkorderCompletionApprover approver,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.approver = approver;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.supplier.kafka.workorder-events-topic:workorder.events.v1}",
             groupId = "${pos.supplier.kafka.workorder-events-consumer-group:pos-supplier-workorder-events}")
-    @Transactional
     public void onWorkorderEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -76,11 +101,14 @@ public class WorkorderCompletionEventsListener {
         }
 
         try {
-            if (WorkorderServiceCompletedV1.EVENT_TYPE.equals(eventType)) {
-                applyCompletion(envelope);
-            } else {
-                log.debug("Ignoring workorder event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (WorkorderServiceCompletedV1.EVENT_TYPE.equals(eventType)) {
+                    applyCompletion(envelope);
+                } else {
+                    log.debug("Ignoring workorder event type={} eventId={}", eventType, eventId);
+                }
+                recordProcessed(eventId, OWNER);
+            });
         } catch (TransientDataAccessException e) {
             // Rethrown so the container retries. Marking this processed would leave an authorized
             // job never queued for sign-off, which is work performed that the fleet is never asked
@@ -88,10 +116,15 @@ public class WorkorderCompletionEventsListener {
             throw e;
         } catch (Exception e) {
             log.warn("Skipping malformed workorder completion event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, OWNER));
         }
+    }
+
+    /** Records the eventId as processed, inside whichever transaction the caller runs. */
+    private void recordProcessed(@NonNull String eventId, @NonNull String owner) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
-                .owner(OWNER)
+                .owner(owner)
                 .processedAt(Instant.now(clock))
                 .build());
     }

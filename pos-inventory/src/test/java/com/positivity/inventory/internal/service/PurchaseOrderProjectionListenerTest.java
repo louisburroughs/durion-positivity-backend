@@ -30,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -78,7 +79,8 @@ class PurchaseOrderProjectionListenerTest {
                 orderRepository,
                 lineRepository,
                 receiptRepository,
-                inventoryFactPublisher);
+                inventoryFactPublisher,
+                org.mockito.Mockito.mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(orderRepository.findById(any())).thenReturn(Optional.empty());
     }

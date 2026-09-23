@@ -31,6 +31,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 class InvoiceEventsListenerTest {
@@ -55,7 +56,8 @@ class InvoiceEventsListenerTest {
                 replica,
                 taxReplica,
                 revenuePosting,
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                mock(PlatformTransactionManager.class));
     }
 
     private String eventWithBreakdown(String eventId, long version) {
@@ -374,7 +376,14 @@ class InvoiceEventsListenerTest {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         when(provider.getIfAvailable()).thenReturn(meterRegistry);
         InvoiceEventsListener listenerWithMetrics = new InvoiceEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, revenuePosting, provider);
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                replica,
+                taxReplica,
+                revenuePosting,
+                provider,
+                mock(PlatformTransactionManager.class));
 
         when(processedEvents.existsById("e-persist-fail")).thenReturn(false);
         when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
@@ -401,7 +410,14 @@ class InvoiceEventsListenerTest {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         when(provider.getIfAvailable()).thenReturn(meterRegistry);
         InvoiceEventsListener listenerWithMetrics = new InvoiceEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, revenuePosting, provider);
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                replica,
+                taxReplica,
+                revenuePosting,
+                provider,
+                mock(PlatformTransactionManager.class));
 
         when(processedEvents.existsById("e-programming-error")).thenReturn(false);
         when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
@@ -425,7 +441,14 @@ class InvoiceEventsListenerTest {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         when(provider.getIfAvailable()).thenReturn(meterRegistry);
         InvoiceEventsListener listenerWithMetrics = new InvoiceEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, revenuePosting, provider);
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                replica,
+                taxReplica,
+                revenuePosting,
+                provider,
+                mock(PlatformTransactionManager.class));
 
         when(processedEvents.existsById("e-tax-persist-fail")).thenReturn(false);
         when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());

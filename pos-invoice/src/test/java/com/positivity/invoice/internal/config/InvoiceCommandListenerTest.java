@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 class InvoiceCommandListenerTest {
@@ -41,7 +42,12 @@ class InvoiceCommandListenerTest {
     @BeforeEach
     void setUp() {
         listener = new InvoiceCommandListener(
-                TEST_CLOCK, new ObjectMapper(), replayService, invoiceService, processedEvents);
+                TEST_CLOCK,
+                new ObjectMapper(),
+                replayService,
+                invoiceService,
+                processedEvents,
+                mock(PlatformTransactionManager.class));
         ReflectionTestUtils.setField(listener, "replayMaxLookback", Duration.ofDays(30));
     }
 
@@ -72,6 +78,31 @@ class InvoiceCommandListenerTest {
         verify(processedEvents).save(processed.capture());
         assertThat(processed.getValue().getEventId()).isEqualTo("c-1");
         assertThat(processed.getValue().getOwner()).isEqualTo("invoice-commands");
+    }
+
+    @Test
+    @DisplayName("A permanent createInvoice failure is logged and dropped, leaving the commandId unrecorded")
+    void permanentGenerationFailureIsDroppedUnrecorded() {
+        when(processedEvents.existsById("c-fail")).thenReturn(false);
+        when(invoiceService.createInvoice(any(InvoiceCreationRequest.class)))
+                .thenThrow(new IllegalStateException("simulated permanent failure"));
+
+        listener.onCommand(generationCommand("c-fail"));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A transient createInvoice failure propagates and records nothing, so the container retries")
+    void transientGenerationFailurePropagatesUnrecorded() {
+        when(processedEvents.existsById("c-retry")).thenReturn(false);
+        when(invoiceService.createInvoice(any(InvoiceCreationRequest.class)))
+                .thenThrow(new QueryTimeoutException("db timeout"));
+
+        assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onCommand(generationCommand("c-retry")));
+
+        verify(processedEvents, never()).save(any());
     }
 
     @Test

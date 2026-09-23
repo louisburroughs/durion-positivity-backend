@@ -13,14 +13,15 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -62,10 +63,16 @@ import tools.jackson.databind.ObjectMapper;
  * — which happens by design, since fetch windows overlap so a failed fetch can be repeated safely.
  * Only the second would survive a rebuilt supplier database, and it is the one that stops a debt
  * being recorded twice.
+ *
+ * <h2>Transaction shape (#2146)</h2>
+ *
+ * The bill and its processed mark commit together in a {@code REQUIRES_NEW} transaction of their
+ * own, so an unreadable invoice that fails inside a repository call rolls back only that work and
+ * is recorded in a separate transaction; every database failure still propagates for retry,
+ * unrecorded, as above.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
 public class SupplierInvoiceEventsListener {
 
@@ -80,10 +87,28 @@ public class SupplierInvoiceEventsListener {
     private final VendorBillRepository vendorBillRepository;
     private final VendorRepository vendorRepository;
 
+    /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
+    public SupplierInvoiceEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            VendorBillRepository vendorBillRepository,
+            VendorRepository vendorRepository,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.vendorBillRepository = vendorBillRepository;
+        this.vendorRepository = vendorRepository;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.accounting.kafka.supplier-events-topic:supplier.events.v1}",
             groupId = "pos-accounting-supplier-events")
-    @Transactional
     public void onSupplierEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -103,11 +128,14 @@ public class SupplierInvoiceEventsListener {
         }
 
         try {
-            if (SupplierInvoiceReceivedV1.EVENT_TYPE.equals(eventType)) {
-                apply(envelope, eventId);
-            } else {
-                log.debug("Ignoring supplier event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (SupplierInvoiceReceivedV1.EVENT_TYPE.equals(eventType)) {
+                    apply(envelope, eventId);
+                } else {
+                    log.debug("Ignoring supplier event type={} eventId={}", eventType, eventId);
+                }
+                markProcessed(eventId);
+            });
         } catch (DataAccessException e) {
             // Every database failure is rethrown, not only the transient ones. A column-length
             // violation or a concurrent vendor insert is not a malformed message, and marking it
@@ -119,8 +147,11 @@ public class SupplierInvoiceEventsListener {
             // Genuinely unreadable: a payload this build cannot parse will not parse on retry
             // either, and blocking the partition would stop every other vendor's invoices too.
             log.warn("Skipping malformed supplier invoice event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }
+    }
 
+    private void markProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .processedAt(Instant.now(clock))

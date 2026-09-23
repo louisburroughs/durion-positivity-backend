@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,6 +34,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -80,7 +82,8 @@ class PaymentEventsListenerTest {
                 salesOrderRepository,
                 paymentRecordRepository,
                 new OrderStateMachine(orderStatusHistoryRepository, clock),
-                domainEventPublisher);
+                domainEventPublisher,
+                mock(PlatformTransactionManager.class));
 
         order = SalesOrder.builder()
                 .orderId(ORDER_ID)

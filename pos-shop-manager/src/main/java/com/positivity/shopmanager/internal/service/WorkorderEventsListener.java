@@ -23,7 +23,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -34,7 +36,7 @@ import tools.jackson.databind.ObjectMapper;
  * pos-workorder, which ADR-0044 R1 forbids.
  *
  * <p>Phase 3.4 consumer contract, identical to this module's four existing replica listeners:
- * {@code processed_events} idempotency inside the apply transaction, a strictly-below stale guard
+ * {@code processed_events} idempotency, a strictly-below stale guard
  * on the envelope's {@code aggregateVersion}, transient DB errors rethrown for container
  * retry/DLQ, malformed payloads swallowed but still counted so the owner's manifest reconciles.
  *
@@ -47,7 +49,7 @@ import tools.jackson.databind.ObjectMapper;
  * existing {@link WorkorderStatusEventService} appointment sync safe to feed from this firehose,
  * rather than standing up a second, parallel consumption path for it.
  *
- * <p>That notification is delivered <em>after</em> this transaction commits — see
+ * <p>That notification is delivered <em>after</em> the handler's transaction commits — see
  * {@link com.positivity.shopmanager.internal.config.WorkorderStatusChangedEventListener} — so a
  * failure in the appointment sync can neither roll back the replica write nor prevent the
  * {@code processed_events} row from landing. Handling it inline would have done both at once, and
@@ -56,6 +58,13 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Staleness is expected and fail-open by design: the dashboard is a read model over an
  * at-least-once feed with retry and backoff, so an assignment made a moment ago may not be visible
  * yet. The endpoint's OpenAPI description says so.
+ *
+ * <p><strong>Transaction shape (#2146).</strong> The listener method is not {@code @Transactional}:
+ * the handler's work and the {@code processed_events} mark commit together in a
+ * {@code REQUIRES_NEW} transaction of their own, so neither lands without the other. A permanent
+ * failure rolls back only that work and is recorded in a separate transaction, instead of
+ * poisoning a shared transaction whose commit then throws and sends the record through retry and
+ * dead-lettering. Transient database errors still propagate, unrecorded, for container retry.
  */
 @Slf4j
 @Component
@@ -71,18 +80,24 @@ public class WorkorderEventsListener {
     private final ApplicationEventPublisher applicationEventPublisher;
     private final Counter payloadRejectedCounter;
 
+    /** Runs the handler with its processed mark, and records a failure; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public WorkorderEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtWorkorderReplicaRepository extWorkorderReplicaRepository,
             ApplicationEventPublisher applicationEventPublisher,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extWorkorderReplicaRepository = extWorkorderReplicaRepository;
         this.applicationEventPublisher = applicationEventPublisher;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -97,7 +112,6 @@ public class WorkorderEventsListener {
     @KafkaListener(
             topics = "${pos.shop-manager.kafka.workorder-events-topic:workorder.events.v1}",
             groupId = "${pos.shop-manager.kafka.workorder-events-consumer-group:pos-shop-manager-workorder-events}")
-    @Transactional
     public void onWorkorderEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -117,13 +131,16 @@ public class WorkorderEventsListener {
         }
 
         try {
-            if (WorkorderUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyWorkorderUpdated(envelope, eventId);
-            } else {
-                // Ignored types still fall through to the processed_events insert below: the
-                // owner's manifest counts every fact in the window.
-                log.debug("Ignoring workorder event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (WorkorderUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    applyWorkorderUpdated(envelope, eventId);
+                } else {
+                    // Ignored types still fall through to the processed_events insert below: the
+                    // owner's manifest counts every fact in the window.
+                    log.debug("Ignoring workorder event type={} eventId={}", eventType, eventId);
+                }
+                processedEventRepository.save(processedMark(eventId));
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -131,14 +148,24 @@ public class WorkorderEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed workorder event payload eventId={}: {}", eventId, e.getMessage(), e);
+            recordFailed(eventId);
         } catch (Exception e) {
             log.warn("Skipping malformed workorder event eventId={}", eventId, e);
+            recordFailed(eventId);
         }
-        processedEventRepository.save(ProcessedEvent.builder()
+    }
+
+    private ProcessedEvent processedMark(String eventId) {
+        return ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)
                 .processedAt(Instant.now(clock))
-                .build());
+                .build();
+    }
+
+    /** Records a permanently failed event in a transaction of its own; see the class doc. */
+    private void recordFailed(String eventId) {
+        handlerTransaction.executeWithoutResult(_ -> processedEventRepository.save(processedMark(eventId)));
     }
 
     private void applyWorkorderUpdated(JsonNode envelope, String eventId) {

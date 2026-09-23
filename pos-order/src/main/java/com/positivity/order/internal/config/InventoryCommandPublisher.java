@@ -1,6 +1,8 @@
 package com.positivity.order.internal.config;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantResolver;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -36,6 +38,7 @@ public class InventoryCommandPublisher {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
+    private final TenantResolver tenantResolver;
 
     @Value("${pos.order.kafka.inventory-commands-topic:inventory.commands.v1}")
     private String inventoryCommandsTopic;
@@ -76,7 +79,9 @@ public class InventoryCommandPublisher {
     private void send(@NonNull String commandType, @NonNull UUID commandId, @NonNull String key, Object payload) {
         try {
             String command = objectMapper.writeValueAsString(new Command(commandId.toString(), commandType, payload));
-            kafkaTemplate.send(inventoryCommandsTopic, key, command).get(sendTimeoutMs, TimeUnit.MILLISECONDS);
+            kafkaTemplate
+                    .send(TenantKafkaHeaders.record(inventoryCommandsTopic, key, command, tenantResolver.require()))
+                    .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while publishing " + commandType + " command", e);

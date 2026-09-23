@@ -25,7 +25,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -56,6 +58,13 @@ import tools.jackson.databind.ObjectMapper;
  *       {@code uomConversions} / {@code substitutionProductIds} null ⇒ empty (children cleared —
  *       the fact carries the full sets, replace wholesale).
  * </ul>
+ *
+ * <p>Transaction shape (#2146): the listener method is deliberately not {@code @Transactional}. The
+ * handler and its {@code processed_events} mark commit together in their own {@code REQUIRES_NEW}
+ * transaction, so a permanent failure rolls back only that work and is recorded in a separate
+ * transaction; before, it poisoned the listener's shared transaction, whose commit then threw and
+ * sent the record through the container's retry ladder to the DLQ. Transient failures still
+ * propagate for container retry, with nothing recorded.
  */
 @Slf4j
 @Component
@@ -74,6 +83,9 @@ public class CatalogEventsListener {
     private final ExtProductSubstitutionReplicaRepository extProductSubstitutionReplicaRepository;
     private final Counter payloadRejectedCounter;
 
+    /** Runs the handler with its processed mark in one transaction of their own; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public CatalogEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
@@ -82,7 +94,8 @@ public class CatalogEventsListener {
             ExtProductCodeReplicaRepository extProductCodeReplicaRepository,
             ExtProductUomReplicaRepository extProductUomReplicaRepository,
             ExtProductSubstitutionReplicaRepository extProductSubstitutionReplicaRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -99,12 +112,13 @@ public class CatalogEventsListener {
                         .tag("owner", OWNER)
                         .tag("entity", "catalog-events")
                         .register(registry);
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${pos.inventory.kafka.catalog-events-topic:catalog.events.v1}",
             groupId = "${pos.inventory.kafka.catalog-events-consumer-group:pos-inventory-catalog-events}")
-    @Transactional
     public void onCatalogEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -124,13 +138,16 @@ public class CatalogEventsListener {
         }
 
         try {
-            if (ProductUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyProductUpdated(envelope);
-            } else {
-                // Ignored types still fall through to the processed_events insert below: the
-                // owner's manifest counts every fact in the window.
-                log.debug("Ignoring catalog event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (ProductUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    applyProductUpdated(envelope);
+                } else {
+                    // Ignored types still fall through to the processed_events insert below: the
+                    // owner's manifest counts every fact in the window.
+                    log.debug("Ignoring catalog event type={} eventId={}", eventType, eventId);
+                }
+                recordProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -138,9 +155,15 @@ public class CatalogEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed catalog event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         } catch (Exception e) {
             log.warn("Skipping malformed catalog event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         }
+    }
+
+    /** The {@code processed_events} mark; callers supply the transaction. */
+    private void recordProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)

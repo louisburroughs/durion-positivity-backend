@@ -48,7 +48,9 @@
   its module to `TenancyArchitectureTest.ADOPTED_MODULES`): a new entity extends `TenantScopedEntity` or carries `@TenantGlobal`;
   a new `@Scheduled` job is wrapped in `TenantIterator.forEachActiveTenant` or annotated `@PlatformScoped`; native
   SQL and `JdbcTemplate` on scoped data carry `@TenantAudited`; a Kafka producer stamps the record with
-  `TenantKafkaHeaders.record(...)`; application code reads `TenantContext` and never binds it (the one exception is
+  `TenantKafkaHeaders.record(...)` and sends the `ProducerRecord`, never `kafkaTemplate.send(topic, key, value)`
+  (without the header the consumer applies the record under the transitional default tenant; #2147, enforced by
+  `TenancyArchitectureTest.every_kafka_record_carries_the_tenant_header`); application code reads `TenantContext` and never binds it (the one exception is
   `pos-tenant`, whose rows are platform data: its `tenant.provisioned` handler re-binds to `PlatformTenant.ID`, and
   `TenantRegistrySecretFilter` binds it at the request edge for the internal registry endpoint).
   **The rule constrains what a new table carries, not which file holds it (#1996).** The default home for a new
@@ -64,6 +66,21 @@
   example. Such a table is not relocated into `V1` after the fact: moving DDL out of a migration other databases
   have already run needs the same reset or repair, and the next flattening folds it into the new baseline for
   free. Data reconciliation and any index over pre-existing rows always stay in a post-baseline migration.
+- Kafka consumers (ADR-0044 §4, amended 2026-09-23 by #2146): a `@KafkaListener` that writes a
+  `processed_events` mark is **not** `@Transactional`. It runs the handler and the mark together in the handler's
+  own transaction (`TransactionTemplate` with `PROPAGATION_REQUIRES_NEW`) and rethrows
+  `TransientDataAccessException`. It logs any other exception as permanent and, if the consumer records failures,
+  writes the mark for the failed record in a separate transaction. If the method were
+  `@Transactional`, a handler exception crossing a `@Transactional` service or a Spring Data repository would mark
+  the shared transaction rollback-only. The commit after the catch would then throw, and the container would retry
+  and dead-letter a record the log calls "failed permanently". Don't write the mark in a second transaction after
+  a successful handler: that opens an at-least-once window, and a handler that applies deltas would apply twice.
+  The one deliberate exception is `pos-inventory`'s `InventoryCommandListener` (#2145), whose pick-command handlers
+  are idempotent by state check and document the window; keep it, and don't copy its shape to a new listener.
+  Pin the shape with a Spring-backed test that uses a real transaction
+  manager, runs the listener inside an enclosing transaction, and makes a `@Transactional` handler throw; a mock
+  transaction manager cannot see the defect. Test template: `pos-inventory`'s
+  `InventoryCommandListenerTransactionTest`; listener exemplar: `pos-order`'s `PurchaseOrderCommandListener`.
 - Permission registries: assert **enforcement → catalog**, never a bidirectional match. A module's
   `{Module}PermissionRegistry` constants and its `src/main/resources/permissions.yaml` catalog are not
   the same set and are not meant to be — `pos-inventory` currently has 57 catalog entries against 54

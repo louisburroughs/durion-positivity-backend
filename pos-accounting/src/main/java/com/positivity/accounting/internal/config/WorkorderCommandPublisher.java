@@ -1,6 +1,8 @@
 package com.positivity.accounting.internal.config;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantResolver;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,7 @@ public class WorkorderCommandPublisher {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
+    private final TenantResolver tenantResolver;
 
     @Value("${pos.accounting.kafka.workorder-commands-topic:workorder.commands.v1}")
     private String workorderCommandsTopic;
@@ -57,7 +60,8 @@ public class WorkorderCommandPublisher {
                     commandId.toString(),
                     new RegenerateCommand.Payload(workorderId.toString(), idempotencyKey, requestedBy)));
             kafkaTemplate
-                    .send(workorderCommandsTopic, workorderId.toString(), command)
+                    .send(TenantKafkaHeaders.record(
+                            workorderCommandsTopic, workorderId.toString(), command, tenantResolver.require()))
                     .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
             log.info("Queued invoice regeneration command {} for workorder {}", commandId, workorderId);
             return commandId;

@@ -13,14 +13,15 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -38,10 +39,16 @@ import tools.jackson.databind.ObjectMapper;
  * dropped rather than poisoning the partition. There is no catalog manifest listener in this
  * module, so — unlike {@code InventoryEventsListener} — facts of other types are skipped without
  * recording a dedup row; nothing compares counts against them.
+ *
+ * <p>Transaction shape (#2146): the apply and its {@code processed_events} mark run together in a
+ * transaction of their own ({@code REQUIRES_NEW}) rather than in the listener's. A malformed fact
+ * is dropped without a mark, so there is nothing to commit after a failure, and keeping the mark
+ * with the apply leaves no at-least-once window. What the isolation buys is that a permanent failure
+ * thrown through a {@code @Transactional} repository call rolls back only this transaction instead
+ * of poisoning an enclosing one into {@code UnexpectedRollbackException} and a container retry.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
 public class CatalogEventsListener {
 
@@ -53,10 +60,28 @@ public class CatalogEventsListener {
     private final ExtProductUomReplicaRepository productUomReplicaRepository;
     private final ExtCatalogServiceReplicaRepository catalogServiceReplicaRepository;
 
+    /** The apply and its processed mark, in one transaction of their own; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
+    public CatalogEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            ExtProductUomReplicaRepository productUomReplicaRepository,
+            ExtCatalogServiceReplicaRepository catalogServiceReplicaRepository,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.productUomReplicaRepository = productUomReplicaRepository;
+        this.catalogServiceReplicaRepository = catalogServiceReplicaRepository;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${workorder.kafka.catalog-events-topic:catalog.events.v1}",
             groupId = "${workorder.kafka.catalog-events-consumer-group:pos-workorder-catalog-events}")
-    @Transactional
     public void onCatalogEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -81,16 +106,18 @@ public class CatalogEventsListener {
         }
 
         try {
-            if (productFact) {
-                applyUomConversions(envelope);
-            } else {
-                applyCatalogService(envelope);
-            }
-            processedEventRepository.save(ProcessedEvent.builder()
-                    .eventId(eventId)
-                    .owner(OWNER)
-                    .processedAt(Instant.now(clock))
-                    .build());
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (productFact) {
+                    applyUomConversions(envelope);
+                } else {
+                    applyCatalogService(envelope);
+                }
+                processedEventRepository.save(ProcessedEvent.builder()
+                        .eventId(eventId)
+                        .owner(OWNER)
+                        .processedAt(Instant.now(clock))
+                        .build());
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (Exception e) {

@@ -117,6 +117,31 @@ class TenancyArchitectureTest {
             .because("ADR-0062 section 3: one resolver, whose isRoot is never true (a Hibernate-level bypass that RLS"
                     + " would disagree with)");
 
+    /** Spring Kafka producer types whose topic-first {@code send} overloads publish a bare record. */
+    private static final java.util.Set<String> KAFKA_PRODUCERS = java.util.Set.of(
+            "org.springframework.kafka.core.KafkaTemplate", "org.springframework.kafka.core.KafkaOperations");
+
+    @ArchTest
+    static final ArchRule every_kafka_record_carries_the_tenant_header = noClasses()
+            .that()
+            .resideInAnyPackage(ADOPTED_MODULES)
+            .should()
+            .callMethodWhere(
+                    new com.tngtech.archunit.base.DescribedPredicate<JavaMethodCall>(
+                            "a KafkaTemplate send overload taking a topic name") {
+                        @Override
+                        public boolean test(JavaMethodCall call) {
+                            var target = call.getTarget();
+                            return KAFKA_PRODUCERS.contains(target.getOwner().getName())
+                                    && "send".equals(target.getName())
+                                    && !target.getRawParameterTypes().isEmpty()
+                                    && target.getRawParameterTypes().get(0).isEquivalentTo(String.class);
+                        }
+                    })
+            .because("ADR-0062 section 3: a consumer binds the tenant from the record's header and falls back to the"
+                    + " transitional default without it, so every record is built with TenantKafkaHeaders.record and"
+                    + " sent as a ProducerRecord (#2147)");
+
     private static ArchCondition<JavaClass> beTenantScopedOrDeclaredGlobal() {
         return new ArchCondition<>("extend TenantScopedEntity or be annotated with @TenantGlobal") {
             @Override

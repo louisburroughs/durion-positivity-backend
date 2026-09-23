@@ -8,11 +8,12 @@ import com.positivity.peoplecontact.internal.exception.UserPersonLinkNotFoundExc
 import com.positivity.peoplecontact.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
 import java.time.Instant;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Applies user-person-link commands from pos-security-service (amended ADR-0043, #876).
@@ -23,10 +24,16 @@ import org.springframework.transaction.annotation.Transactional;
  * transaction, so redelivery cannot recreate a link that was removed after the original apply.
  * Permanent conflicts (username already linked to a different person, unknown person) are logged,
  * marked processed, and dropped — retrying cannot fix them.
+ *
+ * <p>Transaction shape (#2146): these methods are not {@code @Transactional}. The link change and
+ * its processed mark commit together in one {@code REQUIRES_NEW} transaction; a permanent conflict
+ * rolls that transaction back and the mark is written in a second one. {@link UserPersonLinkService}
+ * is itself {@code @Transactional}, so when these methods held one transaction the conflict it
+ * threw marked that transaction rollback-only, and the mark's commit failed with
+ * {@code UnexpectedRollbackException} — the conflict was never recorded as processed.
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class LinkCommandHandler {
 
     private static final String OWNER = "security";
@@ -35,7 +42,21 @@ public class LinkCommandHandler {
     private final UserPersonLinkService userPersonLinkService;
     private final ProcessedEventRepository processedEventRepository;
 
-    @Transactional
+    /** One transaction for the link change and its mark, one for a conflict's mark. */
+    private final TransactionTemplate commandTransaction;
+
+    public LinkCommandHandler(
+            Clock clock,
+            UserPersonLinkService userPersonLinkService,
+            ProcessedEventRepository processedEventRepository,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.userPersonLinkService = userPersonLinkService;
+        this.processedEventRepository = processedEventRepository;
+        this.commandTransaction = new TransactionTemplate(transactionManager);
+        this.commandTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     public void applyCreate(@NonNull String commandEventId, @NonNull UserPersonLinkCreateRequestedV1 command) {
         try {
             LinkUserToPersonRequest request = new LinkUserToPersonRequest(command.username(), command.personId());
@@ -45,7 +66,10 @@ public class LinkCommandHandler {
             if (command.notes() != null) {
                 request.setNotes(command.notes());
             }
-            userPersonLinkService.linkUserToPerson(request);
+            commandTransaction.executeWithoutResult(_ -> {
+                userPersonLinkService.linkUserToPerson(request);
+                markProcessed(commandEventId);
+            });
             log.info(
                     "Link create command applied username={} personId={} eventId={}",
                     command.username(),
@@ -64,19 +88,21 @@ public class LinkCommandHandler {
                     command.personId(),
                     commandEventId,
                     e);
+            commandTransaction.executeWithoutResult(_ -> markProcessed(commandEventId));
         }
-        markProcessed(commandEventId);
     }
 
-    @Transactional
     public void applyRemove(@NonNull String commandEventId, @NonNull String username) {
         try {
-            userPersonLinkService.unlinkUserFromPerson(username);
+            commandTransaction.executeWithoutResult(_ -> {
+                userPersonLinkService.unlinkUserFromPerson(username);
+                markProcessed(commandEventId);
+            });
             log.info("Link remove command applied username={} eventId={}", username, commandEventId);
         } catch (UserPersonLinkNotFoundException e) {
             log.info("Link remove command no-op (no link) username={} eventId={}", username, commandEventId);
+            commandTransaction.executeWithoutResult(_ -> markProcessed(commandEventId));
         }
-        markProcessed(commandEventId);
     }
 
     private void markProcessed(String commandEventId) {

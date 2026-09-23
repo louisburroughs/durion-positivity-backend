@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -62,7 +63,8 @@ class VehicleEventsListenerTest {
                 carePreferenceReplica,
                 personParties,
                 commercialParties,
-                mock(ObjectProvider.class));
+                mock(ObjectProvider.class),
+                mock(PlatformTransactionManager.class));
     }
 
     private String carePreferenceEvent(String eventId, long version, Integer intervalMonths, boolean deleted) {

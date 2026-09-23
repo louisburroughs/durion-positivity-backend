@@ -18,7 +18,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -26,7 +25,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -41,10 +42,18 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Same consumer contract as the replica listeners: idempotent via {@code processed_events} in
  * the applying transaction, transient DB errors rethrown for container retry, malformed payloads
  * logged and skipped.
+ *
+ * <p>Transaction shape (#2146): the listener method is not {@code @Transactional}; the handler
+ * and its {@code processed_events} mark run together in a {@code REQUIRES_NEW} transaction of
+ * their own. A permanent failure thrown through a transactional repository or service therefore
+ * rolls back only that work and is logged and skipped, rather than marking a listener-wide
+ * transaction rollback-only, whose commit would throw {@code UnexpectedRollbackException} and
+ * send the record through the container's retry and dead-letter ladder. Transient database errors
+ * still propagate for container retry, and since the mark commits with the work there is no
+ * window in which one lands without the other.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
 public class PaymentEventsListener {
     private static final String OTHER = "OTHER";
@@ -59,10 +68,32 @@ public class PaymentEventsListener {
     private final OrderStateMachine orderStateMachine;
     private final OrderDomainEventPublisher domainEventPublisher;
 
+    /** The event's handler work and its processed mark, in a transaction of their own; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
+    public PaymentEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            SalesOrderRepository salesOrderRepository,
+            OrderPaymentRecordRepository paymentRecordRepository,
+            OrderStateMachine orderStateMachine,
+            OrderDomainEventPublisher domainEventPublisher,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.salesOrderRepository = salesOrderRepository;
+        this.paymentRecordRepository = paymentRecordRepository;
+        this.orderStateMachine = orderStateMachine;
+        this.domainEventPublisher = domainEventPublisher;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.order.kafka.payment-events-topic:payment.events.v1}",
             groupId = "${pos.order.kafka.payment-events-consumer-group:pos-order-payment-events}")
-    @Transactional
     public void onPaymentEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -89,22 +120,24 @@ public class PaymentEventsListener {
         }
 
         try {
-            JsonNode payload = envelope.path("payload");
-            SalesOrder order = resolveOrder(payload);
-            if (order == null) {
-                // Not an order-fronted payment (e.g. a plain workorder invoice) — nothing to do,
-                // but still record the event as processed so redelivery stays quiet.
-                log.debug("Payment event eventId={} has no matching order; ignoring", eventId);
-            } else if (settled) {
-                applySettled(order, payload);
-            } else {
-                applyReversed(order, payload);
-            }
-            processedEventRepository.save(ProcessedEvent.builder()
-                    .eventId(eventId)
-                    .owner(OWNER)
-                    .processedAt(Instant.now(clock))
-                    .build());
+            handlerTransaction.executeWithoutResult(_ -> {
+                JsonNode payload = envelope.path("payload");
+                SalesOrder order = resolveOrder(payload);
+                if (order == null) {
+                    // Not an order-fronted payment (e.g. a plain workorder invoice) — nothing to do,
+                    // but still record the event as processed so redelivery stays quiet.
+                    log.debug("Payment event eventId={} has no matching order; ignoring", eventId);
+                } else if (settled) {
+                    applySettled(order, payload);
+                } else {
+                    applyReversed(order, payload);
+                }
+                processedEventRepository.save(ProcessedEvent.builder()
+                        .eventId(eventId)
+                        .owner(OWNER)
+                        .processedAt(Instant.now(clock))
+                        .build());
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (Exception e) {

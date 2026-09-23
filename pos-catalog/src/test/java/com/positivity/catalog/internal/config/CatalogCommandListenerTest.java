@@ -18,6 +18,8 @@ import com.positivity.catalog.internal.dto.ProductFactReplayResultDto;
 import com.positivity.catalog.internal.dto.ServiceFactReplayResultDto;
 import com.positivity.catalog.internal.dto.SupplierArticleCodeReplayResultDto;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantResolver;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -41,6 +43,9 @@ class CatalogCommandListenerTest {
 
     private static final String COMMANDS_TOPIC = "catalog.commands.v1";
 
+    /** The transitional default the resolver falls back to when no tenant is bound (#2147). */
+    private static final UUID DEFAULT_TENANT_ID = UUID.fromString("01900000-0000-7000-8000-0000000000d1");
+
     private final ProductFactReplayService productFactReplayService = mock(ProductFactReplayService.class);
     private final ServiceFactReplayService serviceFactReplayService = mock(ServiceFactReplayService.class);
     private final SupplierArticleCodeReplayService supplierArticleCodeReplayService =
@@ -60,7 +65,8 @@ class CatalogCommandListenerTest {
                 productFactReplayService,
                 serviceFactReplayService,
                 supplierArticleCodeReplayService,
-                kafkaTemplate);
+                kafkaTemplate,
+                tenantResolverWithDefault());
         ReflectionTestUtils.setField(listener, "commandsTopic", COMMANDS_TOPIC);
 
         when(productFactReplayService.replayPage(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
@@ -69,6 +75,19 @@ class CatalogCommandListenerTest {
                 .thenReturn(new ServiceFactReplayResultDto(0, null, true, null, Instant.now()));
         when(supplierArticleCodeReplayService.replayPage(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(new SupplierArticleCodeReplayResultDto(0, null, true, null, Instant.now()));
+    }
+
+    private static TenantResolver tenantResolverWithDefault() {
+        TenancyProperties properties = new TenancyProperties();
+        properties.setDefaultTenantId(DEFAULT_TENANT_ID);
+        return new TenantResolver(properties);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ProducerRecord<String, String> sentRecord() {
+        ArgumentCaptor<ProducerRecord<String, String>> record = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(record.capture());
+        return record.getValue();
     }
 
     private String replayCommand(String since, String until) {
@@ -262,22 +281,60 @@ class CatalogCommandListenerTest {
         when(productFactReplayService.replayPage(isNull(), any(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(new ProductFactReplayResultDto(1000, cursor, false, null, Instant.now()));
 
-        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
-
         listener.onCommand("""
                 {"commandType":"catalog.outbox.replay-requested",
                  "payload":{"since":"2026-07-13T10:00:00Z","scope":"PRODUCT"}}
                 """);
 
-        verify(kafkaTemplate).send(eq(COMMANDS_TOPIC), key.capture(), body.capture());
-        JsonNode command = objectMapper.readTree(body.getValue());
+        ProducerRecord<String, String> sent = sentRecord();
+        assertThat(sent.topic()).isEqualTo(COMMANDS_TOPIC);
+        // #2147: with no tenant bound, the continuation still carries a tenant header (the
+        // resolver's default) rather than going out bare.
+        assertThat(TenantKafkaHeaders.read(sent.headers())).contains(DEFAULT_TENANT_ID);
+        JsonNode command = objectMapper.readTree(sent.value());
         assertThat(command.path("commandType").stringValue()).isEqualTo("catalog.outbox.replay-requested");
         JsonNode payload = command.path("payload");
         assertThat(payload.path("since").stringValue()).isEqualTo("2026-07-13T10:00:00Z");
         assertThat(payload.path("scope").stringValue()).isEqualTo("PRODUCT");
         assertThat(payload.path("afterProductId").stringValue()).isEqualTo(cursor.toString());
         assertThat(payload.path("continuation").intValue()).isEqualTo(1);
+    }
+
+    /**
+     * With enforcement off and no default tenant, the record interceptor runs this listener unbound,
+     * and the class promises the replay continues unbound. The continuation must still be published
+     * (without a header, since there is no tenant to stamp) rather than dropped by a tenant lookup
+     * that cannot succeed.
+     */
+    @Test
+    @DisplayName("#2147: an unbound replay (no tenant, no default) still publishes its continuation, unbound")
+    void unboundReplayStillPublishesItsContinuation() {
+        CatalogCommandListener unboundListener = new CatalogCommandListener(
+                objectMapper,
+                productFactReplayService,
+                serviceFactReplayService,
+                supplierArticleCodeReplayService,
+                kafkaTemplate,
+                new TenantResolver(new TenancyProperties()));
+        ReflectionTestUtils.setField(unboundListener, "commandsTopic", COMMANDS_TOPIC);
+        UUID cursor = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");
+        when(productFactReplayService.replayPage(isNull(), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(new ProductFactReplayResultDto(1000, cursor, false, null, Instant.now()));
+
+        unboundListener.onCommand("""
+                {"commandType":"catalog.outbox.replay-requested",
+                 "payload":{"since":"2026-07-13T10:00:00Z","scope":"PRODUCT"}}
+                """);
+
+        ProducerRecord<String, String> sent = sentRecord();
+        assertThat(sent.topic()).isEqualTo(COMMANDS_TOPIC);
+        assertThat(TenantKafkaHeaders.read(sent.headers())).isEmpty();
+        assertThat(objectMapper
+                        .readTree(sent.value())
+                        .path("payload")
+                        .path("afterProductId")
+                        .stringValue())
+                .isEqualTo(cursor.toString());
     }
 
     @Test
@@ -326,7 +383,6 @@ class CatalogCommandListenerTest {
         asTenant(TENANT_A, () -> listener.onCommand(second.value()));
 
         verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
-        verify(kafkaTemplate, never()).send(any(), any(), any());
     }
 
     @Test
@@ -334,7 +390,7 @@ class CatalogCommandListenerTest {
     void completePageDoesNotContinue() {
         listener.onCommand(replayCommand("2026-07-13T10:00:00Z", "2026-07-13T11:00:00Z"));
 
-        verify(kafkaTemplate, never()).send(any(), any(), any());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 
     @Test
@@ -345,15 +401,13 @@ class CatalogCommandListenerTest {
         when(productFactReplayService.replayPage(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(new ProductFactReplayResultDto(1000, cursor, false, null, Instant.now()));
 
-        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         listener.onCommand("""
                 {"commandType":"catalog.outbox.replay-requested",
                  "payload":{"since":"2026-07-13T10:00:00Z","scope":"PRODUCT","continuation":5}}
                 """);
 
-        verify(kafkaTemplate).send(eq(COMMANDS_TOPIC), any(), body.capture());
         assertThat(objectMapper
-                        .readTree(body.getValue())
+                        .readTree(sentRecord().value())
                         .path("payload")
                         .path("continuation")
                         .intValue())
@@ -373,7 +427,7 @@ class CatalogCommandListenerTest {
                  "payload":{"since":"2026-07-13T10:00:00Z","scope":"PRODUCT","continuation":%d}}
                 """.formatted(CatalogCommandListener.MAX_CONTINUATIONS));
 
-        verify(kafkaTemplate, never()).send(any(), any(), any());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 
     @Test
@@ -382,7 +436,7 @@ class CatalogCommandListenerTest {
         UUID cursor = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");
         when(productFactReplayService.replayPage(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(new ProductFactReplayResultDto(1000, cursor, false, null, Instant.now()));
-        when(kafkaTemplate.send(any(), any(), any())).thenThrow(new RuntimeException("broker down"));
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new RuntimeException("broker down"));
 
         assertThatCode(() -> listener.onCommand("""
                         {"commandType":"catalog.outbox.replay-requested",
@@ -424,12 +478,10 @@ class CatalogCommandListenerTest {
                     .isLessThan(10);
             String command = chain.poll();
             org.mockito.Mockito.clearInvocations(kafkaTemplate);
-            ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
             listener.onCommand(command);
             if (org.mockito.Mockito.mockingDetails(kafkaTemplate).getInvocations().stream()
                     .anyMatch(inv -> inv.getMethod().getName().equals("send"))) {
-                verify(kafkaTemplate).send(eq(COMMANDS_TOPIC), any(), body.capture());
-                chain.add(body.getValue());
+                chain.add(sentRecord().value());
             }
         }
 

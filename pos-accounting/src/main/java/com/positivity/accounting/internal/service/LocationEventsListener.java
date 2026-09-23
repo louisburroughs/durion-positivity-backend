@@ -21,7 +21,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -44,6 +46,13 @@ import tools.jackson.databind.ObjectMapper;
  * Unsupported event types on the topic — storage-location, bay and mobile-unit facts — still record
  * their eventIds, because the owner's manifest counts every fact in the window and skipping the
  * record would read as permanent drift.
+ *
+ * <p><b>Transaction shape (#2146).</b> The listener method is not {@code @Transactional}: the
+ * apply and its processed mark commit together in a {@code REQUIRES_NEW} transaction of their own,
+ * so a permanent failure thrown through {@link LocationHierarchyService} or a repository rolls back
+ * only that work, and the failure is recorded in a separate transaction — instead of poisoning a
+ * shared transaction whose commit then throws and sends the record round the container's retry
+ * ladder. Transient failures still propagate for retry, unrecorded.
  */
 @Slf4j
 @Component
@@ -61,6 +70,9 @@ public class LocationEventsListener {
     private final LocationHierarchyService locationHierarchyService;
     private final Counter payloadRejectedCounter;
 
+    /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public LocationEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
@@ -68,13 +80,16 @@ public class LocationEventsListener {
             ExtLocationReplicaRepository extLocationReplicaRepository,
             ExtLocationParentReplicaRepository extLocationParentReplicaRepository,
             LocationHierarchyService locationHierarchyService,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extLocationReplicaRepository = extLocationReplicaRepository;
         this.extLocationParentReplicaRepository = extLocationParentReplicaRepository;
         this.locationHierarchyService = locationHierarchyService;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -89,7 +104,6 @@ public class LocationEventsListener {
     @KafkaListener(
             topics = "${pos.accounting.kafka.location-events-topic:location.events.v1}",
             groupId = "${pos.accounting.kafka.location-events-consumer-group:pos-accounting-location-events}")
-    @Transactional
     public void onLocationEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -109,13 +123,16 @@ public class LocationEventsListener {
         }
 
         try {
-            switch (eventType == null ? "" : eventType) {
-                case LocationUpdatedV1.EVENT_TYPE -> applyLocationUpdated(envelope);
-                case LocationDeletedV1.EVENT_TYPE -> applyLocationDeleted(envelope);
-                // Ignored types (storage-location, bay and mobile-unit facts) still fall through to
-                // the processed_events insert below — see the class javadoc.
-                default -> log.debug("Ignoring location event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                switch (eventType == null ? "" : eventType) {
+                    case LocationUpdatedV1.EVENT_TYPE -> applyLocationUpdated(envelope);
+                    case LocationDeletedV1.EVENT_TYPE -> applyLocationDeleted(envelope);
+                    // Ignored types (storage-location, bay and mobile-unit facts) are still recorded
+                    // as processed below — see the class javadoc.
+                    default -> log.debug("Ignoring location event type={} eventId={}", eventType, eventId);
+                }
+                markProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -123,9 +140,14 @@ public class LocationEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed location event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         } catch (Exception e) {
             log.warn("Skipping malformed location event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }
+    }
+
+    private void markProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)

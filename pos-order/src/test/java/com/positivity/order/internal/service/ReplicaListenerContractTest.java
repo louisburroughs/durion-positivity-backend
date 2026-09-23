@@ -3,6 +3,7 @@ package com.positivity.order.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,6 +45,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -149,23 +151,34 @@ class ReplicaListenerContractTest {
         when(processedEventRepository.existsById(any())).thenReturn(false);
 
         CustomerEventsListener customer = new CustomerEventsListener(
-                clock, objectMapper, processedEventRepository, extCustomerRepository, extBillingRulesRepository);
-        VehicleEventsListener vehicle =
-                new VehicleEventsListener(clock, objectMapper, processedEventRepository, extVehicleRepository);
+                clock,
+                objectMapper,
+                processedEventRepository,
+                extCustomerRepository,
+                extBillingRulesRepository,
+                mock(PlatformTransactionManager.class));
+        VehicleEventsListener vehicle = new VehicleEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                extVehicleRepository,
+                mock(PlatformTransactionManager.class));
         ProductEventsListener product = new ProductEventsListener(
                 clock,
                 objectMapper,
                 processedEventRepository,
                 extProductRepository,
                 extProductUomReplicaRepository,
-                extProductCodeRepository);
+                extProductCodeRepository,
+                mock(PlatformTransactionManager.class));
         LocationEventsListener location = new LocationEventsListener(
                 clock,
                 objectMapper,
                 processedEventRepository,
                 extLocationRepository,
                 extLocationParentReplicaRepository,
-                locationHierarchyService);
+                locationHierarchyService,
+                mock(PlatformTransactionManager.class));
         WorkorderEventsListener workorder = new WorkorderEventsListener(
                 clock,
                 objectMapper,
@@ -173,7 +186,8 @@ class ReplicaListenerContractTest {
                 extWorkorderRepository,
                 extWorkorderLineRepository,
                 extEstimateRepository,
-                extEstimateLineRepository);
+                extEstimateLineRepository,
+                mock(PlatformTransactionManager.class));
 
         listeners = java.util.Map.of(
                 "customer",

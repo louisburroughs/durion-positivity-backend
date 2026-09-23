@@ -17,7 +17,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -31,6 +33,11 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Same shape as {@link LocationEventsListener}: idempotent on eventId through {@code
  * processed_events}, stale snapshots dropped by aggregate version, malformed payloads counted
  * and skipped rather than retried.
+ *
+ * <p><b>Transaction shape (#2146).</b> The skill upsert and its {@code processed_events} mark
+ * commit together in their own {@code REQUIRES_NEW} transaction, so a permanent failure rolls back
+ * only that work and is recorded in a separate transaction; there is no window between an applied
+ * fact and its mark. Transient failures still propagate for container retry.
  */
 @Slf4j
 @Component
@@ -45,12 +52,16 @@ public class PeopleEventsListener {
     private final ExtSkillReplicaRepository skillReplicaRepository;
     private final Counter payloadRejectedCounter;
 
+    /** The apply and its processed mark in one transaction; a failure's mark in its own. */
+    private final TransactionTemplate handlerTransaction;
+
     public PeopleEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtSkillReplicaRepository skillReplicaRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -64,12 +75,13 @@ public class PeopleEventsListener {
                         .tag("owner", OWNER)
                         .tag("entity", "people-events")
                         .register(registry);
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${pos.catalog.kafka.people-events-topic:people.events.v1}",
             groupId = "${pos.catalog.kafka.people-events-consumer-group:pos-catalog-people-events}")
-    @Transactional
     public void onPeopleEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -88,10 +100,13 @@ public class PeopleEventsListener {
             return;
         }
         try {
-            switch (eventType == null ? "" : eventType) {
-                case SkillUpdatedV1.EVENT_TYPE -> applySkillUpdated(envelope, eventId);
-                default -> log.debug("Ignoring people event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                switch (eventType == null ? "" : eventType) {
+                    case SkillUpdatedV1.EVENT_TYPE -> applySkillUpdated(envelope, eventId);
+                    default -> log.debug("Ignoring people event type={} eventId={}", eventType, eventId);
+                }
+                recordProcessed(eventId, OWNER);
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -99,14 +114,11 @@ public class PeopleEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed people event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, OWNER));
         } catch (Exception e) {
             log.warn("Skipping malformed people event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, OWNER));
         }
-        processedEventRepository.save(ProcessedEvent.builder()
-                .eventId(eventId)
-                .owner(OWNER)
-                .processedAt(Instant.now(clock))
-                .build());
     }
 
     /**
@@ -114,6 +126,16 @@ public class PeopleEventsListener {
      * like any other change: the row stays, so a requirement that still names the skill can be
      * told the vocabulary moved rather than that the skill never existed.
      */
+
+    /** Records the eventId as processed, inside whichever transaction the caller runs. */
+    private void recordProcessed(@NonNull String eventId, @NonNull String owner) {
+        processedEventRepository.save(ProcessedEvent.builder()
+                .eventId(eventId)
+                .owner(owner)
+                .processedAt(Instant.now(clock))
+                .build());
+    }
+
     private void applySkillUpdated(@NonNull JsonNode envelope, @NonNull String eventId) throws DatabindException {
         SkillUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), SkillUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);

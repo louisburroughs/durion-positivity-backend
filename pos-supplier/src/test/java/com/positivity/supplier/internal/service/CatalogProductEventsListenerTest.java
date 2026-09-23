@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,7 +49,11 @@ class CatalogProductEventsListenerTest {
     @BeforeEach
     void setUp() {
         listener = new CatalogProductEventsListener(
-                CLOCK, new ObjectMapper(), processedEventRepository, replicaRepository);
+                CLOCK,
+                new ObjectMapper(),
+                processedEventRepository,
+                replicaRepository,
+                mock(PlatformTransactionManager.class));
         when(replicaRepository.save(any(ExtProductCodeReplica.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 

@@ -35,6 +35,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -103,7 +104,12 @@ class AccountingEventsListenerTest {
                 invoiceTaxCalculator,
                 taxBreakdownWriter);
         listener = new AccountingEventsListener(
-                clock, objectMapper, processedEventRepository, finalizationService, registryProvider);
+                clock,
+                objectMapper,
+                processedEventRepository,
+                finalizationService,
+                registryProvider,
+                mock(PlatformTransactionManager.class));
     }
 
     private static Invoice invoice(InvoiceStatus status) {

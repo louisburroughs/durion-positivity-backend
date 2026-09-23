@@ -17,7 +17,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -31,6 +33,13 @@ import tools.jackson.databind.ObjectMapper;
  * transient DB errors rethrown for container retry/DLQ, malformed payloads logged and skipped.
  * The topic also carries reimbursement and claim-lifecycle facts this module ignores — their
  * eventIds are still recorded under the {@code warranty} owner.
+ *
+ * <p>Transaction shape (#2146): the listener method is deliberately not {@code @Transactional}. The
+ * handler and its {@code processed_events} mark commit together in their own {@code REQUIRES_NEW}
+ * transaction, so a permanent failure rolls back only that work and is recorded in a separate
+ * transaction; before, it poisoned the listener's shared transaction, whose commit then threw and
+ * sent the record through the container's retry ladder to the DLQ. Transient failures still
+ * propagate for container retry, with nothing recorded.
  */
 @Slf4j
 @Component
@@ -45,12 +54,16 @@ public class WarrantyEventsListener {
     private final WarrantyPartReturnHoldRepository partReturnHoldRepository;
     private final Counter payloadRejectedCounter;
 
+    /** Runs the handler with its processed mark in one transaction of their own; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public WarrantyEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             WarrantyPartReturnHoldRepository partReturnHoldRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -64,12 +77,13 @@ public class WarrantyEventsListener {
                         .tag("owner", OWNER)
                         .tag("entity", "warranty-events")
                         .register(registry);
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${pos.inventory.kafka.warranty-events-topic:warranty.events.v1}",
             groupId = "${pos.inventory.kafka.warranty-events-consumer-group:pos-inventory-warranty-events}")
-    @Transactional
     public void onWarrantyEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -89,14 +103,17 @@ public class WarrantyEventsListener {
         }
 
         try {
-            if (WarrantyPartReturnRequestedV1.EVENT_TYPE.equals(eventType)) {
-                applyPartReturnRequested(envelope);
-            } else if (WarrantyPartReturnShippedV1.EVENT_TYPE.equals(eventType)) {
-                applyPartReturnShipped(envelope);
-            } else {
-                // Ignored types still fall through to the processed_events insert below.
-                log.debug("Ignoring warranty event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (WarrantyPartReturnRequestedV1.EVENT_TYPE.equals(eventType)) {
+                    applyPartReturnRequested(envelope);
+                } else if (WarrantyPartReturnShippedV1.EVENT_TYPE.equals(eventType)) {
+                    applyPartReturnShipped(envelope);
+                } else {
+                    // Ignored types still fall through to the processed_events insert below.
+                    log.debug("Ignoring warranty event type={} eventId={}", eventType, eventId);
+                }
+                recordProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -104,9 +121,15 @@ public class WarrantyEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed warranty event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         } catch (Exception e) {
             log.warn("Skipping malformed warranty event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId));
         }
+    }
+
+    /** The {@code processed_events} mark; callers supply the transaction. */
+    private void recordProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)

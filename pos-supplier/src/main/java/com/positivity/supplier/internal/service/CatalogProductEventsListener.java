@@ -9,14 +9,15 @@ import com.positivity.supplier.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -28,7 +29,7 @@ import tools.jackson.databind.ObjectMapper;
  * locally (ADR-0053 §5).
  *
  * <p>Consumer contract mirrors the platform's other catalog consumers: {@code processed_events}
- * idempotency (owner {@code catalog}) written in the apply transaction, a stale guard on the fact's
+ * idempotency (owner {@code catalog}), a stale guard on the fact's
  * {@code aggregateVersion} that skips only strictly-lower versions, and transient database errors
  * rethrown so the container retries rather than recording the event as processed. The guard is
  * {@link ReplicaVersionGuard} (#1486): pos-catalog's aggregateVersion strictly advances, so equal
@@ -36,10 +37,14 @@ import tools.jackson.databind.ObjectMapper;
  * {@code POST .../facts/replay} depends on it to repair a replica that holds the version number but
  * wrong or missing rows. Unsupported event types still record their eventId, so the owner's
  * manifest reconciles instead of reporting facts this module deliberately ignored as missing.
+ *
+ * <p><b>Transaction shape (#2146).</b> The replica write and its {@code processed_events} mark
+ * commit together in their own {@code REQUIRES_NEW} transaction, so a permanent failure rolls back
+ * only that work and is recorded in a separate transaction; there is no window between an applied
+ * fact and its mark. Transient failures still propagate for container retry.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.supplier.kafka", name = "enabled", havingValue = "true")
 public class CatalogProductEventsListener {
 
@@ -51,10 +56,26 @@ public class CatalogProductEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final ExtProductCodeReplicaRepository replicaRepository;
 
+    /** The apply and its processed mark in one transaction; a failure's mark in its own. */
+    private final TransactionTemplate handlerTransaction;
+
+    public CatalogProductEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            ExtProductCodeReplicaRepository replicaRepository,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.replicaRepository = replicaRepository;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.supplier.kafka.catalog-events-topic:catalog.events.v1}",
             groupId = "${pos.supplier.kafka.catalog-events-consumer-group:pos-supplier-catalog-events}")
-    @Transactional
     public void onCatalogEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -74,11 +95,14 @@ public class CatalogProductEventsListener {
         }
 
         try {
-            if (ProductUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyProductUpdated(envelope);
-            } else {
-                log.debug("Ignoring catalog event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (ProductUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    applyProductUpdated(envelope);
+                } else {
+                    log.debug("Ignoring catalog event type={} eventId={}", eventType, eventId);
+                }
+                recordProcessed(eventId, OWNER);
+            });
         } catch (TransientDataAccessException e) {
             // Rethrown so the container retries: recording this event as processed would drop a
             // product's codes from the replica permanently, and PRICAT lines would quarantine as
@@ -86,10 +110,15 @@ public class CatalogProductEventsListener {
             throw e;
         } catch (Exception e) {
             log.warn("Skipping malformed catalog event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, OWNER));
         }
+    }
+
+    /** Records the eventId as processed, inside whichever transaction the caller runs. */
+    private void recordProcessed(@NonNull String eventId, @NonNull String owner) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
-                .owner(OWNER)
+                .owner(owner)
                 .processedAt(Instant.now(clock))
                 .build());
     }

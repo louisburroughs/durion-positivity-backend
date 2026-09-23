@@ -11,6 +11,7 @@ import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
 import com.positivity.domainevents.invoice.TaxBreakdownLine;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.io.Serial;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -24,7 +25,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -51,6 +54,13 @@ import tools.jackson.databind.ObjectMapper;
  * live traffic, and it is what would let a regenerate-from-state replay (the catalog/vehicle
  * {@code facts/replay} pattern, should pos-invoice grow one) repair a replica that holds the
  * version number but wrong or missing rows.
+ *
+ * <p><b>Transaction shape (#2146).</b> The listener method is not {@code @Transactional}: the
+ * replica upsert, the GL posting and the processed mark commit together in a {@code REQUIRES_NEW}
+ * transaction of their own. A permanent replica failure thrown through a repository therefore
+ * rolls back only that work and is recorded in a separate transaction, instead of poisoning a
+ * shared transaction whose commit then throws and sends the record round the container's retry
+ * ladder; transient and integrity failures, and any posting failure, still propagate unrecorded.
  */
 @Slf4j
 @Component
@@ -74,6 +84,9 @@ public class InvoiceEventsListener {
     private final Counter payloadRejectedCounter;
     private final Counter replicaPersistFailedCounter;
 
+    /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public InvoiceEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
@@ -81,13 +94,16 @@ public class InvoiceEventsListener {
             ExtInvoiceRepository extInvoiceRepository,
             ExtInvoiceTaxRepository extInvoiceTaxRepository,
             InvoiceRevenuePostingService invoiceRevenuePostingService,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extInvoiceRepository = extInvoiceRepository;
         this.extInvoiceTaxRepository = extInvoiceTaxRepository;
         this.invoiceRevenuePostingService = invoiceRevenuePostingService;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -110,7 +126,6 @@ public class InvoiceEventsListener {
     @KafkaListener(
             topics = "${pos.accounting.kafka.invoice-events-topic:invoice.events.v1}",
             groupId = "pos-accounting-invoice-events")
-    @Transactional
     public void onInvoiceEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -135,20 +150,33 @@ public class InvoiceEventsListener {
         // transient -> rethrow), and the generic catch (Exception) at its foot marks the event
         // processed. A GL posting failure (missing mapping, CLOSED period, transient DB error)
         // must never fall into that generic path and be marked processed over a ledger entry that
-        // never happened, so posting runs after the try/catch, outside it, and propagates unwrapped
-        // for container retry / DLQ (ADR-0044 §4) — the same contract OrderEventsListener
-        // documents. The whole @Transactional rolls back together, replica row included.
-        InvoiceUpdatedV1 applied = null;
+        // never happened, so posting — which shares the replica upsert's and the processed mark's
+        // transaction (#2146) — wraps its failure in RevenuePostingFailure, and the first catch
+        // below unwraps and rethrows it for container retry / DLQ (ADR-0044 §4), the same
+        // contract OrderEventsListener documents. The transaction rolls back together, replica
+        // row included.
         try {
-            if (InvoiceUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applied = applyInvoiceUpdate(envelope);
-            } else {
-                // Ignored types still fall through to the processed_events insert below: the
-                // owner's manifest counts every fact in the window (#1537 F1) — pos-invoice's
-                // InvoiceEventPublisher also publishes invoice.billing-rules.updated onto this
-                // same topic, and ManifestPublisher's window count includes it regardless of type.
-                log.debug("Ignoring invoice event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (InvoiceUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    InvoiceUpdatedV1 applied = applyInvoiceUpdate(envelope);
+                    if (applied != null) {
+                        try {
+                            postRevenue(applied, envelope);
+                        } catch (RuntimeException e) {
+                            throw new RevenuePostingFailure(e);
+                        }
+                    }
+                } else {
+                    // Ignored types are still recorded as processed: the owner's manifest counts
+                    // every fact in the window (#1537 F1) — pos-invoice's InvoiceEventPublisher
+                    // also publishes invoice.billing-rules.updated onto this same topic, and
+                    // ManifestPublisher's window count includes it regardless of type.
+                    log.debug("Ignoring invoice event type={} eventId={}", eventType, eventId);
+                }
+                markProcessed(eventId);
+            });
+        } catch (RevenuePostingFailure e) {
+            throw e.getCause();
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;
@@ -181,17 +209,39 @@ public class InvoiceEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed invoice event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         } catch (Exception e) {
             log.warn("Skipping malformed invoice event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }
-        if (applied != null) {
-            postRevenue(applied, envelope);
-        }
+    }
+
+    private void markProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)
                 .processedAt(Instant.now(clock))
                 .build());
+    }
+
+    /**
+     * Carries a GL posting failure out of the handler transaction past the replica catch ladder,
+     * so {@link #onInvoiceEvent} can rethrow the original exception unwrapped instead of marking
+     * the event processed over a ledger entry that never happened.
+     */
+    private static final class RevenuePostingFailure extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        RevenuePostingFailure(@NonNull RuntimeException cause) {
+            super(cause);
+        }
+
+        @Override
+        public synchronized @NonNull RuntimeException getCause() {
+            return (RuntimeException) super.getCause();
+        }
     }
 
     /**
