@@ -108,7 +108,13 @@ public class SecurityEventsListener {
                 default ->
                     // Ignored types still fall through to the processed_events insert below: the
                     // owner's manifest counts every fact in the window, so skipping the insert
-                    // would register as replica drift and trigger a pointless replay.
+                    // would register as replica drift and trigger a pointless replay. A *rejected*
+                    // payload is the opposite case and returns above without recording: there the
+                    // replica really is missing the fact, so the drift is genuine and the replay it
+                    // provokes is the repair, not a false alarm. Recording it instead would make
+                    // existsById skip the event forever, putting it beyond the reach of any replay
+                    // -- which is how a role-assignment fact published before a field was added to
+                    // the contract would be lost permanently rather than merely deferred.
                     log.debug("Ignoring security event type={}", eventType);
             }
         } catch (TransientDataAccessException e) {
@@ -119,8 +125,10 @@ public class SecurityEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed security event payload eventId={}: {}", eventId, e.getMessage(), e);
+            return;
         } catch (Exception e) {
             log.warn("Skipping malformed security event eventId={}", eventId, e);
+            return;
         }
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)

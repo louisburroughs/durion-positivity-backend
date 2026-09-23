@@ -505,13 +505,24 @@ public class EmployeeServiceImpl implements EmployeeService {
         // Username backs both its own column and the join key role assignments are keyed by
         // (RoleAssignmentReplicaService takes usernames, not person ids) -- resolve it once
         // whenever either is requested rather than twice.
-        boolean needsUsername = includes.contains(EmployeeSearchInclude.USERNAME)
-                || includes.contains(EmployeeSearchInclude.ROLE_ASSIGNMENTS);
+        // durion#2155 acceptance: a caller without the roles-view permission gets rows with
+        // roleAssignments absent. Gated exactly like contactInfo above -- the field is omitted and
+        // the request still answers 200, never a 403 on the row or the request. #2160 moved where
+        // this data comes from (a local replica instead of a call into pos-people-contact) but not
+        // who may see it, and PersonAccessController still gates the equivalent read on the same
+        // permission. Without this, any holder of the broad people:employee:view -- which staff
+        // roles carry -- could read every employee's application roles by passing
+        // ?include=ROLE_ASSIGNMENTS, which is the shape of #1898.
+        boolean includeRoleAssignments = includes.contains(EmployeeSearchInclude.ROLE_ASSIGNMENTS)
+                && SecurityContextHelper.hasAuthority(PeoplePermissions.ROLE_ASSIGNMENTS_VIEW);
+
+        boolean needsUsername = includes.contains(EmployeeSearchInclude.USERNAME) || includeRoleAssignments;
         Map<UUID, String> usernamesByPersonId =
                 needsUsername ? personUsernameService.usernamesByPersonId(windowPersonIds) : Map.of();
 
-        Map<String, List<EmployeeRoleAssignmentDto>> roleAssignmentsByUsername = includes.contains(
-                        EmployeeSearchInclude.ROLE_ASSIGNMENTS)
+        // Gated above, so an ungated caller never reaches the replica at all -- the lookup is
+        // skipped, not merely its result discarded.
+        Map<String, List<EmployeeRoleAssignmentDto>> roleAssignmentsByUsername = includeRoleAssignments
                 ? roleAssignmentReplicaService.findActiveRoleAssignmentsByUsernames(usernamesByPersonId.values())
                 : Map.of();
 
@@ -548,7 +559,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             if (includeContactInfo && callerHoldsPii) {
                 row.setContactInfo(buildContactInfo(replicasByPersonId.get(personId)));
             }
-            if (includes.contains(EmployeeSearchInclude.ROLE_ASSIGNMENTS)) {
+            if (includeRoleAssignments) {
                 String username = usernamesByPersonId.get(personId);
                 row.setRoleAssignments(
                         username == null ? List.of() : roleAssignmentsByUsername.getOrDefault(username, List.of()));

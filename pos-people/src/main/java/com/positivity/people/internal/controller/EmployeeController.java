@@ -144,14 +144,17 @@ public class EmployeeController {
                     the pre-#2155 thin row, byte for byte, so an existing caller (e.g. HrFacadeTool.searchEmployees) \
                     sees no change. Whichever categories are requested are resolved against the page actually \
                     returned, never the whole matching set, so the response cost stays flat as the tenant grows. \
-                    CONTACT_INFO carries a second, narrower gate: email/phone appear only when the caller also \
-                    holds people:employee_pii:view (#1898) -- requesting it without that permission still \
-                    returns 200, just with the field absent from every row, never a 403. ALLOWED_ACTIONS is a \
-                    RENDERING HINT ONLY -- computed by EmployeeActionPolicy from the caller's permissions and each \
-                    row's status, never a substitute for the @PreAuthorize and service-level guards those actions \
-                    still enforce independently -- and does not account for location-scoped access enforced \
-                    elsewhere in this module, so a location-scoped caller may occasionally see an action listed \
-                    that their scope does not actually cover for that employee.
+                    Two categories carry a second, narrower gate, and both behave the same way: requesting \
+                    one without its permission still returns 200, just with that field absent from every row, \
+                    never a 403. CONTACT_INFO: email/phone appear only when the caller also holds \
+                    people:employee_pii:view (#1898). ROLE_ASSIGNMENTS: application roles appear only when the \
+                    caller also holds people-contact:role:view, the same permission that gates the equivalent \
+                    read on pos-people-contact -- #2160 changed where this data is read from, not who may see it. \
+                    ALLOWED_ACTIONS is different again: a RENDERING HINT ONLY -- computed by EmployeeActionPolicy \
+                    from the caller's permissions and each row's status, never a substitute for the @PreAuthorize \
+                    and service-level guards those actions still enforce independently -- and it does not account \
+                    for location-scoped access enforced elsewhere in this module, so a location-scoped caller may \
+                    occasionally see an action listed that their scope does not actually cover for that employee.
                     Returns 200 with an empty items list and correct totals when the page, query, or status \
                     filter matches nothing.
                     """)
@@ -189,9 +192,11 @@ public class EmployeeController {
                                     + "above is passed. Omitted or empty returns the thin pre-#2155 row: "
                                     + "username, contactInfo, roleAssignments, primaryLocation, "
                                     + "otherLocationCount, jobRole and allowedActions are all null. "
-                                    + "CONTACT_INFO additionally requires people:employee_pii:view (#1898); "
-                                    + "without it the field is simply absent, never a 403. ALLOWED_ACTIONS "
-                                    + "is a rendering hint only -- see EmployeeSummaryDto.allowedActions.")
+                                    + "CONTACT_INFO additionally requires people:employee_pii:view (#1898) and "
+                                    + "ROLE_ASSIGNMENTS additionally requires people-contact:role:view; without "
+                                    + "the relevant permission that field is simply absent, never a 403. "
+                                    + "ALLOWED_ACTIONS is a rendering hint only -- see "
+                                    + "EmployeeSummaryDto.allowedActions.")
                     @RequestParam(required = false)
                     List<EmployeeSearchInclude> include) {
         return ResponseEntity.ok(employeeService.searchEmployees(q, status, sort, page, size, include));

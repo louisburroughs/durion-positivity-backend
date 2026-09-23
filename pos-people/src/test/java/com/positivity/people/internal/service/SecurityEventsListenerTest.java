@@ -1,6 +1,7 @@
 package com.positivity.people.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -156,13 +157,26 @@ class SecurityEventsListenerTest {
         @Test
         @DisplayName("swallows a malformed payload but still records the event as seen")
         void malformedPayloadIsSwallowed() {
-            listener.onSecurityEvent("""
-                    {"eventId":"evt-1","eventType":"%s","aggregateVersion":1,
-                     "payload":{"assignmentId":"not-a-uuid"}}""".formatted(RoleAssignmentChangedV1.EVENT_TYPE));
+            assertThatCode(() -> listener.onSecurityEvent("""
+                            {"eventId":"evt-1","eventType":"%s","aggregateVersion":1,
+                             "payload":{"assignmentId":"not-a-uuid"}}""".formatted(RoleAssignmentChangedV1.EVENT_TYPE)))
+                    .doesNotThrowAnyException();
 
-            // A poison message must not wedge the partition, and the manifest still counted it.
             verify(extRoleAssignmentReplicaRepository, never()).save(any());
-            verify(processedEventRepository).save(any());
+
+            // NOT recorded in processed_events, which this test previously required. Returning
+            // normally is what keeps a poison message from wedging the partition -- the offset
+            // still commits -- so that property does not depend on the bookkeeping below.
+            //
+            // Recording a REJECTED payload is different from recording an ignored event type, even
+            // though both end in "we wrote no replica row". An ignored type is not a missing fact;
+            // a rejected one is, so the drift it causes is genuine and the replay it provokes is
+            // the repair. Recording it makes existsById skip the event on every later delivery,
+            // putting it beyond the reach of any replay or backfill -- turning a deferred write
+            // into permanent loss. durion#2163 review: a role-assignment fact published before
+            // roleLocationScope was added to the contract deserializes as malformed, so under the
+            // old behaviour every such grant was lost with nothing failing to say so.
+            verify(processedEventRepository, never()).save(any());
         }
     }
 
