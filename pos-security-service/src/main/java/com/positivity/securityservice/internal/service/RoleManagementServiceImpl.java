@@ -67,6 +67,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     private final EffectiveGrantResolver effectiveGrantResolver;
     private final UserRoleGrantService userRoleGrantService;
     private final ApplicationEventPublisher eventPublisher;
+    private final RoleAssignmentEventEmitter roleAssignmentEventEmitter;
 
     /**
      * Create a new role, including its optional MCP persona metadata (#1613).
@@ -335,7 +336,12 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 assignment.getEffectiveStartDate(),
                 assignment.getEffectiveEndDate());
 
-        return toRoleAssignmentDto(roleAssignmentRepository.save(assignment));
+        RoleAssignment saved = roleAssignmentRepository.save(assignment);
+        // This writes role_assignments directly rather than going through UserRoleGrantService
+        // (see the SUPPORT-role comment above), so it must emit the fact itself — every write path
+        // to role_assignments has to, or a consumer's replica silently drifts (issue #2160).
+        roleAssignmentEventEmitter.roleAssignmentChanged(saved);
+        return toRoleAssignmentDto(saved);
     }
 
     private void validateNoOverlappingAssignment(
@@ -451,6 +457,10 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         assignment.setLastModifiedAt(Instant.now(clock));
 
         roleAssignmentRepository.save(assignment);
+        // Not routed through UserRoleGrantService (see this method's own javadoc above), so — like
+        // createRoleAssignment — it must emit the fact itself: every write path to
+        // role_assignments has to, or a consumer's replica silently drifts (issue #2160).
+        roleAssignmentEventEmitter.roleAssignmentChanged(assignment);
         eventPublisher.publishEvent(
                 new RoleAssignmentRevokedEvent(this, assignment.getUser().getId()));
 

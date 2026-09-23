@@ -122,6 +122,9 @@ class RoleManagementServiceTest {
     @Mock
     private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private RoleAssignmentEventEmitter roleAssignmentEventEmitter;
+
     @InjectMocks
     private RoleManagementServiceImpl sut;
 

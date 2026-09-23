@@ -5,8 +5,10 @@ import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
-import com.positivity.people.internal.dto.EmployeeSearchResponse;
+import com.positivity.people.internal.dto.EmployeeStatusCountsResponse;
+import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
+import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.enums.EmployeeSearchInclude;
 import com.positivity.people.internal.enums.EmployeeStatus;
@@ -119,10 +121,12 @@ public class EmployeeController {
     @Operation(operationId = "searchEmployees", summary = "Search Employees By Name Or Number", description = """
                     Returns a paged list of slim employee rows matching a case-insensitive substring search across \
                     first name, last name, preferred name, and employee number, optionally narrowed to one or more \
-                    employment statuses and sorted, plus a status histogram for the register's stat tiles.
+                    employment statuses and sorted.
                     Use this tool when listing, filtering, sorting, or typeahead-filtering employees; do not use \
-                    getEmployee, which requires the person id already be known, and do not use \
-                    getEmployeeByNumber, which resolves one exact employee number rather than searching.
+                    getEmployee, which requires the person id already be known, do not use getEmployeeByNumber, \
+                    which resolves one exact employee number rather than searching, and do not use this tool to \
+                    render the register's stat tiles -- use getEmployeeStatusCounts instead, which returns the \
+                    status histogram over the same q filter without changing this endpoint's response shape.
                     Preconditions: none; an empty result set is returned rather than an error when nothing matches.
                     Required inputs: none are mandatory; q defaults to blank, which lists every employee; status \
                     defaults to none, which applies no status filter; sort defaults to lastName,asc; page \
@@ -160,7 +164,7 @@ public class EmployeeController {
             name = "bearerAuth",
             scopes = {"people:employee:view"})
     @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
-    public ResponseEntity<EmployeeSearchResponse> searchEmployees(
+    public ResponseEntity<PagedResponse<EmployeeSummaryDto>> searchEmployees(
             @Parameter(description = "Case-insensitive substring match on name or employee number; blank lists all")
                     @RequestParam(required = false)
                     String q,
@@ -191,6 +195,43 @@ public class EmployeeController {
                     @RequestParam(required = false)
                     List<EmployeeSearchInclude> include) {
         return ResponseEntity.ok(employeeService.searchEmployees(q, status, sort, page, size, include));
+    }
+
+    @GetMapping("/status-counts")
+    @EmitEvent(id = "PEOPLE_EMPLOYEE_STATUS_COUNTS", apiVersion = "1")
+    @Operation(
+            operationId = "getEmployeeStatusCounts",
+            summary = "Get Employee Status Histogram For The Register",
+            description = """
+                    Returns a per-status employee count for the employee register's stat tiles, computed over the \
+                    same case-insensitive name/employee-number q filter searchEmployees applies, before any status \
+                    filter -- so every tile reports what selecting that status would return out of the current \
+                    search, including for a status not currently selected.
+                    Use this tool alongside searchEmployees to render the register's stat-tile row; do not use it \
+                    in place of searchEmployees, which alone returns the paged row list (durion#2158: this \
+                    histogram used to be folded into that endpoint's response, which changed its shape for every \
+                    caller -- it is now this separate, additive endpoint instead).
+                    Preconditions: none; an empty tenant, or a q that matches nothing, returns an empty counts map \
+                    rather than an error.
+                    Required inputs: none are mandatory; q defaults to blank, which counts every employee. Unlike \
+                    searchEmployees this endpoint takes no status, sort, page, size, or include parameters -- the \
+                    histogram always covers the whole q-filtered set, never one page of it.
+                    Emits a PEOPLE_EMPLOYEE_STATUS_COUNTS audit event but changes no state; this is a read-only \
+                    projection merged in memory the same way searchEmployees is, and carries a bucket for an \
+                    employee with no status recorded (a legacy row) so the counts always sum to the q-filtered \
+                    total.
+                    Returns 200 with an empty counts map when q matches nothing.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Status histogram returned (possibly empty)")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:employee:view"})
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
+    public ResponseEntity<EmployeeStatusCountsResponse> getEmployeeStatusCounts(
+            @Parameter(description = "Case-insensitive substring match on name or employee number; blank counts all")
+                    @RequestParam(required = false)
+                    String q) {
+        return ResponseEntity.ok(employeeService.employeeStatusCounts(q));
     }
 
     @PutMapping("/{employeeId}")

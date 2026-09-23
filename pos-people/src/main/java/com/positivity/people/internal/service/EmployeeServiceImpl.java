@@ -10,7 +10,7 @@ import com.positivity.people.internal.dto.EmployeeJobRoleDto;
 import com.positivity.people.internal.dto.EmployeeLocationDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.EmployeeRoleAssignmentDto;
-import com.positivity.people.internal.dto.EmployeeSearchResponse;
+import com.positivity.people.internal.dto.EmployeeStatusCountsResponse;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.EnableEmployeeRequestDto;
 import com.positivity.people.internal.dto.PagedResponse;
@@ -306,19 +306,42 @@ public class EmployeeServiceImpl implements EmployeeService {
             throw new ResourceStateConflictException("Only DISABLED employees can be enabled");
         }
 
-        // Optimistic concurrency (DECISION-PEOPLE-017, as amended): reuse the profile's existing
-        // updatedAt as the token rather than adding a second timestamp field. A caller submits
-        // back the value it last read; a mismatch means the record moved since then (e.g. another
-        // admin already reactivated or edited it) and must not be silently overwritten.
-        if (!Objects.equals(employee.getUpdatedAt(), request.getUpdatedAt())) {
+        // Optimistic concurrency (DECISION-PEOPLE-017, as amended), made atomic (#2158 finding
+        // C): the state guards above ran against the row as it stood when THIS request read it,
+        // which is what lets a TERMINATED/ON_LEAVE/SUSPENDED employee get its specific message
+        // rather than a generic conflict — but they cannot by themselves prevent two concurrent
+        // requests that both read this same DISABLED row with the same updatedAt from both
+        // passing every guard and both writing. The read-compare-then-save shape this replaced
+        // had exactly that gap: two callers each load the row, each pass an in-memory
+        // Objects.equals(employee.getUpdatedAt(), request.getUpdatedAt()) check, and each call
+        // save() — the second silently overwrites the first's write (and its published fact)
+        // instead of 409ing. Folding the status check and the token check into one conditional
+        // UPDATE (EmployeeRepository#reactivateIfDisabledAndTokenMatches) closes that gap: the
+        // database evaluates the WHERE clause row-locked as part of a single statement, so of two
+        // callers racing on the same row, only one still finds a matching row to update.
+        Instant now = Instant.now(clock);
+        int reactivated =
+                employeeRepository.reactivateIfDisabledAndTokenMatches(employeeId, request.getUpdatedAt(), now);
+        if (reactivated == 0) {
+            // The guards above already established DISABLED at the moment this request read the
+            // row; zero rows updated here means the row moved between that read and this write —
+            // either the token no longer matches, or (the race this fix targets) another request
+            // already reactivated it first. Both are "the record changed since it was last read",
+            // so both raise the same 409 message the pre-existing in-memory check used.
             throw new ResourceStateConflictException(
                     "Employee has changed since it was last read (updatedAt no longer matches); reload and retry");
         }
 
+        // The conditional UPDATE above is a JPQL bulk statement: it already wrote status,
+        // statusEffectiveAt and updatedAt in the database in that one statement (see the
+        // repository method's javadoc for why it sets updatedAt itself rather than leaving it to
+        // @LastModifiedDate), and clears the persistence context, detaching `employee`. Mirror
+        // the same three fields onto it here to build the response and the published fact,
+        // rather than issuing a second, redundant save() that would just repeat the write.
         employee.setStatus(EmployeeStatus.ACTIVE);
-        employee.setStatusEffectiveAt(Instant.now(clock));
-        Employee savedEmployee = employeeRepository.save(employee);
-        peopleEventPublisher.publishEmployeeUpdated(savedEmployee);
+        employee.setStatusEffectiveAt(now);
+        employee.setUpdatedAt(now);
+        peopleEventPublisher.publishEmployeeUpdated(employee);
 
         // No assignment-policy counterpart here by design: disableEmployee's offboarding ends or
         // grace-periods staffing assignments, but reactivation must not silently resurrect
@@ -327,57 +350,27 @@ public class EmployeeServiceImpl implements EmployeeService {
         // fresh through the staffing-assignment endpoints.
         ExtPersonReplica person =
                 extPersonReplicaRepository.findById(employeeId).orElse(null);
-        return profileFromReplica(employeeId, person, savedEmployee, List.of());
+        return profileFromReplica(employeeId, person, employee, List.of());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public @NonNull EmployeeSearchResponse searchEmployees(
+    public @NonNull PagedResponse<EmployeeSummaryDto> searchEmployees(
             @Nullable String q,
             @Nullable List<EmployeeStatus> status,
             @Nullable String sort,
             int page,
             int size,
             @Nullable List<EmployeeSearchInclude> include) {
-        // Employee counts (shop staff) are far smaller than the customer-directory volumes that
-        // justified the same approach in pos-customer PartyServiceImpl#browseParties (ADR-0026 /
-        // OQ3): load both sides, merge/filter/sort/page in memory rather than joining across
-        // module boundaries in SQL.
-        //
         // WARNING to whoever wires up #2155 (widening these rows with data pulled from other
         // service replicas): that enrichment MUST be applied to `window` below — the page this
-        // call actually returns — and never to `employees`/`all`/`filtered` here. Those lists
-        // hold every employee in the tenant (214+ and growing), not just the requested page; an
-        // extra replica lookup per row done against the full list, instead of the ~20-row window,
-        // turns every search call into O(tenant size) outbound calls and makes this register
-        // slower than the per-row endpoint it was built to replace.
-        List<Employee> employees = employeeRepository.findAll();
-        List<UUID> personIds = employees.stream().map(Employee::getPersonId).toList();
-        Map<UUID, ExtPersonReplica> replicasByPersonId = extPersonReplicaRepository.findByPersonIdIn(personIds).stream()
-                .collect(Collectors.toMap(ExtPersonReplica::getPersonId, Function.identity(), (a, b) -> a));
-        // Reused by enrichWindow below for jobRole (id -> Employee.jobRoleId) and by
-        // buildContactInfo for contactInfo -- both already in memory from the two maps above, so
-        // building this lookup costs a map insert per employee, not a query.
-        Map<UUID, Employee> employeesByPersonId =
-                employees.stream().collect(Collectors.toMap(Employee::getPersonId, Function.identity(), (a, b) -> a));
-
-        List<EmployeeSummaryDto> all = employees.stream()
-                .map(employee -> toSummary(employee, replicasByPersonId.get(employee.getPersonId())))
-                .filter(summary -> matchesSearch(summary, q))
-                .toList();
-
-        // The status histogram for the register's stat tiles is taken over `all` — the
-        // q-filtered set — BEFORE `matchesStatus` narrows it below. The tiles are how the caller
-        // picks a status filter, so a tile must report what selecting that status would return
-        // out of the current search, including for statuses not currently selected; computing it
-        // after the status filter would zero out every tile except the ones already chosen. This
-        // ordering is also why the counts always sum to `all.size()` (the q-filtered total)
-        // regardless of which statuses, if any, the caller passed — never to the smaller,
-        // status-filtered total on the returned page.
-        Map<EmployeeStatus, Long> statusCounts = all.stream()
-                .map(EmployeeSummaryDto::getStatus)
-                .filter(Objects::nonNull)
-                .collect(Collectors.groupingBy(EmployeeStatus::valueOf, Collectors.counting()));
+        // call actually returns — and never to `directory`/`all`/`filtered` here. Those hold
+        // every employee in the tenant (214+ and growing), not just the requested page; an extra
+        // replica lookup per row done against the full list, instead of the ~20-row window, turns
+        // every search call into O(tenant size) outbound calls and makes this register slower
+        // than the per-row endpoint it was built to replace.
+        Directory directory = loadDirectory();
+        List<EmployeeSummaryDto> all = qFilteredSummaries(directory, q);
 
         List<EmployeeSummaryDto> filtered = all.stream()
                 .filter(summary -> matchesStatus(summary, status))
@@ -390,14 +383,71 @@ public class EmployeeServiceImpl implements EmployeeService {
         List<EmployeeSummaryDto> window = filtered.subList(fromIndex, toIndex);
 
         // durion#2155: enrichment runs HERE, against `window` (the page actually returned, at
-        // most `size` rows) -- never against `all`/`filtered`/`employees` above, which hold every
+        // most `size` rows) -- never against `all`/`filtered`/`directory` above, which hold every
         // employee the search matched. See enrichWindow's javadoc for why that ordering is the
         // whole point of this feature.
-        enrichWindow(window, resolveIncludes(include), employeesByPersonId, replicasByPersonId);
+        enrichWindow(window, resolveIncludes(include), directory.employeesByPersonId(), directory.replicasByPersonId());
 
         int totalPages = size == 0 ? 0 : (int) Math.ceil((double) total / size);
-        PagedResponse<EmployeeSummaryDto> pagedResponse = new PagedResponse<>(window, page, size, total, totalPages);
-        return new EmployeeSearchResponse(pagedResponse, statusCounts);
+        return new PagedResponse<>(window, page, size, total, totalPages);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull EmployeeStatusCountsResponse employeeStatusCounts(@Nullable String q) {
+        // Deliberately its own load-and-filter pass (loadDirectory + qFilteredSummaries), the same
+        // two steps searchEmployees takes before it applies status/sort/paging -- see that
+        // method's javadoc and EmployeeStatusCountsResponse's class javadoc for why the histogram
+        // is no longer folded into the search response itself (#2158, corrected).
+        List<EmployeeSummaryDto> all = qFilteredSummaries(loadDirectory(), q);
+
+        // Every q-filtered employee lands in exactly one bucket -- its status name, or
+        // UNKNOWN_STATUS for a null status column (Finding B: a legacy row predating status
+        // becoming a required field must still be counted, not silently dropped) -- which is what
+        // keeps counts.values() summing to all.size() unconditionally rather than only when every
+        // matching employee happens to carry a status.
+        Map<String, Long> counts = all.stream()
+                .map(summary ->
+                        summary.getStatus() != null ? summary.getStatus() : EmployeeStatusCountsResponse.UNKNOWN_STATUS)
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
+        return new EmployeeStatusCountsResponse(counts);
+    }
+
+    /**
+     * Every employee in the tenant (in {@code employeeRepository.findAll()} order — {@code
+     * employeesByPersonId} is a lookup index over the same rows, not a substitute iteration
+     * order) plus its identity-replica row, indexed by person id (#2158 refactor): the shared
+     * load step behind {@link #searchEmployees} (page/sort/status on top) and {@link
+     * #employeeStatusCounts} (a histogram over the same q-filtered set, nothing else on top).
+     * Employee counts (shop staff) are far smaller than the customer-directory volumes that
+     * justified the same in-memory-merge approach in pos-customer PartyServiceImpl#browseParties
+     * (ADR-0026 / OQ3).
+     */
+    private record Directory(
+            List<Employee> employees,
+            Map<UUID, Employee> employeesByPersonId,
+            Map<UUID, ExtPersonReplica> replicasByPersonId) {}
+
+    private Directory loadDirectory() {
+        List<Employee> employees = employeeRepository.findAll();
+        List<UUID> personIds = employees.stream().map(Employee::getPersonId).toList();
+        Map<UUID, ExtPersonReplica> replicasByPersonId = extPersonReplicaRepository.findByPersonIdIn(personIds).stream()
+                .collect(Collectors.toMap(ExtPersonReplica::getPersonId, Function.identity(), (a, b) -> a));
+        // Reused by enrichWindow for jobRole (id -> Employee.jobRoleId) and by buildContactInfo
+        // for contactInfo -- both already in memory from the two maps here, so building this
+        // lookup costs a map insert per employee, not a query.
+        Map<UUID, Employee> employeesByPersonId =
+                employees.stream().collect(Collectors.toMap(Employee::getPersonId, Function.identity(), (a, b) -> a));
+        return new Directory(employees, employeesByPersonId, replicasByPersonId);
+    }
+
+    /** Every employee in {@code directory} whose name/number matches {@code q}, as summaries. */
+    private List<EmployeeSummaryDto> qFilteredSummaries(Directory directory, @Nullable String q) {
+        return directory.employees().stream()
+                .map(employee ->
+                        toSummary(employee, directory.replicasByPersonId().get(employee.getPersonId())))
+                .filter(summary -> matchesSearch(summary, q))
+                .toList();
     }
 
     private EmployeeSummaryDto toSummary(Employee employee, @Nullable ExtPersonReplica person) {
