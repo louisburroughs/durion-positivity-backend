@@ -21,7 +21,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -39,11 +41,18 @@ import tools.jackson.databind.ObjectMapper;
  * on a parent the replica has not seen yet; the scope check does.
  *
  * <p>Consumer contract mirrors this module's other listeners: {@code processed_events} idempotency
- * (owner {@code location}) in the apply transaction, a {@link ReplicaVersionGuard} stale guard on
+ * (owner {@code location}), a {@link ReplicaVersionGuard} stale guard on
  * the fact's {@code aggregateVersion}, and transient DB errors rethrown for container retry/DLQ.
  * Unsupported event types on the topic — storage-location, bay and mobile-unit facts — still record
  * their eventIds, because the owner's manifest counts every fact in the window and skipping the
  * record would read as permanent drift.
+ *
+ * <p><b>Transaction shape (#2146).</b> The listener method is not {@code @Transactional}: the
+ * apply and its {@code processed_events} mark commit together in their own {@code REQUIRES_NEW}
+ * transaction, so a permanent failure inside {@link LocationHierarchyService} or a repository rolls
+ * back only that work — and is recorded in a separate transaction — instead of poisoning a shared
+ * transaction whose commit the container would retry to the DLQ. There is no window between an
+ * applied fact and its mark. Transient failures still propagate for container retry.
  */
 @Slf4j
 @Component
@@ -61,6 +70,9 @@ public class LocationEventsListener {
     private final LocationHierarchyService locationHierarchyService;
     private final Counter payloadRejectedCounter;
 
+    /** The apply and its processed mark in one transaction; a failure's mark in its own. */
+    private final TransactionTemplate handlerTransaction;
+
     public LocationEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
@@ -68,7 +80,8 @@ public class LocationEventsListener {
             ExtLocationReplicaRepository extLocationReplicaRepository,
             ExtLocationParentReplicaRepository extLocationParentReplicaRepository,
             LocationHierarchyService locationHierarchyService,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -84,12 +97,13 @@ public class LocationEventsListener {
                         .tag("owner", OWNER)
                         .tag("entity", "location-events")
                         .register(registry);
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @KafkaListener(
             topics = "${pos.catalog.kafka.location-events-topic:location.events.v1}",
             groupId = "${pos.catalog.kafka.location-events-consumer-group:pos-catalog-location-events}")
-    @Transactional
     public void onLocationEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -109,13 +123,16 @@ public class LocationEventsListener {
         }
 
         try {
-            switch (eventType == null ? "" : eventType) {
-                case LocationUpdatedV1.EVENT_TYPE -> applyLocationUpdated(envelope);
-                case LocationDeletedV1.EVENT_TYPE -> applyLocationDeleted(envelope);
-                // Ignored types (storage-location, bay and mobile-unit facts) still fall through to
-                // the processed_events insert below — see the class javadoc.
-                default -> log.debug("Ignoring location event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                switch (eventType == null ? "" : eventType) {
+                    case LocationUpdatedV1.EVENT_TYPE -> applyLocationUpdated(envelope);
+                    case LocationDeletedV1.EVENT_TYPE -> applyLocationDeleted(envelope);
+                    // Ignored types (storage-location, bay and mobile-unit facts) still fall through
+                    // to the processed_events insert below — see the class javadoc.
+                    default -> log.debug("Ignoring location event type={} eventId={}", eventType, eventId);
+                }
+                recordProcessed(eventId, OWNER);
+            });
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
@@ -123,12 +140,18 @@ public class LocationEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed location event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, OWNER));
         } catch (Exception e) {
             log.warn("Skipping malformed location event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, OWNER));
         }
+    }
+
+    /** Records the eventId as processed, inside whichever transaction the caller runs. */
+    private void recordProcessed(@NonNull String eventId, @NonNull String owner) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
-                .owner(OWNER)
+                .owner(owner)
                 .processedAt(Instant.now(clock))
                 .build());
     }

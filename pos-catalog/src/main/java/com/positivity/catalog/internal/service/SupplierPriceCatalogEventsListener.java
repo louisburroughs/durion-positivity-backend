@@ -22,14 +22,15 @@ import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -54,6 +55,13 @@ import tools.jackson.databind.ObjectMapper;
  * Completeness is therefore a comparison of the applied-chunk set against the declared total, not
  * an ordering assumption.
  *
+ * <h2>Transaction shape (#2146)</h2>
+ *
+ * The apply and its {@code processed_events} mark commit together in their own
+ * {@code REQUIRES_NEW} transaction, so a permanent failure rolls back only that event's lines and
+ * is recorded in a separate transaction; there is no window between an applied event and its mark.
+ * Transient failures still propagate for container retry.
+ *
  * <h2>Nothing here deletes</h2>
  *
  * An import that reports {@code EMPTY}, or one that fails upstream and never publishes chunks,
@@ -63,7 +71,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.catalog.kafka", name = "enabled", havingValue = "true")
 public class SupplierPriceCatalogEventsListener {
 
@@ -80,10 +87,36 @@ public class SupplierPriceCatalogEventsListener {
     private final CatalogFactPublisher catalogFactPublisher;
     private final OutboxEventWriter outboxEventWriter;
 
+    /** The apply and its processed mark in one transaction; a failure's mark in its own. */
+    private final TransactionTemplate handlerTransaction;
+
+    public SupplierPriceCatalogEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            SupplierPriceEntryRepository priceEntryRepository,
+            SupplierPriceImportRepository priceImportRepository,
+            SupplierPriceImportChunkRepository priceImportChunkRepository,
+            SupplierArticleCodeRepository supplierArticleCodeRepository,
+            CatalogFactPublisher catalogFactPublisher,
+            OutboxEventWriter outboxEventWriter,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.priceEntryRepository = priceEntryRepository;
+        this.priceImportRepository = priceImportRepository;
+        this.priceImportChunkRepository = priceImportChunkRepository;
+        this.supplierArticleCodeRepository = supplierArticleCodeRepository;
+        this.catalogFactPublisher = catalogFactPublisher;
+        this.outboxEventWriter = outboxEventWriter;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.catalog.kafka.supplier-events-topic:supplier.events.v1}",
             groupId = "${pos.catalog.kafka.supplier-events-consumer-group:pos-catalog-supplier-events}")
-    @Transactional
     public void onSupplierEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -103,25 +136,33 @@ public class SupplierPriceCatalogEventsListener {
         }
 
         try {
-            if (SupplierPriceCatalogUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyChunk(envelope);
-            } else if (SupplierPriceCatalogImportCompletedV1.EVENT_TYPE.equals(eventType)) {
-                applyCompletion(envelope);
-            } else {
-                // Ignored types still record their eventId so the owner's manifest reconciles
-                // rather than reporting facts this module deliberately skipped as missing.
-                log.debug("Ignoring supplier event type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (SupplierPriceCatalogUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    applyChunk(envelope);
+                } else if (SupplierPriceCatalogImportCompletedV1.EVENT_TYPE.equals(eventType)) {
+                    applyCompletion(envelope);
+                } else {
+                    // Ignored types still record their eventId so the owner's manifest reconciles
+                    // rather than reporting facts this module deliberately skipped as missing.
+                    log.debug("Ignoring supplier event type={} eventId={}", eventType, eventId);
+                }
+                recordProcessed(eventId, OWNER);
+            });
         } catch (TransientDataAccessException e) {
             // Rethrown for container retry. Recording this as processed would lose an import's
             // worth of prices with no way to notice: the rows would simply never exist.
             throw e;
         } catch (Exception e) {
             log.warn("Skipping malformed supplier event eventId={} type={}", eventId, eventType, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, OWNER));
         }
+    }
+
+    /** Records the eventId as processed, inside whichever transaction the caller runs. */
+    private void recordProcessed(@NonNull String eventId, @NonNull String owner) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
-                .owner(OWNER)
+                .owner(owner)
                 .processedAt(Instant.now(clock))
                 .build());
     }

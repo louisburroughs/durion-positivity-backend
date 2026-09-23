@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -41,6 +42,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -87,7 +89,8 @@ class SupplierPriceCatalogEventsListenerTest {
                 priceImportChunkRepository,
                 supplierArticleCodeRepository,
                 catalogFactPublisher,
-                outboxEventWriter);
+                outboxEventWriter,
+                mock(PlatformTransactionManager.class));
         when(priceEntryRepository.save(any(SupplierPriceEntryEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(priceImportRepository.save(any(SupplierPriceImportEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(priceImportRepository.findById(MANIFEST_ID)).thenReturn(Optional.empty());

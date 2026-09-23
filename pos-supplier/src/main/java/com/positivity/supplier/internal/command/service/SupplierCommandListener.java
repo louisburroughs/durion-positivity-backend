@@ -8,7 +8,6 @@ import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogRepubli
 import com.positivity.supplier.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
 import java.time.Instant;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -16,7 +15,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -55,10 +56,19 @@ import tools.jackson.databind.ObjectMapper;
  *       order that already has an active intent is ignored by {@link TransmissionIntentWriter} and
  *       a re-publication inside its cooldown is refused by {@link PriceCatalogRepublisher}.
  * </ul>
+ *
+ * <h2>Transaction shape (#2146)</h2>
+ *
+ * The listener method is not {@code @Transactional}: each command's handler and its
+ * {@code processed_events} mark commit together in their own {@code REQUIRES_NEW} transaction. The
+ * handlers are {@code @Transactional} services, so a defective command's exception used to mark a
+ * shared listener transaction rollback-only and the commit after the catch threw, sending the
+ * record through the container's retries to the DLQ with the mark rolled back each time. Isolated,
+ * the failure rolls back only the handler's work, and the defective command is recorded in a
+ * separate transaction. There is no window between an applied command and its mark.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.supplier.kafka", name = "enabled", havingValue = "true")
 public class SupplierCommandListener {
 
@@ -77,10 +87,28 @@ public class SupplierCommandListener {
     private final TransmissionIntentWriter intentWriter;
     private final PriceCatalogRepublisher republisher;
 
+    /** A handler and its processed mark in one transaction; a failure's mark in its own. */
+    private final TransactionTemplate handlerTransaction;
+
+    public SupplierCommandListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            TransmissionIntentWriter intentWriter,
+            PriceCatalogRepublisher republisher,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.intentWriter = intentWriter;
+        this.republisher = republisher;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.supplier.kafka.supplier-commands-topic:supplier.commands.v1}",
             groupId = "${pos.supplier.kafka.supplier-commands-consumer-group:pos-supplier-commands}")
-    @Transactional
     public void onSupplierCommand(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -100,13 +128,16 @@ public class SupplierCommandListener {
         }
 
         try {
-            if (SupplierOrderRequestedV1.EVENT_TYPE.equals(eventType)) {
-                applyOrderRequested(envelope, eventId);
-            } else if (SupplierPriceCatalogRepublishRequestedV1.EVENT_TYPE.equals(eventType)) {
-                applyRepublishRequested(envelope);
-            } else {
-                log.debug("Ignoring supplier command type={} eventId={}", eventType, eventId);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                if (SupplierOrderRequestedV1.EVENT_TYPE.equals(eventType)) {
+                    applyOrderRequested(envelope, eventId);
+                } else if (SupplierPriceCatalogRepublishRequestedV1.EVENT_TYPE.equals(eventType)) {
+                    applyRepublishRequested(envelope);
+                } else {
+                    log.debug("Ignoring supplier command type={} eventId={}", eventType, eventId);
+                }
+                recordProcessed(eventId, ownerOf(eventType, envelope));
+            });
         } catch (TransientDataAccessException | DataIntegrityViolationException e) {
             // Rethrown so the container retries. A constraint violation here is the active-intent
             // unique index doing its job under a race between two instances; the retry finds the
@@ -114,21 +145,25 @@ public class SupplierCommandListener {
             throw e;
         } catch (TransmissionIntentWriter.UnknownSupplierException e) {
             log.error("Supplier order command eventId={} names an unusable vendor: {}", eventId, e.getMessage());
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, ownerOf(eventType, envelope)));
         } catch (IllegalStateException e) {
             // Not a bad command — this module's own state contradicting itself. Swallowing it would
-            // mislabel it as malformed input and blame the producer, and would record as processed a
-            // command whose transaction is already doomed: the handlers run in this transaction, so
-            // their failure has marked it rollback-only and the commit would fail anyway. Rethrown so
-            // the failure is what it is, at the cost of retrying a message only a fix can clear.
+            // mislabel it as malformed input, blame the producer, and record as processed a command
+            // that was never applied (its handler transaction has rolled back). Rethrown so the
+            // failure is what it is, at the cost of retrying a message only a fix can clear.
             log.error("Supplier command eventId={} hit inconsistent state in this module: {}", eventId, e.toString());
             throw e;
         } catch (Exception e) {
             log.warn("Skipping malformed supplier command eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> recordProcessed(eventId, ownerOf(eventType, envelope)));
         }
+    }
 
+    /** Records the eventId as processed, inside whichever transaction the caller runs. */
+    private void recordProcessed(@NonNull String eventId, @NonNull String owner) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
-                .owner(ownerOf(eventType, envelope))
+                .owner(owner)
                 .processedAt(Instant.now(clock))
                 .build());
     }

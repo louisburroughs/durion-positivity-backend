@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,6 +47,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -123,7 +125,8 @@ class SupplierCatalogEnrichmentListenerTest {
                 treadDesignMatchCandidateRepository,
                 supplierPriceEntryRepository,
                 productRepository,
-                new TreadDesignMatcher(properties, new BrandNormalizer(properties)));
+                new TreadDesignMatcher(properties, new BrandNormalizer(properties)),
+                mock(PlatformTransactionManager.class));
     }
 
     /** A product the sample event's design plainly describes: same brand, same design name. */

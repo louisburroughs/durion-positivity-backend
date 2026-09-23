@@ -44,6 +44,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -110,7 +111,8 @@ class InventoryListenersTest {
                 processedEventRepository,
                 availabilityRepository,
                 leadTimeRepository,
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                org.mockito.Mockito.mock(PlatformTransactionManager.class));
     }
 
     private static String availability(String eventId, long version, int atp) {

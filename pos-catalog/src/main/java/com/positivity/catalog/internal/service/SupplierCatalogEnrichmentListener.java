@@ -28,14 +28,15 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -77,10 +78,18 @@ import tools.jackson.databind.ObjectMapper;
  * Only {@code product.tread_design_id} is written on a product. No dimension, load index, article
  * code or price field is ever touched here — a supplier fact that could redefine a product's
  * identity or structure would hand a vendor edit rights over the catalogue.
+ *
+ * <h2>Transaction shape (#2146)</h2>
+ *
+ * The listener method is not {@code @Transactional}: the apply and its {@code processed_events}
+ * mark run together in a transaction of their own ({@code REQUIRES_NEW}), so a permanent failure
+ * rolls back only this event's work instead of poisoning a shared transaction whose commit the
+ * container would retry to the DLQ. Unlike the sibling listeners the mark stays inside that
+ * transaction — a failed apply has never recorded its eventId here — so there is no window between
+ * two commits. Transient failures still propagate for container retry.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.catalog.kafka", name = "enabled", havingValue = "true")
 public class SupplierCatalogEnrichmentListener {
 
@@ -116,11 +125,39 @@ public class SupplierCatalogEnrichmentListener {
     private final ProductRepository productRepository;
     private final TreadDesignMatcher treadDesignMatcher;
 
+    /** The apply and its processed mark, in one transaction of their own; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
+    public SupplierCatalogEnrichmentListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            TreadDesignRepository treadDesignRepository,
+            TreadDesignTextRepository treadDesignTextRepository,
+            TreadDesignImageRepository treadDesignImageRepository,
+            TreadDesignMatchCandidateRepository treadDesignMatchCandidateRepository,
+            SupplierPriceEntryRepository supplierPriceEntryRepository,
+            ProductRepository productRepository,
+            TreadDesignMatcher treadDesignMatcher,
+            PlatformTransactionManager transactionManager) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.treadDesignRepository = treadDesignRepository;
+        this.treadDesignTextRepository = treadDesignTextRepository;
+        this.treadDesignImageRepository = treadDesignImageRepository;
+        this.treadDesignMatchCandidateRepository = treadDesignMatchCandidateRepository;
+        this.supplierPriceEntryRepository = supplierPriceEntryRepository;
+        this.productRepository = productRepository;
+        this.treadDesignMatcher = treadDesignMatcher;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @KafkaListener(
             topics = "${pos.catalog.kafka.supplier-events-topic:supplier.events.v1}",
             groupId =
                     "${pos.catalog.kafka.supplier-catalog-enrichment-consumer-group:pos-catalog-supplier-catalog-enrichment}")
-    @Transactional
     public void onSupplierEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -143,12 +180,14 @@ public class SupplierCatalogEnrichmentListener {
         }
 
         try {
-            applyUpdate(envelope);
-            processedEventRepository.save(ProcessedEvent.builder()
-                    .eventId(eventId)
-                    .owner(OWNER)
-                    .processedAt(Instant.now(clock))
-                    .build());
+            handlerTransaction.executeWithoutResult(_ -> {
+                applyUpdate(envelope);
+                processedEventRepository.save(ProcessedEvent.builder()
+                        .eventId(eventId)
+                        .owner(OWNER)
+                        .processedAt(Instant.now(clock))
+                        .build());
+            });
         } catch (TransientDataAccessException e) {
             // Rethrown for container retry. Recording this as processed would lose the enrichment
             // with no way to notice: the design would simply never appear.

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -28,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,7 +56,12 @@ class SupplierCommandListenerTest {
     @BeforeEach
     void setUp() {
         listener = new SupplierCommandListener(
-                CLOCK, new ObjectMapper(), processedEventRepository, intentWriter, republisher);
+                CLOCK,
+                new ObjectMapper(),
+                processedEventRepository,
+                intentWriter,
+                republisher,
+                mock(PlatformTransactionManager.class));
     }
 
     private static String republishCommand(String eventId) {
