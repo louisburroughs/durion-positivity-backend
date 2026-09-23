@@ -8,6 +8,8 @@ import com.positivity.inventory.internal.enums.LocationSyncOutcome;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.LocationSyncLogRepository;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantResolver;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -47,6 +49,7 @@ public class LocationSyncServiceImpl implements LocationSyncService {
     private final ObjectProvider<KafkaTemplate<String, String>> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final TenantResolver tenantResolver;
 
     @Value("${pos.inventory.kafka.location-commands-topic:location.commands.v1}")
     private String locationCommandsTopic;
@@ -97,7 +100,8 @@ public class LocationSyncServiceImpl implements LocationSyncService {
         try {
             String command = objectMapper.writeValueAsString(
                     new ReplayCommand(REPLAY_COMMAND_TYPE, new ReplayCommand.Payload(since.toString(), null)));
-            template.send(locationCommandsTopic, since.toString(), command);
+            template.send(TenantKafkaHeaders.record(
+                    locationCommandsTopic, since.toString(), command, tenantResolver.require()));
         } catch (Exception ex) {
             LocationSyncLogEntity saved = locationSyncLogRepository.save(runLog.outcome(LocationSyncOutcome.FAILED)
                     .errorMessage(truncate(ex.getMessage(), 2000))

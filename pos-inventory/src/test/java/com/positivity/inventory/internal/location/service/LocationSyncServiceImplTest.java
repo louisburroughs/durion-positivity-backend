@@ -16,6 +16,10 @@ import com.positivity.inventory.internal.enums.LocationSyncLogScope;
 import com.positivity.inventory.internal.enums.LocationSyncOutcome;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.LocationSyncLogRepository;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.TenantResolver;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +27,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,6 +53,8 @@ class LocationSyncServiceImplTest {
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-07-05T12:00:00Z"), ZoneOffset.UTC);
     private static final String USER = "sync-user";
     private static final String TOPIC = "location.commands.v1";
+    /** Deliberately not the transitional default tenant, so a header carrying it proves propagation. */
+    private static final UUID TENANT_ID = UUID.fromString("01900000-0000-7000-8000-0000000000b2");
 
     @Mock
     private LocationSyncLogRepository locationSyncLogRepository;
@@ -61,13 +69,24 @@ class LocationSyncServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        TenantContext.bind(TENANT_ID);
         service = new LocationSyncServiceImpl(
-                locationSyncLogRepository, templateProvider, new ObjectMapper(), FIXED_CLOCK);
+                locationSyncLogRepository,
+                templateProvider,
+                new ObjectMapper(),
+                FIXED_CLOCK,
+                new TenantResolver(new TenancyProperties()));
         ReflectionTestUtils.setField(service, "locationCommandsTopic", TOPIC);
         ReflectionTestUtils.setField(service, "replayLookback", Duration.ofDays(30));
     }
 
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
+    }
+
     @Test
+    @SuppressWarnings("unchecked")
     void triggerSync_publishesReplayCommandAndLogsRequestedRun() {
         when(templateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
         when(locationSyncLogRepository.save(any(LocationSyncLogEntity.class)))
@@ -80,11 +99,14 @@ class LocationSyncServiceImplTest {
         assertThat(response.getCorrelationId()).isEqualTo("corr-1");
 
         Instant expectedSince = FIXED_CLOCK.instant().minus(Duration.ofDays(30));
-        ArgumentCaptor<String> commandCaptor = ArgumentCaptor.forClass(String.class);
-        verify(kafkaTemplate).send(eq(TOPIC), eq(expectedSince.toString()), commandCaptor.capture());
-        assertThat(commandCaptor.getValue())
-                .contains("location.outbox.replay-requested")
-                .contains(expectedSince.toString());
+        ArgumentCaptor<ProducerRecord<String, String>> recordCaptor = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(recordCaptor.capture());
+        ProducerRecord<String, String> record = recordCaptor.getValue();
+        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.key()).isEqualTo(expectedSince.toString());
+        // #2147: pos-location applies the replay under the tenant this header names.
+        assertThat(TenantKafkaHeaders.read(record.headers())).contains(TENANT_ID);
+        assertThat(record.value()).contains("location.outbox.replay-requested").contains(expectedSince.toString());
 
         ArgumentCaptor<LocationSyncLogEntity> logCaptor = ArgumentCaptor.forClass(LocationSyncLogEntity.class);
         verify(locationSyncLogRepository).save(logCaptor.capture());
@@ -125,7 +147,7 @@ class LocationSyncServiceImplTest {
 
         assertThat(response.getSyncRunId()).isEqualTo(syncRunId);
         assertThat(response.getOutcome()).isEqualTo("REQUESTED");
-        verify(kafkaTemplate, never()).send(any(), any(), any());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
         verify(locationSyncLogRepository, never()).save(any());
     }
 
