@@ -59,6 +59,14 @@ import tools.jackson.databind.ObjectMapper;
  *       the event as processed here would drop an order out of supply permanently.
  * </ul>
  *
+ * <h2>A consumer of its own</h2>
+ *
+ * {@link OrderEventsListener} consumes the same topic for counter-sale stock postings. This listener
+ * has its own consumer group and its own {@code processed_events} owner (#2176): sharing the group
+ * made the two listeners members of one group, so Kafka delivered each partition, and so each
+ * record, to only one of them; sharing the owner let whichever recorded an event first make the
+ * other skip it.
+ *
  * <h2>Transaction shape</h2>
  *
  * Per #2146 the listener method is deliberately not {@code @Transactional}. The
@@ -73,8 +81,13 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "pos.inventory.kafka", name = "enabled", havingValue = "true")
 public class PurchaseOrderProjectionListener {
 
-    /** Producing domain, per the repo-wide {@code processed_events} convention. */
-    static final String OWNER = "order";
+    /**
+     * Producing domain, qualified by what this consumer applies. {@link OrderEventsListener} reads
+     * the same order events under {@code "order"}, and the owner is part of the
+     * {@code processed_events} key, so a shared owner let whichever listener marked an event first
+     * make the other skip it (#2176).
+     */
+    static final String OWNER = "order:purchase-order-projection";
 
     private final Clock clock;
     private final ObjectMapper objectMapper;
@@ -109,7 +122,8 @@ public class PurchaseOrderProjectionListener {
 
     @KafkaListener(
             topics = "${pos.inventory.kafka.order-events-topic:order.events.v1}",
-            groupId = "${pos.inventory.kafka.order-events-consumer-group:pos-inventory-order-events}")
+            groupId =
+                    "${pos.inventory.kafka.purchase-order-projection-consumer-group:pos-inventory-purchase-order-projection}")
     public void onOrderEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -124,7 +138,7 @@ public class PurchaseOrderProjectionListener {
             log.warn("Skipping order event without eventId");
             return;
         }
-        if (processedEventRepository.existsById(eventId)) {
+        if (processedEventRepository.existsByEventIdAndOwner(eventId, OWNER)) {
             return;
         }
 

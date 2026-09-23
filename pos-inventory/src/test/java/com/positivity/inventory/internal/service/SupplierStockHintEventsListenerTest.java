@@ -146,7 +146,8 @@ class SupplierStockHintEventsListenerTest {
     @Test
     @DisplayName("a redelivered event is not applied twice")
     void replayed_event_is_skipped() {
-        when(processedEvents.existsById("evt-1")).thenReturn(true);
+        when(processedEvents.existsByEventIdAndOwner("evt-1", SupplierStockHintEventsListener.OWNER))
+                .thenReturn(true);
 
         listener.onSupplierEvent(chunkEvent("evt-1", 1, 1, 1, line("4012345678901", "V-1", "B-1", "12")));
 

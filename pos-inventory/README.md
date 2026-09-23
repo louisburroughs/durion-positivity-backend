@@ -156,6 +156,19 @@ recorded and the corrected count is resubmitted. The count is what is wrong (usu
 reject the pending adjustment. `500 ADJUSTMENT_LEDGER_POST_FAILED` now
 means only an unexpected posting failure.
 
+### An unexpected posting failure leaves the record FAILED (#2170)
+
+When the ledger posting fails for any other reason (`500 ADJUSTMENT_LEDGER_POST_FAILED` for a cycle
+count adjustment, `500 SCRAP_LEDGER_POST_FAILED` for a scrap), the partial posting rolls back, and
+the adjustment or scrap is then left `FAILED` with the cause in `errorMessage`. The error `message`
+names the record (`Adjustment <id>: …`, `Scrap <id>: …`). The `FAILED` state is written by
+`LedgerPostingFailureRecorder` after the request's transaction has rolled back, in a transaction of
+its own; saved inside the request's transaction, it used to be rolled back too and was never
+persisted. On approval the existing record turns `FAILED`; on a below-threshold create, whose insert
+rolled back, the record is inserted `FAILED` under the id the error names. List them with
+`status=FAILED`. The failure was unexpected, so it is the retryable case: approving a `FAILED`
+adjustment or scrap posts it again, and a successful post clears `errorMessage`.
+
 **Which shelf the variance posts against.** An adjustment created from a task takes the task's bin
 location. A task-less adjustment takes the optional `locationId` on the create request; without
 one it posts against the stock item's location-less balance, which is almost never where counted
@@ -288,6 +301,16 @@ When `pos.inventory.kafka.enabled` is on, `OrderEventsListener` consumes
 move stock — spec R7.5). Each line posts in its own transaction: a rejected post (insufficient
 stock, unknown item) raises `inventory.counter-sale.consumption-failed` on
 `inventory.events.v1` and never affects the completed sale.
+
+`PurchaseOrderProjectionListener` consumes the same topic for the purchase-order projection. Each
+of the two needs every order event, so each has its own consumer group
+(`POS_INVENTORY_ORDER_EVENTS_CONSUMER_GROUP`, default `pos-inventory-order-events`;
+`POS_INVENTORY_PURCHASE_ORDER_PROJECTION_CONSUMER_GROUP`, default
+`pos-inventory-purchase-order-projection`) and its own `processed_events` owner (`order`,
+`order:purchase-order-projection`). `processed_events` is keyed by `(event_id, owner)`, so one
+consumer's mark never makes another skip the event (#2176). Before, the shared group split the
+partitions between the two, and the shared key let whichever recorded an event first make the other
+skip it; either way an order event silently reached only one of them.
 
 ## Supplier availability hints (CAP-322, #1312)
 
@@ -544,8 +567,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `SHORTAGE_RESOLVE_MISSING_FIELD` | 422 | The shortage resolution omits a field its strategy requires |
 | `SHORTAGE_RESOLVE_SUBSTITUTE_UNAVAILABLE` | 422 | The substitute named for the shortage is not available |
 | `SHORTAGE_RESOLVE_INVALID_IDENTIFIER` | 422 | The shortage resolution names an identifier that does not resolve |
-| `ADJUSTMENT_LEDGER_POST_FAILED` | 500 | Ledger post for adjustment failed |
-| `SCRAP_LEDGER_POST_FAILED` | 500 | Ledger post for scrap failed |
+| `ADJUSTMENT_LEDGER_POST_FAILED` | 500 | Ledger post for adjustment failed unexpectedly; the adjustment is left `FAILED` with the cause in `errorMessage`, and approving it retries (#2170) |
+| `SCRAP_LEDGER_POST_FAILED` | 500 | Ledger post for scrap failed unexpectedly; the scrap is left `FAILED` with the cause in `errorMessage`, and approving it retries (#2170) |
 | `NOT_IMPLEMENTED` | 501 | The operation is deliberately unimplemented; enveloped rather than answered with an empty body (#1720) |
 | `LOCATION_SERVICE_UNAVAILABLE` | 503 | pos-location could not be reached, or answered a server error, while a rollup read needed authoritative topology |
 

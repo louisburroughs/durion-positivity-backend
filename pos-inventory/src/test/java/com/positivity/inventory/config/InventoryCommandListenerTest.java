@@ -96,7 +96,8 @@ class InventoryCommandListenerTest {
     @Test
     @DisplayName("confirm-requested confirms the pick task and records the commandId")
     void confirmRequestedConfirmsTask() {
-        when(processedEvents.existsById("c-1")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("c-1", "inventory-commands"))
+                .thenReturn(false);
         when(pickListService.confirmPickTask(PICK_LIST_ID, PICK_TASK_ID, SKU_ID, LOCATION_ID, 2))
                 .thenReturn(new PickTaskResponse(
                         PICK_TASK_ID, PICK_LIST_ID, SKU_ID, LOCATION_ID, 3, 2, PickTaskStatus.PICKED, 1));
@@ -113,7 +114,8 @@ class InventoryCommandListenerTest {
     @Test
     @DisplayName("consume-requested consumes the items and records the commandId")
     void consumeRequestedConsumesItems() {
-        when(processedEvents.existsById("c-2")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("c-2", "inventory-commands"))
+                .thenReturn(false);
         when(consumptionService.consumePickedItems(any()))
                 .thenReturn(new ConsumptionResponse(
                         UUID.randomUUID(), WORKORDER_ID, PICK_LIST_ID, 2, Instant.now(TEST_CLOCK), List.of()));
@@ -131,7 +133,8 @@ class InventoryCommandListenerTest {
     @Test
     @DisplayName("release-requested releases the pick list")
     void releaseRequestedReleasesPickList() {
-        when(processedEvents.existsById("c-3")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("c-3", "inventory-commands"))
+                .thenReturn(false);
         when(pickListService.releasePickList(PICK_LIST_ID))
                 .thenReturn(new PickListResponse(
                         PICK_LIST_ID, WORKORDER_ID, PickListStatus.READY_TO_PICK, 0, null, null, null));
@@ -148,7 +151,8 @@ class InventoryCommandListenerTest {
     @Test
     @DisplayName("Duplicate commandId is skipped — retries apply each command at most once")
     void duplicateCommandIdIsSkipped() {
-        when(processedEvents.existsById("c-dup")).thenReturn(true);
+        when(processedEvents.existsByEventIdAndOwner("c-dup", "inventory-commands"))
+                .thenReturn(true);
 
         listener.onCommand(confirmCommand("c-dup"));
 
@@ -159,7 +163,8 @@ class InventoryCommandListenerTest {
     @Test
     @DisplayName("Business validation failure is permanent: logged, commandId recorded, no retry")
     void businessFailureIsRecordedNotRetried() {
-        when(processedEvents.existsById("c-bad")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("c-bad", "inventory-commands"))
+                .thenReturn(false);
         when(pickListService.confirmPickTask(any(), any(), any(), any(), anyInt()))
                 .thenThrow(new PickScanMismatchException(SKU_ID, LOCATION_ID));
 
@@ -182,7 +187,8 @@ class InventoryCommandListenerTest {
     @Test
     @DisplayName("Transient DB errors propagate so the container retries")
     void transientErrorsPropagate() {
-        when(processedEvents.existsById(anyString())).thenThrow(new QueryTimeoutException("db timeout"));
+        when(processedEvents.existsByEventIdAndOwner(anyString(), anyString()))
+                .thenThrow(new QueryTimeoutException("db timeout"));
 
         assertThatExceptionOfType(QueryTimeoutException.class)
                 .isThrownBy(() -> listener.onCommand(confirmCommand("c-4")));

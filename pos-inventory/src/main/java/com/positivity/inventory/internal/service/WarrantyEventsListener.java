@@ -98,7 +98,7 @@ public class WarrantyEventsListener {
             log.warn("Skipping warranty event without eventId: {}", message);
             return;
         }
-        if (processedEventRepository.existsById(eventId)) {
+        if (processedEventRepository.existsByEventIdAndOwner(eventId, OWNER)) {
             return;
         }
 

@@ -104,7 +104,7 @@ public class WorkorderEventsListener {
             log.warn("Skipping workorder event without eventId: {}", message);
             return;
         }
-        if (processedEventRepository.existsById(eventId)) {
+        if (processedEventRepository.existsByEventIdAndOwner(eventId, OWNER)) {
             return;
         }
 

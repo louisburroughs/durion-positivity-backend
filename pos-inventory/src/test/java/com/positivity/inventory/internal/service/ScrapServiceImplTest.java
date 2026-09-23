@@ -94,6 +94,9 @@ class ScrapServiceImplTest {
     @Mock
     private LocationScopeService locationScopeService;
 
+    @Mock
+    private LedgerPostingFailureRecorder failureRecorder;
+
     private final Clock fixedClock = Clock.fixed(Instant.parse("2026-07-23T00:00:00Z"), ZoneOffset.UTC);
 
     private ScrapServiceImpl service;
@@ -109,7 +112,8 @@ class ScrapServiceImplTest {
                 replenishmentService,
                 fixedClock,
                 methodResolver,
-                locationScopeService);
+                locationScopeService,
+                failureRecorder);
         setUpAuthenticatedActor("inventory:scrap:create");
         // odoo-parity J3: the fact labels costSource with the resolved costing method whenever the
         // engine stamped a cost. Default AVERAGE; STANDARD-specific tests override this.

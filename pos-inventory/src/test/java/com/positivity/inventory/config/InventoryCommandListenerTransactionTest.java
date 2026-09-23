@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.config.OutboxReplayService;
 import com.positivity.inventory.internal.config.PickListGenerationService;
 import com.positivity.inventory.internal.config.PickListService;
 import com.positivity.inventory.internal.config.ReservationRequestService;
+import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.testing.TenantTestSupport;
@@ -94,7 +95,7 @@ class InventoryCommandListenerTransactionTest {
 
     @AfterEach
     void tearDown() {
-        processedEventRepository.deleteById(commandId);
+        processedEventRepository.deleteById(new ProcessedEvent.Key(commandId, "inventory-commands"));
         TenantContext.clear();
     }
 
@@ -127,7 +128,7 @@ class InventoryCommandListenerTransactionTest {
         assertThat(failingHandler.sawActiveTransaction())
                 .as("the handler must have run inside a transaction for this test to prove anything")
                 .isTrue();
-        assertThat(processedEventRepository.existsById(commandId))
+        assertThat(processedEventRepository.existsByEventIdAndOwner(commandId, "inventory-commands"))
                 .as("the processed mark must survive the handler's rollback")
                 .isTrue();
     }

@@ -242,7 +242,7 @@ public class InventoryCommandListener {
             log.warn("Ignoring pick command without commandId: {}", root);
             return;
         }
-        if (processedEventRepository.existsById(commandId)) {
+        if (processedEventRepository.existsByEventIdAndOwner(commandId, COMMANDS_OWNER)) {
             log.debug("Skipping duplicate pick command commandId={}", commandId);
             return;
         }

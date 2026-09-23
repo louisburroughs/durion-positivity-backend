@@ -81,7 +81,7 @@ class PurchaseOrderProjectionListenerTest {
                 receiptRepository,
                 inventoryFactPublisher,
                 org.mockito.Mockito.mock(PlatformTransactionManager.class));
-        when(processedEventRepository.existsById(any())).thenReturn(false);
+        when(processedEventRepository.existsByEventIdAndOwner(any(), any())).thenReturn(false);
         when(orderRepository.findById(any())).thenReturn(Optional.empty());
     }
 
@@ -154,7 +154,8 @@ class PurchaseOrderProjectionListenerTest {
     @Test
     @DisplayName("a redelivered event changes nothing")
     void redeliveryIsANoOp() {
-        when(processedEventRepository.existsById("evt-1")).thenReturn(true);
+        when(processedEventRepository.existsByEventIdAndOwner("evt-1", PurchaseOrderProjectionListener.OWNER))
+                .thenReturn(true);
 
         listener.onOrderEvent(event("evt-1", 3, "APPROVED", "4"));
 

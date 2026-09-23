@@ -8,7 +8,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface ProcessedEventRepository extends JpaRepository<ProcessedEvent, String> {
+public interface ProcessedEventRepository extends JpaRepository<ProcessedEvent, ProcessedEvent.Key> {
+
+    /**
+     * Whether {@code owner} has already applied {@code eventId}. The mark is per consumer (#2176):
+     * another consumer of the same event having recorded it says nothing about this one.
+     */
+    boolean existsByEventIdAndOwner(@NonNull String eventId, @NonNull String owner);
 
     /**
      * Event ids of one owning domain received under one tenant in a reconciliation window (ADR-0044 §4). UUIDv7

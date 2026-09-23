@@ -156,6 +156,9 @@ pos:
       # Counter-sale stock consumption (order parity story H2, #1079)
       order-events-topic: ${POS_INVENTORY_ORDER_EVENTS_TOPIC:order.events.v1}
       order-events-consumer-group: ${POS_INVENTORY_ORDER_EVENTS_CONSUMER_GROUP:pos-inventory-order-events}
+      # Purchase-order projection (CAP-320) reads the same topic. It needs a group of its own: two
+      # listeners in one group split the partitions, so each order event reached only one of them (#2176).
+      purchase-order-projection-consumer-group: ${POS_INVENTORY_PURCHASE_ORDER_PROJECTION_CONSUMER_GROUP:pos-inventory-purchase-order-projection}
       # Supplier stock-report snapshots consumed as availability hints (CAP-322, #1312;
       # producer #1228). The PRICAT feed shares this topic and belongs to pos-catalog, so
       # this consumer group is its own and unrelated types are skipped, not applied.

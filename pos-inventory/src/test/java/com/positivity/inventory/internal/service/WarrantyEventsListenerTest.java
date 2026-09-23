@@ -86,7 +86,8 @@ class WarrantyEventsListenerTest {
     @Test
     @DisplayName("Requested fact creates a REQUESTED hold record and records the eventId")
     void requestedCreatesHold() {
-        when(processedEvents.existsById("e-1")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-1", WarrantyEventsListener.OWNER))
+                .thenReturn(false);
         when(holds.findById(PART_RETURN_ID)).thenReturn(Optional.empty());
 
         listener.onWarrantyEvent(requested("e-1", 3));
@@ -109,7 +110,8 @@ class WarrantyEventsListenerTest {
     @Test
     @DisplayName("Shipped fact updates the hold to SHIPPED with carrier and tracking")
     void shippedUpdatesHold() {
-        when(processedEvents.existsById("e-2")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-2", WarrantyEventsListener.OWNER))
+                .thenReturn(false);
         when(holds.findById(PART_RETURN_ID)).thenReturn(Optional.of(requestedRow(3)));
 
         listener.onWarrantyEvent(shipped("e-2", 5));
@@ -130,7 +132,8 @@ class WarrantyEventsListenerTest {
     @Test
     @DisplayName("Shipped fact without a prior row creates one from the shipment data")
     void shippedWithoutRequestedCreatesRow() {
-        when(processedEvents.existsById("e-3")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-3", WarrantyEventsListener.OWNER))
+                .thenReturn(false);
         when(holds.findById(PART_RETURN_ID)).thenReturn(Optional.empty());
 
         listener.onWarrantyEvent(shipped("e-3", 5));
@@ -148,7 +151,8 @@ class WarrantyEventsListenerTest {
     @Test
     @DisplayName("Skips duplicate events by eventId")
     void skipsDuplicates() {
-        when(processedEvents.existsById("e-dup")).thenReturn(true);
+        when(processedEvents.existsByEventIdAndOwner("e-dup", WarrantyEventsListener.OWNER))
+                .thenReturn(true);
 
         listener.onWarrantyEvent(requested("e-dup", 3));
 
@@ -159,7 +163,8 @@ class WarrantyEventsListenerTest {
     @Test
     @DisplayName("Skips stale events whose aggregateVersion is below the row's")
     void skipsStaleVersions() {
-        when(processedEvents.existsById("e-old")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-old", WarrantyEventsListener.OWNER))
+                .thenReturn(false);
         when(holds.findById(PART_RETURN_ID)).thenReturn(Optional.of(requestedRow(9)));
 
         listener.onWarrantyEvent(shipped("e-old", 5));
@@ -172,7 +177,8 @@ class WarrantyEventsListenerTest {
     @Test
     @DisplayName("Other warranty event types are recorded as processed and skipped")
     void recordsAndSkipsOtherEventTypes() {
-        when(processedEvents.existsById("e-4")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-4", WarrantyEventsListener.OWNER))
+                .thenReturn(false);
 
         listener.onWarrantyEvent("""
                 {"eventId":"e-4","eventType":"warranty.claim.snapshot","aggregateVersion":4,"payload":{}}
@@ -185,7 +191,8 @@ class WarrantyEventsListenerTest {
     @Test
     @DisplayName("Propagates transient DB errors so the container retries")
     void propagatesTransientErrors() {
-        when(processedEvents.existsById("e-5")).thenReturn(false);
+        when(processedEvents.existsByEventIdAndOwner("e-5", WarrantyEventsListener.OWNER))
+                .thenReturn(false);
         when(holds.findById(PART_RETURN_ID)).thenThrow(new QueryTimeoutException("db timeout"));
 
         assertThatExceptionOfType(QueryTimeoutException.class)
