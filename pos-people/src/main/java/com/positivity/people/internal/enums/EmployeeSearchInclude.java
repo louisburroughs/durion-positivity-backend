@@ -44,5 +44,17 @@ public enum EmployeeSearchInclude {
     LOCATION,
 
     /** {@code EmployeeSummaryDto.jobRole}, from the tenant's job-role list (durion#2157). */
-    JOB_ROLE
+    JOB_ROLE,
+
+    /**
+     * {@code EmployeeSummaryDto.allowedActions} (durion#2159): the {@code AllowedAction}s the
+     * caller may take on this row, per {@code EmployeeActionPolicy}. Unlike the other tokens
+     * above, computing this costs no batched lookup -- it is derived purely from the caller's
+     * authorities (already resolved once per page) and the row's own status -- but it stays
+     * behind {@code include=} anyway, for the same reason {@code EmployeeProfileDto.allowedActions}
+     * is always present and this field is not: consistency with every other enrichment field on
+     * this endpoint, and preserving the pre-#2155 thin row byte for byte for a caller that never
+     * passes {@code include=}.
+     */
+    ALLOWED_ACTIONS
 }

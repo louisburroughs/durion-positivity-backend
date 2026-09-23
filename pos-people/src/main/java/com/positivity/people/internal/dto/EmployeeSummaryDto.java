@@ -1,5 +1,6 @@
 package com.positivity.people.internal.dto;
 
+import com.positivity.people.internal.enums.AllowedAction;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.UUID;
@@ -10,12 +11,13 @@ import lombok.Data;
  * Employee row returned by {@code searchEmployees}: enough to identify and pick an employee from
  * a result list, not the full profile ({@link EmployeeProfileDto}).
  *
- * <p>The fields below {@code active} (durion#2155) are the employee register's extra columns
- * (username, contact info, application roles, primary location, job role): each is null unless
- * the caller requested its category on {@code include=} ({@code EmployeeSearchInclude}), and
- * {@code contactInfo} stays null regardless of {@code include=} when the caller lacks {@code
- * people:employee_pii:view} (#1898). A request that omits {@code include=} entirely gets a row
- * with every one of these fields null -- the pre-#2155 thin shape, byte for byte.
+ * <p>The fields below {@code active} (durion#2155, plus {@code allowedActions} from durion#2159)
+ * are the employee register's extra columns (username, contact info, application roles, primary
+ * location, job role, allowed actions): each is null unless the caller requested its category on
+ * {@code include=} ({@code EmployeeSearchInclude}), and {@code contactInfo} stays null regardless
+ * of {@code include=} when the caller lacks {@code people:employee_pii:view} (#1898). A request
+ * that omits {@code include=} entirely gets a row with every one of these fields null -- the
+ * pre-#2155 thin shape, byte for byte.
  */
 @Data
 @Builder
@@ -114,4 +116,15 @@ public class EmployeeSummaryDto {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED,
             nullable = true)
     private EmployeeJobRoleDto jobRole;
+
+    @Schema(
+            description = "Actions the calling user may take on this row (durion#2159); null unless "
+                    + "`include=ALLOWED_ACTIONS` was requested. Computed from the caller's permissions and the "
+                    + "row's status by EmployeeActionPolicy, the single place this transition table lives -- see "
+                    + "EmployeeProfileDto.allowedActions for the full rendering-hint and location-scope caveats, "
+                    + "which apply identically here.",
+            example = "[\"VIEW_PII\", \"UPDATE\", \"DISABLE\"]",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+            nullable = true)
+    private List<AllowedAction> allowedActions;
 }

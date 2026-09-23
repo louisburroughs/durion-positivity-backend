@@ -135,12 +135,13 @@ public class EmployeeController {
                     ordering are both correct for a result set spanning more than one page.
                     Emits a PEOPLE_EMPLOYEE_SEARCH audit event but changes no state; this is a read-only projection \
                     merged in memory from local employment rows and the pos-people-contact identity replica.
-                    Register enrichment (durion#2155): include= repeatable tokens (USERNAME, CONTACT_INFO, \
-                    ROLE_ASSIGNMENTS, LOCATION, JOB_ROLE) each turn on one extra field/group on the returned rows \
-                    -- username, contact info, active application roles, a single primary location plus a count \
-                    of the rest, and job role -- so the register can render a full page in this one call instead \
-                    of one follow-up call per row per column. Omitted, every one of those fields is null: the \
-                    pre-#2155 thin row, byte for byte, so an existing caller (e.g. HrFacadeTool.searchEmployees) \
+                    Register enrichment (durion#2155, plus ALLOWED_ACTIONS from durion#2159): include= repeatable \
+                    tokens (USERNAME, CONTACT_INFO, ROLE_ASSIGNMENTS, LOCATION, JOB_ROLE, ALLOWED_ACTIONS) each \
+                    turn on one extra field/group on the returned rows -- username, contact info, active \
+                    application roles, a single primary location plus a count of the rest, job role, and the \
+                    caller's allowed actions on the row -- so the register can render a full page in this one call \
+                    instead of one follow-up call per row per column. Omitted, every one of those fields is null: \
+                    the pre-#2155 thin row, byte for byte, so an existing caller (e.g. HrFacadeTool.searchEmployees) \
                     sees no change. Whichever categories are requested are resolved against the page actually \
                     returned, never the whole matching set, so the response cost stays flat as the tenant grows. \
                     Two categories carry a second, narrower gate, and both behave the same way: requesting \
@@ -148,7 +149,12 @@ public class EmployeeController {
                     never a 403. CONTACT_INFO: email/phone appear only when the caller also holds \
                     people:employee_pii:view (#1898). ROLE_ASSIGNMENTS: application roles appear only when the \
                     caller also holds people-contact:role:view, the same permission that gates the equivalent \
-                    read on pos-people-contact -- #2160 changed where this data is read from, not who may see it.
+                    read on pos-people-contact -- #2160 changed where this data is read from, not who may see it. \
+                    ALLOWED_ACTIONS is different again: a RENDERING HINT ONLY -- computed by EmployeeActionPolicy \
+                    from the caller's permissions and each row's status, never a substitute for the @PreAuthorize \
+                    and service-level guards those actions still enforce independently -- and it does not account \
+                    for location-scoped access enforced elsewhere in this module, so a location-scoped caller may \
+                    occasionally see an action listed that their scope does not actually cover for that employee.
                     Returns 200 with an empty items list and correct totals when the page, query, or status \
                     filter matches nothing.
                     """)
@@ -180,14 +186,17 @@ public class EmployeeController {
             @Parameter(description = "Page size, up to 100") @Positive @Max(100) @RequestParam(defaultValue = "20")
                     int size,
             @Parameter(
-                            description = "Register-enrichment categories (durion#2155); repeatable "
+                            description = "Register-enrichment categories (durion#2155, plus ALLOWED_ACTIONS from "
+                                    + "durion#2159); repeatable "
                                     + "(?include=USERNAME&include=ROLE_ASSIGNMENTS), matching how `status` "
                                     + "above is passed. Omitted or empty returns the thin pre-#2155 row: "
                                     + "username, contactInfo, roleAssignments, primaryLocation, "
-                                    + "otherLocationCount and jobRole are all null. CONTACT_INFO additionally "
-                                    + "requires people:employee_pii:view (#1898) and ROLE_ASSIGNMENTS additionally "
-                                    + "requires people-contact:role:view; without the relevant permission that "
-                                    + "field is simply absent, never a 403.")
+                                    + "otherLocationCount, jobRole and allowedActions are all null. "
+                                    + "CONTACT_INFO additionally requires people:employee_pii:view (#1898) and "
+                                    + "ROLE_ASSIGNMENTS additionally requires people-contact:role:view; without "
+                                    + "the relevant permission that field is simply absent, never a 403. "
+                                    + "ALLOWED_ACTIONS is a rendering hint only -- see "
+                                    + "EmployeeSummaryDto.allowedActions.")
                     @RequestParam(required = false)
                     List<EmployeeSearchInclude> include) {
         return ResponseEntity.ok(employeeService.searchEmployees(q, status, sort, page, size, include));

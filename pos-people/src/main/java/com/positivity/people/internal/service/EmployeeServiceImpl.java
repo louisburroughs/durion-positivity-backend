@@ -99,6 +99,10 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     private final LocationReferenceService locationReferenceService;
 
+    // ── Rendering-hint action flags (durion#2159) -- see EmployeeActionPolicy's javadoc ──
+
+    private final EmployeeActionPolicy employeeActionPolicy;
+
     @Override
     @Transactional(readOnly = true)
     public @NonNull Optional<EmployeeIdentityDto> resolveByEmployeeNumber(@NonNull String employeeNumber) {
@@ -539,6 +543,14 @@ public class EmployeeServiceImpl implements EmployeeService {
         boolean includeJobRole = includes.contains(EmployeeSearchInclude.JOB_ROLE);
         Map<UUID, JobRole> jobRolesById = includeJobRole ? jobRolesFor(window, employeesByPersonId) : Map.of();
 
+        // durion#2159: unlike the categories above, this needs no batched lookup -- it is derived
+        // purely from the caller's authorities (resolved once here, not per row) and each row's
+        // own status, both already in hand. It still stays behind `include=` for consistency with
+        // every other category on this endpoint; see EmployeeSearchInclude.ALLOWED_ACTIONS.
+        boolean includeAllowedActions = includes.contains(EmployeeSearchInclude.ALLOWED_ACTIONS);
+        Set<String> callerAuthoritiesForActions =
+                includeAllowedActions ? employeeActionPolicy.currentCallerAuthorities() : Set.of();
+
         for (EmployeeSummaryDto row : window) {
             UUID personId = row.getPersonId();
             if (includes.contains(EmployeeSearchInclude.USERNAME)) {
@@ -560,6 +572,12 @@ public class EmployeeServiceImpl implements EmployeeService {
                         .map(Employee::getJobRoleId)
                         .orElse(null);
                 row.setJobRole(jobRoleId == null ? null : toJobRoleRef(jobRoleId, jobRolesById.get(jobRoleId)));
+            }
+            if (includeAllowedActions) {
+                EmployeeStatus status = Optional.ofNullable(employeesByPersonId.get(personId))
+                        .map(Employee::getStatus)
+                        .orElse(null);
+                row.setAllowedActions(employeeActionPolicy.allowedActions(status, callerAuthoritiesForActions));
             }
         }
     }
@@ -889,6 +907,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .createdAt(employee != null ? employee.getCreatedAt() : null)
                 .updatedAt(employee != null ? employee.getUpdatedAt() : null)
                 .warnings(warnings)
+                .allowedActions(employeeActionPolicy.allowedActionsForCurrentCaller(
+                        employee != null ? employee.getStatus() : null))
                 .build();
     }
 
@@ -916,6 +936,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                                 ? person.getPersonUpdatedAt()
                                 : (employee != null ? employee.getUpdatedAt() : null))
                 .warnings(warnings)
+                .allowedActions(employeeActionPolicy.allowedActionsForCurrentCaller(
+                        employee != null ? employee.getStatus() : null))
                 .build();
     }
 

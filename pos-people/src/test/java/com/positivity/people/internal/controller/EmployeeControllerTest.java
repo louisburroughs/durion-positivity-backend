@@ -16,6 +16,7 @@ import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.EmployeeStatusCountsResponse;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.PagedResponse;
+import com.positivity.people.internal.enums.AllowedAction;
 import com.positivity.people.internal.enums.EmployeeSearchInclude;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.RequestValidationException;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -191,7 +193,47 @@ class EmployeeControllerTest {
                 .andExpect(jsonPath("$.items[0].roleAssignments").doesNotExist())
                 .andExpect(jsonPath("$.items[0].primaryLocation").doesNotExist())
                 .andExpect(jsonPath("$.items[0].otherLocationCount").doesNotExist())
-                .andExpect(jsonPath("$.items[0].jobRole").doesNotExist());
+                .andExpect(jsonPath("$.items[0].jobRole").doesNotExist())
+                .andExpect(jsonPath("$.items[0].allowedActions").doesNotExist());
+    }
+
+    // ─── allowedActions (durion#2159) — the field is serialized, not just computed ─────
+
+    @Test
+    @DisplayName("EmployeeProfileDto.allowedActions is serialized on the single-employee read")
+    void getEmployee_serializesAllowedActions() throws Exception {
+        EmployeeProfileDto profileWithActions = profile();
+        profileWithActions.setAllowedActions(
+                List.of(AllowedAction.VIEW_PII, AllowedAction.UPDATE, AllowedAction.DISABLE));
+        when(employeeService.getEmployee(eq(EMPLOYEE_ID))).thenReturn(profileWithActions);
+
+        mockMvc.perform(get("/v1/people/employees/{employeeId}", EMPLOYEE_ID)
+                        .header("X-Authorities", "people:employee_pii:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(
+                        "$.allowedActions", org.hamcrest.Matchers.containsInAnyOrder("VIEW_PII", "UPDATE", "DISABLE")));
+    }
+
+    @Test
+    @DisplayName("EmployeeSummaryDto.allowedActions is serialized when include=ALLOWED_ACTIONS is requested")
+    void searchEmployees_serializesAllowedActions_whenIncludeRequestsIt() throws Exception {
+        EmployeeSummaryDto summaryWithActions = summary();
+        summaryWithActions.setAllowedActions(List.of(AllowedAction.VIEW_PII));
+        PagedResponse<EmployeeSummaryDto> page = new PagedResponse<>(List.of(summaryWithActions), 0, 20, 1, 1);
+        when(employeeService.searchEmployees(
+                        eq(null),
+                        eq(null),
+                        eq("lastName,asc"),
+                        eq(0),
+                        eq(20),
+                        eq(List.of(EmployeeSearchInclude.ALLOWED_ACTIONS))))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/v1/people/employees")
+                        .param("include", "ALLOWED_ACTIONS")
+                        .header("X-Authorities", "people:employee:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].allowedActions", org.hamcrest.Matchers.contains("VIEW_PII")));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.positivity.people.internal.dto;
 
+import com.positivity.people.internal.enums.AllowedAction;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -90,4 +91,17 @@ public class EmployeeProfileDto {
             example = "[\"Potential duplicate employee number\"]",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private List<String> warnings;
+
+    @Schema(
+            description = "Actions the calling user may take on this employee (durion#2159), computed from the "
+                    + "caller's permissions and the employee's current status by EmployeeActionPolicy -- the single "
+                    + "place this transition table lives. This is a RENDERING HINT ONLY: the backend continues to "
+                    + "enforce authorization and status transitions independently via @PreAuthorize and its service "
+                    + "guards, so a client must never treat an entry here as proof an operation will succeed. Known "
+                    + "limitation: the flags consider only permissions and status, not the location-scoped access "
+                    + "enforced elsewhere in this module, so a location-scoped caller may occasionally see an action "
+                    + "listed that their scope does not actually cover for this employee.",
+            example = "[\"VIEW_PII\", \"UPDATE\", \"DISABLE\"]",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    private List<AllowedAction> allowedActions;
 }
