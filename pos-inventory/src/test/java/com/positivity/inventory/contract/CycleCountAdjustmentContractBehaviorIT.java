@@ -1,5 +1,6 @@
 package com.positivity.inventory.contract;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -7,9 +8,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.inventory.internal.entity.ApprovalThresholdConfig;
+import com.positivity.inventory.internal.entity.CycleCountTask;
 import com.positivity.inventory.internal.enums.ApprovalTier;
+import com.positivity.inventory.internal.enums.TaskStatus;
 import com.positivity.inventory.internal.repository.ApprovalThresholdConfigRepository;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
+import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import java.math.BigDecimal;
@@ -56,6 +60,9 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
     @Autowired
     private InventoryStockSummaryRepository stockSummaryRepository;
 
+    @Autowired
+    private CycleCountTaskRepository taskRepository;
+
     @BeforeEach
     void setUp() {
         // Issue #26: delete ledger entries before adjustments (ledger refs adjustment
@@ -63,6 +70,7 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
         ledgerEntryRepository.deleteAll();
         stockSummaryRepository.deleteAll();
         adjustmentRepository.deleteAll();
+        taskRepository.deleteAll();
         thresholdConfigRepository.deleteAll();
     }
 
@@ -237,6 +245,98 @@ class CycleCountAdjustmentContractBehaviorIT extends BaseContractIntegrationTest
      *
      * Issue: #26
      */
+    // ─── #2167: negative-stock refusal and posting location ──────────────────
+
+    /**
+     * A variance the ledger refuses (it would drive on-hand below zero) answers the policy's 422,
+     * not {@code 500 ADJUSTMENT_LEDGER_POST_FAILED}, and the adjustment stays PENDING_APPROVAL so it
+     * can be recounted or rejected.
+     */
+    @Test
+    @DisplayName("#2167: approving a variance that would drive on-hand negative returns 422 and stays PENDING_APPROVAL")
+    void approveAdjustment_varianceBelowZero_returns422AndStaysPending() throws Exception {
+        seedLowThreshold();
+        // Nothing on hand; the count claims 5 and finds 0 → a -5 COUNT_VARIANCE_OUT.
+        String body = buildCreateRequestBody(UUID.fromString("00000000-0000-0000-0000-000000002167"), 0, 5, "10.00");
+        MvcResult created = mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountAdjustments"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
+                .andReturn();
+        UUID adjustmentId = UUID.fromString(objectMapper
+                .readTree(created.getResponse().getContentAsString())
+                .path("adjustmentId")
+                .asString());
+
+        mockMvc.perform(withGatewayAuth(
+                                post("/v1/inventory/cycleCountAdjustments/{adjustmentId}/approve", adjustmentId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("NEGATIVE_STOCK_FLOOR_VIOLATION"))
+                .andExpect(jsonPath("$.message").value(containsString("-5")));
+
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/cycleCountAdjustments/{adjustmentId}", adjustmentId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"));
+    }
+
+    /** A task-less adjustment that names its location posts against it and returns it. */
+    @Test
+    @DisplayName("#2167: create with locationId and no task returns 201 carrying that locationId")
+    void createAdjustment_withLocationAndNoTask_returns201WithLocationId() throws Exception {
+        seedHighThreshold();
+        UUID locationId = UUID.fromString("01960003-0000-7000-8000-000000002167");
+        String body = objectMapper.writeValueAsString(objectMapper
+                .createObjectNode()
+                .put("stockItemId", "00000000-0000-0000-0000-000000002168")
+                .put("locationId", locationId.toString())
+                .put("reasonCode", "CYCLE_COUNT_RECONCILIATION")
+                .put("countedQuantity", 1)
+                .put("quantityOnHandBefore", 0)
+                .put("costAtTimeOfAdjustment", "10.00")
+                .put("createdByUserId", "user-creator"));
+
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountAdjustments"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("POSTED"))
+                .andExpect(jsonPath("$.locationId").value(locationId.toString()));
+    }
+
+    /** A locationId that contradicts the task's bin names the wrong shelf and is refused. */
+    @Test
+    @DisplayName("#2167: create with a locationId contradicting the task bin returns 400 VALIDATION_ERROR")
+    void createAdjustment_locationContradictingTaskBin_returns400() throws Exception {
+        seedHighThreshold();
+        CycleCountTask task = taskRepository.save(CycleCountTask.builder()
+                .binLocation("01960003-0000-7000-8000-000000002167")
+                .itemSku("00000000-0000-0000-0000-000000002169")
+                .expectedQuantity(BigDecimal.ONE)
+                .auditorId("auditor-1")
+                .status(TaskStatus.COUNTED_PENDING_REVIEW)
+                .build());
+        String body = objectMapper.writeValueAsString(objectMapper
+                .createObjectNode()
+                .put("stockItemId", "00000000-0000-0000-0000-000000002169")
+                .put("taskId", task.getTaskId().toString())
+                .put("locationId", "01960003-0000-7000-8000-000000009999")
+                .put("reasonCode", "CYCLE_COUNT_RECONCILIATION")
+                .put("countedQuantity", 2)
+                .put("quantityOnHandBefore", 1)
+                .put("costAtTimeOfAdjustment", "10.00")
+                .put("createdByUserId", "user-creator"));
+
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountAdjustments"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value(containsString("does not match task")));
+    }
+
     private void seedHighThreshold() {
         thresholdConfigRepository.save(ApprovalThresholdConfig.builder()
                 .approvalTier(ApprovalTier.TIER_1_MANAGER)
