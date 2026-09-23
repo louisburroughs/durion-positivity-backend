@@ -125,7 +125,8 @@ class RoleAssignmentEventEmitterTest {
 
         ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
         verify(writer).publish(eq("security.events.v1"), captor.capture());
-        RoleAssignmentChangedV1 payload = (RoleAssignmentChangedV1) captor.getValue().payload();
+        RoleAssignmentChangedV1 payload =
+                (RoleAssignmentChangedV1) captor.getValue().payload();
         assertThat(payload.roleLocationScope()).isEqualTo("LOCATION");
     }
 
@@ -158,14 +159,14 @@ class RoleAssignmentEventEmitterTest {
         OutboxEventWriter writer = mock(OutboxEventWriter.class);
         var emitter = new RoleAssignmentEventEmitter(TEST_CLOCK, providerFor(writer), "security.events.v1");
         RoleAssignment assignment = assignment(LocationScope.LOCATION);
-        assignment.revoke(
-                LocalDateTime.parse("2026-09-22T12:00:00"), Instant.parse("2026-09-22T12:00:00Z"));
+        assignment.revoke(LocalDateTime.parse("2026-09-22T12:00:00"), Instant.parse("2026-09-22T12:00:00Z"));
 
         emitter.roleAssignmentChanged(assignment);
 
         ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
         verify(writer).publish(eq("security.events.v1"), captor.capture());
-        RoleAssignmentChangedV1 payload = (RoleAssignmentChangedV1) captor.getValue().payload();
+        RoleAssignmentChangedV1 payload =
+                (RoleAssignmentChangedV1) captor.getValue().payload();
         assertThat(payload.roleLocationScope()).isEqualTo("LOCATION");
     }
 
