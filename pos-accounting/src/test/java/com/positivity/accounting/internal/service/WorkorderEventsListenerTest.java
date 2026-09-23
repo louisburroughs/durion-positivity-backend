@@ -24,6 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -58,7 +59,8 @@ class WorkorderEventsListenerTest {
                 new ObjectMapper(),
                 processedEvents,
                 requests,
-                new TenantIterator(new StaticTenantRegistry(tenancy)));
+                new TenantIterator(new StaticTenantRegistry(tenancy)),
+                mock(PlatformTransactionManager.class));
     }
 
     private String updatedEvent(String eventId, UUID invoiceId, String updatedAt) {

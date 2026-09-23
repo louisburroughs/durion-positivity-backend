@@ -34,6 +34,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -236,7 +237,8 @@ class InvoiceManifestListenerTest {
                 replica,
                 taxReplica,
                 org.mockito.Mockito.mock(InvoiceRevenuePostingService.class),
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                mock(PlatformTransactionManager.class));
 
         UUID invoiceId = UUID.randomUUID();
         UUID workorderId = UUID.randomUUID();

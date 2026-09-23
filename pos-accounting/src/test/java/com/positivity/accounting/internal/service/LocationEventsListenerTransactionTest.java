@@ -1,0 +1,181 @@
+package com.positivity.accounting.internal.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+
+import com.positivity.accounting.internal.repository.ExtLocationParentReplicaRepository;
+import com.positivity.accounting.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.domainevents.location.LocationUpdatedV1;
+import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.testing.TenantTestSupport;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.NonNull;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * Pins {@link LocationEventsListener}'s transaction shape (#2146) against a real transaction
+ * manager, which the module's mock-based listener tests cannot do.
+ *
+ * <p>The apply calls {@link LocationHierarchyService#recomputeAncestors}, a {@code @Transactional}
+ * service. An exception leaving it marks the transaction it joined rollback-only, so when the
+ * listener method was itself {@code @Transactional}, a "permanent" failure that was caught and
+ * logged still made the commit after the catch throw {@code UnexpectedRollbackException}; the
+ * container retried the record through its back-off ladder and dead-lettered it, and the {@code
+ * processed_events} mark was rolled back on every attempt.
+ */
+@SpringBootTest
+@ActiveProfiles("test")
+@DisplayName("LocationEventsListener transaction shape")
+class LocationEventsListenerTransactionTest {
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private ProcessedEventRepository processedEventRepository;
+
+    @Autowired
+    private ExtLocationReplicaRepository extLocationReplicaRepository;
+
+    @Autowired
+    private ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
+
+    @Autowired
+    private FailingLocationHierarchyService failingHierarchyService;
+
+    @Autowired
+    private ObjectProvider<MeterRegistry> meterRegistry;
+
+    private LocationEventsListener listener;
+    private String eventId;
+    private UUID locationId;
+
+    @BeforeEach
+    void setUp() {
+        TenantContext.bind(TenantTestSupport.TENANT_A);
+        eventId = UUID.randomUUID().toString();
+        locationId = UUID.randomUUID();
+        failingHierarchyService.reset();
+        listener = new LocationEventsListener(
+                Clock.systemUTC(),
+                new ObjectMapper(),
+                processedEventRepository,
+                extLocationReplicaRepository,
+                extLocationParentReplicaRepository,
+                failingHierarchyService,
+                meterRegistry,
+                transactionManager);
+    }
+
+    @AfterEach
+    void tearDown() {
+        processedEventRepository.deleteById(eventId);
+        extLocationReplicaRepository.deleteById(locationId);
+        TenantContext.clear();
+    }
+
+    @Test
+    @DisplayName("A permanent failure inside a transactional service still records the event and does not throw")
+    void permanentFailureInsideTransactionalServiceIsRecordedNotRetried() {
+        assertThatCode(() -> listener.onLocationEvent(locationUpdated(eventId, locationId)))
+                .doesNotThrowAnyException();
+
+        assertHandlerFailedInsideTransactionAndEventWasRecorded();
+    }
+
+    /**
+     * The shape the defect had: the whole event inside one enclosing transaction, as the old
+     * {@code @Transactional} listener method ran it. The service's failure must not mark that
+     * transaction rollback-only, or its commit throws {@code UnexpectedRollbackException} and the
+     * container retries the record.
+     */
+    @Test
+    @DisplayName("Inside an enclosing transaction, the service's failure does not poison its commit")
+    void permanentFailureDoesNotPoisonAnEnclosingTransaction() {
+        TransactionTemplate enclosing = new TransactionTemplate(transactionManager);
+
+        assertThatCode(() -> enclosing.executeWithoutResult(
+                        _ -> listener.onLocationEvent(locationUpdated(eventId, locationId))))
+                .doesNotThrowAnyException();
+
+        assertHandlerFailedInsideTransactionAndEventWasRecorded();
+    }
+
+    private void assertHandlerFailedInsideTransactionAndEventWasRecorded() {
+        assertThat(failingHierarchyService.sawActiveTransaction())
+                .as("the service must have run inside a transaction for this test to prove anything")
+                .isTrue();
+        assertThat(processedEventRepository.existsById(eventId))
+                .as("the processed mark must survive the handler's rollback")
+                .isTrue();
+        assertThat(extLocationReplicaRepository.existsById(locationId))
+                .as("the failed apply's replica write must roll back with it")
+                .isFalse();
+    }
+
+    private static String locationUpdated(String eventId, UUID locationId) {
+        return """
+                {"eventId":"%s","eventType":"%s","aggregateVersion":1,
+                 "payload":{"locationId":"%s","name":"Main","code":"LOC-1","active":true,"parents":[]}}
+                """.formatted(eventId, LocationUpdatedV1.EVENT_TYPE, locationId);
+    }
+
+    @TestConfiguration
+    static class FailingServiceConfiguration {
+
+        @Bean
+        @Primary
+        FailingLocationHierarchyService failingLocationHierarchyService(
+                ExtLocationReplicaRepository extLocationReplicaRepository,
+                ExtLocationParentReplicaRepository extLocationParentReplicaRepository) {
+            return new FailingLocationHierarchyService(
+                    extLocationReplicaRepository, extLocationParentReplicaRepository);
+        }
+    }
+
+    /** Mirrors the real service's shape: a {@code @Transactional} recompute that throws. */
+    static class FailingLocationHierarchyService extends LocationHierarchyService {
+
+        private final AtomicBoolean sawActiveTransaction = new AtomicBoolean(false);
+
+        FailingLocationHierarchyService(
+                ExtLocationReplicaRepository extLocationReplicaRepository,
+                ExtLocationParentReplicaRepository extLocationParentReplicaRepository) {
+            super(extLocationReplicaRepository, extLocationParentReplicaRepository);
+        }
+
+        public boolean sawActiveTransaction() {
+            return sawActiveTransaction.get();
+        }
+
+        public void reset() {
+            sawActiveTransaction.set(false);
+        }
+
+        @Override
+        @Transactional
+        public void recomputeAncestors(@NonNull UUID locationId) {
+            sawActiveTransaction.set(TransactionSynchronizationManager.isActualTransactionActive());
+            throw new IllegalStateException("simulated permanent failure");
+        }
+    }
+}

@@ -22,7 +22,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -47,6 +49,11 @@ import tools.jackson.databind.ObjectMapper;
  * fresh {@code @Version} row starts at 0), where no replica row exists yet and the guard is never
  * consulted — the fact lands. Once a replica holds any higher version, an incoming 0 can only be a
  * legacy or malformed envelope, and treating it as stale is the safer read.
+ *
+ * <p><b>Transaction shape (#2146).</b> Same as {@link InvoiceEventsListener}: the replica write
+ * and its processed mark commit together in a {@code REQUIRES_NEW} transaction of their own, so a
+ * permanent failure rolls back only that work and is recorded in a separate transaction; transient
+ * failures still propagate for container retry, unrecorded.
  */
 @Slf4j
 @Component
@@ -60,18 +67,24 @@ public class CustomerEventsListener {
     private final ExtCustomerPartyRepository partyRepository;
     private final Counter payloadRejectedCounter;
 
+    /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public CustomerEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtCustomerBillingRulesRepository billingRulesRepository,
             ExtCustomerPartyRepository partyRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.billingRulesRepository = billingRulesRepository;
         this.partyRepository = partyRepository;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -86,7 +99,6 @@ public class CustomerEventsListener {
     @KafkaListener(
             topics = "${pos.accounting.kafka.customer-events-topic:customer.events.v1}",
             groupId = "pos-accounting-customer-events")
-    @Transactional
     public void onCustomerEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -111,12 +123,15 @@ public class CustomerEventsListener {
         }
 
         try {
-            switch (eventType) {
-                case BillingRulesUpdatedV1.EVENT_TYPE -> applyBillingRulesUpdate(envelope);
-                case CustomerPartyUpdatedV1.EVENT_TYPE -> applyPartyUpdated(envelope);
-                case CustomerPartyDeletedV1.EVENT_TYPE -> applyPartyDeleted(envelope);
-                default -> throw new IllegalStateException("Unhandled customer event type: " + eventType);
-            }
+            handlerTransaction.executeWithoutResult(_ -> {
+                switch (eventType) {
+                    case BillingRulesUpdatedV1.EVENT_TYPE -> applyBillingRulesUpdate(envelope);
+                    case CustomerPartyUpdatedV1.EVENT_TYPE -> applyPartyUpdated(envelope);
+                    case CustomerPartyDeletedV1.EVENT_TYPE -> applyPartyDeleted(envelope);
+                    default -> throw new IllegalStateException("Unhandled customer event type: " + eventType);
+                }
+                markProcessed(eventId);
+            });
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;
@@ -125,9 +140,14 @@ public class CustomerEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed customer event payload eventId={}: {}", eventId, e.getMessage(), e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         } catch (Exception e) {
             log.warn("Skipping malformed customer event eventId={}", eventId, e);
+            handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
         }
+    }
+
+    private void markProcessed(@NonNull String eventId) {
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .processedAt(Instant.now(clock))
@@ -201,11 +221,9 @@ public class CustomerEventsListener {
 
         // party_type and status are NOT NULL in ext_customer_party, and this entity has an
         // assigned @Id with no @Version, so save() routes through merge() and the insert is
-        // deferred to flush — a constraint violation would surface at commit, AFTER the
-        // catch-and-skip below and after the processed_events row is written. The whole
-        // transaction including the dedupe row would then roll back and the container would
-        // redeliver the same offset forever. This class promises malformed payloads are skipped,
-        // not that they block the partition, so reject the fact here where the skip still works.
+        // deferred to flush — a constraint violation would surface only when the handler's
+        // transaction commits, as an opaque integrity error rather than a named rejection. This
+        // class promises malformed payloads are skipped with a reason, so reject the fact here.
         if (isBlank(payload.partyType()) || isBlank(payload.status())) {
             log.warn(
                     "Skipping customer-party event partyId={} with blank partyType/status; the replica requires both",
