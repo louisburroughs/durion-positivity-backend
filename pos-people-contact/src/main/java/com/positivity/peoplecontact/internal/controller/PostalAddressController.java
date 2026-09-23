@@ -49,7 +49,8 @@ public class PostalAddressController {
                     person; an absent address is an ordinary answer, not an error.
                     """)
     @ApiResponse(responseCode = "200", description = "Address found and returned.")
-    @ApiResponse(responseCode = "204", description = "No address on file for the person.")
+    // An empty @Content stops springdoc inferring the method's PostalAddressDto return type as a 204 body.
+    @ApiResponse(responseCode = "204", description = "No address on file for the person.", content = @Content())
     @EmitEvent(id = "PEOPLE_CONTACT_PERSON_ADDRESS_GET", apiVersion = "1")
     @GetMapping("/v1/people/{personId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -162,7 +163,8 @@ public class PostalAddressController {
                     organization; an absent address is an ordinary answer, not an error.
                     """)
     @ApiResponse(responseCode = "200", description = "Address found and returned.")
-    @ApiResponse(responseCode = "204", description = "No address on file for the organization.")
+    // An empty @Content stops springdoc inferring the method's PostalAddressDto return type as a 204 body.
+    @ApiResponse(responseCode = "204", description = "No address on file for the organization.", content = @Content())
     @EmitEvent(id = "PEOPLE_CONTACT_ORG_ADDRESS_GET", apiVersion = "1")
     @GetMapping("/v1/organizations/{organizationId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
