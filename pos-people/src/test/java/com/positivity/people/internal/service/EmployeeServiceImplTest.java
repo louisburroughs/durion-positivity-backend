@@ -1677,6 +1677,88 @@ class EmployeeServiceImplTest {
             assertThat(row.getContactInfo()).isNull();
         }
 
+        /** An employee row in a given status, for the capability-flag tests below. */
+        private Employee rowWithStatus(UUID personId, String employeeNumber, EmployeeStatus status) {
+            return Employee.builder()
+                    .id(UUID.randomUUID())
+                    .personId(personId)
+                    .employeeNumber(employeeNumber)
+                    .status(status)
+                    .build();
+        }
+
+        /**
+         * durion#2159 review finding: the {@code ALLOWED_ACTIONS} enrichment path had no
+         * service-level test at all. {@link EmployeeActionPolicy}'s matrix is covered in isolation
+         * by {@code EmployeeActionPolicyTest}, and {@code EmployeeControllerTest} mocks
+         * {@code EmployeeService} and only asserts that the field serializes -- so a regression in
+         * any of the three things this method actually does (resolve the caller's authorities once,
+         * read each row's own status, assign the computed list onto the row) would have left both
+         * of those suites green. {@code EVERY_INCLUDE} above deliberately does not carry
+         * {@code ALLOWED_ACTIONS}, so nothing else in this class reaches the code either.
+         *
+         * <p>The policy is a real instance here, not a mock, so this asserts the actions a caller
+         * would genuinely receive rather than that a stubbed list was echoed back.
+         */
+        @Test
+        @DisplayName("ALLOWED_ACTIONS is computed per row from that row's status and the caller's authorities")
+        void allowedActionsAreComputedPerRowForTheCaller() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW, PeoplePermissions.EMPLOYEE_ACTIVATION);
+
+            UUID brownId = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f7002");
+            when(employeeRepository.findAll())
+                    .thenReturn(List.of(
+                            rowWithStatus(JANE_ID, "EMP-1000", EmployeeStatus.ACTIVE),
+                            rowWithStatus(brownId, "EMP-1001", EmployeeStatus.DISABLED)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Ann", "Able"), replicaRow(brownId, "Bob", "Brown")));
+
+            List<EmployeeSummaryDto> rows = service.searchEmployees(
+                            null, null, null, 0, 20, List.of(EmployeeSearchInclude.ALLOWED_ACTIONS))
+                    .items();
+
+            // Default sort is lastName,asc: Able (ACTIVE) then Brown (DISABLED). The two rows must
+            // NOT receive the same flags -- that is what catches the status being read once for the
+            // page rather than per row.
+            assertThat(rows.get(0).getAllowedActions())
+                    .contains(AllowedAction.DISABLE)
+                    .doesNotContain(AllowedAction.ENABLE);
+            assertThat(rows.get(1).getAllowedActions())
+                    .contains(AllowedAction.ENABLE)
+                    .doesNotContain(AllowedAction.DISABLE);
+            // This caller holds no PII bit, so VIEW_PII must be offered on neither row. This is the
+            // assertion that fails if the authorities come from anywhere but the real caller.
+            assertThat(rows)
+                    .allSatisfy(row -> assertThat(row.getAllowedActions()).doesNotContain(AllowedAction.VIEW_PII));
+        }
+
+        /**
+         * The negative half of the above: same rows, same statuses, a caller without
+         * {@code people:employee:activation}. Without this, a bug that ignored the caller's
+         * authorities entirely and keyed only off status would still satisfy the positive test.
+         */
+        @Test
+        @DisplayName("a caller without people:employee:activation is offered neither DISABLE nor ENABLE")
+        void allowedActionsOmitTheActivationPairWithoutThatPermission() {
+            caller(PeoplePermissions.EMPLOYEE_VIEW);
+
+            UUID brownId = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f7003");
+            when(employeeRepository.findAll())
+                    .thenReturn(List.of(
+                            rowWithStatus(JANE_ID, "EMP-1000", EmployeeStatus.ACTIVE),
+                            rowWithStatus(brownId, "EMP-1001", EmployeeStatus.DISABLED)));
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(replicaRow(JANE_ID, "Ann", "Able"), replicaRow(brownId, "Bob", "Brown")));
+
+            List<EmployeeSummaryDto> rows = service.searchEmployees(
+                            null, null, null, 0, 20, List.of(EmployeeSearchInclude.ALLOWED_ACTIONS))
+                    .items();
+
+            assertThat(rows)
+                    .allSatisfy(row -> assertThat(row.getAllowedActions())
+                            .doesNotContain(AllowedAction.DISABLE, AllowedAction.ENABLE));
+        }
+
         @Test
         @DisplayName("include= absent leaves the response identical to the pre-#2155 thin shape")
         void includeAbsentLeavesTheThinShapeUnchanged() {
