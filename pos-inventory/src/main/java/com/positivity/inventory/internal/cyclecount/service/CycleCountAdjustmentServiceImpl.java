@@ -17,16 +17,19 @@ import com.positivity.inventory.internal.event.AuditAggregateRef;
 import com.positivity.inventory.internal.event.InventoryAuditEvent;
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
 import com.positivity.inventory.internal.exception.CycleCountConflictException;
+import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
 import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.ApprovalThresholdEvaluator;
 import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
 import com.positivity.inventory.internal.service.CostingMethodResolver;
 import com.positivity.inventory.internal.service.CycleCountConflictDetector;
 import com.positivity.inventory.internal.service.LedgerPostingService;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.Quantities;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -66,6 +69,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     private final SkuCostStateRepository costStateRepository;
     private final CostingMethodResolver methodResolver;
     private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+    private final LocationScopeService locationScopeService;
 
     @Override
     @Transactional
@@ -81,8 +85,11 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
             throw new IllegalArgumentException("No adjustment needed - counted quantity matches system quantity");
         }
 
-        if (request.getTaskId() != null && !taskRepository.existsById(request.getTaskId())) {
-            throw new TaskNotFoundException(request.getTaskId());
+        UUID locationId = resolveLocation(request);
+        if (locationId != null) {
+            // ADR-0061 gate (#2167): the counted shelf — named on the request or taken from the
+            // task's bin — must lie within the caller's reach before anything is recorded or posted.
+            locationScopeService.require(locationId, InventoryPermissionRegistry.ADJUSTMENT_CREATE);
         }
 
         // odoo-parity J3 (#1053): source costAtTimeOfAdjustment from the J1 costing engine's
@@ -95,6 +102,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         CycleCountAdjustment adjustment = CycleCountAdjustment.builder()
                 .stockItemId(request.getStockItemId())
                 .taskId(request.getTaskId())
+                .locationId(locationId)
                 .reasonCode(request.getReasonCode())
                 .quantityChange(quantityChange)
                 .costAtTimeOfAdjustment(costAtTimeOfAdjustment)
@@ -128,6 +136,32 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         }
 
         return toResponse(adjustment);
+    }
+
+    /**
+     * The storage location the adjustment's variance posts against (#2167). A task whose bin holds a
+     * location UUID decides it; a task-less adjustment takes the request's {@code locationId}. A
+     * request location that contradicts its task's bin is refused rather than silently overridden:
+     * one of the two names the wrong shelf. {@code null} only when neither names one, and then the
+     * variance posts against the SKU's location-less balance, as before.
+     */
+    private @Nullable UUID resolveLocation(CreateAdjustmentRequest request) {
+        UUID requested = request.getLocationId();
+        if (request.getTaskId() == null) {
+            return requested;
+        }
+        CycleCountTask task = taskRepository
+                .findById(request.getTaskId())
+                .orElseThrow(() -> new TaskNotFoundException(request.getTaskId()));
+        Optional<UUID> taskLocation = CycleCountConflictDetector.locationIdOf(task);
+        if (taskLocation.isEmpty()) {
+            return requested;
+        }
+        if (requested != null && !requested.equals(taskLocation.get())) {
+            throw new IllegalArgumentException("locationId " + requested + " does not match task " + request.getTaskId()
+                    + " bin location " + taskLocation.get());
+        }
+        return taskLocation.get();
     }
 
     @Override
@@ -252,16 +286,14 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     /**
      * Replaces the stale snapshot math with current-on-hand math: quantityChange
      * becomes countedQuantity - currentOnHand, using the same on-hand
-     * aggregation the posting path uses for quantityAfter — scoped to the
-     * task's storage location when its bin holds a location UUID (a count of
-     * bin A must never be reconciled against the SKU's stock in bins B and C),
-     * global otherwise. The funnel's floor-at-zero matrix still applies when
+     * aggregation and location the posting path uses for quantityAfter
+     * ({@link #postingLocationOf}: a count of bin A must never be reconciled
+     * against the SKU's stock in bins B and C, nor computed over one scope and
+     * posted to another — #2167), global only when no location is known. The funnel's floor-at-zero matrix still applies when
      * the recomputed variance posts.
      */
     private void recomputeVarianceAgainstCurrentOnHand(CycleCountAdjustment adjustment, CycleCountTask task) {
-        BigDecimal currentOnHand = currentOnHand(
-                adjustment.getStockItemId(),
-                CycleCountConflictDetector.locationIdOf(task).orElse(null));
+        BigDecimal currentOnHand = currentOnHand(adjustment.getStockItemId(), postingLocationOf(adjustment));
         BigDecimal recomputedChange = adjustment.getCountedQuantity().subtract(currentOnHand);
         log.info(
                 "Adjustment {} approved on CONFLICT task {}: variance recomputed against current on-hand"
@@ -307,7 +339,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         log.info("Posting adjustment {} to inventory ledger", adjustment.getAdjustmentId());
 
         try {
-            UUID locationId = taskLocationOf(adjustment);
+            UUID locationId = postingLocationOf(adjustment);
             BigDecimal currentOnHand = currentOnHand(adjustment.getStockItemId(), locationId);
             BigDecimal quantityAfter = currentOnHand.add(adjustment.getQuantityChange());
 
@@ -342,6 +374,15 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                     ledgerEntry.getLedgerEntryId(),
                     adjustment.getStockItemId(),
                     quantityAfter);
+        } catch (NegativeStockPolicyViolationException e) {
+            // A count the ledger refuses (#2167) is the caller's to correct, not a posting failure:
+            // it surfaces as the handler's 422 with its policy code and projected on-hand, and the
+            // transaction rolls back leaving the adjustment PENDING_APPROVAL for a recount.
+            log.warn(
+                    "Adjustment {} rejected by negative-stock policy: {}",
+                    adjustment.getAdjustmentId(),
+                    e.getMessage());
+            throw e;
         } catch (Exception e) {
             log.error("Failed to post adjustment {} to ledger", adjustment.getAdjustmentId(), e);
             adjustment.setStatus(AdjustmentStatus.FAILED);
@@ -353,14 +394,18 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     }
 
     /**
-     * The storage location an adjustment's variance posts against: the linked task's bin when it
-     * holds a location UUID (the form plan-driven task generation writes), {@code null} for
-     * task-less adjustments and free-text bins. Carrying this onto the posted
+     * The storage location an adjustment's variance posts against: the location resolved at create
+     * time ({@link #resolveLocation}), else — for adjustments recorded before #2167 — the linked
+     * task's bin when it holds a location UUID (the form plan-driven task generation writes),
+     * {@code null} for task-less adjustments with no location and free-text bins. Carrying this onto the posted
      * {@code COUNT_VARIANCE_*} entry is what makes a bin-scoped expected-quantity snapshot
      * converge: without it, the correction lands on the NULL-location key and the same shrinkage
      * is re-detected by every subsequent plan for that bin.
      */
-    private @Nullable UUID taskLocationOf(CycleCountAdjustment adjustment) {
+    private @Nullable UUID postingLocationOf(CycleCountAdjustment adjustment) {
+        if (adjustment.getLocationId() != null) {
+            return adjustment.getLocationId();
+        }
         if (adjustment.getTaskId() == null) {
             return null;
         }
@@ -429,6 +474,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                 .adjustmentId(adjustment.getAdjustmentId())
                 .stockItemId(adjustment.getStockItemId())
                 .taskId(adjustment.getTaskId())
+                .locationId(adjustment.getLocationId())
                 .reasonCode(adjustment.getReasonCode())
                 .quantityChange(adjustment.getQuantityChange())
                 .costAtTimeOfAdjustment(adjustment.getCostAtTimeOfAdjustment())

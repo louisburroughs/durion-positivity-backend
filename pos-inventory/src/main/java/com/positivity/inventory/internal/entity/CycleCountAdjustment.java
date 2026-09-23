@@ -59,6 +59,14 @@ public class CycleCountAdjustment extends TenantScopedEntity {
     private UUID taskId;
 
     /**
+     * Storage location the variance posts against (#2167): the task's bin when it holds a
+     * location UUID, else the location named on the create request. Nullable — a task-less
+     * adjustment that names no location posts against the SKU's location-less balance.
+     */
+    @Column(name = "location_id")
+    private UUID locationId;
+
+    /**
      * Reason code for the adjustment (e.g., 'CYCLE_COUNT_SHRINK',
      * 'CYCLE_COUNT_OVERAGE').
      */
