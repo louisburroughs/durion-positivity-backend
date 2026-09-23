@@ -807,7 +807,10 @@ class EmployeeServiceImplTest {
             assertThat(published.getValue().getStatusEffectiveAt()).isEqualTo(NOW);
             assertThat(published.getValue().getUpdatedAt()).isEqualTo(NOW);
             assertThat(profile.getStatus()).isEqualTo(EmployeeStatus.ACTIVE);
-            assertThat(profile.getUpdatedAt()).isEqualTo(NOW);
+            // profile.updatedAt comes from the identity replica (person.personUpdatedAt) when a
+            // replica row exists, not from the employee row -- see profileFromReplica -- so it is
+            // NOT asserted against `now` here; published.getValue().getUpdatedAt() above already
+            // pins the employee-side value the atomic update wrote.
             assertThat(profile.getFirstName()).isEqualTo("Jane");
         }
 
@@ -825,8 +828,14 @@ class EmployeeServiceImplTest {
          */
         @Test
         void twoSequentialAttemptsWithTheSameTokenCannotBothSucceed() {
+            // A fresh Employee instance per call (thenAnswer, not thenReturn of one shared
+            // instance): a real repository read returns an independent object each time, and the
+            // first call's in-memory field mutations (see enableEmployee) must not leak into what
+            // the second call reads -- only the stubbed reactivateIfDisabledAndTokenMatches below
+            // should be what tells the two calls apart, exactly as the real atomic UPDATE would.
             when(employeeRepository.findByPersonId(PERSON_ID))
-                    .thenReturn(Optional.of(employeeWithUpdatedAt(EmployeeStatus.DISABLED, CURRENT_UPDATED_AT)));
+                    .thenAnswer(invocation ->
+                            Optional.of(employeeWithUpdatedAt(EmployeeStatus.DISABLED, CURRENT_UPDATED_AT)));
             when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.of(replica()));
             when(employeeRepository.reactivateIfDisabledAndTokenMatches(PERSON_ID, CURRENT_UPDATED_AT, NOW))
                     .thenReturn(1)
