@@ -42,17 +42,14 @@ public class PostalAddressController {
                     postal-address authority for person parties (FI-4).
                     Use this tool when reading a person's mailing address; use getOrganizationPostalAddress \
                     instead for CRM organization parties.
-                    Preconditions: an address must already have been stored for the person with \
-                    putPersonPostalAddress.
+                    Preconditions: none; an address is present only once stored with putPersonPostalAddress.
                     Required inputs: personId (UUID) as a path parameter; there is no request body.
                     Emits a PEOPLE_CONTACT_PERSON_ADDRESS_GET audit event; no state changes.
-                    Returns 404 when no address is on file for the person.
+                    Returns 200 with the address, or 204 with no body when no address is on file for the \
+                    person; an absent address is an ordinary answer, not an error.
                     """)
     @ApiResponse(responseCode = "200", description = "Address found and returned.")
-    @ApiResponse(
-            responseCode = "404",
-            description = "No address on file for the person.",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "204", description = "No address on file for the person.")
     @EmitEvent(id = "PEOPLE_CONTACT_PERSON_ADDRESS_GET", apiVersion = "1")
     @GetMapping("/v1/people/{personId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -64,7 +61,7 @@ public class PostalAddressController {
         return postalAddressService
                 .getAddress(PartyType.PERSON, personId)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElse(ResponseEntity.noContent().build());
     }
 
     @Operation(
@@ -157,18 +154,15 @@ public class PostalAddressController {
                     id is an external pos-customer party reference stored verbatim.
                     Use this tool when reading an organization's mailing address; use getPersonPostalAddress \
                     instead for person parties.
-                    Preconditions: an address must already have been stored for the organization with \
-                    putOrganizationPostalAddress.
+                    Preconditions: none; an address is present only once stored with putOrganizationPostalAddress.
                     Required inputs: organizationId (the pos-customer commercial party UUID) as a path \
                     parameter; there is no request body.
                     Emits a PEOPLE_CONTACT_ORG_ADDRESS_GET audit event; no state changes.
-                    Returns 404 when no address is on file for the organization.
+                    Returns 200 with the address, or 204 with no body when no address is on file for the \
+                    organization; an absent address is an ordinary answer, not an error.
                     """)
     @ApiResponse(responseCode = "200", description = "Address found and returned.")
-    @ApiResponse(
-            responseCode = "404",
-            description = "No address on file for the organization.",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(responseCode = "204", description = "No address on file for the organization.")
     @EmitEvent(id = "PEOPLE_CONTACT_ORG_ADDRESS_GET", apiVersion = "1")
     @GetMapping("/v1/organizations/{organizationId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -180,7 +174,7 @@ public class PostalAddressController {
         return postalAddressService
                 .getAddress(PartyType.ORGANIZATION, organizationId)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElse(ResponseEntity.noContent().build());
     }
 
     @Operation(
