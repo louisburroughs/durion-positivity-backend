@@ -35,14 +35,14 @@ public class TimePeriodManagementController {
 
     @PostMapping
     @Operation(operationId = "createTimePeriod", summary = "Create Pay Period", description = """
-                    Creates a pay period for a tenant with an inclusive start and end date and an \
-                    initial lifecycle status.
+                    Creates a pay period for the caller's tenant with an inclusive start and end date \
+                    and an initial lifecycle status; the tenant comes from the access token, never the body.
                     Use this tool for corrections and off-grid periods; do not create routine periods \
                     manually, the scheduled rollover opens those on the configured cadence instead.
                     Preconditions: the range must not overlap any existing period for the tenant, and \
                     endDate must not be before startDate.
-                    Required inputs: a body with tenantId (UUID), startDate, and endDate; status is \
-                    optional and defaults to OPEN.
+                    Required inputs: a body with startDate and endDate; status is optional and \
+                    defaults to OPEN.
                     Emits PEOPLE_TIME_PERIOD_CREATE.
                     Returns 400 when the range is invalid, and 409 when the range overlaps an existing \
                     period.
@@ -63,15 +63,13 @@ public class TimePeriodManagementController {
     @EmitEvent(id = "PEOPLE_TIME_PERIOD_CREATE", apiVersion = "1")
     public ResponseEntity<TimePeriodDto> createTimePeriod(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description =
-                                    "Tenant, inclusive date range, and optional initial status of the new" + " period.",
+                            description = "Inclusive date range and optional initial status of the new period.",
                             required = true,
                             content =
                                     @Content(
                                             mediaType = "application/json",
                                             examples = @ExampleObject(name = "Biweekly period", value = """
-                                                    {"tenantId":"01960000-0000-7000-8000-000000000001",\
-                                                    "startDate":"2026-06-01","endDate":"2026-06-14"}
+                                                    {"startDate":"2026-06-01","endDate":"2026-06-14"}
                                                     """)))
                     @RequestBody
                     @Valid

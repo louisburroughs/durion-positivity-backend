@@ -18,6 +18,8 @@ import com.positivity.people.internal.enums.TimePeriodStatus;
 import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.TimePeriodRepository;
 import com.positivity.people.internal.repository.TimekeepingEntryRepository;
+import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.TenantContextMissingException;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
@@ -26,6 +28,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -80,9 +83,19 @@ class TimePeriodManagementServiceImplTest {
     @DisplayName("createTimePeriod")
     class CreateTimePeriod {
 
+        // The gateway binds the caller's tenant from the token's tid; the request carries none.
+        @BeforeEach
+        void bindTenant() {
+            TenantContext.bind(TENANT_ID);
+        }
+
+        @AfterEach
+        void clearTenant() {
+            TenantContext.clear();
+        }
+
         private CreateTimePeriodRequest request(LocalDate start, LocalDate end) {
             return CreateTimePeriodRequest.builder()
-                    .tenantId(TENANT_ID)
                     .startDate(start)
                     .endDate(end)
                     .build();
@@ -113,13 +126,38 @@ class TimePeriodManagementServiceImplTest {
             when(timePeriodRepository.saveAndFlush(any(TimePeriod.class))).thenAnswer(inv -> inv.getArgument(0));
 
             CreateTimePeriodRequest req = CreateTimePeriodRequest.builder()
-                    .tenantId(TENANT_ID)
                     .startDate(LocalDate.of(2026, 5, 18))
                     .endDate(LocalDate.of(2026, 5, 31))
                     .status(TimePeriodStatus.PAYROLL_CLOSED)
                     .build();
 
             assertThat(service.createTimePeriod(req).getStatus()).isEqualTo(TimePeriodStatus.PAYROLL_CLOSED);
+        }
+
+        @Test
+        @DisplayName("scopes the overlap check and the new row to the bound tenant")
+        void usesBoundTenant() {
+            when(timePeriodRepository.existsByTenantIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                            any(), any(), any()))
+                    .thenReturn(false);
+            when(timePeriodRepository.saveAndFlush(any(TimePeriod.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            TimePeriodDto dto = service.createTimePeriod(request(ANCHOR, LocalDate.of(2026, 6, 14)));
+
+            verify(timePeriodRepository)
+                    .existsByTenantIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                            TENANT_ID, LocalDate.of(2026, 6, 14), ANCHOR);
+            assertThat(dto.getTenantId()).isEqualTo(TENANT_ID);
+        }
+
+        @Test
+        @DisplayName("refuses to create when no tenant is bound")
+        void requiresBoundTenant() {
+            TenantContext.clear();
+
+            assertThatThrownBy(() -> service.createTimePeriod(request(ANCHOR, LocalDate.of(2026, 6, 14))))
+                    .isInstanceOf(TenantContextMissingException.class);
+            verify(timePeriodRepository, never()).saveAndFlush(any());
         }
 
         @Test

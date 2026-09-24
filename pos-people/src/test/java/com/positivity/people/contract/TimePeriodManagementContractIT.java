@@ -1,7 +1,9 @@
 package com.positivity.people.contract;
 
 import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_B;
 import static org.hamcrest.Matchers.*;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -9,12 +11,16 @@ import com.positivity.people.BaseIntegrationTest;
 import com.positivity.people.internal.entity.TimePeriod;
 import com.positivity.people.internal.enums.TimePeriodStatus;
 import com.positivity.people.internal.repository.TimePeriodRepository;
+import com.positivity.tenancy.TenantHeaders;
+import com.positivity.tenancy.web.TenantContextFilter;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @DisplayName("Time Period Management ContractIT")
 class TimePeriodManagementContractIT extends BaseIntegrationTest {
@@ -27,6 +33,22 @@ class TimePeriodManagementContractIT extends BaseIntegrationTest {
     @Autowired
     private TimePeriodRepository timePeriodRepository;
 
+    @Autowired
+    private TenantContextFilter tenantContextFilter;
+
+    /**
+     * The base MockMvc carries only the security chain, so the tenant filter never ran and create
+     * was reached unbound. Add it back so {@code X-Tenant-Id} (what the gateway derives from the
+     * token's {@code tid}) binds the tenant exactly as in production (ADR-0062 §3).
+     */
+    @BeforeEach
+    void addTenantFilter() {
+        mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext)
+                .addFilters(tenantContextFilter)
+                .apply(springSecurity())
+                .build();
+    }
+
     private TimePeriod seedOpenPeriod() {
         TimePeriod period = new TimePeriod();
         period.setTenantId(TENANT_ID);
@@ -37,13 +59,29 @@ class TimePeriodManagementContractIT extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("POST /v1/people/time-periods ignores a body tenantId and creates for the bound tenant")
+    void createIgnoresBodyTenant() throws Exception {
+        // ADR-0062 §3: tenancy comes from the token's tid (the gateway's X-Tenant-Id header) only;
+        // a body naming another tenant is ignored.
+        mockMvc.perform(withAuth(post("/v1/people/time-periods"), TIME_PERIOD_AUTHORITIES)
+                        .header(TenantHeaders.HTTP_TENANT_ID, TENANT_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"tenantId":"%s","startDate":"2026-07-01","endDate":"2026-07-14"}
+                                """.formatted(TENANT_B)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tenantId", is(TENANT_ID.toString())));
+    }
+
+    @Test
     @DisplayName("POST /v1/people/time-periods creates an OPEN period")
     void createTimePeriod() throws Exception {
         mockMvc.perform(withAuth(post("/v1/people/time-periods"), TIME_PERIOD_AUTHORITIES)
+                        .header(TenantHeaders.HTTP_TENANT_ID, TENANT_ID.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"%s","startDate":"2026-06-01","endDate":"2026-06-14"}
-                                """.formatted(TENANT_ID)))
+                                {"startDate":"2026-06-01","endDate":"2026-06-14"}
+                                """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.timePeriodId", notNullValue()))
                 .andExpect(jsonPath("$.tenantId", is(TENANT_ID.toString())))
@@ -57,10 +95,11 @@ class TimePeriodManagementContractIT extends BaseIntegrationTest {
     void createOverlappingPeriod() throws Exception {
         seedOpenPeriod();
         mockMvc.perform(withAuth(post("/v1/people/time-periods"), TIME_PERIOD_AUTHORITIES)
+                        .header(TenantHeaders.HTTP_TENANT_ID, TENANT_ID.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"%s","startDate":"2026-06-10","endDate":"2026-06-20"}
-                                """.formatted(TENANT_ID)))
+                                {"startDate":"2026-06-10","endDate":"2026-06-20"}
+                                """))
                 .andExpect(status().isConflict());
     }
 
@@ -68,10 +107,11 @@ class TimePeriodManagementContractIT extends BaseIntegrationTest {
     @DisplayName("POST /v1/people/time-periods rejects an inverted range with 400")
     void createInvertedRange() throws Exception {
         mockMvc.perform(withAuth(post("/v1/people/time-periods"), TIME_PERIOD_AUTHORITIES)
+                        .header(TenantHeaders.HTTP_TENANT_ID, TENANT_ID.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"%s","startDate":"2026-06-14","endDate":"2026-06-01"}
-                                """.formatted(TENANT_ID)))
+                                {"startDate":"2026-06-14","endDate":"2026-06-01"}
+                                """))
                 .andExpect(status().isBadRequest());
     }
 
@@ -128,8 +168,8 @@ class TimePeriodManagementContractIT extends BaseIntegrationTest {
         mockMvc.perform(withAuth(post("/v1/people/time-periods"), "people:timekeeping:view")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"%s","startDate":"2026-06-01","endDate":"2026-06-14"}
-                                """.formatted(TENANT_ID)))
+                                {"startDate":"2026-06-01","endDate":"2026-06-14"}
+                                """))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(post("/v1/people/time-periods")
