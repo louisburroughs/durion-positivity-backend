@@ -521,6 +521,7 @@ class PartyServiceImplTest {
         assertThat(response.getPartyType()).isEqualTo("COMMERCIAL");
         assertThat(response.getTaxId()).isEqualTo("TX-1");
         assertThat(response.getBillingTermsId()).isEqualTo("NET45");
+        assertThat(response.getPersonId()).isNull();
     }
 
     @Test
@@ -538,6 +539,7 @@ class PartyServiceImplTest {
 
         assertThat(response.getPartyId()).isEqualTo(partyId.toString());
         assertThat(response.getPartyType()).isEqualTo("PERSON");
+        assertThat(response.getPersonId()).isEqualTo(personId.toString());
         assertThat(response.getLegalName()).isEqualTo("Pat Person");
         assertThat(response.getDisplayName()).isEqualTo("Pat Person");
         assertThat(response.getStatus()).isEqualTo("ACTIVE");
