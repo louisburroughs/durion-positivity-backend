@@ -13,12 +13,12 @@
     <description>Module to manage people</description>
 
     <properties>
-        <!-- Coverage ratchet: measured 83.2% line / 76.1% branch by the gate's own
+        <!-- Coverage ratchet: measured 86.9% line / 78.5% branch by the gate's own
              command, `verify -DskipITs` (../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
-        <jacoco.line.min>0.80</jacoco.line.min>
-        <jacoco.branch.min>0.73</jacoco.branch.min>
+        <jacoco.line.min>0.83</jacoco.line.min>
+        <jacoco.branch.min>0.75</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
 

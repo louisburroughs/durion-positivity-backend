@@ -13,12 +13,12 @@
     <description>Identity/contact/user-link authority module (ADR-0044 Phase 3)</description>
 
     <properties>
-        <!-- Coverage ratchet: measured 72.8% line / 62.2% branch by the gate's own
+        <!-- Coverage ratchet: measured 78.6% line / 66.4% branch by the gate's own
              command, `verify -DskipITs` (../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
-        <jacoco.line.min>0.69</jacoco.line.min>
-        <jacoco.branch.min>0.59</jacoco.branch.min>
+        <jacoco.line.min>0.75</jacoco.line.min>
+        <jacoco.branch.min>0.63</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
 
