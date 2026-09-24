@@ -9,6 +9,7 @@ import com.positivity.people.internal.enums.TimePeriodStatus;
 import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.TimePeriodRepository;
 import com.positivity.people.internal.repository.TimekeepingEntryRepository;
+import com.positivity.tenancy.TenantContext;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
@@ -47,13 +48,15 @@ public class TimePeriodManagementServiceImpl implements TimePeriodManagementServ
         if (request.getEndDate().isBefore(request.getStartDate())) {
             throw new RequestValidationException("endDate must not be before startDate");
         }
+        // ADR-0062 §3: the tenant is the one bound from the access token's tid, never request data.
+        UUID tenantId = TenantContext.require();
         if (timePeriodRepository.existsByTenantIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
-                request.getTenantId(), request.getEndDate(), request.getStartDate())) {
+                tenantId, request.getEndDate(), request.getStartDate())) {
             throw new IllegalStateException("An existing time period overlaps " + request.getStartDate() + " to "
                     + request.getEndDate() + " for this tenant");
         }
         TimePeriod period = new TimePeriod();
-        period.setTenantId(request.getTenantId());
+        period.setTenantId(tenantId);
         period.setStartDate(request.getStartDate());
         period.setEndDate(request.getEndDate());
         period.setStatus(request.getStatus() != null ? request.getStatus() : TimePeriodStatus.OPEN);

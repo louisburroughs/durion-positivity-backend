@@ -1824,13 +1824,13 @@ paths:
       - people:employee:edit
   /v1/people/time-periods:
     post:
-      description: 'Creates a pay period for a tenant with an inclusive start and end date and an initial lifecycle status.
+      description: 'Creates a pay period for the caller''s tenant with an inclusive start and end date and an initial lifecycle status; the tenant comes from the access token, never the body.
 
         Use this tool for corrections and off-grid periods; do not create routine periods manually, the scheduled rollover opens those on the configured cadence instead.
 
         Preconditions: the range must not overlap any existing period for the tenant, and endDate must not be before startDate.
 
-        Required inputs: a body with tenantId (UUID), startDate, and endDate; status is optional and defaults to OPEN.
+        Required inputs: a body with startDate and endDate; status is optional and defaults to OPEN.
 
         Emits PEOPLE_TIME_PERIOD_CREATE.
 
@@ -1847,10 +1847,9 @@ paths:
                 value:
                   endDate: '2026-06-14'
                   startDate: '2026-06-01'
-                  tenantId: 01960000-0000-7000-8000-000000000001
             schema:
               $ref: '#/components/schemas/CreateTimePeriodRequest'
-        description: Tenant, inclusive date range, and optional initial status of the new period.
+        description: Inclusive date range and optional initial status of the new period.
         required: true
       responses:
         '201':
@@ -3652,7 +3651,7 @@ components:
       - role
       type: object
     CreateTimePeriodRequest:
-      description: Request to create a pay period for timekeeping approval
+      description: Request to create a pay period for timekeeping approval; the tenant is the caller's own, taken from the access token (ADR-0062), never from the body
       properties:
         endDate:
           description: Last date of the period (inclusive)
@@ -3672,15 +3671,9 @@ components:
           - PAYROLL_CLOSED
           example: OPEN
           type: string
-        tenantId:
-          description: Tenant the period belongs to
-          example: 01960000-0000-7000-8000-000000000001
-          format: uuid
-          type: string
       required:
       - endDate
       - startDate
-      - tenantId
       type: object
     Decision:
       description: An individual decision for a specific time entry

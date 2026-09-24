@@ -4,7 +4,6 @@ import com.positivity.people.internal.enums.TimePeriodStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
-import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,15 +13,11 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Request to create a pay period for timekeeping approval")
+@Schema(
+        description =
+                "Request to create a pay period for timekeeping approval; the tenant is the caller's own, taken from the"
+                        + " access token (ADR-0062), never from the body")
 public class CreateTimePeriodRequest {
-
-    @NotNull
-    @Schema(
-            description = "Tenant the period belongs to",
-            example = "01960000-0000-7000-8000-000000000001",
-            requiredMode = Schema.RequiredMode.REQUIRED)
-    private UUID tenantId;
 
     @NotNull
     @Schema(
