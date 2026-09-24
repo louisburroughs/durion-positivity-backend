@@ -35,11 +35,24 @@ public class GetPartyResponse {
     private String partyId;
 
     /**
-     * Party type (ORGANIZATION|INDIVIDUAL)
+     * Party type (COMMERCIAL|PERSON)
      */
-    @Schema(description = "Party type discriminator", example = "ORGANIZATION", requiredMode = REQUIRED)
+    @Schema(
+            description = "Party type discriminator (COMMERCIAL|PERSON)",
+            example = "COMMERCIAL",
+            requiredMode = REQUIRED)
     @NotBlank
     private String partyType;
+
+    /**
+     * Canonical pos-people person id; set only for PERSON parties.
+     */
+    @Schema(
+            description = "Canonical pos-people person id, present only when partyType is PERSON. "
+                    + "Pass it to getPerson for the individual's names, contact points and preferred contact method.",
+            example = "01960003-0000-7000-8000-000000000022",
+            requiredMode = NOT_REQUIRED)
+    private String personId;
 
     /**
      * Legal name

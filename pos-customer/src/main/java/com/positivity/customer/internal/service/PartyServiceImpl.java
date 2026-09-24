@@ -191,6 +191,7 @@ public class PartyServiceImpl implements PartyService {
         return GetPartyResponse.builder()
                 .partyId(String.valueOf(personParty.getPartyId()))
                 .partyType(personParty.getPartyType().toString())
+                .personId(String.valueOf(personParty.getPersonId()))
                 .legalName(personName)
                 .displayName(personName)
                 .status(personParty.getStatus().toString())

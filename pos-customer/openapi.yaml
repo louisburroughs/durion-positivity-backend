@@ -6789,9 +6789,13 @@ components:
           minLength: 1
           type: string
         partyType:
-          description: Party type discriminator
-          example: ORGANIZATION
+          description: Party type discriminator (COMMERCIAL|PERSON)
+          example: COMMERCIAL
           minLength: 1
+          type: string
+        personId:
+          description: Canonical pos-people person id, present only when partyType is PERSON. Pass it to getPerson for the individual's names, contact points and preferred contact method.
+          example: 01960003-0000-7000-8000-000000000022
           type: string
         status:
           description: Current status of the party
