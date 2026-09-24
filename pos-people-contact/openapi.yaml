@@ -59,13 +59,13 @@ paths:
 
         Use this tool when reading an organization''s mailing address; use getPersonPostalAddress instead for person parties.
 
-        Preconditions: an address must already have been stored for the organization with putOrganizationPostalAddress.
+        Preconditions: none; an address is present only once stored with putOrganizationPostalAddress.
 
         Required inputs: organizationId (the pos-customer commercial party UUID) as a path parameter; there is no request body.
 
         Emits a PEOPLE_CONTACT_ORG_ADDRESS_GET audit event; no state changes.
 
-        Returns 404 when no address is on file for the organization.
+        Returns 200 with the address, or 204 with no body when no address is on file for the organization; an absent address is an ordinary answer, not an error.
 
         '
       operationId: getOrganizationPostalAddress
@@ -84,11 +84,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PostalAddressDto'
           description: Address found and returned.
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+        '204':
           description: No address on file for the organization.
       security:
       - bearerAuth:
@@ -896,13 +892,13 @@ paths:
 
         Use this tool when reading a person''s mailing address; use getOrganizationPostalAddress instead for CRM organization parties.
 
-        Preconditions: an address must already have been stored for the person with putPersonPostalAddress.
+        Preconditions: none; an address is present only once stored with putPersonPostalAddress.
 
         Required inputs: personId (UUID) as a path parameter; there is no request body.
 
         Emits a PEOPLE_CONTACT_PERSON_ADDRESS_GET audit event; no state changes.
 
-        Returns 404 when no address is on file for the person.
+        Returns 200 with the address, or 204 with no body when no address is on file for the person; an absent address is an ordinary answer, not an error.
 
         '
       operationId: getPersonPostalAddress
@@ -921,11 +917,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PostalAddressDto'
           description: Address found and returned.
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+        '204':
           description: No address on file for the person.
       security:
       - bearerAuth:

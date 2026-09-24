@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -93,7 +94,7 @@ class PostalAddressControllerWebMvcTest {
                 .andExpect(jsonPath("$.city").value("Leeds"));
 
         // Stubbed on PERSON specifically: had the controller passed ORGANIZATION, the stub
-        // would not match and the response would be a 404 instead.
+        // would not match and the response would be a 204 instead.
         verify(postalAddressService).getAddress(PartyType.PERSON, PARTY_ID);
     }
 
@@ -107,14 +108,21 @@ class PostalAddressControllerWebMvcTest {
         verify(postalAddressService).getAddress(PartyType.ORGANIZATION, PARTY_ID);
     }
 
-    @Test
-    @DisplayName("a party with no address on file is a 404, not an empty address")
-    void missingAddressIsNotFound() throws Exception {
-        when(postalAddressService.getAddress(PartyType.PERSON, PARTY_ID)).thenReturn(Optional.empty());
+    @ParameterizedTest(name = "{0} with no address on file is a 204 with no body")
+    @CsvSource({
+        "/v1/people/%s/postal-address,        people-contact:person:view,       PERSON",
+        "/v1/organizations/%s/postal-address, people-contact:organization:view, ORGANIZATION",
+    })
+    @DisplayName("a party with no address on file is a 204 with no body, not an error or an empty address")
+    void missingAddressIsNoContent(String pathTemplate, String authority, PartyType partyType) throws Exception {
+        when(postalAddressService.getAddress(partyType, PARTY_ID)).thenReturn(Optional.empty());
 
-        // An empty 200 body would read downstream as "this person lives nowhere" rather than
-        // "we have not recorded where they live".
-        mockMvc.perform(get(PERSON_PATH).header(AUTHORITIES, PERSON_VIEW)).andExpect(status().isNotFound());
+        // No address is an ordinary state, so it must not surface as a 404 the browser logs as a
+        // failed request. The body stays empty: an empty JSON object would read downstream as
+        // "this party lives nowhere" rather than "we have not recorded where they live".
+        mockMvc.perform(get(pathTemplate.formatted(PARTY_ID)).header(AUTHORITIES, authority))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
     }
 
     @ParameterizedTest(name = "{0} is refused to a holder of {1}")
