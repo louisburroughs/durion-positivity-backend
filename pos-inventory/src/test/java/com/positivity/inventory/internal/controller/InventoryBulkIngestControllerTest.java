@@ -12,6 +12,7 @@ import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.inventory.config.TestSecurityConfig;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.InventoryBulkIngestRecord;
+import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.movement.service.StockMovementService;
 import java.math.BigDecimal;
 import java.util.List;
@@ -88,7 +89,7 @@ class InventoryBulkIngestControllerTest {
         request.setLocationId(LOCATION_ID);
         request.setRecords(List.of(invRecord));
 
-        // createAdjustmentRequest validates nothing — it builds the request and saves it — so a
+        // Apart from a zero quantity (#2201), createAdjustmentRequest refuses nothing, so any other
         // failure on this path is a persistence fault, and the row says so rather than echoing it.
         // The old mock (IllegalArgumentException("Unknown SKU")) described a rejection the service
         // does not make, and the assertions were too weak to notice (issue #1718 review).
@@ -107,6 +108,30 @@ class InventoryBulkIngestControllerTest {
                 .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
                 .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
                 .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("inventory_adjustment_request"))));
+    }
+
+    @Test
+    void bulkIngest_zeroQuantityRow_isRefusedWithItsReason() throws Exception {
+        InventoryBulkIngestRecord invRecord = new InventoryBulkIngestRecord();
+        invRecord.setSku("ZERO-001");
+        invRecord.setQuantity(BigDecimal.ZERO);
+
+        BulkIngestRequest<InventoryBulkIngestRecord> request = new BulkIngestRequest<>();
+        request.setJobId(JOB_ID);
+        request.setLocationId(LOCATION_ID);
+        request.setRecords(List.of(invRecord));
+
+        // #2201: the service refuses a zero quantity; the row is the caller's and says why.
+        when(stockMovementService.createAdjustmentRequest(any(), any()))
+                .thenThrow(new InventoryValidationException("quantity must not be zero"));
+
+        mockMvc.perform(post("/v1/inventory/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INVENTORY_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage").value("quantity must not be zero"));
     }
 
     @Test

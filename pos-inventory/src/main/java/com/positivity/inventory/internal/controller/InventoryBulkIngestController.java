@@ -7,6 +7,7 @@ import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.InventoryBulkIngestRecord;
+import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.movement.service.StockMovementService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.shared.error.ApiError;
@@ -18,6 +19,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -56,9 +58,9 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
                     Preconditions: none beyond authentication; rows are processed independently, so one bad row \
                     fails only itself.
                     Required inputs: jobId (UUID), locationId (UUID) and at least one record with sku and a \
-                    non-negative quantity; a record-level locationId overrides the batch location, reasonCode \
-                    defaults to CYCLE_COUNT_ADJUSTMENT, and operatorId attributes the rows when a service account \
-                    submits the batch.
+                    positive quantity (a zero-quantity row is refused); a record-level locationId overrides the \
+                    batch location, reasonCode defaults to CYCLE_COUNT_ADJUSTMENT, and operatorId attributes the \
+                    rows when a service account submits the batch.
                     Emits an INVENTORY_BULK_INGEST event; each accepted row persists a PENDING adjustment request \
                     attributed to the resolved actor.
                     Returns 200 with per-row results — a row the service refused carries errorCode \
@@ -157,13 +159,18 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
     }
 
     /**
-     * No rejection types: {@code StockMovementService#createAdjustmentRequest} validates nothing
-     * and refuses nothing — it builds the request and saves it — so a failure on this path is a
-     * persistence fault, not the caller\'s row, and belongs behind a correlation id
-     * (issue #1718). Bare {@code IllegalArgumentException} is deliberately not named even though
-     * this module\'s advice answers it 400: it is equally what Hibernate and the JDK raise, and
-     * its message is the kind this fix exists to stop echoing.
+     * The one refusal {@code StockMovementService#createAdjustmentRequest} makes is a zero quantity
+     * (#2201), raised as {@link InventoryValidationException}; that row is the caller\'s and its
+     * message is echoed. Anything else on this path is a persistence fault and belongs behind a
+     * correlation id (issue #1718). Bare {@code IllegalArgumentException} is deliberately not named
+     * even though this module\'s advice answers it 400: it is equally what Hibernate and the JDK
+     * raise, and its message is the kind that fix exists to stop echoing.
      */
+    @Override
+    protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
+        return List.of(InventoryValidationException.class);
+    }
+
     @Override
     protected String rowRejectionCode() {
         return "INVENTORY_INGEST_FAILED";

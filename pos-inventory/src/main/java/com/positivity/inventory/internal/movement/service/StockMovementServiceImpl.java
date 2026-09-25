@@ -12,6 +12,7 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.MovementType;
 import com.positivity.inventory.internal.exception.CrossSiteTransferRequiresOrderException;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
+import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.exception.ZeroQuantityAdjustmentException;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
@@ -156,6 +157,11 @@ public class StockMovementServiceImpl implements StockMovementService {
     @Transactional
     public @NonNull AdjustmentRequestResponse createAdjustmentRequest(
             @NonNull CreateAdjustmentRequestDto request, @NonNull String actorUserId) {
+        // #2201: the DTO's @NonZero only runs where the body is bean-validated; bulk ingest builds
+        // the DTO itself, so the invariant is enforced here for every caller.
+        if (request.getQuantity() != null && request.getQuantity().signum() == 0) {
+            throw new InventoryValidationException("quantity must not be zero");
+        }
         InventoryAdjustmentRequest adjustmentRequest = InventoryAdjustmentRequest.builder()
                 .productSku(request.getProductSku())
                 .locationId(request.getLocationId())

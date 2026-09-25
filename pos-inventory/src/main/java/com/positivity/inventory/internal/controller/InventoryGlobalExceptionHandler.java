@@ -110,7 +110,11 @@ public class InventoryGlobalExceptionHandler {
                         fieldError.getField(),
                         fieldError.getDefaultMessage() != null ? fieldError.getDefaultMessage() : "is invalid"))
                 .toList();
+        return validationError(message, fieldErrors);
+    }
 
+    /** 400 {@code VALIDATION_ERROR} carrying {@code fieldErrors} when there are any (ADR-0017). */
+    private ResponseEntity<ApiError> validationError(String message, List<ApiError.FieldError> fieldErrors) {
         String correlationId = resolveCorrelationId(null);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(X_CORRELATION_ID, correlationId)
@@ -123,10 +127,36 @@ public class InventoryGlobalExceptionHandler {
                         fieldErrors.isEmpty() ? null : fieldErrors));
     }
 
+    /**
+     * Method-parameter validation ({@code @Validated} controllers): 400 with one field error per
+     * violation, named by the last node of its property path (the parameter or field name), the
+     * same envelope a request-body failure answers (ADR-0017, #2201).
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiError> handleConstraintViolation(ConstraintViolationException ex) {
+        List<ApiError.FieldError> fieldErrors = ex.getConstraintViolations().stream()
+                .map(violation ->
+                        new ApiError.FieldError(leafName(violation.getPropertyPath()), violation.getMessage()))
+                .toList();
+        String message = fieldErrors.isEmpty()
+                ? (ex.getMessage() != null ? ex.getMessage() : "Validation failed")
+                : fieldErrors.getFirst().field() + " " + fieldErrors.getFirst().message();
+        return validationError(message, fieldErrors);
+    }
+
+    private static String leafName(jakarta.validation.Path path) {
+        String name = null;
+        for (jakarta.validation.Path.Node node : path) {
+            if (node.getName() != null) {
+                name = node.getName();
+            }
+        }
+        return name != null ? name : path.toString();
+    }
+
     @ExceptionHandler({
         MethodArgumentTypeMismatchException.class,
         HttpMessageNotReadableException.class,
-        ConstraintViolationException.class,
         InvalidInventoryAvailabilityRequestException.class,
         IllegalArgumentException.class
     })
