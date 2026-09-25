@@ -218,7 +218,7 @@ class ReceiptControllerTest {
     void recordPrintDelivery_receiptNotFound_returns404() throws Exception {
         doThrow(new ReceiptNotFoundException("Receipt not found"))
                 .when(receiptService)
-                .recordPrintDelivery(RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS);
+                .recordPrintDelivery(INVOICE_ID, RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS);
 
         mockMvc.perform(post("/v1/invoices/{invoiceId}/receipts/{receiptId}/print", INVOICE_ID, RECEIPT_ID)
                         .contentType(MediaType.APPLICATION_JSON)

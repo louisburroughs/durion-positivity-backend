@@ -751,7 +751,7 @@ class PaymentReversalServiceImplTest {
     /** All refunds anchored to the invoice are mapped, including requestedAt. */
     @Test
     void listRefundsForInvoice_mapsAllAnchoredRecords() {
-        when(invoiceRepository.existsById(INVOICE_ID)).thenReturn(true);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
 
         RefundRecord paymentAnchored = new RefundRecord();
         paymentAnchored.setId(UUID.fromString("00000000-0000-7000-8000-000000000051"));
@@ -792,7 +792,7 @@ class PaymentReversalServiceImplTest {
 
     @Test
     void listRefundsForInvoice_unknownInvoice_throwsInvoiceNotFoundException() {
-        when(invoiceRepository.existsById(INVOICE_ID)).thenReturn(false);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.listRefundsForInvoice(INVOICE_ID))
                 .isInstanceOf(InvoiceNotFoundException.class);
@@ -1400,6 +1400,44 @@ class PaymentReversalServiceImplTest {
                     .isInstanceOf(LocationScopeDeniedException.class);
 
             verify(refundRecordRepository, never()).save(any());
+        }
+
+        // -------------------------------------------------------------------------
+        // listRefundsForInvoice location scope (#2231)
+        // -------------------------------------------------------------------------
+
+        @Test
+        @DisplayName("listRefundsForInvoice: invoice location out of reach denies, refunds never queried")
+        void listRefundsForInvoice_outOfReach_denies() {
+            authenticate(scopedTo(InvoicePermissions.VIEW, otherShop), InvoicePermissions.VIEW);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(scopedInvoice()));
+
+            assertThatThrownBy(() -> paymentReversalServiceImpl.listRefundsForInvoice(INVOICE_ID))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            verifyNoInteractions(refundRecordRepository);
+        }
+
+        @Test
+        @DisplayName("listRefundsForInvoice: invoice location in reach returns results")
+        void listRefundsForInvoice_inReach_succeeds() {
+            authenticate(scopedTo(InvoicePermissions.VIEW, regionNode), InvoicePermissions.VIEW);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(scopedInvoice()));
+            when(refundRecordRepository.findAllAnchoredToInvoice(INVOICE_ID)).thenReturn(List.of());
+
+            assertThat(paymentReversalServiceImpl.listRefundsForInvoice(INVOICE_ID))
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("listRefundsForInvoice: pre-rollout caller (no scope claims) is unaffected")
+        void listRefundsForInvoice_preRollout_succeeds() {
+            authenticate(LocationScope.unscoped(), InvoicePermissions.VIEW);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(scopedInvoice()));
+            when(refundRecordRepository.findAllAnchoredToInvoice(INVOICE_ID)).thenReturn(List.of());
+
+            assertThat(paymentReversalServiceImpl.listRefundsForInvoice(INVOICE_ID))
+                    .isEmpty();
         }
     }
 }

@@ -67,6 +67,7 @@ public class PaymentIntentResponse {
     @Schema(
             description = "capturedAmount minus refundedAmount; null when the intent is not CAPTURED",
             example = "149.99",
+            nullable = true,
             requiredMode = NOT_REQUIRED)
     private BigDecimal refundableAmount;
 

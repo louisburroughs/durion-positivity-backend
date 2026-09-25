@@ -369,9 +369,12 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
     @NonNull
     @Transactional(readOnly = true)
     public List<RefundPaymentResult> listRefundsForInvoice(@NonNull UUID invoiceId) {
-        if (!invoiceRepository.existsById(invoiceId)) {
-            throw new InvoiceNotFoundException(invoiceId);
-        }
+        Invoice invoice =
+                invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+
+        // ADR-0061 §3 (#2226): after the existence check, before any refunds are queried.
+        requireLocationInReach(InvoicePermissions.VIEW, invoice);
+
         return refundRecordRepository.findAllAnchoredToInvoice(invoiceId).stream()
                 .map(PaymentReversalServiceImpl::toResult)
                 .toList();

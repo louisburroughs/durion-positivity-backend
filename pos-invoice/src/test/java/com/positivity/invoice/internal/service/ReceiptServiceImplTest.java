@@ -239,9 +239,9 @@ class ReceiptServiceImplTest {
     @Test
     void recordPrintDelivery_success_updatesDeliveryRecord() {
         var receipt = buildExistingReceipt(0);
-        when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID)).thenReturn(Optional.of(receipt));
 
-        receiptServiceImpl.recordPrintDelivery(RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS);
+        receiptServiceImpl.recordPrintDelivery(INVOICE_ID, RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS);
 
         ArgumentCaptor<Receipt> captor = ArgumentCaptor.forClass(Receipt.class);
         verify(receiptRepository).save(captor.capture());
@@ -262,9 +262,10 @@ class ReceiptServiceImplTest {
     @Test
     void sendEmailReceipt_success_updatesEmailDeliveryRecord() {
         var receipt = buildExistingReceipt(0);
-        when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID)).thenReturn(Optional.of(receipt));
 
-        receiptServiceImpl.sendEmailReceipt(RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.SUCCESS);
+        receiptServiceImpl.sendEmailReceipt(
+                INVOICE_ID, RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.SUCCESS);
 
         ArgumentCaptor<Receipt> captor = ArgumentCaptor.forClass(Receipt.class);
         verify(receiptRepository).save(captor.capture());
@@ -341,9 +342,9 @@ class ReceiptServiceImplTest {
     @Test
     void recordPrintDelivery_failedStatus_updatesDeliveryRecord() {
         var receipt = buildExistingReceipt(0);
-        when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID)).thenReturn(Optional.of(receipt));
 
-        receiptServiceImpl.recordPrintDelivery(RECEIPT_ID, ReceiptDeliveryStatus.FAILED);
+        receiptServiceImpl.recordPrintDelivery(INVOICE_ID, RECEIPT_ID, ReceiptDeliveryStatus.FAILED);
 
         ArgumentCaptor<Receipt> captor = ArgumentCaptor.forClass(Receipt.class);
         verify(receiptRepository).save(captor.capture());
@@ -358,9 +359,10 @@ class ReceiptServiceImplTest {
      */
     @Test
     void recordPrintDelivery_receiptNotFound_throwsReceiptNotFoundException() {
-        when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.empty());
+        when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> receiptServiceImpl.recordPrintDelivery(RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS))
+        assertThatThrownBy(() ->
+                        receiptServiceImpl.recordPrintDelivery(INVOICE_ID, RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS))
                 .isInstanceOf(com.positivity.invoice.internal.exception.ReceiptNotFoundException.class)
                 .hasMessageContaining(RECEIPT_ID.toString());
     }
@@ -376,9 +378,10 @@ class ReceiptServiceImplTest {
     @Test
     void sendEmailReceipt_failedStatus_updatesDeliveryRecord() {
         var receipt = buildExistingReceipt(0);
-        when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID)).thenReturn(Optional.of(receipt));
 
-        receiptServiceImpl.sendEmailReceipt(RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.FAILED);
+        receiptServiceImpl.sendEmailReceipt(
+                INVOICE_ID, RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.FAILED);
 
         ArgumentCaptor<Receipt> captor = ArgumentCaptor.forClass(Receipt.class);
         verify(receiptRepository).save(captor.capture());
@@ -394,10 +397,10 @@ class ReceiptServiceImplTest {
      */
     @Test
     void sendEmailReceipt_receiptNotFound_throwsReceiptNotFoundException() {
-        when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.empty());
+        when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> receiptServiceImpl.sendEmailReceipt(
-                        RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.SUCCESS))
+                        INVOICE_ID, RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.SUCCESS))
                 .isInstanceOf(com.positivity.invoice.internal.exception.ReceiptNotFoundException.class)
                 .hasMessageContaining(RECEIPT_ID.toString());
     }
@@ -723,6 +726,145 @@ class ReceiptServiceImplTest {
 
             assertThatThrownBy(() -> receiptServiceImpl.reprintReceipt(RECEIPT_ID, "CUSTOMER_REQUEST"))
                     .isInstanceOf(ReprintLimitExceededException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("recordPrintDelivery location scope (ADR-0061 §3, #2231)")
+    class RecordPrintDeliveryLocationScope {
+
+        private void authenticateScoped(LocationScope scope) {
+            var grants = List.of(new SimpleGrantedAuthority(InvoicePermissions.RECEIPT_GENERATE));
+            var auth = new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants);
+            auth.setDetails(Map.of(
+                    GatewaySecurityConstants.DETAIL_USERNAME,
+                    CASHIER_ID,
+                    GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                    scope));
+            SecurityContextHolder.getContext().setAuthentication(auth);
+        }
+
+        private LocationScope generateScopedTo(UUID... nodes) {
+            return LocationScope.of(
+                    Set.of(), Set.of(InvoicePermissions.RECEIPT_GENERATE), Optional.of(Set.of(nodes)), true, RESOLVER);
+        }
+
+        private Receipt receiptWithLocation() {
+            var receipt = buildExistingReceipt(0);
+            receipt.getInvoice().setLocationId(RECEIPT_LOCATION_ID);
+            return receipt;
+        }
+
+        @Test
+        @DisplayName("receipt belongs to a different invoice: ReceiptNotFoundException, nothing saved")
+        void wrongInvoice_notFound() {
+            when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, OTHER_INVOICE_ID))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> receiptServiceImpl.recordPrintDelivery(
+                            OTHER_INVOICE_ID, RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS))
+                    .isInstanceOf(ReceiptNotFoundException.class);
+
+            verify(receiptRepository, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
+        @DisplayName("invoice location out of reach: LocationScopeDeniedException, no delivery recorded")
+        void outOfReach_denies() {
+            authenticateScoped(generateScopedTo(OTHER_SHOP));
+            var receipt = receiptWithLocation();
+            when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID))
+                    .thenReturn(Optional.of(receipt));
+
+            assertThatThrownBy(() -> receiptServiceImpl.recordPrintDelivery(
+                            INVOICE_ID, RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            verify(receiptRepository, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
+        @DisplayName("invoice location in reach: delivery recorded")
+        void inReach_succeeds() {
+            authenticateScoped(generateScopedTo(REGION_NODE));
+            var receipt = receiptWithLocation();
+            when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID))
+                    .thenReturn(Optional.of(receipt));
+            when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            receiptServiceImpl.recordPrintDelivery(INVOICE_ID, RECEIPT_ID, ReceiptDeliveryStatus.SUCCESS);
+
+            verify(receiptRepository).save(any(Receipt.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("sendEmailReceipt location scope (ADR-0061 §3, #2231)")
+    class SendEmailReceiptLocationScope {
+
+        private void authenticateScoped(LocationScope scope) {
+            var grants = List.of(new SimpleGrantedAuthority(InvoicePermissions.RECEIPT_GENERATE));
+            var auth = new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants);
+            auth.setDetails(Map.of(
+                    GatewaySecurityConstants.DETAIL_USERNAME,
+                    CASHIER_ID,
+                    GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                    scope));
+            SecurityContextHolder.getContext().setAuthentication(auth);
+        }
+
+        private LocationScope generateScopedTo(UUID... nodes) {
+            return LocationScope.of(
+                    Set.of(), Set.of(InvoicePermissions.RECEIPT_GENERATE), Optional.of(Set.of(nodes)), true, RESOLVER);
+        }
+
+        private Receipt receiptWithLocation() {
+            var receipt = buildExistingReceipt(0);
+            receipt.getInvoice().setLocationId(RECEIPT_LOCATION_ID);
+            return receipt;
+        }
+
+        @Test
+        @DisplayName("receipt belongs to a different invoice: ReceiptNotFoundException, nothing saved")
+        void wrongInvoice_notFound() {
+            when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, OTHER_INVOICE_ID))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> receiptServiceImpl.sendEmailReceipt(
+                            OTHER_INVOICE_ID, RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.SUCCESS))
+                    .isInstanceOf(ReceiptNotFoundException.class);
+
+            verify(receiptRepository, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
+        @DisplayName("invoice location out of reach: LocationScopeDeniedException, no delivery recorded")
+        void outOfReach_denies() {
+            authenticateScoped(generateScopedTo(OTHER_SHOP));
+            var receipt = receiptWithLocation();
+            when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID))
+                    .thenReturn(Optional.of(receipt));
+
+            assertThatThrownBy(() -> receiptServiceImpl.sendEmailReceipt(
+                            INVOICE_ID, RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.SUCCESS))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            verify(receiptRepository, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
+        @DisplayName("invoice location in reach: delivery recorded")
+        void inReach_succeeds() {
+            authenticateScoped(generateScopedTo(REGION_NODE));
+            var receipt = receiptWithLocation();
+            when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID))
+                    .thenReturn(Optional.of(receipt));
+            when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            receiptServiceImpl.sendEmailReceipt(
+                    INVOICE_ID, RECEIPT_ID, "customer@example.com", ReceiptDeliveryStatus.SUCCESS);
+
+            verify(receiptRepository).save(any(Receipt.class));
         }
     }
 

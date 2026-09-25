@@ -199,6 +199,11 @@ public class PaymentController {
                     """)
     @ApiResponse(responseCode = "200", description = "Payment intents returned")
     @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "404",
             description = "Invoice not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -232,6 +237,11 @@ public class PaymentController {
                     reports 404, so the response never confirms another invoice's payment id.
                     """)
     @ApiResponse(responseCode = "200", description = "Payment intent detail")
+    @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Payment intent not found",

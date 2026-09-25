@@ -30,6 +30,14 @@ decisions:
     shape: gate
     permission: invoice:receipt:reprint_override
     reason: no caller-supplied locationId and no base @PreAuthorize authority (isAuthenticated only); ReceiptServiceImpl.reprintReceipt scopes only the over-5-reprint override to the receipt's invoice location, so a caller who does not hold invoice:receipt:reprint_override at all is unaffected (#2226, BILL-DEC-010).
+  - operation: ReceiptController.recordPrintDelivery
+    shape: gate
+    permission: invoice:receipt:generate
+    reason: no caller-supplied locationId; ReceiptServiceImpl.recordPrintDelivery loads the receipt by invoiceId+receiptId then gates on the invoice's location, the same population as generateReceipt (#2231).
+  - operation: ReceiptController.sendEmailReceipt
+    shape: gate
+    permission: invoice:receipt:generate
+    reason: no caller-supplied locationId; ReceiptServiceImpl.sendEmailReceipt loads the receipt by invoiceId+receiptId then gates on the invoice's location, the same population as generateReceipt (#2231).
   - operation: StandaloneRefundController.refundInvoiceStandalone
     shape: gate
     permission: invoice:refund:issue_manual
@@ -45,3 +53,7 @@ decisions:
     shape: gate
     permission: invoice:invoice:view
     reason: no caller-supplied locationId; PaymentServiceImpl.getInvoicePayment gates on the payment intent's invoice location after the existence check (#2226, #2215).
+  - operation: PaymentReversalController.listRefunds
+    shape: gate
+    permission: invoice:invoice:view
+    reason: no caller-supplied locationId; PaymentReversalServiceImpl.listRefundsForInvoice gates on the invoice's location after the existence check, mirroring PaymentServiceImpl.listInvoicePayments (#2231).

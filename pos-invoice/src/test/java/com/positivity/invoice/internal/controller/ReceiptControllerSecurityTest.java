@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.invoice.ControllerSliceConfig;
+import com.positivity.invoice.internal.enums.ReceiptDeliveryStatus;
 import com.positivity.invoice.internal.enums.ReceiptStatus;
 import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.Receipt;
@@ -24,11 +25,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * Security-gate proof for #2226: {@code generateReceipt} now carries its own
- * {@code @PreAuthorize(invoice:receipt:generate)} rather than relying solely on the
- * service-layer {@code requireAuthority} check. {@link ReceiptControllerTest} runs standalone
- * MockMvc (no method security in effect); this slice runs the real gateway-header authentication
- * so the annotation is actually exercised, mirroring {@code PaymentReversalControllerErrorHandlingTest}.
+ * Security-gate proof for #2226/#2231: {@code generateReceipt}, {@code recordPrintDelivery} and
+ * {@code sendEmailReceipt} each carry their own {@code @PreAuthorize(invoice:receipt:generate)}
+ * rather than relying solely on the service-layer {@code requireAuthority} check. {@link
+ * ReceiptControllerTest} runs standalone MockMvc (no method security in effect); this slice runs
+ * the real gateway-header authentication so the annotation is actually exercised, mirroring
+ * {@code PaymentReversalControllerErrorHandlingTest}.
  *
  * <p>{@code reprintReceipt} carries no new {@code @PreAuthorize} (kept under the class-level
  * {@code isAuthenticated()}); its reprint-cap override is a location-scoped service-layer check
@@ -36,7 +38,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  */
 @WebMvcTest(ReceiptController.class)
 @Import({GatewaySecurityConfig.class, WebCommonErrorAutoConfiguration.class, ControllerSliceConfig.class})
-@DisplayName("generateReceipt requires invoice:receipt:generate (#2226)")
+@DisplayName("receipt delivery endpoints require invoice:receipt:generate (#2226, #2231)")
 class ReceiptControllerSecurityTest {
 
     private static final UUID INVOICE_ID = UUID.randomUUID();
@@ -81,5 +83,67 @@ class ReceiptControllerSecurityTest {
                                 .content(VALID_BODY),
                         InvoicePermissions.RECEIPT_GENERATE))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("recordPrintDelivery: 403 without invoice:receipt:generate")
+    void recordPrintDelivery_missingPermission_returns403() throws Exception {
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/receipts/{receiptId}/print", INVOICE_ID, UUID.randomUUID())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                {"status":"SUCCESS"}
+                                """),
+                        "invoice:manage"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("recordPrintDelivery: 200 with invoice:receipt:generate")
+    void recordPrintDelivery_withPermission_returns200() throws Exception {
+        UUID receiptId = UUID.randomUUID();
+
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/receipts/{receiptId}/print", INVOICE_ID, receiptId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                {"status":"SUCCESS"}
+                                """),
+                        InvoicePermissions.RECEIPT_GENERATE))
+                .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(receiptService)
+                .recordPrintDelivery(INVOICE_ID, receiptId, ReceiptDeliveryStatus.SUCCESS);
+    }
+
+    @Test
+    @DisplayName("sendEmailReceipt: 403 without invoice:receipt:generate")
+    void sendEmailReceipt_missingPermission_returns403() throws Exception {
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/receipts/{receiptId}/email", INVOICE_ID, UUID.randomUUID())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                {"emailAddress":"customer@example.com","status":"SUCCESS"}
+                                """),
+                        "invoice:manage"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("sendEmailReceipt: 200 with invoice:receipt:generate")
+    void sendEmailReceipt_withPermission_returns200() throws Exception {
+        UUID receiptId = UUID.randomUUID();
+
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/receipts/{receiptId}/email", INVOICE_ID, receiptId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                {"emailAddress":"customer@example.com","status":"SUCCESS"}
+                                """),
+                        InvoicePermissions.RECEIPT_GENERATE))
+                .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(receiptService)
+                .sendEmailReceipt(INVOICE_ID, receiptId, "customer@example.com", ReceiptDeliveryStatus.SUCCESS);
     }
 }

@@ -66,6 +66,11 @@ public class ReceiptController {
                     """)
     @ApiResponse(responseCode = "200", description = "Receipt detail")
     @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "404",
             description = "Receipt not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -95,6 +100,11 @@ public class ReceiptController {
                     or the invoice's location is outside the caller's reach.
                     """)
     @ApiResponse(responseCode = "201", description = "Receipt generated")
+    @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Invoice not found",
@@ -179,6 +189,7 @@ public class ReceiptController {
     }
 
     @PostMapping("/{invoiceId}/receipts/{receiptId}/print")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.RECEIPT_GENERATE + "')")
     @EmitEvent(id = "INVOICE_RECEIPT_PRINT_DELIVERY", apiVersion = "1")
     @Operation(
             operationId = "recordReceiptPrintDelivery",
@@ -189,14 +200,23 @@ public class ReceiptController {
                     here.
                     Use this tool after the terminal reports its print result; do not use recordReceiptEmailDelivery, \
                     which records an email delivery attempt with its recipient address.
-                    Preconditions: the receipt must already exist via generateReceipt.
+                    Preconditions: the receipt must already exist via generateReceipt and belong to invoiceId; the \
+                    caller needs the invoice:receipt:generate authority, scoped to the invoice's location \
+                    (ADR-0061) — recording delivery is part of the same counter receipt flow as generating one.
                     Required inputs: receiptId (UUID) as a path parameter and status (SUCCESS or FAILED) in the \
                     body.
                     Emits an INVOICE_RECEIPT_PRINT_DELIVERY event and overwrites the receipt's delivery method and \
                     status.
-                    Returns 200 with an empty body on success, and 404 when the receipt does not exist.
+                    Returns 200 with an empty body on success, 403 when invoice:receipt:generate is missing or the \
+                    invoice's location is outside the caller's reach, and 404 when no receipt with that id exists \
+                    under that invoice — a receipt that exists under a different invoice also reports 404.
                     """)
     @ApiResponse(responseCode = "200", description = "Print delivery recorded")
+    @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Receipt not found",
@@ -217,11 +237,12 @@ public class ReceiptController {
                     @Valid
                     @NonNull
                     PrintDeliveryRequest request) {
-        receiptService.recordPrintDelivery(receiptId, request.status());
+        receiptService.recordPrintDelivery(invoiceId, receiptId, request.status());
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/{invoiceId}/receipts/{receiptId}/email")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.RECEIPT_GENERATE + "')")
     @EmitEvent(id = "INVOICE_RECEIPT_EMAIL_DELIVERY", apiVersion = "1")
     @Operation(
             operationId = "recordReceiptEmailDelivery",
@@ -232,14 +253,23 @@ public class ReceiptController {
                     rather than dispatching the email itself.
                     Use this tool after an email delivery attempt completes; do not use recordReceiptPrintDelivery, \
                     which records a terminal print outcome.
-                    Preconditions: the receipt must already exist via generateReceipt.
+                    Preconditions: the receipt must already exist via generateReceipt and belong to invoiceId; the \
+                    caller needs the invoice:receipt:generate authority, scoped to the invoice's location \
+                    (ADR-0061) — recording delivery is part of the same counter receipt flow as generating one.
                     Required inputs: receiptId (UUID) as a path parameter plus emailAddress and status (SUCCESS or \
                     FAILED) in the body.
                     Emits an INVOICE_RECEIPT_EMAIL_DELIVERY event and overwrites the receipt's delivery method, \
                     address and status.
-                    Returns 200 with an empty body on success, and 404 when the receipt does not exist.
+                    Returns 200 with an empty body on success, 403 when invoice:receipt:generate is missing or the \
+                    invoice's location is outside the caller's reach, and 404 when no receipt with that id exists \
+                    under that invoice — a receipt that exists under a different invoice also reports 404.
                     """)
     @ApiResponse(responseCode = "200", description = "Email delivery recorded")
+    @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Receipt not found",
@@ -261,7 +291,7 @@ public class ReceiptController {
                     @Valid
                     @NonNull
                     EmailDeliveryRequest request) {
-        receiptService.sendEmailReceipt(receiptId, request.emailAddress(), request.status());
+        receiptService.sendEmailReceipt(invoiceId, receiptId, request.emailAddress(), request.status());
         return ResponseEntity.ok().build();
     }
 

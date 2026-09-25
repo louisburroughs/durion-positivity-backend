@@ -104,10 +104,19 @@ public class ReceiptServiceImpl implements ReceiptService {
     }
 
     @Override
-    public void recordPrintDelivery(@NonNull UUID receiptId, @NonNull ReceiptDeliveryStatus status) {
+    public void recordPrintDelivery(
+            @NonNull UUID invoiceId, @NonNull UUID receiptId, @NonNull ReceiptDeliveryStatus status) {
         com.positivity.invoice.internal.entity.Receipt receipt = receiptRepository
-                .findById(receiptId)
+                .findByIdAndInvoice_Id(receiptId, invoiceId)
                 .orElseThrow(() -> new ReceiptNotFoundException(RECEIPT_NOT_FOUND_PREFIX + receiptId));
+
+        // ADR-0061 §3 (#2226): after the existence check, before the delivery status is recorded;
+        // same population as generateReceipt's RECEIPT_GENERATE gate.
+        UUID invoiceLocation =
+                receipt.getInvoice() == null ? null : receipt.getInvoice().getLocationId();
+        SecurityContextHelper.locationScope()
+                .require(
+                        InvoicePermissions.RECEIPT_GENERATE, invoiceLocation == null ? "" : invoiceLocation.toString());
 
         receipt.setDeliveryMethod(ReceiptDeliveryMethod.PRINT);
         receipt.setDeliveryStatus(status);
@@ -116,10 +125,21 @@ public class ReceiptServiceImpl implements ReceiptService {
 
     @Override
     public void sendEmailReceipt(
-            @NonNull UUID receiptId, @NonNull String emailAddress, @NonNull ReceiptDeliveryStatus status) {
+            @NonNull UUID invoiceId,
+            @NonNull UUID receiptId,
+            @NonNull String emailAddress,
+            @NonNull ReceiptDeliveryStatus status) {
         com.positivity.invoice.internal.entity.Receipt receipt = receiptRepository
-                .findById(receiptId)
+                .findByIdAndInvoice_Id(receiptId, invoiceId)
                 .orElseThrow(() -> new ReceiptNotFoundException(RECEIPT_NOT_FOUND_PREFIX + receiptId));
+
+        // ADR-0061 §3 (#2226): after the existence check, before the delivery status is recorded;
+        // same population as generateReceipt's RECEIPT_GENERATE gate.
+        UUID invoiceLocation =
+                receipt.getInvoice() == null ? null : receipt.getInvoice().getLocationId();
+        SecurityContextHelper.locationScope()
+                .require(
+                        InvoicePermissions.RECEIPT_GENERATE, invoiceLocation == null ? "" : invoiceLocation.toString());
 
         receipt.setDeliveryMethod(ReceiptDeliveryMethod.EMAIL);
         receipt.setDeliveryEmailAddress(emailAddress);
