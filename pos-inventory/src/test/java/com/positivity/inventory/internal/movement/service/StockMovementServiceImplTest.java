@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.inventory.InventoryAdjustedV1;
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
@@ -93,6 +94,12 @@ class StockMovementServiceImplTest {
     @Mock
     private Clock clock;
 
+    @Mock
+    private com.positivity.inventory.internal.service.InventoryFactPublisher inventoryFactPublisher;
+
+    @Mock
+    private com.positivity.inventory.internal.service.CostingMethodResolver methodResolver;
+
     private StockMovementServiceImpl service;
 
     @BeforeEach
@@ -105,6 +112,8 @@ class StockMovementServiceImplTest {
                 storageLocationRepository,
                 new com.positivity.inventory.internal.service.QuantityScaleGuard(
                         org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
+                inventoryFactPublisher,
+                methodResolver,
                 clock);
         // Default caller: a pre-rollout token (no loc_* claims), which ADR-0061 treats as unscoped
         // so the existing approve expectations are unchanged.
@@ -368,6 +377,83 @@ class StockMovementServiceImplTest {
     }
 
     @Test
+    void approveAdjustmentRequest_posted_marksEntryAndRecordsManualAdjustmentFact() {
+        // odoo-parity J3 (#2190): the fact is built from the saved row the funnel returns.
+        setupClock();
+        UUID ledgerId = UUID.fromString("01960003-0000-7000-8000-0000000000c1");
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(invocation -> {
+            InventoryLedgerEntry entry = invocation.getArgument(0);
+            entry.setLedgerEntryId(ledgerId);
+            entry.setUnitCost(new BigDecimal("7.5000"));
+            return entry;
+        });
+        stubAdjustmentSaveReturnsRequest();
+        InventoryAdjustmentRequest request = pendingAdjustmentRequest(-3);
+        when(adjustmentRepository.findById(request.getAdjustmentRequestId())).thenReturn(Optional.of(request));
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getLocationId()))
+                .thenReturn(new BigDecimal("10"));
+        when(methodResolver.resolve(request.getProductSku()))
+                .thenReturn(com.positivity.inventory.internal.enums.CostingMethod.STANDARD);
+
+        service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1");
+
+        ArgumentCaptor<InventoryLedgerEntry> marked = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(inventoryFactPublisher).markEntry(marked.capture());
+        assertThat(marked.getValue().getLedgerEntryId()).isEqualTo(ledgerId);
+
+        ArgumentCaptor<InventoryAdjustedV1> fact = ArgumentCaptor.forClass(InventoryAdjustedV1.class);
+        verify(inventoryFactPublisher).recordInventoryAdjusted(fact.capture());
+        InventoryAdjustedV1 recorded = fact.getValue();
+        assertThat(recorded.adjustmentId()).isEqualTo(request.getAdjustmentRequestId());
+        assertThat(recorded.adjustmentKind()).isEqualTo(InventoryAdjustedV1.KIND_MANUAL_ADJUSTMENT);
+        assertThat(recorded.ledgerEventType()).isEqualTo(InventoryLedgerEventType.ADJUSTMENT_OUT.name());
+        assertThat(recorded.ledgerEntryId()).isEqualTo(ledgerId);
+        assertThat(recorded.sku()).isEqualTo(request.getProductSku());
+        assertThat(recorded.locationId()).isEqualTo(LOC_1);
+        assertThat(recorded.taskId()).isNull();
+        assertThat(recorded.reasonCode()).isEqualTo("CYCLE_COUNT");
+        assertThat(recorded.quantityDelta()).isEqualByComparingTo("-3");
+        assertThat(recorded.unitCost()).isEqualByComparingTo("7.5000");
+        assertThat(recorded.costSource()).isEqualTo("STANDARD");
+        assertThat(recorded.occurredAt()).isEqualTo(request.getApprovedAt());
+    }
+
+    @Test
+    void approveAdjustmentRequest_uncostedSku_recordsFactWithSourceNone() {
+        setupClock();
+        stubLedgerSaveReturnsEntry();
+        stubAdjustmentSaveReturnsRequest();
+        InventoryAdjustmentRequest request = pendingAdjustmentRequest(4);
+        when(adjustmentRepository.findById(request.getAdjustmentRequestId())).thenReturn(Optional.of(request));
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getLocationId()))
+                .thenReturn(new BigDecimal("15"));
+
+        service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1");
+
+        ArgumentCaptor<InventoryAdjustedV1> fact = ArgumentCaptor.forClass(InventoryAdjustedV1.class);
+        verify(inventoryFactPublisher).recordInventoryAdjusted(fact.capture());
+        assertThat(fact.getValue().quantityDelta()).isEqualByComparingTo("4");
+        assertThat(fact.getValue().unitCost()).isNull();
+        assertThat(fact.getValue().costSource()).isEqualTo("NONE");
+    }
+
+    @Test
+    void approveAdjustmentRequest_zeroQuantity_marksEntryButRecordsNoFact() {
+        setupClock();
+        stubLedgerSaveReturnsEntry();
+        stubAdjustmentSaveReturnsRequest();
+        InventoryAdjustmentRequest request = pendingAdjustmentRequest(0);
+        when(adjustmentRepository.findById(request.getAdjustmentRequestId())).thenReturn(Optional.of(request));
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getLocationId()))
+                .thenReturn(new BigDecimal("15"));
+
+        service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1");
+
+        verify(inventoryFactPublisher).markEntry(any(InventoryLedgerEntry.class));
+        verify(inventoryFactPublisher, never()).recordInventoryAdjusted(any());
+    }
+
+    @Test
     void approveAdjustmentRequest_negativeQuantity_savesAdjustmentOutLedgerEntry() {
         setupClock();
         stubLedgerSaveReturnsEntry();
@@ -604,8 +690,14 @@ class StockMovementServiceImplTest {
     }
 
     private void stubLedgerSaveReturnsEntry() {
-        when(ledgerPostingService.post(any(InventoryLedgerEntry.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        // The funnel returns the persisted row, which always carries its generated id.
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(invocation -> {
+            InventoryLedgerEntry entry = invocation.getArgument(0);
+            if (entry.getLedgerEntryId() == null) {
+                entry.setLedgerEntryId(UUID.fromString("01960003-0000-7000-8000-0000000000e2"));
+            }
+            return entry;
+        });
     }
 
     private void stubAdjustmentSaveReturnsRequest() {

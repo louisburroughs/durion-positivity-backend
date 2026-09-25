@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.cyclecount.service;
 
+import com.positivity.domainevents.inventory.InventoryAdjustedV1;
 import com.positivity.inventory.internal.dto.cyclecount.AdjustmentResponse;
 import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
@@ -28,6 +29,7 @@ import com.positivity.inventory.internal.service.ApprovalThresholdEvaluator;
 import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
 import com.positivity.inventory.internal.service.CostingMethodResolver;
 import com.positivity.inventory.internal.service.CycleCountConflictDetector;
+import com.positivity.inventory.internal.service.InventoryFactPublisher;
 import com.positivity.inventory.internal.service.LedgerPostingFailureRecorder;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.LocationScopeService;
@@ -59,6 +61,9 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
 
     private static final String ADJUSTMENT_NOT_FOUND = "Adjustment not found: ";
 
+    /** {@code costSource} of an adjustment fact the costing engine could not cost (spec D6). */
+    private static final String UNCOSTED = "NONE";
+
     private final CycleCountAdjustmentRepository adjustmentRepository;
     private final InventoryLedgerEntryRepository ledgerRepository;
     private final LedgerPostingService ledgerPostingService;
@@ -72,6 +77,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
     private final LocationScopeService locationScopeService;
     private final LedgerPostingFailureRecorder failureRecorder;
+    private final InventoryFactPublisher inventoryFactPublisher;
 
     @Override
     @Transactional
@@ -343,6 +349,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     private void postAdjustmentToLedger(CycleCountAdjustment adjustment) {
         log.info("Posting adjustment {} to inventory ledger", adjustment.getAdjustmentId());
 
+        InventoryLedgerEntry posted;
         try {
             UUID locationId = postingLocationOf(adjustment);
             BigDecimal currentOnHand = currentOnHand(adjustment.getStockItemId(), locationId);
@@ -359,7 +366,11 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                     .eventType(eventType)
                     .changeInQuantity(adjustment.getQuantityChange())
                     .quantityAfter(quantityAfter)
-                    .unitCost(adjustment.getCostAtTimeOfAdjustment())
+                    // No document cost (#2190): a count variance is not a receipt. Passing
+                    // costAtTimeOfAdjustment here made AverageCostingStrategy re-blend the running
+                    // average on a gain and StandardCostingStrategy overwrite its latest-receipt
+                    // memo. With no cost the engine values the variance at the current method cost
+                    // and stamps that on the row; costAtTimeOfAdjustment only feeds the approval tier.
                     .transactionUserId(
                             adjustment.getApprovedByUserId() != null
                                     ? adjustment.getApprovedByUserId()
@@ -368,6 +379,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                     .build();
 
             ledgerEntry = ledgerPostingService.post(ledgerEntry);
+            posted = ledgerEntry;
             adjustment.setLedgerEntryId(ledgerEntry.getLedgerEntryId());
             adjustment.setStatus(AdjustmentStatus.POSTED);
             adjustment.setPostedAt(Instant.now(clock));
@@ -400,6 +412,36 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
             throw new AdjustmentLedgerPostingException(
                     adjustment.getAdjustmentId(), "Failed to post adjustment to ledger", e);
         }
+
+        // Outside the try: a fact can only be queued once the posting succeeded, and it is written
+        // to the outbox at beforeCommit, so a rolled-back approval leaves no row (#2190).
+        inventoryFactPublisher.markEntry(posted);
+        inventoryFactPublisher.recordInventoryAdjusted(adjustedFact(adjustment, posted));
+    }
+
+    /**
+     * The {@code inventory.adjustment.posted} fact for a posted count variance (odoo-parity J3,
+     * #2190), built from the saved ledger row: {@code unitCost} is the cost the costing engine
+     * stamped there, never {@code costAtTimeOfAdjustment}; an uncosted SKU carries {@code NONE}.
+     */
+    private InventoryAdjustedV1 adjustedFact(CycleCountAdjustment adjustment, InventoryLedgerEntry posted) {
+        BigDecimal unitCost = posted.getUnitCost();
+        String costSource = unitCost == null
+                ? UNCOSTED
+                : methodResolver.resolve(posted.getStockItemId()).name();
+        return new InventoryAdjustedV1(
+                adjustment.getAdjustmentId(),
+                InventoryAdjustedV1.KIND_CYCLE_COUNT,
+                posted.getEventType().name(),
+                posted.getLedgerEntryId(),
+                posted.getStockItemId(),
+                posted.getLocationId(),
+                adjustment.getTaskId(),
+                adjustment.getReasonCode(),
+                posted.getChangeInQuantity(),
+                unitCost,
+                costSource,
+                adjustment.getPostedAt());
     }
 
     /**

@@ -5,6 +5,7 @@ import com.positivity.domainevents.inventory.BackorderCreatedV1;
 import com.positivity.domainevents.inventory.BackorderResolvedV1;
 import com.positivity.domainevents.inventory.ConsumptionRecordedV1;
 import com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1;
+import com.positivity.domainevents.inventory.InventoryAdjustedV1;
 import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.LeadTimeUpdatedV1;
 import com.positivity.domainevents.inventory.LotExpiryAlertV1;
@@ -172,6 +173,20 @@ public class InventoryFactPublisher {
     }
 
     /**
+     * Record an inventory-adjusted occurrence fact (odoo-parity J3, issue #2190): a cycle-count
+     * adjustment or a manual adjustment request reached the ledger. Queued as-is — this is an
+     * occurrence, not a snapshot, and is never re-emitted. pos-accounting consumes it to post the
+     * adjustment journal entry (issue #2191).
+     */
+    public void recordInventoryAdjusted(@NonNull InventoryAdjustedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.inventoryAdjustments.add(fact);
+    }
+
+    /**
      * Record a product-value-changed occurrence fact (odoo-parity J4, issue #1054): a manual cost
      * revaluation was applied to a SKU's cost state. Queued as-is — this is an occurrence, not a
      * snapshot, and is never re-emitted. pos-accounting consumes it to post the revaluation JE.
@@ -296,6 +311,7 @@ public class InventoryFactPublisher {
         publishConsumptions(writer, pending);
         publishExpectedSupplyDrops(writer, pending);
         publishScrapPosts(writer, pending);
+        publishInventoryAdjustments(writer, pending);
         publishProductValueChanges(writer, pending);
         publishTransferOrderUpdates(writer, pending);
         publishBackorderCreations(writer, pending);
@@ -446,6 +462,21 @@ public class InventoryFactPublisher {
                 publish(writer, ScrapPostedV1.EVENT_TYPE, ScrapPostedV1.SCHEMA_VERSION, scrapPost.scrapId(), scrapPost);
             } catch (Exception e) {
                 log.warn("Skipping scrap-posted fact for {}: {}", scrapPost.scrapId(), e.getMessage());
+            }
+        }
+    }
+
+    private void publishInventoryAdjustments(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
+        for (InventoryAdjustedV1 adjustment : pending.inventoryAdjustments) {
+            try {
+                publish(
+                        writer,
+                        InventoryAdjustedV1.EVENT_TYPE,
+                        InventoryAdjustedV1.SCHEMA_VERSION,
+                        adjustment.adjustmentId(),
+                        adjustment);
+            } catch (Exception e) {
+                log.warn("Skipping inventory-adjusted fact for {}: {}", adjustment.adjustmentId(), e.getMessage());
             }
         }
     }
@@ -604,6 +635,7 @@ public class InventoryFactPublisher {
         private final List<ConsumptionRecordedV1> consumptions = new ArrayList<>();
         private final List<ExpectedSupplyDroppedV1> expectedSupplyDrops = new ArrayList<>();
         private final List<ScrapPostedV1> scrapPosts = new ArrayList<>();
+        private final List<InventoryAdjustedV1> inventoryAdjustments = new ArrayList<>();
         private final List<ProductValueChangedV1> productValueChanges = new ArrayList<>();
         private final List<TransferOrderUpdatedV1> transferOrderUpdates = new ArrayList<>();
         private final List<BackorderCreatedV1> backorderCreations = new ArrayList<>();

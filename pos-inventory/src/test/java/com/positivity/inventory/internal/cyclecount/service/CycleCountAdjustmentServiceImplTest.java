@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.inventory.InventoryAdjustedV1;
 import com.positivity.inventory.internal.dto.cyclecount.AdjustmentResponse;
 import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
@@ -18,6 +19,8 @@ import com.positivity.inventory.internal.entity.CycleCountTask;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.AdjustmentStatus;
 import com.positivity.inventory.internal.enums.ApprovalTier;
+import com.positivity.inventory.internal.enums.CostingMethod;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.TaskStatus;
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
 import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
@@ -94,6 +97,9 @@ class CycleCountAdjustmentServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.LedgerPostingFailureRecorder failureRecorder;
 
+    @Mock
+    private com.positivity.inventory.internal.service.InventoryFactPublisher inventoryFactPublisher;
+
     private CycleCountAdjustmentServiceImpl service;
 
     private static final String ACTOR_USER_ID = "actor-person-id-001";
@@ -116,7 +122,8 @@ class CycleCountAdjustmentServiceImplTest {
                 methodResolver,
                 baseUnitOfMeasureResolver,
                 locationScopeService,
-                failureRecorder);
+                failureRecorder,
+                inventoryFactPublisher);
     }
 
     @AfterEach
@@ -318,10 +325,17 @@ class CycleCountAdjustmentServiceImplTest {
 
         when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
                 .thenReturn(Optional.empty());
-        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> {
+            CycleCountAdjustment saved = inv.getArgument(0);
+            if (saved.getAdjustmentId() == null) {
+                saved.setAdjustmentId(UUID.fromString("01960003-0000-7000-8000-000000000013"));
+            }
+            return saved;
+        });
         when(ledgerRepository.calculateOnHandQuantityAtLocation(STOCK_ITEM_ID, locationId))
                 .thenReturn(new BigDecimal("10"));
-        when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class)))
+                .thenAnswer(inv -> withLedgerEntryId(inv.getArgument(0)));
 
         AdjustmentResponse response = service.createAdjustment(request);
 
@@ -384,7 +398,8 @@ class CycleCountAdjustmentServiceImplTest {
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         when(ledgerRepository.calculateOnHandQuantityAtLocation(STOCK_ITEM_ID, locationId))
                 .thenReturn(new BigDecimal("9"));
-        when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class)))
+                .thenAnswer(inv -> withLedgerEntryId(inv.getArgument(0)));
 
         service.approveAdjustment(
                 adjustmentId, ApproveAdjustmentRequest.builder().build(), "corr-id-001");
@@ -493,6 +508,139 @@ class CycleCountAdjustmentServiceImplTest {
     }
 
     // -------------------------------------------------------------------------
+    // inventory.adjustment.posted fact (odoo-parity J3, #2190)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void approveAdjustment_posted_marksEntryAndRecordsFactFromTheSavedRow() {
+        setUpAuthenticatedActor();
+        UUID adjustmentId = UUID.fromString("01960003-0000-7000-8000-0000000000a1");
+        UUID ledgerId = UUID.fromString("01960003-0000-7000-8000-0000000000b1");
+        CycleCountAdjustment adjustment = pendingAdjustment(adjustmentId);
+
+        when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.of(adjustment));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerRepository.calculateOnHandQuantity(STOCK_ITEM_ID)).thenReturn(new BigDecimal("10"));
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(inv -> {
+            // The funnel persists the row and the costing engine stamps the method cost on it.
+            InventoryLedgerEntry entry = inv.getArgument(0);
+            entry.setLedgerEntryId(ledgerId);
+            entry.setUnitCost(new BigDecimal("4.2500"));
+            return entry;
+        });
+        when(methodResolver.resolve(STOCK_ITEM_ID)).thenReturn(CostingMethod.AVERAGE);
+
+        service.approveAdjustment(
+                adjustmentId, ApproveAdjustmentRequest.builder().build(), "corr-id-001");
+
+        ArgumentCaptor<InventoryLedgerEntry> marked = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(inventoryFactPublisher).markEntry(marked.capture());
+        assertThat(marked.getValue().getLedgerEntryId()).isEqualTo(ledgerId);
+
+        ArgumentCaptor<InventoryAdjustedV1> fact = ArgumentCaptor.forClass(InventoryAdjustedV1.class);
+        verify(inventoryFactPublisher).recordInventoryAdjusted(fact.capture());
+        InventoryAdjustedV1 recorded = fact.getValue();
+        assertThat(recorded.adjustmentId()).isEqualTo(adjustmentId);
+        assertThat(recorded.adjustmentKind()).isEqualTo(InventoryAdjustedV1.KIND_CYCLE_COUNT);
+        assertThat(recorded.ledgerEventType()).isEqualTo(InventoryLedgerEventType.COUNT_VARIANCE_OUT.name());
+        assertThat(recorded.ledgerEntryId()).isEqualTo(ledgerId);
+        assertThat(recorded.sku()).isEqualTo(STOCK_ITEM_ID);
+        assertThat(recorded.reasonCode()).isEqualTo("CYCLE_COUNT_SHRINK");
+        // Loss: negative delta.
+        assertThat(recorded.quantityDelta()).isEqualByComparingTo("-2");
+        // The stamped engine cost, never costAtTimeOfAdjustment (50.00).
+        assertThat(recorded.unitCost()).isEqualByComparingTo("4.2500");
+        assertThat(recorded.costSource()).isEqualTo("AVERAGE");
+        assertThat(recorded.occurredAt()).isEqualTo(adjustment.getPostedAt());
+    }
+
+    @Test
+    void approveAdjustment_countGain_postsWithoutDocumentCostAndRecordsPositiveDelta() {
+        // Cost-of-gain fix (#2190): a count gain is not a receipt, so no document cost may reach
+        // the costing engine — it would re-blend the average / overwrite the STANDARD memo.
+        setUpAuthenticatedActor();
+        UUID adjustmentId = UUID.fromString("01960003-0000-7000-8000-0000000000a2");
+        CycleCountAdjustment adjustment = pendingAdjustment(adjustmentId);
+        adjustment.setQuantityChange(new BigDecimal("3"));
+        adjustment.setCountedQuantity(new BigDecimal("13"));
+
+        when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.of(adjustment));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerRepository.calculateOnHandQuantity(STOCK_ITEM_ID)).thenReturn(new BigDecimal("10"));
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class)))
+                .thenAnswer(inv -> withLedgerEntryId(inv.getArgument(0)));
+
+        service.approveAdjustment(
+                adjustmentId, ApproveAdjustmentRequest.builder().build(), null);
+
+        ArgumentCaptor<InventoryLedgerEntry> posted = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService).post(posted.capture());
+        assertThat(posted.getValue().getEventType()).isEqualTo(InventoryLedgerEventType.COUNT_VARIANCE_IN);
+        assertThat(posted.getValue().getUnitCost()).isNull();
+
+        ArgumentCaptor<InventoryAdjustedV1> fact = ArgumentCaptor.forClass(InventoryAdjustedV1.class);
+        verify(inventoryFactPublisher).recordInventoryAdjusted(fact.capture());
+        assertThat(fact.getValue().quantityDelta()).isEqualByComparingTo("3");
+        assertThat(fact.getValue().ledgerEventType()).isEqualTo(InventoryLedgerEventType.COUNT_VARIANCE_IN.name());
+    }
+
+    @Test
+    void approveAdjustment_uncostedSku_recordsFactWithNullCostAndSourceNone() {
+        setUpAuthenticatedActor();
+        UUID adjustmentId = UUID.fromString("01960003-0000-7000-8000-0000000000a3");
+        CycleCountAdjustment adjustment = pendingAdjustment(adjustmentId);
+
+        when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.of(adjustment));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerRepository.calculateOnHandQuantity(STOCK_ITEM_ID)).thenReturn(new BigDecimal("10"));
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class)))
+                .thenAnswer(inv -> withLedgerEntryId(inv.getArgument(0)));
+
+        service.approveAdjustment(
+                adjustmentId, ApproveAdjustmentRequest.builder().build(), null);
+
+        ArgumentCaptor<InventoryAdjustedV1> fact = ArgumentCaptor.forClass(InventoryAdjustedV1.class);
+        verify(inventoryFactPublisher).recordInventoryAdjusted(fact.capture());
+        assertThat(fact.getValue().unitCost()).isNull();
+        assertThat(fact.getValue().costSource()).isEqualTo("NONE");
+        verify(methodResolver, never()).resolve(any());
+    }
+
+    @Test
+    void rejectAdjustment_recordsNoFact() {
+        UUID adjustmentId = UUID.fromString("01960003-0000-7000-8000-0000000000a4");
+        when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.of(pendingAdjustment(adjustmentId)));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.rejectAdjustment(
+                adjustmentId,
+                RejectAdjustmentRequest.builder()
+                        .rejectorUserId("mgr-001")
+                        .rejectionReason("recount")
+                        .build());
+
+        verifyNoInteractions(inventoryFactPublisher);
+    }
+
+    @Test
+    void approveAdjustment_unexpectedPostingFailure_recordsNoFact() {
+        setUpAuthenticatedActor();
+        UUID adjustmentId = UUID.fromString("01960003-0000-7000-8000-0000000000a5");
+        CycleCountAdjustment adjustment = pendingAdjustment(adjustmentId);
+
+        when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.of(adjustment));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerRepository.calculateOnHandQuantity(STOCK_ITEM_ID)).thenReturn(new BigDecimal("10"));
+        when(ledgerPostingService.post(any(InventoryLedgerEntry.class)))
+                .thenThrow(new IllegalStateException("summary row lock timed out"));
+
+        assertThatThrownBy(() -> service.approveAdjustment(
+                        adjustmentId, ApproveAdjustmentRequest.builder().build(), null))
+                .isInstanceOf(AdjustmentLedgerPostingException.class);
+        verifyNoInteractions(inventoryFactPublisher);
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -554,5 +702,13 @@ class CycleCountAdjustmentServiceImplTest {
                 GatewaySecurityConstants.DETAIL_USERNAME, ACTOR_USERNAME));
         authentication.setAuthenticated(true);
         SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    /** The funnel always returns the persisted row, which carries its generated id. */
+    private static InventoryLedgerEntry withLedgerEntryId(InventoryLedgerEntry entry) {
+        if (entry.getLedgerEntryId() == null) {
+            entry.setLedgerEntryId(UUID.fromString("01960003-0000-7000-8000-0000000000e1"));
+        }
+        return entry;
     }
 }
