@@ -709,6 +709,8 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1receiving~1sessions~1{sessionId}~1lines~1{lineId}~1cross-dock
   /v1/inventory/receiving/sessions/{sessionId}/receive:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1receiving~1sessions~1{sessionId}~1receive
+  /v1/inventory/receiving/workorders:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1receiving~1workorders
   /v1/inventory/replenishment/needs:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1replenishment~1needs
   /v1/inventory/replenishment/policies:
@@ -841,6 +843,8 @@ paths:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1finalize
   /v1/invoices/{invoiceId}/payments:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1payments
+  /v1/invoices/{invoiceId}/payments/{paymentId}:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1payments~1{paymentId}
   /v1/invoices/{invoiceId}/payments/{paymentId}/capture:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1payments~1{paymentId}~1capture
   /v1/invoices/{invoiceId}/payments/{paymentId}/refunds:
@@ -849,6 +853,8 @@ paths:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1payments~1{paymentId}~1void
   /v1/invoices/{invoiceId}/receipts:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1receipts
+  /v1/invoices/{invoiceId}/receipts/{receiptId}:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1receipts~1{receiptId}
   /v1/invoices/{invoiceId}/receipts/{receiptId}/email:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1receipts~1{receiptId}~1email
   /v1/invoices/{invoiceId}/receipts/{receiptId}/print:

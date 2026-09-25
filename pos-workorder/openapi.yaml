@@ -5456,7 +5456,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only replica projection.
 
-        Returns 404 when no pick list exists for the workorder.
+        Returns 404 when no pick list exists for the workorder, and 403 LOCATION_SCOPE_DENIED when the caller holds inventory:pick_list:view but its location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
 
         '
       operationId: getWorkorderPickList
@@ -5508,7 +5508,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only replica projection.
 
-        Returns 200 with an empty array when the workorder has no pick list - a labour-only job, or one whose generated list has not replicated yet - so "nothing to pick" never has to be handled as an error, and 403 when the caller lacks inventory:pick_list:view.
+        Returns 200 with an empty array when the workorder has no pick list - a labour-only job, or one whose generated list has not replicated yet - so "nothing to pick" never has to be handled as an error, 403 when the caller lacks inventory:pick_list:view, and 403 LOCATION_SCOPE_DENIED when the caller holds it but its location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
 
         '
       operationId: getPickTasks
@@ -5556,7 +5556,7 @@ paths:
 
         Emits a WORKORDER_PICK_FACADE_CONFIRM_LINE event and publishes a pick-confirm command; callers must poll getPickTasks to observe the applied quantity.
 
-        Returns 202 with status PENDING when the confirmation is queued, 400 when pickLineId does not match pickTaskId, 404 when the pick list or task is missing, and 503 when the command feed is unavailable.
+        Returns 202 with status PENDING when the confirmation is queued, 400 when pickLineId does not match pickTaskId, 404 when the pick list or task is missing, 503 when the command feed is unavailable, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
 
         '
       operationId: confirmPickLine
@@ -5648,7 +5648,7 @@ paths:
 
         Emits a WORKORDER_PICK_FACADE_COMPLETE_TASK event and publishes a pick-confirm command for the remaining quantity; callers must poll getPickTasks to observe the applied state.
 
-        Returns 202 with status PENDING while the command is in flight, 200 with the current state when the task is already complete, 404 when the pick list or task is missing, and 503 when the command feed is unavailable.
+        Returns 202 with status PENDING while the command is in flight, 200 with the current state when the task is already complete, 404 when the pick list or task is missing, 503 when the command feed is unavailable, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
 
         '
       operationId: completePickTask
@@ -5715,17 +5715,17 @@ paths:
       - inventory:pick_list:execute
   /v1/workorders/{workorderId}/pick-tasks/{pickTaskId}:resolve-scan:
     post:
-      description: 'Checks a scanned SKU and location against a pick task''s expected SKU and location, returning matched plus a matchStatus of MATCHED, SKU_MISMATCH, LOCATION_MISMATCH, or NO_MATCH.
+      description: 'Checks a scanned product and location against a pick task''s expected product and location, returning matched plus a matchStatus of MATCHED, SKU_MISMATCH, LOCATION_MISMATCH, NO_MATCH, PRODUCT_CODE_UNAVAILABLE, or LOCATION_CODE_UNAVAILABLE (#2217).
 
         Use this tool to validate a barcode scan before confirmPickLine; it performs no confirmation itself, so do not treat a match as a recorded pick.
 
         Preconditions: the pick task must exist on the workorder''s pick list replica.
 
-        Required inputs: workorderId and pickTaskId (UUIDs) as path parameters, plus scannedSkuId and scannedLocationId (UUIDs) in the body.
+        Required inputs: workorderId and pickTaskId (UUIDs) as path parameters, plus in the body exactly one of scannedSkuId (UUID) or scannedProductCode (the scanned EAN/UPC string), and exactly one of scannedLocationId (UUID) or scannedLocationCode (the scanned location name or barcode string). A code-based scan is compared against the task''s replicated productCode / locationName / locationBarcode, trimmed and case-insensitively; PRODUCT_CODE_UNAVAILABLE or LOCATION_CODE_UNAVAILABLE means the task carries no replicated code to compare a scanned code against yet — "cannot verify", not "wrong part" — because resolving that further would require a synchronous pos-catalog/pos-location call, which ADR-0044 forbids here; comparison is scoped to this one task and EAN/UPC codes are unique per tenant (ADR-0053 §5), so there is no cross-task ambiguity to resolve. The response always carries expectedProductCode/expectedLocationCode/expectedLocationBarcode so the UI can tell the mechanic what was expected, and fills resolvedSkuId/resolvedLocationId with the task''s own ids only once a code-based scan actually matches (an id-based scan is echoed back regardless of outcome).
 
         Emits a WORKORDER_PICK_FACADE_RESOLVE_SCAN audit event; no pick state changes — the check is purely evaluative.
 
-        Returns 404 when the workorder has no pick list or the pick task is not on it.
+        Returns 400 VALIDATION_FAILED (with fieldErrors naming productTargetValid and/or locationTargetValid) when neither or both of a target pair is supplied, 404 when the workorder has no pick list or the pick task is not on it, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
 
         '
       operationId: resolvePickScan
@@ -5804,7 +5804,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only replica projection.
 
-        Returns 200 with the picked items, possibly empty.
+        Returns 200 with the picked items, possibly empty, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
 
         '
       operationId: getPickedItems
@@ -5852,7 +5852,7 @@ paths:
 
         Emits a WORKORDER_PICKED_ITEMS_CONSUME event and publishes a consume command; callers must poll getPickedItems to observe the consumed quantities.
 
-        Returns 202 with per-item PENDING results, 404 when the pick list or a referenced pick task is missing, and 503 when the command feed is unavailable.
+        Returns 202 with per-item PENDING results, 404 when the pick list or a referenced pick task is missing, 503 when the command feed is unavailable, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
 
         '
       operationId: consumeWorkorderPickedItems
@@ -9007,27 +9007,57 @@ components:
           type: string
       type: object
     ResolveScanRequest:
-      description: Request to resolve a scanned SKU and location against a pick task
+      description: Request to resolve a scanned product and location against a pick task. Exactly one of scannedSkuId/scannedProductCode must be supplied, and exactly one of scannedLocationId/scannedLocationCode (#2217); violating either answers 400 VALIDATION_FAILED with a fieldErrors entry named productTargetValid and/or locationTargetValid.
       properties:
+        scannedLocationCode:
+          description: The location's human-readable name or barcode read off a scan; mutually exclusive with scannedLocationId. Compared case-insensitively, trimmed, against both the location's name and its barcode (#2217).
+          example: Aisle 3 Bin 7
+          type: string
         scannedLocationId:
-          description: Identifier of the location where the scan occurred
+          description: Identifier of the location where the scan occurred; mutually exclusive with scannedLocationCode
           example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
           format: uuid
           type: string
+        scannedProductCode:
+          description: The scannable EAN/UPC code read off a barcode scan; mutually exclusive with scannedSkuId. Compared case-insensitively, trimmed (#2217).
+          example: 0123456789012
+          type: string
         scannedSkuId:
-          description: Identifier of the SKU that was scanned
+          description: Identifier of the SKU that was scanned; mutually exclusive with scannedProductCode
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
           format: uuid
           type: string
-      required:
-      - scannedLocationId
-      - scannedSkuId
       type: object
     ResolveScanResponse:
       description: Result of resolving a scanned SKU and location against a pick task
       properties:
+        expectedLocationBarcode:
+          description: The task's expected location barcode, so the UI can tell the mechanic what was expected. Null when the task carries no replicated location barcode.
+          example: LOC-0037
+          type:
+          - string
+          - 'null'
+        expectedLocationCode:
+          description: The task's expected location name, so the UI can tell the mechanic what was expected. Null when the task carries no replicated location name.
+          example: Aisle 3 Bin 7
+          type:
+          - string
+          - 'null'
+        expectedProductCode:
+          description: The task's expected scannable product code, so the UI can tell the mechanic what was expected. Null when the task carries no replicated product code.
+          example: 0123456789012
+          type:
+          - string
+          - 'null'
         matchStatus:
-          description: Human-readable status describing the match outcome
+          description: 'Status describing the match outcome, backed by MatchStatus: MATCHED (both the product and location scans matched); SKU_MISMATCH (location matched, product did not); LOCATION_MISMATCH (product matched, location did not); NO_MATCH (neither matched); PRODUCT_CODE_UNAVAILABLE (a product code was scanned but the task carries no replicated code to compare against — this cannot verify, it is not necessarily wrong); LOCATION_CODE_UNAVAILABLE (same, for a scanned location code). Unknown-vs-wrong on a code scan cannot be distinguished further without a synchronous catalog/location lookup, which ADR-0044 forbids here; ambiguity across tasks is not a concern because comparison is scoped to one task and EAN/UPC codes are unique per tenant (ADR-0053 §5).'
+          enum:
+          - MATCHED
+          - SKU_MISMATCH
+          - LOCATION_MISMATCH
+          - NO_MATCH
+          - PRODUCT_CODE_UNAVAILABLE
+          - LOCATION_CODE_UNAVAILABLE
           example: MATCHED
           type: string
         matched:
@@ -9048,12 +9078,16 @@ components:
           description: Identifier of the location resolved for the scan
           example: 01960003-0000-7000-8000-000000000002
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         resolvedSkuId:
           description: Identifier of the SKU resolved for the scan (may differ from scanned SKU after substitution)
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
       required:
       - matched
       - pickListId
@@ -10690,6 +10724,10 @@ components:
           example: 2
           format: int32
           type: integer
+        productCode:
+          description: The SKU's scannable EAN/UPC code, for verifying a barcode scan against this task. Null when the SKU carries no scannable code, or for a task last updated before scan codes were replicated (#2217).
+          example: 0123456789012
+          type: string
         remainingQty:
           description: Quantity remaining to pick
           example: 2
@@ -10713,6 +10751,14 @@ components:
         status:
           description: Status of the pick task
           example: OPEN
+          type: string
+        storageLocationBarcode:
+          description: The pick location's barcode, when it carries one. Null when the location has no barcode, is not yet replicated, or for a task last updated before scan codes were replicated (#2217).
+          example: LOC-0037
+          type: string
+        storageLocationCode:
+          description: The pick location's human-readable name, used as its scan code. Null when not yet replicated, or for a task last updated before scan codes were replicated (#2217).
+          example: Aisle 3 Bin 7
           type: string
         version:
           description: Optimistic-locking version of the pick task
