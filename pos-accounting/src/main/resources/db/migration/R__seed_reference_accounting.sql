@@ -599,6 +599,44 @@ VALUES ('5eed0acc-0000-4000-8000-00000000d513'::uuid, 'ACCOUNTING', 'INVENTORY_A
 ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
 
 -- ============================================================================
+-- Issue #2193 (SPEC-inventory-adjustment-gl-posting §4.10; #2186 decision D7,
+-- final): manual cost revaluation GL posting. pos-accounting consumes the
+-- inventory.product-value.changed fact (ProductValueChangedV1 on
+-- inventory.events.v1) and posts abs(totalValueDelta) as delivered (inventory
+-- has already multiplied the cost delta by the on-hand quantity; accounting
+-- recomputes nothing):
+--   write-up   (totalValueDelta > 0): Dr INVENTORY_ASSET (1300) / Cr REVALUATION_OFFSET (5000)
+--   write-down (totalValueDelta < 0): Dr REVALUATION_OFFSET (5000) / Cr INVENTORY_ASSET (1300)
+-- D7 (final): the revaluation counter account is 5000 Cost of Goods Sold. No
+-- new accounts: 1300 and 5000 are upserted by the parity-D2 and base-COA
+-- blocks above. gl_mapping.gl_account_id is resolved by account_code SELECT
+-- (mirrors the D2/D4 pattern). Fixed ids in the 5eed0acc-...-d6xx block.
+-- ============================================================================
+
+-- Posting category: INVENTORY_REVALUATION.
+INSERT INTO posting_category (posting_category_id, category_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d601'::uuid, 'INVENTORY_REVALUATION', 'Manual cost revaluation GL posting (write-up Dr Inventory / Cr COGS, write-down Dr COGS / Cr Inventory, #2193)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, posting_category_id) DO UPDATE SET
+    category_name = EXCLUDED.category_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active,
+    modified_at = NOW(), modified_by = 'seed-generator';
+
+-- Mapping keys (resolved by name at posting time).
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d602'::uuid, '5eed0acc-0000-4000-8000-00000000d601'::uuid, 'INVENTORY_ASSET', 'Inventory asset side of a revaluation (debit on write-up, credit on write-down)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d603'::uuid, '5eed0acc-0000-4000-8000-00000000d601'::uuid, 'REVALUATION_OFFSET', 'Counter side of a revaluation (credit on write-up, debit on write-down; decision D7 final: 5000 COGS)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+
+-- GL mappings (fixed effective_start_date for idempotent re-runs; FK by account_code).
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d611'::uuid, 'ACCOUNTING', 'INVENTORY_REVALUATION_INVENTORY_ASSET', '5eed0acc-0000-4000-8000-00000000d601'::uuid, '5eed0acc-0000-4000-8000-00000000d602'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '1300'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d612'::uuid, 'ACCOUNTING', 'INVENTORY_REVALUATION_REVALUATION_OFFSET', '5eed0acc-0000-4000-8000-00000000d601'::uuid, '5eed0acc-0000-4000-8000-00000000d603'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '5000'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+
+-- ============================================================================
 -- Issue #1843: invoice revenue recognition (ADR-0044 R6).
 -- A FINALIZED invoice fact on invoice.events.v1 posts
 --   Dr 1200 Accounts Receivable (total) / Cr 4000 Service Revenue (total - tax)

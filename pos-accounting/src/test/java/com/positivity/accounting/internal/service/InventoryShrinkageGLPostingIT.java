@@ -86,6 +86,9 @@ class InventoryShrinkageGLPostingIT {
     private InventoryAdjustmentPostingService adjustmentPostingService;
 
     @Autowired
+    private InventoryRevaluationPostingService revaluationPostingService;
+
+    @Autowired
     private InventoryFactIngestionRecorder ingestionRecorder;
 
     @Autowired
@@ -124,6 +127,7 @@ class InventoryShrinkageGLPostingIT {
                 processedEventRepository,
                 shrinkagePostingService,
                 adjustmentPostingService,
+                revaluationPostingService,
                 ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 transactionManager);

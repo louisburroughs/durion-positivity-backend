@@ -75,6 +75,9 @@ class InventoryEventsListenerTransactionTest {
     private FailingAdjustmentPostingService failingPostingService;
 
     @Autowired
+    private InventoryRevaluationPostingService revaluationPostingService;
+
+    @Autowired
     private ObjectProvider<MeterRegistry> meterRegistry;
 
     private InventoryEventsListener listener;
@@ -93,6 +96,7 @@ class InventoryEventsListenerTransactionTest {
                 processedEventRepository,
                 shrinkagePostingService,
                 failingPostingService,
+                revaluationPostingService,
                 ingestionRecorder,
                 meterRegistry,
                 transactionManager);
