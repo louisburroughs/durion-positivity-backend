@@ -54,6 +54,7 @@ import com.positivity.inventory.internal.exception.UomConversionUndefinedExcepti
 import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
+import com.positivity.inventory.internal.exception.ZeroQuantityAdjustmentException;
 import com.positivity.shared.error.ApiError;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -227,6 +228,9 @@ class InventoryGlobalExceptionHandlerTest {
                             () -> handler.handleTransferQuantityExceeded(
                                     TransferQuantityExceededException.dispatchExceedsRequested(
                                             UUID.randomUUID(), "SKU-1", 5, 3))),
+                    Named.of("handleZeroQuantityAdjustment", (HandlerInvocation)
+                            () -> handler.handleZeroQuantityAdjustment(
+                                    new ZeroQuantityAdjustmentException(UUID.randomUUID()))),
                     Named.of("handleCrossSiteTransferRequiresOrder", (HandlerInvocation) () ->
                             handler.handleCrossSiteTransferRequiresOrder(new CrossSiteTransferRequiresOrderException(
                                     UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()))),

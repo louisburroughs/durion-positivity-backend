@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.inventory.internal.validation.NonZero;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -37,10 +38,11 @@ public class CreateAdjustmentRequestDto {
     UUID locationId;
 
     @Schema(
-            description = "Adjustment quantity (positive to add stock, negative to remove)",
+            description = "Adjustment quantity, non-zero (positive to add stock, negative to remove); zero is rejected",
             example = "12",
             requiredMode = REQUIRED)
     @NotNull
+    @NonZero
     BigDecimal quantity;
 
     /** Mandatory reason code explaining the adjustment. */

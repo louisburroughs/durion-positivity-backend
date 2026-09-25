@@ -12,6 +12,7 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.MovementType;
 import com.positivity.inventory.internal.exception.CrossSiteTransferRequiresOrderException;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
+import com.positivity.inventory.internal.exception.ZeroQuantityAdjustmentException;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
@@ -177,7 +178,7 @@ public class StockMovementServiceImpl implements StockMovementService {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = ZeroQuantityAdjustmentException.class)
     public @NonNull InventoryLedgerEntryResponse approveAdjustmentRequest(
             @NonNull UUID adjustmentRequestId, @NonNull String approverUserId) {
         InventoryAdjustmentRequest adjustmentRequest = adjustmentRepository
@@ -196,7 +197,14 @@ public class StockMovementServiceImpl implements StockMovementService {
         }
 
         BigDecimal quantityDelta = Quantities.nz(adjustmentRequest.getQuantity());
-        InventoryLedgerEventType eventType = quantityDelta.signum() >= 0
+        // A zero quantity moves nothing (#2201). Create-time validation refuses one, so this closes
+        // a request stored before that check: reject it (committed, see noRollbackFor) and post nothing.
+        if (quantityDelta.signum() == 0) {
+            adjustmentRequest.setStatus(AdjustmentRequestStatus.REJECTED);
+            adjustmentRepository.save(adjustmentRequest);
+            throw new ZeroQuantityAdjustmentException(adjustmentRequestId);
+        }
+        InventoryLedgerEventType eventType = quantityDelta.signum() > 0
                 ? InventoryLedgerEventType.ADJUSTMENT_IN
                 : InventoryLedgerEventType.ADJUSTMENT_OUT;
 
@@ -223,10 +231,7 @@ public class StockMovementServiceImpl implements StockMovementService {
 
         InventoryLedgerEntry posted = ledgerPostingService.post(entry);
         inventoryFactPublisher.markEntry(posted);
-        // A zero-quantity request moves nothing and has no value to post (#2190): no fact.
-        if (posted.getChangeInQuantity() != null && posted.getChangeInQuantity().signum() != 0) {
-            inventoryFactPublisher.recordInventoryAdjusted(adjustedFact(adjustmentRequest, posted, approvedAt));
-        }
+        inventoryFactPublisher.recordInventoryAdjusted(adjustedFact(adjustmentRequest, posted, approvedAt));
         return toResponse(posted);
     }
 

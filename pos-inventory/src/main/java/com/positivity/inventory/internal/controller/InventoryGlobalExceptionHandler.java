@@ -58,12 +58,14 @@ import com.positivity.inventory.internal.exception.UomConversionUndefinedExcepti
 import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
+import com.positivity.inventory.internal.exception.ZeroQuantityAdjustmentException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -103,8 +105,22 @@ public class InventoryGlobalExceptionHandler {
                 .findFirst()
                 .map(fieldError -> fieldError.getField() + " " + fieldError.getDefaultMessage())
                 .orElse("Validation failed");
+        List<ApiError.FieldError> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
+                .map(fieldError -> new ApiError.FieldError(
+                        fieldError.getField(),
+                        fieldError.getDefaultMessage() != null ? fieldError.getDefaultMessage() : "is invalid"))
+                .toList();
 
-        return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, message);
+        String correlationId = resolveCorrelationId(null);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.withFieldErrors(
+                        VALIDATION_ERROR,
+                        message,
+                        HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors.isEmpty() ? null : fieldErrors));
     }
 
     @ExceptionHandler({
@@ -258,6 +274,12 @@ public class InventoryGlobalExceptionHandler {
         // odoo-parity C2 (#1036): deterministic per-bound 422
         // (TRANSFER_DISPATCH_EXCEEDS_REQUESTED / TRANSFER_RECEIVE_EXCEEDS_DISPATCHED).
         return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(ZeroQuantityAdjustmentException.class)
+    public ResponseEntity<ApiError> handleZeroQuantityAdjustment(ZeroQuantityAdjustmentException ex) {
+        // #2201: a zero-quantity request is rejected at approval, never posted.
+        return build(HttpStatus.valueOf(422), ZeroQuantityAdjustmentException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(CrossSiteTransferRequiresOrderException.class)

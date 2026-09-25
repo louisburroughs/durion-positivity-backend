@@ -193,7 +193,9 @@ outbox, written at `beforeCommit` by `InventoryFactPublisher`, so a posting that
 `InventoryAdjustedV1` carries the posted `ledgerEntryId`, `ledgerEventType`, `sku`, `locationId`,
 `taskId` (cycle count only), `reasonCode`, and a signed `quantityDelta`: positive is a gain,
 negative a loss. No fact is emitted for a rejected adjustment, a variance that recomputes to zero on
-a `CONFLICT` task (nothing posts), or a zero-quantity manual request. Re-approving a `FAILED`
+a `CONFLICT` task (nothing posts). A manual request cannot have a zero quantity: create refuses
+it (400, field error on `quantity`), and approving one stored before that check marks it
+`REJECTED` and answers `422 ADJUSTMENT_QUANTITY_ZERO` without posting (#2201). Re-approving a `FAILED`
 adjustment posts once and emits once.
 
 Cost, on both facts, is the one the costing engine stamped on the posted ledger entry: `unitCost`
@@ -568,6 +570,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `TRANSFER_DISPATCH_EXCEEDS_REQUESTED` | 422 | A transfer dispatch exceeds the requested quantity |
 | `TRANSFER_RECEIVE_EXCEEDS_DISPATCHED` | 422 | A transfer receipt exceeds the dispatched quantity |
 | `CROSS_SITE_TRANSFER_REQUIRES_ORDER` | 422 | Immediate stock movements are intra-site; a cross-site move needs a transfer order |
+| `ADJUSTMENT_QUANTITY_ZERO` | 422 | Approving a manual adjustment request whose quantity is zero; the request is marked `REJECTED` and nothing posts (create rejects a zero quantity with a 400 field error) |
 | `TRANSFER_LOCATION_NOT_ELIGIBLE` | 422 | An INACTIVE or PENDING site cannot take part in a movement |
 | `SCRAP_INSUFFICIENT_STOCK` | 422 | Not enough on hand at the source location to scrap |
 | `LOCATION_NOT_VALID_FOR_SKU` | 422 | Putaway target location is not valid for the SKU |
