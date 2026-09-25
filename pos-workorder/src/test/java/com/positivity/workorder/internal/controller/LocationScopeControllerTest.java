@@ -968,6 +968,30 @@ class LocationScopeControllerTest {
         }
 
         @Test
+        @DisplayName("getPickedItems: 200 when the service does not raise a scope denial (#2225)")
+        void getPickedItemsServiceAllows() throws Exception {
+            preRollout(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW);
+            when(workorderPickFacadeService.getPickedItemsForWorkorder(WORKORDER_ID))
+                    .thenReturn(java.util.List.of());
+
+            mockMvc.perform(get("/v1/workorders/{workorderId}/picked-items", WORKORDER_ID))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("getPickedItems: a scope denial raised by the service answers 403 LOCATION_SCOPE_DENIED (#2225)")
+        void getPickedItemsServiceDenies() throws Exception {
+            preRollout(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW);
+            when(workorderPickFacadeService.getPickedItemsForWorkorder(WORKORDER_ID))
+                    .thenThrow(new LocationScopeDeniedException(
+                            WorkorderPermissions.INVENTORY_PICK_LIST_VIEW, SHOP_B.toString()));
+
+            mockMvc.perform(get("/v1/workorders/{workorderId}/picked-items", WORKORDER_ID))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
+        }
+
+        @Test
         @DisplayName("consumeWorkorderPickedItems: a scope denial raised by the service answers "
                 + "403 LOCATION_SCOPE_DENIED")
         void consumePickedItemsServiceDenies() throws Exception {

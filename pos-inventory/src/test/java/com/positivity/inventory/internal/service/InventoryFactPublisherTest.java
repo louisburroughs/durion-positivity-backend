@@ -298,6 +298,37 @@ class InventoryFactPublisherTest {
         assertThat(fact.locationBarcode()).isNull();
     }
 
+    @Test
+    @DisplayName(
+            "A transient enrichment failure is best-effort: the pick-task fact still publishes, with null codes (#2225)")
+    void pickTaskFactStillPublishesWhenEnrichmentLookupsFail() {
+        UUID pickTaskId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        when(pickTaskRepository.findById(pickTaskId))
+                .thenReturn(
+                        java.util.Optional.of(pickTaskEntity(pickTaskId, UUID.randomUUID(), productId, locationId)));
+        // A transient lookup failure enriching scan codes must not escape publishPickTaskIds and
+        // abort the business transaction, nor stop the pick-task fact — an unrelated, otherwise
+        // healthy snapshot — from publishing.
+        when(extProductCodeReplicaRepository.findAllById(any()))
+                .thenThrow(new org.springframework.dao.QueryTimeoutException("db"));
+        when(extStorageLocationReplicaRepository.findAllById(any()))
+                .thenThrow(new org.springframework.dao.QueryTimeoutException("db"));
+
+        publisher.markPickTaskChanged(pickTaskId);
+        fireBeforeCommit();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<DomainEventEnvelope<Object>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(eq("inventory.events.v1"), captor.capture());
+        PickTaskUpdatedV1 fact = (PickTaskUpdatedV1) captor.getValue().payload();
+        assertThat(fact.pickTaskId()).isEqualTo(pickTaskId);
+        assertThat(fact.productCode()).isNull();
+        assertThat(fact.locationName()).isNull();
+        assertThat(fact.locationBarcode()).isNull();
+    }
+
     // ── Fact→event characterisation (Phase 3.6) ────────────────────────────────────
     //
     // Written before publishPending was split into per-fact emitters. That method scored 52

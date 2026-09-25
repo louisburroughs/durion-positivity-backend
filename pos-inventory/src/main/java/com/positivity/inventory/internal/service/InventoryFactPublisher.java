@@ -438,12 +438,26 @@ public class InventoryFactPublisher {
                 locationIds.add(task.getSuggestedLocationId());
             }
         }
+        // Best-effort (#2225 review): a transient failure enriching scan codes must not escape
+        // this method — that would abort the whole business transaction over a snapshot fact, and
+        // stop every emitter still queued behind this one in publishPending. Falling back to an
+        // empty map degrades to null codes on the published facts rather than losing them.
         Map<UUID, ExtProductCodeReplica> productCodesById = new LinkedHashMap<>();
-        extProductCodeReplicaRepository.findAllById(productIds).forEach(p -> productCodesById.put(p.getProductId(), p));
+        try {
+            extProductCodeReplicaRepository
+                    .findAllById(productIds)
+                    .forEach(p -> productCodesById.put(p.getProductId(), p));
+        } catch (Exception e) {
+            log.warn("Skipping product-code enrichment for pick-task facts: {}", e.getMessage());
+        }
         Map<UUID, ExtStorageLocationReplica> locationsById = new LinkedHashMap<>();
-        extStorageLocationReplicaRepository
-                .findAllById(locationIds)
-                .forEach(l -> locationsById.put(l.getStorageLocationId(), l));
+        try {
+            extStorageLocationReplicaRepository
+                    .findAllById(locationIds)
+                    .forEach(l -> locationsById.put(l.getStorageLocationId(), l));
+        } catch (Exception e) {
+            log.warn("Skipping location enrichment for pick-task facts: {}", e.getMessage());
+        }
 
         for (Map.Entry<UUID, PickTaskEntity> entry : tasksById.entrySet()) {
             UUID pickTaskId = entry.getKey();

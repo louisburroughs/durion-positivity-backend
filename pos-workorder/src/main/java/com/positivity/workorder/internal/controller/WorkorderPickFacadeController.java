@@ -160,10 +160,11 @@ public class WorkorderPickFacadeController {
                     echoed back regardless of outcome).
                     Emits a WORKORDER_PICK_FACADE_RESOLVE_SCAN audit event; no pick state changes — the check is \
                     purely evaluative.
-                    Returns 400 when neither or both of a target pair is supplied, 404 when the workorder has \
-                    no pick list or the pick task is not on it, and 403 LOCATION_SCOPE_DENIED when the \
-                    caller's location scope does not cover the workorder's own site (ADR-0061 mechanism, \
-                    #2204).
+                    Returns 400 VALIDATION_FAILED (with fieldErrors naming productTargetValid and/or \
+                    locationTargetValid) when neither or both of a target pair is supplied, 404 when the \
+                    workorder has no pick list or the pick task is not on it, and 403 LOCATION_SCOPE_DENIED \
+                    when the caller's location scope does not cover the workorder's own site (ADR-0061 \
+                    mechanism, #2204).
                     """)
     @ApiResponse(
             responseCode = "200",

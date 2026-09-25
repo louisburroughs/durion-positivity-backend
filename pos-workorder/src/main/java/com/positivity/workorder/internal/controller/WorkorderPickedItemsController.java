@@ -54,7 +54,9 @@ public class WorkorderPickedItemsController {
                     error.
                     Required inputs: workorderId (UUID) as a path parameter.
                     No events are emitted and no state changes; this is a read-only replica projection.
-                    Returns 200 with the picked items, possibly empty.
+                    Returns 200 with the picked items, possibly empty, and 403 LOCATION_SCOPE_DENIED when the \
+                    caller's location scope does not cover the workorder's own site (ADR-0061 mechanism, \
+                    #2204).
                     """)
     @ApiResponse(
             responseCode = "200",

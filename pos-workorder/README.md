@@ -475,9 +475,10 @@ pos-workorder→pos-catalog client remains `CatalogLaborTimeClientImpl`, file-sc
   last updated before scan codes were replicated (schema v2 additive fields on
   `PickTaskUpdatedV1`, pos-inventory/pos-domain-events #2217).
 - **Location scope (#2204).** Picking and consuming parts are location-scoped by mechanism, not by
-  assignment: `getWorkorderPickList`, `getPickTasks`, `resolvePickScan`, `confirmPickLine`,
-  `completePickTask`, and `consumeWorkorderPickedItems` all gate on the workorder's own `locationId`
-  before any state change — see the Location scope table below for the permission each checks.
+  assignment: `getWorkorderPickList`, `getPickTasks`, `getPickedItems`, `resolvePickScan`,
+  `confirmPickLine`, `completePickTask`, and `consumeWorkorderPickedItems` all gate on the
+  workorder's own `locationId` before any state change (or, for the three reads, before returning
+  it) — see the Location scope table below for the permission each checks.
 
 ## Location scope (ADR-0061, #1871/#1872)
 
@@ -503,7 +504,7 @@ module's `LocationAncestorResolver`; there is no per-request call to pos-locatio
 | `overrideOperationalContext` | `workorder:operationalContext:override` | `WorkorderServiceImpl`, after the 404 and before any write: first the workorder's current `shopId` (null fails closed), then the body's `locationId` |
 | `assignServicePosition`, `releaseServicePosition` | `workorder:position:assign` | `ServicePositionServiceImpl`, after the 404 and before any write, on the workorder's `shopId` (null fails closed). The target position is at the workorder's own site by construction, so there is no second location to check |
 | `startWorkexecWorkSession` | `timekeeping:work_session:create` | controller, on the body's `locationId` |
-| `getWorkorderPickList`, `getPickTasks` | `inventory:pick_list:view` | `WorkorderPickFacadeServiceImpl`, off the workorder's own `locationId` (#2204) — mechanism scoping, no assignment gate; none of the pick-facade endpoints takes a `locationId` parameter, so location comes off the loaded workorder itself, same non-parameter pattern as `overrideOperationalContext`'s `shopId` leg |
+| `getWorkorderPickList`, `getPickTasks`, `getPickedItems` | `inventory:pick_list:view` | `WorkorderPickFacadeServiceImpl`, off the workorder's own `locationId` (#2204) — mechanism scoping, no assignment gate; none of the pick-facade endpoints takes a `locationId` parameter, so location comes off the loaded workorder itself, same non-parameter pattern as `overrideOperationalContext`'s `shopId` leg |
 | `resolvePickScan`, `confirmPickLine`, `completePickTask` | `inventory:pick_list:execute` | `WorkorderPickFacadeServiceImpl`, off the workorder's own `locationId`, before any state change (#2204) |
 | `consumeWorkorderPickedItems` | `workorder:parts:consume` | `WorkorderPickFacadeServiceImpl.consumePickedItems`, off the workorder's own `locationId`, before the consume command is published (#2204) |
 

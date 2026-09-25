@@ -65,11 +65,15 @@ decisions:
   - operation: WorkorderPickFacadeController.getWorkorderPickList
     shape: gate
     permission: inventory:pick_list:view
-    reason: none of these six endpoints take a caller-supplied locationId parameter; the gate is checked in WorkorderPickFacadeServiceImpl off the loaded workorder's own locationId (#2204), the same non-parameter pattern as OperationalContextController.overrideOperationalContext's shopId leg. Denied outside the caller's reach; absent locationId (not yet backfilled) skips the check.
+    reason: none of these seven endpoints take a caller-supplied locationId parameter; the gate is checked in WorkorderPickFacadeServiceImpl off the loaded workorder's own locationId (#2204), the same non-parameter pattern as OperationalContextController.overrideOperationalContext's shopId leg. Denied outside the caller's reach; absent locationId (not yet backfilled) skips the check.
   - operation: WorkorderPickFacadeController.getPickTasks
     shape: gate
     permission: inventory:pick_list:view
     reason: gated in WorkorderPickFacadeServiceImpl off the workorder's own locationId, same as getWorkorderPickList (#2204).
+  - operation: WorkorderPickedItemsController.getPickedItems
+    shape: gate
+    permission: inventory:pick_list:view
+    reason: gated in WorkorderPickFacadeServiceImpl.getPickedItemsForWorkorder off the workorder's own locationId, same as getWorkorderPickList (#2204, #2225 review).
   - operation: WorkorderPickFacadeController.resolveScan
     shape: gate
     permission: inventory:pick_list:execute

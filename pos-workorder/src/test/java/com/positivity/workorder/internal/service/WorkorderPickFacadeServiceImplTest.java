@@ -646,6 +646,36 @@ class WorkorderPickFacadeServiceImplTest {
     }
 
     @Test
+    @DisplayName("getPickedItemsForWorkorder: scoped caller with the workorder's location in reach succeeds (#2225)")
+    void getPickedItemsInReach() {
+        workorderAt(IN_REACH_NODE);
+        authenticateScopedOn(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW, IN_REACH_NODE);
+
+        assertThat(service.getPickedItemsForWorkorder(WORKORDER_ID)).isNotNull();
+    }
+
+    @Test
+    @DisplayName(
+            "getPickedItemsForWorkorder: scoped caller with the workorder's location out of reach is denied (#2225)")
+    void getPickedItemsOutOfReach() {
+        workorderAt(OUT_OF_REACH_NODE);
+        authenticateScopedOn(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW, IN_REACH_NODE);
+
+        assertThatThrownBy(() -> service.getPickedItemsForWorkorder(WORKORDER_ID))
+                .isInstanceOf(LocationScopeDeniedException.class);
+        verify(pickListReplicaRepository, never()).findByWorkorderIdOrderByPickListIdAsc(any());
+    }
+
+    @Test
+    @DisplayName("getPickedItemsForWorkorder: a pre-rollout token keeps today's behaviour: unrestricted (#2225)")
+    void getPickedItemsPreRolloutUnchanged() {
+        workorderAt(OUT_OF_REACH_NODE);
+        authenticatePreRollout();
+
+        assertThat(service.getPickedItemsForWorkorder(WORKORDER_ID)).isNotNull();
+    }
+
+    @Test
     @DisplayName("resolveScan: out-of-reach caller is denied before the scan is graded")
     void resolveScanOutOfReach() {
         workorderAt(OUT_OF_REACH_NODE);

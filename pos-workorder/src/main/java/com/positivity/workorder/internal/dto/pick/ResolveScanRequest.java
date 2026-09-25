@@ -17,7 +17,8 @@ import lombok.NoArgsConstructor;
 @Schema(
         description = "Request to resolve a scanned product and location against a pick task. Exactly one of "
                 + "scannedSkuId/scannedProductCode must be supplied, and exactly one of "
-                + "scannedLocationId/scannedLocationCode (#2217).")
+                + "scannedLocationId/scannedLocationCode (#2217); violating either answers 400 VALIDATION_FAILED "
+                + "with a fieldErrors entry named productTargetValid and/or locationTargetValid.")
 public class ResolveScanRequest {
     @Schema(
             description = "Identifier of the SKU that was scanned; mutually exclusive with scannedProductCode",

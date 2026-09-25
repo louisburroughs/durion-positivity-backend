@@ -216,6 +216,7 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
     @Override
     @NonNull
     public List<WorkorderPickedItemResponse> getPickedItemsForWorkorder(@NonNull UUID workorderId) {
+        requireLocationScope(workorderId, WorkorderPermissions.INVENTORY_PICK_LIST_VIEW);
         List<ExtPickListReplica> pickLists =
                 pickListReplicaRepository.findByWorkorderIdOrderByPickListIdAsc(workorderId);
         if (pickLists.isEmpty()) {

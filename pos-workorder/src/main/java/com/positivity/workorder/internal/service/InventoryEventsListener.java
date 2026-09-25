@@ -344,6 +344,15 @@ public class InventoryEventsListener {
         // Same for a demand line already known: a v1 fact carries none, and taking its null would
         // drop the link a later consumption fact needs.
         UUID workorderLineId = existing == null ? null : existing.getWorkorderLineId();
+        // Same again for the scan-verification codes (#2217, #2225): additive within schema v2, so
+        // a v1 (or older-v2) fact carries them absent, not cleared. Taking a null at face value
+        // here would erase an already-replicated code the moment any earlier-schema snapshot for
+        // this task arrives (e.g. a redelivered/replayed event, or a producer rollback) — null on
+        // the wire means "this fact doesn't say", never "clear it"; there is no way to express an
+        // explicit clear on this fact today.
+        String existingProductCode = existing == null ? null : existing.getProductCode();
+        String existingLocationName = existing == null ? null : existing.getLocationName();
+        String existingLocationBarcode = existing == null ? null : existing.getLocationBarcode();
         pickTaskReplicaRepository.save(ExtPickTaskReplica.builder()
                 .pickTaskId(payload.pickTaskId())
                 .pickListId(payload.pickListId())
@@ -352,10 +361,12 @@ public class InventoryEventsListener {
                 .workorderLineId(payload.workorderLineId() != null ? payload.workorderLineId() : workorderLineId)
                 .skuId(payload.skuId())
                 .locationId(payload.locationId())
-                // Scan-verification codes (#2217); additive within schema v2, absent on an older fact.
-                .productCode(payload.productCode())
-                .locationName(payload.locationName())
-                .locationBarcode(payload.locationBarcode())
+                // Scan-verification codes (#2217); additive within schema v2, absent on an older
+                // fact, which keeps the replica's existing value rather than clearing it.
+                .productCode(payload.productCode() != null ? payload.productCode() : existingProductCode)
+                .locationName(payload.locationName() != null ? payload.locationName() : existingLocationName)
+                .locationBarcode(
+                        payload.locationBarcode() != null ? payload.locationBarcode() : existingLocationBarcode)
                 .quantityRequired(payload.quantityRequired())
                 .quantityPicked(payload.quantityPicked())
                 .quantityConsumed(quantityConsumed)
