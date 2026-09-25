@@ -59,6 +59,8 @@ public class ShortageResolveRequest {
             description = "Quantity that is short and to be resolved. When omitted, derived from the named"
                     + " allocation's reservation as requiredQuantity minus allocatedQuantity",
             example = "3",
+            minimum = "0",
+            exclusiveMinimum = true,
             requiredMode = NOT_REQUIRED)
     @Nullable
     @Positive

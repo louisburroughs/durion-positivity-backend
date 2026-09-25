@@ -83,6 +83,11 @@ public class StandaloneRefundController {
                     """)
     @ApiResponse(responseCode = "201", description = "Refund recorded")
     @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "404",
             description = "Invoice not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -135,6 +140,10 @@ public class StandaloneRefundController {
                     invoice:refund:issue_manual is missing.
                     """)
     @ApiResponse(responseCode = "201", description = "Refund recorded")
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks the required authority",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "400",
             description = "Missing party anchor",

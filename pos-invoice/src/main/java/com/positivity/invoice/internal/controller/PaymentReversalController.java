@@ -72,6 +72,11 @@ public class PaymentReversalController {
                     """)
     @ApiResponse(responseCode = "200", description = "Payment voided")
     @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "404",
             description = "Payment intent not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -129,6 +134,11 @@ public class PaymentReversalController {
                     the amount exceeds the remaining refundable balance.
                     """)
     @ApiResponse(responseCode = "201", description = "Refund created")
+    @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Payment intent not found",
@@ -192,6 +202,11 @@ public class PaymentReversalController {
                     Returns 404 when no invoice exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Refund records returned")
+    @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Invoice not found",

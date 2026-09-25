@@ -66,6 +66,11 @@ public class ReceiptController {
                     """)
     @ApiResponse(responseCode = "200", description = "Receipt detail")
     @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "404",
             description = "Receipt not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -95,6 +100,11 @@ public class ReceiptController {
                     or the invoice's location is outside the caller's reach.
                     """)
     @ApiResponse(responseCode = "201", description = "Receipt generated")
+    @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Invoice not found",
@@ -198,6 +208,11 @@ public class ReceiptController {
                     """)
     @ApiResponse(responseCode = "200", description = "Print delivery recorded")
     @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "404",
             description = "Receipt not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -240,6 +255,11 @@ public class ReceiptController {
                     Returns 200 with an empty body on success, and 404 when the receipt does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Email delivery recorded")
+    @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Receipt not found",

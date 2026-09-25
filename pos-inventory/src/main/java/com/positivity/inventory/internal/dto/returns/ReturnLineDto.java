@@ -28,7 +28,7 @@ public class ReturnLineDto {
     @NotNull
     private UUID itemId;
 
-    @Schema(description = "Quantity of the item being returned", example = "3", requiredMode = REQUIRED)
+    @Schema(description = "Quantity of the item being returned", example = "3", minimum = "1", requiredMode = REQUIRED)
     @Positive
     private int quantity;
 
@@ -39,7 +39,7 @@ public class ReturnLineDto {
             requiredMode = REQUIRED)
     @NotBlank
     @Pattern(
-            regexp = "NOT_NEEDED|WRONG_PART|CUSTOMER_REFUSED",
+            regexp = "^(NOT_NEEDED|WRONG_PART|CUSTOMER_REFUSED)$",
             message = "reasonCode must be one of NOT_NEEDED, WRONG_PART, CUSTOMER_REFUSED")
     private String reasonCode;
 

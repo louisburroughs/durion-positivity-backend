@@ -35,12 +35,14 @@ public class ResolveScanResponse {
             description =
                     "Identifier of the SKU resolved for the scan (may differ from scanned SKU after substitution)",
             example = "01960003-0000-7000-8000-000000000001",
+            nullable = true,
             requiredMode = NOT_REQUIRED)
     private UUID resolvedSkuId;
 
     @Schema(
             description = "Identifier of the location resolved for the scan",
             example = "01960003-0000-7000-8000-000000000002",
+            nullable = true,
             requiredMode = NOT_REQUIRED)
     private UUID resolvedLocationId;
 
@@ -48,6 +50,7 @@ public class ResolveScanResponse {
             description = "The task's expected scannable product code, so the UI can tell the mechanic what "
                     + "was expected. Null when the task carries no replicated product code.",
             example = "0123456789012",
+            nullable = true,
             requiredMode = NOT_REQUIRED)
     private String expectedProductCode;
 
@@ -55,6 +58,7 @@ public class ResolveScanResponse {
             description = "The task's expected location name, so the UI can tell the mechanic what was "
                     + "expected. Null when the task carries no replicated location name.",
             example = "Aisle 3 Bin 7",
+            nullable = true,
             requiredMode = NOT_REQUIRED)
     private String expectedLocationCode;
 
@@ -62,6 +66,7 @@ public class ResolveScanResponse {
             description = "The task's expected location barcode, so the UI can tell the mechanic what was "
                     + "expected. Null when the task carries no replicated location barcode.",
             example = "LOC-0037",
+            nullable = true,
             requiredMode = NOT_REQUIRED)
     private String expectedLocationBarcode;
 
