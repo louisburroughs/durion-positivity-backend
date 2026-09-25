@@ -185,7 +185,7 @@ public class ConsumptionServiceImpl implements ConsumptionService {
                         "Requested quantity exceeds picked quantity for task: " + item.getPickTaskId());
             }
 
-            entriesToSave.add(buildConsumptionEntry(request, item, resolveConsumptionLot(item, task)));
+            entriesToSave.add(buildConsumptionEntry(request, item, task, resolveConsumptionLot(item, task)));
             entriesToSave.addAll(closeAllocations(request, item, task, releasedInBatch));
         }
 
@@ -405,13 +405,17 @@ public class ConsumptionServiceImpl implements ConsumptionService {
     }
 
     private InventoryLedgerEntry buildConsumptionEntry(
-            ConsumeItemsRequest request, ConsumeItemLine item, @Nullable UUID lotId) {
+            ConsumeItemsRequest request, ConsumeItemLine item, PickTaskEntity task, @Nullable UUID lotId) {
         return InventoryLedgerEntry.builder()
                 .stockItemId(item.getSkuId() == null ? "" : item.getSkuId().toString())
                 .eventType(InventoryLedgerEventType.WORKORDER_CONSUMPTION)
                 .changeInQuantity(BigDecimal.valueOf(item.getQuantity()).abs().negate())
                 .quantityAfter(BigDecimal.ZERO)
                 .lotId(lotId)
+                // #2206: the work order the consumption is for, and the pick task's work order
+                // line when it carries one (a task consumed against unallocated stock has none).
+                .workorderId(request.getWorkorderId())
+                .workorderLineId(task.getWorkorderLineId())
                 .transactionUserId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                 .notes("Consumed from pick task " + item.getPickTaskId() + " for workorder " + request.getWorkorderId())
                 .build();

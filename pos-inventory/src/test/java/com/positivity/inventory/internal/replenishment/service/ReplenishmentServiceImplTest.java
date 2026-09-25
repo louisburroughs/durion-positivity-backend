@@ -20,6 +20,7 @@ import com.positivity.inventory.internal.repository.InventoryStockSummaryReposit
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
 import com.positivity.inventory.internal.service.ForecastQuantityService;
 import com.positivity.inventory.internal.service.ForecastSiteResolver;
 import com.positivity.inventory.internal.service.LeadTimeResolver;
@@ -80,6 +81,9 @@ class ReplenishmentServiceImplTest {
 
     @Mock
     private ForecastSiteResolver forecastSiteResolver;
+
+    @Mock
+    private BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
     @Mock
     private LeadTimeResolver leadTimeResolver;

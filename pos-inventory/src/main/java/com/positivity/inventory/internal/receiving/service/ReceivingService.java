@@ -3,11 +3,14 @@ package com.positivity.inventory.internal.receiving.service;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
+import com.positivity.inventory.internal.dto.receiving.CrossDockWorkorderSearchResultDto;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Service for managing inventory receiving sessions.
@@ -90,4 +93,17 @@ public interface ReceivingService {
             @NonNull UUID lineId,
             @NonNull CrossDockRequest request,
             @NonNull String actorUserId);
+
+    /**
+     * Searches cross-dock-eligible workorders (#2211): status not closed and at least one part
+     * line, matching {@code query} against {@code workorderNumber} (case-insensitive contains) or
+     * the exact workorder UUID. A blank/null query returns up to 50 most-recently-updated eligible
+     * workorders.
+     *
+     * @param query free-text workorder number fragment or an exact workorder UUID; blank/null for
+     *     the default listing
+     * @return the matching workorders, most recently updated first
+     */
+    @NonNull
+    List<CrossDockWorkorderSearchResultDto> searchCrossDockWorkorders(@Nullable String query);
 }

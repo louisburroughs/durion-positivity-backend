@@ -37,9 +37,10 @@ Inventory management service for the Durion Positivity ETSMS platform. Manages s
 - `GET /v1/inventory/{planId}` — retrieve a cycle count plan
 - `GET /v1/inventory/lead-time` — supplier lead time data
 - `GET /v1/inventory/policies` — replenishment policies
-- `GET /v1/inventory/returns/returnable-items` — returnable item lookup for a workorder
-- `GET /v1/inventory/returns/reason-codes` — return reason code catalog
-- `POST /v1/inventory/returns/submit-to-stock` — submit return lines to stock (async accepted)
+- `GET /v1/inventory/returns/returnable-items` — returnable items for a workorder's part lines (quantity consumed minus quantity already returned, per line)
+- `GET /v1/inventory/returns/reason-codes` — return reason code catalog (closed set: `NOT_NEEDED`, `WRONG_PART`, `CUSTOMER_REFUSED`, CAP-218 Story #177)
+- `POST /v1/inventory/returns/submit-to-stock` — post return lines to stock: persists the return record and posts a `RETURN_TO_STOCK` ledger entry per line
+- `GET /v1/inventory/receiving/workorders` — search cross-dock-eligible workorders by number (contains) or exact id (#2211)
 - `GET /v1/inventory/shortage/options` — compute shortage resolution options (BACKORDER, SUBSTITUTE, TRANSFER_IN, EMERGENCY_PURCHASE, CANCEL_LINE), each with an expected-resolution date and cost delta where computable (params: `allocationId`, `sku`, `shortQuantity`, optional `workorderLineId`, `locationId`)
 - `POST /v1/inventory/shortage/resolve` — execute the chosen option atomically, creating the backing artifact (backorder / substitute reservation / transfer order / purchase suggestion); requires an `idempotencyKey` (retry-safe)
 - `GET /v1/inventory/backorders` — list backorders (filters: status, sku, location, workorderLine)
@@ -76,7 +77,12 @@ them (pre-rollout) is unscoped and behaves exactly as before. A denial is `403` 
   location is given) and `resolveShortage` (location and source location when given). The by-id
   reads of narrowed lists are gated on the loaded record's location after the 404 so ids cannot
   be probed: `getBackorder`, `getCycleCountPlan`, `getCycleCountSchedule`, `getLedgerEntry`,
-  `getPurchaseSuggestion`, `getScrap`.
+  `getPurchaseSuggestion`, `getScrap`. Pick-list view/execute (#2204) gate the same way, but on a
+  server-derived site (no request parameter names a location): `getPickList`,
+  `getPickTasksForPickList`, `releasePickList`, `confirmPickTask`, `updatePickListStatus` (only
+  when the pick list already exists) and `cancelPickList` (only when it exists) resolve the site
+  from the pick list's tasks' suggested locations (first one that resolves); a list with no tasks,
+  or none resolving a site, is not gated.
 - **Narrow** — `locationId` is an optional filter. Named, it is gated; absent, a scoped caller
   sees only rows within their reach and an empty reach is an empty result (never a 403):
   `listBackorders`, `listCycleCountPlans`, `listCycleCountSchedules`, `listLedgerEntries`,
@@ -224,6 +230,41 @@ order line projected before pos-order published its factor (until the order's ne
 it), or a session line opened before `receiving_line.source_line_id` existed whose SKU appears on
 more than one order line. Receipts posted before #2203 stay uncosted (ADR-0048 §3: cost at posting
 time); such a SKU gains a cost from its next priced receipt or from a revaluation.
+
+### Work-order linkage on the ledger, returns, and cross-dock search (#2206, #2211)
+
+`inventory_ledger_entry` carries nullable `workorder_id`/`workorder_line_id` columns, stamped by
+every posting path that knows a work order: pick-task consumption (`WORKORDER_CONSUMPTION`,
+`ConsumptionServiceImpl`), the cross-dock `GOODS_RECEIPT`/`GOODS_ISSUE` pair (`workorderId` and,
+when the request's `workorderLineId` parses as a UUID, the line), and `RETURN_TO_STOCK` postings
+from both return paths. `fromLocationId`/`toLocationId` already carry the storage location (bin)
+or site the posting used — the UI reads those directly rather than a separate field. No backfill:
+a row posted before this column existed carries no link.
+
+Returns to stock have two paths. `POST /v1/inventory/returns/submit-to-stock`
+(`ReturnController.submitToStock`) is the work-order-line-keyed path: the named workorder must be
+`COMPLETED` or `CLOSED` (`ext_workorder` replica status; 422 `WORKORDER_NOT_RETURNABLE` otherwise,
+404 `NOT_FOUND` when the replica has no row for it at all — CAP-218 Story #177, parts are handed
+back once the job is done, not mid-repair), no two lines may name the same `itemId` (400
+`VALIDATION_ERROR` — each workorder line is validated once, not aggregated), each line's `itemId`
+names a work-order part line (`ext_workorder_part`), `reasonCode` must be one of the closed set
+`NOT_NEEDED`/`WRONG_PART`/`CUSTOMER_REFUSED` (400 `VALIDATION_ERROR` otherwise), and the quantity
+may not exceed that line's returnable balance — quantity consumed (`WORKORDER_CONSUMPTION` ledger
+rows for the line) minus quantity already returned (`inventory_return_line.workorder_line_id` rows
+for the line), floored at zero (422 `RETURN_QUANTITY_EXCEEDED` otherwise, 404 `NOT_FOUND` when
+`itemId` does not name a real part line). It persists an `InventoryReturnEntity`/
+`InventoryReturnLineEntity` pair and posts one `RETURN_TO_STOCK` ledger entry per line.
+`GET /v1/inventory/returns/returnable-items` reads that same consumed-minus-returned balance per
+part line. The older `returnItemsToStock` internal path (SKU/quantity against consumption history,
+no work-order-line key) is unchanged.
+
+`GET /v1/inventory/receiving/workorders?query=` (`ReceivingController.searchCrossDockWorkorders`,
+same dual-authority gate as `crossDockLineToWorkorder`: `inventory:receiving:complete` AND
+`inventory:issue:parts`) finds workorders eligible for cross-dock — status not `COMPLETED`,
+`CANCELLED` or `CLOSED` (`WorkorderValidationService.isClosedWorkorderStatus`) and at least one
+demanded part line — matching `query` against `workorderNumber` (case-insensitive contains) or an
+exact workorder UUID; a blank/omitted query returns up to 50 most-recently-updated eligible rows.
+Eligibility and the match are both expressed in the repository query, not filtered in memory.
 
 ## Lot Tracking — Inbound Capture (odoo-parity E1)
 
@@ -567,7 +608,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `INVALID_PARAM_COMBINATION` | 400 | The query parameters supplied cannot be combined |
 | `FORBIDDEN` | 403 | Caller lacks the required permission, or the request's location falls outside the caller's scope |
 | `PART_MATCH_PERMISSION_REQUIRED` | 403 | Confirming a part match needs a permission the caller lacks |
-| `NOT_FOUND` | 404 | Inventory resource not found: product, location, task, cycle-count plan, transfer order, scrap record, source document or receiving session |
+| `NOT_FOUND` | 404 | Inventory resource not found: product, location, task, cycle-count plan, transfer order, scrap record, source document, receiving session, work order part line (`submitReturnToStock`) or allocation (`listShortageOptions`/`resolveShortage`, when `sku`/`shortQuantity` are omitted and `allocationId` is unknown) |
 | `CONFLICT` | 409 | An `IllegalStateException` from a service, or a duplicate ASN |
 | `DUPLICATE_ENABLED_ANY_PUTAWAY_RULE` | 409 | An enabled `ANY`-scope putaway rule already exists |
 | `CYCLE_COUNT_CONFLICT` | 409 | Cycle-count approval rejected; the task is flagged CONFLICT and the reviewer must choose a recount or a recomputed approval |
@@ -584,7 +625,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `INSUFFICIENT_ATP` | 422 | Available-to-promise quantity is insufficient |
 | `PICK_SCAN_MISMATCH` | 422 | The scanned item does not match the pick line |
 | `WORKORDER_CONSUMPTION_ERROR` | 422 | Consuming parts against the workorder failed a business rule |
-| `RETURN_QUANTITY_EXCEEDED` | 422 | Return exceeds original purchase quantity |
+| `RETURN_QUANTITY_EXCEEDED` | 422 | Return exceeds original purchase quantity (`returnItemsToStock`), or exceeds a work order line's remaining returnable quantity — consumed minus already returned (`submitReturnToStock`) |
 | `TRANSFER_DISPATCH_EXCEEDS_REQUESTED` | 422 | A transfer dispatch exceeds the requested quantity |
 | `TRANSFER_RECEIVE_EXCEEDS_DISPATCHED` | 422 | A transfer receipt exceeds the dispatched quantity |
 | `CROSS_SITE_TRANSFER_REQUIRES_ORDER` | 422 | Immediate stock movements are intra-site; a cross-site move needs a transfer order |
@@ -614,6 +655,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `SHORTAGE_RESOLVE_MISSING_FIELD` | 422 | The shortage resolution omits a field its strategy requires |
 | `SHORTAGE_RESOLVE_SUBSTITUTE_UNAVAILABLE` | 422 | The substitute named for the shortage is not available |
 | `SHORTAGE_RESOLVE_INVALID_IDENTIFIER` | 422 | The shortage resolution names an identifier that does not resolve |
+| `WORKORDER_NOT_RETURNABLE` | 422 | `submitReturnToStock` was called against a workorder whose status is not `COMPLETED` or `CLOSED` (CAP-218 Story #177) |
+| `SHORTAGE_DERIVED_QUANTITY_NOT_POSITIVE` | 422 | The allocation's reservation was used to derive `shortQuantity` (both omitted from the request) and the result is not positive — nothing is actually short |
 | `ADJUSTMENT_LEDGER_POST_FAILED` | 500 | Ledger post for adjustment failed unexpectedly; the adjustment is left `FAILED` with the cause in `errorMessage`, and approving it retries (#2170) |
 | `SCRAP_LEDGER_POST_FAILED` | 500 | Ledger post for scrap failed unexpectedly; the scrap is left `FAILED` with the cause in `errorMessage`, and approving it retries (#2170) |
 | `NOT_IMPLEMENTED` | 501 | The operation is deliberately unimplemented; enveloped rather than answered with an empty body (#1720) |

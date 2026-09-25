@@ -43,6 +43,14 @@ public class InventoryReturnLineEntity extends TenantScopedEntity {
     @Column(nullable = false)
     private UUID skuId;
 
+    /**
+     * Work order line this return line returns stock against (#2206), used to compute how much
+     * of a line remains returnable. Null for the legacy consumption-history return path
+     * ({@code returnItemsToStock}) and for lines posted before this column existed.
+     */
+    @Column(name = "workorder_line_id")
+    private UUID workorderLineId;
+
     /** Base-UoM quantity returned; decimal-capable per the product's declaration (ADR-0055). */
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal quantityReturned;

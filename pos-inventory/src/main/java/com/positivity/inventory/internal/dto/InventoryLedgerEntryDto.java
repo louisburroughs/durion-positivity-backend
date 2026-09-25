@@ -82,16 +82,36 @@ public class InventoryLedgerEntryDto {
     private UUID locationId;
 
     @Schema(
-            description = "Source location for transfer events",
+            description = "The storage location (bin) or site the stock left, on whichever granularity the"
+                    + " posting path used: a bin for a bin-level move (e.g. a pick or a putaway), a site for a"
+                    + " site-level move (e.g. a transfer). This IS the storage-location id for a bin-level"
+                    + " posting; there is no separate storage-location field to read instead",
             example = "01960003-0000-7000-8000-000000000005",
             requiredMode = NOT_REQUIRED)
     private UUID fromLocationId;
 
     @Schema(
-            description = "Destination location for transfer events",
+            description = "The storage location (bin) or site the stock entered, on whichever granularity the"
+                    + " posting path used: a bin for a bin-level move (e.g. a pick or a putaway), a site for a"
+                    + " site-level move (e.g. a transfer). This IS the storage-location id for a bin-level"
+                    + " posting; there is no separate storage-location field to read instead",
             example = "01960003-0000-7000-8000-000000000006",
             requiredMode = NOT_REQUIRED)
     private UUID toLocationId;
+
+    @Schema(
+            description = "Work order this entry was posted for, when the posting path knows one (pick-task"
+                    + " consumption, cross-dock receipt/issue, returns to stock); null otherwise",
+            example = "01960003-0000-7000-8000-000000000008",
+            requiredMode = NOT_REQUIRED)
+    private UUID workorderId;
+
+    @Schema(
+            description = "Work order line this entry was posted for, when the posting path knows one; null when"
+                    + " only the work order (not the line) is known",
+            example = "01960003-0000-7000-8000-000000000009",
+            requiredMode = NOT_REQUIRED)
+    private UUID workorderLineId;
 
     @Schema(description = "Reason code explaining the entry", example = "CYCLE_COUNT", requiredMode = NOT_REQUIRED)
     private String reasonCode;

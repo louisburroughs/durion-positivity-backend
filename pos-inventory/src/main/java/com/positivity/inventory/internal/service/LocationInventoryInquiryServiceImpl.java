@@ -2,10 +2,14 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.LocationInventoryInquiryResponse;
 import com.positivity.inventory.internal.dto.LocationInventoryItemsResponse;
+import com.positivity.inventory.internal.entity.ExtStorageLocationReplica;
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
+import com.positivity.inventory.internal.entity.LocationRefEntity;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.inventory.internal.repository.LocationRefRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -30,16 +34,35 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final AsOfQueryGuard asOfQueryGuard;
     private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+    private final LocationRefRepository locationRefRepository;
+    private final ExtStorageLocationReplicaRepository storageLocationReplicaRepository;
 
     public LocationInventoryInquiryServiceImpl(
             InventoryStockSummaryRepository stockSummaryRepository,
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
             AsOfQueryGuard asOfQueryGuard,
-            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver) {
+            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver,
+            LocationRefRepository locationRefRepository,
+            ExtStorageLocationReplicaRepository storageLocationReplicaRepository) {
         this.stockSummaryRepository = stockSummaryRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.asOfQueryGuard = asOfQueryGuard;
         this.baseUnitOfMeasureResolver = baseUnitOfMeasureResolver;
+        this.locationRefRepository = locationRefRepository;
+        this.storageLocationReplicaRepository = storageLocationReplicaRepository;
+    }
+
+    /**
+     * The location's human-readable name (#2206): the site registry first (it is the platform's
+     * name of record), falling back to the storage-location replica's name for a bin; null when
+     * neither knows the id.
+     */
+    private @org.jspecify.annotations.Nullable String resolveLocationName(UUID locationId) {
+        return locationRefRepository
+                .findByLocationId(locationId)
+                .map(LocationRefEntity::getName)
+                .or(() -> storageLocationReplicaRepository.findById(locationId).map(ExtStorageLocationReplica::getName))
+                .orElse(null);
     }
 
     @Override
@@ -61,8 +84,10 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
 
         return LocationInventoryInquiryResponse.builder()
                 .locationId(locationId)
+                .locationName(resolveLocationName(locationId))
                 .onHandQuantity(onHandQuantity)
                 .availableToPromiseQuantity(onHandQuantity.subtract(outstandingAllocations))
+                .reservedQuantity(outstandingAllocations)
                 .build();
     }
 
@@ -109,6 +134,7 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
         // is not reliably reconstructable from ATP-neutral ledger events (A3, #1029).
         return LocationInventoryInquiryResponse.builder()
                 .locationId(locationId)
+                .locationName(resolveLocationName(locationId))
                 .onHandQuantity(Quantities.nz(onHand))
                 .build();
     }

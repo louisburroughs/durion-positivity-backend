@@ -22,6 +22,13 @@ public class LocationInventoryInquiryResponse {
     private UUID locationId;
 
     @Schema(
+            description = "Human-readable name of the location, from the site registry or the storage-location"
+                    + " replica; null when it cannot be resolved",
+            example = "Main Warehouse",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private String locationName;
+
+    @Schema(
             description = "Current on-hand quantity across all stock items at the location",
             example = "12",
             requiredMode = Schema.RequiredMode.REQUIRED)
@@ -35,4 +42,12 @@ public class LocationInventoryInquiryResponse {
             example = "8",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private BigDecimal availableToPromiseQuantity;
+
+    @Schema(
+            description = "Outstanding allocations at the location — the quantity subtracted from on-hand to"
+                    + " get availableToPromiseQuantity. Null for as-of (historical) requests, same as"
+                    + " availableToPromiseQuantity",
+            example = "4",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private BigDecimal reservedQuantity;
 }

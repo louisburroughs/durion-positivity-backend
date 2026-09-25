@@ -6,8 +6,10 @@ import static org.mockito.Mockito.when;
 import com.positivity.inventory.internal.dto.LocationInventoryInquiryResponse;
 import com.positivity.inventory.internal.dto.LocationInventoryItemsResponse;
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
+import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.inventory.internal.repository.LocationRefRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -38,9 +40,20 @@ class LocationInventoryInquiryServiceImplTest {
     @Mock
     private BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
+    @Mock
+    private LocationRefRepository locationRefRepository;
+
+    @Mock
+    private ExtStorageLocationReplicaRepository storageLocationReplicaRepository;
+
     private LocationInventoryInquiryServiceImpl newService() {
         return new LocationInventoryInquiryServiceImpl(
-                stockSummaryRepository, inventoryLedgerEntryRepository, asOfQueryGuard, baseUnitOfMeasureResolver);
+                stockSummaryRepository,
+                inventoryLedgerEntryRepository,
+                asOfQueryGuard,
+                baseUnitOfMeasureResolver,
+                locationRefRepository,
+                storageLocationReplicaRepository);
     }
 
     private InventoryStockSummary summary(String sku, long onHand, long allocated) {

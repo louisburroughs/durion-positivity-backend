@@ -22,6 +22,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Deliberately location-scope-free (PR #2227 review item 1, BLOCKER): {@code
+ * InventoryCommandListener} calls {@link #releasePickList} and {@link #confirmPickTask} directly
+ * for Kafka-driven commands with no authenticated {@code SecurityContext}, and {@code
+ * SecurityContextHelper.locationScope()} throws without one. Enforcement lives at the HTTP
+ * boundary instead, in {@code PickListController} via {@link PickListLocationScopeGuard}, which
+ * only the controller calls.
+ */
 @Service
 @Transactional
 public class PickListServiceImpl implements PickListService {

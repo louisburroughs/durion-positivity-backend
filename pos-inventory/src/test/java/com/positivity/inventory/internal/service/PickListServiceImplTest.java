@@ -23,12 +23,14 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Unit tests for {@link PickListServiceImpl} — Story #28: Create Pick List /
@@ -73,6 +75,11 @@ class PickListServiceImplTest {
     void setUp() {
         service = new PickListServiceImpl(
                 pickListRepository, pickTaskRepository, inventoryFactPublisher, baseUnitOfMeasureResolver);
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
     }
 
     // ─── SC1: createPickList — valid request → DRAFT status ─────────────────────
@@ -596,5 +603,76 @@ class PickListServiceImplTest {
         org.mockito.Mockito.verify(baseUnitOfMeasureResolver).resolveAll(any());
         org.mockito.Mockito.verify(baseUnitOfMeasureResolver, org.mockito.Mockito.never())
                 .resolve(any(UUID.class));
+    }
+
+    // ─── PR #2227 review item 1 (BLOCKER): PickListServiceImpl must stay location-scope-free ──
+    //
+    // InventoryCommandListener calls releasePickList/confirmPickTask directly for Kafka-driven
+    // commands (async pick-list release/confirm requested by pos-workorder, #901) with no
+    // authenticated SecurityContext at all. SecurityContextHelper.locationScope() throws
+    // IllegalStateException without an Authentication in the context, so if the service ever
+    // called it, every command-driven pick-list update would break. These tests run with an
+    // explicitly empty SecurityContext — the exact shape the command-listener path runs under —
+    // and prove the service methods it calls succeed regardless. Location-scope enforcement now
+    // lives only in PickListController via PickListLocationScopeGuard (see
+    // PickListLocationScopeGuardTest and PickListControllerTest).
+
+    @Test
+    @DisplayName("command-listener path: releasePickList succeeds with an empty SecurityContext (no authentication)")
+    void releasePickList_emptySecurityContext_commandListenerPathSucceeds() {
+        SecurityContextHolder.clearContext();
+        UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000060");
+        PickListEntity entity = PickListEntity.builder()
+                .pickListId(pickListId)
+                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000061"))
+                .status(PickListStatus.DRAFT)
+                .priority(0)
+                .createdAt(Instant.now(TEST_CLOCK))
+                .updatedAt(Instant.now(TEST_CLOCK))
+                .build();
+        when(pickListRepository.findById(pickListId)).thenReturn(Optional.of(entity));
+        when(pickListRepository.save(entity)).thenReturn(entity);
+
+        // No SecurityContextHelper.locationScope() call in this path: no exception, no need to
+        // authenticate first — exactly how InventoryCommandListener.handlePickListReleaseRequested
+        // calls this method.
+        PickListResponse result = service.releasePickList(pickListId);
+        assertThat(result.getStatus()).isEqualTo(PickListStatus.READY_TO_PICK);
+    }
+
+    @Test
+    @DisplayName("command-listener path: confirmPickTask succeeds with an empty SecurityContext (no authentication)")
+    void confirmPickTask_emptySecurityContext_commandListenerPathSucceeds() {
+        SecurityContextHolder.clearContext();
+        UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000062");
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000063");
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000064");
+        UUID scannedLocationId = UUID.fromString("00000000-0000-0000-0000-000000000065");
+
+        PickListEntity pickList = PickListEntity.builder()
+                .pickListId(pickListId)
+                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000066"))
+                .status(PickListStatus.READY_TO_PICK)
+                .priority(0)
+                .build();
+        PickTaskEntity task = PickTaskEntity.builder()
+                .pickTaskId(pickTaskId)
+                .pickList(pickList)
+                .productId(productId)
+                .sku("SKU-COMMAND")
+                .quantityRequired(1)
+                .status(PickTaskStatus.PENDING)
+                .sortOrder(0)
+                .build();
+        when(pickListRepository.findById(pickListId)).thenReturn(Optional.of(pickList));
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(task));
+        when(pickTaskRepository.save(task)).thenReturn(task);
+        when(pickTaskRepository.findByPickListOrderBySortOrderAsc(pickList)).thenReturn(List.of(task));
+
+        // No SecurityContextHelper.locationScope() call in this path — matches
+        // InventoryCommandListener.handlePickTaskConfirmRequested calling this method directly.
+        PickTaskResponse result = service.confirmPickTask(pickListId, pickTaskId, productId, scannedLocationId, 1);
+
+        assertThat(result.getStatus()).isEqualTo(PickTaskStatus.PICKED);
     }
 }

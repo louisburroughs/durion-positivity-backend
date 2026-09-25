@@ -38,4 +38,17 @@ public class ShortageResolutionException extends RuntimeException {
                 "SHORTAGE_RESOLVE_INVALID_IDENTIFIER",
                 "Field '" + field + "' value '" + value + "' is not a valid identifier for this option");
     }
+
+    /**
+     * {@code shortQuantity} was omitted and derived from the named allocation's reservation
+     * (requiredQuantity - allocatedQuantity), and the result is not positive — there is nothing
+     * actually short to resolve (PR #2227 review item 7).
+     */
+    public static ShortageResolutionException derivedQuantityNotPositive(
+            java.util.UUID allocationId, java.math.BigDecimal derivedShortQuantity) {
+        return new ShortageResolutionException(
+                "SHORTAGE_DERIVED_QUANTITY_NOT_POSITIVE",
+                "Allocation " + allocationId + "'s derived shortQuantity (requiredQuantity - allocatedQuantity) is "
+                        + derivedShortQuantity + ", which is not positive; nothing is short");
+    }
 }

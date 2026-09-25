@@ -29,6 +29,8 @@ import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
+import com.positivity.inventory.internal.service.ForecastSiteResolver;
 import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.ProximitySourcingStrategy;
 import com.positivity.inventory.internal.service.PutawayRuleMatcher;
@@ -84,6 +86,12 @@ class PutawayGenerationServiceImplTest {
     @Mock
     private LocationScopeService locationScopeService;
 
+    @Mock
+    private ForecastSiteResolver forecastSiteResolver;
+
+    @Mock
+    private BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+
     private PutawayGenerationServiceImpl service;
 
     @BeforeEach
@@ -100,7 +108,13 @@ class PutawayGenerationServiceImplTest {
                 destinationResolver,
                 stagingLocationResolver,
                 putawayValidationService,
-                locationScopeService);
+                locationScopeService,
+                forecastSiteResolver,
+                baseUnitOfMeasureResolver);
+        lenient().when(forecastSiteResolver.resolveForecastSite(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(forecastSiteResolver.resolveAll(any())).thenReturn(new java.util.HashMap<>());
+        lenient().when(baseUnitOfMeasureResolver.resolve(any(UUID.class))).thenReturn(null);
+        lenient().when(baseUnitOfMeasureResolver.resolveAll(any())).thenReturn(new java.util.HashMap<>());
         lenient()
                 .when(skuCategoryLookup.categoryRefOfAll(org.mockito.ArgumentMatchers.anyCollection()))
                 .thenReturn(Map.of());

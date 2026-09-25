@@ -6,6 +6,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -31,8 +32,15 @@ public class ReturnLineDto {
     @Positive
     private int quantity;
 
-    @Schema(description = "Reason code explaining the return", example = "DAMAGED", requiredMode = REQUIRED)
+    @Schema(
+            description = "Reason code explaining the return, from the closed set returned by"
+                    + " listReturnReasonCodes: NOT_NEEDED, WRONG_PART or CUSTOMER_REFUSED (CAP-218 Story #177)",
+            example = "NOT_NEEDED",
+            requiredMode = REQUIRED)
     @NotBlank
+    @Pattern(
+            regexp = "NOT_NEEDED|WRONG_PART|CUSTOMER_REFUSED",
+            message = "reasonCode must be one of NOT_NEEDED, WRONG_PART, CUSTOMER_REFUSED")
     private String reasonCode;
 
     @Schema(

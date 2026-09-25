@@ -24,9 +24,11 @@ public interface ShortageResolutionService {
      *
      * @param allocationId the allocation experiencing the shortage
      * @param workorderLineId the workorder line whose demand is short (optional)
-     * @param sku the SKU / stock-item identifier that is short
+     * @param sku the SKU / stock-item identifier that is short; derived from the allocation's
+     *     reservation when omitted (#2206)
      * @param shortQuantity the quantity that is short (positive); decimal-capable per the product's
-     *     catalog divisibility declaration (ADR-0055, #1414)
+     *     catalog divisibility declaration (ADR-0055, #1414); derived from the allocation's
+     *     reservation when omitted (#2206)
      * @param locationId the site the demand is short at (optional)
      * @return the computed options
      */
@@ -34,8 +36,8 @@ public interface ShortageResolutionService {
     List<ShortageOptionDto> computeShortageOptions(
             @NonNull UUID allocationId,
             @Nullable UUID workorderLineId,
-            @NonNull String sku,
-            @NonNull BigDecimal shortQuantity,
+            @Nullable String sku,
+            @Nullable BigDecimal shortQuantity,
             @Nullable UUID locationId);
 
     /**

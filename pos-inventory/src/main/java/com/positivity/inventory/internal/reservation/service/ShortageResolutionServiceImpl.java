@@ -8,14 +8,18 @@ import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
 import com.positivity.inventory.internal.dto.transfer.CreateTransferOrderRequest;
 import com.positivity.inventory.internal.dto.transfer.TransferOrderLineRequest;
 import com.positivity.inventory.internal.dto.transfer.TransferOrderResponse;
+import com.positivity.inventory.internal.entity.AllocationEntity;
 import com.positivity.inventory.internal.entity.ExtProductSubstitutionReplica;
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.entity.PurchaseSuggestion;
+import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.entity.ShortageResolutionRecord;
 import com.positivity.inventory.internal.enums.PurchaseSuggestionStatus;
 import com.positivity.inventory.internal.enums.ShortageResolutionOption;
+import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.ShortageResolutionException;
 import com.positivity.inventory.internal.movement.service.TransferOrderService;
+import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.ExtProductSubstitutionReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.PurchaseSuggestionRepository;
@@ -102,6 +106,7 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
     private final SkuCostStateRepository skuCostStateRepository;
     private final PurchaseSuggestionRepository purchaseSuggestionRepository;
     private final ShortageResolutionRecordRepository resolutionRecordRepository;
+    private final AllocationRepository allocationRepository;
     private final BackorderService backorderService;
     private final TransferOrderService transferOrderService;
     private final ReservationService reservationService;
@@ -114,23 +119,65 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
     public @NonNull List<ShortageOptionDto> computeShortageOptions(
             @NonNull UUID allocationId,
             @Nullable UUID workorderLineId,
-            @NonNull String sku,
-            BigDecimal shortQuantity,
+            @Nullable String sku,
+            @Nullable BigDecimal shortQuantity,
             @Nullable UUID locationId) {
-        if (shortQuantity == null || shortQuantity.signum() <= 0) {
+        if (shortQuantity != null && shortQuantity.signum() <= 0) {
             throw new IllegalArgumentException("shortQuantity must be positive");
         }
+        AllocationShortfall derived = deriveShortfall(allocationId, sku, shortQuantity);
+        String resolvedSku = derived.sku();
+        BigDecimal resolvedShortQuantity = derived.shortQuantity();
+
         LocalDate today = LocalDate.ofInstant(Instant.now(clock), ZoneOffset.UTC);
-        BigDecimal originalCost = costOf(sku);
+        BigDecimal originalCost = costOf(resolvedSku);
         List<ShortageOptionDto> options = new ArrayList<>();
 
-        options.add(backorderOption(allocationId, sku, locationId, today));
-        options.addAll(substituteOptions(allocationId, sku, shortQuantity, locationId, originalCost, today));
-        options.addAll(transferInOptions(allocationId, sku, shortQuantity, locationId, today));
-        options.add(emergencyPurchaseOption(allocationId, sku, shortQuantity, originalCost, today));
+        options.add(backorderOption(allocationId, resolvedSku, locationId, today));
+        options.addAll(
+                substituteOptions(allocationId, resolvedSku, resolvedShortQuantity, locationId, originalCost, today));
+        options.addAll(transferInOptions(allocationId, resolvedSku, resolvedShortQuantity, locationId, today));
+        options.add(emergencyPurchaseOption(allocationId, resolvedSku, resolvedShortQuantity, originalCost, today));
         options.add(cancelLineOption(allocationId, today));
 
         return options;
+    }
+
+    /** SKU and short quantity, taken from the request when given, else derived from the allocation (#2206). */
+    private record AllocationShortfall(String sku, BigDecimal shortQuantity) {}
+
+    /**
+     * Derives {@code sku}/{@code shortQuantity} from the named allocation's reservation when the
+     * caller omitted either (#2206): {@code sku} from {@code stockItemId}, {@code shortQuantity}
+     * from {@code requiredQuantity - allocatedQuantity}. A 404 {@code NOT_FOUND} when the
+     * allocation is unknown and a lookup was actually needed; the caller's own values are used
+     * verbatim otherwise, with no allocation lookup at all.
+     */
+    private AllocationShortfall deriveShortfall(
+            UUID allocationId, @Nullable String sku, @Nullable BigDecimal shortQuantity) {
+        boolean skuGiven = sku != null && !sku.isBlank();
+        if (skuGiven && shortQuantity != null) {
+            return new AllocationShortfall(sku, shortQuantity);
+        }
+        AllocationEntity allocation = allocationRepository
+                .findById(allocationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Allocation", allocationId.toString()));
+        ReservationEntity reservation = allocation.getReservation();
+        String resolvedSku = skuGiven ? sku : reservation.getStockItemId().toString();
+        BigDecimal resolvedShortQuantity;
+        if (shortQuantity != null) {
+            resolvedShortQuantity = shortQuantity;
+        } else {
+            resolvedShortQuantity = Quantities.nz(reservation.getRequiredQuantity())
+                    .subtract(Quantities.nz(reservation.getAllocatedQuantity()));
+            // #2227 review item 7: a caller-supplied shortQuantity is already positive (validated
+            // above / by ShortageResolveRequest's @Positive); only the derived value can slip
+            // through non-positive, when the reservation is already fully allocated.
+            if (resolvedShortQuantity.signum() <= 0) {
+                throw ShortageResolutionException.derivedQuantityNotPositive(allocationId, resolvedShortQuantity);
+            }
+        }
+        return new AllocationShortfall(resolvedSku, resolvedShortQuantity);
     }
 
     private ShortageOptionDto backorderOption(
@@ -251,6 +298,11 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
 
     @Override
     public @NonNull ShortageResolutionResultDto resolveShortage(@NonNull ShortageResolveRequest request) {
+        // #2206: idempotencyKey defaults to "<allocationId>:<optionType>" so a caller that only
+        // ever sends one resolution per allocation+option need not mint its own key.
+        if (request.getIdempotencyKey() == null || request.getIdempotencyKey().isBlank()) {
+            request.setIdempotencyKey(request.getAllocationId() + ":" + request.getOptionType());
+        }
         Optional<ShortageResolutionRecord> replay =
                 resolutionRecordRepository.findByIdempotencyKey(request.getIdempotencyKey());
         if (replay.isPresent()) {
@@ -258,6 +310,21 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
                     "Shortage resolve replay for idempotencyKey={}; returning stored result",
                     request.getIdempotencyKey());
             return toResult(replay.get());
+        }
+
+        // #2206: sku/shortQuantity, and workorderLineId when the option needs one, derived from
+        // the allocation's reservation when the caller omitted them. Every downstream execute*
+        // method reads these fields off request, so resolving them here (once) covers all options.
+        AllocationShortfall derived =
+                deriveShortfall(request.getAllocationId(), request.getSku(), request.getShortQuantity());
+        request.setSku(derived.sku());
+        request.setShortQuantity(derived.shortQuantity());
+        if (request.getWorkorderLineId() == null) {
+            allocationRepository
+                    .findById(request.getAllocationId())
+                    .map(AllocationEntity::getReservation)
+                    .map(ReservationEntity::getWorkorderLineId)
+                    .ifPresent(request::setWorkorderLineId);
         }
 
         ArtifactRef artifact = execute(request);

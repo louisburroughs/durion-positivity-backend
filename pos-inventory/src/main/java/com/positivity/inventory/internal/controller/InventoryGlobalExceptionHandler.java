@@ -58,6 +58,7 @@ import com.positivity.inventory.internal.exception.UomConversionUndefinedExcepti
 import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
+import com.positivity.inventory.internal.exception.WorkorderNotReturnableException;
 import com.positivity.inventory.internal.exception.ZeroQuantityAdjustmentException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -292,6 +293,12 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(ReturnQuantityExceededException.class)
     public ResponseEntity<ApiError> handleReturnQuantityExceeded(ReturnQuantityExceededException ex) {
         return build(HttpStatus.valueOf(422), "RETURN_QUANTITY_EXCEEDED", ex.getMessage());
+    }
+
+    @ExceptionHandler(WorkorderNotReturnableException.class)
+    public ResponseEntity<ApiError> handleWorkorderNotReturnable(WorkorderNotReturnableException ex) {
+        // CAP-218 Story #177: only a COMPLETED/CLOSED workorder accepts a return.
+        return build(HttpStatus.valueOf(422), "WORKORDER_NOT_RETURNABLE", ex.getMessage());
     }
 
     @ExceptionHandler(AdjustmentLedgerPostingException.class)

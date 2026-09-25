@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
+import com.positivity.inventory.internal.dto.receiving.CrossDockWorkorderSearchResultDto;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
@@ -13,12 +14,14 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +33,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -337,5 +341,50 @@ public class ReceivingController {
 
         CrossDockResponse response = receivingService.crossDockLineToWorkorder(sessionId, lineId, request, actorUserId);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/workorders")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:receiving:complete", "inventory:issue:parts"})
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.RECEIVING_COMPLETE + "') and hasAuthority('"
+            + InventoryPermissionRegistry.ISSUE_PARTS + "')")
+    @EmitEvent(id = "INVENTORY_RECEIVING_WORKORDER_SEARCH", apiVersion = "1")
+    @Operation(
+            operationId = "searchCrossDockWorkorders",
+            summary = "Search Cross-Dock Workorders",
+            description = """
+                    Searches the workorders eligible to receive a cross-docked receiving line: status not \
+                    COMPLETED, CANCELLED or CLOSED, and at least one demanded part line.
+                    Use this tool to find the workorderId/workorderLineId to pass to crossDockReceivingLine; do \
+                    not use it for workorders with no part lines, which are never eligible and never returned.
+                    Preconditions: none; an unmatched query yields an empty array.
+                    Required inputs: none. Optional query parameter query matches workorderNumber \
+                    (case-insensitive contains) or an exact workorder UUID; a blank or omitted query returns up \
+                    to 50 most-recently-updated eligible workorders.
+                    Read-only: no state changes. Emits an INVENTORY_RECEIVING_WORKORDER_SEARCH event (the \
+                    module's read-audit convention for a search endpoint) even though nothing is written.
+                    Returns 200 with an empty array when nothing matches.
+                    """,
+            tags = {"Receiving"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Matching workorders returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            array =
+                                    @ArraySchema(
+                                            schema =
+                                                    @Schema(implementation = CrossDockWorkorderSearchResultDto.class))))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<List<CrossDockWorkorderSearchResultDto>> searchCrossDockWorkorders(
+            @Parameter(description = "Workorder number fragment or exact workorder UUID")
+                    @RequestParam(required = false)
+                    String query) {
+        return ResponseEntity.ok(receivingService.searchCrossDockWorkorders(query));
     }
 }

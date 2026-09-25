@@ -48,6 +48,19 @@ public class ReplenishmentTaskResponse {
     @NotNull
     private UUID destinationLocationId;
 
+    @Schema(
+            description = "Site the task belongs to: the destination location's site, or the destination"
+                    + " location itself when it is already a site; null when it cannot be resolved",
+            example = "01960003-0000-7000-8000-000000000009",
+            requiredMode = NOT_REQUIRED)
+    private UUID locationId;
+
+    @Schema(
+            description = "Product's base unit of measure; null when it cannot be resolved",
+            example = "EACH",
+            requiredMode = NOT_REQUIRED)
+    private String uom;
+
     @Schema(description = "Current status of the replenishment task", example = "PENDING", requiredMode = REQUIRED)
     @NotNull
     private String status;
