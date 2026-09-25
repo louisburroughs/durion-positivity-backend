@@ -179,6 +179,32 @@ with `400 VALIDATION_ERROR`. The resolved location is gated against the caller's
 the adjustment (`cycle_count_adjustment.location_id`), returned as `locationId`, and used both for
 posting and for the variance recompute on a `CONFLICT` task.
 
+### Scrap and adjustment postings are published as facts (#1030, #2190)
+
+Two value-changing postings each put one occurrence fact on `inventory.events.v1` through the
+outbox, written at `beforeCommit` by `InventoryFactPublisher`, so a posting that rolls back
+(`FAILED`, or a `422` refusal) leaves no row. pos-accounting consumes both to post the journal entry.
+
+| Fact | `eventType` | Aggregate id | Emitted when |
+| --- | --- | --- | --- |
+| `ScrapPostedV1` | `inventory.scrap.posted` | `scrapId` | a scrap's `SCRAP_OUT` entry posts (auto-approved or approved) |
+| `InventoryAdjustedV1` | `inventory.adjustment.posted` | `adjustmentId` | a cycle-count adjustment posts `COUNT_VARIANCE_IN`/`_OUT` (auto-approved or approved; `adjustmentKind = CYCLE_COUNT`), or an approved manual adjustment request posts `ADJUSTMENT_IN`/`_OUT` (`adjustmentKind = MANUAL_ADJUSTMENT`) |
+
+`InventoryAdjustedV1` carries the posted `ledgerEntryId`, `ledgerEventType`, `sku`, `locationId`,
+`taskId` (cycle count only), `reasonCode`, and a signed `quantityDelta`: positive is a gain,
+negative a loss. No fact is emitted for a rejected adjustment, a variance that recomputes to zero on
+a `CONFLICT` task (nothing posts), or a zero-quantity manual request. Re-approving a `FAILED`
+adjustment posts once and emits once.
+
+Cost, on both facts, is the one the costing engine stamped on the posted ledger entry: `unitCost`
+is that entry's `unitCost`, and `costSource` is the SKU's costing method (`AVERAGE`/`STANDARD`), or
+`NONE` with a null `unitCost` for an uncosted SKU, which accounting records and skips. It is never the
+create-time snapshot (`costAtTimeOfAdjustment`, `unitCostSnapshot`), which only sets the approval
+tier. A count variance posts with no document cost of its own, so a gain enters at the current
+method cost: it leaves the running average unchanged under `AVERAGE` and does not overwrite the
+latest-receipt memo under `STANDARD`. Both paths also queue the `InventoryAvailabilityUpdatedV1` and
+`StorageLocationOnHandUpdatedV1` snapshots for the stock item and location they moved.
+
 ## Lot Tracking — Inbound Capture (odoo-parity E1)
 
 Products whose catalog replica (`ext_product.tracking_level`) says `LOT` require a `lotNumber`

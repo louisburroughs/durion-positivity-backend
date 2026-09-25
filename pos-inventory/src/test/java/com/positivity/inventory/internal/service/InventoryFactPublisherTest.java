@@ -13,6 +13,7 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.inventory.BackorderCreatedV1;
 import com.positivity.domainevents.inventory.BackorderResolvedV1;
 import com.positivity.domainevents.inventory.ConsumptionRecordedV1;
+import com.positivity.domainevents.inventory.InventoryAdjustedV1;
 import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.LotExpiryAlertV1;
 import com.positivity.domainevents.inventory.ProductValueChangedV1;
@@ -232,6 +233,30 @@ class InventoryFactPublisherTest {
         fireBeforeCommit();
 
         assertPublished(ScrapPostedV1.EVENT_TYPE, ScrapPostedV1.SCHEMA_VERSION, scrapId, fact);
+    }
+
+    @Test
+    @DisplayName("A recorded adjustment posting is published keyed on its adjustment id (#2190)")
+    void publishesInventoryAdjustedFact() {
+        UUID adjustmentId = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
+        InventoryAdjustedV1 fact = new InventoryAdjustedV1(
+                adjustmentId,
+                InventoryAdjustedV1.KIND_CYCLE_COUNT,
+                "COUNT_VARIANCE_OUT",
+                UUID.fromString("00000000-0000-0000-0000-0000000000f2"),
+                "SKU-ADJ",
+                UUID.fromString("00000000-0000-0000-0000-0000000000f3"),
+                null,
+                "CYCLE_COUNT_SHRINK",
+                new BigDecimal("-2"),
+                new BigDecimal("4.25"),
+                "AVERAGE",
+                Instant.parse("2026-09-24T12:00:00Z"));
+
+        publisher.recordInventoryAdjusted(fact);
+        fireBeforeCommit();
+
+        assertPublished(InventoryAdjustedV1.EVENT_TYPE, InventoryAdjustedV1.SCHEMA_VERSION, adjustmentId, fact);
     }
 
     @Test

@@ -67,4 +67,17 @@ class StandardCostingStrategyTest {
                 SKU, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-3"), null, receipt.state()));
         assertThat(issue.unitCost()).isEqualByComparingTo("7.25");
     }
+
+    @Test
+    @DisplayName("count gain (COUNT_VARIANCE_IN, no document cost) stamps the standard price; memo unchanged")
+    void countGain_withoutDocumentCost_leavesLatestReceiptMemoUnchanged() {
+        // #2190: a gain is not a receipt, so it must not overwrite the latest-receipt memo.
+        CostState state = new CostState(new BigDecimal("9"), new BigDecimal("10"), new BigDecimal("12.5"));
+        CostingResult gain = strategy.cost(
+                new CostingInput(SKU, InventoryLedgerEventType.COUNT_VARIANCE_IN, new BigDecimal("3"), null, state));
+        assertThat(gain.unitCost()).isEqualByComparingTo("12.5");
+        assertThat(gain.state().avgCost()).isEqualByComparingTo("9");
+        assertThat(gain.state().standardCost()).isEqualByComparingTo("12.5");
+        assertThat(gain.state().onHandQty()).isEqualByComparingTo("13");
+    }
 }

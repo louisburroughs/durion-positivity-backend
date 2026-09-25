@@ -80,6 +80,9 @@ class CycleCountAdjustmentServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.LedgerPostingFailureRecorder failureRecorder;
 
+    @Mock
+    private com.positivity.inventory.internal.service.InventoryFactPublisher inventoryFactPublisher;
+
     private CycleCountAdjustmentServiceImpl service;
     private Clock fixedClock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
@@ -98,7 +101,8 @@ class CycleCountAdjustmentServiceImplTest {
                 methodResolver,
                 baseUnitOfMeasureResolver,
                 locationScopeService,
-                failureRecorder);
+                failureRecorder,
+                inventoryFactPublisher);
     }
 
     @AfterEach
@@ -220,6 +224,7 @@ class CycleCountAdjustmentServiceImplTest {
                     .countedQuantity(new BigDecimal("11"))
                     .quantityOnHandBefore(new BigDecimal("10"))
                     .costAtTimeOfAdjustment(BigDecimal.ONE)
+                    .reasonCode("CYCLE_COUNT_OVERAGE")
                     .build();
 
             when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))

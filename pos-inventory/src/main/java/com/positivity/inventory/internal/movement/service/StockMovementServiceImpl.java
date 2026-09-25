@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.movement.service;
 
+import com.positivity.domainevents.inventory.InventoryAdjustedV1;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.InventoryLedgerEntryResponse;
@@ -16,6 +17,8 @@ import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRe
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.CostingMethodResolver;
+import com.positivity.inventory.internal.service.InventoryFactPublisher;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.Quantities;
 import com.positivity.inventory.internal.service.QuantityScaleGuard;
@@ -39,6 +42,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class StockMovementServiceImpl implements StockMovementService {
 
+    /** {@code costSource} of an adjustment fact the costing engine could not cost (spec D6). */
+    private static final String UNCOSTED = "NONE";
+
     private final InventoryLedgerEntryRepository ledgerRepository;
     private final InventoryAdjustmentRequestRepository adjustmentRepository;
     private final LedgerPostingService ledgerPostingService;
@@ -46,6 +52,8 @@ public class StockMovementServiceImpl implements StockMovementService {
     private final ExtStorageLocationReplicaRepository storageLocationRepository;
     private final Clock clock;
     private final QuantityScaleGuard quantityScaleGuard;
+    private final InventoryFactPublisher inventoryFactPublisher;
+    private final CostingMethodResolver methodResolver;
 
     public StockMovementServiceImpl(
             InventoryLedgerEntryRepository ledgerRepository,
@@ -54,6 +62,8 @@ public class StockMovementServiceImpl implements StockMovementService {
             LocationRefRepository locationRefRepository,
             ExtStorageLocationReplicaRepository storageLocationRepository,
             QuantityScaleGuard quantityScaleGuard,
+            InventoryFactPublisher inventoryFactPublisher,
+            CostingMethodResolver methodResolver,
             Clock clock) {
         this.ledgerRepository = ledgerRepository;
         this.adjustmentRepository = adjustmentRepository;
@@ -61,6 +71,8 @@ public class StockMovementServiceImpl implements StockMovementService {
         this.locationRefRepository = locationRefRepository;
         this.storageLocationRepository = storageLocationRepository;
         this.quantityScaleGuard = quantityScaleGuard;
+        this.inventoryFactPublisher = inventoryFactPublisher;
+        this.methodResolver = methodResolver;
         this.clock = clock;
     }
 
@@ -188,6 +200,7 @@ public class StockMovementServiceImpl implements StockMovementService {
                 ? InventoryLedgerEventType.ADJUSTMENT_IN
                 : InventoryLedgerEventType.ADJUSTMENT_OUT;
 
+        Instant approvedAt = Instant.now(clock);
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(adjustmentRequest.getProductSku())
                 .locationId(adjustmentRequest.getLocationId())
@@ -200,15 +213,49 @@ public class StockMovementServiceImpl implements StockMovementService {
                 .reasonCode(adjustmentRequest.getReasonCode())
                 .unitOfMeasure(adjustmentRequest.getUnitOfMeasure())
                 .transactionUserId(approverUserId)
-                .timestamp(Instant.now(clock))
+                .timestamp(approvedAt)
                 .build();
 
         adjustmentRequest.setStatus(AdjustmentRequestStatus.APPROVED);
         adjustmentRequest.setApprovedByUserId(approverUserId);
-        adjustmentRequest.setApprovedAt(Instant.now(clock));
+        adjustmentRequest.setApprovedAt(approvedAt);
         adjustmentRepository.save(adjustmentRequest);
 
-        return toResponse(ledgerPostingService.post(entry));
+        InventoryLedgerEntry posted = ledgerPostingService.post(entry);
+        inventoryFactPublisher.markEntry(posted);
+        // A zero-quantity request moves nothing and has no value to post (#2190): no fact.
+        if (posted.getChangeInQuantity() != null && posted.getChangeInQuantity().signum() != 0) {
+            inventoryFactPublisher.recordInventoryAdjusted(adjustedFact(adjustmentRequest, posted, approvedAt));
+        }
+        return toResponse(posted);
+    }
+
+    /**
+     * The {@code inventory.adjustment.posted} fact for an approved manual adjustment request
+     * (odoo-parity J3, #2190), built from the saved ledger row: {@code unitCost} is the cost the
+     * costing engine stamped there, and an uncosted SKU carries {@code NONE}.
+     */
+    private @NonNull InventoryAdjustedV1 adjustedFact(
+            @NonNull InventoryAdjustmentRequest adjustmentRequest,
+            @NonNull InventoryLedgerEntry posted,
+            @NonNull Instant occurredAt) {
+        BigDecimal unitCost = posted.getUnitCost();
+        String costSource = unitCost == null
+                ? UNCOSTED
+                : methodResolver.resolve(posted.getStockItemId()).name();
+        return new InventoryAdjustedV1(
+                adjustmentRequest.getAdjustmentRequestId(),
+                InventoryAdjustedV1.KIND_MANUAL_ADJUSTMENT,
+                posted.getEventType().name(),
+                posted.getLedgerEntryId(),
+                posted.getStockItemId(),
+                posted.getLocationId(),
+                null,
+                adjustmentRequest.getReasonCode(),
+                posted.getChangeInQuantity(),
+                unitCost,
+                costSource,
+                occurredAt);
     }
 
     /**

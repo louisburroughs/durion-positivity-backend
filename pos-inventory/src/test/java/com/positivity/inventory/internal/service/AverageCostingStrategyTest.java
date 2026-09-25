@@ -128,4 +128,27 @@ class AverageCostingStrategyTest {
         assertThat(issue.unitCost()).isEqualByComparingTo("10.6667");
         assertThat(issue.unitCost().scale()).isEqualTo(4);
     }
+
+    @Test
+    @DisplayName("count gain (COUNT_VARIANCE_IN, no document cost) enters at the current average; average unchanged")
+    void countGain_withoutDocumentCost_leavesAverageUnchanged() {
+        // #2190: cycle-count adjustments post their gains with no document cost, so the engine
+        // values them at the current average instead of re-blending with a create-time snapshot.
+        CostState state = new CostState(new BigDecimal("6"), new BigDecimal("10"), null);
+        CostingResult r = strategy.cost(
+                new CostingInput(SKU, InventoryLedgerEventType.COUNT_VARIANCE_IN, new BigDecimal("3"), null, state));
+        assertThat(r.unitCost()).isEqualByComparingTo("6");
+        assertThat(r.state().avgCost()).isEqualByComparingTo("6");
+        assertThat(r.state().onHandQty()).isEqualByComparingTo("13");
+    }
+
+    @Test
+    @DisplayName("count gain on an uncosted SKU stays uncosted (null stamp, null average)")
+    void countGain_uncostedSku_staysUncosted() {
+        CostState state = new CostState(null, new BigDecimal("0"), null);
+        CostingResult r = strategy.cost(
+                new CostingInput(SKU, InventoryLedgerEventType.COUNT_VARIANCE_IN, new BigDecimal("2"), null, state));
+        assertThat(r.unitCost()).isNull();
+        assertThat(r.state().avgCost()).isNull();
+    }
 }
