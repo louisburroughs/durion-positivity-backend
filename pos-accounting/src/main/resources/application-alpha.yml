@@ -1,5 +1,14 @@
 # Environment-specific runtime intentionally inherits env-driven base settings.
 
+# #2192 (SPEC-inventory-adjustment-gl-posting.md §5.4, D3): the Kafka rails are tier-1 in a
+# deployed environment, not opt-in — a silently-off posting consumer/outbox drops facts with no
+# error. POS_ACCOUNTING_KAFKA_ENABLED=false in the environment still overrides this; KafkaEnabledGuard
+# refuses to start when it does.
+pos:
+  accounting:
+    kafka:
+      enabled: true
+
 logging:
   level:
     # ADR-0046: deployed environments run INFO baseline; framework noise capped at WARN
