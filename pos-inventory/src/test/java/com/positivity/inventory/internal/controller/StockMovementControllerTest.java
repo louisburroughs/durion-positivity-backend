@@ -14,6 +14,7 @@ import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.inventory.config.TestSecurityConfig;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
+import com.positivity.inventory.internal.exception.ZeroQuantityAdjustmentException;
 import com.positivity.inventory.internal.movement.service.StockMovementService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -186,6 +187,22 @@ class StockMovementControllerTest {
         }
 
         @Test
+        @DisplayName("zero quantity: 400 VALIDATION_ERROR with a field error on quantity (#2201)")
+        void zeroQuantity_returns400WithFieldError() throws Exception {
+            mockMvc.perform(post(ADJUSTMENTS)
+                            .with(caller("manager", scopedTo(InventoryPermissionRegistry.ADJUSTMENT_CREATE, SITE)))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"productSku\":\"SKU-10042\",\"locationId\":\"" + SHOP
+                                    + "\",\"quantity\":0.00,\"reasonCode\":\"CYCLE_COUNT\"}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("quantity"))
+                    .andExpect(jsonPath("$.fieldErrors[0].message").value("must not be zero"));
+
+            verify(stockMovementService, never()).createAdjustmentRequest(any(), any());
+        }
+
+        @Test
         @DisplayName("pre-rollout token (no loc_* claims): 201, behaviour unchanged")
         void preRolloutToken_returns201() throws Exception {
             when(stockMovementService.createAdjustmentRequest(any(CreateAdjustmentRequestDto.class), any()))
@@ -268,6 +285,18 @@ class StockMovementControllerTest {
                                     "manager", scopedTo(InventoryPermissionRegistry.ADJUSTMENT_APPROVE, OTHER_SITE))))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        }
+
+        @Test
+        @DisplayName("zero-quantity request: 422 ADJUSTMENT_QUANTITY_ZERO (#2201)")
+        void zeroQuantity_returns422() throws Exception {
+            when(stockMovementService.approveAdjustmentRequest(REQUEST_ID, "manager"))
+                    .thenThrow(new ZeroQuantityAdjustmentException(REQUEST_ID));
+
+            mockMvc.perform(post(APPROVE, REQUEST_ID)
+                            .with(caller("manager", scopedTo(InventoryPermissionRegistry.ADJUSTMENT_APPROVE, SITE))))
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.code").value(ZeroQuantityAdjustmentException.ERROR_CODE));
         }
 
         @Test

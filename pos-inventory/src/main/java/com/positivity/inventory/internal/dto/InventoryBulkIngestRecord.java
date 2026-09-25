@@ -28,7 +28,10 @@ public class InventoryBulkIngestRecord {
             requiredMode = NOT_REQUIRED)
     private UUID locationId;
 
-    @Schema(description = "Quantity to ingest for the product (non-negative)", example = "120", requiredMode = REQUIRED)
+    @Schema(
+            description = "Quantity to ingest for the product (positive; a zero-quantity row is refused)",
+            example = "120",
+            requiredMode = REQUIRED)
     @NotNull
     @Min(0)
     private BigDecimal quantity;

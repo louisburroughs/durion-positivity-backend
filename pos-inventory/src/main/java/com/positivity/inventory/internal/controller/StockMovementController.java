@@ -220,8 +220,9 @@ public class StockMovementController {
                     Returns 400 when the adjustment request id is unknown (the lookup failure maps to a validation \
                     error rather than 404), 403 with LOCATION_SCOPE_DENIED when the caller holds \
                     inventory:adjustment:approve but the token scopes it to locations that do not cover the \
-                    request's locationId (ADR-0061; nothing is posted), and 409 when the request is no longer \
-                    PENDING.
+                    request's locationId (ADR-0061; nothing is posted), 409 when the request is no longer \
+                    PENDING, and 422 with ADJUSTMENT_QUANTITY_ZERO when the request's quantity is zero (the \
+                    request is marked REJECTED and nothing is posted).
                     """,
             tags = {"Stock Movements"})
     @ApiResponses(
@@ -260,7 +261,8 @@ public class StockMovementController {
                                         schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "422",
-                        description = "Business rule validation failed",
+                        description = "Business rule validation failed; ADJUSTMENT_QUANTITY_ZERO when the"
+                                + " request's quantity is zero (the request is marked REJECTED, nothing is posted)",
                         content =
                                 @Content(
                                         mediaType = "application/json",

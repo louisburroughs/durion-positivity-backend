@@ -54,6 +54,7 @@ import com.positivity.inventory.internal.exception.UomConversionUndefinedExcepti
 import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
+import com.positivity.inventory.internal.exception.ZeroQuantityAdjustmentException;
 import com.positivity.shared.error.ApiError;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -128,6 +129,35 @@ class InventoryGlobalExceptionHandlerTest {
         assertThat(response.getBody().message()).isEqualTo("Validation failed");
     }
 
+    @Test
+    @DisplayName("handleConstraintViolation returns 400 VALIDATION_ERROR with one field error per violation (#2201)")
+    void handleConstraintViolation_mapsFieldErrors() {
+        ResponseEntity<ApiError> response = sut.handleConstraintViolation(zeroQuantityViolation());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("VALIDATION_ERROR");
+        assertThat(response.getBody().fieldErrors()).singleElement().satisfies(error -> {
+            assertThat(error.field()).isEqualTo("quantity");
+            assertThat(error.message()).isEqualTo("must not be zero");
+        });
+        assertThat(response.getBody().message()).isEqualTo("quantity must not be zero");
+    }
+
+    private static jakarta.validation.ConstraintViolationException zeroQuantityViolation() {
+        com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto dto =
+                com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto.builder()
+                        .productSku("SKU-1")
+                        .locationId(UUID.randomUUID())
+                        .quantity(java.math.BigDecimal.ZERO)
+                        .reasonCode("CYCLE_COUNT")
+                        .build();
+        try (var factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            return new jakarta.validation.ConstraintViolationException(
+                    factory.getValidator().validate(dto));
+        }
+    }
+
     // ---------------------------------------------------------------
     // X-Correlation-Id header (ADR-0017 §4, #1729) — proves the single `build`
     // helper puts the correlation id in both the body and the header for EVERY
@@ -165,6 +195,8 @@ class InventoryGlobalExceptionHandlerTest {
                             () -> handler.handleNotImplemented(new OperationNotImplementedException("not yet"))),
                     Named.of("handleValidationError", (HandlerInvocation)
                             () -> handler.handleValidationError(validationException())),
+                    Named.of("handleConstraintViolation", (HandlerInvocation)
+                            () -> handler.handleConstraintViolation(zeroQuantityViolation())),
                     Named.of("handleBadRequest", (HandlerInvocation)
                             () -> handler.handleBadRequest(new IllegalArgumentException("bad request"))),
                     Named.of("handleIllegalState", (HandlerInvocation)
@@ -227,6 +259,9 @@ class InventoryGlobalExceptionHandlerTest {
                             () -> handler.handleTransferQuantityExceeded(
                                     TransferQuantityExceededException.dispatchExceedsRequested(
                                             UUID.randomUUID(), "SKU-1", 5, 3))),
+                    Named.of("handleZeroQuantityAdjustment", (HandlerInvocation)
+                            () -> handler.handleZeroQuantityAdjustment(
+                                    new ZeroQuantityAdjustmentException(UUID.randomUUID()))),
                     Named.of("handleCrossSiteTransferRequiresOrder", (HandlerInvocation) () ->
                             handler.handleCrossSiteTransferRequiresOrder(new CrossSiteTransferRequiresOrderException(
                                     UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()))),

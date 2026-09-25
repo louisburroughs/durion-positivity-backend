@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.movement.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -22,6 +23,7 @@ import com.positivity.inventory.internal.enums.AdjustmentRequestStatus;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.MovementType;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
+import com.positivity.inventory.internal.exception.ZeroQuantityAdjustmentException;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
@@ -438,19 +440,19 @@ class StockMovementServiceImplTest {
     }
 
     @Test
-    void approveAdjustmentRequest_zeroQuantity_marksEntryButRecordsNoFact() {
-        setupClock();
-        stubLedgerSaveReturnsEntry();
+    void approveAdjustmentRequest_zeroQuantity_rejectsRequestAndPostsNothing() {
+        // #2201: a zero-quantity request stored before create-time validation is rejected, not posted.
         stubAdjustmentSaveReturnsRequest();
         InventoryAdjustmentRequest request = pendingAdjustmentRequest(0);
         when(adjustmentRepository.findById(request.getAdjustmentRequestId())).thenReturn(Optional.of(request));
-        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getLocationId()))
-                .thenReturn(new BigDecimal("15"));
 
-        service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1");
+        assertThatThrownBy(() -> service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1"))
+                .isInstanceOf(ZeroQuantityAdjustmentException.class);
 
-        verify(inventoryFactPublisher).markEntry(any(InventoryLedgerEntry.class));
-        verify(inventoryFactPublisher, never()).recordInventoryAdjusted(any());
+        assertThat(request.getStatus()).isEqualTo(AdjustmentRequestStatus.REJECTED);
+        verify(adjustmentRepository).save(request);
+        verify(ledgerPostingService, never()).post(any());
+        verifyNoInteractions(inventoryFactPublisher);
     }
 
     @Test

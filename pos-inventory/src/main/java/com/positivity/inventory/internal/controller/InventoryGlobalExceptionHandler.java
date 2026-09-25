@@ -58,12 +58,14 @@ import com.positivity.inventory.internal.exception.UomConversionUndefinedExcepti
 import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
+import com.positivity.inventory.internal.exception.ZeroQuantityAdjustmentException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -103,14 +105,58 @@ public class InventoryGlobalExceptionHandler {
                 .findFirst()
                 .map(fieldError -> fieldError.getField() + " " + fieldError.getDefaultMessage())
                 .orElse("Validation failed");
+        List<ApiError.FieldError> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
+                .map(fieldError -> new ApiError.FieldError(
+                        fieldError.getField(),
+                        fieldError.getDefaultMessage() != null ? fieldError.getDefaultMessage() : "is invalid"))
+                .toList();
+        return validationError(message, fieldErrors);
+    }
 
-        return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, message);
+    /** 400 {@code VALIDATION_ERROR} carrying {@code fieldErrors} when there are any (ADR-0017). */
+    private ResponseEntity<ApiError> validationError(String message, List<ApiError.FieldError> fieldErrors) {
+        String correlationId = resolveCorrelationId(null);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.withFieldErrors(
+                        VALIDATION_ERROR,
+                        message,
+                        HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors.isEmpty() ? null : fieldErrors));
+    }
+
+    /**
+     * Method-parameter validation ({@code @Validated} controllers): 400 with one field error per
+     * violation, named by the last node of its property path (the parameter or field name), the
+     * same envelope a request-body failure answers (ADR-0017, #2201).
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiError> handleConstraintViolation(ConstraintViolationException ex) {
+        List<ApiError.FieldError> fieldErrors = ex.getConstraintViolations().stream()
+                .map(violation ->
+                        new ApiError.FieldError(leafName(violation.getPropertyPath()), violation.getMessage()))
+                .toList();
+        String message = fieldErrors.isEmpty()
+                ? (ex.getMessage() != null ? ex.getMessage() : "Validation failed")
+                : fieldErrors.getFirst().field() + " " + fieldErrors.getFirst().message();
+        return validationError(message, fieldErrors);
+    }
+
+    private static String leafName(jakarta.validation.Path path) {
+        String name = null;
+        for (jakarta.validation.Path.Node node : path) {
+            if (node.getName() != null) {
+                name = node.getName();
+            }
+        }
+        return name != null ? name : path.toString();
     }
 
     @ExceptionHandler({
         MethodArgumentTypeMismatchException.class,
         HttpMessageNotReadableException.class,
-        ConstraintViolationException.class,
         InvalidInventoryAvailabilityRequestException.class,
         IllegalArgumentException.class
     })
@@ -258,6 +304,12 @@ public class InventoryGlobalExceptionHandler {
         // odoo-parity C2 (#1036): deterministic per-bound 422
         // (TRANSFER_DISPATCH_EXCEEDS_REQUESTED / TRANSFER_RECEIVE_EXCEEDS_DISPATCHED).
         return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(ZeroQuantityAdjustmentException.class)
+    public ResponseEntity<ApiError> handleZeroQuantityAdjustment(ZeroQuantityAdjustmentException ex) {
+        // #2201: a zero-quantity request is rejected at approval, never posted.
+        return build(HttpStatus.valueOf(422), ZeroQuantityAdjustmentException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(CrossSiteTransferRequiresOrderException.class)
