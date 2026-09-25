@@ -432,6 +432,44 @@ public class GLPostingServiceImpl implements GLPostingService {
     }
 
     @Override
+    public UUID postInventoryRevaluation(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID revaluationId,
+            @NonNull UUID debitAccountId,
+            @NonNull UUID creditAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
+
+        log.info(
+                "Posting inventory revaluation GL entry {}: amount {}, debit account {}, credit account {}",
+                sourceEventId,
+                amount,
+                debitAccountId,
+                creditAccountId);
+
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
+        addDebit(lines, debitAccountId, amount, "Inventory Revaluation - Revaluation#" + revaluationId);
+        addCredit(lines, creditAccountId, amount, "Inventory Revaluation - Revaluation#" + revaluationId);
+
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(transactionDate)
+                .description(description)
+                .sourceEventId(sourceEventId)
+                .lines(lines)
+                .build();
+
+        JournalEntryResponse created = journalEntryService.createJournalEntry(request);
+        JournalEntryResponse posted =
+                journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+
+        log.info("Posted inventory revaluation GL entry: journal entry ID {}", posted.getJournalEntryId());
+
+        return posted.getJournalEntryId();
+    }
+
+    @Override
     public UUID postSettlement(@NonNull SettlementPostingCommand command) {
         log.info(
                 "Posting settlement GL entry {}: Dr Cash {}, Dr Fees {}, Cr Undeposited {}, Cr Suspense {}",

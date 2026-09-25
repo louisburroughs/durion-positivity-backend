@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.inventory.InventoryAdjustedV1;
+import com.positivity.domainevents.inventory.ProductValueChangedV1;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -35,6 +36,10 @@ import tools.jackson.databind.ObjectMapper;
  *       (odoo-parity D2, issue #1043);
  *   <li>{@code inventory.adjustment.posted} ({@link InventoryAdjustedV1}, cycle-count and manual
  *       adjustments) → {@link InventoryAdjustmentPostingService} (issue #2191);
+ *   <li>{@code inventory.product-value.changed} ({@link ProductValueChangedV1}, manual cost
+ *       revaluation) → {@link InventoryRevaluationPostingService} (issue #2193); a zero value delta
+ *       posts no journal entry but still records the fact {@code PROCESSED} (never {@code SKIPPED}
+ *       — there is no uncosted case for a revaluation, {@code totalValueDelta} is always computed);
  *   <li>every other type on the topic (high-volume snapshots) is ignored without recording its
  *       eventId.
  * </ul>
@@ -81,6 +86,7 @@ public class InventoryEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final InventoryShrinkagePostingService shrinkagePostingService;
     private final InventoryAdjustmentPostingService adjustmentPostingService;
+    private final InventoryRevaluationPostingService revaluationPostingService;
     private final InventoryFactIngestionRecorder ingestionRecorder;
     private final @Nullable MeterRegistry meterRegistry;
     private final @Nullable Counter payloadRejectedCounter;
@@ -94,6 +100,7 @@ public class InventoryEventsListener {
             ProcessedEventRepository processedEventRepository,
             InventoryShrinkagePostingService shrinkagePostingService,
             InventoryAdjustmentPostingService adjustmentPostingService,
+            InventoryRevaluationPostingService revaluationPostingService,
             InventoryFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
@@ -102,6 +109,7 @@ public class InventoryEventsListener {
         this.processedEventRepository = processedEventRepository;
         this.shrinkagePostingService = shrinkagePostingService;
         this.adjustmentPostingService = adjustmentPostingService;
+        this.revaluationPostingService = revaluationPostingService;
         this.ingestionRecorder = ingestionRecorder;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -128,7 +136,9 @@ public class InventoryEventsListener {
             return;
         }
         String eventType = envelope.path("eventType").stringValue(null);
-        if (!ScrapPostedV1.EVENT_TYPE.equals(eventType) && !InventoryAdjustedV1.EVENT_TYPE.equals(eventType)) {
+        if (!ScrapPostedV1.EVENT_TYPE.equals(eventType)
+                && !InventoryAdjustedV1.EVENT_TYPE.equals(eventType)
+                && !ProductValueChangedV1.EVENT_TYPE.equals(eventType)) {
             log.debug("Ignoring inventory event type={}", eventType);
             return;
         }
@@ -144,8 +154,10 @@ public class InventoryEventsListener {
 
         if (ScrapPostedV1.EVENT_TYPE.equals(eventType)) {
             onScrapPosted(eventId, envelope);
-        } else {
+        } else if (InventoryAdjustedV1.EVENT_TYPE.equals(eventType)) {
             onAdjustmentPosted(eventId, envelope);
+        } else {
+            onRevaluationPosted(eventId, envelope);
         }
     }
 
@@ -198,6 +210,29 @@ public class InventoryEventsListener {
                 transactionDate,
                 fact,
                 InventoryAdjustmentPostingService.toSourceEventId(fact.adjustmentKind(), fact.adjustmentId()));
+    }
+
+    /**
+     * A revaluation fact never carries an uncosted case ({@code totalValueDelta} is always
+     * computed), so it always reaches {@link InventoryRevaluationPostingService#postRevaluation}.
+     * A zero delta posts no journal entry but is still recorded {@code PROCESSED} — never
+     * {@code SKIPPED} — since it is not a data-quality gap, just nothing to post.
+     */
+    private void onRevaluationPosted(String eventId, JsonNode envelope) {
+        String eventType = ProductValueChangedV1.EVENT_TYPE;
+        ProductValueChangedV1 fact = readPayload(eventType, eventId, envelope, ProductValueChangedV1.class);
+        if (fact == null) {
+            return;
+        }
+        LocalDateTime transactionDate = businessDate(fact.occurredAt());
+        post(
+                eventType,
+                eventId,
+                () -> revaluationPostingService.postRevaluation(fact),
+                fact.revaluationId(),
+                transactionDate,
+                fact,
+                InventoryRevaluationPostingService.toSourceEventId(fact.revaluationId()));
     }
 
     /**

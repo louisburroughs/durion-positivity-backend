@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.inventory.InventoryAdjustedV1;
+import com.positivity.domainevents.inventory.ProductValueChangedV1;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -48,6 +49,8 @@ class InventoryEventsListenerTest {
     private final InventoryShrinkagePostingService postingService = mock(InventoryShrinkagePostingService.class);
     private final InventoryAdjustmentPostingService adjustmentPostingService =
             mock(InventoryAdjustmentPostingService.class);
+    private final InventoryRevaluationPostingService revaluationPostingService =
+            mock(InventoryRevaluationPostingService.class);
     private final InventoryFactIngestionRecorder ingestionRecorder = mock(InventoryFactIngestionRecorder.class);
 
     private InventoryEventsListener listener;
@@ -60,6 +63,7 @@ class InventoryEventsListenerTest {
                 processedEvents,
                 postingService,
                 adjustmentPostingService,
+                revaluationPostingService,
                 ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 mock(PlatformTransactionManager.class));
@@ -369,6 +373,113 @@ class InventoryEventsListenerTest {
 
         assertThatExceptionOfType(QueryTimeoutException.class)
                 .isThrownBy(() -> listener.onInventoryEvent(adjustment("a-5", "-1", "1.00", "AVERAGE")));
+
+        verify(processedEvents, never()).save(any());
+        verifyNoInteractions(ingestionRecorder);
+    }
+
+    // ===== inventory.product-value.changed (#2193) =====
+
+    private static final UUID REVALUATION_ID = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+
+    /** Representative revaluation fact as pinned by {@link ProductValueChangedV1} (odoo-parity J4, #1054). */
+    private String revaluation(String eventId, String previousUnitCost, String newUnitCost, String onHandQuantity) {
+        return """
+                {"eventId":"%s","eventType":"inventory.product-value.changed","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":0,
+                 "occurredAtUtc":"2026-07-21T09:15:00Z","sourceService":"pos-inventory",
+                 "payload":{"revaluationId":"%s","sku":"BRAKE-PAD-22","costingMethod":"AVERAGE",
+                            "previousUnitCost":%s,"newUnitCost":%s,"onHandQuantity":%s,
+                            "totalValueDelta":%s,"reason":"Supplier price correction","actor":"jdoe",
+                            "occurredAt":"2026-07-21T09:15:00Z"}}
+                """.formatted(
+                        eventId,
+                        REVALUATION_ID,
+                        REVALUATION_ID,
+                        previousUnitCost,
+                        newUnitCost,
+                        onHandQuantity,
+                        delta(previousUnitCost, newUnitCost, onHandQuantity));
+    }
+
+    private static String delta(String previousUnitCost, String newUnitCost, String onHandQuantity) {
+        java.math.BigDecimal previous =
+                previousUnitCost == null ? java.math.BigDecimal.ZERO : new java.math.BigDecimal(previousUnitCost);
+        return new java.math.BigDecimal(newUnitCost)
+                .subtract(previous)
+                .multiply(new java.math.BigDecimal(onHandQuantity))
+                .toPlainString();
+    }
+
+    @Test
+    @DisplayName("Revaluation fact deserializes per the pinned schema, posts, and is recorded NEW with its entry")
+    void revaluationPostsAndRecords() {
+        UUID journalEntryId = UUID.randomUUID();
+        when(processedEvents.existsById("r-1")).thenReturn(false);
+        when(revaluationPostingService.postRevaluation(any())).thenReturn(journalEntryId);
+
+        listener.onInventoryEvent(revaluation("r-1", "5.00", "7.25", "4"));
+
+        ArgumentCaptor<ProductValueChangedV1> fact = ArgumentCaptor.forClass(ProductValueChangedV1.class);
+        verify(revaluationPostingService).postRevaluation(fact.capture());
+        assertThat(fact.getValue().revaluationId()).isEqualTo(REVALUATION_ID);
+        assertThat(fact.getValue().sku()).isEqualTo("BRAKE-PAD-22");
+        assertThat(fact.getValue().costingMethod()).isEqualTo("AVERAGE");
+        assertThat(fact.getValue().previousUnitCost()).isEqualByComparingTo("5.00");
+        assertThat(fact.getValue().newUnitCost()).isEqualByComparingTo("7.25");
+        assertThat(fact.getValue().onHandQuantity()).isEqualByComparingTo("4");
+        assertThat(fact.getValue().totalValueDelta()).isEqualByComparingTo("9.00");
+        verify(ingestionRecorder)
+                .recordPosted(
+                        eq(ProductValueChangedV1.EVENT_TYPE),
+                        eq("r-1"),
+                        eq(REVALUATION_ID),
+                        eq(java.time.LocalDateTime.of(2026, 7, 21, 9, 15)),
+                        any(),
+                        eq(journalEntryId),
+                        eq(InventoryRevaluationPostingService.toSourceEventId(REVALUATION_ID)));
+        verify(processedEvents).save(any());
+        verifyNoInteractions(postingService, adjustmentPostingService);
+    }
+
+    @Test
+    @DisplayName("Re-emitted revaluation (posting key already registered) is recorded with no journal entry of its own")
+    void reEmittedRevaluationRecordedAsDuplicate() {
+        when(processedEvents.existsById("r-2")).thenReturn(false);
+        when(revaluationPostingService.postRevaluation(any())).thenReturn(null);
+
+        listener.onInventoryEvent(revaluation("r-2", "5.00", "7.25", "4"));
+
+        verify(ingestionRecorder)
+                .recordPosted(anyString(), eq("r-2"), eq(REVALUATION_ID), any(), any(), isNull(), any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Zero value delta posts no journal entry but is still recorded PROCESSED, never SKIPPED")
+    void zeroDeltaRevaluationRecordedProcessedNotSkipped() {
+        when(processedEvents.existsById("r-3")).thenReturn(false);
+        when(revaluationPostingService.postRevaluation(any())).thenReturn(null);
+
+        listener.onInventoryEvent(revaluation("r-3", "5.00", "5.00", "4"));
+
+        verify(revaluationPostingService).postRevaluation(any());
+        verify(ingestionRecorder)
+                .recordPosted(anyString(), eq("r-3"), eq(REVALUATION_ID), any(), any(), isNull(), any());
+        verify(ingestionRecorder, never()).recordUncostedSkip(any(), any(), any(), any(), any(), any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Revaluation posting failures propagate unwrapped; nothing marked or recorded")
+    void revaluationPostingFailurePropagates() {
+        when(processedEvents.existsById("r-4")).thenReturn(false);
+        doThrow(new QueryTimeoutException("db down"))
+                .when(revaluationPostingService)
+                .postRevaluation(any());
+
+        assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onInventoryEvent(revaluation("r-4", "5.00", "3.00", "4")));
 
         verify(processedEvents, never()).save(any());
         verifyNoInteractions(ingestionRecorder);

@@ -19,7 +19,7 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
-import com.positivity.domainevents.inventory.InventoryAdjustedV1;
+import com.positivity.domainevents.inventory.ProductValueChangedV1;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
@@ -49,32 +49,32 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Real-Postgres IT for inventory adjustment GL posting (issue #2191, spec
- * SPEC-inventory-adjustment-gl-posting §6). Runs the full Flyway chain + repeatable seed (which
- * carries the {@code INVENTORY_ADJUSTMENT} posting category and its three mapping keys, and the
- * V4 {@code SKIPPED} status constraint) on a Testcontainers Postgres, and drives the
- * {@code inventory.adjustment.posted} envelope through {@link InventoryEventsListener} exactly as
- * Kafka would deliver it.
+ * Real-Postgres IT for inventory revaluation GL posting (issue #2193, spec
+ * SPEC-inventory-adjustment-gl-posting §4.10, #2186 decision D7 final). Runs the full Flyway
+ * chain + repeatable seed (which carries the {@code INVENTORY_REVALUATION} posting category and its
+ * two mapping keys) on a Testcontainers Postgres, and drives the
+ * {@code inventory.product-value.changed} envelope through {@link InventoryEventsListener} exactly
+ * as Kafka would deliver it.
  *
  * <p>Requires Docker.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
-@DisplayName("Inventory adjustment GL posting (#2191, real Postgres)")
-class InventoryAdjustmentGLPostingIT {
+@DisplayName("Inventory revaluation GL posting (#2193, real Postgres)")
+class InventoryRevaluationGLPostingIT {
 
     /** A database of this IT's own: it commits fixtures and clears whole tables. */
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
-        AccountingPostgresContainer.registerIsolatedDatabase(registry, "inventory-adjustment");
+        AccountingPostgresContainer.registerIsolatedDatabase(registry, "inventory-revaluation");
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "none");
         registry.add("spring.flyway.enabled", () -> "true");
     }
 
-    private static final String EVENT_TYPE = InventoryAdjustedV1.EVENT_TYPE;
+    private static final String EVENT_TYPE = ProductValueChangedV1.EVENT_TYPE;
 
     @Autowired
     private Clock clock;
@@ -160,38 +160,36 @@ class InventoryAdjustmentGLPostingIT {
     }
 
     @Test
-    @DisplayName("Seed: the three INVENTORY_ADJUSTMENT mapping keys resolve (loss and gain to 5100, asset to 1300)")
+    @DisplayName("Seed: the two INVENTORY_REVALUATION mapping keys resolve (asset to 1300, offset to 5000)")
     void seededMappingKeysResolve() {
         LocalDateTime now = LocalDateTime.now(clock);
-        assertThat(glMappingResolver.resolveGLAccount("INVENTORY_ADJUSTMENT", "ADJUSTMENT_LOSS", now))
-                .isEqualTo(accountId("5100"));
-        assertThat(glMappingResolver.resolveGLAccount("INVENTORY_ADJUSTMENT", "ADJUSTMENT_GAIN", now))
-                .isEqualTo(accountId("5100"));
-        assertThat(glMappingResolver.resolveGLAccount("INVENTORY_ADJUSTMENT", "INVENTORY_ASSET", now))
+        assertThat(glMappingResolver.resolveGLAccount("INVENTORY_REVALUATION", "INVENTORY_ASSET", now))
                 .isEqualTo(accountId("1300"));
+        assertThat(glMappingResolver.resolveGLAccount("INVENTORY_REVALUATION", "REVALUATION_OFFSET", now))
+                .isEqualTo(accountId("5000"));
     }
 
     @Test
     @DisplayName(
-            "Loss posts one balanced Dr 5100 / Cr 1300 = abs(delta) x unitCost dated occurredAt, recorded PROCESSED")
-    void lossPostsShrinkageAgainstInventory() {
-        UUID adjustmentId = UUID.randomUUID();
+            "Write-up posts one balanced Dr 1300 / Cr 5000 = abs(totalValueDelta) dated occurredAt, recorded PROCESSED")
+    void writeUpPostsInventoryAgainstCogs() {
+        UUID revaluationId = UUID.randomUUID();
         Instant occurredAt = Instant.now(clock).minusSeconds(3600).truncatedTo(ChronoUnit.SECONDS);
         String eventId = UUID.randomUUID().toString();
 
-        // -4 x 7.25 = 29.00
-        listener.onInventoryEvent(envelope(eventId, adjustmentId, "CYCLE_COUNT", "-4", "7.25", "AVERAGE", occurredAt));
+        // (7.25 - 5.00) x 4 = 9.00
+        listener.onInventoryEvent(envelope(eventId, revaluationId, "5.00", "7.25", "4", occurredAt));
 
-        BigDecimal expected = new BigDecimal("29.00");
-        assertBalancedEntry(accountId("5100"), accountId("1300"), expected);
+        BigDecimal expected = new BigDecimal("9.00");
+        assertBalancedEntry(accountId("1300"), accountId("5000"), expected);
         JournalEntry entry = onlyEntry();
         assertThat(entry.getTransactionDate()).isEqualTo(LocalDateTime.ofInstant(occurredAt, clock.getZone()));
         assertThat(entry.getSourceEventId())
-                .isEqualTo(InventoryAdjustmentPostingService.toSourceEventId("CYCLE_COUNT", adjustmentId));
-        assertThat(entry.getDescription()).contains("COUNT_ERROR").contains(adjustmentId.toString());
+                .isEqualTo(InventoryRevaluationPostingService.toSourceEventId(revaluationId));
+        assertThat(entry.getDescription()).contains("write-up").contains(revaluationId.toString());
         assertThat(processedEventRepository.existsById(eventId)).isTrue();
 
-        AccountingEventResponse record = onlyRecord(adjustmentId);
+        AccountingEventResponse record = onlyRecord(revaluationId);
         assertThat(record.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
         assertThat(record.getJournalEntryId()).isEqualTo(entry.getJournalEntryId());
         assertThat(record.getIdempotencyOutcome()).isEqualTo("NEW");
@@ -205,52 +203,43 @@ class InventoryAdjustmentGLPostingIT {
     }
 
     @Test
-    @DisplayName("Gain posts one balanced Dr 1300 / Cr ADJUSTMENT_GAIN (5100)")
-    void gainPostsInventoryAgainstGainAccount() {
-        UUID adjustmentId = UUID.randomUUID();
+    @DisplayName("Write-down posts one balanced Dr 5000 / Cr 1300")
+    void writeDownPostsCogsAgainstInventory() {
+        UUID revaluationId = UUID.randomUUID();
 
-        // +2.5 x 10.00 = 25.00 (decimal-capable delta, ADR-0055)
-        listener.onInventoryEvent(envelope(
-                UUID.randomUUID().toString(),
-                adjustmentId,
-                "MANUAL_ADJUSTMENT",
-                "2.5",
-                "10.00",
-                "STANDARD",
-                Instant.now(clock)));
+        // (6.00 - 10.00) x 2 = -8.00
+        listener.onInventoryEvent(
+                envelope(UUID.randomUUID().toString(), revaluationId, "10.00", "6.00", "2", Instant.now(clock)));
 
-        assertBalancedEntry(accountId("1300"), accountId("5100"), new BigDecimal("25.00"));
-        assertThat(onlyRecord(adjustmentId).getJournalEntryId())
+        assertBalancedEntry(accountId("5000"), accountId("1300"), new BigDecimal("8.00"));
+        assertThat(onlyRecord(revaluationId).getJournalEntryId())
                 .isEqualTo(onlyEntry().getJournalEntryId());
     }
 
     @Test
-    @DisplayName("Uncosted fact posts nothing, counts the skip and leaves a SKIPPED / UNCOSTED_FACT record")
-    void uncostedFactIsSkippedAndRecorded() {
-        UUID adjustmentId = UUID.randomUUID();
+    @DisplayName("Zero value delta posts no journal entry and is recorded PROCESSED, never SKIPPED")
+    void zeroDeltaPostsNothingAndIsRecordedProcessed() {
+        UUID revaluationId = UUID.randomUUID();
         String eventId = UUID.randomUUID().toString();
 
-        listener.onInventoryEvent(
-                envelope(eventId, adjustmentId, "CYCLE_COUNT", "-3", "null", "NONE", Instant.now(clock)));
+        listener.onInventoryEvent(envelope(eventId, revaluationId, "5.00", "5.00", "4", Instant.now(clock)));
 
         assertThat(journalEntryRepository.count()).isZero();
         assertThat(processedEventRepository.existsById(eventId)).isTrue();
-        AccountingEventResponse record = onlyRecord(adjustmentId);
-        assertThat(record.getStatus()).isEqualTo(AccountingEventStatus.SKIPPED);
-        assertThat(record.getFailureReasonCode()).isEqualTo("UNCOSTED_FACT");
+        AccountingEventResponse record = onlyRecord(revaluationId);
+        assertThat(record.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
         assertThat(record.getJournalEntryId()).isNull();
         assertThat(meterRegistry
                         .counter(InventoryEventsListener.SKIPPED_METRIC, "eventType", EVENT_TYPE, "reason", "UNCOSTED")
                         .count())
-                .isEqualTo(1.0);
+                .isEqualTo(0.0);
     }
 
     @Test
     @DisplayName("Redelivery of the same eventId posts nothing more and writes no second record")
     void duplicateEventIdIsDropped() {
-        UUID adjustmentId = UUID.randomUUID();
-        String message = envelope(
-                UUID.randomUUID().toString(), adjustmentId, "CYCLE_COUNT", "-1", "5.00", "AVERAGE", Instant.now(clock));
+        UUID revaluationId = UUID.randomUUID();
+        String message = envelope(UUID.randomUUID().toString(), revaluationId, "5.00", "6.00", "1", Instant.now(clock));
 
         listener.onInventoryEvent(message);
         listener.onInventoryEvent(message);
@@ -263,20 +252,18 @@ class InventoryAdjustmentGLPostingIT {
     @DisplayName(
             "Re-emission under a new eventId posts nothing more; recorded DUPLICATE_IGNORED with the original entry")
     void reEmittedFactIsDuplicateIgnored() {
-        UUID adjustmentId = UUID.randomUUID();
+        UUID revaluationId = UUID.randomUUID();
         Instant occurredAt = Instant.now(clock);
         String firstEventId = UUID.randomUUID().toString();
         String secondEventId = UUID.randomUUID().toString();
 
-        listener.onInventoryEvent(
-                envelope(firstEventId, adjustmentId, "CYCLE_COUNT", "-1", "5.00", "AVERAGE", occurredAt));
-        listener.onInventoryEvent(
-                envelope(secondEventId, adjustmentId, "CYCLE_COUNT", "-1", "5.00", "AVERAGE", occurredAt));
+        listener.onInventoryEvent(envelope(firstEventId, revaluationId, "5.00", "6.00", "1", occurredAt));
+        listener.onInventoryEvent(envelope(secondEventId, revaluationId, "5.00", "6.00", "1", occurredAt));
 
         assertThat(journalEntryRepository.count()).isEqualTo(1);
         assertThat(processedEventRepository.existsById(secondEventId)).isTrue();
         UUID original = onlyEntry().getJournalEntryId();
-        List<AccountingEventResponse> records = records(adjustmentId);
+        List<AccountingEventResponse> records = records(revaluationId);
         assertThat(records).hasSize(2);
         assertThat(records)
                 .extracting(AccountingEventResponse::getIdempotencyOutcome)
@@ -292,10 +279,9 @@ class InventoryAdjustmentGLPostingIT {
     @DisplayName("PERIOD_CLOSED propagates and leaves no processed_events row, record or entry")
     void closedPeriodPropagatesUnmarked() {
         accountingPeriodService.closePeriod("2024-03");
-        UUID adjustmentId = UUID.randomUUID();
+        UUID revaluationId = UUID.randomUUID();
         String eventId = UUID.randomUUID().toString();
-        String message = envelope(
-                eventId, adjustmentId, "CYCLE_COUNT", "-2", "4.00", "AVERAGE", Instant.parse("2024-03-15T10:00:00Z"));
+        String message = envelope(eventId, revaluationId, "5.00", "7.00", "2", Instant.parse("2024-03-15T10:00:00Z"));
 
         assertThatExceptionOfType(AccountingPeriodClosedException.class)
                 .isThrownBy(() -> listener.onInventoryEvent(message));
@@ -309,43 +295,44 @@ class InventoryAdjustmentGLPostingIT {
 
     private String envelope(
             String eventId,
-            UUID adjustmentId,
-            String kind,
-            String quantityDelta,
-            String unitCost,
-            String costSource,
+            UUID revaluationId,
+            String previousUnitCost,
+            String newUnitCost,
+            String onHandQuantity,
             Instant occurredAt) {
+        BigDecimal delta = new BigDecimal(newUnitCost)
+                .subtract(new BigDecimal(previousUnitCost))
+                .multiply(new BigDecimal(onHandQuantity));
         return """
-                {"eventId":"%s","eventType":"inventory.adjustment.posted","schemaVersion":1,
+                {"eventId":"%s","eventType":"inventory.product-value.changed","schemaVersion":1,
                  "aggregateId":"%s","aggregateVersion":0,
                  "occurredAtUtc":"%s","sourceService":"pos-inventory",
-                 "payload":{"adjustmentId":"%s","adjustmentKind":"%s","ledgerEventType":"COUNT_VARIANCE_OUT",
-                            "ledgerEntryId":"%s","sku":"OIL-FILTER-7","locationId":null,"taskId":null,
-                            "reasonCode":"COUNT_ERROR","quantityDelta":%s,"unitCost":%s,
-                            "costSource":"%s","occurredAt":"%s"}}
+                 "payload":{"revaluationId":"%s","sku":"OIL-FILTER-7","costingMethod":"AVERAGE",
+                            "previousUnitCost":%s,"newUnitCost":%s,"onHandQuantity":%s,
+                            "totalValueDelta":%s,"reason":"Supplier price correction","actor":"jdoe",
+                            "occurredAt":"%s"}}
                 """.formatted(
                         eventId,
-                        adjustmentId,
+                        revaluationId,
                         occurredAt,
-                        adjustmentId,
-                        kind,
-                        UUID.randomUUID(),
-                        quantityDelta,
-                        unitCost,
-                        costSource,
+                        revaluationId,
+                        previousUnitCost,
+                        newUnitCost,
+                        onHandQuantity,
+                        delta.toPlainString(),
                         occurredAt);
     }
 
-    private List<AccountingEventResponse> records(UUID adjustmentId) {
+    private List<AccountingEventResponse> records(UUID revaluationId) {
         AccountingEventFilter filter = AccountingEventFilter.builder()
                 .eventType(EVENT_TYPE)
-                .domainKeyId(adjustmentId.toString())
+                .domainKeyId(revaluationId.toString())
                 .build();
         return eventIngestionService.listEvents(filter, PageRequest.of(0, 10)).getContent();
     }
 
-    private AccountingEventResponse onlyRecord(UUID adjustmentId) {
-        List<AccountingEventResponse> records = records(adjustmentId);
+    private AccountingEventResponse onlyRecord(UUID revaluationId) {
+        List<AccountingEventResponse> records = records(revaluationId);
         assertThat(records).hasSize(1);
         return records.getFirst();
     }

@@ -291,6 +291,36 @@ public interface GLPostingService {
             @Nullable String overrideJustification);
 
     /**
+     * Post a cost revaluation (issue #2193): a two-line entry, {@code Dr debitAccount /
+     * Cr creditAccount} for {@code abs(totalValueDelta)}. Consumed from the
+     * {@code inventory.product-value.changed} fact on {@code inventory.events.v1}; the caller
+     * sign-routes and resolves both accounts through the {@code INVENTORY_REVALUATION} posting
+     * category's mapping keys — write-up {@code INVENTORY_ASSET / REVALUATION_OFFSET}, write-down
+     * {@code REVALUATION_OFFSET / INVENTORY_ASSET} — never hardcoded (#2186 D7: the offset is 5000
+     * COGS).
+     *
+     * @param sourceEventId         deterministic JE source id derived from the revaluation id
+     * @param revaluationId         the revaluation being posted (audit label on the entry lines)
+     * @param debitAccountId        GL account debited
+     * @param creditAccountId       GL account credited
+     * @param amount                positive revaluation value ({@code abs(totalValueDelta)})
+     * @param transactionDate       business transaction date (the fact's {@code occurredAt}),
+     *                              never processing time, so redeliveries post into the same period
+     * @param description           entry description (id, sku, cost delta)
+     * @param overrideJustification optional CLOSED-period override justification
+     * @return posted journal entry's id
+     */
+    UUID postInventoryRevaluation(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID revaluationId,
+            @NonNull UUID debitAccountId,
+            @NonNull UUID creditAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification);
+
+    /**
      * Post the batched settlement journal entry (story F1c, issue #963, decision
      * D-13): {@code Dr Cash (net) / Dr Processor Fees (fee) / Cr Undeposited
      * Funds (matched gross) / Cr Settlement Suspense (unmatched gross)}. Zero
