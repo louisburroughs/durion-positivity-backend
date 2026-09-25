@@ -456,16 +456,15 @@ class InventoryEventsListenerTest {
     }
 
     @Test
-    @DisplayName("Zero value delta posts no journal entry but is still recorded PROCESSED, never SKIPPED")
+    @DisplayName("Zero value delta posts no journal entry; recorded PROCESSED/NEW, never SKIPPED or DUPLICATE_IGNORED")
     void zeroDeltaRevaluationRecordedProcessedNotSkipped() {
         when(processedEvents.existsById("r-3")).thenReturn(false);
-        when(revaluationPostingService.postRevaluation(any())).thenReturn(null);
 
         listener.onInventoryEvent(revaluation("r-3", "5.00", "5.00", "4"));
 
-        verify(revaluationPostingService).postRevaluation(any());
-        verify(ingestionRecorder)
-                .recordPosted(anyString(), eq("r-3"), eq(REVALUATION_ID), any(), any(), isNull(), any());
+        verify(revaluationPostingService, never()).postRevaluation(any());
+        verify(ingestionRecorder).recordNothingToPost(anyString(), eq("r-3"), eq(REVALUATION_ID), any(), any());
+        verify(ingestionRecorder, never()).recordPosted(any(), any(), any(), any(), any(), any(), any());
         verify(ingestionRecorder, never()).recordUncostedSkip(any(), any(), any(), any(), any(), any());
         verify(processedEvents).save(any());
     }

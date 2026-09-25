@@ -215,8 +215,9 @@ public class InventoryEventsListener {
     /**
      * A revaluation fact never carries an uncosted case ({@code totalValueDelta} is always
      * computed), so it always reaches {@link InventoryRevaluationPostingService#postRevaluation}.
-     * A zero delta posts no journal entry but is still recorded {@code PROCESSED} — never
-     * {@code SKIPPED} — since it is not a data-quality gap, just nothing to post.
+     * A zero delta posts no journal entry but is still recorded {@code PROCESSED} with outcome
+     * {@code NEW} — never {@code SKIPPED} (not a data-quality gap, just nothing to post) and never
+     * {@code DUPLICATE_IGNORED}, which {@link #post} infers from a {@code null} journal entry id.
      */
     private void onRevaluationPosted(String eventId, JsonNode envelope) {
         String eventType = ProductValueChangedV1.EVENT_TYPE;
@@ -225,6 +226,17 @@ public class InventoryEventsListener {
             return;
         }
         LocalDateTime transactionDate = businessDate(fact.occurredAt());
+        if (fact.totalValueDelta().signum() == 0) {
+            log.info(
+                    "Inventory revaluation has zero value delta, nothing to post | eventId={} | revaluationId={}",
+                    eventId,
+                    fact.revaluationId());
+            handlerTransaction.executeWithoutResult(_ -> {
+                ingestionRecorder.recordNothingToPost(eventType, eventId, fact.revaluationId(), transactionDate, fact);
+                markProcessed(eventId);
+            });
+            return;
+        }
         post(
                 eventType,
                 eventId,

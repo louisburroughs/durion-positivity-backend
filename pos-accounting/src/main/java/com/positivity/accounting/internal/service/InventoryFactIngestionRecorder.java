@@ -93,6 +93,24 @@ public class InventoryFactIngestionRecorder {
     }
 
     /** Record an uncosted fact that was deliberately not posted: {@code SKIPPED / UNCOSTED_FACT}. */
+    /**
+     * A newly consumed fact that legitimately posts no journal entry (a zero-delta revaluation,
+     * #2193): {@code PROCESSED}, outcome {@code NEW}, no journal entry. Distinct from a duplicate,
+     * which {@link #recordPosted} records when the handler returns no new entry.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordNothingToPost(
+            @NonNull String eventType,
+            @NonNull String envelopeEventId,
+            @NonNull UUID domainKeyId,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull Object fact) {
+        AccountingEvent event = newEvent(eventType, envelopeEventId, domainKeyId, transactionDate, fact);
+        event.setStatus(AccountingEventStatus.PROCESSED);
+        event.setIdempotencyOutcome(OUTCOME_NEW);
+        save(event);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public void recordUncostedSkip(
             @NonNull String eventType,

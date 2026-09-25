@@ -228,6 +228,7 @@ class InventoryRevaluationGLPostingIT {
         assertThat(processedEventRepository.existsById(eventId)).isTrue();
         AccountingEventResponse record = onlyRecord(revaluationId);
         assertThat(record.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+        assertThat(record.getIdempotencyOutcome()).isEqualTo("NEW");
         assertThat(record.getJournalEntryId()).isNull();
         assertThat(meterRegistry
                         .counter(InventoryEventsListener.SKIPPED_METRIC, "eventType", EVENT_TYPE, "reason", "UNCOSTED")

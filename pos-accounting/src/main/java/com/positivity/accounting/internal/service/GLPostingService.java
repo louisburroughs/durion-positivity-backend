@@ -310,6 +310,7 @@ public interface GLPostingService {
      * @param overrideJustification optional CLOSED-period override justification
      * @return posted journal entry's id
      */
+    @NonNull
     UUID postInventoryRevaluation(
             @NonNull UUID sourceEventId,
             @NonNull UUID revaluationId,
