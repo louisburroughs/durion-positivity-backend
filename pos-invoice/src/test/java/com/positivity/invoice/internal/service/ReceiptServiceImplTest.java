@@ -8,6 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.invoice.internal.dto.ReceiptViewResponse;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.Receipt;
@@ -15,11 +16,13 @@ import com.positivity.invoice.internal.enums.ReceiptDeliveryMethod;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryStatus;
 import com.positivity.invoice.internal.enums.ReceiptStatus;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.ReceiptNotFoundException;
 import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.repository.ReceiptRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -67,6 +70,7 @@ class ReceiptServiceImplTest {
     private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000010");
     private static final UUID PAYMENT_INTENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000020");
     private static final UUID RECEIPT_ID = UUID.fromString("00000000-0000-0000-0000-000000000030");
+    private static final UUID OTHER_INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000040");
     private static final String INVOICE_NUMBER = "INV-12345";
     private static final String CASHIER_ID = "cashier-001";
     private static final String TERMINAL_ID = "POS-001";
@@ -410,8 +414,104 @@ class ReceiptServiceImplTest {
     }
 
     // -------------------------------------------------------------------------
+    // getReceipt — issue #2214
+    // -------------------------------------------------------------------------
+
+    /**
+     * #2214: getReceipt returns a view with every field mapped from the receipt,
+     * its invoice and its payment intent.
+     */
+    @Test
+    void getReceipt_found_returnsFullyMappedView() {
+        var receipt = buildFullReceipt();
+        when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID)).thenReturn(Optional.of(receipt));
+
+        ReceiptViewResponse view = receiptServiceImpl.getReceipt(INVOICE_ID, RECEIPT_ID);
+
+        assertThat(view.getReceiptId()).isEqualTo(RECEIPT_ID);
+        assertThat(view.getReference()).isEqualTo("RCP-INV-12345-20260115T143022Z-001");
+        assertThat(view.getStatus()).isEqualTo(ReceiptStatus.GENERATED);
+        assertThat(view.getInvoiceId()).isEqualTo(INVOICE_ID);
+        assertThat(view.getInvoiceNumber()).isEqualTo(INVOICE_NUMBER);
+        assertThat(view.getPaymentIntentId()).isEqualTo(PAYMENT_INTENT_ID);
+        assertThat(view.getPaidAmount()).isEqualByComparingTo(new BigDecimal("149.99"));
+        assertThat(view.getPaymentMethod()).isEqualTo("stripe");
+        assertThat(view.getGatewayReference()).isEqualTo("ch_3P0a1b2c3d4e5f");
+        assertThat(view.getCashierId()).isEqualTo(CASHIER_ID);
+        assertThat(view.getTerminalId()).isEqualTo(TERMINAL_ID);
+        assertThat(view.getTemplateId()).isEqualTo(TEMPLATE_ID);
+        assertThat(view.getTemplateVersion()).isEqualTo(TEMPLATE_VERSION);
+        assertThat(view.getDeliveryMethod()).isEqualTo(ReceiptDeliveryMethod.EMAIL);
+        assertThat(view.getDeliveryStatus()).isEqualTo(ReceiptDeliveryStatus.SUCCESS);
+        assertThat(view.getDeliveryEmailAddress()).isEqualTo("customer@example.com");
+        assertThat(view.getReprintCount()).isEqualTo(2);
+        assertThat(view.getLastReprintReason()).isEqualTo("CUSTOMER_REQUEST");
+        assertThat(view.getLastReprintedBy()).isEqualTo(CASHIER_ID);
+        assertThat(view.getCreatedAt()).isEqualTo(TEST_CLOCK.instant());
+    }
+
+    /**
+     * #2214: getReceipt must throw ReceiptNotFoundException when no receipt with that id
+     * exists.
+     */
+    @Test
+    void getReceipt_receiptNotFound_throwsReceiptNotFoundException() {
+        when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> receiptServiceImpl.getReceipt(INVOICE_ID, RECEIPT_ID))
+                .isInstanceOf(ReceiptNotFoundException.class)
+                .hasMessageContaining(RECEIPT_ID.toString());
+    }
+
+    /**
+     * #2214: getReceipt must throw ReceiptNotFoundException — not leak the receipt — when the
+     * receipt exists but belongs to a different invoice.
+     */
+    @Test
+    void getReceipt_belongsToDifferentInvoice_throwsReceiptNotFoundException() {
+        when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, OTHER_INVOICE_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> receiptServiceImpl.getReceipt(OTHER_INVOICE_ID, RECEIPT_ID))
+                .isInstanceOf(ReceiptNotFoundException.class)
+                .hasMessageContaining(RECEIPT_ID.toString());
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private Receipt buildFullReceipt() {
+        var invoice = new Invoice();
+        invoice.setId(INVOICE_ID);
+        invoice.setInvoiceNumber(INVOICE_NUMBER);
+
+        var paymentIntent = new PaymentIntent();
+        paymentIntent.setId(PAYMENT_INTENT_ID);
+        paymentIntent.setInvoice(invoice);
+        paymentIntent.setCapturedAmount(new BigDecimal("149.99"));
+        paymentIntent.setGatewayProvider("stripe");
+        paymentIntent.setGatewayReference("ch_3P0a1b2c3d4e5f");
+
+        var receipt = new Receipt();
+        receipt.setId(RECEIPT_ID);
+        receipt.setInvoice(invoice);
+        receipt.setPaymentIntent(paymentIntent);
+        receipt.setReference("RCP-INV-12345-20260115T143022Z-001");
+        receipt.setStatus(ReceiptStatus.GENERATED);
+        receipt.setCashierId(CASHIER_ID);
+        receipt.setTerminalId(TERMINAL_ID);
+        receipt.setTemplateId(TEMPLATE_ID);
+        receipt.setTemplateVersion(TEMPLATE_VERSION);
+        receipt.setDeliveryMethod(ReceiptDeliveryMethod.EMAIL);
+        receipt.setDeliveryStatus(ReceiptDeliveryStatus.SUCCESS);
+        receipt.setDeliveryEmailAddress("customer@example.com");
+        receipt.setReprintCount(2);
+        receipt.setLastReprintReason("CUSTOMER_REQUEST");
+        receipt.setLastReprintedBy(CASHIER_ID);
+        receipt.setCreatedAt(TEST_CLOCK.instant());
+        return receipt;
+    }
 
     private Receipt buildExistingReceipt(int reprintCount) {
         var receipt = new Receipt();

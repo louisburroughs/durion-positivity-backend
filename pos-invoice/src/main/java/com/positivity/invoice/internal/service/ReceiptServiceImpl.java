@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.dto.ReceiptViewResponse;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryMethod;
@@ -134,6 +135,40 @@ public class ReceiptServiceImpl implements ReceiptService {
         receipt.setLastReprintReason(reason);
         receipt.setLastReprintedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
         return toServiceReceipt(receiptRepository.save(receipt));
+    }
+
+    @Override
+    @NonNull
+    public ReceiptViewResponse getReceipt(@NonNull UUID invoiceId, @NonNull UUID receiptId) {
+        com.positivity.invoice.internal.entity.Receipt receipt = receiptRepository
+                .findByIdAndInvoice_Id(receiptId, invoiceId)
+                .orElseThrow(() -> new ReceiptNotFoundException(RECEIPT_NOT_FOUND_PREFIX + receiptId));
+
+        PaymentIntent paymentIntent = receipt.getPaymentIntent();
+
+        ReceiptViewResponse view = new ReceiptViewResponse();
+        view.setReceiptId(receipt.getId());
+        view.setReference(receipt.getReference());
+        view.setStatus(receipt.getStatus());
+        view.setInvoiceId(invoiceId);
+        view.setInvoiceNumber(
+                receipt.getInvoice() == null ? null : receipt.getInvoice().getInvoiceNumber());
+        view.setPaymentIntentId(paymentIntent == null ? null : paymentIntent.getId());
+        view.setPaidAmount(paymentIntent == null ? null : paymentIntent.getCapturedAmount());
+        view.setPaymentMethod(paymentIntent == null ? null : paymentIntent.getGatewayProvider());
+        view.setGatewayReference(paymentIntent == null ? null : paymentIntent.getGatewayReference());
+        view.setCashierId(receipt.getCashierId());
+        view.setTerminalId(receipt.getTerminalId());
+        view.setTemplateId(receipt.getTemplateId());
+        view.setTemplateVersion(receipt.getTemplateVersion());
+        view.setDeliveryMethod(receipt.getDeliveryMethod());
+        view.setDeliveryStatus(receipt.getDeliveryStatus());
+        view.setDeliveryEmailAddress(receipt.getDeliveryEmailAddress());
+        view.setReprintCount(receipt.getReprintCount());
+        view.setLastReprintReason(receipt.getLastReprintReason());
+        view.setLastReprintedBy(receipt.getLastReprintedBy());
+        view.setCreatedAt(receipt.getCreatedAt());
+        return view;
     }
 
     private static Receipt toServiceReceipt(com.positivity.invoice.internal.entity.Receipt entity) {
