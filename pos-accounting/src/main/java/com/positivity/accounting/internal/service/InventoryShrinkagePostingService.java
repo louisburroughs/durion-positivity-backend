@@ -9,6 +9,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,13 +61,16 @@ public class InventoryShrinkagePostingService {
      * non-positive) — this method assumes a costed scrap.
      *
      * @param fact the consumed scrap fact (with a non-null, positive {@code unitCost})
+     * @return the posted journal entry's id, or {@code null} when the scrap was already posted
+     *     (posting key registered by an earlier delivery — the listener records it
+     *     {@code DUPLICATE_IGNORED})
      */
     @Transactional
-    public void postShrinkage(@NonNull ScrapPostedV1 fact) {
+    public @Nullable UUID postShrinkage(@NonNull ScrapPostedV1 fact) {
         String idempotencyKey = IDEMPOTENCY_KEY_PREFIX + fact.scrapId();
         if (idempotencyService.isKeyProcessed(idempotencyKey)) {
             log.info("Inventory shrinkage GL posting already processed, skipping | scrapId={}", fact.scrapId());
-            return;
+            return null;
         }
 
         BigDecimal unitCost = fact.unitCost();
@@ -114,6 +118,7 @@ public class InventoryShrinkagePostingService {
                 fact.reasonCode(),
                 amount,
                 posted);
+        return posted;
     }
 
     /**

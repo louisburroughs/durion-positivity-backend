@@ -3,6 +3,9 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -12,6 +15,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.domainevents.inventory.InventoryAdjustedV1;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -24,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -41,6 +46,9 @@ class InventoryEventsListenerTest {
 
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final InventoryShrinkagePostingService postingService = mock(InventoryShrinkagePostingService.class);
+    private final InventoryAdjustmentPostingService adjustmentPostingService =
+            mock(InventoryAdjustmentPostingService.class);
+    private final InventoryFactIngestionRecorder ingestionRecorder = mock(InventoryFactIngestionRecorder.class);
 
     private InventoryEventsListener listener;
 
@@ -51,7 +59,10 @@ class InventoryEventsListenerTest {
                 new ObjectMapper(),
                 processedEvents,
                 postingService,
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                adjustmentPostingService,
+                ingestionRecorder,
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                mock(PlatformTransactionManager.class));
     }
 
     /** Representative costed scrap fact as published by pos-inventory (Wave-2 D1, #1030). */
@@ -236,5 +247,130 @@ class InventoryEventsListenerTest {
                 .isThrownBy(() -> listener.onInventoryEvent(costedScrap("e-8")));
 
         verify(processedEvents, never()).save(any());
+    }
+    // ===== inventory.adjustment.posted (#2191) =====
+
+    private static final UUID ADJUSTMENT_ID = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+    private static final UUID LEDGER_ENTRY_ID = UUID.fromString("00000000-0000-0000-0000-0000000000a2");
+    private static final UUID TASK_ID = UUID.fromString("00000000-0000-0000-0000-0000000000a3");
+
+    /** Representative adjustment fact as pinned by {@link InventoryAdjustedV1} (#2190). */
+    private String adjustment(String eventId, String quantityDelta, String unitCost, String costSource) {
+        return """
+                {"eventId":"%s","eventType":"inventory.adjustment.posted","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":0,
+                 "occurredAtUtc":"2026-07-21T09:15:00Z","sourceService":"pos-inventory",
+                 "payload":{"adjustmentId":"%s","adjustmentKind":"CYCLE_COUNT",
+                            "ledgerEventType":"COUNT_VARIANCE_OUT","ledgerEntryId":"%s",
+                            "sku":"BRAKE-PAD-22","locationId":"%s","taskId":"%s","reasonCode":"COUNT_ERROR",
+                            "quantityDelta":%s,"unitCost":%s,"costSource":"%s",
+                            "occurredAt":"2026-07-21T09:15:00Z"}}
+                """.formatted(
+                        eventId,
+                        ADJUSTMENT_ID,
+                        ADJUSTMENT_ID,
+                        LEDGER_ENTRY_ID,
+                        LOCATION_ID,
+                        TASK_ID,
+                        quantityDelta,
+                        unitCost,
+                        costSource);
+    }
+
+    @Test
+    @DisplayName("Adjustment fact deserializes per the pinned schema, posts, and is recorded NEW with its entry")
+    void costedAdjustmentPostsAndRecords() {
+        UUID journalEntryId = UUID.randomUUID();
+        when(processedEvents.existsById("a-1")).thenReturn(false);
+        when(adjustmentPostingService.postAdjustment(any())).thenReturn(journalEntryId);
+
+        listener.onInventoryEvent(adjustment("a-1", "-4", "7.25", "AVERAGE"));
+
+        ArgumentCaptor<InventoryAdjustedV1> fact = ArgumentCaptor.forClass(InventoryAdjustedV1.class);
+        verify(adjustmentPostingService).postAdjustment(fact.capture());
+        assertThat(fact.getValue().adjustmentId()).isEqualTo(ADJUSTMENT_ID);
+        assertThat(fact.getValue().adjustmentKind()).isEqualTo("CYCLE_COUNT");
+        assertThat(fact.getValue().ledgerEventType()).isEqualTo("COUNT_VARIANCE_OUT");
+        assertThat(fact.getValue().ledgerEntryId()).isEqualTo(LEDGER_ENTRY_ID);
+        assertThat(fact.getValue().locationId()).isEqualTo(LOCATION_ID);
+        assertThat(fact.getValue().taskId()).isEqualTo(TASK_ID);
+        assertThat(fact.getValue().quantityDelta()).isEqualByComparingTo("-4");
+        assertThat(fact.getValue().unitCost()).isEqualByComparingTo("7.25");
+        assertThat(fact.getValue().costSource()).isEqualTo("AVERAGE");
+        verify(ingestionRecorder)
+                .recordPosted(
+                        eq(InventoryAdjustedV1.EVENT_TYPE),
+                        eq("a-1"),
+                        eq(ADJUSTMENT_ID),
+                        eq(java.time.LocalDateTime.of(2026, 7, 21, 9, 15)),
+                        any(),
+                        eq(journalEntryId),
+                        eq(InventoryAdjustmentPostingService.toSourceEventId("CYCLE_COUNT", ADJUSTMENT_ID)));
+        verify(processedEvents).save(any());
+        verifyNoInteractions(postingService);
+    }
+
+    @Test
+    @DisplayName("Re-emitted adjustment (posting key already registered) is recorded with no journal entry of its own")
+    void reEmittedAdjustmentRecordedAsDuplicate() {
+        when(processedEvents.existsById("a-2")).thenReturn(false);
+        when(adjustmentPostingService.postAdjustment(any())).thenReturn(null);
+
+        listener.onInventoryEvent(adjustment("a-2", "3", "2.00", "STANDARD"));
+
+        verify(ingestionRecorder)
+                .recordPosted(anyString(), eq("a-2"), eq(ADJUSTMENT_ID), any(), any(), isNull(), any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Uncosted adjustment is never posted; recorded SKIPPED and marked processed")
+    void uncostedAdjustmentSkipped() {
+        when(processedEvents.existsById("a-3")).thenReturn(false);
+
+        listener.onInventoryEvent(adjustment("a-3", "-2", "null", "NONE"));
+
+        verifyNoInteractions(adjustmentPostingService);
+        verify(ingestionRecorder)
+                .recordUncostedSkip(
+                        eq(InventoryAdjustedV1.EVENT_TYPE), eq("a-3"), eq(ADJUSTMENT_ID), any(), any(), anyString());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Uncosted scrap is recorded SKIPPED too")
+    void uncostedScrapRecordedSkipped() {
+        when(processedEvents.existsById("e-9")).thenReturn(false);
+
+        listener.onInventoryEvent(uncostedScrap("e-9"));
+
+        verify(ingestionRecorder)
+                .recordUncostedSkip(eq(ScrapPostedV1.EVENT_TYPE), eq("e-9"), eq(SCRAP_ID), any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("Zero quantityDelta violates the contract: rejected and marked processed, never posted")
+    void zeroDeltaAdjustmentRejected() {
+        when(processedEvents.existsById("a-4")).thenReturn(false);
+
+        listener.onInventoryEvent(adjustment("a-4", "0", "1.00", "AVERAGE"));
+
+        verifyNoInteractions(adjustmentPostingService, ingestionRecorder);
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Adjustment posting failures propagate unwrapped; nothing marked or recorded")
+    void adjustmentPostingFailurePropagates() {
+        when(processedEvents.existsById("a-5")).thenReturn(false);
+        doThrow(new QueryTimeoutException("db down"))
+                .when(adjustmentPostingService)
+                .postAdjustment(any());
+
+        assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onInventoryEvent(adjustment("a-5", "-1", "1.00", "AVERAGE")));
+
+        verify(processedEvents, never()).save(any());
+        verifyNoInteractions(ingestionRecorder);
     }
 }
