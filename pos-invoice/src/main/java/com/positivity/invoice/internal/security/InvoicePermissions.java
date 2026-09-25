@@ -44,6 +44,48 @@ public final class InvoicePermissions {
      */
     public static final String VIEW = "invoice:invoice:view";
 
+    /**
+     * Void an authorized (not yet captured) payment hold (#2226, BILL-DEC-008). Replaces the
+     * unregistered {@code VOID_PAYMENT} raw string that only pos-order's service-to-service header
+     * could ever satisfy.
+     */
+    public static final String PAYMENT_VOID = "invoice:payment:void";
+
+    /**
+     * Refund a captured payment (#2226, BILL-DEC-008). Replaces the unregistered
+     * {@code REFUND_PAYMENT} raw string.
+     */
+    public static final String PAYMENT_REFUND = "invoice:payment:refund";
+
+    /**
+     * Elevation that bypasses the 24-hour void window and the 180-day refund window in
+     * {@code PaymentReversalServiceImpl} (#2226, BILL-DEC-010). Replaces the unregistered
+     * {@code SUPERVISOR_OVERRIDE} raw string used there. Do not confuse with {@link #FINALIZE}
+     * elevation, which is a distinct capability ({@code invoice:finalize:override}).
+     */
+    public static final String PAYMENT_OVERRIDE = "invoice:payment:override";
+
+    /**
+     * Generate a receipt for an invoice payment (#2226, BILL-DEC-008). Replaces the unregistered
+     * {@code GENERATE_RECEIPT} raw string.
+     */
+    public static final String RECEIPT_GENERATE = "invoice:receipt:generate";
+
+    /**
+     * Elevation that bypasses the 5-reprint cap on an existing receipt (#2226, BILL-DEC-010).
+     * Replaces the unregistered {@code SUPERVISOR_OVERRIDE} raw string used in
+     * {@code ReceiptServiceImpl}. Distinct from {@link #PAYMENT_OVERRIDE}: reprinting has no money
+     * movement of its own, so the two overrides are granted independently.
+     */
+    public static final String RECEIPT_REPRINT_OVERRIDE = "invoice:receipt:reprint_override";
+
+    /**
+     * Issue a manual (out-of-band) refund not anchored to a captured payment intent — against an
+     * invoice or directly against a customer party (#2226, BILL-DEC-008). Replaces the
+     * unregistered {@code ISSUE_MANUAL_REFUND} raw string.
+     */
+    public static final String REFUND_ISSUE_MANUAL = "invoice:refund:issue_manual";
+
     private InvoicePermissions() {
         // Utility class - prevent instantiation
     }

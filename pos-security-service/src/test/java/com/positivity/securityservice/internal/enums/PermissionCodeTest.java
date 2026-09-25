@@ -32,7 +32,15 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    // 536 / 90: catalog v90 added people:jobRole:view and people:jobRole:manage (534-535,
+    // 542 / 92: catalog v92 added invoice:payment:override (540) and
+    // invoice:receipt:reprint_override (541, #2226 BILL-DEC-010) — hand-assigned immediately
+    // after v91, because both are enforced only via an in-body SecurityContextHelper.hasAuthority
+    // check (PaymentReversalServiceImpl / ReceiptServiceImpl) and never a @PreAuthorize
+    // annotation, so scripts/generate-permissions.sh --sync's annotation scan cannot discover
+    // them. v91 added invoice:payment:refund, invoice:payment:void, invoice:receipt:generate and
+    // invoice:refund:issue_manual (536-539, #2226 BILL-DEC-008 — the raw-string
+    // VOID_PAYMENT/REFUND_PAYMENT/GENERATE_RECEIPT/ISSUE_MANUAL_REFUND authorities promoted into
+    // the catalog), on top of v90's people:jobRole:view and people:jobRole:manage (534-535,
     // durion#2157 — the tenant's own job-role vocabulary, HR master data that carries no
     // permission of its own), on top of v89's workorder:position:assign (533, #2059 — placing a workorder on a
     // service position, split off the manager operational-context override grant), on top of v87's
@@ -45,8 +53,8 @@ class PermissionCodeTest {
     // people:employee_pii:view (519), v82's crm:fact:replay (518), v81's people:self:view (517)
     // and v80's catalog:service:ingest (516). Both numbers move together by design: the version
     // bump is what tells a running gateway its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 536;
-    private static final int EXPECTED_CATALOG_VERSION = 90;
+    private static final int EXPECTED_PERMISSION_COUNT = 542;
+    private static final int EXPECTED_CATALOG_VERSION = 92;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

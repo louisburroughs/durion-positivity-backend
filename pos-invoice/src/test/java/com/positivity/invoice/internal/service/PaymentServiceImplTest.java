@@ -8,13 +8,18 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
+import com.positivity.invoice.internal.dto.PaymentIntentResponse;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
+import com.positivity.invoice.internal.entity.RefundRecord;
 import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
+import com.positivity.invoice.internal.enums.RefundStatus;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
+import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
 import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
@@ -24,14 +29,24 @@ import com.positivity.invoice.internal.payment.GatewayVoidRequest;
 import com.positivity.invoice.internal.payment.PaymentGatewayPort;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
+import com.positivity.invoice.internal.repository.RefundRecordRepository;
+import com.positivity.invoice.internal.security.InvoicePermissions;
+import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationAncestorResolver;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -76,6 +91,7 @@ class PaymentServiceImplTest {
     private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID OTHER_INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000099");
     private static final UUID PAYMENT_INTENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID OTHER_PAYMENT_INTENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000098");
     private static final String IDEMPOTENCY_KEY = "idem-key-001";
     private static final String CAPTURE_IDEMPOTENCY_KEY = "capture-idempotency-key-001";
     private static final BigDecimal AMOUNT_BELOW_LIMIT = BigDecimal.valueOf(200_00, 2);
@@ -92,6 +108,9 @@ class PaymentServiceImplTest {
 
     @Mock
     private PaymentIntentRepository paymentIntentRepository;
+
+    @Mock
+    private RefundRecordRepository refundRecordRepository;
 
     @Mock
     private com.positivity.invoice.internal.config.PaymentEventPublisher paymentEventPublisher;
@@ -593,5 +612,220 @@ class PaymentServiceImplTest {
         Invoice invoice = new Invoice();
         invoice.setId(id);
         return invoice;
+    }
+
+    // -------------------------------------------------------------------------
+    // listInvoicePayments / getInvoicePayment (#2226, #2215)
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("listInvoicePayments / getInvoicePayment (#2226, #2215)")
+    class PaymentReadTests {
+
+        /** The node a scoped caller is assigned: a region above the test invoice's location. */
+        private final UUID regionNode = UUID.fromString("019200aa-0000-7000-8000-00000000a000");
+
+        private final UUID otherShop = UUID.fromString("019200aa-0000-7000-8000-00000000000b");
+
+        private final UUID testLocation = UUID.fromString("01960003-0000-7000-8000-000000000001");
+
+        /** Replica stand-in: testLocation sits under regionNode on the OTHER dimension; otherShop does not. */
+        private final LocationAncestorResolver resolver = id -> {
+            if (id.equals(testLocation)) {
+                return new AncestorSets(Set.of(id), Set.of(id, regionNode));
+            }
+            if (id.equals(otherShop)) {
+                return new AncestorSets(Set.of(id), Set.of(id));
+            }
+            return AncestorSets.EMPTY;
+        };
+
+        private void authenticate(LocationScope scope) {
+            var authentication = new UsernamePasswordAuthenticationToken(
+                    "invoice-test-user", null, List.of(new SimpleGrantedAuthority(InvoicePermissions.VIEW)));
+            authentication.setDetails(Map.of(
+                    GatewaySecurityConstants.DETAIL_USERNAME,
+                    "invoice-test-user",
+                    GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                    scope));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        /** A caller whose invoice:invoice:view is scoped (OTHER dimension) to the given assigned nodes. */
+        private LocationScope viewScopedTo(UUID... nodes) {
+            return LocationScope.of(
+                    Set.of(), Set.of(InvoicePermissions.VIEW), Optional.of(Set.of(nodes)), true, resolver);
+        }
+
+        private Invoice scopedInvoice() {
+            Invoice invoice = invoice(INVOICE_ID);
+            invoice.setLocationId(testLocation);
+            return invoice;
+        }
+
+        @Test
+        @DisplayName("getInvoicePayment maps status, amounts and the refundable balance")
+        void getInvoicePayment_mapsRefundableBalance() {
+            authenticate(LocationScope.unscoped());
+            PaymentIntent intent = capturedPaymentIntent();
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(intent));
+            when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID))
+                    .thenReturn(List.of(
+                            refundRecord(BigDecimal.valueOf(50), RefundStatus.COMPLETED),
+                            refundRecord(BigDecimal.valueOf(999), RefundStatus.FAILED)));
+
+            PaymentIntentResponse response = paymentService.getInvoicePayment(INVOICE_ID, PAYMENT_INTENT_ID);
+
+            assertThat(response.getPaymentId()).isEqualTo(PAYMENT_INTENT_ID);
+            assertThat(response.getInvoiceId()).isEqualTo(INVOICE_ID);
+            assertThat(response.getStatus()).isEqualTo(PaymentIntentStatus.CAPTURED);
+            assertThat(response.getPaymentFlow()).isEqualTo(PaymentFlow.SALE_CAPTURE);
+            assertThat(response.getCapturedAmount()).isEqualByComparingTo(AMOUNT_BELOW_LIMIT);
+            assertThat(response.getRefundedAmount()).isEqualByComparingTo(BigDecimal.valueOf(50));
+            assertThat(response.getRefundableAmount())
+                    .isEqualByComparingTo(AMOUNT_BELOW_LIMIT.subtract(BigDecimal.valueOf(50)));
+        }
+
+        @Test
+        @DisplayName("getInvoicePayment: an AUTHORIZED (not yet captured) intent has no refundable balance")
+        void getInvoicePayment_notCaptured_refundableIsNull() {
+            authenticate(LocationScope.unscoped());
+            PaymentIntent intent = authorizedPaymentIntent(AMOUNT_BELOW_LIMIT);
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(intent));
+            when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID))
+                    .thenReturn(List.of());
+
+            PaymentIntentResponse response = paymentService.getInvoicePayment(INVOICE_ID, PAYMENT_INTENT_ID);
+
+            assertThat(response.getRefundableAmount()).isNull();
+        }
+
+        @Test
+        @DisplayName("getInvoicePayment: a payment intent under another invoice 404s like a missing one")
+        void getInvoicePayment_wrongInvoice_throws404() {
+            authenticate(LocationScope.unscoped());
+            PaymentIntent intent = capturedPaymentIntent(); // anchored to INVOICE_ID
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(intent));
+
+            assertThatThrownBy(() -> paymentService.getInvoicePayment(OTHER_INVOICE_ID, PAYMENT_INTENT_ID))
+                    .isInstanceOf(PaymentIntentNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("getInvoicePayment: a missing payment intent 404s")
+        void getInvoicePayment_missing_throws404() {
+            authenticate(LocationScope.unscoped());
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.getInvoicePayment(INVOICE_ID, PAYMENT_INTENT_ID))
+                    .isInstanceOf(PaymentIntentNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("getInvoicePayment: invoice location in reach returns detail")
+        void getInvoicePayment_inReach_returnsDetail() {
+            authenticate(viewScopedTo(regionNode));
+            PaymentIntent intent = capturedPaymentIntent();
+            intent.setInvoice(scopedInvoice());
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(intent));
+            when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID))
+                    .thenReturn(List.of());
+
+            assertThat(paymentService
+                            .getInvoicePayment(INVOICE_ID, PAYMENT_INTENT_ID)
+                            .getPaymentId())
+                    .isEqualTo(PAYMENT_INTENT_ID);
+        }
+
+        @Test
+        @DisplayName("getInvoicePayment: invoice location out of reach denies")
+        void getInvoicePayment_outOfReach_denies() {
+            authenticate(viewScopedTo(otherShop));
+            PaymentIntent intent = capturedPaymentIntent();
+            intent.setInvoice(scopedInvoice());
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(intent));
+
+            assertThatThrownBy(() -> paymentService.getInvoicePayment(INVOICE_ID, PAYMENT_INTENT_ID))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("listInvoicePayments returns every payment intent mapped, pre-rollout caller unaffected")
+        void listInvoicePayments_returnsMappedIntents() {
+            authenticate(LocationScope.unscoped());
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+            PaymentIntent intent = capturedPaymentIntent();
+            when(paymentIntentRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of(intent));
+            when(refundRecordRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of());
+
+            List<PaymentIntentResponse> results = paymentService.listInvoicePayments(INVOICE_ID);
+
+            assertThat(results).hasSize(1);
+            assertThat(results.get(0).getPaymentId()).isEqualTo(PAYMENT_INTENT_ID);
+        }
+
+        @Test
+        @DisplayName(
+                "listInvoicePayments batches the refund lookup: one findByInvoice_Id call, never findByPaymentIntent_Id")
+        void listInvoicePayments_batchesRefundLookup() {
+            authenticate(LocationScope.unscoped());
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+
+            PaymentIntent first = capturedPaymentIntent();
+            PaymentIntent second = capturedPaymentIntent();
+            second.setId(OTHER_PAYMENT_INTENT_ID);
+            when(paymentIntentRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of(first, second));
+            when(refundRecordRepository.findByInvoice_Id(INVOICE_ID))
+                    .thenReturn(List.of(
+                            refundRecordFor(first, BigDecimal.valueOf(50), RefundStatus.COMPLETED),
+                            refundRecordFor(second, BigDecimal.valueOf(30), RefundStatus.COMPLETED),
+                            refundRecordFor(second, BigDecimal.valueOf(999), RefundStatus.FAILED)));
+
+            List<PaymentIntentResponse> results = paymentService.listInvoicePayments(INVOICE_ID);
+
+            assertThat(results).hasSize(2);
+            Map<UUID, BigDecimal> refundedByPaymentId = results.stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            PaymentIntentResponse::getPaymentId, PaymentIntentResponse::getRefundedAmount));
+            assertThat(refundedByPaymentId.get(PAYMENT_INTENT_ID)).isEqualByComparingTo(BigDecimal.valueOf(50));
+            assertThat(refundedByPaymentId.get(OTHER_PAYMENT_INTENT_ID)).isEqualByComparingTo(BigDecimal.valueOf(30));
+
+            verify(refundRecordRepository).findByInvoice_Id(INVOICE_ID);
+            verify(refundRecordRepository, never()).findByPaymentIntent_Id(any());
+        }
+
+        @Test
+        @DisplayName("listInvoicePayments: a missing invoice 404s")
+        void listInvoicePayments_missingInvoice_throws404() {
+            authenticate(LocationScope.unscoped());
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.listInvoicePayments(INVOICE_ID))
+                    .isInstanceOf(InvoiceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("listInvoicePayments: invoice location out of reach denies")
+        void listInvoicePayments_outOfReach_denies() {
+            authenticate(viewScopedTo(otherShop));
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(scopedInvoice()));
+
+            assertThatThrownBy(() -> paymentService.listInvoicePayments(INVOICE_ID))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+        }
+
+        private RefundRecord refundRecord(BigDecimal amount, RefundStatus status) {
+            RefundRecord record = new RefundRecord();
+            record.setAmount(amount);
+            record.setStatus(status);
+            return record;
+        }
+
+        /** A refund anchored to the given payment intent, for the batched-lookup grouping test. */
+        private RefundRecord refundRecordFor(PaymentIntent paymentIntent, BigDecimal amount, RefundStatus status) {
+            RefundRecord record = refundRecord(amount, status);
+            record.setPaymentIntent(paymentIntent);
+            return record;
+        }
     }
 }

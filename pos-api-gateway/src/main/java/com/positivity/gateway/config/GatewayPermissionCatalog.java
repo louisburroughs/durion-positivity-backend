@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 90;
+    public static final int CATALOG_VERSION = 92;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -701,7 +701,20 @@ public final class GatewayPermissionCatalog {
 
         // ── New batch (bits 534–535) ──────────────────────────────────────────
         "PERM_people:jobRole:manage", // 534
-        "PERM_people:jobRole:view" // 535
+        "PERM_people:jobRole:view", // 535
+
+        // ── New batch (bits 536–539) ──────────────────────────────────────────
+        "PERM_invoice:payment:refund", // 536
+        "PERM_invoice:payment:void", // 537
+        "PERM_invoice:receipt:generate", // 538
+        "PERM_invoice:refund:issue_manual", // 539
+
+        // ── New batch (bits 540–541): #2226 elevation permissions, hand-assigned because
+        // scripts/generate-permissions.sh --sync only discovers permissions named in a
+        // @PreAuthorize annotation, and these two are enforced only via an in-body
+        // SecurityContextHelper.hasAuthority check ──────────────────────────────
+        "PERM_invoice:payment:override", // 540
+        "PERM_invoice:receipt:reprint_override" // 541
     };
 
     public static String authorityForBit(int bitIndex) {

@@ -3,16 +3,23 @@ package com.positivity.invoice.internal.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.invoice.ControllerSliceConfig;
+import com.positivity.invoice.internal.enums.RefundReason;
+import com.positivity.invoice.internal.enums.RefundStatus;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.PaymentReversalService;
+import com.positivity.invoice.internal.service.RefundPaymentResult;
 import com.positivity.security.common.GatewaySecurityConfig;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -61,7 +68,14 @@ class PaymentReversalControllerErrorHandlingTest {
     private PaymentReversalService paymentReversalService;
 
     private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder request) {
-        return request.header("X-User", "test-user").header("X-Authorities", "*");
+        // #2226: voidPayment now carries its own @PreAuthorize(invoice:payment:void); "*" was never
+        // a wildcard here (GatewayAuthoritiesFilter treats it as a literal authority string), it only
+        // worked while voidPayment relied on the class-level isAuthenticated() alone.
+        return request.header("X-User", "test-user").header("X-Authorities", "invoice:payment:void");
+    }
+
+    private MockHttpServletRequestBuilder withAuthorities(MockHttpServletRequestBuilder request, String authorities) {
+        return request.header("X-User", "test-user").header("X-Authorities", authorities);
     }
 
     /** A genuine, still-mapped domain exception continues to answer its documented 409. */
@@ -110,5 +124,64 @@ class PaymentReversalControllerErrorHandlingTest {
                 .getContentAsString();
 
         assertThat(body).doesNotContain(leakCanary).doesNotContain("UnknownPathException");
+    }
+
+    // -------------------------------------------------------------------------
+    // #2226: voidPayment / refundPayment require their own catalog permission
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("voidPayment: 403 without invoice:payment:void")
+    void voidPayment_missingPermission_returns403() throws Exception {
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/payments/{paymentId}/void", INVOICE_ID, PAYMENT_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_BODY),
+                        "invoice:manage"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("voidPayment: 200 with invoice:payment:void")
+    void voidPayment_withPermission_returns200() throws Exception {
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/payments/{paymentId}/void", INVOICE_ID, PAYMENT_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VALID_BODY),
+                        InvoicePermissions.PAYMENT_VOID))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("refundPayment: 403 without invoice:payment:refund")
+    void refundPayment_missingPermission_returns403() throws Exception {
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/payments/{paymentId}/refunds", INVOICE_ID, PAYMENT_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"amount\":50.00,\"reason\":\"CUSTOMER_RETURN\"}"),
+                        "invoice:manage"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("refundPayment: 201 with invoice:payment:refund")
+    void refundPayment_withPermission_returns201() throws Exception {
+        RefundPaymentResult saved = new RefundPaymentResult();
+        saved.setRefundId(UUID.randomUUID());
+        saved.setInvoiceId(INVOICE_ID);
+        saved.setPaymentIntentId(PAYMENT_ID);
+        saved.setAmount(BigDecimal.valueOf(50));
+        saved.setReason(RefundReason.CUSTOMER_RETURN);
+        saved.setStatus(RefundStatus.COMPLETED);
+        saved.setCompletedAt(Instant.now());
+        when(paymentReversalService.refundPayment(any(), any(), any(), any(), any(), any()))
+                .thenReturn(saved);
+
+        mockMvc.perform(withAuthorities(
+                        post("/v1/invoices/{invoiceId}/payments/{paymentId}/refunds", INVOICE_ID, PAYMENT_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"amount\":50.00,\"reason\":\"CUSTOMER_RETURN\"}"),
+                        InvoicePermissions.PAYMENT_REFUND))
+                .andExpect(status().isCreated());
     }
 }

@@ -14,3 +14,60 @@ permissions:
     description: "Read invoices, invoice items, deposit credits and invoice-anchored refunds; the read half of invoice:manage, split out so a role can look at an invoice without holding write authority (#1612)"
   - name: "invoice:manage"
     description: "Manage invoice lifecycle operations"
+  - name: "invoice:payment:void"
+    description: "Void an authorized (not yet captured) invoice payment hold (#2226, BILL-DEC-008)"
+    grantTo:
+      - ADMIN
+      - GENERAL_MANAGER
+      - LOCATION_MANAGER
+      - SHOP_MANAGER
+      - MANAGER
+      - ACCOUNT_MANAGER
+      - SERVICE_ADVISOR
+  - name: "invoice:payment:refund"
+    description: "Refund a captured invoice payment through the gateway (#2226, BILL-DEC-008)"
+    grantTo:
+      - ADMIN
+      - GENERAL_MANAGER
+      - LOCATION_MANAGER
+      - SHOP_MANAGER
+      - MANAGER
+      - ACCOUNT_MANAGER
+      - SERVICE_ADVISOR
+  - name: "invoice:payment:override"
+    description: "Bypass the 24-hour void window and the 180-day refund window on a captured payment (#2226, BILL-DEC-010)"
+    grantTo:
+      - ADMIN
+      - GENERAL_MANAGER
+      - LOCATION_MANAGER
+      - SHOP_MANAGER
+      - MANAGER
+      - ACCOUNT_MANAGER
+  - name: "invoice:receipt:generate"
+    description: "Generate a receipt for an invoice payment (#2226, BILL-DEC-008)"
+    grantTo:
+      - ADMIN
+      - GENERAL_MANAGER
+      - LOCATION_MANAGER
+      - SHOP_MANAGER
+      - MANAGER
+      - ACCOUNT_MANAGER
+      - SERVICE_ADVISOR
+  - name: "invoice:receipt:reprint_override"
+    description: "Bypass the 5-reprint cap on an existing receipt (#2226, BILL-DEC-010)"
+    grantTo:
+      - ADMIN
+      - GENERAL_MANAGER
+      - LOCATION_MANAGER
+      - SHOP_MANAGER
+      - MANAGER
+      - ACCOUNT_MANAGER
+  - name: "invoice:refund:issue_manual"
+    description: "Issue a manual out-of-band refund not anchored to a captured payment intent, against an invoice or directly against a customer party (#2226, BILL-DEC-010)"
+    grantTo:
+      - ADMIN
+      - GENERAL_MANAGER
+      - LOCATION_MANAGER
+      - SHOP_MANAGER
+      - MANAGER
+      - ACCOUNT_MANAGER

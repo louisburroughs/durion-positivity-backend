@@ -75,6 +75,7 @@ public class ReceiptController {
 
     @PostMapping("/{invoiceId}/receipts")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.RECEIPT_GENERATE + "')")
     @EmitEvent(id = "INVOICE_RECEIPT_GENERATE", apiVersion = "1")
     @Operation(operationId = "generateReceipt", summary = "Generate Receipt for Invoice Payment", description = """
                     Generates a receipt record for an invoice payment, assigning a unique reference built from the \
@@ -83,13 +84,14 @@ public class ReceiptController {
                     Use this tool once per payment after tender; do not use reprintReceipt, which duplicates a \
                     receipt that already exists.
                     Preconditions: the invoice and payment intent must exist, the intent must belong to the \
-                    invoice, and the caller needs the GENERATE_RECEIPT authority.
+                    invoice, and the caller needs the invoice:receipt:generate authority, scoped to the invoice's \
+                    location (ADR-0061).
                     Required inputs: paymentIntentId (UUID), terminalId, templateId and templateVersion.
                     Emits an INVOICE_RECEIPT_GENERATE event and stores the receipt in GENERATED status with a zero \
                     reprint count; the receipt also becomes a downloadable artifact of the invoice.
                     Returns 201 with the receipt reference, 404 when the invoice or payment intent does not exist \
-                    or the intent belongs to a different invoice, and 403 when the GENERATE_RECEIPT authority is \
-                    missing.
+                    or the intent belongs to a different invoice, and 403 when invoice:receipt:generate is missing \
+                    or the invoice's location is outside the caller's reach.
                     """)
     @ApiResponse(responseCode = "201", description = "Receipt generated")
     @ApiResponse(
@@ -132,14 +134,21 @@ public class ReceiptController {
                     Use this tool when a customer needs a duplicate copy; do not use generateReceipt, which creates \
                     a new receipt for a payment that has none yet.
                     Preconditions: the receipt must exist, and its reprint count must be below 5 unless the caller \
-                    holds the SUPERVISOR_OVERRIDE authority.
+                    holds the invoice:receipt:reprint_override authority for the receipt's invoice location \
+                    (ADR-0061).
                     Required inputs: receiptId (UUID) as a path parameter and a non-blank reason in the body.
                     Emits an INVOICE_RECEIPT_REPRINT event and updates the receipt's reprint count, last reprint \
                     reason and last reprinted-by.
-                    Returns 200 with the receipt, 404 when the receipt does not exist, and 409 when the reprint \
-                    limit of 5 is exceeded without a supervisor override.
+                    Returns 200 with the receipt, 403 when the reprint limit is exceeded and the caller's \
+                    invoice:receipt:reprint_override does not reach the receipt's invoice location, 404 when the \
+                    receipt does not exist, and 409 when the reprint limit of 5 is exceeded without a supervisor \
+                    override.
                     """)
     @ApiResponse(responseCode = "200", description = "Receipt reprinted")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Reprint-limit override does not reach this invoice's location",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Receipt not found",

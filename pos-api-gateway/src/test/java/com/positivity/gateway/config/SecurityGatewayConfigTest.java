@@ -1613,13 +1613,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 90")
+    @DisplayName("CATALOG_VERSION is 92")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(90);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(92);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 533")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 541")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1934,8 +1934,20 @@ class SecurityGatewayConfigTest {
         // carries no permission of its own (bits 534-535)
         assertThat(GatewayPermissionCatalog.authorityForBit(534)).isEqualTo("PERM_people:jobRole:manage");
         assertThat(GatewayPermissionCatalog.authorityForBit(535)).isEqualTo("PERM_people:jobRole:view");
+        // catalog v91 (#2226, BILL-DEC-008): the VOID_PAYMENT/REFUND_PAYMENT/GENERATE_RECEIPT/
+        // ISSUE_MANUAL_REFUND raw authorities promoted into the catalog (bits 536-539)
+        assertThat(GatewayPermissionCatalog.authorityForBit(536)).isEqualTo("PERM_invoice:payment:refund");
+        assertThat(GatewayPermissionCatalog.authorityForBit(537)).isEqualTo("PERM_invoice:payment:void");
+        assertThat(GatewayPermissionCatalog.authorityForBit(538)).isEqualTo("PERM_invoice:receipt:generate");
+        assertThat(GatewayPermissionCatalog.authorityForBit(539)).isEqualTo("PERM_invoice:refund:issue_manual");
+        // catalog v92 (#2226, BILL-DEC-010): the void/refund-window and reprint-cap overrides,
+        // hand-assigned because both are enforced only via an in-body
+        // SecurityContextHelper.hasAuthority check and never a @PreAuthorize annotation (bits
+        // 540-541)
+        assertThat(GatewayPermissionCatalog.authorityForBit(540)).isEqualTo("PERM_invoice:payment:override");
+        assertThat(GatewayPermissionCatalog.authorityForBit(541)).isEqualTo("PERM_invoice:receipt:reprint_override");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(536)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(542)).isNull();
     }
 
     @Test

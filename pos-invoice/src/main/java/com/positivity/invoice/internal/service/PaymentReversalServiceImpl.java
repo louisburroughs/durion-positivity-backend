@@ -21,6 +21,7 @@ import com.positivity.invoice.internal.payment.PaymentGatewayPort;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.repository.RefundRecordRepository;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -38,10 +39,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class PaymentReversalServiceImpl implements PaymentReversalService {
 
-    private static final String VOID_PAYMENT = "VOID_PAYMENT";
-    private static final String REFUND_PAYMENT = "REFUND_PAYMENT";
-    private static final String ISSUE_MANUAL_REFUND = "ISSUE_MANUAL_REFUND";
-    private static final String SUPERVISOR_OVERRIDE = "SUPERVISOR_OVERRIDE";
     private static final long VOID_WINDOW_HOURS = 24L;
     private static final long REFUND_WINDOW_DAYS = 180L;
 
@@ -73,13 +70,26 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         }
     }
 
+    /**
+     * ADR-0061 §3 (#2226): gates a payment/refund mutation on the location of the invoice the
+     * payment intent (or standalone refund) belongs to, mirroring the read-side scope check in
+     * {@code InvoiceServiceImpl.loadInvoiceDetail}. An invoice without a location answers ""
+     * which a scoped caller cannot cover (fail closed); an unscoped or pre-rollout caller is
+     * unchanged.
+     */
+    private static void requireLocationInReach(@NonNull String permission, @Nullable Invoice invoice) {
+        UUID invoiceLocation = invoice == null ? null : invoice.getLocationId();
+        SecurityContextHelper.locationScope()
+                .require(permission, invoiceLocation == null ? "" : invoiceLocation.toString());
+    }
+
     @Override
     public void voidPayment(
             @NonNull UUID invoiceId,
             @NonNull UUID paymentIntentId,
             @NonNull VoidReason reason,
             @Nullable String notes) {
-        requireAuthority(VOID_PAYMENT);
+        requireAuthority(InvoicePermissions.PAYMENT_VOID);
         PaymentIntent paymentIntent = paymentIntentRepository
                 .findById(paymentIntentId)
                 .orElseThrow(() -> new PaymentIntentNotFoundException("PaymentIntent not found: " + paymentIntentId));
@@ -89,6 +99,10 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             throw new PaymentIntentNotFoundException("PaymentIntent not found for invoice: " + invoiceId);
         }
 
+        // ADR-0061 §3 (#2226): scope check lives here, after the existence check, so a denial
+        // cannot be used to probe which payment intent ids exist.
+        requireLocationInReach(InvoicePermissions.PAYMENT_VOID, paymentIntent.getInvoice());
+
         if (paymentIntent.getStatus() != PaymentIntentStatus.AUTHORIZED) {
             throw new InvalidPaymentStateException(
                     "Payment must be AUTHORIZED to void, current: " + paymentIntent.getStatus());
@@ -97,8 +111,21 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         Instant authorizedAt = paymentIntent.getCreatedAt();
         if (authorizedAt != null) {
             Instant windowCutoff = Instant.now(clock).minus(VOID_WINDOW_HOURS, ChronoUnit.HOURS);
-            if (authorizedAt.isBefore(windowCutoff) && !SecurityContextHelper.hasAuthority(SUPERVISOR_OVERRIDE)) {
-                throw new PaymentWindowExpiredException("Void window expired");
+            if (authorizedAt.isBefore(windowCutoff)) {
+                // ADR-0061 §3 (#2226, BILL-DEC-010): the override is itself location-bound like
+                // every other elevation, so a holder scoped away from this invoice is denied
+                // before the authority check runs — mirrors ReceiptServiceImpl's reprint-cap
+                // override gate. A caller who does not hold PAYMENT_OVERRIDE at all takes no
+                // scope decision here (LocationScope#require is a no-op for an alternate not
+                // held) and falls straight into the authority check below.
+                UUID voidLocation = paymentIntent.getInvoice().getLocationId();
+                SecurityContextHelper.locationScope()
+                        .require(
+                                InvoicePermissions.PAYMENT_OVERRIDE,
+                                voidLocation == null ? "" : voidLocation.toString());
+                if (!SecurityContextHelper.hasAuthority(InvoicePermissions.PAYMENT_OVERRIDE)) {
+                    throw new PaymentWindowExpiredException("Void window expired");
+                }
             }
         }
 
@@ -124,8 +151,11 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             @NonNull RefundReason reason,
             @Nullable String notes,
             @Nullable String externalReference) {
-        requireAuthority(REFUND_PAYMENT);
+        requireAuthority(InvoicePermissions.PAYMENT_REFUND);
         PaymentIntent paymentIntent = resolveCapturedPaymentIntent(invoiceId, paymentIntentId);
+
+        // ADR-0061 §3 (#2226): after the existence/status check above, before any refund logic.
+        requireLocationInReach(InvoicePermissions.PAYMENT_REFUND, paymentIntent.getInvoice());
 
         List<RefundRecord> existingRefunds = refundRecordRepository.findByPaymentIntent_Id(paymentIntentId);
 
@@ -201,8 +231,17 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             return;
         }
         Instant windowCutoff = Instant.now(clock).minus(REFUND_WINDOW_DAYS, ChronoUnit.DAYS);
-        if (capturedAt.isBefore(windowCutoff) && !SecurityContextHelper.hasAuthority(SUPERVISOR_OVERRIDE)) {
-            throw new PaymentWindowExpiredException("Refund window of 180 days has expired");
+        if (capturedAt.isBefore(windowCutoff)) {
+            // ADR-0061 §3 (#2226, BILL-DEC-010): same location-bound gate as the void window
+            // override above and ReceiptServiceImpl's reprint-cap override.
+            UUID refundLocation = paymentIntent.getInvoice().getLocationId();
+            SecurityContextHelper.locationScope()
+                    .require(
+                            InvoicePermissions.PAYMENT_OVERRIDE,
+                            refundLocation == null ? "" : refundLocation.toString());
+            if (!SecurityContextHelper.hasAuthority(InvoicePermissions.PAYMENT_OVERRIDE)) {
+                throw new PaymentWindowExpiredException("Refund window of 180 days has expired");
+            }
         }
     }
 
@@ -261,9 +300,12 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             @NonNull RefundReason reason,
             @Nullable String notes,
             @Nullable String externalReference) {
-        requireAuthority(ISSUE_MANUAL_REFUND);
+        requireAuthority(InvoicePermissions.REFUND_ISSUE_MANUAL);
         Invoice invoice =
                 invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+
+        // ADR-0061 §3 (#2226): after the existence check, before any refund logic.
+        requireLocationInReach(InvoicePermissions.REFUND_ISSUE_MANUAL, invoice);
 
         List<RefundRecord> existingRefunds = refundRecordRepository.findByInvoice_Id(invoiceId);
         String normalizedReference = normalizeExternalReference(externalReference);
@@ -295,7 +337,10 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             @NonNull RefundReason reason,
             @Nullable String notes,
             @Nullable String externalReference) {
-        requireAuthority(ISSUE_MANUAL_REFUND);
+        requireAuthority(InvoicePermissions.REFUND_ISSUE_MANUAL);
+        // No invoice anchor here, so no location to scope on (#2226): the party is not tied to a
+        // location, and the finance-only invoice:refund:issue_manual authority is the entire
+        // access control for this endpoint (location-scope.yaml records this as unscoped).
         // #1694 (d): defensive invariant, not reachable via HTTP — StandaloneRefundController's
         // PartyStandaloneRefundRequest.partyId already carries @NotBlank, so a blank value is
         // rejected by bean validation (400) before this method ever runs. Left as a bare

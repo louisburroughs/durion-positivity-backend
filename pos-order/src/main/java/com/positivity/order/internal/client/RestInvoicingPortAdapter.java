@@ -77,7 +77,7 @@ public class RestInvoicingPortAdapter implements InvoicingPort {
                     .header(GatewaySecurityConstants.HEADER_USER, SERVICE_USER)
                     .header(
                             GatewaySecurityConstants.HEADER_AUTHORITIES,
-                            "invoice:manage," + (isVoid ? "VOID_PAYMENT" : "REFUND_PAYMENT"))
+                            "invoice:manage," + (isVoid ? "invoice:payment:void" : "invoice:payment:refund"))
                     .body(body)
                     .retrieve()
                     .toBodilessEntity();

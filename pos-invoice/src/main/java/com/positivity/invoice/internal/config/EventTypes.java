@@ -114,6 +114,18 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** #2226/#2215: full read view of an invoice's payment intents for the refundable-balance ruling. */
+    public static final EventTypeRegistration INVOICE_PAYMENT_LIST = EventTypeRegistration.fastRead(
+                    "INVOICE_PAYMENT_LIST", "List all payment intents raised against an invoice")
+            .apiVersion("1")
+            .build();
+
+    /** #2226/#2215: full detail read of a single payment intent, including the refundable balance. */
+    public static final EventTypeRegistration INVOICE_PAYMENT_VIEW = EventTypeRegistration.fastRead(
+                    "INVOICE_PAYMENT_VIEW", "View a single payment intent's full detail")
+            .apiVersion("1")
+            .build();
+
     // ==================== STORY #8 — VOID/REFUND EVENTS ====================
 
     public static final EventTypeRegistration INVOICE_PAYMENT_VOID = EventTypeRegistration.write(
@@ -219,6 +231,8 @@ public final class EventTypes {
                 INVOICE_DRAFT_REVERT,
                 INVOICE_PAYMENT_INITIATE,
                 INVOICE_PAYMENT_CAPTURE,
+                INVOICE_PAYMENT_LIST,
+                INVOICE_PAYMENT_VIEW,
                 INVOICE_PAYMENT_VOID,
                 INVOICE_PAYMENT_REFUND,
                 INVOICE_REFUND_LIST,

@@ -1006,13 +1006,25 @@ public enum PermissionCode {
     WORKORDER__POSITION__ASSIGN(533, "workorder:position:assign"),
     // ── People (new) ───────────────────────────────────────────────────────────
     PEOPLE__JOBROLE__MANAGE(534, "people:jobRole:manage"),
-    PEOPLE__JOBROLE__VIEW(535, "people:jobRole:view");
+    PEOPLE__JOBROLE__VIEW(535, "people:jobRole:view"),
+    // ── Invoice (new) ──────────────────────────────────────────────────────────
+    INVOICE__PAYMENT__REFUND(536, "invoice:payment:refund"),
+    INVOICE__PAYMENT__VOID(537, "invoice:payment:void"),
+    INVOICE__RECEIPT__GENERATE(538, "invoice:receipt:generate"),
+    INVOICE__REFUND__ISSUE_MANUAL(539, "invoice:refund:issue_manual"),
+    // #2226 (BILL-DEC-010): elevation permissions enforced only via an in-body
+    // SecurityContextHelper.hasAuthority check (PaymentReversalServiceImpl /
+    // ReceiptServiceImpl), never a @PreAuthorize annotation, so scripts/generate-permissions.sh
+    // --sync cannot discover them by scanning annotations (it scans @PreAuthorize only) — hand
+    // assigned here immediately after the batch --sync just registered, exactly as it would have.
+    INVOICE__PAYMENT__OVERRIDE(540, "invoice:payment:override"),
+    INVOICE__RECEIPT__REPRINT_OVERRIDE(541, "invoice:receipt:reprint_override");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 90;
+    public static final int CATALOG_VERSION = 92;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

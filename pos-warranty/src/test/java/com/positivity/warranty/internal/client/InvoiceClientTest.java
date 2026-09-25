@@ -147,9 +147,10 @@ class InvoiceClientTest {
     void createRefundReturnsRefundIdOnSuccess() {
         server.expect(requestTo(BASE + "/" + INVOICE_ID + "/payments/" + PAYMENT_ID + "/refunds"))
                 .andExpect(method(HttpMethod.POST))
-                // pos-invoice's refund service enforces REFUND_PAYMENT plus SUPERVISOR_OVERRIDE
-                // for payments outside its 180-day window (typical for warranty claims).
-                .andExpect(header("X-Authorities", "invoice:manage,REFUND_PAYMENT,SUPERVISOR_OVERRIDE"))
+                // pos-invoice's refund service enforces invoice:payment:refund plus
+                // invoice:payment:override for payments outside its 180-day window (typical for
+                // warranty claims).
+                .andExpect(header("X-Authorities", "invoice:manage,invoice:payment:refund,invoice:payment:override"))
                 .andExpect(jsonPath("$.reason").value("OTHER"))
                 .andExpect(jsonPath("$.externalReference").value("WC-2026-000077"))
                 .andRespond(withSuccess(

@@ -131,7 +131,7 @@ class RestInvoicingPortAdapterTest {
         server.expect(requestTo(
                         "http://invoice/v1/invoices/%s/payments/%s/void".formatted(INVOICE_ID, PAYMENT_INTENT_ID)))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(header("X-Authorities", "invoice:manage,VOID_PAYMENT"))
+                .andExpect(header("X-Authorities", "invoice:manage,invoice:payment:void"))
                 .andExpect(jsonPath("$.reason").value("CUSTOMER_REQUEST"))
                 // No funds were captured, so there is no amount to return.
                 .andExpect(jsonPath("$.amount").doesNotExist())
@@ -149,7 +149,7 @@ class RestInvoicingPortAdapterTest {
     void refundsPayment() {
         server.expect(requestTo(
                         "http://invoice/v1/invoices/%s/payments/%s/refunds".formatted(INVOICE_ID, PAYMENT_INTENT_ID)))
-                .andExpect(header("X-Authorities", "invoice:manage,REFUND_PAYMENT"))
+                .andExpect(header("X-Authorities", "invoice:manage,invoice:payment:refund"))
                 .andExpect(jsonPath("$.amount").value(40.00))
                 .andExpect(jsonPath("$.reason").value("CUSTOMER_RETURN"))
                 // The key is what stops a saga retry refunding twice.

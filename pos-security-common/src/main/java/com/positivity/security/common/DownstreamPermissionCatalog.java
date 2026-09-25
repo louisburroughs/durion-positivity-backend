@@ -23,7 +23,7 @@ public final class DownstreamPermissionCatalog {
      * {@code PermissionCode.CATALOG_VERSION}.
      * Updated automatically by {@code scripts/generate-permissions.py --sync}.
      */
-    public static final int CATALOG_VERSION = 90;
+    public static final int CATALOG_VERSION = 92;
 
     /**
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
@@ -727,7 +727,20 @@ public final class DownstreamPermissionCatalog {
 
         // ── New batch (bits 534–535) ──────────────────────────────────────────
         "PERM_people:jobRole:manage", // 534
-        "PERM_people:jobRole:view" // 535
+        "PERM_people:jobRole:view", // 535
+
+        // ── New batch (bits 536–539) ──────────────────────────────────────────
+        "PERM_invoice:payment:refund", // 536
+        "PERM_invoice:payment:void", // 537
+        "PERM_invoice:receipt:generate", // 538
+        "PERM_invoice:refund:issue_manual", // 539
+
+        // ── New batch (bits 540–541): #2226 elevation permissions, hand-assigned because
+        // scripts/generate-permissions.sh --sync only discovers permissions named in a
+        // @PreAuthorize annotation, and these two are enforced only via an in-body
+        // SecurityContextHelper.hasAuthority check ──────────────────────────────
+        "PERM_invoice:payment:override", // 540
+        "PERM_invoice:receipt:reprint_override" // 541
     };
 
     public static String authorityForBit(int bitIndex) {

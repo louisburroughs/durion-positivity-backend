@@ -6,6 +6,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.RefundPaymentResponse;
 import com.positivity.invoice.internal.enums.RefundReason;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.PaymentReversalService;
 import com.positivity.invoice.internal.service.RefundPaymentResult;
 import com.positivity.shared.error.ApiError;
@@ -38,8 +39,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>Covers cases where the original payment is not in the system: walk-in warranty claims on
  * sales from a predecessor system, pre-deploy invoices, vendor-paid scenarios. The refund is
  * anchored to the invoice when one exists, or directly to the customer party otherwise, and is
- * disbursed out of band (till, check, vendor payment). The service layer gates both endpoints
- * with the finance-only {@code ISSUE_MANUAL_REFUND} authority.
+ * disbursed out of band (till, check, vendor payment). Both endpoints are gated with the
+ * finance-only {@code invoice:refund:issue_manual} authority (#2226).
  */
 @RestController
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
@@ -55,6 +56,7 @@ public class StandaloneRefundController {
     }
 
     @PostMapping("/invoices/{invoiceId}/refunds")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.REFUND_ISSUE_MANUAL + "')")
     @EmitEvent(id = "INVOICE_STANDALONE_REFUND", apiVersion = "1")
     @Operation(
             operationId = "createStandaloneInvoiceRefund",
@@ -66,16 +68,18 @@ public class StandaloneRefundController {
                     Use this tool only when no captured payment intent exists to refund; do not use refundPayment, \
                     which reverses a CAPTURED gateway payment, and use createStandalonePartyRefund instead when no \
                     invoice is on file at all.
-                    Preconditions: the invoice must exist, the caller needs the finance-only ISSUE_MANUAL_REFUND \
-                    authority, and cumulative refunds across payment-anchored and standalone records may not exceed \
-                    the invoice total.
+                    Preconditions: the invoice must exist, the caller needs the finance-only \
+                    invoice:refund:issue_manual authority (scoped to the invoice's location, ADR-0061), and \
+                    cumulative refunds across payment-anchored and standalone records may not exceed the invoice \
+                    total.
                     Required inputs: amount (positive) and reason (a RefundReason such as CUSTOMER_RETURN); notes \
                     and externalReference are optional, and a retry replaying the same externalReference returns \
                     the existing record instead of double-recording.
                     Emits an INVOICE_STANDALONE_REFUND event and stores a COMPLETED refund record anchored to the \
                     invoice; no gateway call is made.
-                    Returns 201 with the refund record, 404 when the invoice does not exist, and 422 when the \
-                    amount exceeds the invoice's remaining refundable balance.
+                    Returns 201 with the refund record, 403 when invoice:refund:issue_manual is missing or the \
+                    invoice's location is outside the caller's reach, 404 when the invoice does not exist, and 422 \
+                    when the amount exceeds the invoice's remaining refundable balance.
                     """)
     @ApiResponse(responseCode = "201", description = "Refund recorded")
     @ApiResponse(
@@ -109,6 +113,7 @@ public class StandaloneRefundController {
     }
 
     @PostMapping("/refunds")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.REFUND_ISSUE_MANUAL + "')")
     @EmitEvent(id = "INVOICE_PARTY_STANDALONE_REFUND", apiVersion = "1")
     @Operation(
             operationId = "createStandalonePartyRefund",
@@ -119,14 +124,15 @@ public class StandaloneRefundController {
                     itself happens out of band.
                     Use this tool only when there is no invoice to anchor to; use createStandaloneInvoiceRefund \
                     instead when an invoice is on file, and refundPayment when the captured payment itself exists.
-                    Preconditions: the caller needs the finance-only ISSUE_MANUAL_REFUND authority; because there is \
-                    no invoice, no refundable-amount cap applies.
+                    Preconditions: the caller needs the finance-only invoice:refund:issue_manual authority; \
+                    because there is no invoice, no location scope or refundable-amount cap applies.
                     Required inputs: partyId (non-blank, max 64 characters), amount (positive) and reason (a \
                     RefundReason); notes and externalReference are optional, and a retry replaying the same \
                     externalReference among the party's purely party-anchored records returns the existing record.
                     Emits an INVOICE_PARTY_STANDALONE_REFUND event and stores a COMPLETED refund record anchored to \
                     the party; no gateway call is made.
-                    Returns 201 with the refund record, and 400 when partyId is blank.
+                    Returns 201 with the refund record, 400 when partyId is blank, and 403 when \
+                    invoice:refund:issue_manual is missing.
                     """)
     @ApiResponse(responseCode = "201", description = "Refund recorded")
     @ApiResponse(
