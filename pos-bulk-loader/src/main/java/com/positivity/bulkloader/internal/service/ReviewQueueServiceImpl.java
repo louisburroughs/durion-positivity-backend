@@ -89,6 +89,8 @@ public class ReviewQueueServiceImpl implements ReviewQueueService {
                 .build();
     }
 
+    private static final String DEFAULT_REJECTION_REASON = "Record was rejected during correction processing";
+
     @Override
     @Transactional
     public CorrectionResultDto submitSingleCorrection(
@@ -99,12 +101,32 @@ public class ReviewQueueServiceImpl implements ReviewQueueService {
         BulkCorrectionResponse response = submitCorrections(jobId, singleRequest, operatorId);
         CorrectionStatus status =
                 response.getAcceptedCount() > 0 ? CorrectionStatus.ACCEPTED : CorrectionStatus.REJECTED;
-        return CorrectionResultDto.builder()
+
+        CorrectionResultDto.CorrectionResultDtoBuilder result = CorrectionResultDto.builder()
                 .auditRecordId(item.getAuditRecordId())
                 .status(status)
-                .rejectionReason(
-                        status == CorrectionStatus.REJECTED ? "Record was rejected during correction processing" : null)
-                .build();
+                .rejectionReason(status == CorrectionStatus.REJECTED ? firstRejectionReason(response) : null);
+
+        auditRepository
+                .findById(item.getAuditRecordId())
+                .ifPresent(audit -> result.entityType(audit.getEntityType())
+                        .entityId(audit.getEntityId())
+                        .rowNumber(audit.getRowNumber())
+                        .reviewStatus(audit.getReviewStatus())
+                        .reasonCodes(audit.getReasonCodes())
+                        .originalValues(audit.getOriginalValues())
+                        .correctedValues(audit.getCorrectedValues())
+                        .createdAt(audit.getCreatedAt()));
+
+        return result.build();
+    }
+
+    private String firstRejectionReason(BulkCorrectionResponse response) {
+        List<String> rejections = response.getRejections();
+        if (rejections != null && !rejections.isEmpty()) {
+            return rejections.get(0);
+        }
+        return DEFAULT_REJECTION_REASON;
     }
 
     @Override

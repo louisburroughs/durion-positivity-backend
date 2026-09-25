@@ -238,6 +238,14 @@ class ReviewQueueControllerTest {
         CorrectionResultDto result = CorrectionResultDto.builder()
                 .auditRecordId(AUDIT_ID)
                 .status(CorrectionStatus.ACCEPTED)
+                .entityType("PRODUCT")
+                .entityId(AUDIT_ID)
+                .rowNumber(1L)
+                .reviewStatus(ReviewStatus.CORRECTED)
+                .reasonCodes("[\"MISSING_REQUIRED_FIELD\"]")
+                .originalValues("{\"sku\": \"\"}")
+                .correctedValues("{\"sku\": \"PROD-001\"}")
+                .createdAt(java.time.Instant.parse("2026-01-15T09:30:00Z"))
                 .build();
 
         when(reviewQueueService.submitSingleCorrection(eq(JOB_ID), any(), eq("test-operator")))
@@ -247,7 +255,15 @@ class ReviewQueueControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(item)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("ACCEPTED"));
+                .andExpect(jsonPath("$.status").value("ACCEPTED"))
+                .andExpect(jsonPath("$.entityType").value("PRODUCT"))
+                .andExpect(jsonPath("$.entityId").value(AUDIT_ID.toString()))
+                .andExpect(jsonPath("$.rowNumber").value(1))
+                .andExpect(jsonPath("$.reviewStatus").value("CORRECTED"))
+                .andExpect(jsonPath("$.reasonCodes").value("[\"MISSING_REQUIRED_FIELD\"]"))
+                .andExpect(jsonPath("$.originalValues").value("{\"sku\": \"\"}"))
+                .andExpect(jsonPath("$.correctedValues").value("{\"sku\": \"PROD-001\"}"))
+                .andExpect(jsonPath("$.createdAt").exists());
     }
 
     @Test

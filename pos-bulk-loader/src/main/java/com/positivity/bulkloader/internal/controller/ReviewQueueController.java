@@ -184,9 +184,13 @@ public class ReviewQueueController {
                     Emits a BULK_LOADER_CORRECTION_SUBMIT_SINGLE event and stores the corrected values on the audit \
                     record, setting its review status to CORRECTED when accepted; correcting a record does not \
                     re-run the import.
-                    Returns 201 with status ACCEPTED or REJECTED plus a rejectionReason when rejected, 409 when the \
-                    job is not in FAILED state, 404 when the job does not exist, and 403 when it belongs to another \
-                    operator.
+                    Returns 201 with status ACCEPTED or REJECTED plus a rejectionReason when rejected. The response \
+                    also carries the corrected audit record (entityType, entityId, rowNumber, reviewStatus, \
+                    reasonCodes, originalValues, correctedValues and createdAt) so callers can update their review \
+                    queue view without a follow-up fetch; these fields are omitted when the audit record can no \
+                    longer be reloaded.
+                    Returns 409 when the job is not in FAILED state, 404 when the job does not exist, and 403 when \
+                    it belongs to another operator.
                     """)
     @ApiResponse(
             responseCode = "201",

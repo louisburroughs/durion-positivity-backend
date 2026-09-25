@@ -222,6 +222,75 @@ class ReviewQueueServiceImplTest {
                 .isInstanceOf(JobOwnershipViolationException.class);
     }
 
+    // ─── submitSingleCorrection ─────────────────────────────────────────────
+
+    @Test
+    void submitSingleCorrection_whenAccepted_populatesReloadedRecordFields() {
+        BulkLoadJob job = bulkLoadJob(JOB_ID, OPERATOR_ID, JobStatus.FAILED);
+        BulkLoadRecordAudit audit = auditRecord(AUDIT_ID, JOB_ID);
+        BulkCorrectionItem item = BulkCorrectionItem.builder()
+                .auditRecordId(AUDIT_ID)
+                .correctedData(Map.of("sku", "PROD-001"))
+                .build();
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(auditRepository.findById(AUDIT_ID)).thenReturn(Optional.of(audit));
+        when(auditRepository.save(any(BulkLoadRecordAudit.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.submitSingleCorrection(JOB_ID, item, OPERATOR_ID);
+
+        assertThat(result.getAuditRecordId()).isEqualTo(AUDIT_ID);
+        assertThat(result.getStatus().name()).isEqualTo("ACCEPTED");
+        assertThat(result.getRejectionReason()).isNull();
+        assertThat(result.getEntityType()).isEqualTo("PRODUCT");
+        assertThat(result.getRowNumber()).isEqualTo(1L);
+        // audit.save mutates in place, so the reloaded copy reflects the correction just applied
+        assertThat(result.getReviewStatus()).isEqualTo(ReviewStatus.CORRECTED);
+        assertThat(result.getCorrectedValues()).contains("sku");
+    }
+
+    @Test
+    void submitSingleCorrection_whenRejected_surfacesActualRejectionMessage() {
+        UUID otherJobId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        BulkLoadJob job = bulkLoadJob(JOB_ID, OPERATOR_ID, JobStatus.FAILED);
+        BulkLoadRecordAudit audit = auditRecord(AUDIT_ID, otherJobId);
+        BulkCorrectionItem item = BulkCorrectionItem.builder()
+                .auditRecordId(AUDIT_ID)
+                .correctedData(Map.of("sku", "PROD-001"))
+                .build();
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(auditRepository.findById(AUDIT_ID)).thenReturn(Optional.of(audit));
+
+        var result = service.submitSingleCorrection(JOB_ID, item, OPERATOR_ID);
+
+        assertThat(result.getStatus().name()).isEqualTo("REJECTED");
+        assertThat(result.getRejectionReason())
+                .contains("Audit record not found or does not belong to this job")
+                .contains(AUDIT_ID.toString());
+    }
+
+    @Test
+    void submitSingleCorrection_whenAuditCannotBeReloaded_leavesRecordFieldsNull() {
+        BulkLoadJob job = bulkLoadJob(JOB_ID, OPERATOR_ID, JobStatus.FAILED);
+        BulkCorrectionItem item = BulkCorrectionItem.builder()
+                .auditRecordId(AUDIT_ID)
+                .correctedData(Map.of("sku", "PROD-001"))
+                .build();
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(auditRepository.findById(AUDIT_ID)).thenReturn(Optional.empty());
+
+        var result = service.submitSingleCorrection(JOB_ID, item, OPERATOR_ID);
+
+        assertThat(result.getStatus().name()).isEqualTo("REJECTED");
+        assertThat(result.getRejectionReason()).contains("not found");
+        assertThat(result.getEntityType()).isNull();
+        assertThat(result.getRowNumber()).isNull();
+        assertThat(result.getReviewStatus()).isNull();
+        assertThat(result.getCreatedAt()).isNull();
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────
 
     private BulkLoadJob bulkLoadJob(UUID id, String operatorId, JobStatus status) {
