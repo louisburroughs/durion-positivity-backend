@@ -8,6 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.invoice.internal.dto.ReceiptViewResponse;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
@@ -21,16 +22,24 @@ import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.repository.ReceiptRepository;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationAncestorResolver;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -120,6 +129,20 @@ class ReceiptServiceImplTest {
                 List.of(authorities).stream().map(SimpleGrantedAuthority::new).toList();
         var auth = new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants);
         auth.setDetails(java.util.Map.of(GatewaySecurityConstants.DETAIL_USERNAME, CASHIER_ID));
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    /**
+     * Sets up the security context with the given location scope on top of GENERATE_RECEIPT and
+     * invoice:invoice:view, for the getReceipt location-scope tests (#2214, ADR-0061 §3).
+     */
+    private void withLocationScope(LocationScope scope) {
+        var grants = List.of(
+                new SimpleGrantedAuthority("GENERATE_RECEIPT"), new SimpleGrantedAuthority(InvoicePermissions.VIEW));
+        var auth = new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants);
+        auth.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME, CASHIER_ID,
+                GatewaySecurityConstants.DETAIL_LOCATION_SCOPE, scope));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
@@ -477,14 +500,89 @@ class ReceiptServiceImplTest {
                 .hasMessageContaining(RECEIPT_ID.toString());
     }
 
+    @Nested
+    @DisplayName("getReceipt location scope (ADR-0061 §3, #1872 pattern applied to #2214)")
+    class GetReceiptLocationScope {
+
+        @Test
+        @DisplayName("receipt's invoice location out of reach: LocationScopeDeniedException, no view returned")
+        void outOfReach_denies() {
+            withLocationScope(viewScopedTo(OTHER_SHOP));
+            var receipt = buildFullReceipt();
+            when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID))
+                    .thenReturn(Optional.of(receipt));
+
+            assertThatThrownBy(() -> receiptServiceImpl.getReceipt(INVOICE_ID, RECEIPT_ID))
+                    .isInstanceOf(LocationScopeDeniedException.class)
+                    .asInstanceOf(
+                            org.assertj.core.api.InstanceOfAssertFactories.type(LocationScopeDeniedException.class))
+                    .satisfies(denied -> {
+                        assertThat(denied.permission()).isEqualTo(InvoicePermissions.VIEW);
+                        assertThat(denied.locationId()).isEqualTo(RECEIPT_LOCATION_ID.toString());
+                    });
+        }
+
+        @Test
+        @DisplayName("receipt's invoice location in reach: full view is returned")
+        void inReach_returnsView() {
+            withLocationScope(viewScopedTo(REGION_NODE));
+            var receipt = buildFullReceipt();
+            when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID))
+                    .thenReturn(Optional.of(receipt));
+
+            ReceiptViewResponse view = receiptServiceImpl.getReceipt(INVOICE_ID, RECEIPT_ID);
+
+            assertThat(view.getReceiptId()).isEqualTo(RECEIPT_ID);
+            assertThat(view.getInvoiceId()).isEqualTo(INVOICE_ID);
+        }
+
+        @Test
+        @DisplayName("pre-rollout token (no loc_* claims): behavior unchanged, full view is returned")
+        void preRolloutToken_unchanged() {
+            withLocationScope(LocationScope.unscoped());
+            var receipt = buildFullReceipt();
+            when(receiptRepository.findByIdAndInvoice_Id(RECEIPT_ID, INVOICE_ID))
+                    .thenReturn(Optional.of(receipt));
+
+            ReceiptViewResponse view = receiptServiceImpl.getReceipt(INVOICE_ID, RECEIPT_ID);
+
+            assertThat(view.getReceiptId()).isEqualTo(RECEIPT_ID);
+            assertThat(view.getInvoiceId()).isEqualTo(INVOICE_ID);
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private static final UUID RECEIPT_LOCATION_ID = UUID.fromString("01960003-0000-7000-8000-000000000001");
+
+    /** The node a scoped caller is assigned: a region above the receipt's invoice location. */
+    private static final UUID REGION_NODE = UUID.fromString("019200aa-0000-7000-8000-00000000a000");
+
+    private static final UUID OTHER_SHOP = UUID.fromString("019200aa-0000-7000-8000-00000000000b");
+
+    /** Replica stand-in for the getReceipt location-scope tests (#2214, mirrors InvoiceServiceImplTest). */
+    private static final LocationAncestorResolver RESOLVER = id -> {
+        if (id.equals(RECEIPT_LOCATION_ID)) {
+            return new AncestorSets(Set.of(id), Set.of(id, REGION_NODE));
+        }
+        if (id.equals(OTHER_SHOP)) {
+            return new AncestorSets(Set.of(id), Set.of(id));
+        }
+        return AncestorSets.EMPTY;
+    };
+
+    /** A caller whose invoice:invoice:view is scoped (OTHER dimension) to the given assigned nodes. */
+    private static LocationScope viewScopedTo(UUID... nodes) {
+        return LocationScope.of(Set.of(), Set.of(InvoicePermissions.VIEW), Optional.of(Set.of(nodes)), true, RESOLVER);
+    }
 
     private Receipt buildFullReceipt() {
         var invoice = new Invoice();
         invoice.setId(INVOICE_ID);
         invoice.setInvoiceNumber(INVOICE_NUMBER);
+        invoice.setLocationId(RECEIPT_LOCATION_ID);
 
         var paymentIntent = new PaymentIntent();
         paymentIntent.setId(PAYMENT_INTENT_ID);
