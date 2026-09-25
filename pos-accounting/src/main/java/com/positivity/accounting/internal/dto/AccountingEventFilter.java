@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.IdempotencyOutcome;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
@@ -35,7 +36,7 @@ public class AccountingEventFilter {
             example = "NEW",
             requiredMode = NOT_REQUIRED)
     @Nullable
-    private String idempotencyOutcome;
+    private IdempotencyOutcome idempotencyOutcome;
 
     @Schema(
             description = "Lower bound (inclusive) for received timestamp (ISO 8601)",

@@ -39,5 +39,32 @@ public enum AccountingEventStatus {
      * retry scheduler and {@code retryAccountingEvent} select only {@link #FAILED} and
      * {@link #SUSPENDED} (issue #2191).
      */
-    SKIPPED
+    SKIPPED;
+
+    /**
+     * Human-readable meaning, published on {@code GET /v1/accounting/events/contract}
+     * (issue #2207). A {@code switch} over every constant is exhaustive by construction: a new
+     * constant added to this enum fails to compile here until it is given a meaning, so the
+     * published contract cannot silently drift from the code.
+     */
+    public String meaning() {
+        return switch (this) {
+            case RECEIVED -> "Event has been received and persisted, awaiting processing.";
+            case PROCESSING -> "Event is currently being processed (journal entry generation in progress).";
+            case PROCESSED ->
+                "Event has been successfully processed; a journal entry was created "
+                        + "(or, for a fact that legitimately posts nothing, none was needed).";
+            case FAILED ->
+                "Event processing failed (mapping not found, validation error, etc.); "
+                        + "retryable via the retry endpoint or the scheduled retry job.";
+            case SUSPENDED ->
+                "Event suspended for manual review/resolution; retryable via the "
+                        + "reprocess endpoint once the underlying mapping or rule gap is fixed.";
+            case SKIPPED ->
+                "Terminal: a Kafka-consumed posting fact deliberately not posted (for "
+                        + "example an uncosted inventory fact, failureReasonCode UNCOSTED_FACT). Not "
+                        + "retryable — the retry scheduler and retryAccountingEvent select only FAILED "
+                        + "and SUSPENDED (issue #2191).";
+        };
+    }
 }

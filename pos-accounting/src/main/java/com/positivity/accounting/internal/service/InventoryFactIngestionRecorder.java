@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.IdempotencyOutcome;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
@@ -51,8 +52,6 @@ import tools.jackson.databind.ObjectMapper;
 public class InventoryFactIngestionRecorder {
 
     static final String SOURCE_SYSTEM = "pos-inventory";
-    static final String OUTCOME_NEW = "NEW";
-    static final String OUTCOME_DUPLICATE_IGNORED = "DUPLICATE_IGNORED";
     private static final String EVENT_REFERENCE_SCOPE_PREFIX = "AE-";
     private static final TypeReference<Map<String, Object>> PAYLOAD_TYPE = new TypeReference<>() {};
 
@@ -80,10 +79,10 @@ public class InventoryFactIngestionRecorder {
         AccountingEvent event = newEvent(eventType, envelopeEventId, domainKeyId, transactionDate, fact);
         event.setStatus(AccountingEventStatus.PROCESSED);
         if (postedJournalEntryId != null) {
-            event.setIdempotencyOutcome(OUTCOME_NEW);
+            event.setIdempotencyOutcome(IdempotencyOutcome.NEW.name());
             event.setJournalEntryId(postedJournalEntryId);
         } else {
-            event.setIdempotencyOutcome(OUTCOME_DUPLICATE_IGNORED);
+            event.setIdempotencyOutcome(IdempotencyOutcome.DUPLICATE_IGNORED.name());
             event.setJournalEntryId(journalEntryRepository.findBySourceEvent(sourceEventId).stream()
                     .map(JournalEntry::getJournalEntryId)
                     .findFirst()
@@ -107,7 +106,7 @@ public class InventoryFactIngestionRecorder {
             @NonNull Object fact) {
         AccountingEvent event = newEvent(eventType, envelopeEventId, domainKeyId, transactionDate, fact);
         event.setStatus(AccountingEventStatus.PROCESSED);
-        event.setIdempotencyOutcome(OUTCOME_NEW);
+        event.setIdempotencyOutcome(IdempotencyOutcome.NEW.name());
         save(event);
     }
 
@@ -121,7 +120,7 @@ public class InventoryFactIngestionRecorder {
             @NonNull String detail) {
         AccountingEvent event = newEvent(eventType, envelopeEventId, domainKeyId, transactionDate, fact);
         event.setStatus(AccountingEventStatus.SKIPPED);
-        event.setIdempotencyOutcome(OUTCOME_NEW);
+        event.setIdempotencyOutcome(IdempotencyOutcome.NEW.name());
         event.setFailureReasonCode(PostingFailureReason.UNCOSTED_FACT.name());
         event.setErrorMessage(detail);
         save(event);

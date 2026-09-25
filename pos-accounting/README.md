@@ -423,6 +423,16 @@ ignored without recording its eventId.
   `eventType=inventory.product-value.changed&domainKeyId=<revaluationId>`).
   **Kafka facts are not REST-retryable**: they never end `FAILED` or `SUSPENDED`, which are the only statuses
   the retry scheduler and `retryAccountingEvent` select; a failed fact is replayed from the DLQ instead.
+- **Event envelope contract** (`GET /v1/accounting/events/contract`, issue #2207) — `version`/`fields`/`examples`
+  describe the submission envelope as before; four additive optional sections document the rest of the
+  ingestion surface, each sourced from the real rules rather than a hand-typed list that could drift:
+  `identifierStrategy` (UUIDv7 everywhere; `eventId` is server-minted unless supplied; `domainKeyId` is an
+  opaque upstream string), `traceabilityIds` (`traceparent`, `X-Correlation-Id`, `eventId`, `eventReference`,
+  `ingestionId`, `journalEntryId`, `domainKeyId`, `invoiceId`, each with where it is carried),
+  `processingStatuses` (every `AccountingEventStatus` constant with its meaning, derived from the enum, plus
+  the two lifecycles above), and `idempotencyOutcomes` (`restSubmission` — content-hash dedup, 24h window,
+  409 `DUPLICATE_EVENT` on a replay — and `factConsumption` — every `IdempotencyOutcome` constant,
+  `NEW`/`DUPLICATE_IGNORED`, derived from that enum).
 
 ## Dependencies
 
