@@ -69,6 +69,14 @@ public class ExtPurchaseOrderLineReplica extends TenantScopedEntity {
     @Column(name = "unit_cost_minor")
     private Long unitCostMinor;
 
+    /**
+     * Base units per unit that {@link #unitCostMinor} prices: the document-UoM factor for a line
+     * keyed in a document UoM, one for a line keyed in base (#2203). Null for a row projected
+     * before pos-order published it; no per-base-unit cost can be derived from such a row.
+     */
+    @Column(name = "conversion_factor", precision = 20, scale = 6)
+    private BigDecimal conversionFactor;
+
     @Column(name = "description")
     private String description;
 

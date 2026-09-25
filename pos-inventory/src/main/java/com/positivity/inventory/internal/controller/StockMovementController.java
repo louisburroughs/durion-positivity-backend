@@ -67,7 +67,10 @@ public class StockMovementController {
                     toLocationId is required for TRANSFER, while unitOfMeasure and sourceTransactionId are \
                     optional.
                     Emits an INVENTORY_STOCK_MOVEMENT_CREATE event and posts the entries through the ledger \
-                    funnel, which updates the stock summary that availability reads.
+                    funnel, which updates the stock summary that availability reads. A RECEIVE carries no \
+                    document cost: it enters at the product's current average cost and leaves that average \
+                    unchanged, so it never gives an uncosted product a cost — receive purchased stock with \
+                    createGoodsReceipt or a receiving session instead, which price it from the purchase order.
                     Returns 201 with no body, 422 with INSUFFICIENT_STOCK when a PICK or ISSUE exceeds on-hand at \
                     the source, 422 with CROSS_SITE_TRANSFER_REQUIRES_ORDER for a cross-site TRANSFER, and 400 \
                     when toLocationId is missing for TRANSFER or movementType is ADJUST.

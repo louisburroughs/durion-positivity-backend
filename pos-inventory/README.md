@@ -207,6 +207,24 @@ method cost: it leaves the running average unchanged under `AVERAGE` and does no
 latest-receipt memo under `STANDARD`. Both paths also queue the `InventoryAvailabilityUpdatedV1` and
 `StorageLocationOnHandUpdatedV1` snapshots for the stock item and location they moved.
 
+### Receipt cost (#2203, ADR-0048 IMP-002)
+
+Every `GOODS_RECEIPT` row carries a document cost per base unit, which the costing engine blends
+into the running average under `AVERAGE` and keeps as the latest-receipt memo under `STANDARD`:
+
+| Receipt path | Document cost |
+| --- | --- |
+| `POST /v1/inventory/goods-receipts` | the line's `unitCostMinor`, divided by the document-UoM conversion factor when one is keyed |
+| Receiving session (receive into staging, cross-dock) | the purchase order line's `unitCostMinor`, divided by the factor the order line was keyed at (`ext_purchase_order_line.conversion_factor`, published by pos-order on `purchaseorder.updated`) |
+| `POST /v1/inventory/stock-movements` `RECEIVE` | none: it enters at the current average and never gives an uncosted SKU a cost |
+
+Minor units become major units by the order currency's ISO 4217 digits (two when unknown), at the
+ledger's `numeric(19,4)` scale. A session line posts without a cost when it cannot be priced: an
+order line projected before pos-order published its factor (until the order's next fact replaces
+it), or a session line opened before `receiving_line.source_line_id` existed whose SKU appears on
+more than one order line. Receipts posted before #2203 stay uncosted (ADR-0048 §3: cost at posting
+time); such a SKU gains a cost from its next priced receipt or from a revaluation.
+
 ## Lot Tracking — Inbound Capture (odoo-parity E1)
 
 Products whose catalog replica (`ext_product.tracking_level`) says `LOT` require a `lotNumber`

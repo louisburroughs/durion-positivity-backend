@@ -20,8 +20,13 @@ import org.jspecify.annotations.Nullable;
  * @param skuId            the stock item ordered; the key every consumer joins on
  * @param orderedQuantity  quantity ordered; fixed once the order is approved
  * @param openQuantity     quantity still outstanding; zero once the line is fully received
- * @param unitCostMinor    unit cost in minor units of the order's currency, when priced
+ * @param unitCostMinor    unit cost in minor units of the order's currency, when priced; it prices
+ *                         one <em>document</em> unit when the line was keyed in a document UoM
  * @param description      line description as ordered, for display
+ * @param conversionFactor base units per unit that {@code unitCostMinor} prices: the document-UoM
+ *                         conversion factor for a line keyed in a document UoM, {@code 1} for a line
+ *                         keyed in base. Null from a publisher that predates it (#2203), and then a
+ *                         consumer cannot derive a per-base-unit cost from {@code unitCostMinor}
  */
 public record PurchaseOrderLine(
         @NonNull UUID lineId,
@@ -30,7 +35,8 @@ public record PurchaseOrderLine(
         @NonNull BigDecimal orderedQuantity,
         @NonNull BigDecimal openQuantity,
         @Nullable Long unitCostMinor,
-        @Nullable String description) {
+        @Nullable String description,
+        @Nullable BigDecimal conversionFactor) {
 
     public PurchaseOrderLine {
         Objects.requireNonNull(lineId, "lineId must not be null");

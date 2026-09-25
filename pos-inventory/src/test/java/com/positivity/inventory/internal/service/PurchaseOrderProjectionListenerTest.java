@@ -111,7 +111,8 @@ class PurchaseOrderProjectionListenerTest {
                     "orderedQuantity": 10,
                     "openQuantity": %s,
                     "unitCostMinor": 5000,
-                    "description": "Front brake rotor"
+                    "description": "Front brake rotor",
+                    "conversionFactor": 12
                   }
                 ]
               }
@@ -138,6 +139,9 @@ class PurchaseOrderProjectionListenerTest {
         assertThat(line.getValue().getOpenQuantity()).isEqualByComparingTo(BigDecimal.valueOf(4));
         // Ordered and open are kept apart: summing ordered would count the six already received.
         assertThat(line.getValue().getOrderedQuantity()).isEqualByComparingTo(BigDecimal.TEN);
+        // What unitCostMinor prices, so a receiving session can cost per base unit (#2203).
+        assertThat(line.getValue().getUnitCostMinor()).isEqualTo(5000L);
+        assertThat(line.getValue().getConversionFactor()).isEqualByComparingTo("12");
     }
 
     @Test

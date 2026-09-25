@@ -133,6 +133,20 @@ public class PurchaseOrderFactPublisher {
                 ordered,
                 open,
                 line.getUnitCostMinor(),
-                line.getDescription());
+                line.getDescription(),
+                costConversionFactor(line));
+    }
+
+    /**
+     * Base units per unit that the line's {@code unitCostMinor} prices (#2203): the recorded
+     * conversion factor when the line was keyed in a document UoM, one when it was keyed in base,
+     * and null when a document UoM was keyed but no factor was recorded — pos-inventory then cannot
+     * turn the price into a per-base-unit receipt cost, and says so rather than guess.
+     */
+    private static BigDecimal costConversionFactor(PurchaseOrderLineEntity line) {
+        if (line.getDocumentUom() == null) {
+            return BigDecimal.ONE;
+        }
+        return line.getConversionFactor();
     }
 }
