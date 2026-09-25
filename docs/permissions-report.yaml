@@ -1,9 +1,9 @@
-generatedAt: "2026-09-25T03:34:07.980149+00:00"
+generatedAt: "2026-09-25T18:18:17.782263+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 500
-  uniquePermissionCount: 500
+  permissionCount: 506
+  uniquePermissionCount: 506
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -491,7 +491,7 @@ manifests:
     domain: "invoice"
     serviceName: "pos-invoice"
     version: "1.0"
-    permissionCount: 6
+    permissionCount: 12
     permissions:
       - name: "invoice:analytics:view"
         description: "View invoice analytics reports (revenue-by-customer, invoicing lag; #1589, #1592)"
@@ -505,6 +505,18 @@ manifests:
         description: "Read invoices, invoice items, deposit credits and invoice-anchored refunds; the read half of invoice:manage, split out so a role can look at an invoice without holding write authority (#1612)"
       - name: "invoice:manage"
         description: "Manage invoice lifecycle operations"
+      - name: "invoice:payment:void"
+        description: "Void an authorized (not yet captured) invoice payment hold (#2226, BILL-DEC-008)"
+      - name: "invoice:payment:refund"
+        description: "Refund a captured invoice payment through the gateway (#2226, BILL-DEC-008)"
+      - name: "invoice:payment:override"
+        description: "Bypass the 24-hour void window and the 180-day refund window on a captured payment (#2226, BILL-DEC-010)"
+      - name: "invoice:receipt:generate"
+        description: "Generate a receipt for an invoice payment (#2226, BILL-DEC-008)"
+      - name: "invoice:receipt:reprint_override"
+        description: "Bypass the 5-reprint cap on an existing receipt (#2226, BILL-DEC-010)"
+      - name: "invoice:refund:issue_manual"
+        description: "Issue a manual out-of-band refund not anchored to a captured payment intent, against an invoice or directly against a customer party (#2226, BILL-DEC-010)"
   - module: "pos-location"
     path: "pos-location/src/main/resources/permissions.yaml"
     domain: "location"
@@ -2504,6 +2516,42 @@ permissions:
     source: "pos-invoice/src/main/resources/permissions.yaml"
   - name: "invoice:manage"
     description: "Manage invoice lifecycle operations"
+    domain: "invoice"
+    serviceName: "pos-invoice"
+    module: "pos-invoice"
+    source: "pos-invoice/src/main/resources/permissions.yaml"
+  - name: "invoice:payment:override"
+    description: "Bypass the 24-hour void window and the 180-day refund window on a captured payment (#2226, BILL-DEC-010)"
+    domain: "invoice"
+    serviceName: "pos-invoice"
+    module: "pos-invoice"
+    source: "pos-invoice/src/main/resources/permissions.yaml"
+  - name: "invoice:payment:refund"
+    description: "Refund a captured invoice payment through the gateway (#2226, BILL-DEC-008)"
+    domain: "invoice"
+    serviceName: "pos-invoice"
+    module: "pos-invoice"
+    source: "pos-invoice/src/main/resources/permissions.yaml"
+  - name: "invoice:payment:void"
+    description: "Void an authorized (not yet captured) invoice payment hold (#2226, BILL-DEC-008)"
+    domain: "invoice"
+    serviceName: "pos-invoice"
+    module: "pos-invoice"
+    source: "pos-invoice/src/main/resources/permissions.yaml"
+  - name: "invoice:receipt:generate"
+    description: "Generate a receipt for an invoice payment (#2226, BILL-DEC-008)"
+    domain: "invoice"
+    serviceName: "pos-invoice"
+    module: "pos-invoice"
+    source: "pos-invoice/src/main/resources/permissions.yaml"
+  - name: "invoice:receipt:reprint_override"
+    description: "Bypass the 5-reprint cap on an existing receipt (#2226, BILL-DEC-010)"
+    domain: "invoice"
+    serviceName: "pos-invoice"
+    module: "pos-invoice"
+    source: "pos-invoice/src/main/resources/permissions.yaml"
+  - name: "invoice:refund:issue_manual"
+    description: "Issue a manual out-of-band refund not anchored to a captured payment intent, against an invoice or directly against a customer party (#2226, BILL-DEC-010)"
     domain: "invoice"
     serviceName: "pos-invoice"
     module: "pos-invoice"

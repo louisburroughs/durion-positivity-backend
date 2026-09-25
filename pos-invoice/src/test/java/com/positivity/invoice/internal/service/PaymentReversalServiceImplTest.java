@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.RefundRecord;
@@ -29,15 +30,24 @@ import com.positivity.invoice.internal.payment.PaymentGatewayPort;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.repository.RefundRecordRepository;
+import com.positivity.invoice.internal.security.InvoicePermissions;
+import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationAncestorResolver;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -115,7 +125,7 @@ class PaymentReversalServiceImplTest {
 
     @BeforeEach
     void seedVoidPaymentAuthority() {
-        withAuthorities("VOID_PAYMENT", "REFUND_PAYMENT");
+        withAuthorities(InvoicePermissions.PAYMENT_VOID, InvoicePermissions.PAYMENT_REFUND);
     }
 
     @AfterEach
@@ -190,7 +200,10 @@ class PaymentReversalServiceImplTest {
      */
     @Test
     void voidPayment_withSupervisorOverride_outsideWindow_succeeds() {
-        withAuthorities("VOID_PAYMENT", "REFUND_PAYMENT", "SUPERVISOR_OVERRIDE");
+        withAuthorities(
+                InvoicePermissions.PAYMENT_VOID,
+                InvoicePermissions.PAYMENT_REFUND,
+                InvoicePermissions.PAYMENT_OVERRIDE);
 
         PaymentIntent pi = authorizedPaymentIntent();
         pi.setCreatedAt(OLD_AUTH); // 48h ago — outside normal window
@@ -213,8 +226,8 @@ class PaymentReversalServiceImplTest {
                 MANAGER_ID.toString(),
                 null,
                 List.of(
-                        new SimpleGrantedAuthority("REFUND_PAYMENT"),
-                        new SimpleGrantedAuthority("SUPERVISOR_OVERRIDE")));
+                        new SimpleGrantedAuthority(InvoicePermissions.PAYMENT_REFUND),
+                        new SimpleGrantedAuthority(InvoicePermissions.PAYMENT_OVERRIDE)));
         SecurityContextHolder.setContext(new SecurityContextImpl(auth));
 
         PaymentIntent captured = capturedPaymentIntent();
@@ -243,7 +256,7 @@ class PaymentReversalServiceImplTest {
      */
     @Test
     void voidPayment_missingPermission_throwsAccessDeniedException() {
-        withAuthorities("REFUND_PAYMENT"); // no VOID_PAYMENT
+        withAuthorities(InvoicePermissions.PAYMENT_REFUND); // no VOID_PAYMENT
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
                         INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null))
@@ -256,7 +269,7 @@ class PaymentReversalServiceImplTest {
     @Test
     void refundPayment_missingPermission_throwsAccessDeniedException() {
         var auth = new UsernamePasswordAuthenticationToken(
-                MANAGER_ID.toString(), null, List.of(new SimpleGrantedAuthority("VOID_PAYMENT")));
+                MANAGER_ID.toString(), null, List.of(new SimpleGrantedAuthority(InvoicePermissions.PAYMENT_VOID)));
         SecurityContextHolder.setContext(new SecurityContextImpl(auth));
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
@@ -797,7 +810,7 @@ class PaymentReversalServiceImplTest {
      */
     @Test
     void refundInvoiceStandalone_success_savesCompletedRecordWithoutGateway() {
-        withAuthorities("ISSUE_MANUAL_REFUND");
+        withAuthorities(InvoicePermissions.REFUND_ISSUE_MANUAL);
         Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(500_00, 2));
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
         when(refundRecordRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of());
@@ -822,7 +835,7 @@ class PaymentReversalServiceImplTest {
     /** Standalone refunds require the finance-only ISSUE_MANUAL_REFUND authority. */
     @Test
     void refundInvoiceStandalone_missingPermission_throwsAccessDeniedException() {
-        withAuthorities("REFUND_PAYMENT"); // captured-payment authority is not enough
+        withAuthorities(InvoicePermissions.PAYMENT_REFUND); // captured-payment authority is not enough
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundInvoiceStandalone(
                         INVOICE_ID, BigDecimal.valueOf(50), RefundReason.OTHER, null, null))
@@ -833,7 +846,7 @@ class PaymentReversalServiceImplTest {
 
     @Test
     void refundInvoiceStandalone_invoiceNotFound_throwsInvoiceNotFoundException() {
-        withAuthorities("ISSUE_MANUAL_REFUND");
+        withAuthorities(InvoicePermissions.REFUND_ISSUE_MANUAL);
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundInvoiceStandalone(
@@ -849,7 +862,7 @@ class PaymentReversalServiceImplTest {
      */
     @Test
     void refundInvoiceStandalone_exceedsInvoiceTotal_throwsInsufficientRefundableAmountException() {
-        withAuthorities("ISSUE_MANUAL_REFUND");
+        withAuthorities(InvoicePermissions.REFUND_ISSUE_MANUAL);
         Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(500_00, 2));
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
 
@@ -871,7 +884,7 @@ class PaymentReversalServiceImplTest {
      */
     @Test
     void refundInvoiceStandalone_replaySameExternalReference_returnsExistingRecord() {
-        withAuthorities("ISSUE_MANUAL_REFUND");
+        withAuthorities(InvoicePermissions.REFUND_ISSUE_MANUAL);
         Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(500_00, 2));
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
 
@@ -896,7 +909,7 @@ class PaymentReversalServiceImplTest {
      */
     @Test
     void refundInvoiceStandalone_excludesFailedRefundsFromCumulativeTotal() {
-        withAuthorities("ISSUE_MANUAL_REFUND");
+        withAuthorities(InvoicePermissions.REFUND_ISSUE_MANUAL);
         Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(500_00, 2));
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
 
@@ -919,7 +932,7 @@ class PaymentReversalServiceImplTest {
      */
     @Test
     void refundInvoiceStandalone_paymentAnchoredRecordSameReference_isNotReplayed() {
-        withAuthorities("ISSUE_MANUAL_REFUND");
+        withAuthorities(InvoicePermissions.REFUND_ISSUE_MANUAL);
         Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(500_00, 2));
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
 
@@ -946,7 +959,7 @@ class PaymentReversalServiceImplTest {
      */
     @Test
     void refundInvoiceStandalone_failedRecordSameReference_notReplayed_savesNewRecord() {
-        withAuthorities("ISSUE_MANUAL_REFUND");
+        withAuthorities(InvoicePermissions.REFUND_ISSUE_MANUAL);
         Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(500_00, 2));
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
 
@@ -969,7 +982,7 @@ class PaymentReversalServiceImplTest {
     /** Party-anchored standalone refund: no invoice in the system, anchored to the party id. */
     @Test
     void refundPartyStandalone_success_savesCompletedRecordAnchoredToParty() {
-        withAuthorities("ISSUE_MANUAL_REFUND");
+        withAuthorities(InvoicePermissions.REFUND_ISSUE_MANUAL);
         when(refundRecordRepository.findByPartyIdAndPaymentIntentIsNull("party-0009"))
                 .thenReturn(List.of());
         when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -989,7 +1002,7 @@ class PaymentReversalServiceImplTest {
 
     @Test
     void refundPartyStandalone_blankPartyId_throwsIllegalArgumentException() {
-        withAuthorities("ISSUE_MANUAL_REFUND");
+        withAuthorities(InvoicePermissions.REFUND_ISSUE_MANUAL);
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPartyStandalone(
                         "   ", BigDecimal.valueOf(50), RefundReason.OTHER, null, null))
@@ -1005,7 +1018,7 @@ class PaymentReversalServiceImplTest {
      */
     @Test
     void refundPartyStandalone_invoiceAnchoredRecordSameReference_isNotReplayed() {
-        withAuthorities("ISSUE_MANUAL_REFUND");
+        withAuthorities(InvoicePermissions.REFUND_ISSUE_MANUAL);
 
         RefundRecord invoiceAnchored = new RefundRecord();
         invoiceAnchored.setId(UUID.fromString("00000000-0000-7000-8000-000000000044"));
@@ -1028,7 +1041,7 @@ class PaymentReversalServiceImplTest {
 
     @Test
     void refundPartyStandalone_replaySameExternalReference_returnsExistingRecord() {
-        withAuthorities("ISSUE_MANUAL_REFUND");
+        withAuthorities(InvoicePermissions.REFUND_ISSUE_MANUAL);
 
         RefundRecord existing = new RefundRecord();
         existing.setId(UUID.fromString("00000000-0000-7000-8000-000000000043"));
@@ -1131,5 +1144,159 @@ class PaymentReversalServiceImplTest {
                 List.of(authorities).stream().map(SimpleGrantedAuthority::new).toList();
         SecurityContextHolder.getContext()
                 .setAuthentication(new UsernamePasswordAuthenticationToken("cashier1", null, grants));
+    }
+
+    @Nested
+    @DisplayName("location scope on payment/refund mutations (ADR-0061 §3, #2226)")
+    class LocationScopeTests {
+
+        private final UUID regionNode = UUID.fromString("019200aa-0000-7000-8000-00000000a000");
+        private final UUID otherShop = UUID.fromString("019200aa-0000-7000-8000-00000000000b");
+        private final UUID testLocation = UUID.fromString("01960003-0000-7000-8000-000000000001");
+
+        /** Replica stand-in: testLocation sits under regionNode on the OTHER dimension; otherShop does not. */
+        private final LocationAncestorResolver resolver = id -> {
+            if (id.equals(testLocation)) {
+                return new AncestorSets(Set.of(id), Set.of(id, regionNode));
+            }
+            if (id.equals(otherShop)) {
+                return new AncestorSets(Set.of(id), Set.of(id));
+            }
+            return AncestorSets.EMPTY;
+        };
+
+        private void authenticate(LocationScope scope, String... authorities) {
+            var grants = List.of(authorities).stream()
+                    .map(SimpleGrantedAuthority::new)
+                    .toList();
+            var authentication = new UsernamePasswordAuthenticationToken("invoice-test-user", null, grants);
+            authentication.setDetails(Map.of(
+                    GatewaySecurityConstants.DETAIL_USERNAME,
+                    "invoice-test-user",
+                    GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                    scope));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        private LocationScope scopedTo(String permission, UUID... nodes) {
+            return LocationScope.of(Set.of(), Set.of(permission), Optional.of(Set.of(nodes)), true, resolver);
+        }
+
+        private Invoice scopedInvoice() {
+            Invoice invoice = invoice(INVOICE_ID);
+            invoice.setLocationId(testLocation);
+            return invoice;
+        }
+
+        @Test
+        @DisplayName("voidPayment: invoice location out of reach denies before the gateway is called")
+        void voidPayment_outOfReach_denies() {
+            authenticate(scopedTo(InvoicePermissions.PAYMENT_VOID, otherShop), InvoicePermissions.PAYMENT_VOID);
+            PaymentIntent pi = authorizedPaymentIntent();
+            pi.setInvoice(scopedInvoice());
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+            assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
+                            INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            verify(paymentGatewayPort, never()).voidRemainder(any());
+        }
+
+        @Test
+        @DisplayName("voidPayment: invoice location in reach succeeds")
+        void voidPayment_inReach_succeeds() {
+            authenticate(scopedTo(InvoicePermissions.PAYMENT_VOID, regionNode), InvoicePermissions.PAYMENT_VOID);
+            PaymentIntent pi = authorizedPaymentIntent();
+            pi.setInvoice(scopedInvoice());
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+            // voidPayment only calls isSuccessful() on the gateway result, so this stubs only that
+            // (unlike successResult(), which also stubs getGatewayReference() for the refund tests).
+            GatewayPaymentResult voidSuccessResult = org.mockito.Mockito.mock(GatewayPaymentResult.class);
+            when(voidSuccessResult.isSuccessful()).thenReturn(true);
+            when(paymentGatewayPort.voidRemainder(any())).thenReturn(voidSuccessResult);
+            when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            assertThatCode(() -> paymentReversalServiceImpl.voidPayment(
+                            INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("refundPayment: invoice location out of reach denies before any refund logic")
+        void refundPayment_outOfReach_denies() {
+            authenticate(scopedTo(InvoicePermissions.PAYMENT_REFUND, otherShop), InvoicePermissions.PAYMENT_REFUND);
+            PaymentIntent pi = capturedPaymentIntent();
+            pi.setInvoice(scopedInvoice());
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+            assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
+                            INVOICE_ID,
+                            PAYMENT_INTENT_ID,
+                            BigDecimal.valueOf(50),
+                            RefundReason.CUSTOMER_RETURN,
+                            null,
+                            null))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            verify(refundRecordRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("refundPayment: pre-rollout caller (no scope claims) is unaffected")
+        void refundPayment_preRollout_succeeds() {
+            authenticate(LocationScope.unscoped(), InvoicePermissions.PAYMENT_REFUND);
+            PaymentIntent pi = capturedPaymentIntent();
+            pi.setInvoice(scopedInvoice());
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+            when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID))
+                    .thenReturn(List.of());
+            GatewayPaymentResult successResult = successResult();
+            when(paymentGatewayPort.refund(any())).thenReturn(successResult);
+            when(refundRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            assertThatCode(() -> paymentReversalServiceImpl.refundPayment(
+                            INVOICE_ID,
+                            PAYMENT_INTENT_ID,
+                            BigDecimal.valueOf(50),
+                            RefundReason.CUSTOMER_RETURN,
+                            null,
+                            null))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("refundInvoiceStandalone: invoice location out of reach denies")
+        void refundInvoiceStandalone_outOfReach_denies() {
+            authenticate(
+                    scopedTo(InvoicePermissions.REFUND_ISSUE_MANUAL, otherShop),
+                    InvoicePermissions.REFUND_ISSUE_MANUAL);
+            Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(100));
+            invoice.setLocationId(testLocation);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+
+            assertThatThrownBy(() -> paymentReversalServiceImpl.refundInvoiceStandalone(
+                            INVOICE_ID, BigDecimal.valueOf(25), RefundReason.CUSTOMER_RETURN, null, null))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            verify(refundRecordRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("refundInvoiceStandalone: invoice location in reach succeeds")
+        void refundInvoiceStandalone_inReach_succeeds() {
+            authenticate(
+                    scopedTo(InvoicePermissions.REFUND_ISSUE_MANUAL, regionNode),
+                    InvoicePermissions.REFUND_ISSUE_MANUAL);
+            Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(100));
+            invoice.setLocationId(testLocation);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+            when(refundRecordRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of());
+            when(refundRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            assertThatCode(() -> paymentReversalServiceImpl.refundInvoiceStandalone(
+                            INVOICE_ID, BigDecimal.valueOf(25), RefundReason.CUSTOMER_RETURN, null, null))
+                    .doesNotThrowAnyException();
+        }
     }
 }

@@ -103,7 +103,7 @@ class ReceiptServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        withAuthorities("GENERATE_RECEIPT");
+        withAuthorities(InvoicePermissions.RECEIPT_GENERATE);
 
         var invoice = new Invoice();
         invoice.setId(INVOICE_ID);
@@ -138,7 +138,8 @@ class ReceiptServiceImplTest {
      */
     private void withLocationScope(LocationScope scope) {
         var grants = List.of(
-                new SimpleGrantedAuthority("GENERATE_RECEIPT"), new SimpleGrantedAuthority(InvoicePermissions.VIEW));
+                new SimpleGrantedAuthority(InvoicePermissions.RECEIPT_GENERATE),
+                new SimpleGrantedAuthority(InvoicePermissions.VIEW));
         var auth = new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants);
         auth.setDetails(Map.of(
                 GatewaySecurityConstants.DETAIL_USERNAME, CASHIER_ID,
@@ -303,7 +304,7 @@ class ReceiptServiceImplTest {
         var receipt = buildExistingReceipt(5);
         when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
         // Issue #7: context has no SUPERVISOR_OVERRIDE authority
-        withAuthorities("GENERATE_RECEIPT");
+        withAuthorities(InvoicePermissions.RECEIPT_GENERATE);
 
         assertThatThrownBy(() -> receiptServiceImpl.reprintReceipt(RECEIPT_ID, "CUSTOMER_REQUEST"))
                 .isInstanceOf(ReprintLimitExceededException.class);
@@ -414,7 +415,7 @@ class ReceiptServiceImplTest {
     void reprintReceipt_atLimit_withSupervisorOverride_succeeds() {
         var receipt = buildExistingReceipt(5);
         when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
-        withAuthorities("GENERATE_RECEIPT", "SUPERVISOR_OVERRIDE");
+        withAuthorities(InvoicePermissions.RECEIPT_GENERATE, InvoicePermissions.RECEIPT_REPRINT_OVERRIDE);
 
         com.positivity.invoice.internal.service.Receipt saved =
                 receiptServiceImpl.reprintReceipt(RECEIPT_ID, "SUPERVISOR_APPROVED");
@@ -548,6 +549,180 @@ class ReceiptServiceImplTest {
 
             assertThat(view.getReceiptId()).isEqualTo(RECEIPT_ID);
             assertThat(view.getInvoiceId()).isEqualTo(INVOICE_ID);
+        }
+    }
+
+    @Nested
+    @DisplayName("generateReceipt location scope (ADR-0061 §3, #2226)")
+    class GenerateReceiptLocationScope {
+
+        private void authenticateScoped(LocationScope scope) {
+            var grants = List.of(new SimpleGrantedAuthority(InvoicePermissions.RECEIPT_GENERATE));
+            var auth = new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants);
+            auth.setDetails(Map.of(
+                    GatewaySecurityConstants.DETAIL_USERNAME,
+                    CASHIER_ID,
+                    GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                    scope));
+            SecurityContextHolder.getContext().setAuthentication(auth);
+        }
+
+        private LocationScope generateScopedTo(UUID... nodes) {
+            return LocationScope.of(
+                    Set.of(), Set.of(InvoicePermissions.RECEIPT_GENERATE), Optional.of(Set.of(nodes)), true, RESOLVER);
+        }
+
+        private Invoice scopedInvoice() {
+            var invoice = new Invoice();
+            invoice.setId(INVOICE_ID);
+            invoice.setInvoiceNumber(INVOICE_NUMBER);
+            invoice.setLocationId(RECEIPT_LOCATION_ID);
+            return invoice;
+        }
+
+        private PaymentIntent paymentIntentFor(Invoice invoice) {
+            var paymentIntent = new PaymentIntent();
+            paymentIntent.setId(PAYMENT_INTENT_ID);
+            paymentIntent.setInvoice(invoice);
+            return paymentIntent;
+        }
+
+        @Test
+        @DisplayName("invoice location out of reach: LocationScopeDeniedException, no receipt saved")
+        void outOfReach_denies() {
+            authenticateScoped(generateScopedTo(OTHER_SHOP));
+            Invoice invoice = scopedInvoice();
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID))
+                    .thenReturn(Optional.of(paymentIntentFor(invoice)));
+
+            assertThatThrownBy(() -> receiptServiceImpl.generateReceipt(
+                            INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            verify(receiptRepository, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
+        @DisplayName("invoice location in reach: receipt is generated")
+        void inReach_succeeds() {
+            authenticateScoped(generateScopedTo(REGION_NODE));
+            Invoice invoice = scopedInvoice();
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID))
+                    .thenReturn(Optional.of(paymentIntentFor(invoice)));
+            when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            com.positivity.invoice.internal.service.Receipt saved = receiptServiceImpl.generateReceipt(
+                    INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION);
+
+            assertThat(saved.getInvoiceId()).isEqualTo(INVOICE_ID);
+        }
+
+        @Test
+        @DisplayName("pre-rollout token (no loc_* claims): behavior unchanged, receipt is generated")
+        void preRolloutToken_unchanged() {
+            withAuthorities(InvoicePermissions.RECEIPT_GENERATE);
+            Invoice invoice = scopedInvoice();
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID))
+                    .thenReturn(Optional.of(paymentIntentFor(invoice)));
+            when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            com.positivity.invoice.internal.service.Receipt saved = receiptServiceImpl.generateReceipt(
+                    INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION);
+
+            assertThat(saved.getInvoiceId()).isEqualTo(INVOICE_ID);
+        }
+    }
+
+    @Nested
+    @DisplayName("reprintReceipt reprint-cap override location scope (ADR-0061 §3, #2226)")
+    class ReprintReceiptLocationScope {
+
+        private void authenticateOverride(LocationScope scope) {
+            var grants = List.of(
+                    new SimpleGrantedAuthority(InvoicePermissions.RECEIPT_GENERATE),
+                    new SimpleGrantedAuthority(InvoicePermissions.RECEIPT_REPRINT_OVERRIDE));
+            var auth = new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants);
+            auth.setDetails(Map.of(
+                    GatewaySecurityConstants.DETAIL_USERNAME,
+                    CASHIER_ID,
+                    GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                    scope));
+            SecurityContextHolder.getContext().setAuthentication(auth);
+        }
+
+        private LocationScope overrideScopedTo(UUID... nodes) {
+            return LocationScope.of(
+                    Set.of(),
+                    Set.of(InvoicePermissions.RECEIPT_REPRINT_OVERRIDE),
+                    Optional.of(Set.of(nodes)),
+                    true,
+                    RESOLVER);
+        }
+
+        private Receipt receiptAtCap() {
+            var receipt = buildExistingReceipt(5);
+            var invoice = new Invoice();
+            invoice.setId(INVOICE_ID);
+            invoice.setLocationId(RECEIPT_LOCATION_ID);
+            receipt.setInvoice(invoice);
+            return receipt;
+        }
+
+        @Test
+        @DisplayName("override holder scoped away from the receipt's invoice location is denied, not merely capped")
+        void outOfReach_deniesBeforeCapCheck() {
+            authenticateOverride(overrideScopedTo(OTHER_SHOP));
+            var receipt = receiptAtCap();
+            when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
+
+            assertThatThrownBy(() -> receiptServiceImpl.reprintReceipt(RECEIPT_ID, "SUPERVISOR_APPROVED"))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("override holder in reach bypasses the cap")
+        void inReach_bypassesCap() {
+            authenticateOverride(overrideScopedTo(REGION_NODE));
+            var receipt = receiptAtCap();
+            when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
+            when(receiptRepository.save(any(Receipt.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            com.positivity.invoice.internal.service.Receipt saved =
+                    receiptServiceImpl.reprintReceipt(RECEIPT_ID, "SUPERVISOR_APPROVED");
+
+            assertThat(saved.getReprintCount()).isEqualTo(6);
+        }
+
+        @Test
+        @DisplayName(
+                "caller has location claims but not the override permission: no scope decision, ordinary cap error")
+        void claimsPresentButNoOverrideHeld_capErrorNotScopeError() {
+            // A token carrying loc_* claims scoped on a DIFFERENT permission (RECEIPT_GENERATE), not
+            // invoice:receipt:reprint_override -- LocationScope#covers is true for a permission absent
+            // from both scoped sets (the grant is global / not held), so #require is a no-op here, and
+            // the ordinary cap error is reached instead of a location denial.
+            LocationScope scope = LocationScope.of(
+                    Set.of(),
+                    Set.of(InvoicePermissions.RECEIPT_GENERATE),
+                    Optional.of(Set.of(OTHER_SHOP)),
+                    true,
+                    RESOLVER);
+            var grants = List.of(new SimpleGrantedAuthority(InvoicePermissions.RECEIPT_GENERATE));
+            var auth = new UsernamePasswordAuthenticationToken(CASHIER_ID, null, grants);
+            auth.setDetails(Map.of(
+                    GatewaySecurityConstants.DETAIL_USERNAME,
+                    CASHIER_ID,
+                    GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                    scope));
+            SecurityContextHolder.getContext().setAuthentication(auth);
+            var receipt = receiptAtCap();
+            when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
+
+            assertThatThrownBy(() -> receiptServiceImpl.reprintReceipt(RECEIPT_ID, "CUSTOMER_REQUEST"))
+                    .isInstanceOf(ReprintLimitExceededException.class);
         }
     }
 

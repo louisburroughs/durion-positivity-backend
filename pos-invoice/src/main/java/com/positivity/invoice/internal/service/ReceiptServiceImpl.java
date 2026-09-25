@@ -29,8 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class ReceiptServiceImpl implements ReceiptService {
 
-    private static final String GENERATE_RECEIPT = "GENERATE_RECEIPT";
-    private static final String SUPERVISOR_OVERRIDE = "SUPERVISOR_OVERRIDE";
     private static final String RECEIPT_NOT_FOUND_PREFIX = "Receipt not found: ";
     private static final int INITIAL_REFERENCE_SEQUENCE = 1;
 
@@ -58,7 +56,7 @@ public class ReceiptServiceImpl implements ReceiptService {
             @NonNull String terminalId,
             @NonNull String templateId,
             @NonNull String templateVersion) {
-        requireAuthority(GENERATE_RECEIPT);
+        requireAuthority(InvoicePermissions.RECEIPT_GENERATE);
 
         Invoice invoice =
                 invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
@@ -70,6 +68,14 @@ public class ReceiptServiceImpl implements ReceiptService {
             throw new PaymentIntentNotFoundException(
                     "Payment intent " + paymentIntentId + " not found under invoice " + invoiceId);
         }
+
+        // ADR-0061 §3 (#2226): after the existence check, before the receipt is created.
+        SecurityContextHelper.locationScope()
+                .require(
+                        InvoicePermissions.RECEIPT_GENERATE,
+                        invoice.getLocationId() == null
+                                ? ""
+                                : invoice.getLocationId().toString());
 
         String cashierId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         int nextReferenceSequence =
@@ -128,8 +134,23 @@ public class ReceiptServiceImpl implements ReceiptService {
                 .findById(receiptId)
                 .orElseThrow(() -> new ReceiptNotFoundException(RECEIPT_NOT_FOUND_PREFIX + receiptId));
 
-        if (receipt.getReprintCount() >= 5 && !SecurityContextHelper.hasAuthority(SUPERVISOR_OVERRIDE)) {
-            throw new ReprintLimitExceededException("Reprint limit of 5 exceeded");
+        if (receipt.getReprintCount() >= 5) {
+            // ADR-0061 §3 (#2226): only reached once the cap is exceeded, so an ordinary
+            // under-cap reprint never pays for a location check it does not need. A caller who
+            // does not hold invoice:receipt:reprint_override at all takes no scope decision here
+            // (LocationScope#require is a no-op for an alternate not held) and falls straight
+            // into the authority check below; a supervisor override is itself location-bound
+            // like every other elevation, so a holder scoped away from this invoice is denied
+            // even before the authority check runs.
+            UUID receiptInvoiceLocation =
+                    receipt.getInvoice() == null ? null : receipt.getInvoice().getLocationId();
+            SecurityContextHelper.locationScope()
+                    .require(
+                            InvoicePermissions.RECEIPT_REPRINT_OVERRIDE,
+                            receiptInvoiceLocation == null ? "" : receiptInvoiceLocation.toString());
+            if (!SecurityContextHelper.hasAuthority(InvoicePermissions.RECEIPT_REPRINT_OVERRIDE)) {
+                throw new ReprintLimitExceededException("Reprint limit of 5 exceeded");
+            }
         }
 
         receipt.setReprintCount(receipt.getReprintCount() + 1);

@@ -38,9 +38,15 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 - `POST /v1/invoices/{invoiceId}/adjustments` — apply an adjustment
 - `POST /v1/invoices/{invoiceId}/payments` — initiate payment (idempotent)
 - `POST /v1/invoices/{invoiceId}/payments/{paymentId}/capture` — capture an authorized payment
-- `POST /v1/invoices/{invoiceId}/payments/{paymentId}/void` — void a payment
+- `GET /v1/invoices/{invoiceId}/payments` — list every payment intent raised against an invoice,
+  including its refunded and refundable amounts (#2226, #2215)
+- `GET /v1/invoices/{invoiceId}/payments/{paymentId}` — read a single payment intent's detail,
+  never the tokenised card reference or raw gateway response (#2226, #2215)
+- `POST /v1/invoices/{invoiceId}/payments/{paymentId}/void` — void a payment (`invoice:payment:void`;
+  `invoice:payment:override` bypasses the 24-hour window, #2226)
 - `POST /v1/invoices/{invoiceId}/payments/{paymentId}/refunds` — refund a payment
-- `POST /v1/invoices/{invoiceId}/receipts` — generate a receipt
+  (`invoice:payment:refund`; `invoice:payment:override` bypasses the 180-day window, #2226)
+- `POST /v1/invoices/{invoiceId}/receipts` — generate a receipt (`invoice:receipt:generate`, #2226)
 - `GET /v1/invoices/{invoiceId}/receipts/{receiptId}` — retrieve full receipt detail (#2214)
 - `POST /v1/invoices/{invoiceId}/receipts/{receiptId}/email` — email a receipt
 - `POST /v1/invoices/{invoiceId}/receipts/{receiptId}/print` — print a receipt

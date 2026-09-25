@@ -3,10 +3,13 @@ package com.positivity.invoice.internal.service;
 import com.positivity.invoice.internal.config.PaymentEventPublisher;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
+import com.positivity.invoice.internal.dto.PaymentIntentResponse;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
+import com.positivity.invoice.internal.entity.RefundRecord;
 import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
+import com.positivity.invoice.internal.enums.RefundStatus;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
@@ -19,8 +22,11 @@ import com.positivity.invoice.internal.payment.PaymentGatewayPort;
 import com.positivity.invoice.internal.payment.PaymentGatewayRequest;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
+import com.positivity.invoice.internal.repository.RefundRecordRepository;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.access.AccessDeniedException;
@@ -41,16 +47,19 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentGatewayPort gatewayPort;
     private final InvoiceRepository invoiceRepository;
     private final PaymentIntentRepository paymentIntentRepository;
+    private final RefundRecordRepository refundRecordRepository;
     private final PaymentEventPublisher paymentEventPublisher;
 
     public PaymentServiceImpl(
             @NonNull PaymentGatewayPort gatewayPort,
             @NonNull InvoiceRepository invoiceRepository,
             @NonNull PaymentIntentRepository paymentIntentRepository,
+            @NonNull RefundRecordRepository refundRecordRepository,
             @NonNull PaymentEventPublisher paymentEventPublisher) {
         this.gatewayPort = gatewayPort;
         this.invoiceRepository = invoiceRepository;
         this.paymentIntentRepository = paymentIntentRepository;
+        this.refundRecordRepository = refundRecordRepository;
         this.paymentEventPublisher = paymentEventPublisher;
     }
 
@@ -200,10 +209,96 @@ public class PaymentServiceImpl implements PaymentService {
         return toResponse(saved);
     }
 
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public List<PaymentIntentResponse> listInvoicePayments(@NonNull UUID invoiceId) {
+        Invoice invoice =
+                invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+        requireLocationInReach(invoice);
+
+        return paymentIntentRepository.findByInvoice_Id(invoiceId).stream()
+                .map(this::toPaymentIntentResponse)
+                .toList();
+    }
+
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public PaymentIntentResponse getInvoicePayment(@NonNull UUID invoiceId, @NonNull UUID paymentId) {
+        PaymentIntent paymentIntent = paymentIntentRepository
+                .findById(paymentId)
+                .orElseThrow(() -> new PaymentIntentNotFoundException("Payment intent not found: " + paymentId));
+
+        // A payment intent under another invoice 404s exactly like a missing one, so the response
+        // never confirms another invoice's payment id.
+        if (paymentIntent.getInvoice() == null
+                || !invoiceId.equals(paymentIntent.getInvoice().getId())) {
+            throw new PaymentIntentNotFoundException(
+                    "Payment intent " + paymentId + " not found under invoice " + invoiceId);
+        }
+
+        // ADR-0061 §3 (#2226, #2215): after the existence check, so a denial cannot be used to
+        // probe which payment intent ids exist.
+        requireLocationInReach(paymentIntent.getInvoice());
+
+        return toPaymentIntentResponse(paymentIntent);
+    }
+
     private void requireAuthority(@NonNull String authority) {
         if (!SecurityContextHelper.hasAuthority(authority)) {
             throw new AccessDeniedException("Missing authority: " + authority);
         }
+    }
+
+    /** ADR-0061 §3 (#2226, #2215): gates a payment read on the invoice's location, mirroring
+     *  InvoiceServiceImpl.loadInvoiceDetail. An invoice without a location answers "" which a
+     *  scoped caller cannot cover (fail closed); an unscoped or pre-rollout caller is unchanged.
+     */
+    private static void requireLocationInReach(@NonNull Invoice invoice) {
+        UUID invoiceLocation = invoice.getLocationId();
+        SecurityContextHelper.locationScope()
+                .require(InvoicePermissions.VIEW, invoiceLocation == null ? "" : invoiceLocation.toString());
+    }
+
+    @NonNull
+    private PaymentIntentResponse toPaymentIntentResponse(@NonNull PaymentIntent paymentIntent) {
+        BigDecimal refundedAmount = sumNonFailedRefunds(paymentIntent.getId());
+
+        PaymentIntentResponse response = new PaymentIntentResponse();
+        response.setPaymentId(paymentIntent.getId());
+        response.setInvoiceId(
+                paymentIntent.getInvoice() == null
+                        ? null
+                        : paymentIntent.getInvoice().getId());
+        response.setStatus(paymentIntent.getStatus());
+        response.setPaymentFlow(paymentIntent.getPaymentFlow());
+        response.setAuthorizedAmount(paymentIntent.getAuthorizedAmount());
+        response.setCapturedAmount(paymentIntent.getCapturedAmount());
+        response.setVoidedRemainderAmount(paymentIntent.getVoidedRemainderAmount());
+        response.setRefundedAmount(refundedAmount);
+        response.setRefundableAmount(
+                paymentIntent.getStatus() == PaymentIntentStatus.CAPTURED && paymentIntent.getCapturedAmount() != null
+                        ? paymentIntent.getCapturedAmount().subtract(refundedAmount)
+                        : null);
+        response.setGatewayProvider(paymentIntent.getGatewayProvider());
+        response.setGatewayReference(paymentIntent.getGatewayReference());
+        response.setCreatedAt(paymentIntent.getCreatedAt());
+        response.setUpdatedAt(paymentIntent.getUpdatedAt());
+        return response;
+    }
+
+    /**
+     * Sum of amounts across every non-FAILED refund against a payment intent — a FAILED attempt
+     * never moved money. Mirrors {@code PaymentReversalServiceImpl#sumNonFailed}.
+     */
+    @NonNull
+    private BigDecimal sumNonFailedRefunds(@NonNull UUID paymentIntentId) {
+        List<RefundRecord> refunds = refundRecordRepository.findByPaymentIntent_Id(paymentIntentId);
+        return refunds.stream()
+                .filter(refund -> refund.getStatus() != RefundStatus.FAILED)
+                .map(RefundRecord::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private void validateIdempotentReplayPayload(

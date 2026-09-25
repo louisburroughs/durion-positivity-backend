@@ -5,6 +5,8 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
+import com.positivity.invoice.internal.dto.PaymentIntentResponse;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.PaymentService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,10 +20,13 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -169,6 +174,70 @@ public class PaymentController {
                     @NonNull
                     CaptureAmountRequest body) {
         return paymentService.capturePayment(invoiceId, paymentId, body.amount(), body.captureIdempotencyKey());
+    }
+
+    /**
+     * Lists every payment intent raised against an invoice.
+     *
+     * @param invoiceId invoice to list payments for
+     * @return the invoice's payment intents (HTTP 200)
+     */
+    @GetMapping("/{invoiceId}/payments")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
+    @EmitEvent(id = "INVOICE_PAYMENT_LIST", apiVersion = "1")
+    @Operation(operationId = "listInvoicePayments", summary = "List Payments for an Invoice", description = """
+                    Returns every payment intent raised against an invoice, each carrying its captured, voided \
+                    and refunded amounts and the balance still refundable.
+                    Use this tool to see an invoice's full payment history; do not use getInvoicePayment, which \
+                    reads a single payment intent by id.
+                    Preconditions: the invoice must exist; the caller needs the invoice:invoice:view authority, \
+                    scoped to the invoice's location (ADR-0061).
+                    Required inputs: invoiceId (UUID) as a path parameter; there is no request body or filtering.
+                    Emits an INVOICE_PAYMENT_LIST audit event; no state changes — this is a read-only projection.
+                    Returns 200 with the invoice's payment intents, 403 when invoice:invoice:view is missing or \
+                    the invoice's location is outside the caller's reach, and 404 when the invoice does not exist.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Payment intents returned")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Invoice not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public List<PaymentIntentResponse> listInvoicePayments(@PathVariable @NonNull UUID invoiceId) {
+        return paymentService.listInvoicePayments(invoiceId);
+    }
+
+    /**
+     * Reads a single payment intent's detail.
+     *
+     * @param invoiceId invoice the payment intent must belong to
+     * @param paymentId payment intent to read
+     * @return the payment intent's detail (HTTP 200)
+     */
+    @GetMapping("/{invoiceId}/payments/{paymentId}")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
+    @EmitEvent(id = "INVOICE_PAYMENT_VIEW", apiVersion = "1")
+    @Operation(operationId = "getInvoicePayment", summary = "Get Payment Detail", description = """
+                    Returns the full detail of a single payment intent under an invoice, including its captured, \
+                    voided and refunded amounts and the balance still refundable — never the tokenised card \
+                    reference or the raw gateway response.
+                    Use this tool to render a single payment's detail; do not use listInvoicePayments unless you \
+                    need the invoice's full payment history.
+                    Preconditions: the payment intent must exist and belong to the given invoice; the caller needs \
+                    the invoice:invoice:view authority, scoped to the invoice's location (ADR-0061).
+                    Required inputs: invoiceId and paymentId (both UUID) as path parameters.
+                    Returns 200 with the payment intent detail, 403 when invoice:invoice:view is missing or the \
+                    invoice's location is outside the caller's reach, and 404 when no payment intent with that id \
+                    exists under that invoice — a payment intent that exists under a different invoice also \
+                    reports 404, so the response never confirms another invoice's payment id.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Payment intent detail")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Payment intent not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<PaymentIntentResponse> getInvoicePayment(
+            @PathVariable @NonNull UUID invoiceId, @PathVariable @NonNull UUID paymentId) {
+        return ResponseEntity.ok(paymentService.getInvoicePayment(invoiceId, paymentId));
     }
 
     /**

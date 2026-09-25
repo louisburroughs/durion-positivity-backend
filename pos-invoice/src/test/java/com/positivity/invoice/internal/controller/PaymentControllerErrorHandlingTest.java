@@ -3,16 +3,23 @@ package com.positivity.invoice.internal.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.invoice.ControllerSliceConfig;
+import com.positivity.invoice.internal.dto.PaymentIntentResponse;
+import com.positivity.invoice.internal.enums.PaymentFlow;
+import com.positivity.invoice.internal.enums.PaymentIntentStatus;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.PaymentService;
 import com.positivity.security.common.GatewaySecurityConfig;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,6 +70,10 @@ class PaymentControllerErrorHandlingTest {
         return request.header("X-User", "test-user").header("X-Authorities", "*");
     }
 
+    private MockHttpServletRequestBuilder withAuthorities(MockHttpServletRequestBuilder request, String authorities) {
+        return request.header("X-User", "test-user").header("X-Authorities", authorities);
+    }
+
     /** A genuine, still-mapped domain exception continues to answer its documented 422. */
     @Test
     @DisplayName("a payment decline answers 422 with its own message and code")
@@ -104,5 +115,59 @@ class PaymentControllerErrorHandlingTest {
                 .getContentAsString();
 
         assertThat(body).doesNotContain(leakCanary).doesNotContain("UnknownPathException");
+    }
+
+    // -------------------------------------------------------------------------
+    // #2226/#2215: listInvoicePayments / getInvoicePayment require invoice:invoice:view
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("listInvoicePayments: 403 without invoice:invoice:view")
+    void listInvoicePayments_missingPermission_returns403() throws Exception {
+        mockMvc.perform(withAuthorities(get("/v1/invoices/{invoiceId}/payments", INVOICE_ID), "invoice:manage"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("listInvoicePayments: 200 with invoice:invoice:view")
+    void listInvoicePayments_withPermission_returns200() throws Exception {
+        when(paymentService.listInvoicePayments(any())).thenReturn(List.of(samplePaymentIntentResponse()));
+
+        mockMvc.perform(withAuthorities(get("/v1/invoices/{invoiceId}/payments", INVOICE_ID), InvoicePermissions.VIEW))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    @DisplayName("getInvoicePayment: 403 without invoice:invoice:view")
+    void getInvoicePayment_missingPermission_returns403() throws Exception {
+        UUID paymentId = UUID.randomUUID();
+
+        mockMvc.perform(withAuthorities(
+                        get("/v1/invoices/{invoiceId}/payments/{paymentId}", INVOICE_ID, paymentId), "invoice:manage"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("getInvoicePayment: 200 with invoice:invoice:view")
+    void getInvoicePayment_withPermission_returns200() throws Exception {
+        UUID paymentId = UUID.randomUUID();
+        when(paymentService.getInvoicePayment(any(), any())).thenReturn(samplePaymentIntentResponse());
+
+        mockMvc.perform(withAuthorities(
+                        get("/v1/invoices/{invoiceId}/payments/{paymentId}", INVOICE_ID, paymentId),
+                        InvoicePermissions.VIEW))
+                .andExpect(status().isOk());
+    }
+
+    private PaymentIntentResponse samplePaymentIntentResponse() {
+        PaymentIntentResponse response = new PaymentIntentResponse();
+        response.setPaymentId(UUID.randomUUID());
+        response.setInvoiceId(INVOICE_ID);
+        response.setStatus(PaymentIntentStatus.CAPTURED);
+        response.setPaymentFlow(PaymentFlow.SALE_CAPTURE);
+        response.setCreatedAt(Instant.now());
+        response.setUpdatedAt(Instant.now());
+        return response;
     }
 }

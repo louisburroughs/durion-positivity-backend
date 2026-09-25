@@ -50,6 +50,7 @@ public class PaymentReversalController {
     }
 
     @PostMapping("/{invoiceId}/payments/{paymentId}/void")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.PAYMENT_VOID + "')")
     @EmitEvent(id = "INVOICE_PAYMENT_VOID", apiVersion = "1")
     @Operation(operationId = "voidPayment", summary = "Void Authorized Payment Hold", description = """
                     Voids a previously authorized invoice payment hold at the gateway before it is captured, \
@@ -57,15 +58,17 @@ public class PaymentReversalController {
                     Use this tool on an AUTHORIZED hold; do not use refundPayment, which returns funds from a \
                     payment that was already CAPTURED.
                     Preconditions: the payment intent must belong to the invoice and be AUTHORIZED, the caller needs \
-                    the VOID_PAYMENT authority, and less than 24 hours may have elapsed since authorization unless \
-                    the caller also holds SUPERVISOR_OVERRIDE.
+                    the invoice:payment:void authority (scoped to the invoice's location, ADR-0061), and less than \
+                    24 hours may have elapsed since authorization unless the caller also holds \
+                    invoice:payment:override for that location.
                     Required inputs: reason (CUSTOMER_REQUEST, DUPLICATE_AUTHORIZATION, ENTRY_ERROR, \
                     FRAUD_PREVENTION, MANAGER_DISCRETION or OTHER); notes are optional free text.
                     Emits an INVOICE_PAYMENT_VOID event, moves the intent to VOIDED, and publishes a payment-voided \
                     notification.
-                    Returns 200 with an empty body on success, 404 when the intent does not exist under the invoice, \
-                    409 when the intent is not AUTHORIZED, 422 when the 24-hour void window has expired, and 500 \
-                    when the gateway rejects the void.
+                    Returns 200 with an empty body on success, 403 when invoice:payment:void is missing or the \
+                    invoice's location is outside the caller's reach, 404 when the intent does not exist under the \
+                    invoice, 409 when the intent is not AUTHORIZED, 422 when the 24-hour void window has expired, \
+                    and 500 when the gateway rejects the void.
                     """)
     @ApiResponse(responseCode = "200", description = "Payment voided")
     @ApiResponse(
@@ -102,6 +105,7 @@ public class PaymentReversalController {
     }
 
     @PostMapping("/{invoiceId}/payments/{paymentId}/refunds")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.PAYMENT_REFUND + "')")
     @EmitEvent(id = "INVOICE_PAYMENT_REFUND", apiVersion = "1")
     @Operation(operationId = "refundPayment", summary = "Refund a Captured Payment", description = """
                     Refunds all or part of a CAPTURED invoice payment through the gateway and records the refund \
@@ -110,17 +114,19 @@ public class PaymentReversalController {
                     which releases an uncaptured hold, and use createStandaloneInvoiceRefund instead when the \
                     original payment is not on file.
                     Preconditions: the payment intent must belong to the invoice and be CAPTURED, the caller needs \
-                    the REFUND_PAYMENT authority, less than 180 days may have elapsed since capture unless the \
-                    caller holds SUPERVISOR_OVERRIDE, and cumulative refunds may not exceed the captured amount.
+                    the invoice:payment:refund authority (scoped to the invoice's location, ADR-0061), less than \
+                    180 days may have elapsed since capture unless the caller holds invoice:payment:override for \
+                    that location, and cumulative refunds may not exceed the captured amount.
                     Required inputs: amount (positive) and reason (a RefundReason such as CUSTOMER_RETURN or \
                     SERVICE_ERROR); notes and externalReference are optional, and a retry replaying the same \
                     externalReference returns the existing refund instead of paying twice.
                     Emits an INVOICE_PAYMENT_REFUND event and publishes a payment-refunded notification on success; \
                     a gateway failure is persisted as a FAILED refund record, so callers must read the returned \
                     status rather than treating 201 as completed.
-                    Returns 201 with the refund record, 404 when the intent does not exist under the invoice, 409 \
-                    when the intent is not CAPTURED, and 422 when the 180-day window has expired or the amount \
-                    exceeds the remaining refundable balance.
+                    Returns 201 with the refund record, 403 when invoice:payment:refund is missing or the \
+                    invoice's location is outside the caller's reach, 404 when the intent does not exist under the \
+                    invoice, 409 when the intent is not CAPTURED, and 422 when the 180-day window has expired or \
+                    the amount exceeds the remaining refundable balance.
                     """)
     @ApiResponse(responseCode = "201", description = "Refund created")
     @ApiResponse(
