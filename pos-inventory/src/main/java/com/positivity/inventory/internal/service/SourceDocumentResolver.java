@@ -142,6 +142,57 @@ public class SourceDocumentResolver {
         return purchaseOrderRepository.findById(poId).map(ExtPurchaseOrderReplica::getShipToLocationId);
     }
 
+    /**
+     * The per-base-unit document cost a receiving session's {@code GOODS_RECEIPT} row carries
+     * (#2203, ADR-0048 IMP-002): the purchase order line's price, divided by the base units it
+     * prices and moved from minor to major units of the order's currency.
+     *
+     * <p>The line is the one the receiving line was built from; a receiving line built before that
+     * link was kept falls back to the order's only line for the product. Empty whenever the cost
+     * cannot be known — not a purchase order, no such line (or several candidates), an unpriced
+     * line, or a line projected before pos-order published what its price is per — and the receipt
+     * then posts without a document cost, entering at the product's current average.
+     */
+    public Optional<BigDecimal> resolveReceiptUnitCost(
+            @Nullable SourceDocumentType sourceDocumentType,
+            @Nullable String sourceDocumentId,
+            @Nullable UUID sourceLineId,
+            @Nullable String productId) {
+        if (sourceDocumentType != SourceDocumentType.PO || sourceDocumentId == null) {
+            return Optional.empty();
+        }
+        UUID poId;
+        try {
+            poId = UUID.fromString(sourceDocumentId.trim());
+        } catch (IllegalArgumentException ex) {
+            return Optional.empty();
+        }
+
+        Optional<ExtPurchaseOrderLineReplica> orderLine = sourceLineId != null
+                ? purchaseOrderLineRepository.findById(sourceLineId)
+                : soleLineForProduct(poId, productId);
+        return orderLine
+                .filter(line -> line.getUnitCostMinor() != null && line.getConversionFactor() != null)
+                .map(line -> ReceiptUnitCosts.perBaseUnit(
+                        line.getUnitCostMinor(),
+                        line.getConversionFactor(),
+                        purchaseOrderRepository
+                                .findById(poId)
+                                .map(ExtPurchaseOrderReplica::getCurrency)
+                                .orElse(null)));
+    }
+
+    private Optional<ExtPurchaseOrderLineReplica> soleLineForProduct(UUID poId, @Nullable String productId) {
+        if (productId == null) {
+            return Optional.empty();
+        }
+        List<ExtPurchaseOrderLineReplica> matches = purchaseOrderLineRepository.findByPurchaseOrderId(poId).stream()
+                .filter(line ->
+                        line.getSkuId() != null && line.getSkuId().toString().equalsIgnoreCase(productId.trim()))
+                .toList();
+        return matches.size() == 1 ? Optional.of(matches.get(0)) : Optional.empty();
+    }
+
     private List<SourceDocumentLine> receivableLines(UUID poId) {
         List<ExtPurchaseOrderLineReplica> replicas =
                 new ArrayList<>(purchaseOrderLineRepository.findByPurchaseOrderId(poId));

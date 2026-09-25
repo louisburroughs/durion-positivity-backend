@@ -68,6 +68,13 @@ public class ReceivingLine extends TenantScopedEntity {
     @Column(name = "workorder_line_id", length = 255)
     private String workorderLineId;
 
+    /**
+     * Purchase order line this receiving line was built from (#2203); its unit cost is the
+     * receipt's document cost. Null for lines built before the link was kept.
+     */
+    @Column(name = "source_line_id")
+    private UUID sourceLineId;
+
     /** Lot/batch number keyed on receipt; validated + linked for LOT-tracked products (odoo-parity E1, #1038). */
     @Column(name = "lot_number", length = 128)
     private String lotNumber;

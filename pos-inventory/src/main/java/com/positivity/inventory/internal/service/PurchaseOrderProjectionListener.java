@@ -237,6 +237,7 @@ public class PurchaseOrderProjectionListener {
                 .openQuantity(line.openQuantity())
                 .unitCostMinor(line.unitCostMinor())
                 .description(line.description())
+                .conversionFactor(line.conversionFactor())
                 .build();
     }
 

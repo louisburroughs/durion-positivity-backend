@@ -34,6 +34,7 @@ import com.positivity.inventory.internal.service.InventoryLotCaptureService;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.Quantities;
 import com.positivity.inventory.internal.service.QuantityScaleGuard;
+import com.positivity.inventory.internal.service.ReceiptUnitCosts;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
@@ -208,7 +209,7 @@ public class AsnServiceImpl implements AsnService {
                 persistReceipt(request, purchaseOrder, asn, computedLines, receiptTotalMinor);
 
         publishReceiptCreated(persistedReceipt, poId, computedLines, actorId);
-        postLedgerEntries(request, computedLines, persistedReceipt, actorId);
+        postLedgerEntries(request, computedLines, persistedReceipt, purchaseOrder.getCurrency(), actorId);
 
         // Receiving states what arrived; pos-order decides what that means for the order's
         // outstanding quantities and status (CAP-320 #1334). Writing the order here is what made
@@ -301,13 +302,23 @@ public class AsnServiceImpl implements AsnService {
         return goodsReceiptRepository.save(receiptEntity);
     }
 
-    /** Posts one base-UoM ledger row per received line and marks it for fact publication. */
+    /**
+     * Posts one base-UoM ledger row per received line and marks it for fact publication. Each row
+     * carries the line's document cost per base unit (#2203, ADR-0048 IMP-002): {@code unitCostMinor}
+     * prices one document unit when a document UoM was keyed, so it is divided by the conversion
+     * factor, then moved from minor to major units of the order's currency.
+     */
     private void postLedgerEntries(
             @NonNull CreateGoodsReceiptRequest request,
             @NonNull List<ReceiptLineComputation> computedLines,
             @NonNull GoodsReceiptEntity persistedReceipt,
+            @Nullable String currency,
             @NonNull String actorId) {
         for (ReceiptLineComputation computed : computedLines) {
+            BigDecimal unitCost = ReceiptUnitCosts.perBaseUnit(
+                    computed.request().getUnitCostMinor(),
+                    computed.conversion() == null ? null : computed.conversion().conversionFactor(),
+                    currency);
             // Ledger rows stay base-UoM only (spec B2): the converted base quantity posts here.
             // lotId is null for untracked products (E1 zero-change guarantee).
             InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
@@ -316,6 +327,7 @@ public class AsnServiceImpl implements AsnService {
                     .toLocationId(request.getLocationId())
                     .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
                     .changeInQuantity(computed.baseQuantity())
+                    .unitCost(unitCost)
                     .quantityAfter(calculateQuantityAfter(
                             computed.request().getSku(), request.getLocationId(), computed.baseQuantity()))
                     .lotId(computed.lotId())

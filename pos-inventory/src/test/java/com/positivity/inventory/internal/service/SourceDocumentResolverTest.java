@@ -177,6 +177,65 @@ class SourceDocumentResolverTest {
         return resolver.resolve(SourceDocumentType.PO, PO_ID.toString());
     }
 
+    // ─── #2203: receipt document cost from the purchase order line ──────────────
+
+    @Test
+    @DisplayName("receipt cost: the linked order line's price per base unit, in the order's currency")
+    void receiptUnitCost_linkedLine_pricesPerBaseUnit() {
+        projectOrder("APPROVED");
+        when(purchaseOrderLineRepository.findById(LINE_ID))
+                .thenReturn(Optional.of(pricedLine(LINE_ID, 12_000L, new BigDecimal("12"))));
+
+        assertThat(resolver.resolveReceiptUnitCost(SourceDocumentType.PO, PO_ID.toString(), LINE_ID, SKU_ID.toString()))
+                .hasValueSatisfying(cost -> assertThat(cost).isEqualByComparingTo("10.0000"));
+    }
+
+    @Test
+    @DisplayName("receipt cost: an unlinked receiving line falls back to the order's only line for the product")
+    void receiptUnitCost_unlinked_usesSoleLineForProduct() {
+        projectOrder("APPROVED", pricedLine(LINE_ID, 1_250L, BigDecimal.ONE));
+
+        assertThat(resolver.resolveReceiptUnitCost(SourceDocumentType.PO, PO_ID.toString(), null, SKU_ID.toString()))
+                .hasValueSatisfying(cost -> assertThat(cost).isEqualByComparingTo("12.5"));
+    }
+
+    @Test
+    @DisplayName("receipt cost: unknown when the unlinked product matches several order lines")
+    void receiptUnitCost_unlinkedAmbiguous_isEmpty() {
+        UUID otherLine = UUID.fromString("01a02fd3-b675-7000-8000-000000000005");
+        projectOrder(
+                "APPROVED", pricedLine(LINE_ID, 1_000L, BigDecimal.ONE), pricedLine(otherLine, 2_000L, BigDecimal.ONE));
+
+        assertThat(resolver.resolveReceiptUnitCost(SourceDocumentType.PO, PO_ID.toString(), null, SKU_ID.toString()))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("receipt cost: unknown for a line projected before its conversion factor was published")
+    void receiptUnitCost_noConversionFactor_isEmpty() {
+        projectOrder("APPROVED");
+        when(purchaseOrderLineRepository.findById(LINE_ID)).thenReturn(Optional.of(pricedLine(LINE_ID, 12_000L, null)));
+
+        assertThat(resolver.resolveReceiptUnitCost(SourceDocumentType.PO, PO_ID.toString(), LINE_ID, SKU_ID.toString()))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("receipt cost: unknown for an ASN or a non-UUID document id")
+    void receiptUnitCost_notAPurchaseOrder_isEmpty() {
+        assertThat(resolver.resolveReceiptUnitCost(SourceDocumentType.ASN, "ASN-1", LINE_ID, SKU_ID.toString()))
+                .isEmpty();
+        assertThat(resolver.resolveReceiptUnitCost(SourceDocumentType.PO, "PO-FREE-TEXT", LINE_ID, SKU_ID.toString()))
+                .isEmpty();
+    }
+
+    private static ExtPurchaseOrderLineReplica pricedLine(UUID lineId, Long unitCostMinor, BigDecimal factor) {
+        ExtPurchaseOrderLineReplica line = line(lineId, SKU_ID, 1, "12", "12");
+        line.setUnitCostMinor(unitCostMinor);
+        line.setConversionFactor(factor);
+        return line;
+    }
+
     private void projectOrder(String status, ExtPurchaseOrderLineReplica... lines) {
         when(purchaseOrderRepository.findById(PO_ID))
                 .thenReturn(Optional.of(ExtPurchaseOrderReplica.builder()
@@ -184,6 +243,7 @@ class SourceDocumentResolverTest {
                         .poNumber("PO-2026-00042")
                         .vendorId(UUID.fromString("01a02fd3-b675-7000-8000-00000000000f"))
                         .status(status)
+                        .currency("USD")
                         .build()));
         when(purchaseOrderLineRepository.findByPurchaseOrderId(PO_ID)).thenReturn(List.of(lines));
     }

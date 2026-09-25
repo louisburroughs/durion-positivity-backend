@@ -199,6 +199,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 line.getLineId(),
                 line.getProductId(),
                 receivedQty,
+                receiptUnitCost(session, line),
                 lotId,
                 lineReq.getSerialNumbers(),
                 actorUserId);
@@ -279,6 +280,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 line.getProductId(),
                 crossDockLocationId,
                 quantities.quantityDelta(),
+                receiptUnitCost(session, line),
                 lot.lotId(),
                 actorUserId);
 
@@ -386,6 +388,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             @NonNull String productId,
             @NonNull UUID crossDockLocationId,
             @NonNull BigDecimal quantityDelta,
+            @Nullable BigDecimal receiptUnitCost,
             UUID lotId,
             @NonNull String actorUserId) {
         BigDecimal receiptQuantityAfter = calculateQuantityAfter(productId, crossDockLocationId, quantityDelta);
@@ -395,6 +398,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .toLocationId(crossDockLocationId)
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
                 .changeInQuantity(quantityDelta)
+                .unitCost(receiptUnitCost)
                 .quantityAfter(receiptQuantityAfter)
                 .lotId(lotId)
                 .transactionUserId(actorUserId)
@@ -452,6 +456,32 @@ public class ReceivingServiceImpl implements ReceivingService {
                 allLinesSettled(session) ? ReceivingSessionStatus.COMPLETED : ReceivingSessionStatus.IN_PROGRESS);
     }
 
+    /**
+     * The receipt's document cost per base unit, from the purchase order line the receiving line
+     * was built from (#2203, ADR-0048 IMP-002); null when it cannot be known, and the receipt then
+     * enters at the product's current average as before.
+     */
+    private @Nullable BigDecimal receiptUnitCost(@NonNull ReceivingSession session, @NonNull ReceivingLine line) {
+        return sourceDocumentResolver
+                .resolveReceiptUnitCost(
+                        session.getSourceDocumentType(),
+                        session.getSourceDocumentId(),
+                        line.getSourceLineId(),
+                        line.getProductId())
+                .orElse(null);
+    }
+
+    private static @Nullable UUID parseSourceLineId(@Nullable String sourceLineId) {
+        if (sourceLineId == null || sourceLineId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(sourceLineId.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
     private ReceivingSession resolveSessionForReceive(UUID sessionId) {
         var sessionOptional = receivingSessionRepository.findById(sessionId);
         if (sessionOptional.isPresent()) {
@@ -467,6 +497,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             UUID lineId,
             String productId,
             BigDecimal quantity,
+            @Nullable BigDecimal unitCost,
             UUID lotId,
             java.util.List<String> serialNumbers,
             String actorUserId) {
@@ -477,6 +508,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .toLocationId(stagingLocationId)
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
                 .changeInQuantity(quantityDelta)
+                .unitCost(unitCost)
                 .quantityAfter(calculateQuantityAfter(productId, stagingLocationId, quantityDelta))
                 .lotId(lotId)
                 // odoo-parity E4 (#1050): the funnel enumerates these serials for SERIAL-tracked
@@ -695,6 +727,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             lines.add(ReceivingLine.builder()
                     .session(session)
                     .productId(sourceLine.getProductId())
+                    .sourceLineId(parseSourceLineId(sourceLine.getSourceLineId()))
                     .expectedQuantity(sourceLine.getExpectedQuantity())
                     .receivedQuantity(BigDecimal.ZERO)
                     .status(ReceivingLineStatus.EXPECTED)

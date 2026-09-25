@@ -658,6 +658,99 @@ class ReceivingServiceImplTest {
         assertThat(savedLedgerEntry.getChangeInQuantity()).isEqualByComparingTo("10");
     }
 
+    /** #2203: the receipt row carries the purchase order line's per-base-unit cost. */
+    @Test
+    void receiveItemsIntoStaging_stampsTheOrderLinesDocumentCost() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID sourceLineId = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+        String poId = "00000000-0000-0000-0000-0000000000b1";
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .sourceLineId(sourceLineId)
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId(poId)
+                .sourceDocumentType(SourceDocumentType.PO)
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(sourceDocumentResolver.resolveReceiptUnitCost(SourceDocumentType.PO, poId, sourceLineId, "PROD-001"))
+                .thenReturn(Optional.of(new BigDecimal("12.5000")));
+
+        receivingService.receiveItemsIntoStaging(
+                sessionId,
+                new ReceiveItemsRequest(
+                        List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null))),
+                "test-user");
+
+        ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService).post(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue().getUnitCost()).isEqualByComparingTo("12.5000");
+    }
+
+    /** #2203: without a known order-line cost the receipt posts cost-less, as before. */
+    @Test
+    void receiveItemsIntoStaging_unknownDocumentCost_postsWithoutUnitCost() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId("PO-123")
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        receivingService.receiveItemsIntoStaging(
+                sessionId,
+                new ReceiveItemsRequest(
+                        List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null))),
+                "test-user");
+
+        ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService).post(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue().getUnitCost()).isNull();
+    }
+
+    /** #2203: a session keeps which order line each receiving line came from. */
+    @Test
+    void createReceivingSession_linksEachLineToItsOrderLine() {
+        UUID sourceLineId = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+        SourceDocumentResolver.SourceDocumentLine sourceLine = sourceLine("PROD-001", "5");
+        sourceLine.setSourceLineId(sourceLineId.toString());
+        when(sourceDocumentResolver.resolve(any(), any()))
+                .thenReturn(new SourceDocumentResolver.SourceDocument("PO-123", "APPROVED", List.of(sourceLine)));
+        ArgumentCaptor<ReceivingSession> saved = ArgumentCaptor.forClass(ReceivingSession.class);
+        when(receivingSessionRepository.save(saved.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        receivingService.createReceivingSession(new CreateReceivingSessionRequest("PO-123", "MANUAL"), "test-user");
+
+        assertThat(saved.getValue().getLines())
+                .singleElement()
+                .satisfies(line -> assertThat(line.getSourceLineId()).isEqualTo(sourceLineId));
+    }
+
     /**
      * #2009: the session names the site its stock is received at, so the ledger entry is stamped
      * with that site's declared staging location without the caller sending X-Site-Id.
