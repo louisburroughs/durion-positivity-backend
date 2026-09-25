@@ -36,7 +36,7 @@ class ReturnLineDtoTest {
         ReturnLineDto dto = ReturnLineDto.builder()
                 .itemId(null)
                 .quantity(1)
-                .reasonCode("DAMAGED")
+                .reasonCode("NOT_NEEDED")
                 .locationId(UUID.randomUUID())
                 .build();
 
@@ -51,7 +51,7 @@ class ReturnLineDtoTest {
         ReturnLineDto dto = ReturnLineDto.builder()
                 .itemId(UUID.randomUUID())
                 .quantity(0)
-                .reasonCode("DAMAGED")
+                .reasonCode("NOT_NEEDED")
                 .locationId(UUID.randomUUID())
                 .build();
 
@@ -66,7 +66,7 @@ class ReturnLineDtoTest {
         ReturnLineDto dto = ReturnLineDto.builder()
                 .itemId(UUID.randomUUID())
                 .quantity(-1)
-                .reasonCode("DAMAGED")
+                .reasonCode("NOT_NEEDED")
                 .locationId(UUID.randomUUID())
                 .build();
 
@@ -81,12 +81,44 @@ class ReturnLineDtoTest {
         ReturnLineDto dto = ReturnLineDto.builder()
                 .itemId(UUID.randomUUID())
                 .quantity(1)
-                .reasonCode("DAMAGED")
+                .reasonCode("NOT_NEEDED")
                 .locationId(UUID.randomUUID())
                 .build();
 
         Set<ConstraintViolation<ReturnLineDto>> violations = validator.validate(dto);
 
         assertThat(violations).extracting(v -> v.getPropertyPath().toString()).doesNotContain("itemId", "quantity");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"NOT_NEEDED", "WRONG_PART", "CUSTOMER_REFUSED"})
+    @DisplayName("reasonCode from the closed set produces no constraint violation on reasonCode field")
+    void closedSetReasonCode_noViolation(String reasonCode) {
+        ReturnLineDto dto = ReturnLineDto.builder()
+                .itemId(UUID.randomUUID())
+                .quantity(1)
+                .reasonCode(reasonCode)
+                .locationId(UUID.randomUUID())
+                .build();
+
+        Set<ConstraintViolation<ReturnLineDto>> violations = validator.validate(dto);
+
+        assertThat(violations).extracting(v -> v.getPropertyPath().toString()).doesNotContain("reasonCode");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"WRONG_PART_EXTRA", "DAMAGED"})
+    @DisplayName("reasonCode outside the closed set produces a constraint violation on reasonCode field")
+    void nonClosedSetReasonCode_producesConstraintViolation(String reasonCode) {
+        ReturnLineDto dto = ReturnLineDto.builder()
+                .itemId(UUID.randomUUID())
+                .quantity(1)
+                .reasonCode(reasonCode)
+                .locationId(UUID.randomUUID())
+                .build();
+
+        Set<ConstraintViolation<ReturnLineDto>> violations = validator.validate(dto);
+
+        assertThat(violations).extracting(v -> v.getPropertyPath().toString()).contains("reasonCode");
     }
 }

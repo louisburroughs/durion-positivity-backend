@@ -29,9 +29,13 @@ public interface ReceiptService {
     @NonNull
     ReceiptViewResponse getReceipt(@NonNull UUID invoiceId, @NonNull UUID receiptId);
 
-    void recordPrintDelivery(@NonNull UUID receiptId, @NonNull ReceiptDeliveryStatus status);
+    void recordPrintDelivery(@NonNull UUID invoiceId, @NonNull UUID receiptId, @NonNull ReceiptDeliveryStatus status);
 
-    void sendEmailReceipt(@NonNull UUID receiptId, @NonNull String emailAddress, @NonNull ReceiptDeliveryStatus status);
+    void sendEmailReceipt(
+            @NonNull UUID invoiceId,
+            @NonNull UUID receiptId,
+            @NonNull String emailAddress,
+            @NonNull ReceiptDeliveryStatus status);
 
     @NonNull
     Receipt reprintReceipt(@NonNull UUID receiptId, @NonNull String reason);
