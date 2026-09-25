@@ -168,6 +168,12 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** #2214: full read view of a single receipt for the frontend receipt page. */
+    public static final EventTypeRegistration INVOICE_RECEIPT_VIEW = EventTypeRegistration.fastRead(
+                    "INVOICE_RECEIPT_VIEW", "View a single receipt's full detail")
+            .apiVersion("1")
+            .build();
+
     public static final EventTypeRegistration INVOICE_CREATE_FROM_ORDER = EventTypeRegistration.write(
                     "INVOICE_CREATE_FROM_ORDER", "Create invoice from a sales order at checkout")
             .apiVersion("1")
@@ -221,6 +227,7 @@ public final class EventTypes {
                 INVOICE_RECEIPT_GENERATE,
                 INVOICE_RECEIPT_REPRINT,
                 INVOICE_RECEIPT_PRINT_DELIVERY,
-                INVOICE_RECEIPT_EMAIL_DELIVERY);
+                INVOICE_RECEIPT_EMAIL_DELIVERY,
+                INVOICE_RECEIPT_VIEW);
     }
 }

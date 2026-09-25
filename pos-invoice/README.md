@@ -41,6 +41,7 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 - `POST /v1/invoices/{invoiceId}/payments/{paymentId}/void` — void a payment
 - `POST /v1/invoices/{invoiceId}/payments/{paymentId}/refunds` — refund a payment
 - `POST /v1/invoices/{invoiceId}/receipts` — generate a receipt
+- `GET /v1/invoices/{invoiceId}/receipts/{receiptId}` — retrieve full receipt detail (#2214)
 - `POST /v1/invoices/{invoiceId}/receipts/{receiptId}/email` — email a receipt
 - `POST /v1/invoices/{invoiceId}/receipts/{receiptId}/print` — print a receipt
 - `GET /v1/billing/rules/{partyId}` — retrieve billing rules for a party
