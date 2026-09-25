@@ -200,6 +200,19 @@ class SourceDocumentResolverTest {
     }
 
     @Test
+    @DisplayName(
+            "receipt cost: a link to a line a revision replaced falls back to the order's only line for the product")
+    void receiptUnitCost_staleLink_usesSoleLineForProduct() {
+        UUID replacedLine = UUID.fromString("01a02fd3-b675-7000-8000-000000000006");
+        projectOrder("APPROVED", pricedLine(LINE_ID, 1_250L, BigDecimal.ONE));
+        when(purchaseOrderLineRepository.findById(replacedLine)).thenReturn(Optional.empty());
+
+        assertThat(resolver.resolveReceiptUnitCost(
+                        SourceDocumentType.PO, PO_ID.toString(), replacedLine, SKU_ID.toString()))
+                .hasValueSatisfying(cost -> assertThat(cost).isEqualByComparingTo("12.5"));
+    }
+
+    @Test
     @DisplayName("receipt cost: unknown when the unlinked product matches several order lines")
     void receiptUnitCost_unlinkedAmbiguous_isEmpty() {
         UUID otherLine = UUID.fromString("01a02fd3-b675-7000-8000-000000000005");

@@ -148,7 +148,8 @@ public class SourceDocumentResolver {
      * prices and moved from minor to major units of the order's currency.
      *
      * <p>The line is the one the receiving line was built from; a receiving line built before that
-     * link was kept falls back to the order's only line for the product. Empty whenever the cost
+     * link was kept, or whose linked line a revision has since replaced, falls back to the order's
+     * only line for the product. Empty whenever the cost
      * cannot be known — not a purchase order, no such line (or several candidates), an unpriced
      * line, or a line projected before pos-order published what its price is per — and the receipt
      * then posts without a document cost, entering at the product's current average.
@@ -168,9 +169,12 @@ public class SourceDocumentResolver {
             return Optional.empty();
         }
 
-        Optional<ExtPurchaseOrderLineReplica> orderLine = sourceLineId != null
-                ? purchaseOrderLineRepository.findById(sourceLineId)
-                : soleLineForProduct(poId, productId);
+        // A revision rebuilds the order's lines under new ids, so a link can outlive its line; the
+        // sole-line fallback then applies exactly as for a line that was never linked.
+        Optional<ExtPurchaseOrderLineReplica> orderLine = (sourceLineId != null
+                        ? purchaseOrderLineRepository.findById(sourceLineId)
+                        : Optional.<ExtPurchaseOrderLineReplica>empty())
+                .or(() -> soleLineForProduct(poId, productId));
         return orderLine
                 .filter(line -> line.getUnitCostMinor() != null && line.getConversionFactor() != null)
                 .map(line -> ReceiptUnitCosts.perBaseUnit(

@@ -1472,6 +1472,65 @@ class ReceivingServiceImplTest {
         assertThat(issueEntry.getFromLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
         assertThat(issueEntry.getQuantityAfter()).isEqualByComparingTo("4");
         assertThat(issueEntry.getChangeInQuantity()).isEqualByComparingTo("-10");
+
+        // #2203: no order-line cost is known here, so neither entry carries a document cost.
+        assertThat(receiptEntry.getUnitCost()).isNull();
+        assertThat(issueEntry.getUnitCost()).isNull();
+    }
+
+    private static final UUID SOURCE_LINE_ID = UUID.fromString("00000000-0000-0000-0000-0000000000a2");
+    private static final String PRICED_PO_ID = "00000000-0000-0000-0000-0000000000b2";
+
+    @Test
+    void crossDockLineToWorkorder_pricedOrderLine_costsTheReceiptOnly() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .sourceLineId(SOURCE_LINE_ID)
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId(PRICED_PO_ID)
+                .sourceDocumentType(SourceDocumentType.PO)
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", CROSS_DOCK_LOCATION_ID))
+                .thenReturn(new BigDecimal("4"), new BigDecimal("14"));
+
+        when(sourceDocumentResolver.resolveReceiptUnitCost(
+                        SourceDocumentType.PO, PRICED_PO_ID, SOURCE_LINE_ID, "PROD-001"))
+                .thenReturn(Optional.of(new BigDecimal("12.5000")));
+
+        CrossDockRequest request =
+                new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("10"), null);
+
+        receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user");
+
+        ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService, times(2)).post(ledgerCaptor.capture());
+        List<InventoryLedgerEntry> savedEntries = ledgerCaptor.getAllValues();
+
+        // #2203: the GOODS_RECEIPT carries the order line's cost; the paired GOODS_ISSUE carries none
+        // of its own and is costed by the engine at posting.
+        assertThat(savedEntries.get(0).getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_RECEIPT);
+        assertThat(savedEntries.get(0).getUnitCost()).isEqualByComparingTo("12.5000");
+        assertThat(savedEntries.get(1).getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_ISSUE);
+        assertThat(savedEntries.get(1).getUnitCost()).isNull();
     }
 
     /**
