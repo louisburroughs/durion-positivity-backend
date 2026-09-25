@@ -1140,8 +1140,39 @@ canonical ADR-0044 (`durion/docs/adr/0044-platform-event-only-domain-walls.adr.m
 `docker-compose up -d kafka` starts a single-node KRaft broker (`apache/kafka`). Services reach it
 at `kafka:29092` inside the compose network (host tools at `localhost:9092`). Kafka features remain
 opt-in per module (e.g. `WORKORDER_KAFKA_ENABLED=true`, `pos.customer.kafka.enabled=true`,
-`POS_INVOICE_KAFKA_ENABLED=true`, `pos.accounting.kafka.enabled=true`) until
-the Phase 0.4 tier-1 flip.
+`POS_INVOICE_KAFKA_ENABLED=true`) until the Phase 0.4 tier-1 flip — **except**
+`pos.accounting.kafka.enabled` / `pos.inventory.kafka.enabled` on `alpha` and `prod`, which are no
+longer opt-in there (issue #2192, below).
+
+#### `pos.accounting.kafka.enabled` / `pos.inventory.kafka.enabled` — no longer opt-in on alpha/prod (#2192)
+
+Both flags default to `false` in the modules' base `application.yml`
+(`${POS_ACCOUNTING_KAFKA_ENABLED:false}` / `${POS_INVENTORY_KAFKA_ENABLED:false}`), same as every
+other module's Kafka flag. But pos-accounting's `InventoryEventsListener` posts GL entries for
+inventory facts and pos-inventory's `OutboxEventWriter` is how every fact it owns (scrap,
+adjustments, availability snapshots) leaves the module at all — an absent consumer or producer here
+means money not posted or facts never written, silently, with no error and no health signal
+(SPEC-inventory-adjustment-gl-posting.md §2.3). So on `alpha` and `prod` only:
+
+- `application-alpha.yml` and `application-prod.yml` now set the flag to the literal `true` in both
+  modules, replacing the inherited `${…:false}` default — a deployment that forgets to export the
+  environment variable no longer silently starts with the rails off.
+- A `KafkaEnabledGuard` bean (`internal/config`, active only on the `alpha` / `prod` profiles) reads
+  the **bound** property value after Spring's relaxed binding and refuses to start if it resolved to
+  `false` — including when an operator explicitly sets `POS_ACCOUNTING_KAFKA_ENABLED=false` /
+  `POS_INVENTORY_KAFKA_ENABLED=false` in the environment, which still overrides the profile literal.
+  The startup failure names the property (e.g. `pos.accounting.kafka.enabled is false in
+  profile(s) [prod]. ...`).
+- `dev` is unaffected by design (H2, no broker, no guard bean); so is every test suite in both
+  modules — `test`, `pg`, and the bespoke unit profiles all either exclude Kafka autoconfiguration
+  or set the flag `false` on purpose, and the guard only exists on `alpha` / `prod`.
+- **Override**: there is no supported way to run `alpha` or `prod` with the rails intentionally off
+  — that is exactly the state this guard exists to refuse. If a deployment genuinely needs it (e.g.
+  a broker outage), that is an operational incident, not a configuration a container should start
+  into quietly.
+- **Follow-up**: the Phase 0.4 tier-1 flip (ADR-0044 §4) removes the `@ConditionalOnProperty` opt-in
+  from these domain-flow beans entirely, at which point the flag and this guard are both retired —
+  tracked as a follow-up issue from #2192.
 
 ### Warranty events rollout (#927)
 
