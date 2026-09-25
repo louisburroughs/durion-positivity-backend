@@ -19,6 +19,7 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import com.positivity.domainevents.inventory.ProductValueChangedV1;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -110,6 +111,9 @@ class InventoryRevaluationGLPostingIT {
     private AccountingEventRepository accountingEventRepository;
 
     @Autowired
+    private ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
+
+    @Autowired
     private ProcessedEventRepository processedEventRepository;
 
     @Autowired
@@ -152,6 +156,7 @@ class InventoryRevaluationGLPostingIT {
     @AfterEach
     void cleanUp() {
         journalEntryRepository.deleteAll();
+        reprocessingAttemptHistoryRepository.deleteAll();
         accountingEventRepository.deleteAll();
         sequenceRepository.deleteAll();
         idempotencyKeyRepository.deleteAll();
