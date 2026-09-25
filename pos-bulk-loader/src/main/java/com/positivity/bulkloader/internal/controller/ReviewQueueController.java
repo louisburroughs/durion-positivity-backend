@@ -114,11 +114,11 @@ public class ReviewQueueController {
     @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_CORRECTION_SUBMIT", apiVersion = "1")
     @Operation(operationId = "submitCorrections", summary = "Submit Corrected Records for Job", description = """
-                    Submits corrected field values for one or more audit records of a FAILED bulk load job, marking \
+                    Submits corrected field values for one or more audit records of a FAILED or PARTIAL bulk load job, marking \
                     each accepted record CORRECTED.
                     Use this tool to fix several failed rows in one call; use submitSingleCorrection instead when \
                     correcting exactly one record and a per-record accept or reject status is wanted.
-                    Preconditions: the job must belong to the authenticated operator and be in FAILED state; each \
+                    Preconditions: the job must belong to the authenticated operator and be in FAILED or PARTIAL state; each \
                     auditRecordId must belong to that job.
                     Required inputs: corrections, a non-empty list where each item carries auditRecordId (UUID) and \
                     correctedData, a map of field names to corrected string values.
@@ -127,7 +127,7 @@ public class ReviewQueueController {
                     and reported in the response's rejections list without failing the call.
                     Correcting records does not re-run the import; call retryBulkLoadJob and then startJobProcessing \
                     to process the job again.
-                    Returns 201 with accepted and rejected counts, 409 when the job is not in FAILED state, 404 \
+                    Returns 201 with accepted and rejected counts, 409 when the job is not in FAILED or PARTIAL state, 404 \
                     when the job does not exist, and 403 when it belongs to another operator.
                     """)
     @ApiResponse(responseCode = "201", description = "Corrections submitted successfully")
@@ -173,11 +173,11 @@ public class ReviewQueueController {
     @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_CORRECTION_SUBMIT_SINGLE", apiVersion = "1")
     @Operation(operationId = "submitSingleCorrection", summary = "Submit a Single Correction Record", description = """
-                    Submits corrected field values for exactly one audit record of a FAILED bulk load job and \
+                    Submits corrected field values for exactly one audit record of a FAILED or PARTIAL bulk load job and \
                     reports whether the correction was accepted.
                     Use this tool for interactive row-by-row fixing; use submitCorrections instead to correct a \
                     batch of records in one call.
-                    Preconditions: the job must belong to the authenticated operator and be in FAILED state; the \
+                    Preconditions: the job must belong to the authenticated operator and be in FAILED or PARTIAL state; the \
                     auditRecordId must belong to that job.
                     Required inputs: auditRecordId (UUID) and correctedData, a map of field names to corrected \
                     string values.
@@ -189,7 +189,7 @@ public class ReviewQueueController {
                     reasonCodes, originalValues, correctedValues and createdAt) so callers can update their review \
                     queue view without a follow-up fetch; these fields are omitted when the audit record can no \
                     longer be reloaded.
-                    Returns 409 when the job is not in FAILED state, 404 when the job does not exist, and 403 when \
+                    Returns 409 when the job is not in FAILED or PARTIAL state, 404 when the job does not exist, and 403 when \
                     it belongs to another operator.
                     """)
     @ApiResponse(

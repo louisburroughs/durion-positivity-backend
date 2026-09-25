@@ -107,8 +107,11 @@ public class ReviewQueueServiceImpl implements ReviewQueueService {
                 .status(status)
                 .rejectionReason(status == CorrectionStatus.REJECTED ? firstRejectionReason(response) : null);
 
+        // Reload only within the requested job: submitCorrections has already refused a record
+        // belonging to another job, and the response must not echo that record's values.
         auditRepository
                 .findById(item.getAuditRecordId())
+                .filter(audit -> jobId.equals(audit.getJobId()))
                 .ifPresent(audit -> result.entityType(audit.getEntityType())
                         .entityId(audit.getEntityId())
                         .rowNumber(audit.getRowNumber())

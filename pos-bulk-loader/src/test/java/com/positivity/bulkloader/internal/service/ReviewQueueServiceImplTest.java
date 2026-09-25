@@ -291,6 +291,32 @@ class ReviewQueueServiceImplTest {
         assertThat(result.getCreatedAt()).isNull();
     }
 
+    @Test
+    void submitSingleCorrection_whenAuditBelongsToAnotherJob_rejectsWithoutEchoingThatRecord() {
+        UUID otherJobId = UUID.fromString("00000000-0000-0000-0000-00000000aaaa");
+        BulkLoadJob job = bulkLoadJob(JOB_ID, OPERATOR_ID, JobStatus.FAILED);
+        BulkLoadRecordAudit foreignAudit = auditRecord(AUDIT_ID, otherJobId);
+        BulkCorrectionItem item = BulkCorrectionItem.builder()
+                .auditRecordId(AUDIT_ID)
+                .correctedData(Map.of("sku", "PROD-001"))
+                .build();
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(auditRepository.findById(AUDIT_ID)).thenReturn(Optional.of(foreignAudit));
+
+        var result = service.submitSingleCorrection(JOB_ID, item, OPERATOR_ID);
+
+        // The record exists, but under another job: the response must not leak its values.
+        assertThat(result.getStatus().name()).isEqualTo("REJECTED");
+        assertThat(result.getRejectionReason()).contains("does not belong");
+        assertThat(result.getEntityType()).isNull();
+        assertThat(result.getEntityId()).isNull();
+        assertThat(result.getRowNumber()).isNull();
+        assertThat(result.getReviewStatus()).isNull();
+        assertThat(result.getOriginalValues()).isNull();
+        assertThat(result.getCorrectedValues()).isNull();
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────
 
     private BulkLoadJob bulkLoadJob(UUID id, String operatorId, JobStatus status) {
