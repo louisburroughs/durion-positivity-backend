@@ -91,6 +91,7 @@ class PaymentServiceImplTest {
     private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID OTHER_INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000099");
     private static final UUID PAYMENT_INTENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID OTHER_PAYMENT_INTENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000098");
     private static final String IDEMPOTENCY_KEY = "idem-key-001";
     private static final String CAPTURE_IDEMPOTENCY_KEY = "capture-idempotency-key-001";
     private static final BigDecimal AMOUNT_BELOW_LIMIT = BigDecimal.valueOf(200_00, 2);
@@ -755,13 +756,42 @@ class PaymentServiceImplTest {
             when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
             PaymentIntent intent = capturedPaymentIntent();
             when(paymentIntentRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of(intent));
-            when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID))
-                    .thenReturn(List.of());
+            when(refundRecordRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of());
 
             List<PaymentIntentResponse> results = paymentService.listInvoicePayments(INVOICE_ID);
 
             assertThat(results).hasSize(1);
             assertThat(results.get(0).getPaymentId()).isEqualTo(PAYMENT_INTENT_ID);
+        }
+
+        @Test
+        @DisplayName(
+                "listInvoicePayments batches the refund lookup: one findByInvoice_Id call, never findByPaymentIntent_Id")
+        void listInvoicePayments_batchesRefundLookup() {
+            authenticate(LocationScope.unscoped());
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+
+            PaymentIntent first = capturedPaymentIntent();
+            PaymentIntent second = capturedPaymentIntent();
+            second.setId(OTHER_PAYMENT_INTENT_ID);
+            when(paymentIntentRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of(first, second));
+            when(refundRecordRepository.findByInvoice_Id(INVOICE_ID))
+                    .thenReturn(List.of(
+                            refundRecordFor(first, BigDecimal.valueOf(50), RefundStatus.COMPLETED),
+                            refundRecordFor(second, BigDecimal.valueOf(30), RefundStatus.COMPLETED),
+                            refundRecordFor(second, BigDecimal.valueOf(999), RefundStatus.FAILED)));
+
+            List<PaymentIntentResponse> results = paymentService.listInvoicePayments(INVOICE_ID);
+
+            assertThat(results).hasSize(2);
+            Map<UUID, BigDecimal> refundedByPaymentId = results.stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            PaymentIntentResponse::getPaymentId, PaymentIntentResponse::getRefundedAmount));
+            assertThat(refundedByPaymentId.get(PAYMENT_INTENT_ID)).isEqualByComparingTo(BigDecimal.valueOf(50));
+            assertThat(refundedByPaymentId.get(OTHER_PAYMENT_INTENT_ID)).isEqualByComparingTo(BigDecimal.valueOf(30));
+
+            verify(refundRecordRepository).findByInvoice_Id(INVOICE_ID);
+            verify(refundRecordRepository, never()).findByPaymentIntent_Id(any());
         }
 
         @Test
@@ -788,6 +818,13 @@ class PaymentServiceImplTest {
             RefundRecord record = new RefundRecord();
             record.setAmount(amount);
             record.setStatus(status);
+            return record;
+        }
+
+        /** A refund anchored to the given payment intent, for the batched-lookup grouping test. */
+        private RefundRecord refundRecordFor(PaymentIntent paymentIntent, BigDecimal amount, RefundStatus status) {
+            RefundRecord record = refundRecord(amount, status);
+            record.setPaymentIntent(paymentIntent);
             return record;
         }
     }

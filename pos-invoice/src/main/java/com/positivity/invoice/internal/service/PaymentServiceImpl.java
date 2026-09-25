@@ -27,7 +27,9 @@ import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -217,8 +219,21 @@ public class PaymentServiceImpl implements PaymentService {
                 invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
         requireLocationInReach(invoice);
 
-        return paymentIntentRepository.findByInvoice_Id(invoiceId).stream()
-                .map(this::toPaymentIntentResponse)
+        List<PaymentIntent> paymentIntents = paymentIntentRepository.findByInvoice_Id(invoiceId);
+        // Batched: one refund query for the whole invoice instead of one per payment intent
+        // (N+1). Refunds are grouped by payment-intent id so each response still carries its own
+        // total; a standalone refund (no payment-intent anchor) is dropped by the null filter and
+        // never counted against a payment intent.
+        Map<UUID, BigDecimal> refundedByPaymentIntentId = refundRecordRepository.findByInvoice_Id(invoiceId).stream()
+                .filter(refund -> refund.getStatus() != RefundStatus.FAILED)
+                .filter(refund -> refund.getPaymentIntent() != null)
+                .collect(Collectors.groupingBy(
+                        refund -> refund.getPaymentIntent().getId(),
+                        Collectors.reducing(BigDecimal.ZERO, RefundRecord::getAmount, BigDecimal::add)));
+
+        return paymentIntents.stream()
+                .map(paymentIntent -> toPaymentIntentResponse(
+                        paymentIntent, refundedByPaymentIntentId.getOrDefault(paymentIntent.getId(), BigDecimal.ZERO)))
                 .toList();
     }
 
@@ -263,8 +278,12 @@ public class PaymentServiceImpl implements PaymentService {
 
     @NonNull
     private PaymentIntentResponse toPaymentIntentResponse(@NonNull PaymentIntent paymentIntent) {
-        BigDecimal refundedAmount = sumNonFailedRefunds(paymentIntent.getId());
+        return toPaymentIntentResponse(paymentIntent, sumNonFailedRefunds(paymentIntent.getId()));
+    }
 
+    @NonNull
+    private PaymentIntentResponse toPaymentIntentResponse(
+            @NonNull PaymentIntent paymentIntent, @NonNull BigDecimal refundedAmount) {
         PaymentIntentResponse response = new PaymentIntentResponse();
         response.setPaymentId(paymentIntent.getId());
         response.setInvoiceId(

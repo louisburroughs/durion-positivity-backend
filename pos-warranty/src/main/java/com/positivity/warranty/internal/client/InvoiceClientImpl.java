@@ -30,10 +30,11 @@ import org.springframework.web.client.RestClientResponseException;
  * {@code SettlementReconciliationServiceImpl} maps to {@code ReconciliationCheckStatus.UNKNOWN}.
  * Every settlement row would read UNKNOWN and look exactly like pos-invoice being unreachable.
  *
- * <p>The refund endpoint additionally enforces {@code REFUND_PAYMENT} in the pos-invoice service
- * layer plus {@code SUPERVISOR_OVERRIDE} for payments outside pos-invoice's 180-day refund window —
- * warranty refunds routinely reverse payments captured years earlier, and the warranty flow's
- * own approval gate (claim must be APPROVED before settlement) is the compensating control.
+ * <p>The refund endpoint additionally enforces {@code invoice:payment:refund} in the pos-invoice
+ * service layer plus {@code invoice:payment:override} for payments outside pos-invoice's 180-day
+ * refund window — warranty refunds routinely reverse payments captured years earlier, and the
+ * warranty flow's own approval gate (claim must be APPROVED before settlement) is the
+ * compensating control.
  */
 @Slf4j
 @Component
@@ -46,7 +47,7 @@ public class InvoiceClientImpl implements InvoiceClient {
     /** Writes: the adjustment POST. */
     private static final String AUTHORITIES = "invoice:manage";
 
-    private static final String REFUND_AUTHORITIES = "invoice:manage,REFUND_PAYMENT,SUPERVISOR_OVERRIDE";
+    private static final String REFUND_AUTHORITIES = "invoice:manage,invoice:payment:refund,invoice:payment:override";
     private static final String REFUND_STATUS_COMPLETED = "COMPLETED";
     private static final String ADJUSTMENT_TYPE_WARRANTY = "WARRANTY";
     private static final String REFUND_REASON_OTHER = "OTHER";

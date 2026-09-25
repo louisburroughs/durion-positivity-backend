@@ -1182,6 +1182,12 @@ class PaymentReversalServiceImplTest {
             return LocationScope.of(Set.of(), Set.of(permission), Optional.of(Set.of(nodes)), true, resolver);
         }
 
+        /** Scopes only {@link InvoicePermissions#PAYMENT_OVERRIDE}, leaving the base void/refund permission global. */
+        private LocationScope overrideScopedTo(UUID... nodes) {
+            return LocationScope.of(
+                    Set.of(), Set.of(InvoicePermissions.PAYMENT_OVERRIDE), Optional.of(Set.of(nodes)), true, resolver);
+        }
+
         private Invoice scopedInvoice() {
             Invoice invoice = invoice(INVOICE_ID);
             invoice.setLocationId(testLocation);
@@ -1297,6 +1303,103 @@ class PaymentReversalServiceImplTest {
             assertThatCode(() -> paymentReversalServiceImpl.refundInvoiceStandalone(
                             INVOICE_ID, BigDecimal.valueOf(25), RefundReason.CUSTOMER_RETURN, null, null))
                     .doesNotThrowAnyException();
+        }
+
+        // -------------------------------------------------------------------------
+        // AC4 window-bypass override, location-scoped (#2226, BILL-DEC-010)
+        // -------------------------------------------------------------------------
+
+        @Test
+        @DisplayName(
+                "voidPayment: override held globally bypasses the window even when void permission is location-scoped")
+        void voidPayment_overrideHeldGlobally_bypassesWindow() {
+            authenticate(
+                    scopedTo(InvoicePermissions.PAYMENT_VOID, regionNode),
+                    InvoicePermissions.PAYMENT_VOID,
+                    InvoicePermissions.PAYMENT_OVERRIDE);
+            PaymentIntent pi = authorizedPaymentIntent();
+            pi.setInvoice(scopedInvoice());
+            pi.setCreatedAt(OLD_AUTH);
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+            GatewayPaymentResult voidSuccessResult = org.mockito.Mockito.mock(GatewayPaymentResult.class);
+            when(voidSuccessResult.isSuccessful()).thenReturn(true);
+            when(paymentGatewayPort.voidRemainder(any())).thenReturn(voidSuccessResult);
+            when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            assertThatCode(() -> paymentReversalServiceImpl.voidPayment(
+                            INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.MANAGER_DISCRETION, null))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("voidPayment: override scoped to another location leaves the window enforced")
+        void voidPayment_overrideScopedElsewhere_windowStillEnforced() {
+            authenticate(
+                    overrideScopedTo(otherShop), InvoicePermissions.PAYMENT_VOID, InvoicePermissions.PAYMENT_OVERRIDE);
+            PaymentIntent pi = authorizedPaymentIntent();
+            pi.setInvoice(scopedInvoice());
+            pi.setCreatedAt(OLD_AUTH);
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+            assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
+                            INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.MANAGER_DISCRETION, null))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            verify(paymentGatewayPort, never()).voidRemainder(any());
+        }
+
+        @Test
+        @DisplayName(
+                "refundPayment: override held globally bypasses the window even when refund permission is location-scoped")
+        void refundPayment_overrideHeldGlobally_bypassesWindow() {
+            authenticate(
+                    scopedTo(InvoicePermissions.PAYMENT_REFUND, regionNode),
+                    InvoicePermissions.PAYMENT_REFUND,
+                    InvoicePermissions.PAYMENT_OVERRIDE);
+            PaymentIntent pi = capturedPaymentIntent();
+            pi.setInvoice(scopedInvoice());
+            pi.setCreatedAt(OLD_CAPTURE);
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+            when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID))
+                    .thenReturn(List.of());
+            GatewayPaymentResult refundSuccessResult = successResult();
+            when(paymentGatewayPort.refund(any())).thenReturn(refundSuccessResult);
+            when(refundRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            assertThatCode(() -> paymentReversalServiceImpl.refundPayment(
+                            INVOICE_ID,
+                            PAYMENT_INTENT_ID,
+                            BigDecimal.valueOf(50),
+                            RefundReason.CUSTOMER_RETURN,
+                            null,
+                            null))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("refundPayment: override scoped to another location leaves the window enforced")
+        void refundPayment_overrideScopedElsewhere_windowStillEnforced() {
+            authenticate(
+                    overrideScopedTo(otherShop),
+                    InvoicePermissions.PAYMENT_REFUND,
+                    InvoicePermissions.PAYMENT_OVERRIDE);
+            PaymentIntent pi = capturedPaymentIntent();
+            pi.setInvoice(scopedInvoice());
+            pi.setCreatedAt(OLD_CAPTURE);
+            when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+            when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID))
+                    .thenReturn(List.of());
+
+            assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
+                            INVOICE_ID,
+                            PAYMENT_INTENT_ID,
+                            BigDecimal.valueOf(50),
+                            RefundReason.CUSTOMER_RETURN,
+                            null,
+                            null))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            verify(refundRecordRepository, never()).save(any());
         }
     }
 }

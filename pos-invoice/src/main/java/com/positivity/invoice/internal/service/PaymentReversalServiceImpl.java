@@ -111,9 +111,21 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         Instant authorizedAt = paymentIntent.getCreatedAt();
         if (authorizedAt != null) {
             Instant windowCutoff = Instant.now(clock).minus(VOID_WINDOW_HOURS, ChronoUnit.HOURS);
-            if (authorizedAt.isBefore(windowCutoff)
-                    && !SecurityContextHelper.hasAuthority(InvoicePermissions.PAYMENT_OVERRIDE)) {
-                throw new PaymentWindowExpiredException("Void window expired");
+            if (authorizedAt.isBefore(windowCutoff)) {
+                // ADR-0061 §3 (#2226, BILL-DEC-010): the override is itself location-bound like
+                // every other elevation, so a holder scoped away from this invoice is denied
+                // before the authority check runs — mirrors ReceiptServiceImpl's reprint-cap
+                // override gate. A caller who does not hold PAYMENT_OVERRIDE at all takes no
+                // scope decision here (LocationScope#require is a no-op for an alternate not
+                // held) and falls straight into the authority check below.
+                UUID voidLocation = paymentIntent.getInvoice().getLocationId();
+                SecurityContextHelper.locationScope()
+                        .require(
+                                InvoicePermissions.PAYMENT_OVERRIDE,
+                                voidLocation == null ? "" : voidLocation.toString());
+                if (!SecurityContextHelper.hasAuthority(InvoicePermissions.PAYMENT_OVERRIDE)) {
+                    throw new PaymentWindowExpiredException("Void window expired");
+                }
             }
         }
 
@@ -219,9 +231,17 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             return;
         }
         Instant windowCutoff = Instant.now(clock).minus(REFUND_WINDOW_DAYS, ChronoUnit.DAYS);
-        if (capturedAt.isBefore(windowCutoff)
-                && !SecurityContextHelper.hasAuthority(InvoicePermissions.PAYMENT_OVERRIDE)) {
-            throw new PaymentWindowExpiredException("Refund window of 180 days has expired");
+        if (capturedAt.isBefore(windowCutoff)) {
+            // ADR-0061 §3 (#2226, BILL-DEC-010): same location-bound gate as the void window
+            // override above and ReceiptServiceImpl's reprint-cap override.
+            UUID refundLocation = paymentIntent.getInvoice().getLocationId();
+            SecurityContextHelper.locationScope()
+                    .require(
+                            InvoicePermissions.PAYMENT_OVERRIDE,
+                            refundLocation == null ? "" : refundLocation.toString());
+            if (!SecurityContextHelper.hasAuthority(InvoicePermissions.PAYMENT_OVERRIDE)) {
+                throw new PaymentWindowExpiredException("Refund window of 180 days has expired");
+            }
         }
     }
 
