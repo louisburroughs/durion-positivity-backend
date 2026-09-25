@@ -306,7 +306,9 @@ class InventoryEventsListenerTest {
                  "aggregateId":"%s","aggregateVersion":%d,
                  "payload":{"pickTaskId":"%s","pickListId":"%s","workorderId":"%s","skuId":"%s",
                             "locationId":"%s","quantityRequired":3,"quantityPicked":2,
-                            "status":"PICKED","sortOrder":1,"workorderLineId":"%s"}}
+                            "status":"PICKED","sortOrder":1,"workorderLineId":"%s",
+                            "productCode":"0123456789012","locationName":"Aisle 3 Bin 7",
+                            "locationBarcode":"LOC-0037"}}
                 """.formatted(
                 eventId, PICK_TASK_ID, version, PICK_TASK_ID, PICK_LIST_ID, WORKORDER_ID, SKU_ID, LOCATION_ID, PART_ID);
     }
@@ -323,6 +325,66 @@ class InventoryEventsListenerTest {
         ArgumentCaptor<ExtPickTaskReplica> saved = ArgumentCaptor.forClass(ExtPickTaskReplica.class);
         verify(pickTasks).save(saved.capture());
         assertThat(saved.getValue().getWorkorderLineId()).isEqualTo(PART_ID);
+    }
+
+    /** #2217: the pick facade's resolve-scan endpoint compares against these projected codes. */
+    @Test
+    @DisplayName("a v2 pick-task fact carries its scan-verification codes onto the replica")
+    void pickTaskReplicaCarriesScanCodes() {
+        when(processedEvents.existsById("e-scan-codes")).thenReturn(false);
+        when(pickTasks.findById(PICK_TASK_ID)).thenReturn(Optional.empty());
+
+        listener.onInventoryEvent(pickTaskEventV2("e-scan-codes", 1));
+
+        ArgumentCaptor<ExtPickTaskReplica> saved = ArgumentCaptor.forClass(ExtPickTaskReplica.class);
+        verify(pickTasks).save(saved.capture());
+        assertThat(saved.getValue().getProductCode()).isEqualTo("0123456789012");
+        assertThat(saved.getValue().getLocationName()).isEqualTo("Aisle 3 Bin 7");
+        assertThat(saved.getValue().getLocationBarcode()).isEqualTo("LOC-0037");
+    }
+
+    /** A v1 fact carries none of the scan codes; the replica keeps them null, not a stale value. */
+    @Test
+    @DisplayName("a v1 pick-task fact carries no scan codes")
+    void pickTaskReplicaHasNoScanCodesFromV1Fact() {
+        when(processedEvents.existsById("e-v1-codes")).thenReturn(false);
+        when(pickTasks.findById(PICK_TASK_ID)).thenReturn(Optional.empty());
+
+        listener.onInventoryEvent(pickTaskEvent("e-v1-codes", 1));
+
+        ArgumentCaptor<ExtPickTaskReplica> saved = ArgumentCaptor.forClass(ExtPickTaskReplica.class);
+        verify(pickTasks).save(saved.capture());
+        assertThat(saved.getValue().getProductCode()).isNull();
+        assertThat(saved.getValue().getLocationName()).isNull();
+        assertThat(saved.getValue().getLocationBarcode()).isNull();
+    }
+
+    /**
+     * #2225 regression: a v1 (or older-v2) fact arriving after codes were already replicated —
+     * a redelivery, a replay, or simply an out-of-order snapshot — must not erase them. Null on
+     * the wire means "this fact doesn't say", never "clear it"; there is no way to express an
+     * explicit clear on this fact today.
+     */
+    @Test
+    @DisplayName("a v1 pick-task fact does not erase scan-verification codes already replicated")
+    void pickTaskReplicaPreservesScanCodesAcrossV1Facts() {
+        when(processedEvents.existsById("e-v1-preserve-codes")).thenReturn(false);
+        when(pickTasks.findById(PICK_TASK_ID))
+                .thenReturn(Optional.of(ExtPickTaskReplica.builder()
+                        .pickTaskId(PICK_TASK_ID)
+                        .productCode("0123456789012")
+                        .locationName("Aisle 3 Bin 7")
+                        .locationBarcode("LOC-0037")
+                        .aggregateVersion(1)
+                        .build()));
+
+        listener.onInventoryEvent(pickTaskEvent("e-v1-preserve-codes", 2));
+
+        ArgumentCaptor<ExtPickTaskReplica> saved = ArgumentCaptor.forClass(ExtPickTaskReplica.class);
+        verify(pickTasks).save(saved.capture());
+        assertThat(saved.getValue().getProductCode()).isEqualTo("0123456789012");
+        assertThat(saved.getValue().getLocationName()).isEqualTo("Aisle 3 Bin 7");
+        assertThat(saved.getValue().getLocationBarcode()).isEqualTo("LOC-0037");
     }
 
     /** A v1 fact carries no demand line; taking its null would drop a link already known. */

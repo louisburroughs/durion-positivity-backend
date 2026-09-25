@@ -26,6 +26,8 @@ import com.positivity.workorder.internal.dto.DashboardResponse;
 import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
 import com.positivity.workorder.internal.dto.WorkSessionResponse;
+import com.positivity.workorder.internal.dto.pick.ResolveScanRequest;
+import com.positivity.workorder.internal.dto.pick.WorkorderPickListResponse;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.ApprovalConfigurationService;
@@ -36,6 +38,7 @@ import com.positivity.workorder.internal.service.LaborIntelligenceService;
 import com.positivity.workorder.internal.service.LocationHierarchyService;
 import com.positivity.workorder.internal.service.WorkSessionService;
 import com.positivity.workorder.internal.service.WorkexecTimeTrackingService;
+import com.positivity.workorder.internal.service.WorkorderPickFacadeService;
 import com.positivity.workorder.internal.service.WorkorderService;
 import java.time.Clock;
 import java.time.Instant;
@@ -97,7 +100,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
     EstimateFromAppointmentController.class,
     WorkSessionController.class,
     WorkexecTimeTrackingController.class,
-    LaborIntelligenceController.class
+    LaborIntelligenceController.class,
+    WorkorderPickFacadeController.class,
+    WorkorderPickedItemsController.class
 })
 @Import({LocationScopeAutoConfiguration.class, LocationScopeControllerTest.SliceTestConfig.class})
 class LocationScopeControllerTest {
@@ -154,6 +159,18 @@ class LocationScopeControllerTest {
 
     @MockitoBean
     private LocationHierarchyService locationHierarchyService;
+
+    /**
+     * The pick facade's location-scope check lives inside {@link
+     * com.positivity.workorder.internal.service.WorkorderPickFacadeServiceImpl} (ADR-0061
+     * mechanism, #2204), not the controller — unlike every other entry in this test. Mocking the
+     * whole service therefore proves only the wiring (a {@link LocationScopeDeniedException} the
+     * service raises still resolves to 403 {@code LOCATION_SCOPE_DENIED} through this controller);
+     * the actual in-reach/out-of-reach/pre-rollout/global-grant decision logic is covered against
+     * the real service in {@code WorkorderPickFacadeServiceImplTest}.
+     */
+    @MockitoBean
+    private WorkorderPickFacadeService workorderPickFacadeService;
 
     @AfterEach
     void clearCaller() {
@@ -855,6 +872,140 @@ class LocationScopeControllerTest {
 
             verify(laborIntelligenceService, org.mockito.Mockito.times(2)).operations(isNull(), isNull(), isNull());
             verify(locationHierarchyService, never()).reachableLocations(any());
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // WorkorderPickFacadeController / WorkorderPickedItemsController — gate on the workorder's
+    // own locationId (#2204). The service (mocked here) is where the real decision is made; see
+    // the field javadoc on workorderPickFacadeService above for what this proves.
+    // ---------------------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("pick facade endpoints (gate, decided in the service)")
+    class PickFacade {
+
+        private static final UUID PICK_TASK_ID = UUID.fromString("019200bb-0000-7000-8000-000000000501");
+
+        @Test
+        @DisplayName("resolvePickScan: 200 when the service does not raise a scope denial")
+        void resolveScanServiceAllows() throws Exception {
+            preRollout(WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE);
+            when(workorderPickFacadeService.resolveScan(eq(WORKORDER_ID), eq(PICK_TASK_ID), any()))
+                    .thenReturn(com.positivity.workorder.internal.dto.pick.ResolveScanResponse.builder()
+                            .pickTaskId(PICK_TASK_ID)
+                            .pickListId(WORKORDER_ID)
+                            .matched(true)
+                            .matchStatus("MATCHED")
+                            .build());
+
+            var request = ResolveScanRequest.builder()
+                    .scannedSkuId(SHOP_A)
+                    .scannedLocationId(SHOP_A)
+                    .build();
+            mockMvc.perform(post(
+                                    "/v1/workorders/{workorderId}/pick-tasks/{pickTaskId}:resolve-scan",
+                                    WORKORDER_ID,
+                                    PICK_TASK_ID)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(request)))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("resolvePickScan: a scope denial raised by the service answers 403 LOCATION_SCOPE_DENIED, "
+                + "with no workorder id leaked in the body")
+        void resolveScanServiceDenies() throws Exception {
+            preRollout(WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE);
+            when(workorderPickFacadeService.resolveScan(eq(WORKORDER_ID), eq(PICK_TASK_ID), any()))
+                    .thenThrow(new LocationScopeDeniedException(
+                            WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE, SHOP_B.toString()));
+
+            var request = ResolveScanRequest.builder()
+                    .scannedSkuId(SHOP_A)
+                    .scannedLocationId(SHOP_A)
+                    .build();
+            String body = mockMvc.perform(post(
+                                    "/v1/workorders/{workorderId}/pick-tasks/{pickTaskId}:resolve-scan",
+                                    WORKORDER_ID,
+                                    PICK_TASK_ID)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(request)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE))
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+            org.assertj.core.api.Assertions.assertThat(body).doesNotContain(WORKORDER_ID.toString());
+        }
+
+        @Test
+        @DisplayName("getWorkorderPickList: 200 when the service does not raise a scope denial")
+        void getPickListServiceAllows() throws Exception {
+            preRollout(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW);
+            when(workorderPickFacadeService.getPickListForWorkorder(WORKORDER_ID))
+                    .thenReturn(WorkorderPickListResponse.builder()
+                            .pickListId(PICK_TASK_ID)
+                            .workorderId(WORKORDER_ID)
+                            .status("OPEN")
+                            .build());
+
+            mockMvc.perform(get("/v1/workorders/{workorderId}/pick-list", WORKORDER_ID))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("getWorkorderPickList: a scope denial raised by the service answers 403 LOCATION_SCOPE_DENIED")
+        void getPickListServiceDenies() throws Exception {
+            preRollout(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW);
+            when(workorderPickFacadeService.getPickListForWorkorder(WORKORDER_ID))
+                    .thenThrow(new LocationScopeDeniedException(
+                            WorkorderPermissions.INVENTORY_PICK_LIST_VIEW, SHOP_B.toString()));
+
+            mockMvc.perform(get("/v1/workorders/{workorderId}/pick-list", WORKORDER_ID))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
+        }
+
+        @Test
+        @DisplayName("getPickedItems: 200 when the service does not raise a scope denial (#2225)")
+        void getPickedItemsServiceAllows() throws Exception {
+            preRollout(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW);
+            when(workorderPickFacadeService.getPickedItemsForWorkorder(WORKORDER_ID))
+                    .thenReturn(java.util.List.of());
+
+            mockMvc.perform(get("/v1/workorders/{workorderId}/picked-items", WORKORDER_ID))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("getPickedItems: a scope denial raised by the service answers 403 LOCATION_SCOPE_DENIED (#2225)")
+        void getPickedItemsServiceDenies() throws Exception {
+            preRollout(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW);
+            when(workorderPickFacadeService.getPickedItemsForWorkorder(WORKORDER_ID))
+                    .thenThrow(new LocationScopeDeniedException(
+                            WorkorderPermissions.INVENTORY_PICK_LIST_VIEW, SHOP_B.toString()));
+
+            mockMvc.perform(get("/v1/workorders/{workorderId}/picked-items", WORKORDER_ID))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
+        }
+
+        @Test
+        @DisplayName("consumeWorkorderPickedItems: a scope denial raised by the service answers "
+                + "403 LOCATION_SCOPE_DENIED")
+        void consumePickedItemsServiceDenies() throws Exception {
+            preRollout(WorkorderPermissions.PARTS_CONSUME);
+            when(workorderPickFacadeService.consumePickedItems(eq(WORKORDER_ID), any()))
+                    .thenThrow(new LocationScopeDeniedException(WorkorderPermissions.PARTS_CONSUME, SHOP_B.toString()));
+
+            mockMvc.perform(post("/v1/workorders/{workorderId}/picked-items:consume", WORKORDER_ID)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"items":[{"pickTaskId":"019200bb-0000-7000-8000-000000000502","quantityToConsume":1}]}
+                                    """))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
         }
     }
 

@@ -16,6 +16,7 @@ import com.positivity.domainevents.inventory.ConsumptionRecordedV1;
 import com.positivity.domainevents.inventory.InventoryAdjustedV1;
 import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.LotExpiryAlertV1;
+import com.positivity.domainevents.inventory.PickTaskUpdatedV1;
 import com.positivity.domainevents.inventory.ProductValueChangedV1;
 import com.positivity.domainevents.inventory.ReservationOutcomeV1;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
@@ -61,12 +62,20 @@ class InventoryFactPublisherTest {
             mock(com.positivity.inventory.internal.repository.PickListRepository.class);
     private final com.positivity.inventory.internal.repository.PickTaskRepository pickTaskRepository =
             mock(com.positivity.inventory.internal.repository.PickTaskRepository.class);
+    private final com.positivity.inventory.internal.repository.ExtProductCodeReplicaRepository
+            extProductCodeReplicaRepository =
+                    mock(com.positivity.inventory.internal.repository.ExtProductCodeReplicaRepository.class);
+    private final com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository
+            extStorageLocationReplicaRepository =
+                    mock(com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository.class);
 
     private InventoryFactPublisher publisher;
 
     @BeforeEach
     void setUp() {
         when(writerProvider.getIfAvailable()).thenReturn(writer);
+        when(extProductCodeReplicaRepository.findAllById(any())).thenReturn(List.of());
+        when(extStorageLocationReplicaRepository.findAllById(any())).thenReturn(List.of());
         publisher = new InventoryFactPublisher(
                 writerProvider,
                 availabilityService,
@@ -74,6 +83,8 @@ class InventoryFactPublisherTest {
                 leadTimeService,
                 pickListRepository,
                 pickTaskRepository,
+                extProductCodeReplicaRepository,
+                extStorageLocationReplicaRepository,
                 TEST_CLOCK);
         ReflectionTestUtils.setField(publisher, "eventsTopic", "inventory.events.v1");
         TransactionSynchronizationManager.initSynchronization();
@@ -181,6 +192,141 @@ class InventoryFactPublisherTest {
         fireBeforeCommit();
 
         verify(writer, never()).publish(any(), any());
+    }
+
+    // ── Pick-task scan codes (#2217) ─────────────────────────────────────────────
+
+    private static com.positivity.inventory.internal.entity.PickTaskEntity pickTaskEntity(
+            UUID pickTaskId, UUID pickListId, UUID productId, UUID locationId) {
+        com.positivity.inventory.internal.entity.PickListEntity pickList =
+                com.positivity.inventory.internal.entity.PickListEntity.builder()
+                        .pickListId(pickListId)
+                        .workorderId(UUID.randomUUID())
+                        .build();
+        return com.positivity.inventory.internal.entity.PickTaskEntity.builder()
+                .pickTaskId(pickTaskId)
+                .pickList(pickList)
+                .productId(productId)
+                .sku("SKU-1")
+                .suggestedLocationId(locationId)
+                .quantityRequired(5)
+                .quantityPicked(0)
+                .status(com.positivity.inventory.internal.enums.PickTaskStatus.PENDING)
+                .sortOrder(1)
+                .build();
+    }
+
+    @Test
+    @DisplayName("Pick-task fact carries the product's scan code and location name/barcode when replicated (#2217)")
+    void pickTaskFactCarriesScanCodesWhenReplicated() {
+        UUID pickTaskId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        when(pickTaskRepository.findById(pickTaskId))
+                .thenReturn(
+                        java.util.Optional.of(pickTaskEntity(pickTaskId, UUID.randomUUID(), productId, locationId)));
+        when(extProductCodeReplicaRepository.findAllById(any()))
+                .thenReturn(List.of(com.positivity.inventory.internal.entity.ExtProductCodeReplica.builder()
+                        .productId(productId)
+                        .code("0123456789012")
+                        .codeType("EAN")
+                        .build()));
+        when(extStorageLocationReplicaRepository.findAllById(any()))
+                .thenReturn(List.of(com.positivity.inventory.internal.entity.ExtStorageLocationReplica.builder()
+                        .storageLocationId(locationId)
+                        .name("Aisle 3 Bin 7")
+                        .barcode("LOC-0037")
+                        .build()));
+
+        publisher.markPickTaskChanged(pickTaskId);
+        fireBeforeCommit();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<DomainEventEnvelope<Object>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(eq("inventory.events.v1"), captor.capture());
+        PickTaskUpdatedV1 fact = (PickTaskUpdatedV1) captor.getValue().payload();
+        assertThat(fact.productCode()).isEqualTo("0123456789012");
+        assertThat(fact.locationName()).isEqualTo("Aisle 3 Bin 7");
+        assertThat(fact.locationBarcode()).isEqualTo("LOC-0037");
+    }
+
+    @Test
+    @DisplayName("Pick-task fact carries no product code when the replica's code type is not a scan scheme (#2217)")
+    void pickTaskFactOmitsCodeWhenTypeIsNotScannable() {
+        UUID pickTaskId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        when(pickTaskRepository.findById(pickTaskId))
+                .thenReturn(java.util.Optional.of(pickTaskEntity(pickTaskId, UUID.randomUUID(), productId, null)));
+        when(extProductCodeReplicaRepository.findAllById(any()))
+                .thenReturn(List.of(com.positivity.inventory.internal.entity.ExtProductCodeReplica.builder()
+                        .productId(productId)
+                        // MPN and internal SKUs are not scan codes (ADR-0053 §5).
+                        .code("MPN-778")
+                        .codeType("MPN")
+                        .build()));
+
+        publisher.markPickTaskChanged(pickTaskId);
+        fireBeforeCommit();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<DomainEventEnvelope<Object>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(eq("inventory.events.v1"), captor.capture());
+        PickTaskUpdatedV1 fact = (PickTaskUpdatedV1) captor.getValue().payload();
+        assertThat(fact.productCode()).isNull();
+    }
+
+    @Test
+    @DisplayName("Pick-task fact carries no codes when neither the product nor the location has replicated yet (#2217)")
+    void pickTaskFactOmitsCodesWhenNoReplica() {
+        UUID pickTaskId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        when(pickTaskRepository.findById(pickTaskId))
+                .thenReturn(
+                        java.util.Optional.of(pickTaskEntity(pickTaskId, UUID.randomUUID(), productId, locationId)));
+        // No product/location replica rows returned: findAllById defaults to empty (see setUp).
+
+        publisher.markPickTaskChanged(pickTaskId);
+        fireBeforeCommit();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<DomainEventEnvelope<Object>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(eq("inventory.events.v1"), captor.capture());
+        PickTaskUpdatedV1 fact = (PickTaskUpdatedV1) captor.getValue().payload();
+        assertThat(fact.productCode()).isNull();
+        assertThat(fact.locationName()).isNull();
+        assertThat(fact.locationBarcode()).isNull();
+    }
+
+    @Test
+    @DisplayName(
+            "A transient enrichment failure is best-effort: the pick-task fact still publishes, with null codes (#2225)")
+    void pickTaskFactStillPublishesWhenEnrichmentLookupsFail() {
+        UUID pickTaskId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        when(pickTaskRepository.findById(pickTaskId))
+                .thenReturn(
+                        java.util.Optional.of(pickTaskEntity(pickTaskId, UUID.randomUUID(), productId, locationId)));
+        // A transient lookup failure enriching scan codes must not escape publishPickTaskIds and
+        // abort the business transaction, nor stop the pick-task fact — an unrelated, otherwise
+        // healthy snapshot — from publishing.
+        when(extProductCodeReplicaRepository.findAllById(any()))
+                .thenThrow(new org.springframework.dao.QueryTimeoutException("db"));
+        when(extStorageLocationReplicaRepository.findAllById(any()))
+                .thenThrow(new org.springframework.dao.QueryTimeoutException("db"));
+
+        publisher.markPickTaskChanged(pickTaskId);
+        fireBeforeCommit();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<DomainEventEnvelope<Object>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(eq("inventory.events.v1"), captor.capture());
+        PickTaskUpdatedV1 fact = (PickTaskUpdatedV1) captor.getValue().payload();
+        assertThat(fact.pickTaskId()).isEqualTo(pickTaskId);
+        assertThat(fact.productCode()).isNull();
+        assertThat(fact.locationName()).isNull();
+        assertThat(fact.locationBarcode()).isNull();
     }
 
     // ── Fact→event characterisation (Phase 3.6) ────────────────────────────────────

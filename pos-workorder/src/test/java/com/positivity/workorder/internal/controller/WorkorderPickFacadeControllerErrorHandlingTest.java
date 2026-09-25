@@ -3,18 +3,22 @@ package com.positivity.workorder.internal.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import com.positivity.workorder.internal.service.WorkorderPickFacadeService;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -73,5 +77,35 @@ class WorkorderPickFacadeControllerErrorHandlingTest {
                 .getContentAsString();
 
         assertThat(body).doesNotContain(WORKORDER_ID.toString());
+    }
+
+    /**
+     * #2225: the resolve-scan validation tests added alongside #2217 exercised a slice that
+     * excludes this module's own {@link com.positivity.workorder.internal.config.GlobalExceptionHandler}
+     * and imports only {@link WebCommonErrorAutoConfiguration}, so they proved the platform
+     * fallback's {@code VALIDATION_ERROR} code rather than what production actually answers. This
+     * module's own {@code MethodArgumentNotValidException} handler runs here (nothing excludes
+     * it) and answers {@code VALIDATION_FAILED} — the code the resolvePickScan {@code @Operation}
+     * description and {@code ResolveScanRequest}'s validation are documented against.
+     */
+    @Test
+    @WithMockUser(authorities = "inventory:pick_list:execute")
+    @DisplayName("#2225: resolve-scan validation runs through the real module advice and answers "
+            + "400 VALIDATION_FAILED with fieldErrors")
+    void resolveScanValidationAnswersValidationFailedThroughTheRealAdvice() throws Exception {
+        String pickTaskId = "01a0a52c-89f9-7ef9-9c97-583da36fa241";
+        // Neither scannedSkuId nor scannedProductCode, and neither scannedLocationId nor
+        // scannedLocationCode: both @AssertTrue checks fail.
+        mockMvc.perform(post(
+                                "/v1/workorders/{workorderId}/pick-tasks/{pickTaskId}:resolve-scan",
+                                WORKORDER_ID,
+                                pickTaskId)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[*].field")
+                        .value(org.hamcrest.Matchers.containsInAnyOrder("productTargetValid", "locationTargetValid")));
     }
 }

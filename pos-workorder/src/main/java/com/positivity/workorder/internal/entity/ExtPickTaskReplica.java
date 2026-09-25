@@ -54,6 +54,24 @@ public class ExtPickTaskReplica extends TenantScopedEntity {
     @Column(name = "location_id")
     private UUID locationId;
 
+    /**
+     * The SKU's scannable EAN/UPC code (#2217). Null when the SKU carries none, when its code type
+     * is not a scan scheme (MPN, internal SKU), or on a row replicated before this field existed.
+     */
+    @Column(name = "product_code")
+    private String productCode;
+
+    /**
+     * The suggested location's name, which pos-location's replica uses as its human-readable code
+     * (#2217). Null when the location replica had not arrived, or on a pre-existing row.
+     */
+    @Column(name = "location_name")
+    private String locationName;
+
+    /** The suggested location's barcode, when it carries one (#2217). Null on the same conditions as {@link #locationName}. */
+    @Column(name = "location_barcode")
+    private String locationBarcode;
+
     @Column(name = "quantity_required", nullable = false)
     private int quantityRequired;
 

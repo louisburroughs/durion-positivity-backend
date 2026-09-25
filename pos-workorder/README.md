@@ -445,6 +445,41 @@ Tenant-scoped per ADR-0062 §3, mirroring `POST /v1/outbox/replay`: an ordinary 
 only its own rows, and a platform-tenant operator — who owns no workorder rows — fans out over every
 active tenant in turn, each from the beginning of its own bounded run (a cursor cannot span tenants).
 
+## Pick facade (ADR-0044 §4/§6, #901; scan-by-code #2217; location scope #2204)
+
+`WorkorderPickFacadeController` / `WorkorderPickedItemsController` (`WorkorderPickFacadeServiceImpl`)
+read the event-fed `ext_pick_list` / `ext_pick_task` replicas, fed by `inventory.events.v1`
+(`InventoryEventsListener`), and never call pos-inventory synchronously (ADR-0044 R1; the sole
+pos-workorder→pos-catalog client remains `CatalogLaborTimeClientImpl`, file-scoped grant, ADR-0044).
+
+- **Scan-by-code (#2217).** `resolvePickScan` accepts either an id-based or a code-based scan:
+  exactly one of `scannedSkuId`/`scannedProductCode`, and exactly one of
+  `scannedLocationId`/`scannedLocationCode`, each `400 VALIDATION_FAILED` otherwise. A product code
+  is compared against the task's replicated `productCode` (the SKU's EAN/UPC, projected from
+  `PickTaskUpdatedV1`, itself sourced from pos-inventory's `ext_product` — only EAN/UPC codes travel
+  here, never MPN or an internal SKU, per ADR-0053 §5); a location code is compared against either the
+  task's `locationBarcode` or its `locationName`, since a mechanic may scan either printed label. Both
+  comparisons are trimmed and case-insensitive.
+- **Match statuses**, backed by `ResolveScanResponse.MatchStatus`: `MATCHED`, `SKU_MISMATCH`,
+  `LOCATION_MISMATCH`, `NO_MATCH` (unchanged), plus `PRODUCT_CODE_UNAVAILABLE` /
+  `LOCATION_CODE_UNAVAILABLE` — a code was scanned but the task carries no replicated code to compare
+  against, so the UI can tell "we cannot verify" from "wrong part". Unknown-vs-wrong on a code scan
+  cannot be distinguished further without a synchronous catalog/location lookup, which ADR-0044
+  forbids here; per-task comparison and per-tenant-unique EAN/UPC codes (ADR-0053 §5) rule out
+  ambiguity across tasks. `resolvedSkuId`/`resolvedLocationId` are filled with the task's own ids only
+  once a code-based scan actually matches; an id-based scan is echoed back as before regardless of
+  outcome. `expectedProductCode`/`expectedLocationCode`/`expectedLocationBarcode` always carry the
+  task's replicated values (even on a mismatch) so the UI can tell the mechanic what was expected.
+- **`WorkorderPickTaskResponse` (#2221)** carries the same three expected codes as
+  `productCode`/`storageLocationCode`/`storageLocationBarcode`, `NOT_REQUIRED` and null for a task
+  last updated before scan codes were replicated (schema v2 additive fields on
+  `PickTaskUpdatedV1`, pos-inventory/pos-domain-events #2217).
+- **Location scope (#2204).** Picking and consuming parts are location-scoped by mechanism, not by
+  assignment: `getWorkorderPickList`, `getPickTasks`, `getPickedItems`, `resolvePickScan`,
+  `confirmPickLine`, `completePickTask`, and `consumeWorkorderPickedItems` all gate on the
+  workorder's own `locationId` before any state change (or, for the three reads, before returning
+  it) — see the Location scope table below for the permission each checks.
+
 ## Location scope (ADR-0061, #1871/#1872)
 
 Location-scoped permissions are enforced on top of `@PreAuthorize` using the caller's
@@ -469,6 +504,9 @@ module's `LocationAncestorResolver`; there is no per-request call to pos-locatio
 | `overrideOperationalContext` | `workorder:operationalContext:override` | `WorkorderServiceImpl`, after the 404 and before any write: first the workorder's current `shopId` (null fails closed), then the body's `locationId` |
 | `assignServicePosition`, `releaseServicePosition` | `workorder:position:assign` | `ServicePositionServiceImpl`, after the 404 and before any write, on the workorder's `shopId` (null fails closed). The target position is at the workorder's own site by construction, so there is no second location to check |
 | `startWorkexecWorkSession` | `timekeeping:work_session:create` | controller, on the body's `locationId` |
+| `getWorkorderPickList`, `getPickTasks`, `getPickedItems` | `inventory:pick_list:view` | `WorkorderPickFacadeServiceImpl`, off the workorder's own `locationId` (#2204) — mechanism scoping, no assignment gate; none of the pick-facade endpoints takes a `locationId` parameter, so location comes off the loaded workorder itself, same non-parameter pattern as `overrideOperationalContext`'s `shopId` leg |
+| `resolvePickScan`, `confirmPickLine`, `completePickTask` | `inventory:pick_list:execute` | `WorkorderPickFacadeServiceImpl`, off the workorder's own `locationId`, before any state change (#2204) |
+| `consumeWorkorderPickedItems` | `workorder:parts:consume` | `WorkorderPickFacadeServiceImpl.consumePickedItems`, off the workorder's own `locationId`, before the consume command is published (#2204) |
 
 **Narrow** — the location is an optional filter; a supplied one is gated, and without one a scoped
 caller sees only the locations within reach (an empty reach is an empty result, never a 403 and

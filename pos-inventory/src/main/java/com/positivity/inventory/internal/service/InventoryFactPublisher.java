@@ -20,17 +20,23 @@ import com.positivity.inventory.internal.config.OutboxEventWriter;
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LeadTimeView;
 import com.positivity.inventory.internal.dto.LocationInventoryInquiryResponse;
+import com.positivity.inventory.internal.entity.ExtProductCodeReplica;
+import com.positivity.inventory.internal.entity.ExtStorageLocationReplica;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.PickListEntity;
 import com.positivity.inventory.internal.entity.PickTaskEntity;
+import com.positivity.inventory.internal.repository.ExtProductCodeReplicaRepository;
+import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.PickListRepository;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -67,7 +73,14 @@ public class InventoryFactPublisher {
     private final InventoryLeadTimeService inventoryLeadTimeService;
     private final PickListRepository pickListRepository;
     private final PickTaskRepository pickTaskRepository;
+    private final ExtProductCodeReplicaRepository extProductCodeReplicaRepository;
+    private final ExtStorageLocationReplicaRepository extStorageLocationReplicaRepository;
     private final Clock clock;
+
+    /** Scan-code schemes pos-catalog may assign; only these are scannable (ADR-0053 §5). */
+    private static final String CODE_TYPE_EAN = "EAN";
+
+    private static final String CODE_TYPE_UPC = "UPC";
 
     // Same property ManifestPublisher scans event_outbox by, so an override can never
     // desync the outbox rows from the manifest computation.
@@ -394,13 +407,65 @@ public class InventoryFactPublisher {
     }
 
     private void publishPickTaskIds(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
+        if (pending.pickTaskIds.isEmpty()) {
+            return;
+        }
+
+        // First pass: load every pending task so the product/location code lookups below can be
+        // batched once per fact drain rather than once per task (#2217).
+        Map<UUID, PickTaskEntity> tasksById = new LinkedHashMap<>();
         for (UUID pickTaskId : pending.pickTaskIds) {
             try {
                 PickTaskEntity task = pickTaskRepository.findById(pickTaskId).orElse(null);
-                if (task == null) {
-                    continue;
+                if (task != null) {
+                    tasksById.put(pickTaskId, task);
                 }
+            } catch (Exception e) {
+                log.warn("Skipping pick-task fact for {}: {}", pickTaskId, e.getMessage());
+            }
+        }
+        if (tasksById.isEmpty()) {
+            return;
+        }
+
+        Set<UUID> productIds = new LinkedHashSet<>();
+        Set<UUID> locationIds = new LinkedHashSet<>();
+        for (PickTaskEntity task : tasksById.values()) {
+            if (task.getProductId() != null) {
+                productIds.add(task.getProductId());
+            }
+            if (task.getSuggestedLocationId() != null) {
+                locationIds.add(task.getSuggestedLocationId());
+            }
+        }
+        // Best-effort (#2225 review): a transient failure enriching scan codes must not escape
+        // this method — that would abort the whole business transaction over a snapshot fact, and
+        // stop every emitter still queued behind this one in publishPending. Falling back to an
+        // empty map degrades to null codes on the published facts rather than losing them.
+        Map<UUID, ExtProductCodeReplica> productCodesById = new LinkedHashMap<>();
+        try {
+            extProductCodeReplicaRepository
+                    .findAllById(productIds)
+                    .forEach(p -> productCodesById.put(p.getProductId(), p));
+        } catch (Exception e) {
+            log.warn("Skipping product-code enrichment for pick-task facts: {}", e.getMessage());
+        }
+        Map<UUID, ExtStorageLocationReplica> locationsById = new LinkedHashMap<>();
+        try {
+            extStorageLocationReplicaRepository
+                    .findAllById(locationIds)
+                    .forEach(l -> locationsById.put(l.getStorageLocationId(), l));
+        } catch (Exception e) {
+            log.warn("Skipping location enrichment for pick-task facts: {}", e.getMessage());
+        }
+
+        for (Map.Entry<UUID, PickTaskEntity> entry : tasksById.entrySet()) {
+            UUID pickTaskId = entry.getKey();
+            try {
+                PickTaskEntity task = entry.getValue();
                 PickListEntity owning = task.getPickList();
+                ExtProductCodeReplica productCode = productCodesById.get(task.getProductId());
+                ExtStorageLocationReplica location = locationsById.get(task.getSuggestedLocationId());
                 publish(
                         writer,
                         PickTaskUpdatedV1.EVENT_TYPE,
@@ -419,11 +484,30 @@ public class InventoryFactPublisher {
                                 // Schema v2 (#1479): the demand line this task fulfils, so a
                                 // consumer can map a consumed pick back to the workorder part it
                                 // came from.
-                                task.getWorkorderLineId()));
+                                task.getWorkorderLineId(),
+                                scannableProductCode(productCode),
+                                location == null ? null : location.getName(),
+                                location == null ? null : location.getBarcode()));
             } catch (Exception e) {
                 log.warn("Skipping pick-task fact for {}: {}", pickTaskId, e.getMessage());
             }
         }
+    }
+
+    /**
+     * The product's scan code, only when its type is actually a scannable scheme (#2217, ADR-0053
+     * §5). An MPN or an internal SKU is not a barcode a mechanic can scan against, so those types —
+     * and a product the replica has not seen yet — carry {@code null} here. Reads the existing
+     * {@code ext_product_code} replica (CAP-322 #1312) rather than a separate copy, matching the
+     * pattern {@link SupplierStockHintResolver} already uses for the same EAN/UPC pair.
+     */
+    private static String scannableProductCode(ExtProductCodeReplica productCode) {
+        if (productCode == null || productCode.getCodeType() == null) {
+            return null;
+        }
+        String type = productCode.getCodeType();
+        boolean scannable = CODE_TYPE_EAN.equalsIgnoreCase(type) || CODE_TYPE_UPC.equalsIgnoreCase(type);
+        return scannable ? productCode.getCode() : null;
     }
 
     private void publishConsumptions(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
