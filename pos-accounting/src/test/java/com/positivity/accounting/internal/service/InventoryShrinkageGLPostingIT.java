@@ -14,6 +14,7 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -95,6 +96,9 @@ class InventoryShrinkageGLPostingIT {
     private AccountingEventRepository accountingEventRepository;
 
     @Autowired
+    private ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
+
+    @Autowired
     private ProcessedEventRepository processedEventRepository;
 
     @Autowired
@@ -136,6 +140,7 @@ class InventoryShrinkageGLPostingIT {
     @AfterEach
     void cleanUp() {
         journalEntryRepository.deleteAll();
+        reprocessingAttemptHistoryRepository.deleteAll();
         accountingEventRepository.deleteAll();
         sequenceRepository.deleteAll();
         idempotencyKeyRepository.deleteAll();

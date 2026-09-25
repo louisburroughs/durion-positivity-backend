@@ -17,6 +17,7 @@ import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ExtCustomerPartyRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.LocationProfileRepository;
+import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -71,6 +72,9 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
     private AccountingEventRepository accountingEventRepository;
 
     @Autowired
+    private ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
+
+    @Autowired
     private ExtInvoiceRepository extInvoiceRepository;
 
     @Autowired
@@ -84,6 +88,7 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
 
     @BeforeEach
     void setUp() {
+        reprocessingAttemptHistoryRepository.deleteAll();
         accountingEventRepository.deleteAll();
         extInvoiceRepository.deleteAll();
         extCustomerPartyRepository.deleteAll();
@@ -129,6 +134,7 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
 
     @AfterEach
     void tearDown() {
+        reprocessingAttemptHistoryRepository.deleteAll();
         accountingEventRepository.deleteAll();
         extInvoiceRepository.deleteAll();
         extCustomerPartyRepository.deleteAll();
