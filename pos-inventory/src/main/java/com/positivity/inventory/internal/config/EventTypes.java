@@ -261,6 +261,10 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "INVENTORY_RECEIVING_CROSSDOCK", "Cross-dock receiving line directly to workorder")
                         .build(),
+                EventTypeRegistration.search(
+                                "INVENTORY_RECEIVING_WORKORDER_SEARCH",
+                                "Search eligible workorders for cross-dock by number or id")
+                        .build(),
 
                 // PurchaseOrderController — only receiving remains here (CAP-320 #1334)
                 EventTypeRegistration.fastRead("INVENTORY_LOT_LIST", "List inventory lots")

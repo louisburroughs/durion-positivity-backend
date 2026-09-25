@@ -247,6 +247,8 @@ public class InventoryLedgerServiceImpl implements InventoryLedgerService {
                 .locationId(entry.getLocationId())
                 .fromLocationId(entry.getFromLocationId())
                 .toLocationId(entry.getToLocationId())
+                .workorderId(entry.getWorkorderId())
+                .workorderLineId(entry.getWorkorderLineId())
                 .reasonCode(entry.getReasonCode())
                 .sourceTransactionId(entry.getSourceTransactionId())
                 .unitOfMeasure(entry.getUnitOfMeasure())

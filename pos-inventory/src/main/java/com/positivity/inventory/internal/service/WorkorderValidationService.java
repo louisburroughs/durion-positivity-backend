@@ -4,9 +4,11 @@ import com.positivity.inventory.internal.entity.ExtWorkorderPartReplica;
 import com.positivity.inventory.internal.entity.ExtWorkorderReplica;
 import com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtWorkorderReplicaRepository;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,6 +55,21 @@ public class WorkorderValidationService {
 
         return new WorkorderLineValidation(
                 workorder.getStatus(), matchedLine.getProductEntityId().toString());
+    }
+
+    /**
+     * Whether a workorder status is a terminal one that no longer accepts parts issued to it —
+     * shared by {@code ReceivingServiceImpl} (cross-dock eligibility) and the cross-dock workorder
+     * search (#2211), so the two paths cannot drift on what "closed" means.
+     */
+    public static boolean isClosedWorkorderStatus(@Nullable String status) {
+        if (status == null) {
+            return false;
+        }
+        String normalizedStatus = status.trim().toUpperCase(Locale.ROOT);
+        return "COMPLETED".equals(normalizedStatus)
+                || "CANCELLED".equals(normalizedStatus)
+                || "CLOSED".equals(normalizedStatus);
     }
 
     private UUID parseUuid(String value, String fieldName) {

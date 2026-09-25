@@ -21,12 +21,14 @@ import com.positivity.inventory.internal.repository.NormalizedAvailabilityReposi
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
 import com.positivity.inventory.internal.service.ForecastQuantityService;
 import com.positivity.inventory.internal.service.ForecastSiteResolver;
 import com.positivity.inventory.internal.service.LeadTimeResolver;
 import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.PurchaseSuggestionCreationService;
 import com.positivity.inventory.internal.service.Quantities;
+import com.positivity.inventory.internal.service.QuantityScaleGuard;
 import com.positivity.inventory.internal.service.StockoutDeadlineCalculator;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -37,6 +39,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -71,12 +74,23 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
     private final ReplenishmentSourcingService replenishmentSourcingService;
     private final Clock clock;
     private final LocationScopeService locationScopeService;
+    private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
     @Override
     @Transactional(readOnly = true)
     public @NonNull List<ReplenishmentTaskResponse> getReplenishmentTasks() {
-        return replenishmentTaskRepository.findByStatusIn(OPEN_STATUSES).stream()
-                .map(this::toTaskResponse)
+        List<ReplenishmentTask> tasks = replenishmentTaskRepository.findByStatusIn(OPEN_STATUSES);
+        // One batched IN query for the whole list instead of one round trip per task (#2206).
+        Map<UUID, UUID> siteByLocation = forecastSiteResolver.resolveAll(
+                tasks.stream().map(ReplenishmentTask::getDestinationLocationId).toList());
+        Map<UUID, String> uomByProduct = baseUnitOfMeasureResolver.resolveAll(tasks.stream()
+                .map(task -> QuantityScaleGuard.productIdOf(task.getItemSKU()))
+                .toList());
+        return tasks.stream()
+                .map(task -> toTaskResponse(
+                        task,
+                        siteByLocation.get(task.getDestinationLocationId()),
+                        uomByProduct.get(QuantityScaleGuard.productIdOf(task.getItemSKU()))))
                 .toList();
     }
 
@@ -891,13 +905,24 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                 .build();
     }
 
+    /** Single-row path: resolves the site and unit of measure itself. See {@link #getReplenishmentTasks} for the batched form. */
     private ReplenishmentTaskResponse toTaskResponse(ReplenishmentTask task) {
+        return toTaskResponse(
+                task,
+                forecastSiteResolver.resolveForecastSite(task.getDestinationLocationId()),
+                baseUnitOfMeasureResolver.resolve(QuantityScaleGuard.productIdOf(task.getItemSKU())));
+    }
+
+    private ReplenishmentTaskResponse toTaskResponse(
+            ReplenishmentTask task, @Nullable UUID locationId, @Nullable String uom) {
         return ReplenishmentTaskResponse.builder()
                 .taskId(task.getTaskId() != null ? task.getTaskId().toString() : null)
                 .itemSKU(task.getItemSKU())
                 .quantity(task.getQuantity() != null ? task.getQuantity() : 0)
                 .sourceLocationId(task.getSourceLocationId())
                 .destinationLocationId(task.getDestinationLocationId())
+                .locationId(locationId)
+                .uom(uom)
                 .status(task.getStatus() != null ? task.getStatus().name() : null)
                 .triggerType(
                         task.getTriggerType() != null ? task.getTriggerType().name() : null)

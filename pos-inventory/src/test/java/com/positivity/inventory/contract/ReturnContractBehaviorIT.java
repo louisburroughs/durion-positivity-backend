@@ -59,7 +59,7 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
                 .lines(List.of(ReturnLineDto.builder()
                         .itemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                         .quantity(2)
-                        .reasonCode("DAMAGED")
+                        .reasonCode("NOT_NEEDED")
                         .locationId(UUID.fromString("10000000-0000-0000-0000-000000000001"))
                         .build()))
                 .build();
@@ -83,7 +83,7 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
                 .lines(List.of(ReturnLineDto.builder()
                         .itemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                         .quantity(1)
-                        .reasonCode("EXCESS")
+                        .reasonCode("WRONG_PART")
                         .locationId(UUID.fromString("10000000-0000-0000-0000-000000000001"))
                         .build()))
                 .build();
@@ -127,7 +127,7 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
                 .lines(List.of(ReturnLineDto.builder()
                         .itemId(skuId)
                         .quantity(99)
-                        .reasonCode("DAMAGED")
+                        .reasonCode("CUSTOMER_REFUSED")
                         .locationId(UUID.fromString("10000000-0000-0000-0000-000000000001"))
                         .build()))
                 .build();

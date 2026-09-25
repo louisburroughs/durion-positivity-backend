@@ -5,7 +5,6 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.positivity.inventory.internal.enums.ShortageResolutionOption;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
@@ -29,14 +28,16 @@ import org.jspecify.annotations.Nullable;
 public class ShortageResolveRequest {
 
     @Schema(
-            description = "Retry-safe idempotency key; a replay with the same key returns the original result",
+            description = "Retry-safe idempotency key; a replay with the same key returns the original result."
+                    + " When omitted, defaults to \"<allocationId>:<optionType>\"",
             example = "shortage-resolve-01960003-0001",
-            requiredMode = REQUIRED)
-    @NotBlank
+            requiredMode = NOT_REQUIRED)
+    @Nullable
     private String idempotencyKey;
 
     @Schema(
-            description = "Identifier of the allocation to resolve",
+            description =
+                    "Identifier of the allocation to resolve; the UI's allocationLineId names the same" + " allocation",
             example = "01960003-0000-7000-8000-000000000001",
             requiredMode = REQUIRED)
     @NotNull
@@ -47,14 +48,19 @@ public class ShortageResolveRequest {
     private ShortageResolutionOption optionType;
 
     @Schema(
-            description = "SKU / stock-item identifier that is short",
+            description = "SKU / stock-item identifier that is short. When omitted, derived from the named"
+                    + " allocation's reservation",
             example = "01960003-0000-7000-8000-000000000002",
-            requiredMode = REQUIRED)
-    @NotBlank
+            requiredMode = NOT_REQUIRED)
+    @Nullable
     private String sku;
 
-    @Schema(description = "Quantity that is short and to be resolved", example = "3", requiredMode = REQUIRED)
-    @NotNull
+    @Schema(
+            description = "Quantity that is short and to be resolved. When omitted, derived from the named"
+                    + " allocation's reservation as requiredQuantity minus allocatedQuantity",
+            example = "3",
+            requiredMode = NOT_REQUIRED)
+    @Nullable
     @Positive
     private BigDecimal shortQuantity;
 

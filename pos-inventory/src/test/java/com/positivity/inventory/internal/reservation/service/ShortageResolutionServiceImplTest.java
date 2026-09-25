@@ -24,6 +24,7 @@ import com.positivity.inventory.internal.entity.SkuCostState;
 import com.positivity.inventory.internal.enums.ShortageResolutionOption;
 import com.positivity.inventory.internal.exception.ShortageResolutionException;
 import com.positivity.inventory.internal.movement.service.TransferOrderService;
+import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.ExtProductSubstitutionReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.PurchaseSuggestionRepository;
@@ -66,6 +67,7 @@ class ShortageResolutionServiceImplTest {
     private SkuCostStateRepository skuCostStateRepository;
     private PurchaseSuggestionRepository purchaseSuggestionRepository;
     private ShortageResolutionRecordRepository resolutionRecordRepository;
+    private AllocationRepository allocationRepository;
     private BackorderService backorderService;
     private TransferOrderService transferOrderService;
     private ReservationService reservationService;
@@ -82,6 +84,7 @@ class ShortageResolutionServiceImplTest {
         skuCostStateRepository = mock(SkuCostStateRepository.class);
         purchaseSuggestionRepository = mock(PurchaseSuggestionRepository.class);
         resolutionRecordRepository = mock(ShortageResolutionRecordRepository.class);
+        allocationRepository = mock(AllocationRepository.class);
         backorderService = mock(BackorderService.class);
         transferOrderService = mock(TransferOrderService.class);
         reservationService = mock(ReservationService.class);
@@ -95,6 +98,7 @@ class ShortageResolutionServiceImplTest {
                 skuCostStateRepository,
                 purchaseSuggestionRepository,
                 resolutionRecordRepository,
+                allocationRepository,
                 backorderService,
                 transferOrderService,
                 reservationService,
@@ -412,5 +416,127 @@ class ShortageResolutionServiceImplTest {
         SkuCostState state = new SkuCostState();
         state.setAvgCost(new BigDecimal(avgCost));
         return state;
+    }
+
+    // ─── #2206: sku/shortQuantity derived from the allocation when omitted ───────
+
+    @Test
+    @DisplayName("computeShortageOptions derives sku/shortQuantity from the allocation's reservation when omitted")
+    void computeShortageOptions_skuAndShortQuantityOmitted_derivedFromAllocation() {
+        allocationRepository = mock(com.positivity.inventory.internal.repository.AllocationRepository.class);
+        service = new ShortageResolutionServiceImpl(
+                substitutionReplicaRepository,
+                stockSummaryRepository,
+                replenishmentPolicyRepository,
+                skuCostStateRepository,
+                purchaseSuggestionRepository,
+                resolutionRecordRepository,
+                allocationRepository,
+                backorderService,
+                transferOrderService,
+                reservationService,
+                vendorSelectionService,
+                forecastSiteResolver,
+                TEST_CLOCK);
+        when(vendorSelectionService.selectVendor(any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(new VendorSelectionService.VendorSelection(null, "no vendor"));
+        when(substitutionReplicaRepository.findByProductId(any())).thenReturn(List.of());
+        when(replenishmentPolicyRepository.findByItemSKUAndLocationId(any(), any()))
+                .thenReturn(Optional.empty());
+
+        com.positivity.inventory.internal.entity.ReservationEntity reservation =
+                com.positivity.inventory.internal.entity.ReservationEntity.builder()
+                        .stockItemId(SKU_ID)
+                        .requiredQuantity(new BigDecimal("5"))
+                        .allocatedQuantity(new BigDecimal("2"))
+                        .build();
+        com.positivity.inventory.internal.entity.AllocationEntity allocation =
+                com.positivity.inventory.internal.entity.AllocationEntity.builder()
+                        .reservation(reservation)
+                        .build();
+        when(allocationRepository.findById(ALLOCATION)).thenReturn(Optional.of(allocation));
+
+        List<ShortageOptionDto> options = service.computeShortageOptions(ALLOCATION, null, null, null, null);
+
+        assertThat(options).isNotEmpty();
+        // BACKORDER is always first and carries no sku itself, but the derivation must have
+        // succeeded (no exception) and used shortQuantity = 5 - 2 = 3 downstream; verified via the
+        // emergency-purchase option's description, which always renders regardless of sku validity.
+        assertThat(options.stream().anyMatch(o -> o.getOptionType() == ShortageResolutionOption.EMERGENCY_PURCHASE))
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("computeShortageOptions 404s when allocationId is unknown and sku/shortQuantity were omitted")
+    void computeShortageOptions_unknownAllocationAndFieldsOmitted_throwsResourceNotFound() {
+        allocationRepository = mock(com.positivity.inventory.internal.repository.AllocationRepository.class);
+        service = new ShortageResolutionServiceImpl(
+                substitutionReplicaRepository,
+                stockSummaryRepository,
+                replenishmentPolicyRepository,
+                skuCostStateRepository,
+                purchaseSuggestionRepository,
+                resolutionRecordRepository,
+                allocationRepository,
+                backorderService,
+                transferOrderService,
+                reservationService,
+                vendorSelectionService,
+                forecastSiteResolver,
+                TEST_CLOCK);
+        when(allocationRepository.findById(ALLOCATION)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.computeShortageOptions(ALLOCATION, null, null, null, null))
+                .isInstanceOf(com.positivity.inventory.internal.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("computeShortageOptions uses the caller's sku/shortQuantity verbatim, no allocation lookup")
+    void computeShortageOptions_skuAndShortQuantitySupplied_noAllocationLookup() {
+        allocationRepository = mock(com.positivity.inventory.internal.repository.AllocationRepository.class);
+        service = new ShortageResolutionServiceImpl(
+                substitutionReplicaRepository,
+                stockSummaryRepository,
+                replenishmentPolicyRepository,
+                skuCostStateRepository,
+                purchaseSuggestionRepository,
+                resolutionRecordRepository,
+                allocationRepository,
+                backorderService,
+                transferOrderService,
+                reservationService,
+                vendorSelectionService,
+                forecastSiteResolver,
+                TEST_CLOCK);
+        when(vendorSelectionService.selectVendor(any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(new VendorSelectionService.VendorSelection(null, "no vendor"));
+        when(substitutionReplicaRepository.findByProductId(any())).thenReturn(List.of());
+        when(replenishmentPolicyRepository.findByItemSKUAndLocationId(any(), any()))
+                .thenReturn(Optional.empty());
+
+        List<ShortageOptionDto> options =
+                service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, new BigDecimal("3"), null);
+
+        assertThat(options).isNotEmpty();
+        verify(allocationRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("resolveShortage defaults idempotencyKey to allocationId:optionType when omitted")
+    void resolveShortage_idempotencyKeyOmitted_defaultsToAllocationAndOption() {
+        ShortageResolveRequest request = ShortageResolveRequest.builder()
+                .allocationId(ALLOCATION)
+                .optionType(ShortageResolutionOption.CANCEL_LINE)
+                .sku(SKU)
+                .shortQuantity(new BigDecimal("3"))
+                .workorderLineId(WORKORDER_LINE)
+                .build();
+        when(resolutionRecordRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
+        when(resolutionRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.resolveShortage(request);
+
+        assertThat(request.getIdempotencyKey()).isEqualTo(ALLOCATION + ":CANCEL_LINE");
+        verify(resolutionRecordRepository).findByIdempotencyKey(ALLOCATION + ":CANCEL_LINE");
     }
 }

@@ -17,10 +17,18 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ReturnableItemDto {
     @Schema(
-            description = "Identifier of the returnable item",
+            description = "Identifier of the returnable item; equal to workorderLineId, kept for compatibility"
+                    + " with callers that read itemId rather than workorderLineId (they name the same work order"
+                    + " line)",
             example = "01960003-0000-7000-8000-000000000001",
             requiredMode = REQUIRED)
     private UUID itemId;
+
+    @Schema(
+            description = "Work order line this returnable quantity was issued against; identical to itemId",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = REQUIRED)
+    private UUID workorderLineId;
 
     @Schema(description = "Stock keeping unit of the item", example = "SKU-10042", requiredMode = REQUIRED)
     private String sku;
@@ -31,7 +39,18 @@ public class ReturnableItemDto {
             requiredMode = NOT_REQUIRED)
     private String description;
 
-    @Schema(description = "Quantity of the item that can still be returned", example = "4", requiredMode = REQUIRED)
+    @Schema(
+            description = "Unit of measure the returnable quantity is expressed in (the product's base UoM); null"
+                    + " when it cannot be resolved",
+            example = "EACH",
+            requiredMode = NOT_REQUIRED)
+    private String uom;
+
+    @Schema(
+            description = "Quantity of the item that can still be returned: quantity consumed against this line"
+                    + " minus quantity already returned against it, floored at 0",
+            example = "4",
+            requiredMode = REQUIRED)
     private int quantityReturnable;
 
     @Schema(

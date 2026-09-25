@@ -33,6 +33,13 @@ public interface InventoryLedgerEntryRepository
     List<InventoryLedgerEntry> findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
             String stockItemId, InventoryLedgerEventType eventType, String notesFragment);
 
+    /**
+     * A work order's postings of one event type (#2206), keyed by the {@code workorderId} column
+     * rather than the {@code notes} text — used to sum consumed quantity per work order line for
+     * the returns source-of-record.
+     */
+    List<InventoryLedgerEntry> findByWorkorderIdAndEventType(UUID workorderId, InventoryLedgerEventType eventType);
+
     /** Per-line idempotency guard for event-driven postings (order parity story H2, #1079). */
     boolean existsByEventTypeAndSourceTransactionId(InventoryLedgerEventType eventType, String sourceTransactionId);
 

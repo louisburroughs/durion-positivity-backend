@@ -48,13 +48,13 @@ public class ReturnController {
             operationId = "listReturnableItems",
             summary = "List Returnable Items",
             description = """
-                    Returns the items eligible to be returned to stock for a workorder, with the quantity still \
-                    returnable per item.
+                    Returns the items eligible to be returned to stock for a workorder, one row per work order \
+                    part line, with the quantity still returnable (parts consumed against the line minus parts \
+                    already returned against it, floored at 0).
                     Use this tool to build a return before submitReturnToStock; use listReturnReasonCodes instead \
-                    for the reason codes a return line must carry.
-                    Preconditions: none checked; the current implementation is a placeholder that echoes a single \
-                    stub item with quantityReturnable 0 for any workorderId until a returnable-item \
-                    source-of-record exists.
+                    for the reason codes a return line must carry. itemId and workorderLineId name the same work \
+                    order line; submitReturnToStock's lines key off that id.
+                    Preconditions: none; an unknown or partless workorderId yields an empty array.
                     Required inputs: workorderId (UUID) as a query parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
                     Returns 400 when workorderId is missing or not a valid UUID.
@@ -88,8 +88,8 @@ public class ReturnController {
             operationId = "listReturnReasonCodes",
             summary = "List Return Reason Codes",
             description = """
-                    Returns the fixed catalog of return reason codes: DAMAGED, WRONG_ITEM, EXCESS and DEFECTIVE, \
-                    each with a description and category.
+                    Returns the fixed catalog of return reason codes: NOT_NEEDED, WRONG_PART and CUSTOMER_REFUSED \
+                    (CAP-218 Story #177), each with a description and category.
                     Use this tool to populate the reasonCode of return lines before submitReturnToStock; do not \
                     use listReturnableItems, which lists what can be returned rather than why.
                     Preconditions: none; the list is static in the service and takes no filters.
@@ -123,20 +123,22 @@ public class ReturnController {
             operationId = "submitReturnToStock",
             summary = "Submit Return To Stock",
             description = """
-                    Accepts a return-to-stock submission for a workorder and acknowledges it with a generated \
-                    returnId, the processed line count and a SUBMITTED status.
+                    Posts a return-to-stock submission for a workorder: persists the return record and its \
+                    lines, posts a RETURN_TO_STOCK ledger entry per line (carrying the workorder and work order \
+                    line), and acknowledges with a generated returnId, the processed line count and a SUBMITTED \
+                    status.
                     Use this tool to hand back unused workorder parts; do not use receiveItemsIntoStaging or \
                     createGoodsReceipt, which receive vendor shipments rather than workorder returns.
-                    Preconditions: none checked by the current implementation; the call is an acknowledgement \
-                    stub, so no return record is persisted, no ledger entry posts and on-hand stock does not \
-                    change yet.
-                    Required inputs: workorderId (UUID) and lines (non-empty), each naming itemId (UUID), a \
-                    positive quantity, a reasonCode from listReturnReasonCodes and a locationId; \
-                    storageLocationId is optional.
-                    Emits an INVENTORY_RETURN_SUBMIT_TO_STOCK event; the 202 response signals acceptance of the \
-                    submission, not completed stock movement.
+                    Preconditions: each line's itemId must name a real work order part line, and its quantity may \
+                    not exceed that line's returnable quantity (parts consumed minus parts already returned).
+                    Required inputs: workorderId (UUID) and lines (non-empty), each naming itemId (UUID, the work \
+                    order line), a positive quantity, a reasonCode from the closed set NOT_NEEDED, WRONG_PART or \
+                    CUSTOMER_REFUSED, and a locationId; storageLocationId is optional.
+                    Emits an INVENTORY_RETURN_SUBMIT_TO_STOCK event; the 202 response signals the posting completed.
                     Returns 400 when workorderId is missing, lines is empty, a quantity is not positive or a \
-                    reasonCode is blank.
+                    reasonCode is not one of the closed set, 404 when a line's itemId does not name a work order \
+                    part line, and 422 RETURN_QUANTITY_EXCEEDED when a line's quantity exceeds what remains \
+                    returnable.
                     """,
             tags = {"Returns"})
     @ApiResponse(
@@ -155,6 +157,10 @@ public class ReturnController {
             description = "FORBIDDEN when the caller lacks inventory:return:write;"
                     + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
                     + " locations that do not cover every line's locationId (ADR-0061)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "A line's itemId does not name a work order part line",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",

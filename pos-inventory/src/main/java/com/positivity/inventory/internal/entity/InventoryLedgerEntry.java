@@ -92,6 +92,22 @@ public class InventoryLedgerEntry extends TenantScopedEntity {
     private UUID toLocationId;
 
     /**
+     * Work order this posting is for, when the posting path knows one (#2206): pick-task
+     * consumption, the cross-dock receipt/issue pair, and returns to stock. Null for postings
+     * that carry no work order and for rows posted before this column existed.
+     */
+    @Column(name = "workorder_id")
+    private UUID workorderId;
+
+    /**
+     * Work order line this posting is for, when the posting path knows one (#2206). Null when
+     * only the work order (not the line) is known, and for rows posted before this column
+     * existed.
+     */
+    @Column(name = "workorder_line_id")
+    private UUID workorderLineId;
+
+    /**
      * Lot the quantity belongs to (odoo-parity E1, issue #1038): stamped by receipt postings for
      * LOT-tracked products; null for untracked products and, until E2 wires the outbound flows,
      * for all non-receipt event types.

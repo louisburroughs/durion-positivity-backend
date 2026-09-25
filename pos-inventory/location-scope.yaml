@@ -100,6 +100,30 @@ decisions:
     shape: gate
     permission: inventory:on_hand:view
     reason: The path locationId is the root of the rollup; everything aggregated sits beneath it, so covering the root covers the report.
+  - operation: PickListController.getPickList
+    shape: gate
+    permission: inventory:pick_list:view
+    reason: No request parameter names a location; the pick list's site is derived from its tasks' suggested locations (first one that resolves) and gated after the 404 (#2204). A list with no tasks, or whose tasks resolve no site, is not gated.
+  - operation: PickListController.getPickTasksForPickList
+    shape: gate
+    permission: inventory:pick_list:view
+    reason: Same derived-site gate as getPickList (#2204); an unknown pickListId resolves no tasks and so is not gated, matching the endpoint's existing empty-array-on-unknown-id behaviour.
+  - operation: PickListController.releasePickList
+    shape: gate
+    permission: inventory:pick_list:execute
+    reason: Same derived-site gate as getPickList (#2204), applied after the 404 and before the status change.
+  - operation: PickListController.confirmPickTask
+    shape: gate
+    permission: inventory:pick_list:execute
+    reason: Same derived-site gate as getPickList (#2204), applied after the pick-list/pick-task existence checks and before the task is marked PICKED.
+  - operation: PickListController.updatePickListStatus
+    shape: gate
+    permission: inventory:pick_list:execute
+    reason: Same derived-site gate as getPickList (#2204), applied only when the pick list already exists; an unknown id upserts a fresh row with no tasks to derive a site from, so it is not gated (unchanged pre-#2204 behaviour).
+  - operation: PickListController.cancelPickList
+    shape: gate
+    permission: inventory:pick_list:execute
+    reason: Same derived-site gate as getPickList (#2204), applied only when the pick list exists; an unknown id is already a silent no-op.
   - operation: PurchaseSuggestionController.listPurchaseSuggestions
     shape: narrow
     permission: inventory:on_hand:view

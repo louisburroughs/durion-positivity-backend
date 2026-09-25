@@ -18,7 +18,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.util.List;
@@ -61,14 +60,18 @@ public class ShortageController {
                     Use this tool to present choices before calling resolveShortage with the selected optionType; \
                     do not call resolveShortage blind, because SUBSTITUTE and TRANSFER_IN need fields \
                     (substituteSku, sourceLocationId) that this computation supplies.
-                    Preconditions: none beyond a positive shortQuantity; SUBSTITUTE and TRANSFER_IN options appear \
+                    Preconditions: allocationId must name a real allocation when sku or shortQuantity is omitted \
+                    (they are then derived from the allocation's reservation: sku from stockItemId, shortQuantity \
+                    from requiredQuantity minus allocatedQuantity); SUBSTITUTE and TRANSFER_IN options appear \
                     only when locationId is provided, and SUBSTITUTE additionally requires sku to parse as a \
                     product UUID.
-                    Required inputs: allocationId (UUID), sku (non-blank) and shortQuantity (positive, decimal-capable \
-                    per the product's catalog precision_scale declaration); \
-                    workorderLineId and locationId are optional but drive which options appear.
+                    Required inputs: allocationId (UUID) — the UI's allocationLineId names the same allocation; \
+                    sku and shortQuantity (positive, decimal-capable per the product's catalog precision_scale \
+                    declaration) are optional and derived from the allocation when omitted; workorderLineId and \
+                    locationId are optional but drive which options appear.
                     No events are emitted and no state changes; this is a read-only computation.
-                    Returns 400 when shortQuantity is not positive or sku is blank.
+                    Returns 400 when a supplied shortQuantity is not positive, and 404 when allocationId is \
+                    unknown and sku or shortQuantity was omitted.
                     """,
             tags = {"Shortage Resolution"})
     @ApiResponse(
@@ -88,10 +91,27 @@ public class ShortageController {
                     + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
                     + " locations that do not cover the requested locationId (when given) (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "allocationId is unknown and sku or shortQuantity was omitted",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<ShortageOptionDto>> listShortageOptions(
-            @Parameter(description = "Allocation experiencing the shortage") @RequestParam UUID allocationId,
-            @Parameter(description = "SKU / stock-item identifier that is short") @RequestParam @NotBlank String sku,
-            @Parameter(description = "Quantity that is short") @RequestParam @Positive BigDecimal shortQuantity,
+            @Parameter(
+                            description = "Allocation experiencing the shortage; the UI's allocationLineId names the"
+                                    + " same allocation")
+                    @RequestParam
+                    UUID allocationId,
+            @Parameter(
+                            description = "SKU / stock-item identifier that is short; derived from the"
+                                    + " allocation's reservation when omitted")
+                    @RequestParam(required = false)
+                    String sku,
+            @Parameter(
+                            description = "Quantity that is short; derived from the allocation's reservation"
+                                    + " (requiredQuantity minus allocatedQuantity) when omitted")
+                    @RequestParam(required = false)
+                    @Positive
+                    BigDecimal shortQuantity,
             @Parameter(description = "Workorder line whose demand is short") @RequestParam(required = false)
                     UUID workorderLineId,
             @Parameter(description = "Site the demand is short at") @RequestParam(required = false) UUID locationId) {

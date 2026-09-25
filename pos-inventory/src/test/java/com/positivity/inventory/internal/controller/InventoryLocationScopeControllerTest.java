@@ -239,7 +239,7 @@ class InventoryLocationScopeControllerTest {
                         202,
                         loc -> json(
                                 post("/v1/inventory/returns/submit-to-stock"), """
-                                {"workorderId":"%s","lines":[{"itemId":"%s","quantity":1,"reasonCode":"DEFECTIVE",
+                                {"workorderId":"%s","lines":[{"itemId":"%s","quantity":1,"reasonCode":"NOT_NEEDED",
                                  "locationId":"%s"}]}
                                 """.formatted(SOME_ID, SOME_ID, loc))),
                 new GateCase(

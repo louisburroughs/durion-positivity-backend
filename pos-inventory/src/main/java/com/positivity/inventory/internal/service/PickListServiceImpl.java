@@ -12,9 +12,12 @@ import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.PickListRepository;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -32,6 +35,7 @@ public class PickListServiceImpl implements PickListService {
     private final InventoryFactPublisher inventoryFactPublisher;
     private final @Nullable InventoryLotOutboundService lotOutboundService;
     private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+    private final ForecastSiteResolver forecastSiteResolver;
 
     @Autowired
     public PickListServiceImpl(
@@ -39,12 +43,14 @@ public class PickListServiceImpl implements PickListService {
             PickTaskRepository pickTaskRepository,
             InventoryFactPublisher inventoryFactPublisher,
             InventoryLotOutboundService lotOutboundService,
-            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver) {
+            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver,
+            ForecastSiteResolver forecastSiteResolver) {
         this.pickListRepository = pickListRepository;
         this.pickTaskRepository = pickTaskRepository;
         this.inventoryFactPublisher = inventoryFactPublisher;
         this.lotOutboundService = lotOutboundService;
         this.baseUnitOfMeasureResolver = baseUnitOfMeasureResolver;
+        this.forecastSiteResolver = forecastSiteResolver;
     }
 
     /**
@@ -57,8 +63,15 @@ public class PickListServiceImpl implements PickListService {
             PickListRepository pickListRepository,
             PickTaskRepository pickTaskRepository,
             InventoryFactPublisher inventoryFactPublisher,
-            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver) {
-        this(pickListRepository, pickTaskRepository, inventoryFactPublisher, null, baseUnitOfMeasureResolver);
+            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver,
+            ForecastSiteResolver forecastSiteResolver) {
+        this(
+                pickListRepository,
+                pickTaskRepository,
+                inventoryFactPublisher,
+                null,
+                baseUnitOfMeasureResolver,
+                forecastSiteResolver);
     }
 
     @Override
@@ -92,6 +105,7 @@ public class PickListServiceImpl implements PickListService {
         PickListEntity pickList = pickListRepository
                 .findById(pickListId)
                 .orElseThrow(() -> new ResourceNotFoundException(PICK_LIST, pickListId.toString()));
+        requireLocationScope(pickListId, InventoryPermissionRegistry.PICK_LIST_VIEW);
         return toResponse(pickList);
     }
 
@@ -109,6 +123,7 @@ public class PickListServiceImpl implements PickListService {
 
     @Override
     public @NonNull PickListResponse updatePickListStatus(@NonNull UUID pickListId, @NonNull PickListStatus status) {
+        boolean existed = pickListRepository.existsById(pickListId);
         PickListEntity pickList = pickListRepository
                 .findById(pickListId)
                 .orElseGet(() -> PickListEntity.builder()
@@ -116,6 +131,11 @@ public class PickListServiceImpl implements PickListService {
                         .status(PickListStatus.DRAFT)
                         .priority(0)
                         .build());
+        // ADR-0061 §3 (#1872): only gated when the list already exists and its tasks resolve a
+        // site — an unknown id upserts a fresh row with no location to gate on.
+        if (existed) {
+            requireLocationScope(pickListId, InventoryPermissionRegistry.PICK_LIST_EXECUTE);
+        }
 
         pickList.setStatus(status);
         PickListEntity saved = pickListRepository.save(pickList);
@@ -128,6 +148,7 @@ public class PickListServiceImpl implements PickListService {
         PickListEntity pickList = pickListRepository
                 .findById(pickListId)
                 .orElseThrow(() -> new ResourceNotFoundException(PICK_LIST, pickListId.toString()));
+        requireLocationScope(pickListId, InventoryPermissionRegistry.PICK_LIST_EXECUTE);
         pickList.setStatus(PickListStatus.READY_TO_PICK);
         PickListEntity saved = pickListRepository.save(pickList);
         inventoryFactPublisher.markPickListChanged(saved.getPickListId());
@@ -154,6 +175,7 @@ public class PickListServiceImpl implements PickListService {
                 || !pickListId.equals(task.getPickList().getPickListId())) {
             throw new ResourceNotFoundException("PickTask", pickTaskId.toString());
         }
+        requireLocationScope(pickListId, InventoryPermissionRegistry.PICK_LIST_EXECUTE);
 
         if (!scannedSkuId.equals(task.getProductId())) {
             throw new PickScanMismatchException(task.getProductId(), scannedSkuId);
@@ -194,6 +216,7 @@ public class PickListServiceImpl implements PickListService {
 
     @Override
     public @NonNull List<PickTaskResponse> getPickTasksForPickList(@NonNull UUID pickListId) {
+        requireLocationScope(pickListId, InventoryPermissionRegistry.PICK_LIST_VIEW);
         List<PickTaskEntity> tasks = pickTaskRepository.findByPickList_PickListId(pickListId);
         // One batched IN query for the whole list instead of one BaseUnitOfMeasureResolver round
         // trip per task.
@@ -210,9 +233,35 @@ public class PickListServiceImpl implements PickListService {
         if (pickList == null) {
             return;
         }
+        requireLocationScope(pickListId, InventoryPermissionRegistry.PICK_LIST_EXECUTE);
         pickList.setStatus(PickListStatus.CANCELLED);
         pickListRepository.save(pickList);
         inventoryFactPublisher.markPickListChanged(pickListId);
+    }
+
+    /**
+     * Gates a pick-list operation to the caller's location scope (ADR-0061 §3, #2204). A pick
+     * list carries no location itself; its site is derived from its tasks' suggested locations
+     * (the first one that resolves). Pre-rollout tokens without {@code loc_*} claims, and a pick
+     * list whose tasks resolve no site (none generated yet, or every suggestion is null), are not
+     * gated — there is nothing to check against, so the operation proceeds exactly as before this
+     * scoping existed.
+     */
+    private void requireLocationScope(UUID pickListId, String permission) {
+        UUID siteId = resolvePickListSiteId(pickListId);
+        if (siteId != null) {
+            SecurityContextHelper.locationScope().require(permission, siteId);
+        }
+    }
+
+    private @Nullable UUID resolvePickListSiteId(UUID pickListId) {
+        return pickTaskRepository.findByPickList_PickListId(pickListId).stream()
+                .map(PickTaskEntity::getSuggestedLocationId)
+                .filter(Objects::nonNull)
+                .map(forecastSiteResolver::resolveForecastSite)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     private PickListResponse toResponse(PickListEntity entity) {

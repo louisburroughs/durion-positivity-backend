@@ -17,18 +17,30 @@ import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.PickListRepository;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationAncestorResolver;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Unit tests for {@link PickListServiceImpl} — Story #28: Create Pick List /
@@ -67,12 +79,24 @@ class PickListServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
+    @Mock
+    private ForecastSiteResolver forecastSiteResolver;
+
     private PickListServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new PickListServiceImpl(
-                pickListRepository, pickTaskRepository, inventoryFactPublisher, baseUnitOfMeasureResolver);
+                pickListRepository,
+                pickTaskRepository,
+                inventoryFactPublisher,
+                baseUnitOfMeasureResolver,
+                forecastSiteResolver);
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
     }
 
     // ─── SC1: createPickList — valid request → DRAFT status ─────────────────────
@@ -596,5 +620,118 @@ class PickListServiceImplTest {
         org.mockito.Mockito.verify(baseUnitOfMeasureResolver).resolveAll(any());
         org.mockito.Mockito.verify(baseUnitOfMeasureResolver, org.mockito.Mockito.never())
                 .resolve(any(UUID.class));
+    }
+
+    // ─── #2204: pick-list view/execute location scope (ADR-0061 §3) ─────────────
+
+    @Nested
+    @DisplayName("pick list location scope (ADR-0061 §3, #2204)")
+    class PickListLocationScope {
+
+        private static final UUID PICK_LIST_ID = UUID.fromString("00000000-0000-0000-0000-000000000050");
+        private static final UUID BIN_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000051");
+        private static final UUID SITE = UUID.fromString("00000000-0000-0000-0000-000000000052");
+        private static final UUID OTHER_SITE = UUID.fromString("00000000-0000-0000-0000-000000000053");
+
+        /** Trivial resolver: every location is its own (and only) ancestor. */
+        private static final LocationAncestorResolver SELF_RESOLVER =
+                locationId -> new com.positivity.domainevents.location.LocationAncestry.AncestorSets(
+                        Set.of(locationId), Set.of(locationId));
+
+        private static void authenticate(String username, LocationScope scope) {
+            var authentication = new UsernamePasswordAuthenticationToken(
+                    username,
+                    null,
+                    List.of(
+                            new SimpleGrantedAuthority(InventoryPermissionRegistry.PICK_LIST_VIEW),
+                            new SimpleGrantedAuthority(InventoryPermissionRegistry.PICK_LIST_EXECUTE)));
+            authentication.setDetails(Map.of(
+                    GatewaySecurityConstants.DETAIL_USERNAME, username,
+                    GatewaySecurityConstants.DETAIL_LOCATION_SCOPE, scope));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        private static LocationScope scopedTo(UUID... nodes) {
+            return LocationScope.of(
+                    Set.of(),
+                    Set.of(InventoryPermissionRegistry.PICK_LIST_VIEW, InventoryPermissionRegistry.PICK_LIST_EXECUTE),
+                    Optional.of(Set.of(nodes)),
+                    true,
+                    SELF_RESOLVER);
+        }
+
+        private void givenPickListWithTaskAt(UUID locationId) {
+            PickListEntity pickList = PickListEntity.builder()
+                    .pickListId(PICK_LIST_ID)
+                    .status(PickListStatus.READY_TO_PICK)
+                    .priority(0)
+                    .build();
+            when(pickListRepository.findById(PICK_LIST_ID)).thenReturn(Optional.of(pickList));
+            PickTaskEntity task = PickTaskEntity.builder()
+                    .pickTaskId(UUID.fromString("00000000-0000-0000-0000-000000000054"))
+                    .productId(UUID.fromString("00000000-0000-0000-0000-000000000055"))
+                    .sku("SKU-1")
+                    .quantityRequired(1)
+                    .suggestedLocationId(locationId)
+                    .status(PickTaskStatus.PENDING)
+                    .build();
+            when(pickTaskRepository.findByPickList_PickListId(PICK_LIST_ID)).thenReturn(List.of(task));
+            when(forecastSiteResolver.resolveForecastSite(locationId)).thenReturn(SITE);
+        }
+
+        @Test
+        @DisplayName("site in reach: getPickList succeeds")
+        void inReach_getPickListSucceeds() {
+            authenticate("scoped-picker", scopedTo(SITE));
+            givenPickListWithTaskAt(BIN_LOCATION);
+
+            assertThatCode(() -> service.getPickList(PICK_LIST_ID)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("site out of reach: getPickList denies with LOCATION_SCOPE_DENIED")
+        void outOfReach_getPickListDenies() {
+            authenticate("scoped-picker", scopedTo(OTHER_SITE));
+            givenPickListWithTaskAt(BIN_LOCATION);
+
+            assertThatThrownBy(() -> service.getPickList(PICK_LIST_ID))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("site out of reach: releasePickList denies before any state change")
+        void outOfReach_releasePickListDeniesBeforeStateChange() {
+            authenticate("scoped-picker", scopedTo(OTHER_SITE));
+            givenPickListWithTaskAt(BIN_LOCATION);
+
+            assertThatThrownBy(() -> service.releasePickList(PICK_LIST_ID))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+            org.mockito.Mockito.verify(pickListRepository, org.mockito.Mockito.never())
+                    .save(any());
+        }
+
+        @Test
+        @DisplayName("pre-rollout token (no loc_* claims): unchanged even when the resolved site isn't assigned")
+        void preRolloutToken_unchanged() {
+            authenticate("legacy-picker", LocationScope.unscoped());
+            givenPickListWithTaskAt(BIN_LOCATION);
+
+            assertThatCode(() -> service.getPickList(PICK_LIST_ID)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("pick list with no tasks resolves no site: not gated, proceeds unchanged")
+        void noTasksResolveNoSite_notGated() {
+            authenticate("scoped-picker", scopedTo(OTHER_SITE));
+            PickListEntity pickList = PickListEntity.builder()
+                    .pickListId(PICK_LIST_ID)
+                    .status(PickListStatus.DRAFT)
+                    .priority(0)
+                    .build();
+            when(pickListRepository.findById(PICK_LIST_ID)).thenReturn(Optional.of(pickList));
+            when(pickTaskRepository.findByPickList_PickListId(PICK_LIST_ID)).thenReturn(List.of());
+
+            assertThatCode(() -> service.getPickList(PICK_LIST_ID)).doesNotThrowAnyException();
+        }
     }
 }

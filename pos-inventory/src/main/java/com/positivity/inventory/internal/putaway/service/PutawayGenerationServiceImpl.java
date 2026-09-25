@@ -13,6 +13,8 @@ import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
+import com.positivity.inventory.internal.service.ForecastSiteResolver;
 import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.PutawayRuleMatcher;
 import com.positivity.inventory.internal.service.StagingLocationResolver;
@@ -39,6 +41,8 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     private final StagingLocationResolver stagingLocationResolver;
     private final PutawayValidationService putawayValidationService;
     private final LocationScopeService locationScopeService;
+    private final ForecastSiteResolver forecastSiteResolver;
+    private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
     @Override
     @Transactional
@@ -66,18 +70,14 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
                 .map(lineItem -> toTask(sourceReceipt, lineItem, rulesByProduct.get(lineItem.productId())))
                 .toList();
 
-        return putawayTaskRepository.saveAll(tasks).stream()
-                .map(this::toResponse)
-                .toList();
+        return toResponses(putawayTaskRepository.saveAll(tasks));
     }
 
     @Override
     @Transactional(readOnly = true)
     public @NonNull List<PutawayTaskResponse> getTasksByReceiptId(@NonNull String receiptId) {
         UUID sourceReceiptId = parseRequiredUuid(receiptId, "receiptId");
-        return putawayTaskRepository.findBySourceReceipt_ReceiptId(sourceReceiptId).stream()
-                .map(this::toResponse)
-                .toList();
+        return toResponses(putawayTaskRepository.findBySourceReceipt_ReceiptId(sourceReceiptId));
     }
 
     @Override
@@ -102,7 +102,7 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
                     List.of(PutawayTaskStatus.UNASSIGNED), reach.get());
         }
 
-        return tasks.stream().map(this::toResponse).toList();
+        return toResponses(tasks);
     }
 
     @Override
@@ -217,7 +217,27 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
 
     private record ParsedPutawayLineItem(UUID productId, Integer quantity) {}
 
+    /** Single-row path: resolves the site and unit of measure itself. See {@link #toResponses} for the batched form. */
     private PutawayTaskResponse toResponse(PutawayTask task) {
+        return toResponse(
+                task,
+                forecastSiteResolver.resolveForecastSite(task.getSourceLocationId()),
+                baseUnitOfMeasureResolver.resolve(task.getProductId()));
+    }
+
+    /** Batched multi-row form (#2206): one round trip per lookup for the whole list instead of one per task. */
+    private List<PutawayTaskResponse> toResponses(List<PutawayTask> tasks) {
+        Map<UUID, UUID> siteByLocation = forecastSiteResolver.resolveAll(
+                tasks.stream().map(PutawayTask::getSourceLocationId).toList());
+        Map<UUID, String> uomByProduct = baseUnitOfMeasureResolver.resolveAll(
+                tasks.stream().map(PutawayTask::getProductId).toList());
+        return tasks.stream()
+                .map(task -> toResponse(
+                        task, siteByLocation.get(task.getSourceLocationId()), uomByProduct.get(task.getProductId())))
+                .toList();
+    }
+
+    private PutawayTaskResponse toResponse(PutawayTask task, @Nullable UUID locationId, @Nullable String uom) {
         return PutawayTaskResponse.builder()
                 .taskId(task.getTaskId() != null ? task.getTaskId().toString() : null)
                 .sourceReceiptId(
@@ -228,6 +248,8 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
                 .productId(task.getProductId() != null ? task.getProductId().toString() : null)
                 .quantity(task.getQuantity())
                 .sourceLocationId(task.getSourceLocationId())
+                .locationId(locationId)
+                .uom(uom)
                 .suggestedDestinationLocationId(task.getSuggestedDestinationLocationId())
                 .originalSuggestedLocationId(task.getOriginalSuggestedLocationId())
                 .finalSuggestedLocationId(task.getFinalSuggestedLocationId())

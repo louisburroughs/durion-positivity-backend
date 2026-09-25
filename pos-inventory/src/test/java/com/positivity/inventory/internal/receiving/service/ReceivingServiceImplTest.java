@@ -140,6 +140,13 @@ class ReceivingServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.InventoryLotCaptureService lotCaptureService;
 
+    @Mock
+    private com.positivity.inventory.internal.repository.ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
+
+    @Mock
+    private com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository
+            extWorkorderPartReplicaRepository;
+
     /**
      * The real divisibility guard over a stubbable conversion service (ADR-0055, #1414). A mocked
      * guard would answer null and NPE; a real one over a mocked conversion service answers "scale
@@ -1865,5 +1872,97 @@ class ReceivingServiceImplTest {
                 Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList());
         authentication.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, username));
         SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    // ─── #2211: searchCrossDockWorkorders ────────────────────────────────────────
+
+    @Test
+    void searchCrossDockWorkorders_blankQuery_listsUpTo50MostRecentlyUpdatedEligible() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000090");
+        com.positivity.inventory.internal.entity.ExtWorkorderReplica workorder =
+                com.positivity.inventory.internal.entity.ExtWorkorderReplica.builder()
+                        .workorderId(workorderId)
+                        .workorderNumber("WO-0001")
+                        .status("IN_PROGRESS")
+                        .updatedAt(Instant.parse("2026-01-01T00:00:00Z"))
+                        .build();
+        when(extWorkorderReplicaRepository.searchEligibleForCrossDock(
+                        org.mockito.ArgumentMatchers.isNull(),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(List.of(workorder));
+        when(extWorkorderPartReplicaRepository.countLinesByWorkorderIdIn(List.of(workorderId)))
+                .thenReturn(List.of(lineCount(workorderId, 3)));
+
+        List<com.positivity.inventory.internal.dto.receiving.CrossDockWorkorderSearchResultDto> result =
+                receivingService.searchCrossDockWorkorders(null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getWorkorderId()).isEqualTo(workorderId);
+        assertThat(result.get(0).getWorkorderNumber()).isEqualTo("WO-0001");
+        assertThat(result.get(0).getPartLineCount()).isEqualTo(3L);
+        org.mockito.Mockito.verify(extWorkorderReplicaRepository)
+                .searchEligibleForCrossDock(
+                        org.mockito.ArgumentMatchers.isNull(),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        org.mockito.ArgumentMatchers.argThat(
+                                pageable -> pageable.getPageSize() == 50 && pageable.getPageNumber() == 0));
+    }
+
+    @Test
+    void searchCrossDockWorkorders_textQuery_buildsCaseInsensitiveLikePattern() {
+        when(extWorkorderReplicaRepository.searchEligibleForCrossDock(
+                        any(), any(), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(List.of());
+
+        receivingService.searchCrossDockWorkorders("WO-42");
+
+        org.mockito.Mockito.verify(extWorkorderReplicaRepository)
+                .searchEligibleForCrossDock(
+                        eq("%wo-42%"),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        any(org.springframework.data.domain.Pageable.class));
+    }
+
+    @Test
+    void searchCrossDockWorkorders_uuidQuery_parsesExactWorkorderId() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        when(extWorkorderReplicaRepository.searchEligibleForCrossDock(
+                        any(), any(), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(List.of());
+
+        receivingService.searchCrossDockWorkorders(workorderId.toString());
+
+        org.mockito.Mockito.verify(extWorkorderReplicaRepository)
+                .searchEligibleForCrossDock(
+                        eq("%" + workorderId + "%"),
+                        eq(workorderId),
+                        any(org.springframework.data.domain.Pageable.class));
+    }
+
+    @Test
+    void searchCrossDockWorkorders_noMatches_returnsEmptyListWithoutCountLookup() {
+        when(extWorkorderReplicaRepository.searchEligibleForCrossDock(
+                        any(), any(), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(List.of());
+
+        assertThat(receivingService.searchCrossDockWorkorders("nothing")).isEmpty();
+        org.mockito.Mockito.verify(extWorkorderPartReplicaRepository, never()).countLinesByWorkorderIdIn(any());
+    }
+
+    private static com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository.WorkorderPartLineCount
+            lineCount(UUID workorderId, long count) {
+        return new com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository
+                .WorkorderPartLineCount() {
+            @Override
+            public UUID getWorkorderId() {
+                return workorderId;
+            }
+
+            @Override
+            public long getLineCount() {
+                return count;
+            }
+        };
     }
 }

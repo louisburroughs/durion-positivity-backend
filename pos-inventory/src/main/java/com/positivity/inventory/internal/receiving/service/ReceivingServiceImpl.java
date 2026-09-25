@@ -3,11 +3,13 @@ package com.positivity.inventory.internal.receiving.service;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
+import com.positivity.inventory.internal.dto.receiving.CrossDockWorkorderSearchResultDto;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceiveLineRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceivingLineResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
+import com.positivity.inventory.internal.entity.ExtWorkorderReplica;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryVariance;
 import com.positivity.inventory.internal.entity.ReceivingLine;
@@ -21,6 +23,9 @@ import com.positivity.inventory.internal.enums.SourceDocumentType;
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
+import com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository;
+import com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository.WorkorderPartLineCount;
+import com.positivity.inventory.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryVarianceRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
@@ -46,6 +51,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -69,6 +75,11 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final DocumentQuantityConverter documentQuantityConverter;
     private final InventoryLotCaptureService lotCaptureService;
     private final QuantityScaleGuard quantityScaleGuard;
+    private final ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
+    private final ExtWorkorderPartReplicaRepository extWorkorderPartReplicaRepository;
+
+    /** Cap on {@link #searchCrossDockWorkorders} results (#2211): also the blank-query default page size. */
+    private static final int WORKORDER_SEARCH_LIMIT = 50;
 
     @Value("${pos.inventory.receiving.cross-dock-location-id:}")
     private String configuredCrossDockLocationId;
@@ -277,6 +288,7 @@ public class ReceivingServiceImpl implements ReceivingService {
         List<String> ledgerEntryIds = postCrossDockLedgerEntries(
                 sessionId,
                 workorderId,
+                request.getWorkorderLineId(),
                 line.getProductId(),
                 crossDockLocationId,
                 quantities.quantityDelta(),
@@ -300,6 +312,38 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .build();
     }
 
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public List<CrossDockWorkorderSearchResultDto> searchCrossDockWorkorders(@Nullable String query) {
+        String trimmedQuery = query == null ? "" : query.trim();
+        String likeQuery = trimmedQuery.isEmpty() ? null : "%" + trimmedQuery.toLowerCase(Locale.ROOT) + "%";
+        UUID queryId = parseWorkorderUuid(trimmedQuery.isEmpty() ? null : trimmedQuery);
+
+        List<ExtWorkorderReplica> workorders = extWorkorderReplicaRepository.searchEligibleForCrossDock(
+                likeQuery, queryId, PageRequest.of(0, WORKORDER_SEARCH_LIMIT));
+        if (workorders.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> workorderIds =
+                workorders.stream().map(ExtWorkorderReplica::getWorkorderId).toList();
+        Map<UUID, Long> lineCountByWorkorderId =
+                extWorkorderPartReplicaRepository.countLinesByWorkorderIdIn(workorderIds).stream()
+                        .collect(Collectors.toMap(
+                                WorkorderPartLineCount::getWorkorderId, WorkorderPartLineCount::getLineCount));
+
+        return workorders.stream()
+                .map(workorder -> CrossDockWorkorderSearchResultDto.builder()
+                        .workorderId(workorder.getWorkorderId())
+                        .workorderNumber(workorder.getWorkorderNumber())
+                        .status(workorder.getStatus())
+                        .partLineCount(lineCountByWorkorderId.getOrDefault(workorder.getWorkorderId(), 0L))
+                        .updatedAt(workorder.getUpdatedAt())
+                        .build())
+                .toList();
+    }
+
     /** The session's line named by {@code lineId}, or a 404 when this session does not have it. */
     @NonNull
     private static ReceivingLine requireLine(@NonNull ReceivingSession session, @NonNull UUID lineId) {
@@ -318,7 +362,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             @NonNull String actorUserId) {
         WorkorderValidationService.WorkorderLineValidation workorderValidation =
                 workorderValidationService.getWorkorderLineValidation(workorderId, request.getWorkorderLineId());
-        if (isClosedWorkorderStatus(workorderValidation.status())) {
+        if (WorkorderValidationService.isClosedWorkorderStatus(workorderValidation.status())) {
             throw new WorkorderClosedException("Cannot issue parts to a closed workorder: " + workorderId);
         }
         validatePartMatchOrOverride(
@@ -385,12 +429,18 @@ public class ReceivingServiceImpl implements ReceivingService {
     private List<String> postCrossDockLedgerEntries(
             @NonNull UUID sessionId,
             @NonNull String workorderId,
+            @Nullable String workorderLineId,
             @NonNull String productId,
             @NonNull UUID crossDockLocationId,
             @NonNull BigDecimal quantityDelta,
             @Nullable BigDecimal receiptUnitCost,
             UUID lotId,
             @NonNull String actorUserId) {
+        // #2206: both paired entries carry the workorder (and, when the request's
+        // workorderLineId parses as a UUID, the line) so the ledger is queryable by it, not just
+        // readable from the free-text notes below.
+        UUID workorderUuid = parseWorkorderUuid(workorderId);
+        UUID workorderLineUuid = parseWorkorderUuid(workorderLineId);
         BigDecimal receiptQuantityAfter = calculateQuantityAfter(productId, crossDockLocationId, quantityDelta);
         InventoryLedgerEntry receiptEntry = InventoryLedgerEntry.builder()
                 .stockItemId(productId)
@@ -401,6 +451,8 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .unitCost(receiptUnitCost)
                 .quantityAfter(receiptQuantityAfter)
                 .lotId(lotId)
+                .workorderId(workorderUuid)
+                .workorderLineId(workorderLineUuid)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId.toString())
                 .notes("Cross-dock GOODS_RECEIPT for workorder " + workorderId)
@@ -417,6 +469,8 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .changeInQuantity(quantityDelta.negate())
                 .quantityAfter(issueQuantityAfter)
                 .lotId(lotId)
+                .workorderId(workorderUuid)
+                .workorderLineId(workorderLineUuid)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId.toString())
                 .notes("Cross-dock GOODS_ISSUE to workorder " + workorderId)
@@ -480,6 +534,16 @@ public class ReceivingServiceImpl implements ReceivingService {
         } catch (IllegalArgumentException ex) {
             return null;
         }
+    }
+
+    /**
+     * Parses a free-text workorder or workorder-line id as a UUID for ledger stamping (#2206);
+     * {@code null} when absent or not a UUID, exactly like {@link #parseSourceLineId}. Cross-dock
+     * carries these ids as opaque strings (not every caller sends a UUIDv7), so the ledger link
+     * degrades to absent rather than failing the whole posting.
+     */
+    private static @Nullable UUID parseWorkorderUuid(@Nullable String value) {
+        return parseSourceLineId(value);
     }
 
     private ReceivingSession resolveSessionForReceive(UUID sessionId) {
@@ -648,16 +712,6 @@ public class ReceivingServiceImpl implements ReceivingService {
         throw new PartMatchPermissionException(String.format(
                 "PART_MISMATCH_WITH_WORKORDER: received product %s does not match demanded product %s for workorderLineId %s. Required permission: %s",
                 line.getProductId(), demandedProductId, workorderLineId, PART_MATCH_OVERRIDE_PERMISSION));
-    }
-
-    private boolean isClosedWorkorderStatus(String status) {
-        if (status == null) {
-            return false;
-        }
-        String normalizedStatus = status.trim().toUpperCase(Locale.ROOT);
-        return "COMPLETED".equals(normalizedStatus)
-                || "CANCELLED".equals(normalizedStatus)
-                || "CLOSED".equals(normalizedStatus);
     }
 
     private boolean isSameProduct(String left, String right) {

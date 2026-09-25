@@ -51,6 +51,19 @@ public class PutawayTaskResponse {
     private UUID sourceLocationId;
 
     @Schema(
+            description = "Site the task belongs to: the source receipt's location, or the source location's"
+                    + " site when the source location is a bin; null when it cannot be resolved",
+            example = "01960003-0000-7000-8000-000000000099",
+            requiredMode = NOT_REQUIRED)
+    private UUID locationId;
+
+    @Schema(
+            description = "Product's base unit of measure; null when it cannot be resolved",
+            example = "EACH",
+            requiredMode = NOT_REQUIRED)
+    private String uom;
+
+    @Schema(
             description = "Currently suggested destination location for the goods",
             example = "01960003-0000-7000-8000-000000000094",
             requiredMode = NOT_REQUIRED)
