@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.dto.EventProcessingLogEntry;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.IdempotencyOutcome;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.EventIngestionService;
 import com.positivity.events.EmitEvent;
@@ -121,9 +122,19 @@ public class EventIngestionController {
             }
         }
 
+        IdempotencyOutcome parsedIdempotencyOutcome = null;
+        if (idempotencyOutcome != null) {
+            try {
+                parsedIdempotencyOutcome =
+                        IdempotencyOutcome.valueOf(idempotencyOutcome.trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException _) {
+                parsedIdempotencyOutcome = null;
+            }
+        }
+
         AccountingEventFilter filter = AccountingEventFilter.builder()
                 .eventType(eventType)
-                .idempotencyOutcome(idempotencyOutcome)
+                .idempotencyOutcome(parsedIdempotencyOutcome)
                 .receivedAtFrom(receivedAtFrom)
                 .receivedAtTo(receivedAtTo)
                 .eventId(eventId)

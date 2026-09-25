@@ -7,14 +7,23 @@ import com.positivity.accounting.internal.dto.ContractField;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.EventEnvelopeContract;
 import com.positivity.accounting.internal.dto.EventProcessingLogEntry;
+import com.positivity.accounting.internal.dto.FactConsumptionIdempotency;
+import com.positivity.accounting.internal.dto.IdempotencyOutcomeDescriptor;
+import com.positivity.accounting.internal.dto.IdempotencyOutcomesContract;
+import com.positivity.accounting.internal.dto.IdentifierStrategy;
 import com.positivity.accounting.internal.dto.PostingResult;
+import com.positivity.accounting.internal.dto.ProcessingStatusDescriptor;
+import com.positivity.accounting.internal.dto.ProcessingStatusesContract;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryMapper;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
+import com.positivity.accounting.internal.dto.RestSubmissionIdempotency;
+import com.positivity.accounting.internal.dto.TraceabilityIdDescriptor;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.IdempotencyOutcome;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.exception.EventValidationException;
@@ -29,6 +38,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
@@ -42,6 +52,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -450,8 +461,11 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             specs = specs.and((root, query, cb) -> cb.equal(root.get("status"), filter.getStatus()));
         }
         if (filter.getIdempotencyOutcome() != null) {
-            specs = specs.and(
-                    (root, query, cb) -> cb.equal(root.get("idempotencyOutcome"), filter.getIdempotencyOutcome()));
+            // idempotency_outcome is a plain String column (not @Enumerated); compare against the
+            // enum's name() rather than the enum instance itself.
+            specs = specs.and((root, query, cb) -> cb.equal(
+                    root.get("idempotencyOutcome"),
+                    filter.getIdempotencyOutcome().name()));
         }
         if (filter.getReceivedAtFrom() != null) {
             specs = specs.and(
@@ -529,6 +543,123 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                 .version("1.0")
                 .fields(fields)
                 .examples(List.of())
+                .identifierStrategy(buildIdentifierStrategy())
+                .traceabilityIds(buildTraceabilityIds())
+                .processingStatuses(buildProcessingStatuses())
+                .idempotencyOutcomes(buildIdempotencyOutcomes())
+                .build();
+    }
+
+    /** AD-006 / ADR-0013 identifier conventions (issue #2207). */
+    private IdentifierStrategy buildIdentifierStrategy() {
+        return IdentifierStrategy.builder()
+                .idFormat("UUIDv7")
+                .eventIdMintedBy("SERVER_UNLESS_SUPPLIED")
+                .domainKeyIdFormat("OPAQUE_STRING")
+                .notes(List.of(
+                        "AccountingEvent.eventId is minted by @UUIDv7Id unless the caller supplies eventId "
+                                + "in the payload, which is then accepted verbatim.",
+                        "domainKeyId is the upstream domain's own key; it is a string and is never required "
+                                + "to be a UUID."))
+                .build();
+    }
+
+    /** Traceability ids confirmed on AccountingEventResponse / the request pipeline (issue #2207). */
+    private List<TraceabilityIdDescriptor> buildTraceabilityIds() {
+        return List.of(
+                TraceabilityIdDescriptor.builder()
+                        .name("traceparent")
+                        .description("W3C Trace Context header (AD-008), propagated automatically by the "
+                                + "platform's distributed tracing instrumentation")
+                        .location("Request/response header")
+                        .build(),
+                TraceabilityIdDescriptor.builder()
+                        .name("X-Correlation-Id")
+                        .description("Correlation id echoed from the request header if present, otherwise "
+                                + "minted; returned on error responses (ADR-0017 §4)")
+                        .location("Request/response header")
+                        .build(),
+                TraceabilityIdDescriptor.builder()
+                        .name("eventId")
+                        .description("Canonical identifier of the accounting event")
+                        .location("AccountingEventResponse.eventId")
+                        .build(),
+                TraceabilityIdDescriptor.builder()
+                        .name("eventReference")
+                        .description("Short human-readable display reference, format AE-{YYYYMM}-{seq}")
+                        .location("AccountingEventResponse.eventReference")
+                        .build(),
+                TraceabilityIdDescriptor.builder()
+                        .name("ingestionId")
+                        .description("Identifier of the ingestion batch or, for a Kafka-consumed fact, the "
+                                + "envelope eventId that delivered it")
+                        .location("AccountingEventResponse.ingestionId")
+                        .build(),
+                TraceabilityIdDescriptor.builder()
+                        .name("journalEntryId")
+                        .description(
+                                "Canonical posting reference: the journal entry produced from this " + "event, if any")
+                        .location("AccountingEventResponse.journalEntryId")
+                        .build(),
+                TraceabilityIdDescriptor.builder()
+                        .name("domainKeyId")
+                        .description("Domain key associated with the event, as supplied by the upstream " + "domain")
+                        .location("AccountingEventResponse.domainKeyId")
+                        .build(),
+                TraceabilityIdDescriptor.builder()
+                        .name("invoiceId")
+                        .description("Identifier of the related invoice, if any")
+                        .location("AccountingEventResponse.invoiceId")
+                        .build());
+    }
+
+    /**
+     * Every {@link AccountingEventStatus} constant with its meaning, plus the two distinct
+     * lifecycles (issue #2207). Derived from {@code AccountingEventStatus.values()} — never
+     * hand-typed — so a new status constant is published automatically.
+     */
+    private ProcessingStatusesContract buildProcessingStatuses() {
+        List<ProcessingStatusDescriptor> statuses = Arrays.stream(AccountingEventStatus.values())
+                .map(status -> ProcessingStatusDescriptor.builder()
+                        .status(status)
+                        .meaning(status.meaning())
+                        .build())
+                .toList();
+        return ProcessingStatusesContract.builder()
+                .statuses(statuses)
+                .restSubmissionLifecycle(List.of("RECEIVED", "PROCESSING", "PROCESSED|FAILED|SUSPENDED"))
+                .kafkaFactLifecycle(List.of("PROCESSED|SKIPPED"))
+                .build();
+    }
+
+    /**
+     * The two idempotency mechanisms (issue #2207): REST submission (content-hash dedup, 24h
+     * window, rejects a replay with 409 DUPLICATE_EVENT) and Kafka fact consumption (every
+     * consumed fact writes a terminal row; outcomes derived from {@code
+     * IdempotencyOutcome.values()} — never hand-typed).
+     */
+    private IdempotencyOutcomesContract buildIdempotencyOutcomes() {
+        RestSubmissionIdempotency restSubmission = RestSubmissionIdempotency.builder()
+                .mechanism("CONTENT_HASH")
+                .window("24h")
+                .onDuplicateHttpStatus(HttpStatus.CONFLICT.value())
+                .onDuplicateErrorCode("DUPLICATE_EVENT")
+                .onDuplicateBehavior("A replay persists nothing; idempotencyOutcome is not applicable to this path "
+                        + "and stays null.")
+                .build();
+        List<IdempotencyOutcomeDescriptor> factOutcomes = Arrays.stream(IdempotencyOutcome.values())
+                .map(outcome -> IdempotencyOutcomeDescriptor.builder()
+                        .outcome(outcome)
+                        .description(outcome.description())
+                        .build())
+                .toList();
+        FactConsumptionIdempotency factConsumption = FactConsumptionIdempotency.builder()
+                .mechanism("DETERMINISTIC_SOURCE_EVENT_ID")
+                .outcomes(factOutcomes)
+                .build();
+        return IdempotencyOutcomesContract.builder()
+                .restSubmission(restSubmission)
+                .factConsumption(factConsumption)
                 .build();
     }
 

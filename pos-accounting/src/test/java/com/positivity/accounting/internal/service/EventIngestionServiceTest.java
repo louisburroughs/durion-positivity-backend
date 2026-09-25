@@ -10,9 +10,14 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
 import com.positivity.accounting.internal.dto.AccountingEventFilter;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.dto.EventEnvelopeContract;
+import com.positivity.accounting.internal.dto.IdempotencyOutcomeDescriptor;
+import com.positivity.accounting.internal.dto.ProcessingStatusDescriptor;
+import com.positivity.accounting.internal.dto.TraceabilityIdDescriptor;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.IdempotencyOutcome;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
@@ -309,5 +314,71 @@ class EventIngestionServiceTest {
         verify(idempotencyService).isKeyProcessed(any(String.class));
         verify(accountingEventRepository).save(any(AccountingEvent.class));
         verify(idempotencyService).registerKey(any(String.class), any(UUID.class));
+    }
+
+    // ========== Issue #2207: additive EventEnvelopeContract sections ==========
+
+    @Test
+    @DisplayName("getEventContract should publish every AccountingEventStatus constant, derived from the enum")
+    void testGetEventContract_PublishesEveryProcessingStatus() {
+        EventEnvelopeContract contract = service.getEventContract();
+
+        assertThat(contract.getProcessingStatuses()).isNotNull();
+        assertThat(contract.getProcessingStatuses().getStatuses())
+                .extracting(ProcessingStatusDescriptor::getStatus)
+                .containsExactlyInAnyOrder(AccountingEventStatus.values());
+        assertThat(contract.getProcessingStatuses().getStatuses())
+                .allSatisfy(descriptor -> assertThat(descriptor.getMeaning()).isNotBlank());
+        assertThat(contract.getProcessingStatuses().getRestSubmissionLifecycle())
+                .containsExactly("RECEIVED", "PROCESSING", "PROCESSED|FAILED|SUSPENDED");
+        assertThat(contract.getProcessingStatuses().getKafkaFactLifecycle()).containsExactly("PROCESSED|SKIPPED");
+    }
+
+    @Test
+    @DisplayName("getEventContract should publish every IdempotencyOutcome constant under factConsumption, "
+            + "and the REST submission mechanism separately")
+    void testGetEventContract_PublishesEveryIdempotencyOutcome() {
+        EventEnvelopeContract contract = service.getEventContract();
+
+        assertThat(contract.getIdempotencyOutcomes()).isNotNull();
+        assertThat(contract.getIdempotencyOutcomes().getFactConsumption().getOutcomes())
+                .extracting(IdempotencyOutcomeDescriptor::getOutcome)
+                .containsExactlyInAnyOrder(IdempotencyOutcome.values());
+        assertThat(contract.getIdempotencyOutcomes().getFactConsumption().getOutcomes())
+                .allSatisfy(
+                        descriptor -> assertThat(descriptor.getDescription()).isNotBlank());
+
+        assertThat(contract.getIdempotencyOutcomes().getRestSubmission().getOnDuplicateHttpStatus())
+                .isEqualTo(409);
+        assertThat(contract.getIdempotencyOutcomes().getRestSubmission().getOnDuplicateErrorCode())
+                .isEqualTo("DUPLICATE_EVENT");
+    }
+
+    @Test
+    @DisplayName("getEventContract should publish identifierStrategy and traceabilityIds, "
+            + "leaving version/fields/examples unchanged")
+    void testGetEventContract_PublishesIdentifierStrategyAndTraceabilityIds() {
+        EventEnvelopeContract contract = service.getEventContract();
+
+        assertThat(contract.getIdentifierStrategy()).isNotNull();
+        assertThat(contract.getIdentifierStrategy().getIdFormat()).isEqualTo("UUIDv7");
+        assertThat(contract.getIdentifierStrategy().getEventIdMintedBy()).isEqualTo("SERVER_UNLESS_SUPPLIED");
+        assertThat(contract.getIdentifierStrategy().getDomainKeyIdFormat()).isEqualTo("OPAQUE_STRING");
+
+        assertThat(contract.getTraceabilityIds())
+                .extracting(TraceabilityIdDescriptor::getName)
+                .containsExactlyInAnyOrder(
+                        "traceparent",
+                        "X-Correlation-Id",
+                        "eventId",
+                        "eventReference",
+                        "ingestionId",
+                        "journalEntryId",
+                        "domainKeyId",
+                        "invoiceId");
+
+        assertThat(contract.getVersion()).isEqualTo("1.0");
+        assertThat(contract.getFields()).isNotEmpty();
+        assertThat(contract.getExamples()).isEmpty();
     }
 }
