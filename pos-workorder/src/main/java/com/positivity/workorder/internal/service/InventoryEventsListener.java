@@ -352,6 +352,10 @@ public class InventoryEventsListener {
                 .workorderLineId(payload.workorderLineId() != null ? payload.workorderLineId() : workorderLineId)
                 .skuId(payload.skuId())
                 .locationId(payload.locationId())
+                // Scan-verification codes (#2217); additive within schema v2, absent on an older fact.
+                .productCode(payload.productCode())
+                .locationName(payload.locationName())
+                .locationBarcode(payload.locationBarcode())
                 .quantityRequired(payload.quantityRequired())
                 .quantityPicked(payload.quantityPicked())
                 .quantityConsumed(quantityConsumed)

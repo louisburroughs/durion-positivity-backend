@@ -64,7 +64,9 @@ public class WorkorderPickFacadeController {
                     while releasing it marks it READY_TO_PICK for the floor.
                     Required inputs: workorderId (UUID) as a path parameter.
                     No events are emitted and no state changes; this is a read-only replica projection.
-                    Returns 404 when no pick list exists for the workorder.
+                    Returns 404 when no pick list exists for the workorder, and 403 LOCATION_SCOPE_DENIED \
+                    when the caller holds inventory:pick_list:view but its location scope does not cover \
+                    the workorder's own site (ADR-0061 mechanism, #2204).
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -104,7 +106,9 @@ public class WorkorderPickFacadeController {
                     No events are emitted and no state changes; this is a read-only replica projection.
                     Returns 200 with an empty array when the workorder has no pick list - a labour-only job, \
                     or one whose generated list has not replicated yet - so "nothing to pick" never has to be \
-                    handled as an error, and 403 when the caller lacks inventory:pick_list:view.
+                    handled as an error, 403 when the caller lacks inventory:pick_list:view, and 403 \
+                    LOCATION_SCOPE_DENIED when the caller holds it but its location scope does not cover the \
+                    workorder's own site (ADR-0061 mechanism, #2204).
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -134,16 +138,32 @@ public class WorkorderPickFacadeController {
     @PreAuthorize("hasAuthority('" + WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE + "')")
     @EmitEvent(id = "WORKORDER_PICK_FACADE_RESOLVE_SCAN", apiVersion = "1")
     @Operation(operationId = "resolvePickScan", summary = "Resolve Scan Against Pick Task", description = """
-                    Checks a scanned SKU and location against a pick task's expected SKU and location, returning \
-                    matched plus a matchStatus of MATCHED, SKU_MISMATCH, LOCATION_MISMATCH, or NO_MATCH.
+                    Checks a scanned product and location against a pick task's expected product and location, \
+                    returning matched plus a matchStatus of MATCHED, SKU_MISMATCH, LOCATION_MISMATCH, NO_MATCH, \
+                    PRODUCT_CODE_UNAVAILABLE, or LOCATION_CODE_UNAVAILABLE (#2217).
                     Use this tool to validate a barcode scan before confirmPickLine; it performs no confirmation \
                     itself, so do not treat a match as a recorded pick.
                     Preconditions: the pick task must exist on the workorder's pick list replica.
-                    Required inputs: workorderId and pickTaskId (UUIDs) as path parameters, plus scannedSkuId \
-                    and scannedLocationId (UUIDs) in the body.
+                    Required inputs: workorderId and pickTaskId (UUIDs) as path parameters, plus in the body \
+                    exactly one of scannedSkuId (UUID) or scannedProductCode (the scanned EAN/UPC string), and \
+                    exactly one of scannedLocationId (UUID) or scannedLocationCode (the scanned location name \
+                    or barcode string). A code-based scan is compared against the task's replicated \
+                    productCode / locationName / locationBarcode, trimmed and case-insensitively; \
+                    PRODUCT_CODE_UNAVAILABLE or LOCATION_CODE_UNAVAILABLE means the task carries no replicated \
+                    code to compare a scanned code against yet — "cannot verify", not "wrong part" — because \
+                    resolving that further would require a synchronous pos-catalog/pos-location call, which \
+                    ADR-0044 forbids here; comparison is scoped to this one task and EAN/UPC codes are unique \
+                    per tenant (ADR-0053 §5), so there is no cross-task ambiguity to resolve. The response \
+                    always carries expectedProductCode/expectedLocationCode/expectedLocationBarcode so the UI \
+                    can tell the mechanic what was expected, and fills resolvedSkuId/resolvedLocationId with \
+                    the task's own ids only once a code-based scan actually matches (an id-based scan is \
+                    echoed back regardless of outcome).
                     Emits a WORKORDER_PICK_FACADE_RESOLVE_SCAN audit event; no pick state changes — the check is \
                     purely evaluative.
-                    Returns 404 when the workorder has no pick list or the pick task is not on it.
+                    Returns 400 when neither or both of a target pair is supplied, 404 when the workorder has \
+                    no pick list or the pick task is not on it, and 403 LOCATION_SCOPE_DENIED when the \
+                    caller's location scope does not cover the workorder's own site (ADR-0061 mechanism, \
+                    #2204).
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -210,8 +230,9 @@ public class WorkorderPickFacadeController {
                     Emits a WORKORDER_PICK_FACADE_CONFIRM_LINE event and publishes a pick-confirm command; \
                     callers must poll getPickTasks to observe the applied quantity.
                     Returns 202 with status PENDING when the confirmation is queued, 400 when pickLineId does \
-                    not match pickTaskId, 404 when the pick list or task is missing, and 503 when the command \
-                    feed is unavailable.
+                    not match pickTaskId, 404 when the pick list or task is missing, 503 when the command \
+                    feed is unavailable, and 403 LOCATION_SCOPE_DENIED when the caller's location scope does \
+                    not cover the workorder's own site (ADR-0061 mechanism, #2204).
                     """)
     @ApiResponse(
             responseCode = "202",
@@ -282,8 +303,9 @@ public class WorkorderPickFacadeController {
                     Emits a WORKORDER_PICK_FACADE_COMPLETE_TASK event and publishes a pick-confirm command for \
                     the remaining quantity; callers must poll getPickTasks to observe the applied state.
                     Returns 202 with status PENDING while the command is in flight, 200 with the current state \
-                    when the task is already complete, 404 when the pick list or task is missing, and 503 when \
-                    the command feed is unavailable.
+                    when the task is already complete, 404 when the pick list or task is missing, 503 when \
+                    the command feed is unavailable, and 403 LOCATION_SCOPE_DENIED when the caller's location \
+                    scope does not cover the workorder's own site (ADR-0061 mechanism, #2204).
                     """)
     @ApiResponse(
             responseCode = "202",

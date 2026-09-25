@@ -10,6 +10,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
+import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationAncestorResolver;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScopeDeniedException;
 import com.positivity.workorder.internal.config.InventoryCommandPublisher;
 import com.positivity.workorder.internal.dto.pick.CompletePickTaskRequest;
 import com.positivity.workorder.internal.dto.pick.ConfirmPickLineRequest;
@@ -18,10 +23,17 @@ import com.positivity.workorder.internal.dto.pick.ResolveScanRequest;
 import com.positivity.workorder.internal.dto.pick.ResolveScanResponse;
 import com.positivity.workorder.internal.entity.ExtPickListReplica;
 import com.positivity.workorder.internal.entity.ExtPickTaskReplica;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.repository.ExtPickListReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPickTaskReplicaRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +46,9 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -84,15 +99,25 @@ class WorkorderPickFacadeServiceImplTest {
     @Mock
     private InventoryCommandPublisher publisher;
 
+    @Mock
+    private WorkorderRepository workorderRepository;
+
     private WorkorderPickFacadeServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new WorkorderPickFacadeServiceImpl(
-                pickListReplicaRepository, pickTaskReplicaRepository, publisherProvider);
+                pickListReplicaRepository, pickTaskReplicaRepository, publisherProvider, workorderRepository);
         when(publisherProvider.getIfAvailable()).thenReturn(publisher);
         pickListExists();
         taskExists(task());
+        // No workorder row by default: requireLocationScope skips (#2204), so every existing test
+        // above is unaffected by the new gate unless it opts in via workorderAt(...).
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
     }
 
     private void pickListExists() {
@@ -128,6 +153,56 @@ class WorkorderPickFacadeServiceImplTest {
         request.setScannedSkuId(sku);
         request.setScannedLocationId(location);
         return request;
+    }
+
+    private static ResolveScanRequest scanByCode(String productCode, String locationCode) {
+        ResolveScanRequest request = new ResolveScanRequest();
+        request.setScannedProductCode(productCode);
+        request.setScannedLocationCode(locationCode);
+        return request;
+    }
+
+    // ─── location scope helpers (#2204) ────────────────────────────────────────
+
+    private void workorderAt(UUID locationId) {
+        Workorder workorder = new Workorder();
+        workorder.setId(WORKORDER_ID);
+        workorder.setLocationId(locationId);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+    }
+
+    /** A resolver whose only ancestor of a node is the node itself — enough for require()'s check. */
+    private static final LocationAncestorResolver SELF_RESOLVER =
+            locationId -> new AncestorSets(Set.of(locationId), Set.of(locationId));
+
+    /** A post-rollout caller whose {@code permission} is scoped to exactly {@code assignedNode}. */
+    private static void authenticateScopedOn(String permission, UUID assignedNode) {
+        authenticateAs(
+                LocationScope.of(Set.of(), Set.of(permission), Optional.of(Set.of(assignedNode)), true, SELF_RESOLVER));
+    }
+
+    /** A post-rollout caller whose token carries claims but {@code permission} is not scoped (global grant). */
+    private static void authenticateGlobalOn(UUID assignedNode) {
+        authenticateAs(LocationScope.of(Set.of(), Set.of(), Optional.of(Set.of(assignedNode)), true, SELF_RESOLVER));
+    }
+
+    /** A pre-rollout caller: no {@code loc_*} claims at all. */
+    private static void authenticatePreRollout() {
+        var token = new UsernamePasswordAuthenticationToken(
+                "scope-test-user", null, List.of(new SimpleGrantedAuthority("ROLE_TEST")));
+        token.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "scope-test-user"));
+        SecurityContextHolder.getContext().setAuthentication(token);
+    }
+
+    private static void authenticateAs(LocationScope scope) {
+        var token = new UsernamePasswordAuthenticationToken(
+                "scope-test-user", null, List.of(new SimpleGrantedAuthority("ROLE_TEST")));
+        token.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "scope-test-user",
+                GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                scope));
+        SecurityContextHolder.getContext().setAuthentication(token);
     }
 
     // ─── scan classification ─────────────────────────────────────────────────
@@ -175,6 +250,140 @@ class WorkorderPickFacadeServiceImplTest {
 
         assertThat(response.isMatched()).isFalse();
         assertThat(response.getMatchStatus()).isIn("SKU_MISMATCH", "LOCATION_MISMATCH");
+    }
+
+    // ─── scan by code (#2217) ───────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("a code-based scan matches when both the product code and a location code match")
+    void codeScanMatches() {
+        ExtPickTaskReplica task = task();
+        task.setProductCode("0123456789012");
+        task.setLocationName("Aisle 3 Bin 7");
+        task.setLocationBarcode("LOC-0037");
+        taskExists(task);
+
+        ResolveScanResponse response =
+                service.resolveScan(WORKORDER_ID, TASK_ID, scanByCode("0123456789012", "LOC-0037"));
+
+        assertThat(response.isMatched()).isTrue();
+        assertThat(response.getMatchStatus()).isEqualTo("MATCHED");
+        // Resolved by code: the caller learns the task's own ids only once matched.
+        assertThat(response.getResolvedSkuId()).isEqualTo(SKU_ID);
+        assertThat(response.getResolvedLocationId()).isEqualTo(LOCATION_ID);
+        assertThat(response.getExpectedProductCode()).isEqualTo("0123456789012");
+        assertThat(response.getExpectedLocationCode()).isEqualTo("Aisle 3 Bin 7");
+        assertThat(response.getExpectedLocationBarcode()).isEqualTo("LOC-0037");
+    }
+
+    @Test
+    @DisplayName("a location code matches against either the name or the barcode")
+    void locationCodeMatchesEitherNameOrBarcode() {
+        ExtPickTaskReplica task = task();
+        task.setProductCode("0123456789012");
+        task.setLocationName("Aisle 3 Bin 7");
+        task.setLocationBarcode("LOC-0037");
+        taskExists(task);
+
+        assertThat(service.resolveScan(WORKORDER_ID, TASK_ID, scanByCode("0123456789012", "Aisle 3 Bin 7"))
+                        .isMatched())
+                .isTrue();
+        assertThat(service.resolveScan(WORKORDER_ID, TASK_ID, scanByCode("0123456789012", "  loc-0037  "))
+                        .isMatched())
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("a wrong product code is SKU_MISMATCH when the location code matches")
+    void codeScanProductMismatch() {
+        ExtPickTaskReplica task = task();
+        task.setProductCode("0123456789012");
+        task.setLocationBarcode("LOC-0037");
+        taskExists(task);
+
+        ResolveScanResponse response =
+                service.resolveScan(WORKORDER_ID, TASK_ID, scanByCode("9999999999999", "LOC-0037"));
+
+        assertThat(response.isMatched()).isFalse();
+        assertThat(response.getMatchStatus()).isEqualTo("SKU_MISMATCH");
+        assertThat(response.getResolvedSkuId()).isNull();
+    }
+
+    @Test
+    @DisplayName("a wrong location code is LOCATION_MISMATCH when the product code matches")
+    void codeScanLocationMismatch() {
+        ExtPickTaskReplica task = task();
+        task.setProductCode("0123456789012");
+        task.setLocationBarcode("LOC-0037");
+        taskExists(task);
+
+        ResolveScanResponse response =
+                service.resolveScan(WORKORDER_ID, TASK_ID, scanByCode("0123456789012", "LOC-9999"));
+
+        assertThat(response.isMatched()).isFalse();
+        assertThat(response.getMatchStatus()).isEqualTo("LOCATION_MISMATCH");
+        assertThat(response.getResolvedLocationId()).isNull();
+    }
+
+    @Test
+    @DisplayName("neither code matching is NO_MATCH")
+    void codeScanNoMatch() {
+        ExtPickTaskReplica task = task();
+        task.setProductCode("0123456789012");
+        task.setLocationBarcode("LOC-0037");
+        taskExists(task);
+
+        ResolveScanResponse response =
+                service.resolveScan(WORKORDER_ID, TASK_ID, scanByCode("9999999999999", "LOC-9999"));
+
+        assertThat(response.getMatchStatus()).isEqualTo("NO_MATCH");
+    }
+
+    @Test
+    @DisplayName("a scanned product code the task has no replicated code to compare against is "
+            + "PRODUCT_CODE_UNAVAILABLE — unverifiable, not necessarily wrong")
+    void codeScanProductUnavailable() {
+        ExtPickTaskReplica task = task();
+        task.setProductCode(null);
+        task.setLocationBarcode("LOC-0037");
+        taskExists(task);
+
+        ResolveScanResponse response =
+                service.resolveScan(WORKORDER_ID, TASK_ID, scanByCode("0123456789012", "LOC-0037"));
+
+        assertThat(response.isMatched()).isFalse();
+        assertThat(response.getMatchStatus()).isEqualTo("PRODUCT_CODE_UNAVAILABLE");
+    }
+
+    @Test
+    @DisplayName("a scanned location code the task has no replicated code to compare against is "
+            + "LOCATION_CODE_UNAVAILABLE")
+    void codeScanLocationUnavailable() {
+        ExtPickTaskReplica task = task();
+        task.setProductCode("0123456789012");
+        task.setLocationName(null);
+        task.setLocationBarcode(null);
+        taskExists(task);
+
+        ResolveScanResponse response =
+                service.resolveScan(WORKORDER_ID, TASK_ID, scanByCode("0123456789012", "LOC-0037"));
+
+        assertThat(response.isMatched()).isFalse();
+        assertThat(response.getMatchStatus()).isEqualTo("LOCATION_CODE_UNAVAILABLE");
+    }
+
+    @Test
+    @DisplayName("product code unavailable takes priority over a location mismatch")
+    void productUnavailableTakesPriorityOverLocationMismatch() {
+        ExtPickTaskReplica task = task();
+        task.setProductCode(null);
+        task.setLocationBarcode("LOC-0037");
+        taskExists(task);
+
+        ResolveScanResponse response =
+                service.resolveScan(WORKORDER_ID, TASK_ID, scanByCode("0123456789012", "LOC-9999"));
+
+        assertThat(response.getMatchStatus()).isEqualTo("PRODUCT_CODE_UNAVAILABLE");
     }
 
     // ─── failing closed before publishing ────────────────────────────────────
@@ -400,5 +609,137 @@ class WorkorderPickFacadeServiceImplTest {
         ConfirmPickLineRequest request = new ConfirmPickLineRequest();
         request.setQuantityPicked(quantity);
         return request;
+    }
+
+    // ─── location scope (#2204) ─────────────────────────────────────────────────
+
+    private static final UUID IN_REACH_NODE = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+    private static final UUID OUT_OF_REACH_NODE = UUID.fromString("00000000-0000-0000-0000-0000000000b2");
+
+    @Test
+    @DisplayName("getPickListForWorkorder: scoped caller with the workorder's location in reach succeeds")
+    void getPickListInReach() {
+        workorderAt(IN_REACH_NODE);
+        authenticateScopedOn(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW, IN_REACH_NODE);
+
+        assertThat(service.getPickListForWorkorder(WORKORDER_ID)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("getPickListForWorkorder: scoped caller with the workorder's location out of reach is denied")
+    void getPickListOutOfReach() {
+        workorderAt(OUT_OF_REACH_NODE);
+        authenticateScopedOn(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW, IN_REACH_NODE);
+
+        assertThatThrownBy(() -> service.getPickListForWorkorder(WORKORDER_ID))
+                .isInstanceOf(LocationScopeDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("getPickTasksForWorkorder: out-of-reach caller is denied before reading tasks")
+    void getPickTasksOutOfReach() {
+        workorderAt(OUT_OF_REACH_NODE);
+        authenticateScopedOn(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW, IN_REACH_NODE);
+
+        assertThatThrownBy(() -> service.getPickTasksForWorkorder(WORKORDER_ID))
+                .isInstanceOf(LocationScopeDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("resolveScan: out-of-reach caller is denied before the scan is graded")
+    void resolveScanOutOfReach() {
+        workorderAt(OUT_OF_REACH_NODE);
+        authenticateScopedOn(WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE, IN_REACH_NODE);
+
+        assertThatThrownBy(() -> service.resolveScan(WORKORDER_ID, TASK_ID, scan(SKU_ID, LOCATION_ID)))
+                .isInstanceOf(LocationScopeDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("confirmPickLine: in-reach caller is allowed to publish the confirm command")
+    void confirmPickLineInReach() {
+        workorderAt(IN_REACH_NODE);
+        authenticateScopedOn(WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE, IN_REACH_NODE);
+
+        service.confirmPickLine(WORKORDER_ID, TASK_ID, TASK_ID, confirm(5));
+
+        verify(publisher).requestPickTaskConfirm(any(), any(), any(), any(), eq(5));
+    }
+
+    @Test
+    @DisplayName("confirmPickLine: out-of-reach caller is denied and nothing is published")
+    void confirmPickLineOutOfReach() {
+        workorderAt(OUT_OF_REACH_NODE);
+        authenticateScopedOn(WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE, IN_REACH_NODE);
+
+        assertThatThrownBy(() -> service.confirmPickLine(WORKORDER_ID, TASK_ID, TASK_ID, confirm(5)))
+                .isInstanceOf(LocationScopeDeniedException.class);
+        verify(publisher, never()).requestPickTaskConfirm(any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("completePickTask: out-of-reach caller is denied and nothing is published")
+    void completePickTaskOutOfReach() {
+        workorderAt(OUT_OF_REACH_NODE);
+        authenticateScopedOn(WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE, IN_REACH_NODE);
+
+        assertThatThrownBy(() -> service.completePickTask(WORKORDER_ID, TASK_ID, new CompletePickTaskRequest()))
+                .isInstanceOf(LocationScopeDeniedException.class);
+        verify(publisher, never()).requestPickTaskConfirm(any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("consumePickedItems: out-of-reach caller is denied and nothing is published")
+    void consumePickedItemsOutOfReach() {
+        workorderAt(OUT_OF_REACH_NODE);
+        authenticateScopedOn(WorkorderPermissions.PARTS_CONSUME, IN_REACH_NODE);
+        ConsumePickedItemsRequest request = new ConsumePickedItemsRequest();
+        ConsumePickedItemsRequest.ConsumeItem item = new ConsumePickedItemsRequest.ConsumeItem();
+        item.setPickTaskId(TASK_ID);
+        item.setQuantityToConsume(2);
+        request.setItems(List.of(item));
+
+        assertThatThrownBy(() -> service.consumePickedItems(WORKORDER_ID, request))
+                .isInstanceOf(LocationScopeDeniedException.class);
+        verify(publisher, never()).requestItemsConsume(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a pre-rollout token (no loc_* claims) keeps today's behaviour: unrestricted")
+    void preRolloutTokenUnchanged() {
+        workorderAt(OUT_OF_REACH_NODE);
+        authenticatePreRollout();
+
+        assertThat(service.getPickListForWorkorder(WORKORDER_ID)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("a caller whose grant is global (not location-scoped) is unrestricted")
+    void globalGrantCallerPasses() {
+        workorderAt(OUT_OF_REACH_NODE);
+        authenticateGlobalOn(IN_REACH_NODE);
+
+        assertThat(service.getPickListForWorkorder(WORKORDER_ID)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("a workorder whose locationId has not been backfilled skips the check rather than failing closed")
+    void nullLocationIdSkipsTheCheck() {
+        workorderAt(null);
+        authenticateScopedOn(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW, IN_REACH_NODE);
+
+        assertThat(service.getPickListForWorkorder(WORKORDER_ID)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("a workorder this module does not hold skips the check — the 404 further down answers it")
+    void unknownWorkorderSkipsTheCheck() {
+        authenticateScopedOn(WorkorderPermissions.INVENTORY_PICK_LIST_VIEW, IN_REACH_NODE);
+        // No workorderAt(...) stub: workorderRepository.findById returns empty.
+
+        assertThatThrownBy(() -> service.getPickListForWorkorder(OTHER_ID))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
     }
 }

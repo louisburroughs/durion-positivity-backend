@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.config.InventoryCommandPublisher;
 import com.positivity.workorder.internal.config.InventoryCommandPublisher.ConsumeLine;
 import com.positivity.workorder.internal.dto.pick.CompletePickTaskRequest;
@@ -8,14 +9,18 @@ import com.positivity.workorder.internal.dto.pick.ConsumePickedItemsRequest;
 import com.positivity.workorder.internal.dto.pick.ConsumePickedItemsResponse;
 import com.positivity.workorder.internal.dto.pick.ResolveScanRequest;
 import com.positivity.workorder.internal.dto.pick.ResolveScanResponse;
+import com.positivity.workorder.internal.dto.pick.ResolveScanResponse.MatchStatus;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickListResponse;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickTaskResponse;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickedItemResponse;
 import com.positivity.workorder.internal.entity.ExtPickListReplica;
 import com.positivity.workorder.internal.entity.ExtPickTaskReplica;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ConsumeItemStatus;
 import com.positivity.workorder.internal.repository.ExtPickListReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPickTaskReplicaRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -44,19 +49,17 @@ import org.springframework.web.server.ResponseStatusException;
 @Slf4j
 public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeService {
 
-    private static final String STATUS_MATCHED = "MATCHED";
-    private static final String STATUS_LOCATION_MISMATCH = "LOCATION_MISMATCH";
-    private static final String STATUS_SKU_MISMATCH = "SKU_MISMATCH";
-    private static final String STATUS_NO_MATCH = "NO_MATCH";
     private static final String STATUS_PICKED = "PICKED";
 
     private final ExtPickListReplicaRepository pickListReplicaRepository;
     private final ExtPickTaskReplicaRepository pickTaskReplicaRepository;
     private final ObjectProvider<InventoryCommandPublisher> inventoryCommandPublisher;
+    private final WorkorderRepository workorderRepository;
 
     @Override
     @NonNull
     public WorkorderPickListResponse getPickListForWorkorder(@NonNull UUID workorderId) {
+        requireLocationScope(workorderId, WorkorderPermissions.INVENTORY_PICK_LIST_VIEW);
         return mapPickList(resolvePrimaryPickList(workorderId));
     }
 
@@ -75,6 +78,7 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
     @Override
     @NonNull
     public List<WorkorderPickTaskResponse> getPickTasksForWorkorder(@NonNull UUID workorderId) {
+        requireLocationScope(workorderId, WorkorderPermissions.INVENTORY_PICK_LIST_VIEW);
         return findPrimaryPickList(workorderId)
                 .map(pickList ->
                         pickTaskReplicaRepository.findByPickListIdOrderBySortOrderAsc(pickList.getPickListId()).stream()
@@ -87,32 +91,90 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
     @NonNull
     public ResolveScanResponse resolveScan(
             @NonNull UUID workorderId, @NonNull UUID pickTaskId, @NonNull ResolveScanRequest request) {
+        requireLocationScope(workorderId, WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE);
         ExtPickTaskReplica task = resolveTask(workorderId, pickTaskId);
 
-        boolean skuMatches = task.getSkuId() != null && task.getSkuId().equals(request.getScannedSkuId());
-        boolean locationMatches =
-                task.getLocationId() != null && task.getLocationId().equals(request.getScannedLocationId());
+        Outcome productOutcome = resolveProductOutcome(task, request);
+        Outcome locationOutcome = resolveLocationOutcome(task, request);
 
-        boolean matched = skuMatches && locationMatches;
-        String matchStatus;
+        boolean matched = productOutcome == Outcome.MATCH && locationOutcome == Outcome.MATCH;
+        MatchStatus matchStatus;
         if (matched) {
-            matchStatus = STATUS_MATCHED;
-        } else if (skuMatches) {
-            matchStatus = STATUS_LOCATION_MISMATCH;
-        } else if (locationMatches) {
-            matchStatus = STATUS_SKU_MISMATCH;
+            matchStatus = MatchStatus.MATCHED;
+        } else if (productOutcome == Outcome.UNAVAILABLE) {
+            matchStatus = MatchStatus.PRODUCT_CODE_UNAVAILABLE;
+        } else if (locationOutcome == Outcome.UNAVAILABLE) {
+            matchStatus = MatchStatus.LOCATION_CODE_UNAVAILABLE;
+        } else if (productOutcome == Outcome.MISMATCH && locationOutcome == Outcome.MISMATCH) {
+            matchStatus = MatchStatus.NO_MATCH;
+        } else if (productOutcome == Outcome.MISMATCH) {
+            matchStatus = MatchStatus.SKU_MISMATCH;
         } else {
-            matchStatus = STATUS_NO_MATCH;
+            matchStatus = MatchStatus.LOCATION_MISMATCH;
         }
+
+        // Echo an id-based scan back as-is; a code-based scan resolves to the task's own id only
+        // once the code has actually matched — otherwise the caller does not know which sku/location
+        // was really scanned, and inventing one would be worse than leaving it null.
+        UUID resolvedSkuId = request.getScannedSkuId() != null
+                ? request.getScannedSkuId()
+                : (productOutcome == Outcome.MATCH ? task.getSkuId() : null);
+        UUID resolvedLocationId = request.getScannedLocationId() != null
+                ? request.getScannedLocationId()
+                : (locationOutcome == Outcome.MATCH ? task.getLocationId() : null);
 
         return ResolveScanResponse.builder()
                 .pickTaskId(task.getPickTaskId())
                 .pickListId(task.getPickListId())
-                .resolvedSkuId(request.getScannedSkuId())
-                .resolvedLocationId(request.getScannedLocationId())
+                .resolvedSkuId(resolvedSkuId)
+                .resolvedLocationId(resolvedLocationId)
+                .expectedProductCode(task.getProductCode())
+                .expectedLocationCode(task.getLocationName())
+                .expectedLocationBarcode(task.getLocationBarcode())
                 .matched(matched)
-                .matchStatus(matchStatus)
+                .matchStatus(matchStatus.name())
                 .build();
+    }
+
+    /** Per-dimension scan outcome, folded into one {@link MatchStatus} in {@link #resolveScan}. */
+    private enum Outcome {
+        MATCH,
+        MISMATCH,
+        UNAVAILABLE
+    }
+
+    private static Outcome resolveProductOutcome(ExtPickTaskReplica task, ResolveScanRequest request) {
+        if (request.getScannedSkuId() != null) {
+            return request.getScannedSkuId().equals(task.getSkuId()) ? Outcome.MATCH : Outcome.MISMATCH;
+        }
+        if (task.getProductCode() == null) {
+            return Outcome.UNAVAILABLE;
+        }
+        return equalsIgnoreCaseTrimmed(request.getScannedProductCode(), task.getProductCode())
+                ? Outcome.MATCH
+                : Outcome.MISMATCH;
+    }
+
+    private static Outcome resolveLocationOutcome(ExtPickTaskReplica task, ResolveScanRequest request) {
+        if (request.getScannedLocationId() != null) {
+            return request.getScannedLocationId().equals(task.getLocationId()) ? Outcome.MATCH : Outcome.MISMATCH;
+        }
+        // A location code matches either the location's barcode or its name (#2217): a mechanic
+        // may scan either printed label, and the replica cannot say which one is posted where.
+        if (task.getLocationBarcode() == null && task.getLocationName() == null) {
+            return Outcome.UNAVAILABLE;
+        }
+        String scanned = request.getScannedLocationCode();
+        boolean matches = equalsIgnoreCaseTrimmed(scanned, task.getLocationBarcode())
+                || equalsIgnoreCaseTrimmed(scanned, task.getLocationName());
+        return matches ? Outcome.MATCH : Outcome.MISMATCH;
+    }
+
+    private static boolean equalsIgnoreCaseTrimmed(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return a.trim().equalsIgnoreCase(b.trim());
     }
 
     @Override
@@ -127,6 +189,7 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "pickLineId " + pickLineId + " does not match pickTaskId " + pickTaskId);
         }
+        requireLocationScope(workorderId, WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE);
         ExtPickTaskReplica task = resolveTask(workorderId, pickTaskId);
         requestConfirm(task, request.getQuantityPicked());
         return mapPickTask(task, STATUS_PENDING);
@@ -136,6 +199,7 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
     @NonNull
     public WorkorderPickTaskResponse completePickTask(
             @NonNull UUID workorderId, @NonNull UUID pickTaskId, @NonNull CompletePickTaskRequest request) {
+        requireLocationScope(workorderId, WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE);
         ExtPickTaskReplica task = resolveTask(workorderId, pickTaskId);
 
         int remaining = task.getQuantityRequired() - task.getQuantityPicked();
@@ -177,6 +241,7 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
     @NonNull
     public ConsumePickedItemsResponse consumePickedItems(
             @NonNull UUID workorderId, @NonNull ConsumePickedItemsRequest request) {
+        requireLocationScope(workorderId, WorkorderPermissions.PARTS_CONSUME);
         ExtPickListReplica pickList = resolvePrimaryPickList(workorderId);
         List<ExtPickTaskReplica> tasks =
                 pickTaskReplicaRepository.findByPickListIdOrderBySortOrderAsc(pickList.getPickListId());
@@ -295,6 +360,9 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
                 .pickListId(task.getPickListId())
                 .skuId(task.getSkuId())
                 .locationId(task.getLocationId())
+                .productCode(task.getProductCode())
+                .storageLocationCode(task.getLocationName())
+                .storageLocationBarcode(task.getLocationBarcode())
                 .requiredQty(task.getQuantityRequired())
                 .pickedQty(task.getQuantityPicked())
                 .remainingQty(remainingQty)
@@ -302,5 +370,29 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
                 .sortOrder(task.getSortOrder())
                 .version(task.getAggregateVersion())
                 .build();
+    }
+
+    /**
+     * Gates a state-changing (or state-describing) pick-facade call to the caller's location reach
+     * (ADR-0061 mechanism, #2204). Picking and consuming parts happen at the workorder's own site,
+     * not the technician's assignment, so the check is against {@link Workorder#getLocationId()}
+     * rather than any assignment gate.
+     *
+     * <p>Absent on purpose when there is nothing to scope against: a workorder this module does not
+     * hold (the caller's own downstream lookup answers 404), or one whose {@code locationId} has not
+     * been backfilled yet (ADR-0061 rollout is per-module and per-row). Both skip rather than fail
+     * closed, matching every other location-scope gate in this module.
+     */
+    private void requireLocationScope(@NonNull UUID workorderId, @NonNull String permission) {
+        Workorder workorder = workorderRepository.findById(workorderId).orElse(null);
+        if (workorder == null) {
+            log.debug("Skipping location scope check for workorder {}: workorder not found", workorderId);
+            return;
+        }
+        if (workorder.getLocationId() == null) {
+            log.debug("Skipping location scope check for workorder {}: no locationId recorded", workorderId);
+            return;
+        }
+        SecurityContextHelper.locationScope().require(permission, workorder.getLocationId());
     }
 }

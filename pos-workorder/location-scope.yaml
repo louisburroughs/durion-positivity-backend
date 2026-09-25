@@ -62,3 +62,27 @@ decisions:
     shape: narrow
     permission: workorder:labor_intelligence:view
     reason: locationId is an optional report filter; a supplied one is gated, and a scoped caller with no filter sees only the shops within reach (an empty reach is an empty report); ROLE_ADMIN without the permission is unrestricted.
+  - operation: WorkorderPickFacadeController.getWorkorderPickList
+    shape: gate
+    permission: inventory:pick_list:view
+    reason: none of these six endpoints take a caller-supplied locationId parameter; the gate is checked in WorkorderPickFacadeServiceImpl off the loaded workorder's own locationId (#2204), the same non-parameter pattern as OperationalContextController.overrideOperationalContext's shopId leg. Denied outside the caller's reach; absent locationId (not yet backfilled) skips the check.
+  - operation: WorkorderPickFacadeController.getPickTasks
+    shape: gate
+    permission: inventory:pick_list:view
+    reason: gated in WorkorderPickFacadeServiceImpl off the workorder's own locationId, same as getWorkorderPickList (#2204).
+  - operation: WorkorderPickFacadeController.resolveScan
+    shape: gate
+    permission: inventory:pick_list:execute
+    reason: gated in WorkorderPickFacadeServiceImpl off the workorder's own locationId before the scan is graded (#2204).
+  - operation: WorkorderPickFacadeController.confirmPickLine
+    shape: gate
+    permission: inventory:pick_list:execute
+    reason: gated in WorkorderPickFacadeServiceImpl off the workorder's own locationId before the confirm command is published (#2204).
+  - operation: WorkorderPickFacadeController.completePickTask
+    shape: gate
+    permission: inventory:pick_list:execute
+    reason: gated in WorkorderPickFacadeServiceImpl off the workorder's own locationId before the confirm command is published (#2204).
+  - operation: WorkorderPickedItemsController.consumeWorkorderPickedItems
+    shape: gate
+    permission: workorder:parts:consume
+    reason: gated in WorkorderPickFacadeServiceImpl.consumePickedItems off the workorder's own locationId before the consume command is published (#2204).

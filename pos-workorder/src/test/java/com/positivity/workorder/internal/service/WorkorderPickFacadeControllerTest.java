@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.internal.config.GlobalExceptionHandler;
 import com.positivity.workorder.internal.controller.WorkorderPickFacadeController;
@@ -49,7 +50,7 @@ import org.springframework.web.server.ResponseStatusException;
         controllers = WorkorderPickFacadeController.class,
         excludeFilters =
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = GlobalExceptionHandler.class))
-@Import(TestSecurityConfig.class)
+@Import({TestSecurityConfig.class, WebCommonErrorAutoConfiguration.class})
 @ActiveProfiles("test")
 class WorkorderPickFacadeControllerTest {
 
@@ -269,6 +270,79 @@ class WorkorderPickFacadeControllerTest {
     // -------------------------------------------------------------------------
     // AC-9: POST :confirm → 403 when missing inventory:pick_list:execute
     // -------------------------------------------------------------------------
+
+    // -------------------------------------------------------------------------
+    // #2217: resolve-scan validation — exactly one of id/code per dimension
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2217: POST :resolve-scan returns 400 with field errors when neither scannedSkuId "
+            + "nor scannedProductCode is supplied")
+    void resolveScan_whenNeitherProductTargetSupplied_returns400() throws Exception {
+        var request = ResolveScanRequest.builder()
+                .scannedLocationId(UUID.randomUUID())
+                .build();
+
+        mockMvc.perform(post(RESOLVE_SCAN_URL, WORKORDER_ID, PICK_TASK_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("productTargetValid"));
+    }
+
+    @Test
+    @DisplayName("#2217: POST :resolve-scan returns 400 with field errors when both scannedSkuId "
+            + "and scannedProductCode are supplied")
+    void resolveScan_whenBothProductTargetsSupplied_returns400() throws Exception {
+        var request = ResolveScanRequest.builder()
+                .scannedSkuId(UUID.randomUUID())
+                .scannedProductCode("0123456789012")
+                .scannedLocationId(UUID.randomUUID())
+                .build();
+
+        mockMvc.perform(post(RESOLVE_SCAN_URL, WORKORDER_ID, PICK_TASK_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("productTargetValid"));
+    }
+
+    @Test
+    @DisplayName("#2217: POST :resolve-scan returns 400 when neither scannedLocationId nor "
+            + "scannedLocationCode is supplied")
+    void resolveScan_whenNeitherLocationTargetSupplied_returns400() throws Exception {
+        var request =
+                ResolveScanRequest.builder().scannedSkuId(UUID.randomUUID()).build();
+
+        mockMvc.perform(post(RESOLVE_SCAN_URL, WORKORDER_ID, PICK_TASK_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("locationTargetValid"));
+    }
+
+    @Test
+    @DisplayName("#2217: POST :resolve-scan accepts a code-based scan and returns 200")
+    void resolveScan_whenScannedByCode_returns200() throws Exception {
+        var request = ResolveScanRequest.builder()
+                .scannedProductCode("0123456789012")
+                .scannedLocationCode("Aisle 3 Bin 7")
+                .build();
+        var response = ResolveScanResponse.builder()
+                .pickTaskId(PICK_TASK_ID)
+                .pickListId(UUID.randomUUID())
+                .matched(true)
+                .matchStatus("MATCHED")
+                .build();
+        when(workorderPickFacadeService.resolveScan(eq(WORKORDER_ID), eq(PICK_TASK_ID), any()))
+                .thenReturn(response);
+
+        mockMvc.perform(post(RESOLVE_SCAN_URL, WORKORDER_ID, PICK_TASK_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.matchStatus").value("MATCHED"));
+    }
 
     @Test
     @DisplayName("AC-9: POST :confirm returns 403 when missing inventory:pick_list:execute authority")

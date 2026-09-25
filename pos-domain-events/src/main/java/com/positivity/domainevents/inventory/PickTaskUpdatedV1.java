@@ -18,6 +18,11 @@ import org.jspecify.annotations.Nullable;
  * {@code workorder_part.quantityConsumed}. Events emitted under schema v1 deserialize with the
  * field absent, and a task generated from a source that has no demand line still carries null.
  *
+ * <p><b>Schema v2 additions (issue #2217):</b> adds the additive nullable {@code productCode},
+ * {@code locationName}, and {@code locationBarcode} — human-readable codes the mobile pick facade
+ * needs to verify a barcode scan without calling pos-catalog or pos-location synchronously
+ * (ADR-0044 R1/R3). Older facts deserialize with all three absent.
+ *
  * @param pickTaskId pick task identifier (aggregate id of the fact)
  * @param pickListId owning pick list
  * @param workorderId workorder the owning pick list serves
@@ -29,6 +34,19 @@ import org.jspecify.annotations.Nullable;
  * @param sortOrder pick route ordering
  * @param workorderLineId demand line the task fulfils (pos-workorder {@code workorder_part.id});
  *     {@code null} on a v1 event or a task with no demand line
+ * @param productCode the SKU's scannable EAN/UPC code, sourced from pos-catalog's {@code
+ *     productCode} (ADR-0053 §5, issue #2217). Additive within schema v2 (ADR-0044 §3); {@code
+ *     null} when the SKU carries no EAN/UPC code, when its code type is neither (e.g. MPN or an
+ *     internal SKU, which are not scan codes), or on a fact emitted before this field existed. The
+ *     pick facade compares a scanned code against this field rather than calling pos-catalog
+ *     synchronously, which ADR-0044 R1 forbids.
+ * @param locationName the suggested storage location's name, which pos-location's replica uses as
+ *     its human-readable code. Additive within schema v2, same reason as {@code productCode};
+ *     {@code null} when the location replica had not arrived when this fact was built, or on a
+ *     fact emitted before this field existed.
+ * @param locationBarcode the suggested storage location's barcode, when it carries one. Additive
+ *     within schema v2, same reason as {@code productCode}; {@code null} when the location has no
+ *     barcode, its replica had not arrived, or on a fact emitted before this field existed.
  */
 public record PickTaskUpdatedV1(
         @NonNull UUID pickTaskId,
@@ -40,7 +58,10 @@ public record PickTaskUpdatedV1(
         int quantityPicked,
         @NonNull String status,
         int sortOrder,
-        @Nullable UUID workorderLineId) {
+        @Nullable UUID workorderLineId,
+        @Nullable String productCode,
+        @Nullable String locationName,
+        @Nullable String locationBarcode) {
 
     public static final String EVENT_TYPE = "inventory.pick-task.updated";
     public static final int SCHEMA_VERSION = 2;
