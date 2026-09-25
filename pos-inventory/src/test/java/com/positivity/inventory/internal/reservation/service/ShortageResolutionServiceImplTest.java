@@ -466,6 +466,91 @@ class ShortageResolutionServiceImplTest {
                 .isTrue();
     }
 
+    // ─── PR #2227 review item 7: a non-positive derived shortfall is rejected ────
+
+    @Test
+    @DisplayName(
+            "computeShortageOptions rejects a derived shortfall that is not positive (fully allocated reservation)")
+    void computeShortageOptions_derivedShortfallNotPositive_throwsShortageResolutionException() {
+        allocationRepository = mock(com.positivity.inventory.internal.repository.AllocationRepository.class);
+        service = new ShortageResolutionServiceImpl(
+                substitutionReplicaRepository,
+                stockSummaryRepository,
+                replenishmentPolicyRepository,
+                skuCostStateRepository,
+                purchaseSuggestionRepository,
+                resolutionRecordRepository,
+                allocationRepository,
+                backorderService,
+                transferOrderService,
+                reservationService,
+                vendorSelectionService,
+                forecastSiteResolver,
+                TEST_CLOCK);
+
+        // requiredQuantity == allocatedQuantity: nothing is actually short.
+        com.positivity.inventory.internal.entity.ReservationEntity reservation =
+                com.positivity.inventory.internal.entity.ReservationEntity.builder()
+                        .stockItemId(SKU_ID)
+                        .requiredQuantity(new BigDecimal("5"))
+                        .allocatedQuantity(new BigDecimal("5"))
+                        .build();
+        com.positivity.inventory.internal.entity.AllocationEntity allocation =
+                com.positivity.inventory.internal.entity.AllocationEntity.builder()
+                        .reservation(reservation)
+                        .build();
+        when(allocationRepository.findById(ALLOCATION)).thenReturn(Optional.of(allocation));
+
+        assertThatThrownBy(() -> service.computeShortageOptions(ALLOCATION, null, null, null, null))
+                .isInstanceOf(ShortageResolutionException.class)
+                .satisfies(ex -> assertThat(((ShortageResolutionException) ex).getErrorCode())
+                        .isEqualTo("SHORTAGE_DERIVED_QUANTITY_NOT_POSITIVE"));
+    }
+
+    @Test
+    @DisplayName("resolveShortage rejects a derived shortfall that is not positive (over-allocated reservation)")
+    void resolveShortage_derivedShortfallNotPositive_throwsShortageResolutionException() {
+        allocationRepository = mock(com.positivity.inventory.internal.repository.AllocationRepository.class);
+        service = new ShortageResolutionServiceImpl(
+                substitutionReplicaRepository,
+                stockSummaryRepository,
+                replenishmentPolicyRepository,
+                skuCostStateRepository,
+                purchaseSuggestionRepository,
+                resolutionRecordRepository,
+                allocationRepository,
+                backorderService,
+                transferOrderService,
+                reservationService,
+                vendorSelectionService,
+                forecastSiteResolver,
+                TEST_CLOCK);
+        when(resolutionRecordRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
+
+        com.positivity.inventory.internal.entity.ReservationEntity reservation =
+                com.positivity.inventory.internal.entity.ReservationEntity.builder()
+                        .stockItemId(SKU_ID)
+                        .requiredQuantity(new BigDecimal("5"))
+                        .allocatedQuantity(new BigDecimal("9"))
+                        .build();
+        com.positivity.inventory.internal.entity.AllocationEntity allocation =
+                com.positivity.inventory.internal.entity.AllocationEntity.builder()
+                        .reservation(reservation)
+                        .build();
+        when(allocationRepository.findById(ALLOCATION)).thenReturn(Optional.of(allocation));
+
+        ShortageResolveRequest request = ShortageResolveRequest.builder()
+                .allocationId(ALLOCATION)
+                .optionType(ShortageResolutionOption.BACKORDER)
+                .workorderLineId(WORKORDER_LINE)
+                .build();
+
+        assertThatThrownBy(() -> service.resolveShortage(request))
+                .isInstanceOf(ShortageResolutionException.class)
+                .satisfies(ex -> assertThat(((ShortageResolutionException) ex).getErrorCode())
+                        .isEqualTo("SHORTAGE_DERIVED_QUANTITY_NOT_POSITIVE"));
+    }
+
     @Test
     @DisplayName("computeShortageOptions 404s when allocationId is unknown and sku/shortQuantity were omitted")
     void computeShortageOptions_unknownAllocationAndFieldsOmitted_throwsResourceNotFound() {

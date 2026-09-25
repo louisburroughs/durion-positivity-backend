@@ -143,17 +143,23 @@ public class ShortageController {
                     cancels when an auditable, idempotent resolution record is wanted.
                     Preconditions: option-specific — workorderLineId for BACKORDER and SUBSTITUTE, substituteSku \
                     (a product UUID with positive ATP at locationId when locationId is given) for SUBSTITUTE, and \
-                    both sourceLocationId and locationId for TRANSFER_IN.
-                    Required inputs: idempotencyKey (unique per resolution attempt — a replay with the same key \
-                    returns the stored result without re-executing), allocationId (UUID), sku, a positive \
-                    shortQuantity and optionType (BACKORDER, SUBSTITUTE, TRANSFER_IN, EMERGENCY_PURCHASE or \
-                    CANCEL_LINE), plus the option-specific fields above; notes is optional free text.
+                    both sourceLocationId and locationId for TRANSFER_IN. When sku or shortQuantity is omitted, \
+                    allocationId must name a real allocation (404 otherwise) and the derived shortQuantity \
+                    (requiredQuantity minus allocatedQuantity) must be positive.
+                    Required inputs: allocationId (UUID) and optionType (BACKORDER, SUBSTITUTE, TRANSFER_IN, \
+                    EMERGENCY_PURCHASE or CANCEL_LINE), plus the option-specific fields above; notes is optional \
+                    free text. idempotencyKey, sku and shortQuantity are all optional: idempotencyKey defaults to \
+                    "<allocationId>:<optionType>" (a replay with the same key, supplied or defaulted, returns the \
+                    stored result without re-executing), and sku/shortQuantity default to the values derived from \
+                    the named allocation's reservation (see Preconditions).
                     Emits an INVENTORY_SHORTAGE_RESOLVE event and persists a shortage-resolution record \
                     referencing the artifact (BACKORDER, RESERVATION, TRANSFER_ORDER, PURCHASE_SUGGESTION or NONE).
-                    Returns 422 with per-case codes when execution preconditions fail — MISSING_FIELD for an \
-                    absent option-specific field, SUBSTITUTE_UNAVAILABLE when the substitute has no ATP at the \
-                    site, INVALID_IDENTIFIER when substituteSku is not a UUID — and 400 when idempotencyKey, \
-                    allocationId, sku or optionType is missing.
+                    Returns 404 when allocationId is unknown and sku or shortQuantity was omitted; 422 with \
+                    per-case codes when execution preconditions fail — MISSING_FIELD for an absent \
+                    option-specific field, SUBSTITUTE_UNAVAILABLE when the substitute has no ATP at the site, \
+                    INVALID_IDENTIFIER when substituteSku is not a UUID, SHORTAGE_DERIVED_QUANTITY_NOT_POSITIVE \
+                    when the derived shortQuantity is not positive — and 400 when allocationId or optionType is \
+                    missing, or a supplied shortQuantity is not positive.
                     """,
             tags = {"Shortage Resolution"})
     @ApiResponse(
@@ -173,6 +179,10 @@ public class ShortageController {
                     "FORBIDDEN when the caller lacks inventory:shortage:resolve;"
                             + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
                             + " locations that do not cover the request's locationId or sourceLocationId (when given) (ADR-0061)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "allocationId is unknown and sku or shortQuantity was omitted",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",

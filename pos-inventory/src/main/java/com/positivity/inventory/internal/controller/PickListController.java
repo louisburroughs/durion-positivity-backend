@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.dto.picklist.PickTaskResponse;
 import com.positivity.inventory.internal.dto.picklist.UpdatePickListStatusRequest;
 import com.positivity.inventory.internal.enums.PickListStatus;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.PickListLocationScopeGuard;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -42,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class PickListController {
 
     private final PickListService pickListService;
+    private final PickListLocationScopeGuard pickListLocationScopeGuard;
 
     @PostMapping
     @EmitEvent(id = "INVENTORY_PICK_LIST_CREATE", apiVersion = "1")
@@ -137,6 +139,10 @@ public class PickListController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PickListResponse> getPickList(
             @Parameter(description = "Pick list identifier", required = true) @PathVariable UUID pickListId) {
+        // ADR-0061 §3 (#2204): gated at the HTTP boundary, not in the service — see
+        // PickListLocationScopeGuard for why. Every distinct site the list's tasks resolve to
+        // must be in reach (#2227 review item 2: sourcing can pick a different site per task).
+        pickListLocationScopeGuard.require(pickListId, InventoryPermissionRegistry.PICK_LIST_VIEW);
         return ResponseEntity.ok(pickListService.getPickList(pickListId));
     }
 
@@ -149,13 +155,15 @@ public class PickListController {
             operationId = "listPickListsForWorkorder",
             summary = "List pick lists for workorder",
             description = """
-                    Returns every pick list linked to a workorder.
+                    Returns every pick list linked to a workorder whose site is within the caller's location \
+                    scope (ADR-0061 §3, #2204); a list at a site outside the caller's reach is dropped from the \
+                    result, not rejected.
                     Use this tool to find a workorder's pick lists and their statuses; use getPickList instead \
                     when the pickListId is already known.
                     Preconditions: none; an unknown workorderId simply yields an empty array.
                     Required inputs: workorderId (UUID) as a query parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 200 with an empty array when the workorder has no pick lists.
+                    Returns 200 with an empty array when the workorder has no pick lists, or none within reach.
                     """,
             tags = {"Pick Lists"})
     @ApiResponse(
@@ -175,7 +183,13 @@ public class PickListController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<PickListResponse>> getPickListsForWorkorder(
             @Parameter(description = "Workorder identifier", required = true) @RequestParam UUID workorderId) {
-        return ResponseEntity.ok(pickListService.getPickListsForWorkorder(workorderId));
+        // ADR-0061 §3 (#2204, #2227 review item 4): narrow, not gate — an out-of-reach list is
+        // dropped rather than failing the whole request.
+        List<PickListResponse> lists = pickListService.getPickListsForWorkorder(workorderId).stream()
+                .filter(list -> pickListLocationScopeGuard.isWithinReach(
+                        list.getPickListId(), InventoryPermissionRegistry.PICK_LIST_VIEW))
+                .toList();
+        return ResponseEntity.ok(lists);
     }
 
     @PostMapping("/{pickListId}/release")
@@ -214,6 +228,10 @@ public class PickListController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PickListResponse> releasePickList(
             @Parameter(description = "Pick list identifier", required = true) @PathVariable UUID pickListId) {
+        // ADR-0061 §3 (#2204): gated at the HTTP boundary before delegating; the async
+        // command-driven release (InventoryCommandListener) bypasses the controller entirely and
+        // so is never gated (#2227 review item 1 — that path has no authenticated caller to scope).
+        pickListLocationScopeGuard.require(pickListId, InventoryPermissionRegistry.PICK_LIST_EXECUTE);
         return ResponseEntity.ok(pickListService.releasePickList(pickListId));
     }
 
@@ -290,6 +308,14 @@ public class PickListController {
                     @Valid
                     @RequestBody
                     ConfirmPickTaskRequest request) {
+        // ADR-0061 §3 (#2204): gated at the HTTP boundary before delegating (async confirm via
+        // InventoryCommandListener bypasses the controller and is never gated, #2227 review item
+        // 1). Both the list's own site(s) and the scanned location's site are checked (#2227
+        // review item 3): the caller may scan a location at a different site than the task's
+        // suggestion, and that site must be in reach too, before anything is saved.
+        pickListLocationScopeGuard.require(pickListId, InventoryPermissionRegistry.PICK_LIST_EXECUTE);
+        pickListLocationScopeGuard.requireForLocation(
+                request.getScannedLocationId(), InventoryPermissionRegistry.PICK_LIST_EXECUTE);
         return ResponseEntity.ok(pickListService.confirmPickTask(
                 pickListId,
                 taskId,
@@ -336,6 +362,9 @@ public class PickListController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<PickTaskResponse>> getPickTasksForPickList(
             @Parameter(description = "Pick list identifier", required = true) @PathVariable UUID pickListId) {
+        // ADR-0061 §3 (#2204): gated at the HTTP boundary; an unknown pickListId resolves no
+        // tasks/sites and so is not gated, matching the endpoint's existing empty-array behaviour.
+        pickListLocationScopeGuard.require(pickListId, InventoryPermissionRegistry.PICK_LIST_VIEW);
         return ResponseEntity.ok(pickListService.getPickTasksForPickList(pickListId));
     }
 
@@ -399,6 +428,10 @@ public class PickListController {
         if (status == null) {
             throw new IllegalArgumentException("status is required");
         }
+        // ADR-0061 §3 (#2204): gated at the HTTP boundary before delegating. An unknown
+        // pickListId resolves no tasks/sites and so is not gated — the upsert-on-unknown-id
+        // behaviour is unchanged.
+        pickListLocationScopeGuard.require(pickListId, InventoryPermissionRegistry.PICK_LIST_EXECUTE);
         return ResponseEntity.ok(pickListService.updatePickListStatus(pickListId, status));
     }
 
@@ -434,6 +467,10 @@ public class PickListController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> cancelPickList(
             @Parameter(description = "Pick list identifier", required = true) @PathVariable UUID pickListId) {
+        // ADR-0061 §3 (#2204): gated at the HTTP boundary before delegating. An unknown
+        // pickListId resolves no tasks/sites and so is not gated — the silent-no-op behaviour on
+        // an unknown id is unchanged.
+        pickListLocationScopeGuard.require(pickListId, InventoryPermissionRegistry.PICK_LIST_EXECUTE);
         pickListService.cancelPickList(pickListId);
         return ResponseEntity.noContent().build();
     }

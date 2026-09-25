@@ -17,29 +17,19 @@ import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.PickListRepository;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
-import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.security.common.GatewaySecurityConstants;
-import com.positivity.security.common.LocationAncestorResolver;
-import com.positivity.security.common.LocationScope;
-import com.positivity.security.common.LocationScopeDeniedException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
@@ -79,19 +69,12 @@ class PickListServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
-    @Mock
-    private ForecastSiteResolver forecastSiteResolver;
-
     private PickListServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new PickListServiceImpl(
-                pickListRepository,
-                pickTaskRepository,
-                inventoryFactPublisher,
-                baseUnitOfMeasureResolver,
-                forecastSiteResolver);
+                pickListRepository, pickTaskRepository, inventoryFactPublisher, baseUnitOfMeasureResolver);
     }
 
     @AfterEach
@@ -622,116 +605,74 @@ class PickListServiceImplTest {
                 .resolve(any(UUID.class));
     }
 
-    // ─── #2204: pick-list view/execute location scope (ADR-0061 §3) ─────────────
+    // ─── PR #2227 review item 1 (BLOCKER): PickListServiceImpl must stay location-scope-free ──
+    //
+    // InventoryCommandListener calls releasePickList/confirmPickTask directly for Kafka-driven
+    // commands (async pick-list release/confirm requested by pos-workorder, #901) with no
+    // authenticated SecurityContext at all. SecurityContextHelper.locationScope() throws
+    // IllegalStateException without an Authentication in the context, so if the service ever
+    // called it, every command-driven pick-list update would break. These tests run with an
+    // explicitly empty SecurityContext — the exact shape the command-listener path runs under —
+    // and prove the service methods it calls succeed regardless. Location-scope enforcement now
+    // lives only in PickListController via PickListLocationScopeGuard (see
+    // PickListLocationScopeGuardTest and PickListControllerTest).
 
-    @Nested
-    @DisplayName("pick list location scope (ADR-0061 §3, #2204)")
-    class PickListLocationScope {
+    @Test
+    @DisplayName("command-listener path: releasePickList succeeds with an empty SecurityContext (no authentication)")
+    void releasePickList_emptySecurityContext_commandListenerPathSucceeds() {
+        SecurityContextHolder.clearContext();
+        UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000060");
+        PickListEntity entity = PickListEntity.builder()
+                .pickListId(pickListId)
+                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000061"))
+                .status(PickListStatus.DRAFT)
+                .priority(0)
+                .createdAt(Instant.now(TEST_CLOCK))
+                .updatedAt(Instant.now(TEST_CLOCK))
+                .build();
+        when(pickListRepository.findById(pickListId)).thenReturn(Optional.of(entity));
+        when(pickListRepository.save(entity)).thenReturn(entity);
 
-        private static final UUID PICK_LIST_ID = UUID.fromString("00000000-0000-0000-0000-000000000050");
-        private static final UUID BIN_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000051");
-        private static final UUID SITE = UUID.fromString("00000000-0000-0000-0000-000000000052");
-        private static final UUID OTHER_SITE = UUID.fromString("00000000-0000-0000-0000-000000000053");
+        // No SecurityContextHelper.locationScope() call in this path: no exception, no need to
+        // authenticate first — exactly how InventoryCommandListener.handlePickListReleaseRequested
+        // calls this method.
+        PickListResponse result = service.releasePickList(pickListId);
+        assertThat(result.getStatus()).isEqualTo(PickListStatus.READY_TO_PICK);
+    }
 
-        /** Trivial resolver: every location is its own (and only) ancestor. */
-        private static final LocationAncestorResolver SELF_RESOLVER =
-                locationId -> new com.positivity.domainevents.location.LocationAncestry.AncestorSets(
-                        Set.of(locationId), Set.of(locationId));
+    @Test
+    @DisplayName("command-listener path: confirmPickTask succeeds with an empty SecurityContext (no authentication)")
+    void confirmPickTask_emptySecurityContext_commandListenerPathSucceeds() {
+        SecurityContextHolder.clearContext();
+        UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000062");
+        UUID pickTaskId = UUID.fromString("00000000-0000-0000-0000-000000000063");
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000064");
+        UUID scannedLocationId = UUID.fromString("00000000-0000-0000-0000-000000000065");
 
-        private static void authenticate(String username, LocationScope scope) {
-            var authentication = new UsernamePasswordAuthenticationToken(
-                    username,
-                    null,
-                    List.of(
-                            new SimpleGrantedAuthority(InventoryPermissionRegistry.PICK_LIST_VIEW),
-                            new SimpleGrantedAuthority(InventoryPermissionRegistry.PICK_LIST_EXECUTE)));
-            authentication.setDetails(Map.of(
-                    GatewaySecurityConstants.DETAIL_USERNAME, username,
-                    GatewaySecurityConstants.DETAIL_LOCATION_SCOPE, scope));
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-        }
+        PickListEntity pickList = PickListEntity.builder()
+                .pickListId(pickListId)
+                .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000066"))
+                .status(PickListStatus.READY_TO_PICK)
+                .priority(0)
+                .build();
+        PickTaskEntity task = PickTaskEntity.builder()
+                .pickTaskId(pickTaskId)
+                .pickList(pickList)
+                .productId(productId)
+                .sku("SKU-COMMAND")
+                .quantityRequired(1)
+                .status(PickTaskStatus.PENDING)
+                .sortOrder(0)
+                .build();
+        when(pickListRepository.findById(pickListId)).thenReturn(Optional.of(pickList));
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(task));
+        when(pickTaskRepository.save(task)).thenReturn(task);
+        when(pickTaskRepository.findByPickListOrderBySortOrderAsc(pickList)).thenReturn(List.of(task));
 
-        private static LocationScope scopedTo(UUID... nodes) {
-            return LocationScope.of(
-                    Set.of(),
-                    Set.of(InventoryPermissionRegistry.PICK_LIST_VIEW, InventoryPermissionRegistry.PICK_LIST_EXECUTE),
-                    Optional.of(Set.of(nodes)),
-                    true,
-                    SELF_RESOLVER);
-        }
+        // No SecurityContextHelper.locationScope() call in this path — matches
+        // InventoryCommandListener.handlePickTaskConfirmRequested calling this method directly.
+        PickTaskResponse result = service.confirmPickTask(pickListId, pickTaskId, productId, scannedLocationId, 1);
 
-        private void givenPickListWithTaskAt(UUID locationId) {
-            PickListEntity pickList = PickListEntity.builder()
-                    .pickListId(PICK_LIST_ID)
-                    .status(PickListStatus.READY_TO_PICK)
-                    .priority(0)
-                    .build();
-            when(pickListRepository.findById(PICK_LIST_ID)).thenReturn(Optional.of(pickList));
-            PickTaskEntity task = PickTaskEntity.builder()
-                    .pickTaskId(UUID.fromString("00000000-0000-0000-0000-000000000054"))
-                    .productId(UUID.fromString("00000000-0000-0000-0000-000000000055"))
-                    .sku("SKU-1")
-                    .quantityRequired(1)
-                    .suggestedLocationId(locationId)
-                    .status(PickTaskStatus.PENDING)
-                    .build();
-            when(pickTaskRepository.findByPickList_PickListId(PICK_LIST_ID)).thenReturn(List.of(task));
-            when(forecastSiteResolver.resolveForecastSite(locationId)).thenReturn(SITE);
-        }
-
-        @Test
-        @DisplayName("site in reach: getPickList succeeds")
-        void inReach_getPickListSucceeds() {
-            authenticate("scoped-picker", scopedTo(SITE));
-            givenPickListWithTaskAt(BIN_LOCATION);
-
-            assertThatCode(() -> service.getPickList(PICK_LIST_ID)).doesNotThrowAnyException();
-        }
-
-        @Test
-        @DisplayName("site out of reach: getPickList denies with LOCATION_SCOPE_DENIED")
-        void outOfReach_getPickListDenies() {
-            authenticate("scoped-picker", scopedTo(OTHER_SITE));
-            givenPickListWithTaskAt(BIN_LOCATION);
-
-            assertThatThrownBy(() -> service.getPickList(PICK_LIST_ID))
-                    .isInstanceOf(LocationScopeDeniedException.class);
-        }
-
-        @Test
-        @DisplayName("site out of reach: releasePickList denies before any state change")
-        void outOfReach_releasePickListDeniesBeforeStateChange() {
-            authenticate("scoped-picker", scopedTo(OTHER_SITE));
-            givenPickListWithTaskAt(BIN_LOCATION);
-
-            assertThatThrownBy(() -> service.releasePickList(PICK_LIST_ID))
-                    .isInstanceOf(LocationScopeDeniedException.class);
-            org.mockito.Mockito.verify(pickListRepository, org.mockito.Mockito.never())
-                    .save(any());
-        }
-
-        @Test
-        @DisplayName("pre-rollout token (no loc_* claims): unchanged even when the resolved site isn't assigned")
-        void preRolloutToken_unchanged() {
-            authenticate("legacy-picker", LocationScope.unscoped());
-            givenPickListWithTaskAt(BIN_LOCATION);
-
-            assertThatCode(() -> service.getPickList(PICK_LIST_ID)).doesNotThrowAnyException();
-        }
-
-        @Test
-        @DisplayName("pick list with no tasks resolves no site: not gated, proceeds unchanged")
-        void noTasksResolveNoSite_notGated() {
-            authenticate("scoped-picker", scopedTo(OTHER_SITE));
-            PickListEntity pickList = PickListEntity.builder()
-                    .pickListId(PICK_LIST_ID)
-                    .status(PickListStatus.DRAFT)
-                    .priority(0)
-                    .build();
-            when(pickListRepository.findById(PICK_LIST_ID)).thenReturn(Optional.of(pickList));
-            when(pickTaskRepository.findByPickList_PickListId(PICK_LIST_ID)).thenReturn(List.of());
-
-            assertThatCode(() -> service.getPickList(PICK_LIST_ID)).doesNotThrowAnyException();
-        }
+        assertThat(result.getStatus()).isEqualTo(PickTaskStatus.PICKED);
     }
 }

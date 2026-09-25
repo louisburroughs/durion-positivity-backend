@@ -164,10 +164,19 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
                 .orElseThrow(() -> new ResourceNotFoundException("Allocation", allocationId.toString()));
         ReservationEntity reservation = allocation.getReservation();
         String resolvedSku = skuGiven ? sku : reservation.getStockItemId().toString();
-        BigDecimal resolvedShortQuantity = shortQuantity != null
-                ? shortQuantity
-                : Quantities.nz(reservation.getRequiredQuantity())
-                        .subtract(Quantities.nz(reservation.getAllocatedQuantity()));
+        BigDecimal resolvedShortQuantity;
+        if (shortQuantity != null) {
+            resolvedShortQuantity = shortQuantity;
+        } else {
+            resolvedShortQuantity = Quantities.nz(reservation.getRequiredQuantity())
+                    .subtract(Quantities.nz(reservation.getAllocatedQuantity()));
+            // #2227 review item 7: a caller-supplied shortQuantity is already positive (validated
+            // above / by ShortageResolveRequest's @Positive); only the derived value can slip
+            // through non-positive, when the reservation is already fully allocated.
+            if (resolvedShortQuantity.signum() <= 0) {
+                throw ShortageResolutionException.derivedQuantityNotPositive(allocationId, resolvedShortQuantity);
+            }
+        }
         return new AllocationShortfall(resolvedSku, resolvedShortQuantity);
     }
 

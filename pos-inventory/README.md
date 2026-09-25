@@ -242,8 +242,12 @@ or site the posting used — the UI reads those directly rather than a separate 
 a row posted before this column existed carries no link.
 
 Returns to stock have two paths. `POST /v1/inventory/returns/submit-to-stock`
-(`ReturnController.submitToStock`) is the work-order-line-keyed path: each line's `itemId` names a
-work-order part line (`ext_workorder_part`), `reasonCode` must be one of the closed set
+(`ReturnController.submitToStock`) is the work-order-line-keyed path: the named workorder must be
+`COMPLETED` or `CLOSED` (`ext_workorder` replica status; 422 `WORKORDER_NOT_RETURNABLE` otherwise,
+404 `NOT_FOUND` when the replica has no row for it at all — CAP-218 Story #177, parts are handed
+back once the job is done, not mid-repair), no two lines may name the same `itemId` (400
+`VALIDATION_ERROR` — each workorder line is validated once, not aggregated), each line's `itemId`
+names a work-order part line (`ext_workorder_part`), `reasonCode` must be one of the closed set
 `NOT_NEEDED`/`WRONG_PART`/`CUSTOMER_REFUSED` (400 `VALIDATION_ERROR` otherwise), and the quantity
 may not exceed that line's returnable balance — quantity consumed (`WORKORDER_CONSUMPTION` ledger
 rows for the line) minus quantity already returned (`inventory_return_line.workorder_line_id` rows
@@ -651,6 +655,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `SHORTAGE_RESOLVE_MISSING_FIELD` | 422 | The shortage resolution omits a field its strategy requires |
 | `SHORTAGE_RESOLVE_SUBSTITUTE_UNAVAILABLE` | 422 | The substitute named for the shortage is not available |
 | `SHORTAGE_RESOLVE_INVALID_IDENTIFIER` | 422 | The shortage resolution names an identifier that does not resolve |
+| `WORKORDER_NOT_RETURNABLE` | 422 | `submitReturnToStock` was called against a workorder whose status is not `COMPLETED` or `CLOSED` (CAP-218 Story #177) |
+| `SHORTAGE_DERIVED_QUANTITY_NOT_POSITIVE` | 422 | The allocation's reservation was used to derive `shortQuantity` (both omitted from the request) and the result is not positive — nothing is actually short |
 | `ADJUSTMENT_LEDGER_POST_FAILED` | 500 | Ledger post for adjustment failed unexpectedly; the adjustment is left `FAILED` with the cause in `errorMessage`, and approving it retries (#2170) |
 | `SCRAP_LEDGER_POST_FAILED` | 500 | Ledger post for scrap failed unexpectedly; the scrap is left `FAILED` with the cause in `errorMessage`, and approving it retries (#2170) |
 | `NOT_IMPLEMENTED` | 501 | The operation is deliberately unimplemented; enveloped rather than answered with an empty body (#1720) |

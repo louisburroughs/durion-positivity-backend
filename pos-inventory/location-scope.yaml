@@ -103,27 +103,31 @@ decisions:
   - operation: PickListController.getPickList
     shape: gate
     permission: inventory:pick_list:view
-    reason: No request parameter names a location; the pick list's site is derived from its tasks' suggested locations (first one that resolves) and gated after the 404 (#2204). A list with no tasks, or whose tasks resolve no site, is not gated.
+    reason: No request parameter names a location; the pick list's site(s) are derived from its tasks' suggested locations and every distinct resolved site is gated (#2204; #2227 review item 2 — sourcing can pick a different site per task, so a list may span sites). Enforced in the controller via PickListLocationScopeGuard, not in PickListServiceImpl (#2227 review item 1 — InventoryCommandListener calls the same service methods with no authenticated caller to scope). A list with no tasks, or whose tasks resolve no site, is not gated.
+  - operation: PickListController.getPickListsForWorkorder
+    shape: narrow
+    permission: inventory:pick_list:view
+    reason: workorderId names no location; each returned pick list's derived site(s) (see getPickList) are checked with PickListLocationScopeGuard.isWithinReach and an out-of-reach list is dropped from the result rather than failing the request (#2227 review item 4).
   - operation: PickListController.getPickTasksForPickList
     shape: gate
     permission: inventory:pick_list:view
-    reason: Same derived-site gate as getPickList (#2204); an unknown pickListId resolves no tasks and so is not gated, matching the endpoint's existing empty-array-on-unknown-id behaviour.
+    reason: Same derived-site gate as getPickList (#2204, #2227); an unknown pickListId resolves no tasks and so is not gated, matching the endpoint's existing empty-array-on-unknown-id behaviour.
   - operation: PickListController.releasePickList
     shape: gate
     permission: inventory:pick_list:execute
-    reason: Same derived-site gate as getPickList (#2204), applied after the 404 and before the status change.
+    reason: Same derived-site gate as getPickList (#2204, #2227), applied in the controller before delegating to the service (see getPickList's reason for why).
   - operation: PickListController.confirmPickTask
     shape: gate
     permission: inventory:pick_list:execute
-    reason: Same derived-site gate as getPickList (#2204), applied after the pick-list/pick-task existence checks and before the task is marked PICKED.
+    reason: Same derived-site gate as getPickList (#2204), applied in the controller before delegating; the scanned location's own site is also gated (#2227 review item 3 — the caller may scan a location at a different site than the task's suggestion), both checks before anything is saved.
   - operation: PickListController.updatePickListStatus
     shape: gate
     permission: inventory:pick_list:execute
-    reason: Same derived-site gate as getPickList (#2204), applied only when the pick list already exists; an unknown id upserts a fresh row with no tasks to derive a site from, so it is not gated (unchanged pre-#2204 behaviour).
+    reason: Same derived-site gate as getPickList (#2204, #2227); an unknown id resolves no tasks/site and so is not gated, which is also what lets it upsert a fresh row (unchanged pre-#2204 behaviour).
   - operation: PickListController.cancelPickList
     shape: gate
     permission: inventory:pick_list:execute
-    reason: Same derived-site gate as getPickList (#2204), applied only when the pick list exists; an unknown id is already a silent no-op.
+    reason: Same derived-site gate as getPickList (#2204, #2227); an unknown id resolves no tasks/site and so is not gated, which is also what makes it a silent no-op.
   - operation: PurchaseSuggestionController.listPurchaseSuggestions
     shape: narrow
     permission: inventory:on_hand:view

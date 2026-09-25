@@ -174,10 +174,10 @@ public class ReturnController {
                                     @Content(
                                             mediaType = "application/json",
                                             schema = @Schema(implementation = ReturnSubmitRequest.class),
-                                            examples = @ExampleObject(name = "Damaged part return", value = """
+                                            examples = @ExampleObject(name = "Part no longer needed", value = """
                                                                     {"workorderId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a50",
                                                                      "lines":[{"itemId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a51",
-                                                                       "quantity":3,"reasonCode":"DAMAGED",
+                                                                       "quantity":3,"reasonCode":"NOT_NEEDED",
                                                                        "locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a52"}]}
                                                                     """)))
                     @Valid

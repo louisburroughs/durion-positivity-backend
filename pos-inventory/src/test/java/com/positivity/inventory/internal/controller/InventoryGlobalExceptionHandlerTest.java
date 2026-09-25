@@ -54,6 +54,7 @@ import com.positivity.inventory.internal.exception.UomConversionUndefinedExcepti
 import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
+import com.positivity.inventory.internal.exception.WorkorderNotReturnableException;
 import com.positivity.inventory.internal.exception.ZeroQuantityAdjustmentException;
 import com.positivity.shared.error.ApiError;
 import java.math.BigDecimal;
@@ -252,6 +253,9 @@ class InventoryGlobalExceptionHandlerTest {
                     Named.of("handleReturnQuantityExceeded", (HandlerInvocation)
                             () -> handler.handleReturnQuantityExceeded(new ReturnQuantityExceededException(
                                     UUID.randomUUID(), BigDecimal.TEN, BigDecimal.ONE))),
+                    Named.of("handleWorkorderNotReturnable", (HandlerInvocation)
+                            () -> handler.handleWorkorderNotReturnable(
+                                    new WorkorderNotReturnableException(UUID.randomUUID(), "IN_PROGRESS"))),
                     Named.of("handleAdjustmentLedgerPosting", (HandlerInvocation)
                             () -> handler.handleAdjustmentLedgerPosting(new AdjustmentLedgerPostingException(
                                     UUID.randomUUID(), "ledger failed", new RuntimeException()))),

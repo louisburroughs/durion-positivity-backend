@@ -7,11 +7,14 @@ import com.positivity.inventory.internal.dto.returns.ReturnLineDto;
 import com.positivity.inventory.internal.dto.returns.ReturnSubmitRequest;
 import com.positivity.inventory.internal.dto.returns.ReturnableItemDto;
 import com.positivity.inventory.internal.entity.ExtWorkorderPartReplica;
+import com.positivity.inventory.internal.entity.ExtWorkorderReplica;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
+import com.positivity.inventory.internal.exception.WorkorderNotReturnableException;
 import com.positivity.inventory.internal.receiving.service.ReturnService;
 import com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository;
+import com.positivity.inventory.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
@@ -47,6 +50,9 @@ class ReturnPostingPathIT {
 
     @Autowired
     private ExtWorkorderPartReplicaRepository extWorkorderPartReplicaRepository;
+
+    @Autowired
+    private ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
 
     @Autowired
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
@@ -88,6 +94,7 @@ class ReturnPostingPathIT {
         UUID workorderId = UUID.randomUUID();
         UUID workorderLineId = UUID.randomUUID();
         UUID productId = UUID.randomUUID();
+        seedWorkorder(workorderId, "COMPLETED");
         seedPartLine(workorderId, workorderLineId, productId);
         seedConsumption(workorderId, workorderLineId, productId, "4");
 
@@ -123,6 +130,7 @@ class ReturnPostingPathIT {
         UUID workorderId = UUID.randomUUID();
         UUID workorderLineId = UUID.randomUUID();
         UUID productId = UUID.randomUUID();
+        seedWorkorder(workorderId, "COMPLETED");
         seedPartLine(workorderId, workorderLineId, productId);
         seedConsumption(workorderId, workorderLineId, productId, "1");
 
@@ -142,6 +150,43 @@ class ReturnPostingPathIT {
         assertThat(inventoryLedgerEntryRepository.findByWorkorderIdAndEventType(
                         workorderId, InventoryLedgerEventType.RETURN_TO_STOCK))
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("submitToStock rejects an IN_PROGRESS workorder with WORKORDER_NOT_RETURNABLE, posting nothing"
+            + " (PR #2227 review item 5)")
+    void submitToStock_workorderNotCompleted_rejectsWithNoPosting() {
+        UUID workorderId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        seedWorkorder(workorderId, "IN_PROGRESS");
+        seedPartLine(workorderId, workorderLineId, productId);
+        seedConsumption(workorderId, workorderLineId, productId, "5");
+
+        ReturnSubmitRequest request = ReturnSubmitRequest.builder()
+                .workorderId(workorderId)
+                .lines(List.of(ReturnLineDto.builder()
+                        .itemId(workorderLineId)
+                        .quantity(1)
+                        .reasonCode("NOT_NEEDED")
+                        .locationId(UUID.randomUUID())
+                        .build()))
+                .build();
+
+        assertThatThrownBy(() -> returnService.submitToStock(request))
+                .isInstanceOf(WorkorderNotReturnableException.class);
+
+        assertThat(inventoryLedgerEntryRepository.findByWorkorderIdAndEventType(
+                        workorderId, InventoryLedgerEventType.RETURN_TO_STOCK))
+                .isEmpty();
+    }
+
+    private void seedWorkorder(UUID workorderId, String status) {
+        extWorkorderReplicaRepository.save(ExtWorkorderReplica.builder()
+                .workorderId(workorderId)
+                .workorderNumber("WO-" + workorderId)
+                .status(status)
+                .build());
     }
 
     private void seedPartLine(UUID workorderId, UUID workorderLineId, UUID productId) {

@@ -362,7 +362,8 @@ public class ReceivingController {
                     Required inputs: none. Optional query parameter query matches workorderNumber \
                     (case-insensitive contains) or an exact workorder UUID; a blank or omitted query returns up \
                     to 50 most-recently-updated eligible workorders.
-                    No events are emitted and no state changes; this is a read-only projection.
+                    Read-only: no state changes. Emits an INVENTORY_RECEIVING_WORKORDER_SEARCH event (the \
+                    module's read-audit convention for a search endpoint) even though nothing is written.
                     Returns 200 with an empty array when nothing matches.
                     """,
             tags = {"Receiving"})

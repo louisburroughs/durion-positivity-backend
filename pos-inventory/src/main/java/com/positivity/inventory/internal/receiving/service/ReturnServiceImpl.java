@@ -9,13 +9,16 @@ import com.positivity.inventory.internal.dto.returns.ReturnSubmissionResultDto;
 import com.positivity.inventory.internal.dto.returns.ReturnSubmitRequest;
 import com.positivity.inventory.internal.dto.returns.ReturnableItemDto;
 import com.positivity.inventory.internal.entity.ExtWorkorderPartReplica;
+import com.positivity.inventory.internal.entity.ExtWorkorderReplica;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryReturnEntity;
 import com.positivity.inventory.internal.entity.InventoryReturnLineEntity;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
+import com.positivity.inventory.internal.exception.WorkorderNotReturnableException;
 import com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository;
+import com.positivity.inventory.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryReturnLineRepository;
 import com.positivity.inventory.internal.repository.InventoryReturnRepository;
@@ -34,9 +37,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
@@ -53,6 +59,7 @@ public class ReturnServiceImpl implements ReturnService {
     private final InventoryReturnLineRepository inventoryReturnLineRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final ExtWorkorderPartReplicaRepository extWorkorderPartReplicaRepository;
+    private final ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
     private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final DocumentQuantityConverter documentQuantityConverter;
@@ -61,12 +68,16 @@ public class ReturnServiceImpl implements ReturnService {
     private final @Nullable InventoryLotOutboundService lotOutboundService;
     private final QuantityScaleGuard quantityScaleGuard;
 
+    /** CAP-218 Story #177: only a workorder in one of these statuses accepts a return. */
+    private static final Set<String> RETURNABLE_WORKORDER_STATUSES = Set.of("COMPLETED", "CLOSED");
+
     @Autowired
     public ReturnServiceImpl(
             InventoryReturnRepository inventoryReturnRepository,
             InventoryReturnLineRepository inventoryReturnLineRepository,
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
             ExtWorkorderPartReplicaRepository extWorkorderPartReplicaRepository,
+            ExtWorkorderReplicaRepository extWorkorderReplicaRepository,
             LedgerPostingService ledgerPostingService,
             InventoryFactPublisher inventoryFactPublisher,
             DocumentQuantityConverter documentQuantityConverter,
@@ -78,6 +89,7 @@ public class ReturnServiceImpl implements ReturnService {
         this.inventoryReturnLineRepository = inventoryReturnLineRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.extWorkorderPartReplicaRepository = extWorkorderPartReplicaRepository;
+        this.extWorkorderReplicaRepository = extWorkorderReplicaRepository;
         this.ledgerPostingService = ledgerPostingService;
         this.inventoryFactPublisher = inventoryFactPublisher;
         this.documentQuantityConverter = documentQuantityConverter;
@@ -98,6 +110,7 @@ public class ReturnServiceImpl implements ReturnService {
             InventoryReturnLineRepository inventoryReturnLineRepository,
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
             ExtWorkorderPartReplicaRepository extWorkorderPartReplicaRepository,
+            ExtWorkorderReplicaRepository extWorkorderReplicaRepository,
             LedgerPostingService ledgerPostingService,
             InventoryFactPublisher inventoryFactPublisher,
             DocumentQuantityConverter documentQuantityConverter,
@@ -109,6 +122,7 @@ public class ReturnServiceImpl implements ReturnService {
                 inventoryReturnLineRepository,
                 inventoryLedgerEntryRepository,
                 extWorkorderPartReplicaRepository,
+                extWorkorderReplicaRepository,
                 ledgerPostingService,
                 inventoryFactPublisher,
                 documentQuantityConverter,
@@ -175,6 +189,19 @@ public class ReturnServiceImpl implements ReturnService {
     public @NonNull ReturnSubmissionResultDto submitToStock(@NonNull ReturnSubmitRequest request) {
         List<ReturnLineDto> lines = request.getLines() == null ? List.of() : request.getLines();
         UUID workorderId = request.getWorkorderId();
+
+        requireReturnableWorkorder(workorderId);
+
+        // #2227 review item 6: a workorderLineId named twice must not be validated
+        // independently against the same returnable baseline — reject rather than silently
+        // aggregate, so the caller sees exactly which line was duplicated.
+        Set<UUID> seenLineIds = new HashSet<>();
+        for (ReturnLineDto line : lines) {
+            if (!seenLineIds.add(line.getItemId())) {
+                throw new IllegalArgumentException(
+                        "lines[].itemId must not repeat a workorderLineId within one submission: " + line.getItemId());
+            }
+        }
 
         List<UUID> workorderLineIds =
                 lines.stream().map(ReturnLineDto::getItemId).toList();
@@ -256,6 +283,24 @@ public class ReturnServiceImpl implements ReturnService {
                 .status("SUBMITTED")
                 .processedAt(savedReturn.getCreatedAt() != null ? savedReturn.getCreatedAt() : Instant.now(clock))
                 .build();
+    }
+
+    /**
+     * CAP-218 Story #177 (PR #2227 review item 5): a return may only be submitted once the
+     * workorder is COMPLETED or CLOSED — parts are handed back once the job is done, not
+     * mid-repair. 404 when the replica has no row for the workorder at all (nothing to check
+     * against), 422 {@code WORKORDER_NOT_RETURNABLE} for any other status.
+     */
+    private void requireReturnableWorkorder(UUID workorderId) {
+        ExtWorkorderReplica workorder = extWorkorderReplicaRepository
+                .findById(workorderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Workorder", workorderId.toString()));
+        String status = workorder.getStatus() == null
+                ? ""
+                : workorder.getStatus().trim().toUpperCase(Locale.ROOT);
+        if (!RETURNABLE_WORKORDER_STATUSES.contains(status)) {
+            throw new WorkorderNotReturnableException(workorderId, workorder.getStatus());
+        }
     }
 
     /** Consumed (WORKORDER_CONSUMPTION) quantity for a work order, summed per work order line. */
