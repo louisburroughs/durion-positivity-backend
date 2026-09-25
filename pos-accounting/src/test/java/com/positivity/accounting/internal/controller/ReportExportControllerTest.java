@@ -5,15 +5,19 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.internal.dto.ReportExportArtifact;
 import com.positivity.accounting.internal.dto.ReportExportRequest;
 import com.positivity.accounting.internal.dto.ReportExportResponse;
 import com.positivity.accounting.internal.enums.ExportFormat;
 import com.positivity.accounting.internal.enums.ExportStatus;
 import com.positivity.accounting.internal.service.ReportExportService;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -35,10 +39,11 @@ import org.springframework.web.server.ResponseStatusException;
  * Integration tests for ReportExportController.
  *
  * <p>
- * Tests the three async report export endpoints:
+ * Tests the async report export endpoints:
  * <ul>
  * <li>POST /v1/accounting/reports/export — submit export job (201)</li>
  * <li>GET /v1/accounting/reports/export/{exportId} — poll status (200/404)</li>
+ * <li>GET /v1/accounting/reports/export/{exportId}/download — download artifact (200)</li>
  * <li>GET /v1/accounting/reports/export — list history (200)</li>
  * </ul>
  */
@@ -200,6 +205,32 @@ class ReportExportControllerTest extends BaseIntegrationTest {
                             .header("X-Authorities", "accounting:read")
                             .header("X-User", TEST_USER))
                     .andExpect(status().isForbidden());
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /v1/accounting/reports/export/{exportId}/download")
+    class DownloadExport {
+
+        @Test
+        @DisplayName("should return the artifact's own content type when the client accepts application/json")
+        void downloadExport_whenAcceptJson_returnsArtifactContentType() throws Exception {
+            // The generated Angular SDK prefers the JSON media type from the operation's
+            // declared types, so downloadReportExport sends Accept: application/json by default.
+            // The controller presets the artifact's content type, which must win over the
+            // Accept header; without it the CSV bytes go out labelled application/json (issue #2216).
+            byte[] csv = "Report,Start Date,End Date\n".getBytes(StandardCharsets.UTF_8);
+            when(reportExportService.downloadExport(EXPORT_ID))
+                    .thenReturn(new ReportExportArtifact(csv, "text/csv", "trial-balance.csv"));
+
+            mockMvc.perform(get(BASE_URL + "/{exportId}/download", EXPORT_ID)
+                            .header("X-Authorities", "reporting:view:financial-statements")
+                            .header("X-User", TEST_USER)
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Content-Type", "text/csv"))
+                    .andExpect(header().string("Content-Disposition", containsString("trial-balance.csv")))
+                    .andExpect(content().bytes(csv));
         }
     }
 }
