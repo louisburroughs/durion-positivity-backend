@@ -225,6 +225,7 @@ public class PaymentController {
                     Preconditions: the payment intent must exist and belong to the given invoice; the caller needs \
                     the invoice:invoice:view authority, scoped to the invoice's location (ADR-0061).
                     Required inputs: invoiceId and paymentId (both UUID) as path parameters.
+                    Emits an INVOICE_PAYMENT_VIEW audit event; no state changes — this is a read-only projection.
                     Returns 200 with the payment intent detail, 403 when invoice:invoice:view is missing or the \
                     invoice's location is outside the caller's reach, and 404 when no payment intent with that id \
                     exists under that invoice — a payment intent that exists under a different invoice also \

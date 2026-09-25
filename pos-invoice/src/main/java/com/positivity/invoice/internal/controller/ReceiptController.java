@@ -59,6 +59,7 @@ public class ReceiptController {
                     Preconditions: the receipt must exist and belong to the given invoice; the caller needs the \
                     invoice:invoice:view authority.
                     Required inputs: invoiceId and receiptId (both UUID) as path parameters.
+                    Emits an INVOICE_RECEIPT_VIEW audit event; no state changes — this is a read-only projection.
                     Returns 200 with the receipt view, and 404 when no receipt with that id exists under that \
                     invoice — a receipt that exists under a different invoice also reports 404, so the response \
                     never confirms another invoice's receipt id.
