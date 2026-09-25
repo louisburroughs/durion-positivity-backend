@@ -17,6 +17,7 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - Issue credit memos with configurable GL account targets, freezing their per-jurisdiction tax reversal
 - Apply or refund AR customer credits, relieving the customer-credit liability recognized at issuance
 - Post inventory shrinkage (Dr Inventory Shrinkage 5100 / Cr Inventory 1300) from `inventory.scrap.posted` facts on `inventory.events.v1`, exactly once per scrap; uncosted scraps (ADR-0048 interim `costSource=NONE`) are logged and skipped, never posted
+- Post inventory adjustments (cycle-count variances and manual adjustments) from `inventory.adjustment.posted` facts on `inventory.events.v1`, exactly once per adjustment: a loss posts Dr 5100 / Cr 1300 and a gain Dr 1300 / Cr 5100 for `abs(quantityDelta) × unitCost` through the `INVENTORY_ADJUSTMENT` posting category; uncosted facts are counted and recorded `SKIPPED`, never posted (see Inventory Posting Facts below)
 - Manage monthly accounting periods (list, close, reopen)
 - Produce financial reports (income statement, balance sheet)
 - Ingest domain events from Kafka via the event ingestion pipeline
@@ -333,7 +334,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `pos.accounting.credit-memo.tax-payable-account-id` | required             | GL account for tax payable reversals     |
 | `pos.accounting.credit-memo.ar-account-id`          | required             | GL account for AR reductions             |
 | `pos.accounting.kafka.enabled`                      | `false`              | Enable all of accounting's Kafka consumers (payment, workorder, invoice, invoice-manifest, customer, inventory, order, warranty, settlement-config) |
-| `pos.accounting.kafka.inventory-events-topic`       | `inventory.events.v1` | Inventory scrap facts for shrinkage GL posting (#1043) |
+| `pos.accounting.kafka.inventory-events-topic`       | `inventory.events.v1` | Inventory scrap and adjustment facts for shrinkage / adjustment GL posting (#1043, #2191) |
 | `pos.accounting.kafka.accounting-events-topic`      | `accounting.events.v1` | Accounting's own fact feed (`accounting.invoice.gl-posted`), drained from `kafka_event_outbox` (#1843) |
 | `pos.accounting.outbox.poll-interval-ms`            | `1000`               | Kafka outbox drain interval (#1843) |
 | `pos.accounting.outbox.send-timeout-ms`             | `10000`              | Broker ack timeout per outbox row (#1843) |
@@ -377,6 +378,45 @@ unbound connection, through the repository and through raw SQL) and `TenancySche
 non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
 `pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-accounting verify`).
 
+## Inventory Posting Facts (issues #1043, #2191)
+
+`InventoryEventsListener` dispatches `inventory.events.v1` on `eventType`; every other type on the topic is
+ignored without recording its eventId.
+
+| Fact | Posting category | Entry |
+| --- | --- | --- |
+| `inventory.scrap.posted` (`ScrapPostedV1`) | `INVENTORY_SHRINKAGE`: `SHRINKAGE_EXPENSE` → 5100, `INVENTORY_ASSET` → 1300 | Dr 5100 / Cr 1300 for `quantity × unitCost` |
+| `inventory.adjustment.posted` (`InventoryAdjustedV1`, `adjustmentKind` `CYCLE_COUNT` or `MANUAL_ADJUSTMENT`) | `INVENTORY_ADJUSTMENT`: `ADJUSTMENT_LOSS` → 5100, `ADJUSTMENT_GAIN` → 5100, `INVENTORY_ASSET` → 1300 | loss (`quantityDelta < 0`): Dr `ADJUSTMENT_LOSS` / Cr `INVENTORY_ASSET`; gain: Dr `INVENTORY_ASSET` / Cr `ADJUSTMENT_GAIN`, for `abs(quantityDelta) × unitCost` |
+
+- **Accounts** resolve through the mapping keys (seeded in `R__seed_reference_accounting.sql`), never hardcoded.
+  A gain credits 5100 so count over/short nets in one account (#2186 D2); scrap and count corrections are
+  separate categories so finance can remap either (D4). `reasonCode` rides into the entry description only.
+- **Date** — the fact's `occurredAt` (business time); the period gate applies.
+- **Idempotency** — envelope `eventId` in `processed_events`, checked before any transaction; posting key
+  `INVENTORY_SHRINKAGE_GL_POSTING:<scrapId>` / `INVENTORY_ADJUSTMENT_GL_POSTING:<kind>:<adjustmentId>`; journal
+  entry `sourceEventId = nameUUIDFromBytes("INVENTORY_SHRINKAGE:" + scrapId)` /
+  `nameUUIDFromBytes("INVENTORY_ADJUSTMENT:" + kind + ":" + adjustmentId)`. An adjustment whose posting key has
+  expired is still recognised as posted by its `sourceEventId`.
+- **Transaction shape** (ADR-0044 as amended by #2146; `OrderEventsListener` has the same shape) — the listener
+  method is not transactional. The posting, posting key, ingestion record and processed mark commit together
+  in a `REQUIRES_NEW` transaction. A malformed payload (`replica.payload.rejected`) and an uncosted fact are each
+  marked in a transaction of their own. `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `MAPPING_NOT_FOUND`, transient
+  and unexpected failures propagate unmarked for container retry and then `inventory.events.v1.dlq`; replay
+  after the operations fix.
+- **Uncosted facts** (`unitCost` null or ≤ 0, ADR-0048 `costSource=NONE`) are never posted. The skip is
+  terminal: the fact carries the cost at posting time and a later cost is a different fact.
+- **Metrics** — `accounting.inventory.fact.posted{eventType}` (a journal entry was posted) and
+  `accounting.inventory.fact.skipped{eventType, reason=UNCOSTED}`.
+- **Ingestion records** (AD-007, #2186 D5) — each consumed fact writes one terminal `AccountingEvent` row:
+  `eventType` = the fact type, `sourceSystem = pos-inventory`, `domainKeyId` = `adjustmentId` / `scrapId`,
+  `ingestionId` = envelope `eventId`, `transactionDate` = business date, `payload` = the fact, and a display
+  `eventReference` (`AE-YYYYMM-n`). A posted fact is `PROCESSED` with `journalEntryId` and
+  `idempotencyOutcome = NEW`; a re-emitted fact is `PROCESSED`, `DUPLICATE_IGNORED`, linked to the original
+  entry; an uncosted fact is `SKIPPED` with `failureReasonCode = UNCOSTED_FACT`. Look one up with
+  `GET /v1/accounting/events?eventType=inventory.adjustment.posted&domainKeyId=<adjustmentId>`.
+  **Kafka facts are not REST-retryable**: they never end `FAILED` or `SUSPENDED`, which are the only statuses
+  the retry scheduler and `retryAccountingEvent` select; a failed fact is replayed from the DLQ instead.
+
 ## Dependencies
 
 - `pos-security-common` — JWT-based security filter
@@ -394,8 +434,11 @@ flattened into the baseline for ADR-0062; see `../durion/docs/architecture/deplo
 - `V2__seed_accounting.sql` — versioned seed data
 - `V3__outbox_tenant_id.sql` — `tenant_id` as data on the two global outbox tables (`event_outbox`,
   `kafka_event_outbox`), see Multitenancy below
+- `V4__accounting_event_status_skipped.sql` — adds the terminal `SKIPPED` status to the `accounting_event`
+  status check (#2191)
 - `R__seed_reference_accounting.sql` — repeatable seed for reference data, including the 9-account COA; also the
-  `INVOICE_REVENUE` posting category / mapping keys (#1843)
+  `INVOICE_REVENUE` posting category / mapping keys (#1843) and the `INVENTORY_ADJUSTMENT` posting category /
+  mapping keys (#2191)
 
 ## Development
 

@@ -6,7 +6,9 @@ import com.positivity.accounting.AccountingPostgresContainer;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
@@ -81,6 +83,15 @@ class InventoryShrinkageGLPostingIT {
     private InventoryShrinkagePostingService shrinkagePostingService;
 
     @Autowired
+    private InventoryAdjustmentPostingService adjustmentPostingService;
+
+    @Autowired
+    private InventoryFactIngestionRecorder ingestionRecorder;
+
+    @Autowired
+    private AccountingEventRepository accountingEventRepository;
+
+    @Autowired
     private ProcessedEventRepository processedEventRepository;
 
     @Autowired
@@ -112,12 +123,16 @@ class InventoryShrinkageGLPostingIT {
                 objectMapper,
                 processedEventRepository,
                 shrinkagePostingService,
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                adjustmentPostingService,
+                ingestionRecorder,
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                transactionManager);
     }
 
     @AfterEach
     void cleanUp() {
         journalEntryRepository.deleteAll();
+        accountingEventRepository.deleteAll();
         sequenceRepository.deleteAll();
         idempotencyKeyRepository.deleteAll();
         processedEventRepository.deleteAll();
@@ -164,6 +179,18 @@ class InventoryShrinkageGLPostingIT {
         Map<UUID, BigDecimal> debitsAfter = new HashMap<>();
         sumLines(debitsAfter, new HashMap<>());
         assertThat(debitsAfter.getOrDefault(shrinkage, BigDecimal.ZERO)).isEqualByComparingTo(expected);
+
+        // #2191: one PROCESSED ingestion record per consumed fact (NEW, then DUPLICATE_IGNORED for
+        // the redelivery under a fresh eventId), both linked to the one entry.
+        UUID entryId = journalEntryRepository.findAll().getFirst().getJournalEntryId();
+        assertThat(accountingEventRepository.findAll())
+                .hasSize(2)
+                .allSatisfy(record -> {
+                    assertThat(record.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+                    assertThat(record.getJournalEntryId()).isEqualTo(entryId);
+                })
+                .extracting(record -> record.getIdempotencyOutcome())
+                .containsExactlyInAnyOrder("NEW", "DUPLICATE_IGNORED");
     }
 
     @Test
@@ -175,6 +202,13 @@ class InventoryShrinkageGLPostingIT {
 
         assertThat(journalEntryRepository.count()).isZero();
         assertThat(processedEventRepository.existsById("evt-3")).isTrue();
+        // #2191: the skip leaves a terminal SKIPPED / UNCOSTED_FACT ingestion record.
+        assertThat(accountingEventRepository.findAll()).singleElement().satisfies(record -> {
+            assertThat(record.getEventType()).isEqualTo("inventory.scrap.posted");
+            assertThat(record.getDomainKeyId()).isEqualTo(scrapId.toString());
+            assertThat(record.getStatus()).isEqualTo(AccountingEventStatus.SKIPPED);
+            assertThat(record.getFailureReasonCode()).isEqualTo("UNCOSTED_FACT");
+        });
     }
 
     // ===== helpers =====
