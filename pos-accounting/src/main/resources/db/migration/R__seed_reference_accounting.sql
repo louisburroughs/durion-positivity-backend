@@ -555,6 +555,50 @@ VALUES ('5eed0acc-0000-4000-8000-00000000d313'::uuid, 'ACCOUNTING', 'REGISTER_OV
 ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
 
 -- ============================================================================
+-- Issue #2191 (SPEC-inventory-adjustment-gl-posting §4.6; #2186 decisions D2, D4):
+-- inventory adjustment GL posting. pos-accounting consumes the
+-- inventory.adjustment.posted fact (InventoryAdjustedV1 on inventory.events.v1,
+-- cycle-count and manual adjustments) and posts abs(quantityDelta) x unitCost:
+--   loss (quantityDelta < 0): Dr ADJUSTMENT_LOSS (5100) / Cr INVENTORY_ASSET (1300)
+--   gain (quantityDelta > 0): Dr INVENTORY_ASSET (1300) / Cr ADJUSTMENT_GAIN (5100)
+-- D2: a gain credits 5100 Inventory Shrinkage so count over/short nets in one
+-- account. D4: a category of its own (the REGISTER_OVER_SHORT shape), so scrap
+-- write-offs and count corrections stay separately mappable; scrap stays on
+-- INVENTORY_SHRINKAGE. No new accounts: 1300 and 5100 are upserted by the
+-- parity-D2 block above. gl_mapping.gl_account_id is resolved by account_code
+-- SELECT (mirrors the D2/G3 pattern). Fixed ids in the 5eed0acc-...-d5xx block.
+-- ============================================================================
+
+-- Posting category: INVENTORY_ADJUSTMENT.
+INSERT INTO posting_category (posting_category_id, category_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d501'::uuid, 'INVENTORY_ADJUSTMENT', 'Inventory count / manual adjustment GL posting (loss Dr Shrinkage / Cr Inventory, gain Dr Inventory / Cr Shrinkage, #2191)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, posting_category_id) DO UPDATE SET
+    category_name = EXCLUDED.category_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active,
+    modified_at = NOW(), modified_by = 'seed-generator';
+
+-- Mapping keys (resolved by name at posting time).
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d502'::uuid, '5eed0acc-0000-4000-8000-00000000d501'::uuid, 'ADJUSTMENT_LOSS', 'Debit side of an adjustment loss (on-hand down; shrinkage cost recognized)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d503'::uuid, '5eed0acc-0000-4000-8000-00000000d501'::uuid, 'ADJUSTMENT_GAIN', 'Credit side of an adjustment gain (on-hand up; nets against shrinkage, decision D2)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d504'::uuid, '5eed0acc-0000-4000-8000-00000000d501'::uuid, 'INVENTORY_ASSET', 'Inventory asset side of an adjustment (credit on loss, debit on gain)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+
+-- GL mappings (fixed effective_start_date for idempotent re-runs; FK by account_code).
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d511'::uuid, 'ACCOUNTING', 'INVENTORY_ADJUSTMENT_ADJUSTMENT_LOSS', '5eed0acc-0000-4000-8000-00000000d501'::uuid, '5eed0acc-0000-4000-8000-00000000d502'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '5100'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d512'::uuid, 'ACCOUNTING', 'INVENTORY_ADJUSTMENT_ADJUSTMENT_GAIN', '5eed0acc-0000-4000-8000-00000000d501'::uuid, '5eed0acc-0000-4000-8000-00000000d503'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '5100'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d513'::uuid, 'ACCOUNTING', 'INVENTORY_ADJUSTMENT_INVENTORY_ASSET', '5eed0acc-0000-4000-8000-00000000d501'::uuid, '5eed0acc-0000-4000-8000-00000000d504'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '1300'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+
+-- ============================================================================
 -- Issue #1843: invoice revenue recognition (ADR-0044 R6).
 -- A FINALIZED invoice fact on invoice.events.v1 posts
 --   Dr 1200 Accounts Receivable (total) / Cr 4000 Service Revenue (total - tax)

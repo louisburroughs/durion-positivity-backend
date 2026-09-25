@@ -13,7 +13,9 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -23,10 +25,18 @@ import tools.jackson.databind.ObjectMapper;
  * (odoo-parity G3, issue #1083).
  *
  * <p>Same reliability contract as {@link InventoryEventsListener}: idempotent via {@code
- * processed_events} in the ingest transaction, transient DB errors and posting failures propagate
- * unwrapped for container retry / DLQ (ADR-0044 §4), malformed payloads logged and marked processed
- * so a poison record never blocks the partition. Only {@code order.session.closed} events are
- * handled; the topic's other (high-volume) fact types are ignored without recording their eventIds.
+ * processed_events}, transient DB errors and posting failures (closed period, missing mapping,
+ * anything unexpected) propagate unwrapped and unmarked for container retry / DLQ (ADR-0044 §4),
+ * malformed payloads logged and marked processed so a poison record never blocks the partition.
+ * Only {@code order.session.closed} events are handled; the topic's other (high-volume) fact types
+ * are ignored without recording their eventIds.
+ *
+ * <p><b>Transaction shape (ADR-0044 as amended by #2146).</b> The listener method is not
+ * transactional: the envelope and payload are parsed and {@code processed_events} checked before
+ * any transaction opens; the posting and its processed mark commit together in a {@code
+ * REQUIRES_NEW} transaction of their own; a malformed payload is marked in a transaction of its
+ * own. A permanent failure thrown through a {@code @Transactional} service therefore rolls back
+ * only the handler's work instead of poisoning a shared listener transaction.
  *
  * <p>Posting itself (idempotent on sessionId via posting key, period-gated, accounts resolved
  * through the {@code REGISTER_OVER_SHORT} posting category, zero-variance posts nothing) lives in
@@ -43,16 +53,22 @@ public class OrderEventsListener {
     private final RegisterOverShortPostingService registerOverShortPostingService;
     private final Counter payloadRejectedCounter;
 
+    /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
+
     public OrderEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             RegisterOverShortPostingService registerOverShortPostingService,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.registerOverShortPostingService = registerOverShortPostingService;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -67,7 +83,6 @@ public class OrderEventsListener {
     @KafkaListener(
             topics = "${pos.accounting.kafka.order-events-topic:order.events.v1}",
             groupId = "pos-accounting-order-events")
-    @Transactional
     public void onOrderEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -91,31 +106,48 @@ public class OrderEventsListener {
             return;
         }
 
-        // Only deserialization failures are terminal for this record — skip and mark processed so a
-        // malformed payload does not poison the partition. Anything thrown by posting (transient DB
-        // errors, period gate, unexpected failures) propagates unwrapped for container retry / DLQ.
+        // Only deserialization failures are terminal for this record — skip and mark processed (in a
+        // transaction of its own) so a malformed payload does not poison the partition. Anything
+        // thrown by posting (transient DB errors, period gate, unexpected failures) propagates
+        // unwrapped and unmarked for container retry / DLQ.
         RegisterSessionClosedV1 fact;
         try {
             fact = objectMapper.treeToValue(envelope.path("payload"), RegisterSessionClosedV1.class);
         } catch (DatabindException e) {
-            if (payloadRejectedCounter != null) {
-                payloadRejectedCounter.increment();
-            }
-            log.error(
-                    "Rejected malformed register-session-closed event payload eventId={}: {}",
-                    eventId,
-                    e.getMessage(),
-                    e);
-            markProcessed(eventId);
+            reject(eventId, e);
             return;
         } catch (Exception e) {
             log.warn("Skipping malformed register-session-closed event eventId={}", eventId, e);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
+            return;
+        }
+        if (fact == null) {
+            log.warn("Skipping register-session-closed event without a payload eventId={}", eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
-        registerOverShortPostingService.postOverShort(fact);
-        markProcessed(eventId);
+        try {
+            handlerTransaction.executeWithoutResult(_ -> {
+                registerOverShortPostingService.postOverShort(fact);
+                markProcessed(eventId);
+            });
+        } catch (DatabindException e) {
+            reject(eventId, e);
+        }
+    }
+
+    private void reject(@NonNull String eventId, DatabindException e) {
+        if (payloadRejectedCounter != null) {
+            payloadRejectedCounter.increment();
+        }
+        log.error(
+                "Rejected malformed register-session-closed event payload eventId={}: {}", eventId, e.getMessage(), e);
+        markInOwnTransaction(eventId);
+    }
+
+    private void markInOwnTransaction(@NonNull String eventId) {
+        handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
     }
 
     private void markProcessed(@NonNull String eventId) {

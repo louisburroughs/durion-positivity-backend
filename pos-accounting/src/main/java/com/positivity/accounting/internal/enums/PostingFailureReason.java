@@ -50,5 +50,13 @@ public enum PostingFailureReason {
      * auto-retry loop skips it (a closed period will not reopen on a retry
      * cadence) but manual reprocessing after the period is reopened works.
      */
-    PERIOD_CLOSED
+    PERIOD_CLOSED,
+
+    /**
+     * A Kafka-consumed inventory posting fact (adjustment or scrap) carried no
+     * positive {@code unitCost}, so no journal entry is posted (issue #2191).
+     * Event is recorded SKIPPED — terminal, never retried: the fact carries the
+     * cost at posting time and a later cost is a different fact.
+     */
+    UNCOSTED_FACT
 }

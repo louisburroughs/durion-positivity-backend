@@ -260,6 +260,37 @@ public interface GLPostingService {
             @Nullable String overrideJustification);
 
     /**
+     * Post an inventory adjustment (cycle-count variance or manual adjustment) to GL
+     * (issue #2191): a two-line entry, {@code Dr debitAccount / Cr creditAccount} for
+     * {@code abs(quantityDelta) x unitCost}. Consumed from the
+     * {@code inventory.adjustment.posted} fact on {@code inventory.events.v1}; the caller
+     * sign-routes and resolves both accounts through the {@code INVENTORY_ADJUSTMENT} posting
+     * category's mapping keys — loss {@code ADJUSTMENT_LOSS / INVENTORY_ASSET}, gain
+     * {@code INVENTORY_ASSET / ADJUSTMENT_GAIN} — never hardcoded.
+     *
+     * @param sourceEventId         deterministic JE source id derived from the adjustment kind
+     *                              and id
+     * @param adjustmentId          the adjustment being posted (audit label on the entry lines)
+     * @param debitAccountId        GL account debited
+     * @param creditAccountId       GL account credited
+     * @param amount                positive adjustment value ({@code abs(quantityDelta) x unitCost})
+     * @param transactionDate       business transaction date (the fact's {@code occurredAt}),
+     *                              never processing time, so redeliveries post into the same period
+     * @param description           entry description (kind, id, reason code, sku, delta, cost)
+     * @param overrideJustification optional CLOSED-period override justification
+     * @return posted journal entry's id
+     */
+    UUID postInventoryAdjustment(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID adjustmentId,
+            @NonNull UUID debitAccountId,
+            @NonNull UUID creditAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification);
+
+    /**
      * Post the batched settlement journal entry (story F1c, issue #963, decision
      * D-13): {@code Dr Cash (net) / Dr Processor Fees (fee) / Cr Undeposited
      * Funds (matched gross) / Cr Settlement Suspense (unmatched gross)}. Zero

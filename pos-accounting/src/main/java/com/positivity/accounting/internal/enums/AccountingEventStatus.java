@@ -31,5 +31,13 @@ public enum AccountingEventStatus {
     /**
      * Event has been suspended for manual review/resolution.
      */
-    SUSPENDED
+    SUSPENDED,
+
+    /**
+     * Terminal: a Kafka-consumed posting fact that was deliberately not posted (for example an
+     * uncosted inventory fact, {@code failureReasonCode = UNCOSTED_FACT}). Not retryable — the
+     * retry scheduler and {@code retryAccountingEvent} select only {@link #FAILED} and
+     * {@link #SUSPENDED} (issue #2191).
+     */
+    SKIPPED
 }
