@@ -1162,6 +1162,56 @@ paths:
       x-required-permissions:
       - invoice:finalize
   /v1/invoices/{invoiceId}/payments:
+    get:
+      description: 'Returns every payment intent raised against an invoice, each carrying its captured, voided and refunded amounts and the balance still refundable.
+
+        Use this tool to see an invoice''s full payment history; do not use getInvoicePayment, which reads a single payment intent by id.
+
+        Preconditions: the invoice must exist; the caller needs the invoice:invoice:view authority, scoped to the invoice''s location (ADR-0061).
+
+        Required inputs: invoiceId (UUID) as a path parameter; there is no request body or filtering.
+
+        Emits an INVOICE_PAYMENT_LIST audit event; no state changes — this is a read-only projection.
+
+        Returns 200 with the invoice''s payment intents, 403 when invoice:invoice:view is missing or the invoice''s location is outside the caller''s reach, and 404 when the invoice does not exist.
+
+        '
+      operationId: listInvoicePayments
+      parameters:
+      - in: path
+        name: invoiceId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/PaymentIntentResponse'
+                type: array
+          description: Payment intents returned
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invoice not found
+      security:
+      - bearerAuth: []
+      summary: List Payments for an Invoice
+      tags:
+      - Payment
+      x-required-permissions:
+      - invoice:invoice:view
     post:
       description: 'Initiates a card payment against an invoice through the payment gateway, creating a payment intent that is CAPTURED immediately (SALE_CAPTURE) or left AUTHORIZED as a hold (AUTH_ONLY).
 
@@ -1237,6 +1287,61 @@ paths:
       - Payment
       x-required-permissions:
       - AUTHENTICATED
+  /v1/invoices/{invoiceId}/payments/{paymentId}:
+    get:
+      description: 'Returns the full detail of a single payment intent under an invoice, including its captured, voided and refunded amounts and the balance still refundable — never the tokenised card reference or the raw gateway response.
+
+        Use this tool to render a single payment''s detail; do not use listInvoicePayments unless you need the invoice''s full payment history.
+
+        Preconditions: the payment intent must exist and belong to the given invoice; the caller needs the invoice:invoice:view authority, scoped to the invoice''s location (ADR-0061).
+
+        Required inputs: invoiceId and paymentId (both UUID) as path parameters.
+
+        Emits an INVOICE_PAYMENT_VIEW audit event; no state changes — this is a read-only projection.
+
+        Returns 200 with the payment intent detail, 403 when invoice:invoice:view is missing or the invoice''s location is outside the caller''s reach, and 404 when no payment intent with that id exists under that invoice — a payment intent that exists under a different invoice also reports 404, so the response never confirms another invoice''s payment id.
+
+        '
+      operationId: getInvoicePayment
+      parameters:
+      - in: path
+        name: invoiceId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: paymentId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntentResponse'
+          description: Payment intent detail
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Payment intent not found
+      security:
+      - bearerAuth: []
+      summary: Get Payment Detail
+      tags:
+      - Payment
+      x-required-permissions:
+      - invoice:invoice:view
   /v1/invoices/{invoiceId}/payments/{paymentId}/capture:
     post:
       description: 'Captures all or part of a previously authorized AUTH_ONLY payment hold at the gateway; when the captured amount is below the authorized amount, the remainder of the hold is voided.
@@ -1311,13 +1416,13 @@ paths:
 
         Use this tool when the original card payment lives in this system; do not use voidPayment, which releases an uncaptured hold, and use createStandaloneInvoiceRefund instead when the original payment is not on file.
 
-        Preconditions: the payment intent must belong to the invoice and be CAPTURED, the caller needs the REFUND_PAYMENT authority, less than 180 days may have elapsed since capture unless the caller holds SUPERVISOR_OVERRIDE, and cumulative refunds may not exceed the captured amount.
+        Preconditions: the payment intent must belong to the invoice and be CAPTURED, the caller needs the invoice:payment:refund authority (scoped to the invoice''s location, ADR-0061), less than 180 days may have elapsed since capture unless the caller holds invoice:payment:override for that location, and cumulative refunds may not exceed the captured amount.
 
         Required inputs: amount (positive) and reason (a RefundReason such as CUSTOMER_RETURN or SERVICE_ERROR); notes and externalReference are optional, and a retry replaying the same externalReference returns the existing refund instead of paying twice.
 
         Emits an INVOICE_PAYMENT_REFUND event and publishes a payment-refunded notification on success; a gateway failure is persisted as a FAILED refund record, so callers must read the returned status rather than treating 201 as completed.
 
-        Returns 201 with the refund record, 404 when the intent does not exist under the invoice, 409 when the intent is not CAPTURED, and 422 when the 180-day window has expired or the amount exceeds the remaining refundable balance.
+        Returns 201 with the refund record, 403 when invoice:payment:refund is missing or the invoice''s location is outside the caller''s reach, 404 when the intent does not exist under the invoice, 409 when the intent is not CAPTURED, and 422 when the 180-day window has expired or the amount exceeds the remaining refundable balance.
 
         '
       operationId: refundPayment
@@ -1356,6 +1461,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/RefundPaymentResponse'
           description: Refund created
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)
         '404':
           content:
             application/json:
@@ -1380,20 +1491,20 @@ paths:
       tags:
       - PaymentReversal
       x-required-permissions:
-      - AUTHENTICATED
+      - invoice:payment:refund
   /v1/invoices/{invoiceId}/payments/{paymentId}/void:
     post:
       description: 'Voids a previously authorized invoice payment hold at the gateway before it is captured, releasing the customer''s funds without any money movement.
 
         Use this tool on an AUTHORIZED hold; do not use refundPayment, which returns funds from a payment that was already CAPTURED.
 
-        Preconditions: the payment intent must belong to the invoice and be AUTHORIZED, the caller needs the VOID_PAYMENT authority, and less than 24 hours may have elapsed since authorization unless the caller also holds SUPERVISOR_OVERRIDE.
+        Preconditions: the payment intent must belong to the invoice and be AUTHORIZED, the caller needs the invoice:payment:void authority (scoped to the invoice''s location, ADR-0061), and less than 24 hours may have elapsed since authorization unless the caller also holds invoice:payment:override for that location.
 
         Required inputs: reason (CUSTOMER_REQUEST, DUPLICATE_AUTHORIZATION, ENTRY_ERROR, FRAUD_PREVENTION, MANAGER_DISCRETION or OTHER); notes are optional free text.
 
         Emits an INVOICE_PAYMENT_VOID event, moves the intent to VOIDED, and publishes a payment-voided notification.
 
-        Returns 200 with an empty body on success, 404 when the intent does not exist under the invoice, 409 when the intent is not AUTHORIZED, 422 when the 24-hour void window has expired, and 500 when the gateway rejects the void.
+        Returns 200 with an empty body on success, 403 when invoice:payment:void is missing or the invoice''s location is outside the caller''s reach, 404 when the intent does not exist under the invoice, 409 when the intent is not AUTHORIZED, 422 when the 24-hour void window has expired, and 500 when the gateway rejects the void.
 
         '
       operationId: voidPayment
@@ -1426,6 +1537,12 @@ paths:
       responses:
         '200':
           description: Payment voided
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)
         '404':
           content:
             application/json:
@@ -1450,20 +1567,20 @@ paths:
       tags:
       - PaymentReversal
       x-required-permissions:
-      - AUTHENTICATED
+      - invoice:payment:void
   /v1/invoices/{invoiceId}/receipts:
     post:
       description: 'Generates a receipt record for an invoice payment, assigning a unique reference built from the invoice number, a UTC timestamp and a per-invoice sequence, with the cashier taken from the security context.
 
         Use this tool once per payment after tender; do not use reprintReceipt, which duplicates a receipt that already exists.
 
-        Preconditions: the invoice and payment intent must exist, the intent must belong to the invoice, and the caller needs the GENERATE_RECEIPT authority.
+        Preconditions: the invoice and payment intent must exist, the intent must belong to the invoice, and the caller needs the invoice:receipt:generate authority, scoped to the invoice''s location (ADR-0061).
 
         Required inputs: paymentIntentId (UUID), terminalId, templateId and templateVersion.
 
         Emits an INVOICE_RECEIPT_GENERATE event and stores the receipt in GENERATED status with a zero reprint count; the receipt also becomes a downloadable artifact of the invoice.
 
-        Returns 201 with the receipt reference, 404 when the invoice or payment intent does not exist or the intent belongs to a different invoice, and 403 when the GENERATE_RECEIPT authority is missing.
+        Returns 201 with the receipt reference, 404 when the invoice or payment intent does not exist or the intent belongs to a different invoice, and 403 when invoice:receipt:generate is missing or the invoice''s location is outside the caller''s reach.
 
         '
       operationId: generateReceipt
@@ -1496,6 +1613,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ReceiptResponse'
           description: Receipt generated
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)
         '404':
           content:
             application/json:
@@ -1508,20 +1631,75 @@ paths:
       tags:
       - Receipt
       x-required-permissions:
-      - AUTHENTICATED
+      - invoice:receipt:generate
+  /v1/invoices/{invoiceId}/receipts/{receiptId}:
+    get:
+      description: 'Returns the full detail of a single receipt: its reference and status, the invoice and payment intent it documents, the paid amount, the payment gateway and gateway reference captured on the payment intent, the cashier, terminal and template that produced it, its delivery status, and its reprint history.
+
+        Use this tool to render the frontend receipt page for a receipt already generated by generateReceipt; do not use it to check whether a receipt exists for an invoice — list the invoice''s receipts for that.
+
+        Preconditions: the receipt must exist and belong to the given invoice; the caller needs the invoice:invoice:view authority.
+
+        Required inputs: invoiceId and receiptId (both UUID) as path parameters.
+
+        Emits an INVOICE_RECEIPT_VIEW audit event; no state changes — this is a read-only projection.
+
+        Returns 200 with the receipt view, and 404 when no receipt with that id exists under that invoice — a receipt that exists under a different invoice also reports 404, so the response never confirms another invoice''s receipt id.
+
+        '
+      operationId: getReceipt
+      parameters:
+      - in: path
+        name: invoiceId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: receiptId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptViewResponse'
+          description: Receipt detail
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Receipt not found
+      security:
+      - bearerAuth: []
+      summary: Get Receipt Detail
+      tags:
+      - Receipt
+      x-required-permissions:
+      - invoice:invoice:view
   /v1/invoices/{invoiceId}/receipts/{receiptId}/email:
     post:
       description: 'Records the outcome of emailing a receipt to a customer, stamping the receipt''s delivery method as EMAIL with the recipient address and the reported status; this endpoint records the attempt rather than dispatching the email itself.
 
         Use this tool after an email delivery attempt completes; do not use recordReceiptPrintDelivery, which records a terminal print outcome.
 
-        Preconditions: the receipt must already exist via generateReceipt.
+        Preconditions: the receipt must already exist via generateReceipt and belong to invoiceId; the caller needs the invoice:receipt:generate authority, scoped to the invoice''s location (ADR-0061) — recording delivery is part of the same counter receipt flow as generating one.
 
         Required inputs: receiptId (UUID) as a path parameter plus emailAddress and status (SUCCESS or FAILED) in the body.
 
         Emits an INVOICE_RECEIPT_EMAIL_DELIVERY event and overwrites the receipt''s delivery method, address and status.
 
-        Returns 200 with an empty body on success, and 404 when the receipt does not exist.
+        Returns 200 with an empty body on success, 403 when invoice:receipt:generate is missing or the invoice''s location is outside the caller''s reach, and 404 when no receipt with that id exists under that invoice — a receipt that exists under a different invoice also reports 404.
 
         '
       operationId: recordReceiptEmailDelivery
@@ -1554,6 +1732,12 @@ paths:
       responses:
         '200':
           description: Email delivery recorded
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)
         '404':
           content:
             application/json:
@@ -1566,20 +1750,20 @@ paths:
       tags:
       - Receipt
       x-required-permissions:
-      - AUTHENTICATED
+      - invoice:receipt:generate
   /v1/invoices/{invoiceId}/receipts/{receiptId}/print:
     post:
       description: 'Records the outcome of printing a receipt at the terminal, stamping the receipt''s delivery method as PRINT with the reported status; the physical printing itself happens client-side, not here.
 
         Use this tool after the terminal reports its print result; do not use recordReceiptEmailDelivery, which records an email delivery attempt with its recipient address.
 
-        Preconditions: the receipt must already exist via generateReceipt.
+        Preconditions: the receipt must already exist via generateReceipt and belong to invoiceId; the caller needs the invoice:receipt:generate authority, scoped to the invoice''s location (ADR-0061) — recording delivery is part of the same counter receipt flow as generating one.
 
         Required inputs: receiptId (UUID) as a path parameter and status (SUCCESS or FAILED) in the body.
 
         Emits an INVOICE_RECEIPT_PRINT_DELIVERY event and overwrites the receipt''s delivery method and status.
 
-        Returns 200 with an empty body on success, and 404 when the receipt does not exist.
+        Returns 200 with an empty body on success, 403 when invoice:receipt:generate is missing or the invoice''s location is outside the caller''s reach, and 404 when no receipt with that id exists under that invoice — a receipt that exists under a different invoice also reports 404.
 
         '
       operationId: recordReceiptPrintDelivery
@@ -1611,6 +1795,12 @@ paths:
       responses:
         '200':
           description: Print delivery recorded
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)
         '404':
           content:
             application/json:
@@ -1623,20 +1813,20 @@ paths:
       tags:
       - Receipt
       x-required-permissions:
-      - AUTHENTICATED
+      - invoice:receipt:generate
   /v1/invoices/{invoiceId}/receipts/{receiptId}/reprint:
     post:
       description: 'Records a reprint of an existing receipt, incrementing its reprint count and capturing the reason and the reprinting actor for audit.
 
         Use this tool when a customer needs a duplicate copy; do not use generateReceipt, which creates a new receipt for a payment that has none yet.
 
-        Preconditions: the receipt must exist, and its reprint count must be below 5 unless the caller holds the SUPERVISOR_OVERRIDE authority.
+        Preconditions: the receipt must exist, and its reprint count must be below 5 unless the caller holds the invoice:receipt:reprint_override authority for the receipt''s invoice location (ADR-0061).
 
         Required inputs: receiptId (UUID) as a path parameter and a non-blank reason in the body.
 
         Emits an INVOICE_RECEIPT_REPRINT event and updates the receipt''s reprint count, last reprint reason and last reprinted-by.
 
-        Returns 200 with the receipt, 404 when the receipt does not exist, and 409 when the reprint limit of 5 is exceeded without a supervisor override.
+        Returns 200 with the receipt, 403 when the reprint limit is exceeded and the caller''s invoice:receipt:reprint_override does not reach the receipt''s invoice location, 404 when the receipt does not exist, and 409 when the reprint limit of 5 is exceeded without a supervisor override.
 
         '
       operationId: reprintReceipt
@@ -1672,6 +1862,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ReceiptResponse'
           description: Receipt reprinted
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reprint-limit override does not reach this invoice's location
         '404':
           content:
             application/json:
@@ -1723,6 +1919,12 @@ paths:
                   $ref: '#/components/schemas/InvoiceRefundResponse'
                 type: array
           description: Refund records returned
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)
         '404':
           content:
             application/json:
@@ -1741,13 +1943,13 @@ paths:
 
         Use this tool only when no captured payment intent exists to refund; do not use refundPayment, which reverses a CAPTURED gateway payment, and use createStandalonePartyRefund instead when no invoice is on file at all.
 
-        Preconditions: the invoice must exist, the caller needs the finance-only ISSUE_MANUAL_REFUND authority, and cumulative refunds across payment-anchored and standalone records may not exceed the invoice total.
+        Preconditions: the invoice must exist, the caller needs the finance-only invoice:refund:issue_manual authority (scoped to the invoice''s location, ADR-0061), and cumulative refunds across payment-anchored and standalone records may not exceed the invoice total.
 
         Required inputs: amount (positive) and reason (a RefundReason such as CUSTOMER_RETURN); notes and externalReference are optional, and a retry replaying the same externalReference returns the existing record instead of double-recording.
 
         Emits an INVOICE_STANDALONE_REFUND event and stores a COMPLETED refund record anchored to the invoice; no gateway call is made.
 
-        Returns 201 with the refund record, 404 when the invoice does not exist, and 422 when the amount exceeds the invoice''s remaining refundable balance.
+        Returns 201 with the refund record, 403 when invoice:refund:issue_manual is missing or the invoice''s location is outside the caller''s reach, 404 when the invoice does not exist, and 422 when the amount exceeds the invoice''s remaining refundable balance.
 
         '
       operationId: createStandaloneInvoiceRefund
@@ -1780,6 +1982,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/RefundPaymentResponse'
           description: Refund recorded
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks the required authority; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)
         '404':
           content:
             application/json:
@@ -1798,7 +2006,7 @@ paths:
       tags:
       - StandaloneRefund
       x-required-permissions:
-      - AUTHENTICATED
+      - invoice:refund:issue_manual
   /v1/invoices/{invoiceId}/revert:
     post:
       description: 'Reverts a FINALIZED invoice back to DRAFT within 24 hours of finalization, before GL posting has made it immutable, and voids the provider tax document committed at finalization.
@@ -1862,13 +2070,13 @@ paths:
 
         Use this tool only when there is no invoice to anchor to; use createStandaloneInvoiceRefund instead when an invoice is on file, and refundPayment when the captured payment itself exists.
 
-        Preconditions: the caller needs the finance-only ISSUE_MANUAL_REFUND authority; because there is no invoice, no refundable-amount cap applies.
+        Preconditions: the caller needs the finance-only invoice:refund:issue_manual authority; because there is no invoice, no location scope or refundable-amount cap applies.
 
         Required inputs: partyId (non-blank, max 64 characters), amount (positive) and reason (a RefundReason); notes and externalReference are optional, and a retry replaying the same externalReference among the party''s purely party-anchored records returns the existing record.
 
         Emits an INVOICE_PARTY_STANDALONE_REFUND event and stores a COMPLETED refund record anchored to the party; no gateway call is made.
 
-        Returns 201 with the refund record, and 400 when partyId is blank.
+        Returns 201 with the refund record, 400 when partyId is blank, and 403 when invoice:refund:issue_manual is missing.
 
         '
       operationId: createStandalonePartyRefund
@@ -1901,13 +2109,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Missing party anchor
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks the required authority
       security:
       - bearerAuth: []
       summary: Record Standalone Party Refund
       tags:
       - StandaloneRefund
       x-required-permissions:
-      - AUTHENTICATED
+      - invoice:refund:issue_manual
 components:
   schemas:
     AdjustmentRequest:
@@ -3129,6 +3343,83 @@ components:
       - partyId
       - reason
       type: object
+    PaymentIntentResponse:
+      description: Read view of a payment intent
+      properties:
+        authorizedAmount:
+          description: Amount authorized on the card
+          example: 149.99
+          type: number
+        capturedAmount:
+          description: Amount captured (funds moved)
+          example: 149.99
+          type: number
+        createdAt:
+          description: When the payment intent was created
+          format: date-time
+          type: string
+        gatewayProvider:
+          description: Gateway provider identifier (e.g., stripe)
+          example: stripe
+          type: string
+        gatewayReference:
+          description: Opaque gateway transaction reference
+          example: ch_3NXyZ2eZvKYlo2Ca
+          type: string
+        invoiceId:
+          description: Invoice the payment intent belongs to
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        paymentFlow:
+          description: SALE_CAPTURE or AUTH_ONLY
+          enum:
+          - SALE_CAPTURE
+          - AUTH_ONLY
+          example: SALE_CAPTURE
+          type: string
+        paymentId:
+          description: Payment intent identifier
+          example: 01960003-0000-7000-8000-000000000020
+          format: uuid
+          type: string
+        refundableAmount:
+          description: capturedAmount minus refundedAmount; null when the intent is not CAPTURED
+          example: 149.99
+          type:
+          - number
+          - 'null'
+        refundedAmount:
+          description: Sum of non-FAILED refunds recorded against this payment intent
+          example: 0.0
+          type: number
+        status:
+          description: Current lifecycle status of the payment intent
+          enum:
+          - PENDING
+          - AUTHORIZED
+          - CAPTURED
+          - CAPTURE_FAILED
+          - VOIDED
+          - EXPIRED
+          example: CAPTURED
+          type: string
+        updatedAt:
+          description: When the payment intent was last updated
+          format: date-time
+          type: string
+        voidedRemainderAmount:
+          description: Remainder voided after partial capture
+          example: 0.0
+          type: number
+      required:
+      - createdAt
+      - invoiceId
+      - paymentFlow
+      - paymentId
+      - status
+      - updatedAt
+      type: object
     PrintDeliveryRequest:
       description: Request to record the delivery status of a printed receipt
       properties:
@@ -3163,6 +3454,114 @@ components:
       required:
       - receiptId
       - status
+      type: object
+    ReceiptViewResponse:
+      description: Full read view of a receipt, including its invoice, payment and delivery context
+      properties:
+        cashierId:
+          description: Cashier who generated the receipt
+          example: cashier-001
+          type: string
+        createdAt:
+          description: When the receipt was originally generated (printed-at)
+          format: date-time
+          type: string
+        deliveryEmailAddress:
+          description: Recipient address of the last email delivery attempt
+          example: customer@example.com
+          type: string
+        deliveryMethod:
+          description: How the receipt was last delivered
+          enum:
+          - PRINT
+          - EMAIL
+          example: EMAIL
+          type: string
+        deliveryStatus:
+          description: Outcome of the last delivery attempt
+          enum:
+          - SUCCESS
+          - FAILED
+          example: SUCCESS
+          type: string
+        gatewayReference:
+          description: Opaque gateway transaction reference used for capture, void and inquiry
+          example: ch_3P0a1b2c3d4e5f
+          type: string
+        invoiceId:
+          description: Invoice the receipt documents
+          example: 01960003-0000-7000-8000-000000000010
+          format: uuid
+          type: string
+        invoiceNumber:
+          description: Human-readable invoice number
+          example: INV-12345
+          type: string
+        lastReprintReason:
+          description: Reason given for the most recent reprint
+          example: Customer requested a duplicate copy
+          type: string
+        lastReprintedBy:
+          description: Actor who performed the most recent reprint
+          example: cashier-002
+          type: string
+        paidAmount:
+          description: Amount captured against the payment intent
+          example: 149.99
+          type: number
+        paymentIntentId:
+          description: Payment intent the receipt documents
+          example: 01960003-0000-7000-8000-000000000020
+          format: uuid
+          type: string
+        paymentMethod:
+          description: Payment gateway/processor that handled the transaction (e.g. "stripe"); pos-invoice does not store card brand, last 4 or authorization code
+          example: stripe
+          type: string
+        receiptId:
+          description: Unique identifier of the receipt
+          example: 01960003-0000-7000-8000-000000000060
+          format: uuid
+          type: string
+        reference:
+          description: Human-readable receipt reference
+          example: RCP-INV-12345-20260115T143022Z-001
+          type: string
+        reprintCount:
+          description: Number of times the receipt has been reprinted
+          example: 0
+          format: int32
+          type: integer
+        status:
+          description: Current status of the receipt
+          enum:
+          - GENERATED
+          example: GENERATED
+          type: string
+        templateId:
+          description: Receipt template identifier
+          example: RECEIPT_DEFAULT
+          type: string
+        templateVersion:
+          description: Receipt template version, immutable once captured at generation
+          example: '1'
+          type: string
+        terminalId:
+          description: Terminal that produced the receipt
+          example: TERM-001
+          type: string
+      required:
+      - cashierId
+      - createdAt
+      - invoiceId
+      - paymentIntentId
+      - receiptId
+      - reference
+      - reprintCount
+      - status
+      - templateId
+      - templateVersion
+      - terminalId
       type: object
     RefundPaymentRequest:
       description: Request to refund a captured payment

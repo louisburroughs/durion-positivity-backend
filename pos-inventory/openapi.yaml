@@ -170,7 +170,7 @@ paths:
 
         Emits an INVENTORY_ADJUSTMENT_REQUEST_APPROVE event; the request is stamped APPROVED with approver and timestamp, and the ledger posting updates the stock summary that availability reads.
 
-        Returns 400 when the adjustment request id is unknown (the lookup failure maps to a validation error rather than 404), 403 with LOCATION_SCOPE_DENIED when the caller holds inventory:adjustment:approve but the token scopes it to locations that do not cover the request''s locationId (ADR-0061; nothing is posted), and 409 when the request is no longer PENDING.
+        Returns 400 when the adjustment request id is unknown (the lookup failure maps to a validation error rather than 404), 403 with LOCATION_SCOPE_DENIED when the caller holds inventory:adjustment:approve but the token scopes it to locations that do not cover the request''s locationId (ADR-0061; nothing is posted), 409 when the request is no longer PENDING, and 422 with ADJUSTMENT_QUANTITY_ZERO when the request''s quantity is zero (the request is marked REJECTED and nothing is posted).
 
         '
       operationId: approveAdjustmentRequest
@@ -213,7 +213,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Business rule validation failed
+          description: Business rule validation failed; ADJUSTMENT_QUANTITY_ZERO when the request's quantity is zero (the request is marked REJECTED, nothing is posted)
       security:
       - bearerAuth:
         - inventory:adjustment:approve
@@ -943,7 +943,7 @@ paths:
 
         Preconditions: none beyond authentication; rows are processed independently, so one bad row fails only itself.
 
-        Required inputs: jobId (UUID), locationId (UUID) and at least one record with sku and a non-negative quantity; a record-level locationId overrides the batch location, reasonCode defaults to CYCLE_COUNT_ADJUSTMENT, and operatorId attributes the rows when a service account submits the batch.
+        Required inputs: jobId (UUID), locationId (UUID) and at least one record with sku and a positive quantity (a zero-quantity row is refused); a record-level locationId overrides the batch location, reasonCode defaults to CYCLE_COUNT_ADJUSTMENT, and operatorId attributes the rows when a service account submits the batch.
 
         Emits an INVENTORY_BULK_INGEST event; each accepted row persists a PENDING adjustment request attributed to the resolved actor.
 
@@ -3935,7 +3935,7 @@ paths:
       - inventory:adjustment:approve
   /v1/inventory/pick-lists:
     get:
-      description: 'Returns every pick list linked to a workorder.
+      description: 'Returns every pick list linked to a workorder whose site is within the caller''s location scope (ADR-0061 §3, #2204); a list at a site outside the caller''s reach is dropped from the result, not rejected.
 
         Use this tool to find a workorder''s pick lists and their statuses; use getPickList instead when the pickListId is already known.
 
@@ -3945,7 +3945,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 200 with an empty array when the workorder has no pick lists.
+        Returns 200 with an empty array when the workorder has no pick lists, or none within reach.
 
         '
       operationId: listPickListsForWorkorder
@@ -5618,6 +5618,54 @@ paths:
       - Receiving
       x-required-permissions:
       - inventory:receiving:complete
+  /v1/inventory/receiving/workorders:
+    get:
+      description: 'Searches the workorders eligible to receive a cross-docked receiving line: status not COMPLETED, CANCELLED or CLOSED, and at least one demanded part line.
+
+        Use this tool to find the workorderId/workorderLineId to pass to crossDockReceivingLine; do not use it for workorders with no part lines, which are never eligible and never returned.
+
+        Preconditions: none; an unmatched query yields an empty array.
+
+        Required inputs: none. Optional query parameter query matches workorderNumber (case-insensitive contains) or an exact workorder UUID; a blank or omitted query returns up to 50 most-recently-updated eligible workorders.
+
+        Read-only: no state changes. Emits an INVENTORY_RECEIVING_WORKORDER_SEARCH event (the module''s read-audit convention for a search endpoint) even though nothing is written.
+
+        Returns 200 with an empty array when nothing matches.
+
+        '
+      operationId: searchCrossDockWorkorders
+      parameters:
+      - description: Workorder number fragment or exact workorder UUID
+        in: query
+        name: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/CrossDockWorkorderSearchResultDto'
+                type: array
+          description: Matching workorders returned
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User lacks required authority
+      security:
+      - bearerAuth:
+        - inventory:receiving:complete
+        - inventory:issue:parts
+      summary: Search Cross-Dock Workorders
+      tags:
+      - Receiving
+      x-required-permissions:
+      - inventory:receiving:complete
+      - inventory:issue:parts
   /v1/inventory/replenishment/needs:
     get:
       description: 'Reports, for every active non-snoozed replenishment policy, the projected availability at its lead-time horizon, whether a scan would trigger, the multiple-rounded suggested quantity and the projected stock-out deadline.
@@ -6211,7 +6259,7 @@ paths:
       - inventory:adjustment:create
   /v1/inventory/returns/reason-codes:
     get:
-      description: 'Returns the fixed catalog of return reason codes: DAMAGED, WRONG_ITEM, EXCESS and DEFECTIVE, each with a description and category.
+      description: 'Returns the fixed catalog of return reason codes: NOT_NEEDED, WRONG_PART and CUSTOMER_REFUSED (CAP-218 Story #177), each with a description and category.
 
         Use this tool to populate the reasonCode of return lines before submitReturnToStock; do not use listReturnableItems, which lists what can be returned rather than why.
 
@@ -6250,11 +6298,11 @@ paths:
       - inventory:return:view
   /v1/inventory/returns/returnable-items:
     get:
-      description: 'Returns the items eligible to be returned to stock for a workorder, with the quantity still returnable per item.
+      description: 'Returns the items eligible to be returned to stock for a workorder, one row per work order part line, with the quantity still returnable (parts consumed against the line minus parts already returned against it, floored at 0).
 
-        Use this tool to build a return before submitReturnToStock; use listReturnReasonCodes instead for the reason codes a return line must carry.
+        Use this tool to build a return before submitReturnToStock; use listReturnReasonCodes instead for the reason codes a return line must carry. itemId and workorderLineId name the same work order line; submitReturnToStock''s lines key off that id.
 
-        Preconditions: none checked; the current implementation is a placeholder that echoes a single stub item with quantityReturnable 0 for any workorderId until a returnable-item source-of-record exists.
+        Preconditions: none; an unknown or partless workorderId yields an empty array.
 
         Required inputs: workorderId (UUID) as a query parameter; there is no request body.
 
@@ -6302,17 +6350,17 @@ paths:
       - inventory:return:view
   /v1/inventory/returns/submit-to-stock:
     post:
-      description: 'Accepts a return-to-stock submission for a workorder and acknowledges it with a generated returnId, the processed line count and a SUBMITTED status.
+      description: 'Posts a return-to-stock submission for a workorder: persists the return record and its lines, posts a RETURN_TO_STOCK ledger entry per line (carrying the workorder and work order line), and acknowledges with a generated returnId, the processed line count and a SUBMITTED status.
 
         Use this tool to hand back unused workorder parts; do not use receiveItemsIntoStaging or createGoodsReceipt, which receive vendor shipments rather than workorder returns.
 
-        Preconditions: none checked by the current implementation; the call is an acknowledgement stub, so no return record is persisted, no ledger entry posts and on-hand stock does not change yet.
+        Preconditions: each line''s itemId must name a real work order part line, and its quantity may not exceed that line''s returnable quantity (parts consumed minus parts already returned).
 
-        Required inputs: workorderId (UUID) and lines (non-empty), each naming itemId (UUID), a positive quantity, a reasonCode from listReturnReasonCodes and a locationId; storageLocationId is optional.
+        Required inputs: workorderId (UUID) and lines (non-empty), each naming itemId (UUID, the work order line), a positive quantity, a reasonCode from the closed set NOT_NEEDED, WRONG_PART or CUSTOMER_REFUSED, and a locationId; storageLocationId is optional.
 
-        Emits an INVENTORY_RETURN_SUBMIT_TO_STOCK event; the 202 response signals acceptance of the submission, not completed stock movement.
+        Emits an INVENTORY_RETURN_SUBMIT_TO_STOCK event; the 202 response signals the posting completed.
 
-        Returns 400 when workorderId is missing, lines is empty, a quantity is not positive or a reasonCode is blank.
+        Returns 400 when workorderId is missing, lines is empty, a quantity is not positive or a reasonCode is not one of the closed set, 404 when a line''s itemId does not name a work order part line, and 422 RETURN_QUANTITY_EXCEEDED when a line''s quantity exceeds what remains returnable.
 
         '
       operationId: submitReturnToStock
@@ -6320,14 +6368,14 @@ paths:
         content:
           application/json:
             examples:
-              Damaged part return:
-                description: Damaged part return
+              Part no longer needed:
+                description: Part no longer needed
                 value:
                   lines:
                   - itemId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a51
                     locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a52
                     quantity: 3
-                    reasonCode: DAMAGED
+                    reasonCode: NOT_NEEDED
                   workorderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a50
             schema:
               $ref: '#/components/schemas/ReturnSubmitRequest'
@@ -6352,6 +6400,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: FORBIDDEN when the caller lacks inventory:return:write; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover every line's locationId (ADR-0061)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A line's itemId does not name a work order part line
         '422':
           content:
             application/json:
@@ -6897,35 +6951,34 @@ paths:
 
         Use this tool to present choices before calling resolveShortage with the selected optionType; do not call resolveShortage blind, because SUBSTITUTE and TRANSFER_IN need fields (substituteSku, sourceLocationId) that this computation supplies.
 
-        Preconditions: none beyond a positive shortQuantity; SUBSTITUTE and TRANSFER_IN options appear only when locationId is provided, and SUBSTITUTE additionally requires sku to parse as a product UUID.
+        Preconditions: allocationId must name a real allocation when sku or shortQuantity is omitted (they are then derived from the allocation''s reservation: sku from stockItemId, shortQuantity from requiredQuantity minus allocatedQuantity); SUBSTITUTE and TRANSFER_IN options appear only when locationId is provided, and SUBSTITUTE additionally requires sku to parse as a product UUID.
 
-        Required inputs: allocationId (UUID), sku (non-blank) and shortQuantity (positive, decimal-capable per the product''s catalog precision_scale declaration); workorderLineId and locationId are optional but drive which options appear.
+        Required inputs: allocationId (UUID) — the UI''s allocationLineId names the same allocation; sku and shortQuantity (positive, decimal-capable per the product''s catalog precision_scale declaration) are optional and derived from the allocation when omitted; workorderLineId and locationId are optional but drive which options appear.
 
         No events are emitted and no state changes; this is a read-only computation.
 
-        Returns 400 when shortQuantity is not positive or sku is blank.
+        Returns 400 when a supplied shortQuantity is not positive, and 404 when allocationId is unknown and sku or shortQuantity was omitted.
 
         '
       operationId: listShortageOptions
       parameters:
-      - description: Allocation experiencing the shortage
+      - description: Allocation experiencing the shortage; the UI's allocationLineId names the same allocation
         in: query
         name: allocationId
         required: true
         schema:
           format: uuid
           type: string
-      - description: SKU / stock-item identifier that is short
+      - description: SKU / stock-item identifier that is short; derived from the allocation's reservation when omitted
         in: query
         name: sku
-        required: true
+        required: false
         schema:
-          minLength: 1
           type: string
-      - description: Quantity that is short
+      - description: Quantity that is short; derived from the allocation's reservation (requiredQuantity minus allocatedQuantity) when omitted
         in: query
         name: shortQuantity
-        required: true
+        required: false
         schema:
           exclusiveMinimum: 0
           type: number
@@ -6964,6 +7017,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: FORBIDDEN when the caller lacks inventory:shortage:view; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover the requested locationId (when given) (ADR-0061)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: allocationId is unknown and sku or shortQuantity was omitted
       security:
       - bearerAuth:
         - inventory:shortage:view
@@ -6978,13 +7037,13 @@ paths:
 
         Use this tool after picking an option from listShortageOptions; do not use createOrUpdateReservation directly for substitutes or cancelReservation directly for line cancels when an auditable, idempotent resolution record is wanted.
 
-        Preconditions: option-specific — workorderLineId for BACKORDER and SUBSTITUTE, substituteSku (a product UUID with positive ATP at locationId when locationId is given) for SUBSTITUTE, and both sourceLocationId and locationId for TRANSFER_IN.
+        Preconditions: option-specific — workorderLineId for BACKORDER and SUBSTITUTE, substituteSku (a product UUID with positive ATP at locationId when locationId is given) for SUBSTITUTE, and both sourceLocationId and locationId for TRANSFER_IN. When sku or shortQuantity is omitted, allocationId must name a real allocation (404 otherwise) and the derived shortQuantity (requiredQuantity minus allocatedQuantity) must be positive.
 
-        Required inputs: idempotencyKey (unique per resolution attempt — a replay with the same key returns the stored result without re-executing), allocationId (UUID), sku, a positive shortQuantity and optionType (BACKORDER, SUBSTITUTE, TRANSFER_IN, EMERGENCY_PURCHASE or CANCEL_LINE), plus the option-specific fields above; notes is optional free text.
+        Required inputs: allocationId (UUID) and optionType (BACKORDER, SUBSTITUTE, TRANSFER_IN, EMERGENCY_PURCHASE or CANCEL_LINE), plus the option-specific fields above; notes is optional free text. idempotencyKey, sku and shortQuantity are all optional: idempotencyKey defaults to "<allocationId>:<optionType>" (a replay with the same key, supplied or defaulted, returns the stored result without re-executing), and sku/shortQuantity default to the values derived from the named allocation''s reservation (see Preconditions).
 
         Emits an INVENTORY_SHORTAGE_RESOLVE event and persists a shortage-resolution record referencing the artifact (BACKORDER, RESERVATION, TRANSFER_ORDER, PURCHASE_SUGGESTION or NONE).
 
-        Returns 422 with per-case codes when execution preconditions fail — MISSING_FIELD for an absent option-specific field, SUBSTITUTE_UNAVAILABLE when the substitute has no ATP at the site, INVALID_IDENTIFIER when substituteSku is not a UUID — and 400 when idempotencyKey, allocationId, sku or optionType is missing.
+        Returns 404 when allocationId is unknown and sku or shortQuantity was omitted; 422 with per-case codes when execution preconditions fail — MISSING_FIELD for an absent option-specific field, SUBSTITUTE_UNAVAILABLE when the substitute has no ATP at the site, INVALID_IDENTIFIER when substituteSku is not a UUID, SHORTAGE_DERIVED_QUANTITY_NOT_POSITIVE when the derived shortQuantity is not positive — and 400 when allocationId or optionType is missing, or a supplied shortQuantity is not positive.
 
         '
       operationId: resolveShortage
@@ -7025,6 +7084,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: FORBIDDEN when the caller lacks inventory:shortage:resolve; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover the request's locationId or sourceLocationId (when given) (ADR-0061)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: allocationId is unknown and sku or shortQuantity was omitted
         '422':
           content:
             application/json:
@@ -7382,7 +7447,7 @@ paths:
 
         Required inputs: productSku, fromLocationId (UUID), movementType and a positive quantity; toLocationId is required for TRANSFER, while unitOfMeasure and sourceTransactionId are optional.
 
-        Emits an INVENTORY_STOCK_MOVEMENT_CREATE event and posts the entries through the ledger funnel, which updates the stock summary that availability reads.
+        Emits an INVENTORY_STOCK_MOVEMENT_CREATE event and posts the entries through the ledger funnel, which updates the stock summary that availability reads. A RECEIVE carries no document cost: it enters at the product''s current average cost and leaves that average unchanged, so it never gives an uncosted product a cost — receive purchased stock with createGoodsReceipt or a receiving session instead, which price it from the purchase order.
 
         Returns 201 with no body, 422 with INSUFFICIENT_STOCK when a PICK or ISSUE exceeds on-hand at the source, 422 with CROSS_SITE_TRANSFER_REQUIRES_ORDER for a cross-site TRANSFER, and 400 when toLocationId is missing for TRANSFER or movementType is ADJUST.
 
@@ -9954,7 +10019,7 @@ components:
           minLength: 1
           type: string
         quantity:
-          description: Adjustment quantity (positive to add stock, negative to remove)
+          description: Adjustment quantity, non-zero (positive to add stock, negative to remove); zero is rejected
           example: 12
           type: number
         reasonCode:
@@ -10586,6 +10651,36 @@ components:
       - sessionStatus
       - workorderId
       - workorderLineId
+      type: object
+    CrossDockWorkorderSearchResultDto:
+      description: A workorder eligible to receive a cross-docked receiving line (#2211)
+      properties:
+        partLineCount:
+          description: Number of part lines the workorder demands
+          example: 3
+          format: int64
+          type: integer
+        status:
+          description: Current workorder status
+          example: IN_PROGRESS
+          type: string
+        updatedAt:
+          description: Timestamp the workorder replica was last updated
+          example: '2026-01-15T09:30:00Z'
+          format: date-time
+          type: string
+        workorderId:
+          description: Identifier of the workorder
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        workorderNumber:
+          description: Human-readable workorder number
+          example: WO-2026-0042
+          type: string
+      required:
+      - partLineCount
+      - workorderId
       type: object
     CycleCountPlanBulkIngestRecord:
       description: 'One cycle count plan: which zones are counted, and when'
@@ -11260,7 +11355,7 @@ components:
           format: uuid
           type: string
         quantity:
-          description: Quantity to ingest for the product (non-negative)
+          description: Quantity to ingest for the product (positive; a zero-quantity row is refused)
           example: 120
           minimum: 0
           type: number
@@ -11325,7 +11420,7 @@ components:
           example: GOODS_RECEIPT
           type: string
         fromLocationId:
-          description: Source location for transfer events
+          description: 'The storage location (bin) or site the stock left, on whichever granularity the posting path used: a bin for a bin-level move (e.g. a pick or a putaway), a site for a site-level move (e.g. a transfer). This IS the storage-location id for a bin-level posting; there is no separate storage-location field to read instead'
           example: 01960003-0000-7000-8000-000000000005
           format: uuid
           type: string
@@ -11365,7 +11460,7 @@ components:
           format: date-time
           type: string
         toLocationId:
-          description: Destination location for transfer events
+          description: 'The storage location (bin) or site the stock entered, on whichever granularity the posting path used: a bin for a bin-level move (e.g. a pick or a putaway), a site for a site-level move (e.g. a transfer). This IS the storage-location id for a bin-level posting; there is no separate storage-location field to read instead'
           example: 01960003-0000-7000-8000-000000000006
           format: uuid
           type: string
@@ -11385,6 +11480,16 @@ components:
           description: Timestamp when the entry record was last updated
           example: '2026-01-15T09:35:00Z'
           format: date-time
+          type: string
+        workorderId:
+          description: Work order this entry was posted for, when the posting path knows one (pick-task consumption, cross-dock receipt/issue, returns to stock); null otherwise
+          example: 01960003-0000-7000-8000-000000000008
+          format: uuid
+          type: string
+        workorderLineId:
+          description: Work order line this entry was posted for, when the posting path knows one; null when only the work order (not the line) is known
+          example: 01960003-0000-7000-8000-000000000009
+          format: uuid
           type: string
       required:
       - changeInQuantity
@@ -11500,9 +11605,17 @@ components:
           description: Storage location identifier
           format: uuid
           type: string
+        locationName:
+          description: Human-readable name of the location, from the site registry or the storage-location replica; null when it cannot be resolved
+          example: Main Warehouse
+          type: string
         onHandQuantity:
           description: Current on-hand quantity across all stock items at the location
           example: 12
+          type: number
+        reservedQuantity:
+          description: Outstanding allocations at the location — the quantity subtracted from on-hand to get availableToPromiseQuantity. Null for as-of (historical) requests, same as availableToPromiseQuantity
+          example: 4
           type: number
       required:
       - locationId
@@ -12357,6 +12470,11 @@ components:
           example: 01960003-0000-7000-8000-000000000096
           format: uuid
           type: string
+        locationId:
+          description: 'Site the task belongs to: the source receipt''s location, or the source location''s site when the source location is a bin; null when it cannot be resolved'
+          example: 01960003-0000-7000-8000-000000000099
+          format: uuid
+          type: string
         originalSuggestedLocationId:
           description: Originally suggested destination location before any fallback
           example: 01960003-0000-7000-8000-000000000095
@@ -12392,6 +12510,10 @@ components:
         taskId:
           description: Unique identifier of the putaway task
           example: 01960003-0000-7000-8000-000000000090
+          type: string
+        uom:
+          description: Product's base unit of measure; null when it cannot be resolved
+          example: EACH
           type: string
         updatedAt:
           description: Timestamp when the putaway task was last updated
@@ -12976,6 +13098,11 @@ components:
           description: SKU of the item to be replenished
           example: SKU-10042
           type: string
+        locationId:
+          description: 'Site the task belongs to: the destination location''s site, or the destination location itself when it is already a site; null when it cannot be resolved'
+          example: 01960003-0000-7000-8000-000000000009
+          format: uuid
+          type: string
         quantity:
           description: Quantity of the item to be moved by this replenishment task
           example: 12
@@ -13001,6 +13128,10 @@ components:
         triggerType:
           description: Mechanism that triggered the task, such as a manual request or automatic threshold breach
           example: AUTOMATIC
+          type: string
+        uom:
+          description: Product's base unit of measure; null when it cannot be resolved
+          example: EACH
           type: string
       required:
       - createdAt
@@ -13069,12 +13200,13 @@ components:
           description: Quantity of the item being returned
           example: 3
           format: int32
-          minimum: 0
+          minimum: 1
           type: integer
         reasonCode:
-          description: Reason code explaining the return
-          example: DAMAGED
+          description: 'Reason code explaining the return, from the closed set returned by listReturnReasonCodes: NOT_NEEDED, WRONG_PART or CUSTOMER_REFUSED (CAP-218 Story #177)'
+          example: NOT_NEEDED
           minLength: 1
+          pattern: ^(NOT_NEEDED|WRONG_PART|CUSTOMER_REFUSED)$
           type: string
         storageLocationId:
           description: Optional storage location within the location to receive the returned item
@@ -13147,12 +13279,12 @@ components:
           example: Brake pad set, front axle
           type: string
         itemId:
-          description: Identifier of the returnable item
+          description: Identifier of the returnable item; equal to workorderLineId, kept for compatibility with callers that read itemId rather than workorderLineId (they name the same work order line)
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
           type: string
         quantityReturnable:
-          description: Quantity of the item that can still be returned
+          description: 'Quantity of the item that can still be returned: quantity consumed against this line minus quantity already returned against it, floored at 0'
           example: 4
           format: int32
           type: integer
@@ -13160,9 +13292,18 @@ components:
           description: Stock keeping unit of the item
           example: SKU-10042
           type: string
+        uom:
+          description: Unit of measure the returnable quantity is expressed in (the product's base UoM); null when it cannot be resolved
+          example: EACH
+          type: string
         workorderId:
           description: Identifier of the workorder the item was issued against
           example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        workorderLineId:
+          description: Work order line this returnable quantity was issued against; identical to itemId
+          example: 01960003-0000-7000-8000-000000000001
           format: uuid
           type: string
       required:
@@ -13170,6 +13311,7 @@ components:
       - quantityReturnable
       - sku
       - workorderId
+      - workorderLineId
       type: object
     RevaluationResponse:
       description: A manual cost-revaluation document with its approval/application state
@@ -13623,14 +13765,13 @@ components:
       description: Request to resolve an inventory shortage by executing a chosen option
       properties:
         allocationId:
-          description: Identifier of the allocation to resolve
+          description: Identifier of the allocation to resolve; the UI's allocationLineId names the same allocation
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
           type: string
         idempotencyKey:
-          description: Retry-safe idempotency key; a replay with the same key returns the original result
+          description: Retry-safe idempotency key; a replay with the same key returns the original result. When omitted, defaults to "<allocationId>:<optionType>"
           example: shortage-resolve-01960003-0001
-          minLength: 1
           type: string
         locationId:
           description: Site the demand is short at (required for BACKORDER / TRANSFER_IN)
@@ -13652,14 +13793,13 @@ components:
           example: BACKORDER
           type: string
         shortQuantity:
-          description: Quantity that is short and to be resolved
+          description: Quantity that is short and to be resolved. When omitted, derived from the named allocation's reservation as requiredQuantity minus allocatedQuantity
           example: 3
           minimum: 0
           type: number
         sku:
-          description: SKU / stock-item identifier that is short
+          description: SKU / stock-item identifier that is short. When omitted, derived from the named allocation's reservation
           example: 01960003-0000-7000-8000-000000000002
-          minLength: 1
           type: string
         sourceLocationId:
           description: Source site to pull surplus from; required when optionType is TRANSFER_IN
@@ -13677,10 +13817,7 @@ components:
           type: string
       required:
       - allocationId
-      - idempotencyKey
       - optionType
-      - shortQuantity
-      - sku
       type: object
     SiteInventoryRollupResponse:
       description: Site inventory rollup with quantities subtotaled along the storage-location hierarchy
