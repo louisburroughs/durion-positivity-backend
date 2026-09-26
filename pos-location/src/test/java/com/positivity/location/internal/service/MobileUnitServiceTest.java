@@ -33,7 +33,6 @@ import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -529,27 +528,24 @@ class MobileUnitServiceTest {
     }
 
     @Test
-    @DisplayName("#76 - eligible mobile units include only active and deduplicate by unit")
+    @DisplayName("#76/#2265 - eligible mobile units include only active and deduplicate by unit")
     void shouldFindEligibleMobileUnitsWithActiveDeduplication() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
         UUID activeId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID inactiveId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID inactiveId = UUID.fromString("00000000-0000-0000-0000-000000000002");
         Instant now = Instant.now(TEST_CLOCK);
 
         MobileUnitEntity activeUnit = MobileUnitEntity.builder()
                 .id(activeId)
                 .name("Active")
                 .status("ACTIVE")
-                .baseLocation(Location.builder()
-                        .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                        .build())
+                .baseLocation(Location.builder().id(baseLocationId).build())
                 .build();
         MobileUnitEntity inactiveUnit = MobileUnitEntity.builder()
                 .id(inactiveId)
                 .name("Inactive")
                 .status("INACTIVE")
-                .baseLocation(Location.builder()
-                        .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                        .build())
+                .baseLocation(Location.builder().id(baseLocationId).build())
                 .build();
 
         MobileUnitCoverageRuleEntity firstForActive = MobileUnitCoverageRuleEntity.builder()
@@ -571,14 +567,71 @@ class MobileUnitServiceTest {
                 .ruleType("ZIP")
                 .build();
 
-        when(coverageRuleRepository.findEligibleCoverageRules(eq("94107"), eq("US"), any(LocalDate.class)))
+        when(coverageRuleRepository.findEligibleCoverageRules(eq("94107"), eq("US"), eq(now), eq(baseLocationId)))
                 .thenReturn(List.of(firstForActive, secondForSameActive, forInactive));
 
-        var eligible = service.findEligibleMobileUnits("94107", "US", now);
+        var eligible = service.findEligibleMobileUnits("94107", "US", now, baseLocationId, null);
 
         assertThat(eligible).hasSize(1);
         assertThat(eligible.get(0).getId()).isEqualTo(activeId);
         assertThat(eligible.get(0).getPriority()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("#2265 - eligible mobile units require baseLocationId")
+    void shouldRequireBaseLocationIdForEligibility() {
+        assertThatThrownBy(() -> service.findEligibleMobileUnits("94107", "US", Instant.now(TEST_CLOCK), null, null))
+                .isInstanceOfSatisfying(InvalidFieldException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(e.getField()).isEqualTo("baseLocationId");
+                });
+    }
+
+    @Test
+    @DisplayName("#2265 - eligible mobile units require every requested operationCode")
+    void shouldExcludeUnitsMissingAnyRequestedOperationCode() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+        UUID fullyEquippedId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        UUID partiallyEquippedId = UUID.fromString("00000000-0000-0000-0000-000000000004");
+        Instant now = Instant.now(TEST_CLOCK);
+
+        MobileUnitEntity fullyEquipped = MobileUnitEntity.builder()
+                .id(fullyEquippedId)
+                .name("Fully Equipped")
+                .status("ACTIVE")
+                .baseLocation(Location.builder().id(baseLocationId).build())
+                .build();
+        fullyEquipped.getServiceCapabilityCodes().add("CAP-A");
+        fullyEquipped.getServiceCapabilityCodes().add("CAP-B");
+        MobileUnitEntity partiallyEquipped = MobileUnitEntity.builder()
+                .id(partiallyEquippedId)
+                .name("Partially Equipped")
+                .status("ACTIVE")
+                .baseLocation(Location.builder().id(baseLocationId).build())
+                .build();
+        partiallyEquipped.getServiceCapabilityCodes().add("CAP-A");
+
+        MobileUnitCoverageRuleEntity ruleForFull = MobileUnitCoverageRuleEntity.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000005"))
+                .mobileUnit(fullyEquipped)
+                .priority(1)
+                .ruleType("SERVICE_AREA")
+                .build();
+        MobileUnitCoverageRuleEntity ruleForPartial = MobileUnitCoverageRuleEntity.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000006"))
+                .mobileUnit(partiallyEquipped)
+                .priority(2)
+                .ruleType("SERVICE_AREA")
+                .build();
+
+        when(coverageRuleRepository.findEligibleCoverageRules(eq("94107"), eq("US"), eq(now), eq(baseLocationId)))
+                .thenReturn(List.of(ruleForFull, ruleForPartial));
+
+        var eligible = service.findEligibleMobileUnits("94107", "US", now, baseLocationId, List.of("cap-a", "cap-b"));
+
+        assertThat(eligible).hasSize(1);
+        assertThat(eligible.get(0).getId()).isEqualTo(fullyEquippedId);
     }
 
     @Test

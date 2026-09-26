@@ -6,7 +6,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -59,11 +59,17 @@ public class CoverageRuleResponse {
             requiredMode = NOT_REQUIRED)
     private Integer priority;
 
-    @Schema(description = "Date from which the rule is effective", example = "2026-06-18", requiredMode = NOT_REQUIRED)
-    private LocalDate validFrom;
+    @Schema(
+            description = "UTC instant from which the rule is effective, inclusive",
+            example = "2026-06-18T00:00:00Z",
+            requiredMode = NOT_REQUIRED)
+    private Instant validFrom;
 
-    @Schema(description = "Date until which the rule is effective", example = "2026-12-31", requiredMode = NOT_REQUIRED)
-    private LocalDate validTo;
+    @Schema(
+            description = "UTC instant until which the rule is effective, exclusive",
+            example = "2026-12-31T00:00:00Z",
+            requiredMode = NOT_REQUIRED)
+    private Instant validTo;
 
     @Schema(
             description = "Maximum service distance in kilometres covered by the rule",

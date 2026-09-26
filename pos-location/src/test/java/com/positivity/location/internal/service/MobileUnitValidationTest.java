@@ -29,7 +29,6 @@ import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
@@ -234,6 +233,29 @@ class MobileUnitValidationTest {
                     HttpStatus.UNPROCESSABLE_ENTITY,
                     MobileUnitServiceImpl.SERVICE_AREA_NOT_FOUND,
                     "coverageRules[1].serviceAreaId");
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("#2265 - a serviceAreaId naming an inactive area is 422 SERVICE_AREA_INACTIVE on that rule")
+        void inactiveServiceArea() {
+            when(locationRepository.findById(BASE_ID))
+                    .thenReturn(Optional.of(Location.builder().id(BASE_ID).build()));
+            when(serviceAreaRepository.findAllById(any()))
+                    .thenReturn(List.of(ServiceAreaEntity.builder()
+                            .id(AREA_ID)
+                            .active(false)
+                            .build()));
+            MobileUnitRequest request =
+                    inactiveUnit().coverageRules(List.of(areaRule(AREA_ID))).build();
+
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> service.createMobileUnit(request));
+
+            assertField(
+                    thrown,
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    MobileUnitServiceImpl.SERVICE_AREA_INACTIVE,
+                    "coverageRules[0].serviceAreaId");
             assertNothingWritten();
         }
 
@@ -500,18 +522,56 @@ class MobileUnitValidationTest {
         }
 
         @Test
-        @DisplayName("validTo before validFrom is 400 on rules[i].validTo")
+        @DisplayName("#2265 - validTo before validFrom is 400 on rules[i].validTo")
         void windowEndsBeforeItStarts() {
             when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(unit("ACTIVE")));
             CoverageRuleRequest rule = areaRule(AREA_ID).toBuilder()
-                    .validFrom(LocalDate.of(2026, 10, 1))
-                    .validTo(LocalDate.of(2026, 9, 1))
+                    .validFrom(Instant.parse("2026-10-01T00:00:00Z"))
+                    .validTo(Instant.parse("2026-09-01T00:00:00Z"))
                     .build();
 
             Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(
                     () -> service.replaceCoverageRules(UNIT_ID, List.of(rule)));
 
             assertField(thrown, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "rules[0].validTo");
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("#2265 - validTo equal to validFrom is 400 (the window is exclusive at the end)")
+        void windowIsZeroLength() {
+            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(unit("ACTIVE")));
+            Instant sameInstant = Instant.parse("2026-10-01T00:00:00Z");
+            CoverageRuleRequest rule = areaRule(AREA_ID).toBuilder()
+                    .validFrom(sameInstant)
+                    .validTo(sameInstant)
+                    .build();
+
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(
+                    () -> service.replaceCoverageRules(UNIT_ID, List.of(rule)));
+
+            assertField(thrown, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "rules[0].validTo");
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("#2265 - a serviceAreaId naming an inactive area is 422 SERVICE_AREA_INACTIVE")
+        void inactiveServiceArea() {
+            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(unit("ACTIVE")));
+            when(serviceAreaRepository.findAllById(any()))
+                    .thenReturn(List.of(ServiceAreaEntity.builder()
+                            .id(AREA_ID)
+                            .active(false)
+                            .build()));
+
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(
+                    () -> service.replaceCoverageRules(UNIT_ID, List.of(areaRule(AREA_ID))));
+
+            assertField(
+                    thrown,
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    MobileUnitServiceImpl.SERVICE_AREA_INACTIVE,
+                    "rules[0].serviceAreaId");
             assertNothingWritten();
         }
 

@@ -468,8 +468,9 @@ def coverage_rules_by_unit(service_area_ids):
                 unresolved.add(unit_name)
                 continue
         # Left out entirely when the column is blank rather than sent as "": maxDistance is a
-        # BigDecimal and the two dates are LocalDate on CoverageRuleRequest, so an empty string is
-        # a 400 -- and a blank maxDistance is the null catch-all tier, which "" would not read as.
+        # BigDecimal and the two dates are ISO-8601 instants on CoverageRuleRequest (#2265), so an
+        # empty string is a 400 -- and a blank maxDistance is the null catch-all tier, which ""
+        # would not read as.
         if row.get("maxDistance"):
             rule["maxDistance"] = row["maxDistance"]
         for date_field in ("validFrom", "validTo"):

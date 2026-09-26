@@ -349,6 +349,7 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
         // status, coverage rules and postal codes only.
         String areaId = createServiceArea("Eligibility Shift Zone", "98160");
         String policyId = createTravelBufferPolicy("Eligibility Shift Buffer");
+        String baseLocationId = createBaseLocation();
         seedCatalogOperationCode("CAP-MOBILE-DIAGNOSTIC");
 
         String unit = mockMvc.perform(withGatewayAuth(post("/v1/mobile-units")
@@ -364,7 +365,7 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                                     { "serviceAreaId": "%s", "ruleType": "SERVICE_AREA", "priority": 1 }
                                   ]
                                 }
-                                """.formatted(createBaseLocation(), policyId, areaId))))
+                                """.formatted(baseLocationId, policyId, areaId))))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -377,8 +378,8 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                         .content("{ \"status\": \"ACTIVE\" }")))
                 .andExpect(status().isOk());
 
-        assertEligible("98160", unitName, true);
-        assertEligible("98161", unitName, false);
+        assertEligible("98160", baseLocationId, unitName, true);
+        assertEligible("98161", baseLocationId, unitName, false);
 
         // Move the area's coverage from 98160 to 98161.
         mockMvc.perform(withGatewayAuth(put("/v1/service-areas/{id}/postal-codes", areaId)
@@ -387,8 +388,102 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(status().isOk());
 
         // Same unit, same coverage rule: only the area's postal codes moved.
-        assertEligible("98160", unitName, false);
-        assertEligible("98161", unitName, true);
+        assertEligible("98160", baseLocationId, unitName, false);
+        assertEligible("98161", baseLocationId, unitName, true);
+    }
+
+    @Test
+    @DisplayName("#2265 - a unit at another base location is not eligible even though it covers the address")
+    void shouldExcludeUnitsAtAnotherBaseLocation() throws Exception {
+        String areaId = createServiceArea("Cross Location Zone", "98162");
+        String policyId = createTravelBufferPolicy("Cross Location Buffer");
+        seedCatalogOperationCode("CAP-MOBILE-CROSS");
+        String hubA = createBaseLocation();
+        String hubB = createBaseLocation();
+        createActiveUnit("MU-CROSS-A", hubA, policyId, areaId, "CAP-MOBILE-CROSS");
+        createActiveUnit("MU-CROSS-B", hubB, policyId, areaId, "CAP-MOBILE-CROSS");
+
+        mockMvc.perform(withGatewayAuth(get("/v1/mobile-units:eligible")
+                        .param("postalCode", "98162")
+                        .param("countryCode", "US")
+                        .param("at", "2026-09-14T12:00:00Z")
+                        .param("baseLocationId", hubA)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].name", hasItem("MU-CROSS-A")))
+                .andExpect(jsonPath("$[*].name", not(hasItem("MU-CROSS-B"))));
+
+        mockMvc.perform(withGatewayAuth(get("/v1/mobile-units:eligible")
+                        .param("postalCode", "98162")
+                        .param("countryCode", "US")
+                        .param("at", "2026-09-14T12:00:00Z")
+                        .param("baseLocationId", hubB)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].name", hasItem("MU-CROSS-B")))
+                .andExpect(jsonPath("$[*].name", not(hasItem("MU-CROSS-A"))));
+    }
+
+    @Test
+    @DisplayName("#2265 - missing baseLocationId is 400 VALIDATION_ERROR naming the field")
+    void shouldRequireBaseLocationIdForEligibility() throws Exception {
+        mockMvc.perform(withGatewayAuth(get("/v1/mobile-units:eligible")
+                        .param("postalCode", "98160")
+                        .param("countryCode", "US")
+                        .param("at", "2026-09-14T12:00:00Z")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("baseLocationId"));
+    }
+
+    @Test
+    @DisplayName("#2265 - a rule on an inactive service area is not eligible, though the rule is kept")
+    void shouldExcludeUnitsCoveredOnlyByAnInactiveArea() throws Exception {
+        String areaId = createServiceArea("Retiring Zone", "98163");
+        String policyId = createTravelBufferPolicy("Retiring Zone Buffer");
+        seedCatalogOperationCode("CAP-MOBILE-RETIRE");
+        String hub = createBaseLocation();
+        String unitId = createActiveUnit("MU-RETIRE-1", hub, policyId, areaId, "CAP-MOBILE-RETIRE");
+
+        assertEligible("98163", hub, "MU-RETIRE-1", true);
+
+        mockMvc.perform(withGatewayAuth(patch("/v1/service-areas/{id}", areaId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"active\": false }")))
+                .andExpect(status().isOk());
+
+        // The rule is kept (not deleted) but no longer matches; the unit's own status is untouched.
+        assertEligible("98163", hub, "MU-RETIRE-1", false);
+        mockMvc.perform(withGatewayAuth(get("/v1/mobile-units/{id}/coverage-rules", unitId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].serviceAreaId").value(areaId));
+    }
+
+    @Test
+    @DisplayName("#2265 - creating a rule on an inactive service area is 422 SERVICE_AREA_INACTIVE")
+    void shouldRefuseCreatingCoverageOnAnInactiveArea() throws Exception {
+        String areaId = createServiceArea("Inactive At Create Zone", "98164");
+        mockMvc.perform(withGatewayAuth(patch("/v1/service-areas/{id}", areaId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"active\": false }")))
+                .andExpect(status().isOk());
+        String policyId = createTravelBufferPolicy("Inactive At Create Buffer");
+        String hub = createBaseLocation();
+
+        mockMvc.perform(withGatewayAuth(post("/v1/mobile-units")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "MU-INACTIVE-AREA-CREATE",
+                                  "baseLocationId": "%s",
+                                  "status": "INACTIVE",
+                                  "travelBufferPolicyId": "%s",
+                                  "coverageRules": [
+                                    { "serviceAreaId": "%s", "ruleType": "SERVICE_AREA", "priority": 1 }
+                                  ]
+                                }
+                                """.formatted(hub, policyId, areaId))))
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.code").value("SERVICE_AREA_INACTIVE"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("coverageRules[0].serviceAreaId"));
     }
 
     @Test
@@ -422,6 +517,12 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
 
     private String createActiveUnit(String name, String baseLocationId, String policyId, String areaId)
             throws Exception {
+        return createActiveUnit(name, baseLocationId, policyId, areaId, "CAP-MOBILE-FILTER");
+    }
+
+    /** Same as the four-argument overload, but with the claimed operation code named explicitly. */
+    private String createActiveUnit(
+            String name, String baseLocationId, String policyId, String areaId, String operationCode) throws Exception {
         String body = mockMvc.perform(withGatewayAuth(post("/v1/mobile-units")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -430,12 +531,12 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                                   "baseLocationId": "%s",
                                   "status": "ACTIVE",
                                   "travelBufferPolicyId": "%s",
-                                  "serviceCapabilityCodes": [ "CAP-MOBILE-FILTER" ],
+                                  "serviceCapabilityCodes": [ "%s" ],
                                   "coverageRules": [
                                     { "serviceAreaId": "%s", "ruleType": "SERVICE_AREA", "priority": 1 }
                                   ]
                                 }
-                                """.formatted(name, baseLocationId, policyId, areaId))))
+                                """.formatted(name, baseLocationId, policyId, operationCode, areaId))))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -443,11 +544,13 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
         return new ObjectMapper().readTree(body).get("id").asText();
     }
 
-    private void assertEligible(String postalCode, String unitName, boolean expected) throws Exception {
+    private void assertEligible(String postalCode, String baseLocationId, String unitName, boolean expected)
+            throws Exception {
         mockMvc.perform(withGatewayAuth(get("/v1/mobile-units:eligible")
                         .param("postalCode", postalCode)
                         .param("countryCode", "US")
-                        .param("at", "2026-09-14T12:00:00Z")))
+                        .param("at", "2026-09-14T12:00:00Z")
+                        .param("baseLocationId", baseLocationId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].name", expected ? hasItem(unitName) : not(hasItem(unitName))));
     }
@@ -557,7 +660,8 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
         mockMvc.perform(withGatewayAuth(get("/v1/mobile-units:eligible")
                         .param("postalCode", "98101")
                         .param("countryCode", "US")
-                        .param("at", "2026-02-22T10:00:00Z")))
+                        .param("at", "2026-02-22T10:00:00Z")
+                        .param("baseLocationId", createBaseLocation())))
                 .andExpect(status().isOk());
     }
 }

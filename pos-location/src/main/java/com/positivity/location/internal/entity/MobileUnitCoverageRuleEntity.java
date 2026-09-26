@@ -13,7 +13,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -57,11 +56,21 @@ public class MobileUnitCoverageRuleEntity extends TenantScopedEntity {
     @Column(nullable = false)
     private Integer priority;
 
+    /**
+     * Start of the window, inclusive (DECISION-LOCATION-017, DECISION-LOCATION-027 rule 4): a UTC
+     * instant, not a calendar date. {@code null} means "always has started".
+     */
     @Column(name = "valid_from")
-    private LocalDate validFrom;
+    private Instant validFrom;
 
+    /**
+     * End of the window, exclusive: the rule matches up to but not including this instant. {@code
+     * null} means "never ends". Migration V9 converted the former {@code date} column so that the
+     * old inclusive end-of-day reads unchanged: the day after the old {@code valid_to} date, at UTC
+     * midnight.
+     */
     @Column(name = "valid_to")
-    private LocalDate validTo;
+    private Instant validTo;
 
     @Column(name = "max_distance", precision = 10, scale = 2)
     private BigDecimal maxDistance;

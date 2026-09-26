@@ -32,7 +32,7 @@ decisions:
   - operation: MobileUnitController.listMobileUnits
     shape: gate
     permission: location:mobile-unit:read
-    reason: The optional baseLocationId filter names the shop whose units are listed and is gated when named, as listBays is (#2253). Without it the list keeps the tenant-wide view that getMobileUnitById and findEligibleMobileUnits also give, since units serve addresses beyond their base shop; scoping mobile unit reads as a whole is a separate decision.
+    reason: The optional baseLocationId filter names the shop whose units are listed and is gated when named, as listBays is (#2253). Without it the list keeps the tenant-wide view that getMobileUnitById also gives; scoping mobile unit reads as a whole is a separate decision. findEligibleMobileUnits now requires baseLocationId (DECISION-LOCATION-027, #2265) but is not itself permission-gated by it here — a follow-up decision, tracked alongside the rest of mobile-unit read scoping.
   - operation: BayController.listBays
     shape: gate
     permission: location:bay:read
