@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
+
 import com.positivity.workorder.internal.entity.Workorder;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -59,6 +61,13 @@ public class WorkorderResponse {
     @Schema(description = "List of CRM contact identifiers")
     private List<String> crmContactIds;
 
+    @Schema(
+            description = "Invoice generated from this work order, once generateWorkorderInvoice has applied; "
+                    + "null before that",
+            example = "550e8400-e29b-41d4-a716-446655440005",
+            requiredMode = NOT_REQUIRED)
+    private UUID invoiceId;
+
     /**
      * Convert entity to response DTO
      */
@@ -81,6 +90,7 @@ public class WorkorderResponse {
                 .crmPartyId(entity.getCrmPartyId())
                 .crmVehicleId(entity.getCrmVehicleId())
                 .crmContactIds(entity.getCrmContactIds() != null ? List.copyOf(entity.getCrmContactIds()) : List.of())
+                .invoiceId(entity.getInvoiceId())
                 .build();
     }
 }

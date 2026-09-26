@@ -122,8 +122,9 @@ public class WorkorderController {
     }
 
     @Operation(operationId = "getWorkorder", summary = "Get Workorder by Id", description = """
-                    Returns the raw workorder record — status, customer, vehicle, estimate linkage, approval and \
-                    completion fields — for one workorder id.
+                    Returns the raw workorder record — status, customer, vehicle, estimate linkage, approval, \
+                    completion fields, and the linked invoiceId (null until generateWorkorderInvoice has applied) \
+                    — for one workorder id.
                     Use this tool when the plain record is enough; use getWorkorderDetail instead for the \
                     role-aware view with capability flags, labor totals, and conditional financials.
                     Preconditions: the workorder must exist.
