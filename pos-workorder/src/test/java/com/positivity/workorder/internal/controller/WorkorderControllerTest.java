@@ -109,6 +109,23 @@ class WorkorderControllerTest {
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody().getId()).isEqualTo(WORKORDER_ID);
+            assertThat(response.getBody().getInvoiceId()).isNull();
+        }
+
+        @Test
+        void servesTheLinkedInvoiceIdOnceGenerateWorkorderInvoiceHasApplied() {
+            WorkorderResponse invoicedWorkorder = WorkorderResponse.builder()
+                    .id(WORKORDER_ID)
+                    .estimateId(ESTIMATE_ID)
+                    .customerId(CUSTOMER_ID)
+                    .status(WorkorderStatus.COMPLETED.name())
+                    .invoiceId(INVOICE_ID)
+                    .build();
+            when(workorderService.getWorkorderById(WORKORDER_ID)).thenReturn(Optional.of(invoicedWorkorder));
+
+            ResponseEntity<WorkorderResponse> response = controller.getWorkorderById(WORKORDER_ID);
+
+            assertThat(response.getBody().getInvoiceId()).isEqualTo(INVOICE_ID);
         }
 
         @Test
