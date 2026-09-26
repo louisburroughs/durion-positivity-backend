@@ -1883,13 +1883,19 @@ public class BatchConfiguration {
                     item.getName(),
                     item.getBayType(),
                     parseIntegerOrNull(item.getMaxConcurrentVehicles()),
+                    parseIntegerOrNull(item.getMaxDutyClass()),
                     blankToNull(item.getStatus())));
         }
         return payloads;
     }
 
     private record BayWriterPayload(
-            UUID locationId, String name, String bayType, Integer maxConcurrentVehicles, String status) {}
+            UUID locationId,
+            String name,
+            String bayType,
+            Integer maxConcurrentVehicles,
+            Integer maxDutyClass,
+            String status) {}
 
     private List<MobileUnitWriterPayload> mapMobileUnitPayloads(List<MobileUnitLoaderRecord> items) {
         List<MobileUnitWriterPayload> payloads = new ArrayList<>(items.size());

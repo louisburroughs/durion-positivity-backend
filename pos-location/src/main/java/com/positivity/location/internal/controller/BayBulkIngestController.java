@@ -56,7 +56,7 @@ public class BayBulkIngestController extends AbstractBulkIngestController<BayBul
              "locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10",
              "operatorId":"seed-operator",
              "records":[
-               {"name":"Bay 1","bayType":"GENERAL_SERVICE","maxConcurrentVehicles":1},
+               {"name":"Bay 1","bayType":"GENERAL_SERVICE","maxConcurrentVehicles":1,"maxDutyClass":3},
                {"name":"Alignment Bay","bayType":"ALIGNMENT","maxConcurrentVehicles":1}
              ]}
             """;
@@ -73,7 +73,9 @@ public class BayBulkIngestController extends AbstractBulkIngestController<BayBul
                     for a single bay.
                     Preconditions: each row's location must exist, and bayType must name a known bay type.
                     Required inputs: jobId (UUID), locationId (UUID) and records, each with a name, a bayType and \
-                    maxConcurrentVehicles; a record's own locationId overrides the batch one.
+                    maxConcurrentVehicles; a record's own locationId overrides the batch one. A record may also \
+                    carry an optional maxDutyClass (1-8, the heaviest GVWR class the bay accepts; omit for \
+                    unconstrained, CAP-325 D13).
                     Emits a LOCATION_BAY_BULK_INGEST event and a bay-created event per row.
                     Re-running the same file is safe: a bay name already present at its location is reported as \
                     already existing rather than as a failure.
@@ -157,6 +159,7 @@ public class BayBulkIngestController extends AbstractBulkIngestController<BayBul
         BayCapacityRequest capacity = new BayCapacityRequest();
         capacity.setMaxConcurrentVehicles(record.getMaxConcurrentVehicles());
         bayRequest.setCapacity(capacity);
+        bayRequest.setMaxDutyClass(record.getMaxDutyClass());
         if (record.getStatus() != null && !record.getStatus().isBlank()) {
             bayRequest.setStatus(record.getStatus());
         }

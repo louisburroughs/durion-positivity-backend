@@ -10,6 +10,7 @@ public class BayLoaderRecord {
     private String name;
     private String bayType;
     private String maxConcurrentVehicles;
+    private String maxDutyClass;
     private String status;
 
     /** Resolved from {@code locationCode}, or supplied directly. */
