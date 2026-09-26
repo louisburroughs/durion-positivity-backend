@@ -3,6 +3,7 @@ package com.positivity.location.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
@@ -41,7 +42,11 @@ public class MobileUnitResponse {
             requiredMode = NOT_REQUIRED)
     private UUID baseLocationId;
 
-    @Schema(description = "Operational status of the mobile unit", example = "ACTIVE", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Operational status of the mobile unit",
+            example = "ACTIVE",
+            allowableValues = {"ACTIVE", "INACTIVE"},
+            requiredMode = NOT_REQUIRED)
     private String status;
 
     @Schema(
@@ -74,4 +79,11 @@ public class MobileUnitResponse {
             example = "2026-06-18T08:00:00Z",
             requiredMode = NOT_REQUIRED)
     private Instant updatedAt;
+
+    @Schema(
+            description = "The unit's coverage rules ordered by ascending priority. Present only on listMobileUnits"
+                    + " with include=coverageRules; absent otherwise (read them with listCoverageRules).",
+            requiredMode = NOT_REQUIRED)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private List<CoverageRuleResponse> coverageRules;
 }

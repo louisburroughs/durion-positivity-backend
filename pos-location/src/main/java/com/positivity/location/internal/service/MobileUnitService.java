@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 
 public interface MobileUnitService {
@@ -23,6 +25,14 @@ public interface MobileUnitService {
     void validateDistanceTiers(List<?> tiers);
 
     Page<MobileUnitResponse> list(int page, int size);
+
+    /**
+     * A page of mobile units, optionally narrowed to one base location and/or status, each
+     * optionally carrying its coverage rules (#2253).
+     */
+    @NonNull
+    Page<MobileUnitResponse> list(
+            int page, int size, @Nullable UUID baseLocationId, @Nullable String status, boolean includeCoverageRules);
 
     Optional<MobileUnitResponse> getById(UUID id);
 

@@ -4,6 +4,7 @@ import com.positivity.location.internal.dto.TravelBufferPolicyRequest;
 import com.positivity.location.internal.dto.TravelBufferPolicyResponse;
 import com.positivity.location.internal.entity.TravelBufferPolicyEntity;
 import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.InvalidFieldException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
 import java.math.BigDecimal;
@@ -30,9 +31,12 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
 
     private static final String BUFFER_TYPE = "bufferType";
 
+    private static final String BUFFER_TYPE_INVALID =
+            "bufferType must be FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER";
+
     private static final String TRAVEL_BUFFER_POLICY_NAME_TAKEN = "TRAVEL_BUFFER_POLICY_NAME_TAKEN";
     private static final String TRAVEL_BUFFER_POLICY_CONFLICT = "TRAVEL_BUFFER_POLICY_CONFLICT";
-    private static final Set<String> SUPPORTED_BUFFER_TYPES =
+    static final Set<String> SUPPORTED_BUFFER_TYPES =
             Set.of("FLAT_MINUTES", "PERCENTAGE_OF_TRAVEL", "DISTANCE_MULTIPLIER");
 
     protected final TravelBufferPolicyRepository repository;
@@ -60,10 +64,13 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
      */
     @Transactional
     public TravelBufferPolicyResponse create(TravelBufferPolicyRequest request) {
+        if (request.getName() == null || request.getName().isBlank()) {
+            throw InvalidFieldException.invalid("name", "name is required and must not be blank");
+        }
         validateRequest(request.getBufferType(), request.getBufferValue(), true);
 
         TravelBufferPolicyEntity entity = TravelBufferPolicyEntity.builder()
-                .name(request.getName())
+                .name(request.getName().trim())
                 .bufferType(request.getBufferType())
                 .bufferValue(request.getBufferValue())
                 .notes(request.getNotes())
@@ -97,13 +104,26 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
                 .orElseThrow(() -> new ResourceNotFoundException("Travel buffer policy not found"));
 
         if (patch.containsKey(BUFFER_TYPE)) {
-            entity.setBufferType(String.valueOf(patch.get(BUFFER_TYPE)));
+            Object bufferType = patch.get(BUFFER_TYPE);
+            if (!(bufferType instanceof String text) || !SUPPORTED_BUFFER_TYPES.contains(text)) {
+                throw InvalidFieldException.invalid(BUFFER_TYPE, BUFFER_TYPE_INVALID);
+            }
+            entity.setBufferType(text);
         }
         if (patch.containsKey(BUFFER_VALUE)) {
-            entity.setBufferValue(parseBigDecimal(patch.get(BUFFER_VALUE)));
+            Object bufferValue = patch.get(BUFFER_VALUE);
+            BigDecimal parsed = parseBigDecimal(bufferValue);
+            if (bufferValue != null && parsed == null) {
+                throw InvalidFieldException.invalid(BUFFER_VALUE, "bufferValue must be a number");
+            }
+            entity.setBufferValue(parsed);
         }
         if (patch.containsKey(NOTES)) {
-            entity.setNotes((String) patch.get(NOTES));
+            Object notes = patch.get(NOTES);
+            if (notes != null && !(notes instanceof String)) {
+                throw InvalidFieldException.invalid(NOTES, "notes must be text or null");
+            }
+            entity.setNotes((String) notes);
         }
 
         validateRequest(entity.getBufferType(), entity.getBufferValue(), false);
@@ -132,15 +152,16 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         return repository.findAll().stream().map(this::toResponse).toList();
     }
 
+    /** 400 {@code VALIDATION_ERROR} naming the field, rather than an unmapped 500 (#2252). */
     private void validateRequest(String bufferType, BigDecimal bufferValue, boolean requiredType) {
         if (requiredType && bufferType == null) {
-            throw new IllegalArgumentException("bufferType is invalid");
+            throw InvalidFieldException.invalid(BUFFER_TYPE, BUFFER_TYPE_INVALID);
         }
         if (bufferType != null && !SUPPORTED_BUFFER_TYPES.contains(bufferType)) {
-            throw new IllegalArgumentException("bufferType is invalid");
+            throw InvalidFieldException.invalid(BUFFER_TYPE, BUFFER_TYPE_INVALID);
         }
         if (bufferValue != null && bufferValue.signum() < 0) {
-            throw new IllegalArgumentException("bufferValue must be non-negative");
+            throw InvalidFieldException.invalid(BUFFER_VALUE, "bufferValue must be non-negative");
         }
     }
 
@@ -172,11 +193,8 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         if (value instanceof BigDecimal decimal) {
             return decimal;
         }
-        if (value instanceof Number number) {
-            return BigDecimal.valueOf(number.doubleValue());
-        }
         try {
-            return new BigDecimal(String.valueOf(value));
+            return new BigDecimal(String.valueOf(value).trim());
         } catch (NumberFormatException exception) {
             return null;
         }

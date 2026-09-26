@@ -2,6 +2,7 @@ package com.positivity.location.internal.repository;
 
 import com.positivity.location.internal.entity.MobileUnitCoverageRuleEntity;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,6 +16,9 @@ import org.springframework.data.jpa.repository.Query;
 public interface MobileUnitCoverageRuleRepository extends JpaRepository<MobileUnitCoverageRuleEntity, UUID> {
 
     List<MobileUnitCoverageRuleEntity> findByMobileUnit_IdOrderByPriorityAsc(UUID mobileUnitId);
+
+    /** Every rule of a page of units in one query, for the list's {@code include=coverageRules} (#2253). */
+    List<MobileUnitCoverageRuleEntity> findByMobileUnit_IdInOrderByPriorityAsc(Collection<UUID> mobileUnitIds);
 
     void deleteByMobileUnit_Id(UUID mobileUnitId);
 

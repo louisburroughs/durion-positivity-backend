@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -32,16 +33,23 @@ public class MobileUnitRequest {
     private String name;
 
     @Schema(
-            description = "Identifier of the base location the mobile unit operates from",
+            description = "Identifier of the base location the mobile unit operates from; must name an existing"
+                    + " location (422 LOCATION_NOT_FOUND otherwise)",
             example = "01960003-0000-7000-8000-000000000001",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = REQUIRED)
+    @NotNull
     private UUID baseLocationId;
 
-    @Schema(description = "Operational status of the mobile unit", example = "ACTIVE", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Operational status of the mobile unit, matched case-insensitively; INACTIVE when omitted",
+            example = "ACTIVE",
+            allowableValues = {"ACTIVE", "INACTIVE"},
+            requiredMode = NOT_REQUIRED)
     private String status;
 
     @Schema(
-            description = "Identifier of the travel buffer policy applied to the mobile unit",
+            description = "Identifier of the travel buffer policy applied to the mobile unit; must name an existing"
+                    + " policy (422 TRAVEL_BUFFER_POLICY_NOT_FOUND otherwise). Required for an ACTIVE unit.",
             example = "01960003-0000-7000-8000-000000000002",
             requiredMode = NOT_REQUIRED)
     private UUID travelBufferPolicyId;
@@ -60,7 +68,10 @@ public class MobileUnitRequest {
             requiredMode = NOT_REQUIRED)
     private List<String> serviceCapabilityCodes;
 
-    @Schema(description = "Coverage rules defining where the mobile unit can operate", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Coverage rules defining where the mobile unit can operate. Required, non-empty, for an"
+                    + " ACTIVE unit.",
+            requiredMode = NOT_REQUIRED)
     @Valid
     private List<CoverageRuleRequest> coverageRules;
 }

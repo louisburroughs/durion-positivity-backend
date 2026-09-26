@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -53,12 +54,19 @@ public class TravelBufferPolicyController {
                     DISTANCE_MULTIPLIER; bufferValue is optional, must be non-negative, and is interpreted \
                     according to the bufferType.
                     Emits a LOCATION_TRAVEL_BUFFER_POLICY_CREATE event.
-                    Returns 201 with the created policy and 409 when the name is already taken.
+                    Returns 201 with the created policy, 400 VALIDATION_ERROR with fieldErrors for a blank name, \
+                    an unknown bufferType or a negative bufferValue, and 409 TRAVEL_BUFFER_POLICY_NAME_TAKEN when \
+                    the name is already taken.
                     """)
     @ApiResponse(responseCode = "201", description = "Travel buffer policy created")
     @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: blank name, a bufferType other than FLAT_MINUTES, PERCENTAGE_OF_TRAVEL"
+                    + " or DISTANCE_MULTIPLIER, or a negative bufferValue. fieldErrors names the field.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "409",
-            description = "Travel buffer policy name already taken",
+            description = "TRAVEL_BUFFER_POLICY_NAME_TAKEN: the name is already taken",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_TRAVEL_BUFFER_POLICY_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.TRAVEL_BUFFER_POLICY_MANAGE + "')")
@@ -80,6 +88,7 @@ public class TravelBufferPolicyController {
                                                                      "bufferValue":30,
                                                                      "notes":"Applies during peak hours only"}
                                                                     """)))
+                    @Valid
                     @RequestBody
                     TravelBufferPolicyRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(travelBufferPolicyService.create(request));
@@ -118,12 +127,15 @@ public class TravelBufferPolicyController {
                     Required inputs: id (UUID) as a path parameter and a JSON object of the fields to change; \
                     keys other than bufferType, bufferValue and notes are silently ignored.
                     Emits a LOCATION_TRAVEL_BUFFER_POLICY_PATCH event.
-                    Returns 400 when the id is not a valid UUID and 404 when no policy exists for it.
+                    Returns 200 with the patched policy, 400 VALIDATION_ERROR when the id is not a valid UUID or \
+                    (with fieldErrors) when bufferType is not a supported value, bufferValue is not a \
+                    non-negative number or notes is not text, and 404 when no policy exists for the id.
                     """)
     @ApiResponse(responseCode = "200", description = "Travel buffer policy patched")
     @ApiResponse(
             responseCode = "400",
-            description = "Invalid travel buffer policy id",
+            description = "VALIDATION_ERROR: the id is not a UUID, or bufferType, bufferValue or notes is invalid"
+                    + " (fieldErrors names the field)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",

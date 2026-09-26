@@ -330,15 +330,15 @@ ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
 
 -- Travel buffer policies
 INSERT INTO travel_buffer_policies (id, name, buffer_type, buffer_value, created_at, updated_at)
-VALUES ('407617dd-f4f6-fec6-50e4-4221bdf102c8'::uuid, 'Default 15m', 'MINUTES', 15, NOW(), NOW())
+VALUES ('407617dd-f4f6-fec6-50e4-4221bdf102c8'::uuid, 'Default 15m', 'FLAT_MINUTES', 15, NOW(), NOW())
 ON CONFLICT (tenant_id, name) DO NOTHING;
 
 INSERT INTO travel_buffer_policies (id, name, buffer_type, buffer_value, created_at, updated_at)
-VALUES ('01960002-0000-7000-8000-000000000001'::uuid, 'Standard Suburban', 'MINUTES', 20, NOW(), NOW())
+VALUES ('01960002-0000-7000-8000-000000000001'::uuid, 'Standard Suburban', 'FLAT_MINUTES', 20, NOW(), NOW())
 ON CONFLICT (tenant_id, name) DO NOTHING;
 
 INSERT INTO travel_buffer_policies (id, name, buffer_type, buffer_value, created_at, updated_at)
-VALUES ('01960002-0000-7000-8000-000000000002'::uuid, 'Extended Rural', 'MINUTES', 35, NOW(), NOW())
+VALUES ('01960002-0000-7000-8000-000000000002'::uuid, 'Extended Rural', 'FLAT_MINUTES', 35, NOW(), NOW())
 ON CONFLICT (tenant_id, name) DO NOTHING;
 
 -- Location types

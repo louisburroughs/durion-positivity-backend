@@ -23,18 +23,26 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@Builder(toBuilder = true)
 @Schema(description = "Request payload defining a coverage rule for a mobile unit")
 public class CoverageRuleRequest {
 
     @Schema(
-            description = "Identifier of the service area this rule applies to",
+            description = "Identifier of the service area this rule applies to; must name an existing service area"
+                    + " (422 SERVICE_AREA_NOT_FOUND otherwise). Required for every rule type: a DISTANCE_TIER rule"
+                    + " is a tier within its service area, and a rule without one never matches an address.",
             example = "01960003-0000-7000-8000-000000000001",
             requiredMode = REQUIRED)
     @NotNull
     private UUID serviceAreaId;
 
-    @Schema(description = "Type of coverage rule", example = "INCLUDE", requiredMode = REQUIRED)
+    @Schema(
+            description = "Type of coverage rule, matched case-insensitively. SERVICE_AREA covers the whole service"
+                    + " area; DISTANCE_TIER covers it up to maxDistance, and a unit's DISTANCE_TIER rules must be"
+                    + " strictly ascending by maxDistance and end with one rule whose maxDistance is null.",
+            example = "SERVICE_AREA",
+            allowableValues = {"SERVICE_AREA", "DISTANCE_TIER"},
+            requiredMode = REQUIRED)
     @NotBlank
     private String ruleType;
 
@@ -48,7 +56,10 @@ public class CoverageRuleRequest {
     @Schema(description = "Date from which the rule is effective", example = "2026-06-18", requiredMode = NOT_REQUIRED)
     private LocalDate validFrom;
 
-    @Schema(description = "Date until which the rule is effective", example = "2026-12-31", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Date until which the rule is effective; must not be before validFrom",
+            example = "2026-12-31",
+            requiredMode = NOT_REQUIRED)
     private LocalDate validTo;
 
     @Schema(

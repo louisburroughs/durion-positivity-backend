@@ -46,7 +46,11 @@ public class CoverageRuleResponse {
     @NotNull
     private UUID serviceAreaId;
 
-    @Schema(description = "Type of coverage rule", example = "INCLUDE", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Type of coverage rule",
+            example = "SERVICE_AREA",
+            allowableValues = {"SERVICE_AREA", "DISTANCE_TIER"},
+            requiredMode = NOT_REQUIRED)
     private String ruleType;
 
     @Schema(

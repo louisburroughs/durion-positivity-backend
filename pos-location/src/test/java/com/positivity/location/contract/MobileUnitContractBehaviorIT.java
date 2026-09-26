@@ -14,8 +14,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.location.BaseContractIntegrationTest;
 import com.positivity.location.config.TestSecurityConfig;
 import com.positivity.location.internal.entity.ExtCatalogServiceReplica;
+import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
+import com.positivity.location.internal.repository.LocationRepository;
+import com.positivity.location.internal.repository.MobileUnitCoverageRuleRepository;
+import com.positivity.location.internal.repository.MobileUnitRepository;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -48,9 +54,44 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private ExtCatalogServiceReplicaRepository extCatalogServiceReplicaRepository;
 
+    @Autowired
+    private LocationRepository locationRepository;
+
+    /** A mobile unit's base location must exist (#2252), so each test that creates a unit makes one. */
+    private String createBaseLocation() {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UUID id = locationRepository
+                .save(Location.builder()
+                        .name("Mobile Hub " + suffix)
+                        .code("MU-HUB-" + suffix)
+                        .status("ACTIVE")
+                        .active(true)
+                        .build())
+                .getId();
+        createdLocations.add(id);
+        return id.toString();
+    }
+
+    @Autowired
+    private MobileUnitRepository mobileUnitRepository;
+
+    @Autowired
+    private MobileUnitCoverageRuleRepository coverageRuleRepository;
+
+    private final List<UUID> createdLocations = new ArrayList<>();
+
+    /**
+     * The H2 context is shared with the other contract ITs, and a unit's base location is a real
+     * foreign key now (#2252): units left behind would stop BayContractBehaviorIT from clearing
+     * its locations. So the units, their rules and the locations this class made all go.
+     */
     @AfterEach
     void clearCatalogReplica() {
         extCatalogServiceReplicaRepository.deleteAll();
+        coverageRuleRepository.deleteAll();
+        mobileUnitRepository.deleteAll();
+        locationRepository.deleteAllById(createdLocations);
+        createdLocations.clear();
     }
 
     @Test
@@ -59,11 +100,11 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
         String payload = """
                 {
                   "name": "MU-101",
-                  "baseLocationId": "018f1f5a-a111-7333-8222-111111111111",
+                  "baseLocationId": "%s",
                   "status": "INACTIVE",
                   "notes": "new unit"
                 }
-                """;
+                """.formatted(createBaseLocation());
 
         mockMvc.perform(withGatewayAuth(post("/v1/mobile-units")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -85,8 +126,8 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("#76 - PATCH /v1/mobile-units/{id} returns 200")
-    void shouldPatchMobileUnit() throws Exception {
+    @DisplayName("#2252 - PATCH /v1/mobile-units/{id} returns 404 when missing, as GET and DELETE do")
+    void shouldReturnNotFoundWhenPatchingMissingMobileUnit() throws Exception {
         String patchPayload = """
                 {
                   "status": "ACTIVE",
@@ -97,7 +138,8 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
         mockMvc.perform(withGatewayAuth(patch("/v1/mobile-units/{id}", "018f1f5a-a222-7333-8222-222222222222")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(patchPayload)))
-                .andExpect(status().isOk());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
 
     @Test
@@ -314,6 +356,7 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                         .content("""
                                 {
                                   "name": "MU-ELIGIBILITY-1991",
+                                  "baseLocationId": "%s",
                                   "status": "INACTIVE",
                                   "travelBufferPolicyId": "%s",
                                   "serviceCapabilityCodes": [ "CAP-MOBILE-DIAGNOSTIC" ],
@@ -321,7 +364,7 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                                     { "serviceAreaId": "%s", "ruleType": "SERVICE_AREA", "priority": 1 }
                                   ]
                                 }
-                                """.formatted(policyId, areaId))))
+                                """.formatted(createBaseLocation(), policyId, areaId))))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -346,6 +389,58 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
         // Same unit, same coverage rule: only the area's postal codes moved.
         assertEligible("98160", unitName, false);
         assertEligible("98161", unitName, true);
+    }
+
+    @Test
+    @DisplayName("#2253 / #2248 - list by base location embeds rules; an ACTIVE unit cannot lose its last rule")
+    void shouldListOneLocationsUnitsWithRulesAndGuardTheLastRule() throws Exception {
+        String areaId = createServiceArea("Filter Zone 2253", "98170");
+        String policyId = createTravelBufferPolicy("Filter Buffer 2253");
+        seedCatalogOperationCode("CAP-MOBILE-FILTER");
+        String hubA = createBaseLocation();
+        String hubB = createBaseLocation();
+        String unitA = createActiveUnit("MU-FILTER-A", hubA, policyId, areaId);
+        createActiveUnit("MU-FILTER-B", hubB, policyId, areaId);
+
+        mockMvc.perform(withGatewayAuth(
+                        get("/v1/mobile-units").param("baseLocationId", hubA).param("include", "coverageRules")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[*].id", containsInAnyOrder(unitA)))
+                .andExpect(
+                        jsonPath("$.content[0].coverageRules[0].serviceAreaId").value(areaId));
+
+        mockMvc.perform(withGatewayAuth(put("/v1/mobile-units/{id}/coverage-rules", unitA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"rules\": [] }")))
+                .andExpect(status().is(422));
+
+        // The refused replace changed nothing: the rule is still there.
+        mockMvc.perform(withGatewayAuth(get("/v1/mobile-units/{id}/coverage-rules", unitA)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].serviceAreaId").value(areaId));
+    }
+
+    private String createActiveUnit(String name, String baseLocationId, String policyId, String areaId)
+            throws Exception {
+        String body = mockMvc.perform(withGatewayAuth(post("/v1/mobile-units")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "%s",
+                                  "baseLocationId": "%s",
+                                  "status": "ACTIVE",
+                                  "travelBufferPolicyId": "%s",
+                                  "serviceCapabilityCodes": [ "CAP-MOBILE-FILTER" ],
+                                  "coverageRules": [
+                                    { "serviceAreaId": "%s", "ruleType": "SERVICE_AREA", "priority": 1 }
+                                  ]
+                                }
+                                """.formatted(name, baseLocationId, policyId, areaId))))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return new ObjectMapper().readTree(body).get("id").asText();
     }
 
     private void assertEligible(String postalCode, String unitName, boolean expected) throws Exception {
