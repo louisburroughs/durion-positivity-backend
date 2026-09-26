@@ -63,6 +63,13 @@ public class ExtVehicleReplica extends TenantScopedEntity {
     @Column(name = "odometer_unit", length = 16)
     private String odometerUnit;
 
+    /**
+     * Owner's FHWA GVWR class 1-8 (#2263). Null means undetermined or not yet published; workorder
+     * placement skips the duty-class check (spec D11) rather than treating null as a class.
+     */
+    @Column(name = "gvwr_class")
+    private Integer gvwrClass;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 

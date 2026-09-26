@@ -38,6 +38,14 @@ import tools.jackson.databind.ObjectMapper;
  * in a transaction of their own ({@code REQUIRES_NEW}) rather than the listener's, so there is no
  * at-least-once window. A permanent failure rolls back only that work, and the failed record's mark
  * is written in a separate transaction; transient failures still propagate for container retry.
+ *
+ * <p>{@code gvwrClass} (#2263, CAP-327) is replicated for workorder placement's duty-class check
+ * (DECISION-SHOPMGMT-021 rule 3, spec D11): null means undetermined and placement skips the check.
+ * pos-workorder has no reconciliation manifest listener for the vehicle domain (unlike
+ * pos-customer's and pos-shop-manager's {@code VehicleManifestListener}), so an existing row picks
+ * up its class only from the next live event or an owner-triggered replay of {@code
+ * vehicle.events.v1} — this listener applies either the same way, via the ordinary stale-version
+ * guard above.
  */
 @Slf4j
 @Component
@@ -124,7 +132,8 @@ public class VehicleEventsListener {
     }
 
     private void applyVehicleUpdated(@NonNull JsonNode envelope) {
-        VehicleUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), VehicleUpdatedV1.class);
+        JsonNode payloadNode = envelope.path("payload");
+        VehicleUpdatedV1 payload = objectMapper.treeToValue(payloadNode, VehicleUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtVehicleReplica existing =
                 vehicleReplicaRepository.findById(payload.vehicleId()).orElse(null);
@@ -138,6 +147,13 @@ public class VehicleEventsListener {
                 .unitNumber(payload.unitNumber())
                 .odometerValue(payload.odometerValue())
                 .odometerUnit(payload.odometerUnit())
+                // gvwrClass is additive within schema v1 (#2263): a fact from a pre-change producer
+                // has no such field, which must not clear a class already replicated during a
+                // rolling deploy or a replay of an older stored event.
+                .gvwrClass(
+                        payloadNode.has("gvwrClass")
+                                ? payload.gvwrClass()
+                                : existing == null ? null : existing.getGvwrClass())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

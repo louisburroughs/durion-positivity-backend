@@ -85,6 +85,68 @@ class VehicleEventsListenerTest {
     }
 
     @Test
+    @DisplayName("gvwrClass is replicated when the fact carries one (#2263)")
+    void gvwrClassIsReplicatedWhenPresent() {
+        when(processedEventRepository.existsById("e-3")).thenReturn(false);
+        when(vehicleRepository.findById(VEHICLE_ID)).thenReturn(Optional.empty());
+
+        listener.onVehicleEvent("""
+                {"eventId":"e-3","eventType":"vehicle.vehicle.updated","schemaVersion":1,
+                 "aggregateId":"019200aa-0000-7000-8000-0000000000e1","aggregateVersion":5,
+                 "payload":{"vehicleId":"019200aa-0000-7000-8000-0000000000e1",
+                            "accountId":"019200aa-0000-7000-8000-0000000000f1",
+                            "vin":"1HGCM82633A004352","vinNormalized":"1HGCM82633A004352","active":true,
+                            "gvwrClass":6}}
+                """);
+
+        ArgumentCaptor<ExtVehicleReplica> saved = ArgumentCaptor.forClass(ExtVehicleReplica.class);
+        verify(vehicleRepository).save(saved.capture());
+        assertThat(saved.getValue().getGvwrClass()).isEqualTo(6);
+    }
+
+    @Test
+    @DisplayName("gvwrClass is null when the fact carries none and no class was replicated before (#2263)")
+    void gvwrClassIsNullWhenAbsentAndNoPriorRow() {
+        when(processedEventRepository.existsById("e-4")).thenReturn(false);
+        when(vehicleRepository.findById(VEHICLE_ID)).thenReturn(Optional.empty());
+
+        listener.onVehicleEvent("""
+                {"eventId":"e-4","eventType":"vehicle.vehicle.updated","schemaVersion":1,
+                 "aggregateId":"019200aa-0000-7000-8000-0000000000e1","aggregateVersion":5,
+                 "payload":{"vehicleId":"019200aa-0000-7000-8000-0000000000e1",
+                            "accountId":"019200aa-0000-7000-8000-0000000000f1",
+                            "vin":"1HGCM82633A004352","vinNormalized":"1HGCM82633A004352","active":true}}
+                """);
+
+        ArgumentCaptor<ExtVehicleReplica> saved = ArgumentCaptor.forClass(ExtVehicleReplica.class);
+        verify(vehicleRepository).save(saved.capture());
+        assertThat(saved.getValue().getGvwrClass()).isNull();
+    }
+
+    @Test
+    @DisplayName("a fact without the gvwrClass field keeps the class already replicated (#2263)")
+    void gvwrClassAbsentKeepsExistingClass() {
+        when(processedEventRepository.existsById("e-5")).thenReturn(false);
+        ExtVehicleReplica existing = new ExtVehicleReplica();
+        existing.setVehicleId(VEHICLE_ID);
+        existing.setAggregateVersion(1L);
+        existing.setGvwrClass(4);
+        when(vehicleRepository.findById(VEHICLE_ID)).thenReturn(Optional.of(existing));
+
+        listener.onVehicleEvent("""
+                {"eventId":"e-5","eventType":"vehicle.vehicle.updated","schemaVersion":1,
+                 "aggregateId":"019200aa-0000-7000-8000-0000000000e1","aggregateVersion":2,
+                 "payload":{"vehicleId":"019200aa-0000-7000-8000-0000000000e1",
+                            "accountId":"019200aa-0000-7000-8000-0000000000f1",
+                            "vin":"1HGCM82633A004352","vinNormalized":"1HGCM82633A004352","active":true}}
+                """);
+
+        ArgumentCaptor<ExtVehicleReplica> saved = ArgumentCaptor.forClass(ExtVehicleReplica.class);
+        verify(vehicleRepository).save(saved.capture());
+        assertThat(saved.getValue().getGvwrClass()).isEqualTo(4);
+    }
+
+    @Test
     @DisplayName("a strictly-lower version is not applied over a newer replica row")
     void staleVersionIsIgnored() {
         when(processedEventRepository.existsById("e-2")).thenReturn(false);
