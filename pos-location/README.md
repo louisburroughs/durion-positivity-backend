@@ -39,6 +39,34 @@ Location hierarchy and physical space management service for the Durion Positivi
 - `POST /v1/locations/{siteId}/storage-locations` — create a storage location
 - `PATCH /v1/locations/{siteId}/storage-locations/{storageLocationId}` — patch a storage location
 - `GET /v1/mobile-units:eligible` — eligible mobile units for scheduling
+- `GET /v1/mobile-units?baseLocationId=&status=&include=coverageRules` — one shop's units (and, with
+  `include=coverageRules`, each unit's rules in the same response); every filter is optional (#2253)
+- `PUT /v1/mobile-units/{id}/coverage-rules` — replace a unit's coverage, validated as create is (#2248)
+
+## Error codes
+
+Every non-2xx answer is the platform `ApiError` envelope
+([`ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md)). A refusal caused by one
+request field also carries `fieldErrors[0].field` naming it (`name`, `baseLocationId`,
+`coverageRules[1].ruleType`, `rules[0].serviceAreaId`, ...). Codes specific to this module:
+
+| Code | Status | When |
+| --- | --- | --- |
+| `VALIDATION_ERROR` | 400 | A malformed or out-of-range value; `fieldErrors` names it |
+| `LOCATION_NOT_FOUND` | 422 | A mobile unit's `baseLocationId` names no location |
+| `TRAVEL_BUFFER_POLICY_NOT_FOUND` | 422 | A mobile unit's `travelBufferPolicyId` names no policy |
+| `SERVICE_AREA_NOT_FOUND` | 422 | A coverage rule's `serviceAreaId` names no service area |
+| `UNPROCESSABLE_CONTENT` | 422 | An ACTIVE mobile unit without a travel buffer policy, capabilities and coverage rules, or an unknown capability code |
+| `MOBILE_UNIT_NAME_TAKEN` | 409 | Another mobile unit at the same base location has the name (ignoring case) |
+| `BAY_NAME_TAKEN` | 409 | Another bay at the same location has the name |
+| `TRAVEL_BUFFER_POLICY_NAME_TAKEN` | 409 | Another travel buffer policy has the name |
+| `OPTIMISTIC_LOCK_FAILED` | 409 | A concurrent update to the same mobile unit won the version race |
+| `NOT_FOUND` | 404 | The resource addressed by the path does not exist |
+
+A `DuplicateResourceException` answers its own code (`*_NAME_TAKEN`), not the generic `CONFLICT`
+(#2252). Mobile unit `status` is `ACTIVE` or `INACTIVE` only (V6 adds a `CHECK`), and travel
+buffer policy `bufferType` is `FLAT_MINUTES`, `PERCENTAGE_OF_TRAVEL` or `DISTANCE_MULTIPLIER` (also a
+`CHECK` since V6, #2249).
 
 ## Location scope (ADR-0061, #1872)
 

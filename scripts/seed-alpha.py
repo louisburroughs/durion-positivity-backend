@@ -443,9 +443,9 @@ def coverage_rules_by_unit(service_area_ids):
     """unit name -> coverage rule payloads, in fixture row order.
 
     Row order is load-bearing for DISTANCE_TIER: MobileUnitServiceImpl.validateDistanceTiers walks
-    the list as given and requires strictly ascending maxDistance ending in a single null catch-all
-    (and it applies to every rule on the unit once any one of them is DISTANCE_TIER). Sorting or
-    regrouping these rows would reject the very fixture that was written to satisfy it."""
+    the unit's DISTANCE_TIER rules in the order given and requires strictly ascending maxDistance
+    ending in a single null catch-all (SERVICE_AREA rules are not part of that sequence, #2248).
+    Sorting or regrouping these rows would reject the very fixture that was written to satisfy it."""
     rules = {}
     unresolved = set()
     for row in read_fixture_rows(MOBILE_UNIT_COVERAGE_RULES_PACK):

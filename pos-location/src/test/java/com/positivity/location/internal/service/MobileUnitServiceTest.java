@@ -21,6 +21,7 @@ import com.positivity.location.internal.entity.MobileUnitEntity;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
 import com.positivity.location.internal.entity.TravelBufferPolicyEntity;
 import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.InvalidFieldException;
 import com.positivity.location.internal.exception.InvalidServiceCapabilityCodesException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
@@ -49,6 +50,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -120,20 +122,27 @@ class MobileUnitServiceTest {
                 .travelBufferPolicyId(policyId)
                 .serviceCapabilityCodes(List.of("OIL-CHANGE-FULL-SYNTHETIC"))
                 .coverageRules(List.of(CoverageRuleRequest.builder()
-                        .ruleType("ZIP")
+                        .serviceAreaId(UUID.fromString("00000000-0000-0000-0000-0000000000a1"))
+                        .ruleType("SERVICE_AREA")
                         .priority(1)
                         .build()))
                 .build();
 
         assertThatThrownBy(() -> service.createMobileUnit(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unknown travelBufferPolicyId");
+                .isInstanceOfSatisfying(InvalidFieldException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+                    assertThat(e.getCode()).isEqualTo(MobileUnitServiceImpl.TRAVEL_BUFFER_POLICY_NOT_FOUND);
+                    assertThat(e.getField()).isEqualTo("travelBufferPolicyId");
+                });
+        verify(mobileUnitRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("#76 - duplicate name from repository check returns conflict")
     void shouldRejectDuplicateNameFromRepository() {
         UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
         when(mobileUnitRepository.existsByBaseLocationIdAndNameIgnoreCase(baseLocationId, "NorthVan"))
                 .thenReturn(true);
 
@@ -208,8 +217,11 @@ class MobileUnitServiceTest {
                 List.of(Map.of("maxDistance", 25), Map.of("maxDistance", 20), Map.of("maxDistance", 50));
 
         assertThatThrownBy(() -> service.validateDistanceTiers(invalidTiers))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Distance tiers must be strictly ascending and end with null catch-all");
+                .isInstanceOfSatisfying(InvalidFieldException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(e.getField()).isEqualTo("coverageRules");
+                });
     }
 
     @Test
@@ -241,7 +253,11 @@ class MobileUnitServiceTest {
                 .updatedAt(Instant.now(TEST_CLOCK))
                 .build();
         when(mobileUnitRepository.save(any(MobileUnitEntity.class))).thenReturn(savedEntity);
-        when(mobileUnitRepository.findById(savedId)).thenReturn(java.util.Optional.of(savedEntity));
+        when(serviceAreaRepository.findAllById(any()))
+                .thenReturn(List.of(ServiceAreaEntity.builder()
+                        .id(serviceAreaId)
+                        .name("North")
+                        .build()));
         when(extCatalogServiceReplicaRepository.findByOperationCodeInAndActiveIsTrue(any()))
                 .thenReturn(List.of(activeService("BATTERY-REPLACEMENT")));
 
@@ -274,12 +290,14 @@ class MobileUnitServiceTest {
                 .serviceCapabilityCodes(List.of("battery-replacement"))
                 .coverageRules(List.of(
                         CoverageRuleRequest.builder()
+                                .serviceAreaId(serviceAreaId)
                                 .ruleType("DISTANCE_TIER")
                                 .priority(1)
                                 .maxDistance(BigDecimal.valueOf(25))
                                 .build(),
                         CoverageRuleRequest.builder()
-                                .ruleType("DISTANCE_TIER")
+                                .serviceAreaId(serviceAreaId)
+                                .ruleType("distance_tier")
                                 .priority(2)
                                 .maxDistance(null)
                                 .build()))
@@ -299,7 +317,7 @@ class MobileUnitServiceTest {
     void shouldListMobileUnits() {
         UUID firstId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID secondId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        PageRequest pageable = PageRequest.of(0, 10);
+        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Order.asc("name"), Sort.Order.asc("id")));
         when(mobileUnitRepository.findAll(pageable))
                 .thenReturn(new PageImpl<>(
                         List.of(
@@ -421,18 +439,17 @@ class MobileUnitServiceTest {
     }
 
     @Test
-    @DisplayName("#76 - patch not found returns synthesized response")
-    void shouldReturnFallbackResponseWhenPatchTargetMissing() {
+    @DisplayName("#2252 row 1 - patching an unknown id is 404, as GET and DELETE are; nothing saved or published")
+    void shouldRefusePatchOfUnknownUnitWithNotFound() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.empty());
 
-        MobileUnitResponse patched = service.patch(id, Map.of("name", "Ghost"));
-
-        assertThat(patched.getId()).isEqualTo(id);
-        assertThat(patched.getName()).isEqualTo("Ghost");
+        assertThatThrownBy(() -> service.patch(id, Map.of("name", "Ghost")))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Mobile unit not found");
         verify(mobileUnitRepository, never()).save(any(MobileUnitEntity.class));
-        // The synthesized response persists nothing, so publishing here would create a replica row
-        // for a unit the owner has no record of (issue #1668).
+        // Publishing for a unit that was never written would create a replica row the owner has no
+        // record of (issue #1668).
         verify(locationFactPublisher, never()).mobileUnitChanged(any());
     }
 
@@ -447,8 +464,8 @@ class MobileUnitServiceTest {
                 .status("ACTIVE")
                 .build();
         when(mobileUnitRepository.findById(unitId)).thenReturn(java.util.Optional.of(unit));
-        when(serviceAreaRepository.findById(areaId))
-                .thenReturn(java.util.Optional.of(
+        when(serviceAreaRepository.findAllById(any()))
+                .thenReturn(List.of(
                         ServiceAreaEntity.builder().id(areaId).name("Area").build()));
 
         MobileUnitCoverageRuleEntity persisted = MobileUnitCoverageRuleEntity.builder()
@@ -464,7 +481,7 @@ class MobileUnitServiceTest {
                 unitId,
                 List.of(CoverageRuleRequest.builder()
                         .serviceAreaId(areaId)
-                        .ruleType("ZIP")
+                        .ruleType("SERVICE_AREA")
                         .priority(10)
                         .build()));
 

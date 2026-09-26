@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.CoverageRuleResponse;
 import com.positivity.location.internal.dto.MobileUnitRequest;
 import com.positivity.location.internal.dto.MobileUnitResponse;
+import com.positivity.location.internal.exception.InvalidFieldException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.MobileUnitService;
@@ -16,6 +17,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -61,32 +64,52 @@ public class MobileUnitController {
                        "validFrom":"2026-06-18","validTo":"2026-12-31"}]}
             """;
 
+    private static final String INCLUDE_COVERAGE_RULES = "coverageRules";
+
     private final MobileUnitService mobileUnitService;
 
     @Operation(operationId = "createMobileUnit", summary = "Create a New Mobile Service Unit", description = """
-                    Creates a mobile service unit with an optional base location, travel buffer policy, \
+                    Creates a mobile service unit at a base location, with an optional travel buffer policy, \
                     capability list and initial coverage rules.
                     Use this tool when commissioning a van or truck that serves customers off-site; do not use \
                     patchMobileUnit, which updates an existing unit, and change coverage later with \
                     replaceCoverageRules.
                     Preconditions: a unit created with status ACTIVE must include travelBufferPolicyId, \
-                    serviceCapabilityCodes and coverageRules; the travel buffer policy must exist, every \
-                    serviceCapabilityCode must be an active catalog operationCode known to the location service's \
-                    catalog replica, DISTANCE_TIER coverage rules must be strictly \
-                    ascending by maxDistance and end with a null catch-all tier, and the name must be unique at \
-                    the base location.
-                    Required inputs: name; status defaults to INACTIVE when omitted, and baseLocationId, \
-                    travelBufferPolicyId, notes, serviceCapabilityCodes and coverageRules are optional for inactive \
-                    units.
+                    serviceCapabilityCodes and coverageRules; the base location, the travel buffer policy and \
+                    every rule's service area must exist, every serviceCapabilityCode must be an active catalog \
+                    operationCode known to the location service's catalog replica, each coverage rule's ruleType \
+                    must be SERVICE_AREA or DISTANCE_TIER, DISTANCE_TIER coverage rules must be strictly \
+                    ascending by maxDistance and end with one null catch-all tier, and the name must be unique \
+                    (ignoring case) at the base location.
+                    Required inputs: name and baseLocationId; status is ACTIVE or INACTIVE and defaults to \
+                    INACTIVE when omitted, and travelBufferPolicyId, notes, serviceCapabilityCodes and \
+                    coverageRules are optional for inactive units.
                     Emits a LOCATION_MOBILE_UNIT_CREATE event and persists any supplied coverage rules in the \
                     same transaction.
-                    Returns 201 with the created unit and 409 when the name is already taken at the base \
-                    location.
+                    Returns 201 with the created unit; 400 VALIDATION_ERROR with fieldErrors for a blank name, a \
+                    missing baseLocationId, an unknown status or a malformed coverage rule; 422 with fieldErrors \
+                    (LOCATION_NOT_FOUND, TRAVEL_BUFFER_POLICY_NOT_FOUND, SERVICE_AREA_NOT_FOUND) when an id names \
+                    nothing, and 422 for an incomplete ACTIVE unit or an unknown capability code; 409 \
+                    MOBILE_UNIT_NAME_TAKEN when the name is already taken at the base location.
                     """)
     @ApiResponse(responseCode = "201", description = "Mobile unit created successfully.")
     @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: blank name, missing baseLocationId, a status other than ACTIVE or"
+                    + " INACTIVE, or a coverage rule with an unknown ruleType, no serviceAreaId, a negative"
+                    + " priority or maxDistance, validTo before validFrom, or DISTANCE_TIER rules out of order."
+                    + " fieldErrors names the field.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "409",
-            description = "Mobile unit name already taken at the base location.",
+            description = "MOBILE_UNIT_NAME_TAKEN: the name is already taken at the base location.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "LOCATION_NOT_FOUND, TRAVEL_BUFFER_POLICY_NOT_FOUND or SERVICE_AREA_NOT_FOUND (fieldErrors"
+                    + " names the field) when an id names nothing; otherwise an ACTIVE unit without a travel buffer"
+                    + " policy, capabilities and coverage rules, or a serviceCapabilityCode that is not an active"
+                    + " catalog operation code.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
@@ -106,6 +129,7 @@ public class MobileUnitController {
                                                     @ExampleObject(
                                                             name = "Active mobile unit",
                                                             value = MOBILE_UNIT_EXAMPLE)))
+                    @Valid
                     @RequestBody
                     MobileUnitRequest request) {
         log.info("Creating mobile unit with name(mask)={}", maskForLog(request != null ? request.getName() : null));
@@ -113,24 +137,70 @@ public class MobileUnitController {
     }
 
     @Operation(operationId = "listMobileUnits", summary = "List Mobile Units With Pagination", description = """
-                    Lists all mobile units as a page with status, base location and travel buffer policy \
-                    references.
-                    Use this tool to enumerate or browse units; use getMobileUnitById instead when the unit id is \
-                    known, and findEligibleMobileUnits to match units to a service address.
+                    Lists mobile units as a page, ordered by name, with status, base location and travel buffer \
+                    policy references; optionally narrowed to one base location and/or status, and optionally \
+                    with each unit's coverage rules.
+                    Use this tool to enumerate or browse units, or to read one shop's units (baseLocationId) and \
+                    their coverage (include=coverageRules) in one request; use getMobileUnitById instead when \
+                    the unit id is known, and findEligibleMobileUnits to match units to a service address.
                     Preconditions: none beyond the location:mobile-unit:read authority.
-                    Required inputs: none; page defaults to 0 and size to 20.
+                    Required inputs: none; page defaults to 0 and size to 20. baseLocationId (UUID) keeps only \
+                    units based there, status (ACTIVE or INACTIVE) only units in that status, and include \
+                    accepts coverageRules, which adds each unit's rules ordered by priority.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 200 with a page of mobile units, empty when none exist.
+                    Returns 200 with a page of mobile units, empty when none match (including an unknown \
+                    baseLocationId), and 400 VALIDATION_ERROR for an unknown status or include value.
                     """)
     @ApiResponse(responseCode = "200", description = "Mobile units retrieved successfully.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: baseLocationId is not a UUID, status is not ACTIVE or INACTIVE, or"
+                    + " include names something other than coverageRules.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:mobile-unit:read"})
     @GetMapping
     public ResponseEntity<Page<MobileUnitResponse>> listMobileUnits(
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(mobileUnitService.list(page, size));
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @Parameter(
+                            description = "Only units based at this location",
+                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01")
+                    @RequestParam(required = false)
+                    UUID baseLocationId,
+            @Parameter(description = "Only units in this status (ACTIVE or INACTIVE)", example = "ACTIVE")
+                    @RequestParam(required = false)
+                    String status,
+            @Parameter(
+                            description = "Related data to embed; coverageRules adds each unit's coverage rules",
+                            example = INCLUDE_COVERAGE_RULES)
+                    @RequestParam(required = false)
+                    List<String> include) {
+        boolean includeCoverageRules = parseInclude(include);
+        return ResponseEntity.ok(mobileUnitService.list(page, size, baseLocationId, status, includeCoverageRules));
+    }
+
+    /** {@code include} is a comma-separated or repeated list; coverageRules is the only value today. */
+    private static boolean parseInclude(List<String> include) {
+        if (include == null) {
+            return false;
+        }
+        List<String> values = new ArrayList<>();
+        for (String entry : include) {
+            for (String value : entry.split(",")) {
+                if (!value.isBlank()) {
+                    values.add(value.trim());
+                }
+            }
+        }
+        for (String value : values) {
+            if (!INCLUDE_COVERAGE_RULES.equals(value)) {
+                throw InvalidFieldException.invalid("include", "include accepts only coverageRules");
+            }
+        }
+        return !values.isEmpty();
     }
 
     @Operation(operationId = "getMobileUnitById", summary = "Get a Mobile Unit by Identifier", description = """
@@ -166,38 +236,51 @@ public class MobileUnitController {
                     travelBufferPolicyId and serviceCapabilityCodes.
                     Use this tool for status transitions, travel-buffer-policy reassignment and replacing the \
                     unit's capability claim; use replaceCoverageRules instead to change where the unit operates.
-                    Preconditions: for an existing unit, the unit as it stands after the patch must satisfy what \
+                    Preconditions: the unit must exist. The unit as it stands after the patch must satisfy what \
                     create demands of an ACTIVE unit, so an ACTIVE result needs a travelBufferPolicyId, at least \
                     one serviceCapabilityCode and at least one coverage rule already on the unit; activating an \
                     incomplete unit means calling replaceCoverageRules first and then sending the status with the \
-                    policy and capabilities. For an existing unit, serviceCapabilityCodes replaces the whole claim \
-                    and every code must be an active catalog operationCode known to the location service's catalog \
-                    replica. When the unit id does not exist none of this is checked: nothing is persisted and a \
-                    synthesized response carrying only the patched name, status, notes and travelBufferPolicyId is \
-                    echoed back, without serviceCapabilityCodes, so callers must verify existence first with \
-                    getMobileUnitById.
-                    Required inputs: id (UUID) as a path parameter and a JSON object of the fields to change; \
-                    status values are upper-cased and a blank status normalizes to INACTIVE.
+                    policy and capabilities. serviceCapabilityCodes replaces the whole claim and every code must \
+                    be an active catalog operationCode known to the location service's catalog replica.
+                    Required inputs: id (UUID) as a path parameter and a JSON object of the fields to change. \
+                    name must be non-blank text, unique (ignoring case) at the unit's base location; status must \
+                    be ACTIVE or INACTIVE (any case; null is refused); notes is text or null; \
+                    travelBufferPolicyId is null to clear it or the id of an existing policy; \
+                    serviceCapabilityCodes is an array. Other keys are ignored.
                     Emits a LOCATION_MOBILE_UNIT_UPDATE event.
-                    Returns 200 even for unknown ids (with the unpersisted echo, whatever the patch holds), 409 \
-                    when a name change collides with another unit at the same base location, and, for an existing \
-                    unit, 422 when the result would be an incomplete ACTIVE unit or a capability code is unknown.
+                    Returns 200 with the updated unit; 404 NOT_FOUND when the unit does not exist; 400 \
+                    VALIDATION_ERROR with fieldErrors for a value of the wrong shape; 409 MOBILE_UNIT_NAME_TAKEN \
+                    when the new name is taken at the base location, or 409 when a concurrent update won the \
+                    version race; 422 TRAVEL_BUFFER_POLICY_NOT_FOUND with fieldErrors for an unknown policy, and \
+                    422 when the result would be an incomplete ACTIVE unit or a capability code is unknown. \
+                    Nothing is saved on any refusal.
                     """)
-    @ApiResponse(responseCode = "200", description = "Mobile units managed successfully.")
+    @ApiResponse(responseCode = "200", description = "Mobile unit updated.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: blank or non-text name, a status other than ACTIVE or INACTIVE (null"
+                    + " included), non-text notes, a travelBufferPolicyId that is not a UUID, or"
+                    + " serviceCapabilityCodes that is not an array. fieldErrors names the field.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Caller lacks location:mobile-unit:manage.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
+            responseCode = "404",
+            description = "Mobile unit not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "409",
-            description =
-                    "Mobile unit name already taken at the base location, or a concurrent update won the version race.",
+            description = "MOBILE_UNIT_NAME_TAKEN when the new name is taken at the base location, or"
+                    + " OPTIMISTIC_LOCK_FAILED when a concurrent update won the version race.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "An existing unit would be ACTIVE after the patch without a travel buffer policy,"
-                    + " capabilities and coverage rules, or a serviceCapabilityCode is not an active catalog operation"
-                    + " code. Not returned for an unknown id, which answers 200 with an unpersisted echo.",
+            description = "TRAVEL_BUFFER_POLICY_NOT_FOUND (fieldErrors names travelBufferPolicyId) for an unknown"
+                    + " policy; otherwise the unit would be ACTIVE after the patch without a travel buffer policy,"
+                    + " capabilities and coverage rules, or a serviceCapabilityCode is not an active catalog"
+                    + " operation code.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
@@ -281,19 +364,36 @@ public class MobileUnitController {
                     rules and inserting the supplied ones in one transaction.
                     Use this tool whenever coverage changes, sending the complete desired rule set; do not use \
                     patchMobileUnit, which cannot modify coverage.
-                    Preconditions: the mobile unit must exist; a referenced serviceAreaId that does not resolve \
-                    is stored as a rule without a service area rather than rejected.
+                    Preconditions: the mobile unit must exist; every rule's serviceAreaId must name an existing \
+                    service area; DISTANCE_TIER rules must be strictly ascending by maxDistance and end with one \
+                    null catch-all tier; an ACTIVE unit must keep at least one rule. The replacement set is \
+                    checked in full before the existing rules are touched, so a refusal changes nothing.
                     Required inputs: id (UUID) as a path parameter and a body of the form {"rules": [...]}, each \
-                    rule carrying ruleType and optionally serviceAreaId, priority (defaults to 0), validFrom, \
-                    validTo and maxDistance.
+                    rule carrying ruleType (SERVICE_AREA or DISTANCE_TIER, any case) and serviceAreaId, and \
+                    optionally priority (non-negative, defaults to 0), validFrom, validTo (not before validFrom) \
+                    and maxDistance (non-negative).
                     Emits a LOCATION_COVERAGE_RULES_REPLACE event.
-                    Returns 404 when the mobile unit does not exist; an omitted or empty rules array clears all \
-                    coverage.
+                    Returns 200 with the saved rules ordered by priority; 400 VALIDATION_ERROR with fieldErrors \
+                    (rules[i].field) for a malformed rule or tiers out of order; 404 when the mobile unit does not \
+                    exist; 422 SERVICE_AREA_NOT_FOUND with fieldErrors for an unknown service area, and 422 when \
+                    the set would leave an ACTIVE unit with no rules. An omitted or empty rules array clears all \
+                    coverage of an INACTIVE unit.
                     """)
     @ApiResponse(responseCode = "200", description = "Coverage rules replaced successfully.")
     @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: rules is not an array, or a rule has an unknown ruleType, no"
+                    + " serviceAreaId, a value of the wrong type, a negative priority or maxDistance, validTo before"
+                    + " validFrom, or the DISTANCE_TIER rules are out of order. fieldErrors names the field.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "404",
             description = "Mobile unit not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "SERVICE_AREA_NOT_FOUND (fieldErrors names rules[i].serviceAreaId) for an unknown service"
+                    + " area, or the replacement would leave an ACTIVE unit with no coverage rules.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_COVERAGE_RULES_REPLACE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
@@ -316,9 +416,28 @@ public class MobileUnitController {
                                                             value = COVERAGE_RULES_EXAMPLE)))
                     @RequestBody
                     Map<String, Object> payload) {
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> rawRules = (List<Map<String, Object>>) payload.getOrDefault("rules", List.of());
-        return ResponseEntity.ok(mobileUnitService.replaceCoverageRules(id.toString(), rawRules));
+        return ResponseEntity.ok(mobileUnitService.replaceCoverageRules(id.toString(), rulesOf(payload)));
+    }
+
+    /** The {@code rules} array of the PUT body, each element an object; 400 naming the field otherwise. */
+    private static List<Map<String, Object>> rulesOf(Map<String, Object> payload) {
+        Object raw = payload == null ? null : payload.get("rules");
+        if (raw == null) {
+            return List.of();
+        }
+        if (!(raw instanceof List<?> list)) {
+            throw InvalidFieldException.invalid("rules", "rules must be an array");
+        }
+        List<Map<String, Object>> rules = new ArrayList<>(list.size());
+        for (int i = 0; i < list.size(); i++) {
+            if (!(list.get(i) instanceof Map<?, ?> rule)) {
+                throw InvalidFieldException.invalid("rules[" + i + "]", "coverage rule must be an object");
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> typed = (Map<String, Object>) rule;
+            rules.add(typed);
+        }
+        return rules;
     }
 
     @Operation(operationId = "listCoverageRules", summary = "Get Coverage Rules of Mobile Unit", description = """

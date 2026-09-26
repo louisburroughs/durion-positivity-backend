@@ -1,14 +1,18 @@
 package com.positivity.location.internal.controller;
 
+import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.InvalidFieldException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -26,6 +30,13 @@ import org.springframework.web.server.ResponseStatusException;
  * {@link ApiError#code()}, so a client branches on the same value it read from the RFC 9457
  * {@code detail} before this advice replaced the module's ProblemDetail rendering. Any other
  * reason is free text: the code falls back to the status and the text becomes the message.
+ *
+ * <p>Two module exceptions get their own rendering. An {@link InvalidFieldException} carries its
+ * code and the field at fault, so it answers with {@code fieldErrors}. A
+ * {@link DuplicateResourceException} is {@code @ResponseStatus(CONFLICT)} with no reason, which the
+ * shared catch-all renders as a bare {@code CONFLICT}; its message is always a machine code
+ * ({@code MOBILE_UNIT_NAME_TAKEN}, {@code BAY_NAME_TAKEN}, ...), so it becomes the code here and a
+ * client can tell "name taken" from any other conflict (#2252).
  *
  * <p>Everything else — Spring MVC's own web exceptions, validation failures, the catch-all — is
  * left to pos-web-common's {@code GlobalApiExceptionHandler} (ADR-0056), which answers with the
@@ -66,6 +77,40 @@ public class LocationGlobalExceptionHandler {
                 .header(X_CORRELATION_ID, correlationId)
                 .body(ApiError.of(
                         code, message, status.value(), Instant.now(clock).toString(), correlationId));
+    }
+
+    @ExceptionHandler(InvalidFieldException.class)
+    public ResponseEntity<ApiError> handleInvalidField(
+            @NonNull InvalidFieldException ex, @NonNull HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpStatusCode status = ex.getStatusCode();
+        String message = ex.getReason() == null ? defaultMessage(status) : ex.getReason();
+        return ResponseEntity.status(status)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.withFieldErrors(
+                        ex.getCode(),
+                        message,
+                        status.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        List.of(new ApiError.FieldError(ex.getField(), message))));
+    }
+
+    @ExceptionHandler(DuplicateResourceException.class)
+    public ResponseEntity<ApiError> handleDuplicateResource(
+            @NonNull DuplicateResourceException ex, @NonNull HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpStatus status = HttpStatus.CONFLICT;
+        String reason = ex.getMessage();
+        String code = reason != null && MACHINE_CODE.matcher(reason).matches() ? reason : statusCode(status);
+        return ResponseEntity.status(status)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        code,
+                        defaultMessage(status),
+                        status.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
     }
 
     private static String resolveCorrelationId(HttpServletRequest request) {

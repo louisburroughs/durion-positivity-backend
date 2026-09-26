@@ -5,6 +5,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -25,6 +26,25 @@ public interface MobileUnitRepository extends JpaRepository<MobileUnitEntity, UU
               AND UPPER(m.name) = UPPER(:name)
             """)
     boolean existsByBaseLocationIdAndNameIgnoreCase(UUID baseLocationId, String name);
+
+    /** The rename check: another unit at this base location already holds the name, ignoring case (#2252). */
+    @Query("""
+            SELECT CASE WHEN COUNT(m) > 0 THEN true ELSE false END
+            FROM MobileUnitEntity m
+            WHERE m.baseLocation.id = :baseLocationId
+              AND UPPER(m.name) = UPPER(:name)
+              AND m.id <> :excludedId
+            """)
+    boolean existsByBaseLocationIdAndNameIgnoreCaseAndIdNot(UUID baseLocationId, String name, UUID excludedId);
+
+    /** One base location's units (#2253). */
+    Page<MobileUnitEntity> findByBaseLocation_Id(UUID baseLocationId, Pageable pageable);
+
+    /** One base location's units in one status (#2253). */
+    Page<MobileUnitEntity> findByBaseLocation_IdAndStatus(UUID baseLocationId, String status, Pageable pageable);
+
+    /** Every unit in one status (#2253). */
+    Page<MobileUnitEntity> findByStatus(String status, Pageable pageable);
 
     /**
      * Counts mobile units per base location for a single status, for a batch of

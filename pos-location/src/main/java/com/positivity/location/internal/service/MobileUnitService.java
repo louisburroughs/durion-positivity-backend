@@ -24,6 +24,12 @@ public interface MobileUnitService {
 
     Page<MobileUnitResponse> list(int page, int size);
 
+    /**
+     * A page of mobile units, optionally narrowed to one base location and/or status, each
+     * optionally carrying its coverage rules (#2253).
+     */
+    Page<MobileUnitResponse> list(int page, int size, UUID baseLocationId, String status, boolean includeCoverageRules);
+
     Optional<MobileUnitResponse> getById(UUID id);
 
     MobileUnitResponse patch(UUID id, Map<String, Object> patch);

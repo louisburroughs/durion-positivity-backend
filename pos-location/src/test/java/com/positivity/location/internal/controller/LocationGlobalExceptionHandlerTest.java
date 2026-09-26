@@ -2,6 +2,8 @@ package com.positivity.location.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.InvalidFieldException;
 import com.positivity.shared.error.ApiError;
 import java.time.Clock;
 import java.time.Instant;
@@ -93,5 +95,62 @@ class LocationGlobalExceptionHandlerTest {
         assertThat(header).isNotBlank().isNotEqualTo("   ");
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().correlationId()).isEqualTo(header);
+    }
+
+    @Test
+    @DisplayName("#2252 - an InvalidFieldException answers its code with the field in fieldErrors")
+    void invalidFieldRendersFieldErrors() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/mobile-units");
+        request.addHeader(LocationGlobalExceptionHandler.X_CORRELATION_ID, "corr-field-422");
+
+        ResponseEntity<ApiError> response = handler.handleInvalidField(
+                InvalidFieldException.unknownReference(
+                        "LOCATION_NOT_FOUND",
+                        "baseLocationId",
+                        "baseLocationId does not reference an existing location"),
+                request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getHeaders().getFirst(LocationGlobalExceptionHandler.X_CORRELATION_ID))
+                .isEqualTo("corr-field-422");
+        ApiError body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.code()).isEqualTo("LOCATION_NOT_FOUND");
+        assertThat(body.status()).isEqualTo(422);
+        assertThat(body.correlationId()).isEqualTo("corr-field-422");
+        assertThat(body.fieldErrors()).singleElement().satisfies(error -> {
+            assertThat(error.field()).isEqualTo("baseLocationId");
+            assertThat(error.message()).isEqualTo("baseLocationId does not reference an existing location");
+        });
+    }
+
+    @Test
+    @DisplayName("#2252 - a DuplicateResourceException keeps its machine code instead of a bare CONFLICT")
+    void duplicateResourceKeepsItsCode() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/mobile-units");
+
+        ResponseEntity<ApiError> response =
+                handler.handleDuplicateResource(new DuplicateResourceException("MOBILE_UNIT_NAME_TAKEN"), request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        ApiError body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.code()).isEqualTo("MOBILE_UNIT_NAME_TAKEN");
+        assertThat(body.message()).isEqualTo("Request conflicts with the current state of the resource");
+        assertThat(body.status()).isEqualTo(409);
+    }
+
+    @Test
+    @DisplayName("#2252 - a DuplicateResourceException without a machine code falls back to CONFLICT")
+    void duplicateResourceWithoutCodeFallsBack() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/mobile-units");
+
+        ResponseEntity<ApiError> response =
+                handler.handleDuplicateResource(new DuplicateResourceException("name taken"), request);
+
+        ApiError body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.code()).isEqualTo("CONFLICT");
+        assertThat(body.message()).doesNotContain("name taken");
     }
 }
