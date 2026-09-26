@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.exception.JournalEntryNotFoundExceptio
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -60,6 +61,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
     private final JournalEntryRepository journalEntryRepository;
     private final GLAccountService glAccountService;
+    private final GLAccountRepository glAccountRepository;
     private final AccountingSequenceRepository sequenceRepository;
     private final AccountingSequenceProvisioner sequenceProvisioner;
     private final AccountingPeriodService accountingPeriodService;
@@ -656,7 +658,27 @@ public class JournalEntryServiceImpl implements JournalEntryService {
             if (line.getLineNumber() == null) {
                 line.setLineNumber(lineNumber);
             }
+            bindGlAccount(line);
             lineNumber++;
         }
+    }
+
+    /**
+     * Replaces the id-only {@code GLAccount} reference a line is built with by the managed account,
+     * and stamps the line's denormalised {@code account_code} / {@code account_name} from it, so the
+     * line answers with its account code and name both in the response built from this entity and
+     * once persisted (issue #2238). An unknown account id is left alone: GL-account validation
+     * rejects it with its own error.
+     */
+    private void bindGlAccount(JournalEntryLine line) {
+        UUID glAccountId = line.getGlAccountId();
+        if (glAccountId == null) {
+            return;
+        }
+        glAccountRepository.findById(glAccountId).ifPresent(account -> {
+            line.setGlAccount(account);
+            line.setAccountCode(account.getAccountCode());
+            line.setAccountName(account.getAccountName());
+        });
     }
 }

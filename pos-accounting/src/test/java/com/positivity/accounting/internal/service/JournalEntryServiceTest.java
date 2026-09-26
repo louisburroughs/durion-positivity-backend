@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -17,6 +18,7 @@ import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
 import com.positivity.accounting.internal.entity.AccountingSequence;
+import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
@@ -28,6 +30,7 @@ import com.positivity.accounting.internal.exception.JournalEntryNotReversibleExc
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -73,6 +76,9 @@ class JournalEntryServiceTest {
     private GLAccountServiceImpl glAccountService;
 
     @Mock
+    private GLAccountRepository glAccountRepository;
+
+    @Mock
     private AccountingSequenceRepository sequenceRepository;
 
     @Mock
@@ -115,6 +121,7 @@ class JournalEntryServiceTest {
                 clock,
                 journalEntryRepository,
                 glAccountService,
+                glAccountRepository,
                 sequenceRepository,
                 sequenceProvisioner,
                 accountingPeriodService,
@@ -151,6 +158,34 @@ class JournalEntryServiceTest {
         verify(journalEntryRepository).save(any(JournalEntry.class));
         verify(glAccountService).validateAccountForPosting(eq(testGLAccountId1), eq(testTransactionDate));
         verify(glAccountService).validateAccountForPosting(eq(testGLAccountId2), eq(testTransactionDate));
+    }
+
+    @Test
+    @DisplayName("createJournalEntry - lines carry their GL account code and name (#2238)")
+    void createJournalEntry_stampsAccountCodeAndName() {
+        // Arrange
+        JournalEntryCreateRequest request = createBalancedRequest();
+        when(glAccountRepository.findById(testGLAccountId1))
+                .thenReturn(Optional.of(glAccount(testGLAccountId1, "5100", "Inventory Shrinkage")));
+        when(glAccountRepository.findById(testGLAccountId2))
+                .thenReturn(Optional.of(glAccount(testGLAccountId2, "1300", "Inventory")));
+        doNothing().when(glAccountService).validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
+        ArgumentCaptor<JournalEntry> saved = ArgumentCaptor.forClass(JournalEntry.class);
+        when(journalEntryRepository.save(saved.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        JournalEntryResponse result = service.createJournalEntry(request);
+
+        // Assert: the persisted lines carry the denormalised columns ...
+        assertThat(saved.getValue().getLines())
+                .extracting(JournalEntryLine::getAccountCode, JournalEntryLine::getAccountName)
+                .containsExactly(tuple("5100", "Inventory Shrinkage"), tuple("1300", "Inventory"));
+        // ... and the response lines answer with them.
+        assertThat(result.getLines())
+                .extracting(
+                        JournalEntryResponse.JournalEntryLineResponse::getAccountCode,
+                        JournalEntryResponse.JournalEntryLineResponse::getAccountName)
+                .containsExactly(tuple("5100", "Inventory Shrinkage"), tuple("1300", "Inventory"));
     }
 
     @Test
@@ -843,6 +878,13 @@ class JournalEntryServiceTest {
         lines.add(line2);
 
         return lines;
+    }
+
+    private static GLAccount glAccount(UUID glAccountId, String accountCode, String accountName) {
+        GLAccount account = new GLAccount(glAccountId);
+        account.setAccountCode(accountCode);
+        account.setAccountName(accountName);
+        return account;
     }
 
     private JournalEntryCreateRequest createBalancedRequest() {

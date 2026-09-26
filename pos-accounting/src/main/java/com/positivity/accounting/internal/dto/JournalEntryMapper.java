@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.dto;
 
+import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import java.math.BigDecimal;
@@ -87,6 +88,20 @@ public final class JournalEntryMapper {
         JournalEntryResponse.JournalEntryLineResponse response = new JournalEntryResponse.JournalEntryLineResponse();
         response.setLineNumber(line.getLineNumber());
         response.setGlAccountId(line.getGlAccountId());
+        // The line's denormalised columns are stamped when the line is built, so they answer
+        // without loading the lazy GL account (list pages map every line). Only a line persisted
+        // before stamping falls back to the account itself.
+        String accountCode = line.getAccountCode();
+        String accountName = line.getAccountName();
+        if (accountCode == null || accountName == null) {
+            GLAccount account = line.getGlAccount();
+            if (account != null) {
+                accountCode = accountCode != null ? accountCode : account.getAccountCode();
+                accountName = accountName != null ? accountName : account.getAccountName();
+            }
+        }
+        response.setAccountCode(accountCode);
+        response.setAccountName(accountName);
         response.setDebitAmount(line.getDebitAmount());
         response.setCreditAmount(line.getCreditAmount());
         response.setDescription(line.getDescription());
