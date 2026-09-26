@@ -162,18 +162,24 @@ public class MobileUnitController {
     }
 
     @Operation(operationId = "patchMobileUnit", summary = "Patch Fields of a Mobile Unit", description = """
-                    Applies a partial update to a mobile unit, accepting the keys name, status, notes and \
-                    travelBufferPolicyId.
-                    Use this tool for status transitions and travel-buffer-policy reassignment; use \
-                    replaceCoverageRules instead to change where the unit operates.
-                    Preconditions: none are enforced; when the unit id does not exist nothing is persisted and a \
-                    synthesized response built from the patch is echoed back, so callers must verify existence \
-                    first with getMobileUnitById.
+                    Applies a partial update to a mobile unit, accepting the keys name, status, notes, \
+                    travelBufferPolicyId and serviceCapabilityCodes.
+                    Use this tool for status transitions, travel-buffer-policy reassignment and replacing the \
+                    unit's capability claim; use replaceCoverageRules instead to change where the unit operates.
+                    Preconditions: the unit as it stands after the patch must satisfy what create demands of an \
+                    ACTIVE unit, so an ACTIVE result needs a travelBufferPolicyId, at least one \
+                    serviceCapabilityCode and at least one coverage rule already on the unit; activating an \
+                    incomplete unit means calling replaceCoverageRules first and then sending the status with the \
+                    policy and capabilities. serviceCapabilityCodes replaces the whole claim, and every code must \
+                    be an active catalog operationCode known to the location service's catalog replica. When the \
+                    unit id does not exist nothing is persisted and a synthesized response built from the patch is \
+                    echoed back, so callers must verify existence first with getMobileUnitById.
                     Required inputs: id (UUID) as a path parameter and a JSON object of the fields to change; \
                     status values are upper-cased and a blank status normalizes to INACTIVE.
                     Emits a LOCATION_MOBILE_UNIT_UPDATE event.
-                    Returns 200 even for unknown ids (with the unpersisted echo) and 409 when a name change \
-                    collides with another unit at the same base location.
+                    Returns 200 even for unknown ids (with the unpersisted echo), 409 when a name change \
+                    collides with another unit at the same base location, and 422 when the result would be an \
+                    incomplete ACTIVE unit or a capability code is unknown.
                     """)
     @ApiResponse(responseCode = "200", description = "Mobile units managed successfully.")
     @ApiResponse(
@@ -185,6 +191,11 @@ public class MobileUnitController {
             description =
                     "Mobile unit name already taken at the base location, or a concurrent update won the version race.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "The patched unit would be ACTIVE without a travel buffer policy, capabilities and coverage"
+                    + " rules, or a serviceCapabilityCode is not an active catalog operation code.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
     @SecurityRequirement(
@@ -194,8 +205,8 @@ public class MobileUnitController {
     public ResponseEntity<MobileUnitResponse> patchMobileUnit(
             @PathVariable UUID id,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Free-form patch object; only the keys name, status, notes and"
-                                    + " travelBufferPolicyId are recognized.",
+                            description = "Free-form patch object; only the keys name, status, notes,"
+                                    + " travelBufferPolicyId and serviceCapabilityCodes are recognized.",
                             required = true,
                             content =
                                     @Content(
