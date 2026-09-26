@@ -159,6 +159,7 @@ existing `location.events.v1` topic (issue #1668, ADR-0044 §6):
 | `location.bay.deleted`         | `bayId`                                             | bay hard-deleted via `DELETE /v1/locations/{locationId}/bays/{bayId}` |
 | `location.mobile-unit.updated` | `mobileUnitId`, `baseLocationId`, `name`, `status`  | unit created or changed, including a re-base |
 | `location.mobile-unit.deleted` | `mobileUnitId`                                      | unit hard-deleted via `DELETE /v1/mobile-units/{id}` |
+| `location.bay-specialty-map.updated` | `tenantId`, `entries[]` (`bayType`, `operationCodes[]`, `acceptsGeneralWork`), `aggregateVersion` | a tenant's bay specialty map changes, and once per active tenant at startup |
 
 Records live in `pos-domain-events` (`com.positivity.domainevents.location`). Consumers —
 pos-workorder's dispatch board and pos-shop-manager's unit roster — hold `ext_bay` /
@@ -199,6 +200,43 @@ an out-of-order pair could drop or resurrect the row.
 envelope's `aggregateVersion`, which strictly advances per committed mutation so a consumer's stale
 guard is sound (#1486). Tombstones publish at `version + 1` — one past every fact the aggregate has
 published — because consumers delete without consulting a version.
+
+### Bay specialty map, published per tenant (DECISION-LOCATION-025, CAP-325 D14/D14.1/D14.3)
+
+`bay_specialty_operation` (V4, seeded platform-only by `R__seed_location_2_bay_specialty.sql`) is
+the only source for whether a catalog `operationCode` is *specialty* — a bay's own
+`serviceCapabilityCodes` (on `BayUpdatedV1`) say only what that one bay claims. Deriving "is this
+specialty" from which bays happen to be active at a location silently turns missing equipment into
+general work, so pos-location now publishes the map itself:
+
+- **Tenant provisioning.** On `tenant.created` (consumed from `tenant.events.v1`, pattern:
+  pos-security-service's `TenantEventsListener`), pos-location copies the platform tenant's map rows
+  into the new tenant. **Idempotent**: a tenant that already has any map rows — a replayed
+  `tenant.created`, or one provisioned before this listener existed — is left untouched; no copy, no
+  fact, though the eventId is still recorded so a redelivery short-circuits immediately.
+- **`location.bay-specialty-map.updated`** (`pos-domain-events`
+  `com.positivity.domainevents.location.BaySpecialtyMapUpdatedV1`) publishes on the same
+  `location.events.v1` topic through the existing outbox, keyed by `tenantId` (the envelope
+  `aggregateId`). The payload carries the tenant's **full** map, one entry per `BayType` — including
+  a type with no specialty rows, whose `operationCodes` is then empty — never a delta:
+  `{tenantId, entries: [{bayType, operationCodes[], acceptsGeneralWork}], aggregateVersion}`.
+  `aggregateVersion` is a dedicated per-tenant counter (`bay_specialty_map_version`, one row per
+  tenant, since the map itself is several rows with no JPA `@Version` of its own): it strictly
+  advances whenever the map actually changes for a tenant (today, only first-time provisioning), and
+  a startup republish carries whatever version is already on record rather than bumping it — the
+  same equal-version-applies rule as every other strictly-advancing fact
+  (`ReplicaVersionGuard`), which is what lets the startup sweep repair a replica holding the right
+  version but wrong rows.
+- **Startup sweep.** A `BaySpecialtyMapStartupPublisher` `ApplicationRunner` republishes every
+  active tenant's current map once at boot (`TenantIterator.forEachActiveTenant`), so a replica
+  standing up for the first time, or one that missed live traffic, converges without a manual
+  replay. A per-tenant failure is logged and never blocks startup.
+- **`BayType.acceptsGeneralWork()`** (DECISION-LOCATION-025) is `false` only for `WASH_DETAIL`; every
+  other type — specialty bays included — takes general work by default (ranked last, per D14). It
+  rides both `location.bay-specialty-map.updated` (per type) and `BayUpdatedV1` (additive within
+  schema version 1, per bay), replacing a `WASH_DETAIL`-by-name check in consumers.
+- **Wash and detail services are never in the map** (DECISION-LOCATION-025 rule 5): they are
+  ordinary catalog line items, so `WASH_DETAIL`'s `operationCodes` is always empty.
 
 ### Reading the scheduling fields back (#2139)
 
