@@ -23,14 +23,15 @@ import org.hibernate.type.SqlTypes;
  * <p>pos-location owns the bay aggregate; nothing in this module may write the table except the
  * event consumer. Same shape and rules as {@link ExtLocationReplica}: the owner's monotonic
  * {@code aggregateVersion} guards against applying a stale fact, and a <em>deactivated</em> bay
- * (status {@code OUT_OF_SERVICE}) is retained as an {@code active=false} row, so an assignment to a
- * decommissioned bay can still be named on the board.
+ * (status {@code OUT_OF_SERVICE} or {@code RETIRED}) is retained as an {@code active=false} row, so
+ * an assignment to a decommissioned bay can still be named on the board.
  *
- * <p>A <em>deleted</em> bay is a different fact and does remove the row: {@code location.bay.deleted}
- * says the owner's aggregate no longer exists, and this replica mirrors the owner rather than
- * outliving it — exactly as {@link ExtLocationReplica} does for {@code location.location.deleted}.
- * That is not a hole in the board: the dispatch panel renders a row for any resource open work still
- * points at, with a null name, whether or not a replica row survives for it.
+ * <p>A <em>retired</em> bay (DECISION-LOCATION-026, issue #2264) is never hard-deleted by the owner:
+ * {@code DELETE} on the bay resource sets {@code status = RETIRED} and this replica sees it as an
+ * ordinary {@code location.bay.updated}, the same as any other status change — never a tombstone.
+ * {@code location.bay.deleted} is a stray fact from before that decision; pos-location no longer
+ * emits it, and this replica handles a delayed or replayed one the same defensive way, marking the
+ * row inactive rather than removing it, so it is never a hole in the board.
  *
  * <p>This replica is why the dispatch board can finally show a bay <em>name</em>: before it
  * existed, {@code BayStatus.bayName} was declared and never populated, because bay identity lives

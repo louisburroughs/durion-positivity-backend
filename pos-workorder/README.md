@@ -285,11 +285,13 @@ populated at all: it was declared-but-always-null until a replica existed to res
 
 A replica row's `active` flag is **derived from the owner's `status`**, allow-listing `ACTIVE`
 (any casing); anything else, including an absent or unseen value, is not active. pos-location's
-`BayEntity` and `MobileUnitEntity` have no boolean active field at all — a bay's status is
-`ACTIVE` | `OUT_OF_SERVICE` and a mobile unit's is a free-text column whose in-use values are
-`ACTIVE` | `INACTIVE` — so a deny-list would put an undispatchable unit on the board, and a
-consumer-invented `active` boolean would deserialize to `false` on every real event and leave both
-panels permanently empty.
+`BayEntity` and `MobileUnitEntity` have no boolean active field at all — both statuses are
+`ACTIVE` | `OUT_OF_SERVICE` | `RETIRED` (DECISION-LOCATION-026, #2264; mobile units previously also
+wrote `INACTIVE`, retired with no compatibility shim) — so a deny-list would put an undispatchable
+unit on the board, and a consumer-invented `active` boolean would deserialize to `false` on every
+real event and leave both panels permanently empty. Retiring a resource (`DELETE` at pos-location)
+is just another status change to derive `active = false` from: it arrives as `status = RETIRED` on
+the ordinary `updated` fact, not a delete, and the row is never removed from the replica.
 
 Both panels list **every active unit at the location** (bays by `location_id`, units by
 `base_location_id`), including units holding no work, which report `assignedWorkorderId: null`.
@@ -363,15 +365,24 @@ Two edge behaviours are deliberate and live in `DashboardServiceImpl.buildResour
   its id and a null name rather than being dropped.
 
 Upstream dependency: pos-location publishes bay and mobile-unit facts as of #1668 —
-`location.bay.updated` / `location.bay.deleted` and `location.mobile-unit.updated` /
-`location.mobile-unit.deleted` on `location.events.v1`, with the canonical records in
-`pos-domain-events` (`com.positivity.domainevents.location`). The replicas still start empty and
-stay that way for any bay or mobile unit created before #1668 that has not been touched since: the
-facts are forward-only, and outbox replay cannot reach those rows because they have no outbox
-history. pos-location's `location.fact-backfill.requested` command regenerates them from current
-state (see `pos-location/README.md` and `docs/OPERATIONS_RUNBOOK.md`). The consumer tolerates an
-empty or partial replica by design — the panels render what the replica holds and converge as
-facts arrive.
+`location.bay.updated` and `location.mobile-unit.updated` on `location.events.v1`, with the
+canonical records in `pos-domain-events` (`com.positivity.domainevents.location`). The replicas
+still start empty and stay that way for any bay or mobile unit created before #1668 that has not
+been touched since: the facts are forward-only, and outbox replay cannot reach those rows because
+they have no outbox history. pos-location's `location.fact-backfill.requested` command regenerates
+them from current state (see `pos-location/README.md` and `docs/OPERATIONS_RUNBOOK.md`). The
+consumer tolerates an empty or partial replica by design — the panels render what the replica holds
+and converge as facts arrive.
+
+**Retirement no longer deletes the replica row (DECISION-LOCATION-026, #2264).** `DELETE` on a bay
+or mobile unit at pos-location retires it (`status = RETIRED`) instead of hard-deleting, and the
+Kafka fact is an ordinary `location.bay.updated` / `location.mobile-unit.updated` — pos-location no
+longer emits `location.bay.deleted` / `location.mobile-unit.deleted` at all. `applyBayUpdated` /
+`applyMobileUnitUpdated` already derive `active` from the raw `status`, so a retirement needs no
+special handling: the row stays, `active` flips to `false`, and a workorder already assigned to it
+still resolves a name. `applyBayDeleted` / `applyMobileUnitDeleted` remain only to handle a stray or
+replayed pre-#2264 delivery of the retired facts safely — marking the row inactive if it still
+exists, never calling `deleteById`.
 
 **Bay specialty map replica (#2261, DECISION-LOCATION-025).** `location.bay-specialty-map.updated`
 carries a tenant's *whole* bay-type specialty map — one entry per `BayType`, never a delta — so this

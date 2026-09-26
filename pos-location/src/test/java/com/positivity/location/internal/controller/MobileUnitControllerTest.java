@@ -238,7 +238,7 @@ class MobileUnitControllerTest {
     @DisplayName("#2252 row 7 - a patch status the service refuses is 400 naming status")
     void patchInvalidStatusIs400() throws Exception {
         when(mobileUnitService.patch(eq(UNIT_ID), any()))
-                .thenThrow(InvalidFieldException.invalid("status", "status must be ACTIVE or INACTIVE"));
+                .thenThrow(InvalidFieldException.invalid("status", "status must be ACTIVE, OUT_OF_SERVICE or RETIRED"));
         as(preRollout(LocationPermissions.MOBILE_UNIT_MANAGE));
 
         mockMvc.perform(patch(UNITS_URL + "/{id}", UNIT_ID)
@@ -247,7 +247,8 @@ class MobileUnitControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("status"))
-                .andExpect(jsonPath("$.fieldErrors[0].message").value("status must be ACTIVE or INACTIVE"));
+                .andExpect(
+                        jsonPath("$.fieldErrors[0].message").value("status must be ACTIVE, OUT_OF_SERVICE or RETIRED"));
     }
 
     @Test

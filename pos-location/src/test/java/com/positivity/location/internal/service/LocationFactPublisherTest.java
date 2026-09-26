@@ -13,11 +13,9 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.positivity.domainevents.DomainEventEnvelope;
-import com.positivity.domainevents.location.BayDeletedV1;
 import com.positivity.domainevents.location.BayUpdatedV1;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
-import com.positivity.domainevents.location.MobileUnitDeletedV1;
 import com.positivity.domainevents.location.MobileUnitUpdatedV1;
 import com.positivity.domainevents.location.StorageLocationUpdatedV1;
 import com.positivity.location.internal.config.OutboxEventWriter;
@@ -238,9 +236,7 @@ class LocationFactPublisherTest {
         publisher.storageLocationChanged(
                 StorageLocationEntity.builder().id(UUID.randomUUID()).build());
         publisher.bayChanged(bay(UUID.randomUUID(), UUID.randomUUID(), "Bay", "ACTIVE", 1L));
-        publisher.bayDeleted(bay(UUID.randomUUID(), UUID.randomUUID(), "Bay", "ACTIVE", 1L));
         publisher.mobileUnitChanged(mobileUnit(UUID.randomUUID(), UUID.randomUUID(), "Van", "ACTIVE", 1L));
-        publisher.mobileUnitDeleted(mobileUnit(UUID.randomUUID(), UUID.randomUUID(), "Van", "ACTIVE", 1L));
 
         verify(writer, never()).publish(any(), any());
         verify(entityManager, never()).flush();
@@ -335,18 +331,38 @@ class LocationFactPublisherTest {
     }
 
     @Test
-    @DisplayName("#1668 bay tombstone is versioned one past every fact the aggregate published")
-    void bayDeleteFact() {
+    @DisplayName("#2264 retiring a bay publishes an ordinary update with status RETIRED, not a tombstone")
+    void bayRetiredPublishesUpdateNotTombstone() {
         UUID bayId = UUID.randomUUID();
+        BayEntity retired = bay(bayId, UUID.randomUUID(), "Front Bay 1", "RETIRED", 10L);
 
-        publisher.bayDeleted(bay(bayId, UUID.randomUUID(), "Front Bay 1", "ACTIVE", 10L));
+        publisher.bayChanged(retired);
 
-        // Consumers delete the replica row without consulting a version, so the tombstone must
-        // outrank every update, including one still in flight.
-        BayDeletedV1 fact = capturePayload(BayDeletedV1.EVENT_TYPE, 11L, BayDeletedV1.class);
+        // DECISION-LOCATION-026: DELETE retires. There is no bay tombstone fact any more; a retired
+        // bay is published exactly like any other status change, at its own version.
+        BayUpdatedV1 fact = capturePayload(BayUpdatedV1.EVENT_TYPE, 10L, BayUpdatedV1.class);
         assertThat(fact.bayId()).isEqualTo(bayId);
-        // A tombstone reads the version it already holds; there is no pending mutation to flush.
-        verify(entityManager, never()).flush();
+        assertThat(fact.status()).isEqualTo("RETIRED");
+    }
+
+    @Test
+    @DisplayName("#2264 an out-of-service bay's fact carries the reason, note, expected return and display order")
+    void bayFactCarriesOutOfServiceFields() {
+        UUID bayId = UUID.randomUUID();
+        BayEntity outOfService = bay(bayId, UUID.randomUUID(), "Front Bay 1", "OUT_OF_SERVICE", 12L);
+        outOfService.setOutOfServiceReason("EQUIPMENT_FAILURE");
+        outOfService.setOutOfServiceNote("Lift arm replaced");
+        Instant expectedReturn = Instant.parse("2026-07-20T08:00:00Z");
+        outOfService.setExpectedReturnAt(expectedReturn);
+        outOfService.setDisplayOrder(5);
+
+        publisher.bayChanged(outOfService);
+
+        BayUpdatedV1 fact = capturePayload(BayUpdatedV1.EVENT_TYPE, 12L, BayUpdatedV1.class);
+        assertThat(fact.outOfServiceReason()).isEqualTo("EQUIPMENT_FAILURE");
+        assertThat(fact.outOfServiceNote()).isEqualTo("Lift arm replaced");
+        assertThat(fact.expectedReturnAt()).isEqualTo(expectedReturn);
+        assertThat(fact.displayOrder()).isEqualTo(5);
     }
 
     @Test
@@ -366,14 +382,14 @@ class LocationFactPublisherTest {
     }
 
     @Test
-    @DisplayName("#1668 mobile unit status change publishes INACTIVE rather than removing the unit")
+    @DisplayName("#1668 mobile unit status change publishes OUT_OF_SERVICE rather than removing the unit")
     void mobileUnitStatusChangeIsRaw() {
-        publisher.mobileUnitChanged(mobileUnit(UUID.randomUUID(), UUID.randomUUID(), "Van 1", "INACTIVE", 6L));
+        publisher.mobileUnitChanged(mobileUnit(UUID.randomUUID(), UUID.randomUUID(), "Van 1", "OUT_OF_SERVICE", 6L));
 
         MobileUnitUpdatedV1 fact = capturePayload(MobileUnitUpdatedV1.EVENT_TYPE, 6L, MobileUnitUpdatedV1.class);
         // Standing a unit down is a status change, not a tombstone: the replica keeps the row and
         // flips it inactive.
-        assertThat(fact.status()).isEqualTo("INACTIVE");
+        assertThat(fact.status()).isEqualTo("OUT_OF_SERVICE");
         assertThat(MobileUnitUpdatedV1.class.getRecordComponents())
                 .extracting(java.lang.reflect.RecordComponent::getName)
                 .doesNotContain("active");
@@ -409,15 +425,35 @@ class LocationFactPublisherTest {
     }
 
     @Test
-    @DisplayName("#1668 mobile unit tombstone is versioned one past every fact the aggregate published")
-    void mobileUnitDeleteFact() {
+    @DisplayName("#2264 retiring a mobile unit publishes an ordinary update with status RETIRED, not a tombstone")
+    void mobileUnitRetiredPublishesUpdateNotTombstone() {
         UUID unitId = UUID.randomUUID();
+        MobileUnitEntity retired = mobileUnit(unitId, UUID.randomUUID(), "Van 1", "RETIRED", 20L);
 
-        publisher.mobileUnitDeleted(mobileUnit(unitId, UUID.randomUUID(), "Van 1", "ACTIVE", 20L));
+        publisher.mobileUnitChanged(retired);
 
-        MobileUnitDeletedV1 fact = capturePayload(MobileUnitDeletedV1.EVENT_TYPE, 21L, MobileUnitDeletedV1.class);
+        // DECISION-LOCATION-026: DELETE retires. There is no mobile-unit tombstone fact any more.
+        MobileUnitUpdatedV1 fact = capturePayload(MobileUnitUpdatedV1.EVENT_TYPE, 20L, MobileUnitUpdatedV1.class);
         assertThat(fact.mobileUnitId()).isEqualTo(unitId);
-        verify(entityManager, never()).flush();
+        assertThat(fact.status()).isEqualTo("RETIRED");
+    }
+
+    @Test
+    @DisplayName("#2264 an out-of-service mobile unit's fact carries the reason, note and expected return")
+    void mobileUnitFactCarriesOutOfServiceFields() {
+        UUID unitId = UUID.randomUUID();
+        MobileUnitEntity outOfService = mobileUnit(unitId, UUID.randomUUID(), "Van 1", "OUT_OF_SERVICE", 21L);
+        outOfService.setOutOfServiceReason("INSPECTION");
+        outOfService.setOutOfServiceNote("Annual inspection due");
+        Instant expectedReturn = Instant.parse("2026-08-01T08:00:00Z");
+        outOfService.setExpectedReturnAt(expectedReturn);
+
+        publisher.mobileUnitChanged(outOfService);
+
+        MobileUnitUpdatedV1 fact = capturePayload(MobileUnitUpdatedV1.EVENT_TYPE, 21L, MobileUnitUpdatedV1.class);
+        assertThat(fact.outOfServiceReason()).isEqualTo("INSPECTION");
+        assertThat(fact.outOfServiceNote()).isEqualTo("Annual inspection due");
+        assertThat(fact.expectedReturnAt()).isEqualTo(expectedReturn);
     }
 
     @Test

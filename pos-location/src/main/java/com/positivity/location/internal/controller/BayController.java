@@ -72,12 +72,14 @@ public class BayController {
     }
 
     @Operation(operationId = "listBays", summary = "List Service Bays of a Location", description = """
-                    Lists the service bays of a location as a page, optionally filtered by status and bayType.
+                    Lists the service bays of a location as a page, sorted by displayOrder (nulls last) then \
+                    name, optionally filtered by status and bayType.
                     Use this tool to see bay capacity and status for a shop; use getBay instead when the bay id \
                     is already known.
                     Preconditions: the location must exist.
-                    Required inputs: locationId (UUID) as a path parameter; status (ACTIVE or OUT_OF_SERVICE) and \
-                    bayType filters are optional, and page defaults to 0 with size 20.
+                    Required inputs: locationId (UUID) as a path parameter; status (ACTIVE, OUT_OF_SERVICE or \
+                    RETIRED) and bayType filters are optional, and page defaults to 0 with size 20. Omitting \
+                    status hides RETIRED bays; naming status=RETIRED explicitly includes them.
                     No events are emitted and no state changes; this is a read-only projection.
                     Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a \
                     location-scoped location:bay:read grant does not cover locationId (ADR-0061), and 404 when \
@@ -157,15 +159,19 @@ public class BayController {
                     modifies a bay that already exists, and use createStorageLocation for inventory storage \
                     rather than vehicle bays.
                     Preconditions: the location must exist, no bay of that location may already use the name \
-                    (case-insensitive), and any serviceCapabilityCodes must name active catalog operation \
-                    codes (a GENERAL_SERVICE bay declares none).
+                    (case-insensitive, including a retired bay's name), any serviceCapabilityCodes must name \
+                    active catalog operation codes (a GENERAL_SERVICE bay declares none), and a status of \
+                    OUT_OF_SERVICE must carry outOfServiceReason, with outOfServiceNote also required for OTHER.
                     Required inputs: name, bayType (one of GENERAL_SERVICE, ALIGNMENT, TIRE_SERVICE, HEAVY_DUTY, \
                     INSPECTION or WASH_DETAIL) and capacity.maxConcurrentVehicles of at least 1; status is \
-                    optional, defaults to ACTIVE and only also accepts OUT_OF_SERVICE.
+                    optional and defaults to ACTIVE, also accepting OUT_OF_SERVICE or RETIRED; displayOrder is \
+                    optional and controls list ordering.
                     Emits a LOCATION_BAY_CREATE event; no other records are touched.
                     Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a \
                     location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when \
-                    the location does not exist and 409 when the bay name is already taken at that location.
+                    the location does not exist, 409 when the bay name is already taken at that location \
+                    (including a retired bay), and 422 OUT_OF_SERVICE_REASON_REQUIRED when status is \
+                    OUT_OF_SERVICE without a reason, or with OTHER and no note.
                     """)
     @ApiResponse(responseCode = "201", description = "Bay created successfully.")
     @ApiResponse(
@@ -182,7 +188,12 @@ public class BayController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Bay name already taken at this location.",
+            description = "Bay name already taken at this location, including a retired bay's name.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "OUT_OF_SERVICE_REASON_REQUIRED: status is OUT_OF_SERVICE without outOfServiceReason, or"
+                    + " outOfServiceReason is OTHER without outOfServiceNote.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_BAY_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_MANAGE + "')")
@@ -212,18 +223,23 @@ public class BayController {
 
     @Operation(operationId = "patchBay", summary = "Patch Fields of a Service Bay", description = """
                     Applies a partial update to a bay, changing only the supplied fields: name, bayType, status, \
-                    capacity and the capability or skill requirement lists.
-                    Use this tool for status transitions between ACTIVE and OUT_OF_SERVICE and for capacity \
-                    changes; do not use createBay, which adds a new bay.
-                    Preconditions: the location must exist, the bay must belong to it, and a new name must not \
-                    collide with another bay at the same location.
+                    the out-of-service reason/note/expected-return fields, displayOrder, capacity and the \
+                    capability or skill requirement lists.
+                    Use this tool for status transitions among ACTIVE, OUT_OF_SERVICE and RETIRED and for \
+                    capacity changes; do not use createBay, which adds a new bay, and do not use this tool to \
+                    retire a bay for good — use deleteBay, which also sets RETIRED.
+                    Preconditions: the location must exist, the bay must belong to it, a new name must not \
+                    collide with another bay at the same location (including a retired one), and a resulting \
+                    status of OUT_OF_SERVICE must carry outOfServiceReason, with outOfServiceNote also required \
+                    for OTHER; returning to ACTIVE clears all three fields regardless of what else is sent.
                     Required inputs: locationId and bayId (UUIDs) as path parameters and a body with at least one \
                     field; capacity.maxConcurrentVehicles, when supplied, must be at least 1.
                     Emits a LOCATION_BAY_UPDATE event; no other records are touched.
                     Returns 400 when either id does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a \
                     location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when \
-                    the location or bay does not exist and 409 when the new name is already taken at that \
-                    location.
+                    the location or bay does not exist, 409 when the new name is already taken at that location, \
+                    and 422 OUT_OF_SERVICE_REASON_REQUIRED when the resulting status is OUT_OF_SERVICE without a \
+                    reason, or with OTHER and no note.
                     """)
     @ApiResponse(responseCode = "200", description = "Bay updated successfully.")
     @ApiResponse(
@@ -241,6 +257,11 @@ public class BayController {
     @ApiResponse(
             responseCode = "409",
             description = "Bay name already taken at this location, or a concurrent update won the version race.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "OUT_OF_SERVICE_REASON_REQUIRED: the resulting status is OUT_OF_SERVICE without"
+                    + " outOfServiceReason, or outOfServiceReason is OTHER without outOfServiceNote.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_BAY_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_MANAGE + "')")
@@ -268,21 +289,25 @@ public class BayController {
         return ResponseEntity.ok(bayService.patchBay(location, parseUuid(bayId), patchRequest));
     }
 
-    @Operation(operationId = "deleteBay", summary = "Delete a Service Bay", description = """
-                    Deletes a bay permanently by id and publishes a deletion fact so replica consumers drop \
-                    the row from their dispatch and roster views.
-                    Use this tool only when a bay was created in error; use patchBay with status \
-                    OUT_OF_SERVICE instead to take a real bay out of service, which keeps it visible as \
-                    inactive rather than removing it.
-                    Preconditions: the location must exist and the bay must belong to it; there is no \
-                    usage check, so callers must confirm the bay is not referenced by scheduled work first.
+    @Operation(operationId = "deleteBay", summary = "Retire a Service Bay", description = """
+                    Retires a bay by id: status becomes RETIRED and an update fact is published so replica \
+                    consumers mark the row inactive rather than removing it. Nothing is hard-deleted.
+                    Use this tool to take a bay out of use for good; use patchBay with status OUT_OF_SERVICE \
+                    instead for a temporary stand-down that records a reason, and patchBay with status ACTIVE \
+                    or OUT_OF_SERVICE to bring a retired bay back into service.
+                    Preconditions: the location must exist and the bay must belong to it; there is no usage \
+                    check, so callers must confirm the bay is not referenced by scheduled work first.
                     Required inputs: locationId and bayId (UUIDs) as path parameters; there is no request body.
-                    Emits a LOCATION_BAY_DELETE event; the row is hard-deleted, not soft-deleted.
+                    Emits a LOCATION_BAY_DELETE audit event, but the Kafka fact replica consumers see is an \
+                    ordinary location.bay.updated with status RETIRED, not a tombstone; the bay's name stays \
+                    reserved, so a later create or rename to the same name at this location still returns 409 \
+                    BAY_NAME_TAKEN.
                     Returns 204 on success, 400 when either id does not parse as a UUID, 403 \
                     LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover \
-                    locationId (ADR-0061), and 404 when the location or bay does not exist.
+                    locationId (ADR-0061), and 404 when the location or bay does not exist; retiring an \
+                    already-RETIRED bay succeeds again rather than erroring.
                     """)
-    @ApiResponse(responseCode = "204", description = "Bay deleted successfully.")
+    @ApiResponse(responseCode = "204", description = "Bay retired successfully.")
     @ApiResponse(
             responseCode = "400",
             description = "locationId or bayId is not a UUID.",

@@ -106,8 +106,12 @@ class MobileUnitValidationTest {
                 .build();
     }
 
+    /**
+     * A unit staged before it is complete: status omitted, so it defaults to {@code OUT_OF_SERVICE}
+     * with the system-supplied reason {@code OTHER} (formerly {@code INACTIVE} — DECISION-LOCATION-026).
+     */
     private static MobileUnitRequest.MobileUnitRequestBuilder inactiveUnit() {
-        return MobileUnitRequest.builder().name("Van 7").baseLocationId(BASE_ID).status("INACTIVE");
+        return MobileUnitRequest.builder().name("Van 7").baseLocationId(BASE_ID);
     }
 
     private static MobileUnitEntity unit(String status) {
@@ -116,6 +120,9 @@ class MobileUnitValidationTest {
                 .name("Van 7")
                 .baseLocation(Location.builder().id(BASE_ID).build())
                 .status(status)
+                // A stored OUT_OF_SERVICE unit always carries a reason (DECISION-LOCATION-026 rule
+                // 4); a test that cares about a particular reason sets its own on the built entity.
+                .outOfServiceReason("OUT_OF_SERVICE".equals(status) ? "EQUIPMENT_FAILURE" : null)
                 .travelBufferPolicyId(POLICY_ID)
                 .notes("old")
                 .build();
@@ -259,7 +266,7 @@ class MobileUnitValidationTest {
         @Test
         @DisplayName("row 7 - an explicit null status is 400, never stored as \"NULL\"")
         void nullStatus() {
-            MobileUnitEntity existing = unit("INACTIVE");
+            MobileUnitEntity existing = unit("OUT_OF_SERVICE");
             when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
             Map<String, Object> patch = new HashMap<>();
             patch.put("status", null);
@@ -267,18 +274,18 @@ class MobileUnitValidationTest {
             Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> service.patch(UNIT_ID, patch));
 
             assertField(thrown, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "status");
-            assertThat(existing.getStatus()).isEqualTo("INACTIVE");
+            assertThat(existing.getStatus()).isEqualTo("OUT_OF_SERVICE");
             assertNothingWritten();
         }
 
         @Test
-        @DisplayName("row 7 - any status but ACTIVE / INACTIVE is 400")
+        @DisplayName("row 7 - any status but ACTIVE / OUT_OF_SERVICE / RETIRED is 400")
         void unknownStatus() {
-            MobileUnitEntity existing = unit("INACTIVE");
+            MobileUnitEntity existing = unit("OUT_OF_SERVICE");
             when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
 
             Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(
-                    () -> service.patch(UNIT_ID, Map.of("status", "retired")));
+                    () -> service.patch(UNIT_ID, Map.of("status", "closed")));
 
             assertField(thrown, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "status");
             assertNothingWritten();
@@ -291,9 +298,10 @@ class MobileUnitValidationTest {
             when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
             when(mobileUnitRepository.save(existing)).thenReturn(existing);
 
-            MobileUnitResponse patched = service.patch(UNIT_ID, Map.of("status", " inactive "));
+            // RETIRED needs no reason, so a bare status patch is enough to prove normalization.
+            MobileUnitResponse patched = service.patch(UNIT_ID, Map.of("status", " retired "));
 
-            assertThat(patched.getStatus()).isEqualTo("INACTIVE");
+            assertThat(patched.getStatus()).isEqualTo("RETIRED");
             verify(locationFactPublisher).mobileUnitChanged(existing);
         }
 
@@ -301,7 +309,7 @@ class MobileUnitValidationTest {
         @DisplayName("row 8 - an unknown travelBufferPolicyId is 422 TRAVEL_BUFFER_POLICY_NOT_FOUND, as on create")
         void unknownPolicy() {
             UUID unknown = UUID.fromString("019200aa-0000-7000-8000-0000000000c9");
-            MobileUnitEntity existing = unit("INACTIVE");
+            MobileUnitEntity existing = unit("OUT_OF_SERVICE");
             when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
             when(travelBufferPolicyRepository.findById(unknown)).thenReturn(Optional.empty());
 
@@ -320,7 +328,7 @@ class MobileUnitValidationTest {
         @Test
         @DisplayName("a travelBufferPolicyId that is not a UUID is 400 rather than clearing the policy")
         void malformedPolicy() {
-            MobileUnitEntity existing = unit("INACTIVE");
+            MobileUnitEntity existing = unit("OUT_OF_SERVICE");
             when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
 
             Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(
@@ -335,7 +343,7 @@ class MobileUnitValidationTest {
         @DisplayName("an existing travelBufferPolicyId is accepted")
         void knownPolicy() {
             UUID other = UUID.fromString("019200aa-0000-7000-8000-0000000000c2");
-            MobileUnitEntity existing = unit("INACTIVE");
+            MobileUnitEntity existing = unit("OUT_OF_SERVICE");
             when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
             when(travelBufferPolicyRepository.findById(other))
                     .thenReturn(Optional.of(
@@ -350,7 +358,7 @@ class MobileUnitValidationTest {
         @Test
         @DisplayName("a blank name is 400 on name")
         void blankName() {
-            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(unit("INACTIVE")));
+            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(unit("OUT_OF_SERVICE")));
 
             Throwable thrown =
                     org.assertj.core.api.Assertions.catchThrowable(() -> service.patch(UNIT_ID, Map.of("name", " ")));
@@ -362,7 +370,7 @@ class MobileUnitValidationTest {
         @Test
         @DisplayName("row 6 - renaming onto another unit's name at the base location is 409 MOBILE_UNIT_NAME_TAKEN")
         void renameCollision() {
-            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(unit("INACTIVE")));
+            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(unit("OUT_OF_SERVICE")));
             when(mobileUnitRepository.existsByBaseLocationIdAndNameIgnoreCaseAndIdNot(BASE_ID, "Van 8", UNIT_ID))
                     .thenReturn(true);
 
@@ -375,7 +383,7 @@ class MobileUnitValidationTest {
         @Test
         @DisplayName("a rename that loses the race to the case-insensitive unique index is 409 MOBILE_UNIT_NAME_TAKEN")
         void renameLosesRaceToUniqueIndex() {
-            MobileUnitEntity existing = unit("INACTIVE");
+            MobileUnitEntity existing = unit("OUT_OF_SERVICE");
             when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
             when(mobileUnitRepository.existsByBaseLocationIdAndNameIgnoreCaseAndIdNot(BASE_ID, "van 8", UNIT_ID))
                     .thenReturn(false);
@@ -393,7 +401,7 @@ class MobileUnitValidationTest {
         @Test
         @DisplayName("serviceCapabilityCodes that is not an array is 400 rather than clearing the claim")
         void capabilityCodesNotAnArray() {
-            MobileUnitEntity existing = unit("INACTIVE");
+            MobileUnitEntity existing = unit("OUT_OF_SERVICE");
             when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
 
             Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(
@@ -423,9 +431,9 @@ class MobileUnitValidationTest {
         }
 
         @Test
-        @DisplayName("an empty set on an INACTIVE unit clears its coverage")
+        @DisplayName("an empty set on an OUT_OF_SERVICE unit clears its coverage")
         void emptySetOnInactiveUnit() {
-            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(unit("INACTIVE")));
+            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(unit("OUT_OF_SERVICE")));
             when(coverageRuleRepository.saveAll(anyList())).thenReturn(List.of());
 
             assertThat(service.replaceCoverageRules(UNIT_ID, List.of())).isEmpty();
@@ -565,7 +573,8 @@ class MobileUnitValidationTest {
         @Test
         @DisplayName("baseLocationId narrows to that location's units")
         void byBaseLocation() {
-            when(mobileUnitRepository.findByBaseLocation_Id(eq(BASE_ID), any(Pageable.class)))
+            when(mobileUnitRepository.findByBaseLocation_IdAndStatusNot(
+                            eq(BASE_ID), eq("RETIRED"), any(Pageable.class)))
                     .thenReturn(new PageImpl<>(List.of(van)));
 
             var page = service.list(0, 20, BASE_ID, null, false);
@@ -589,10 +598,10 @@ class MobileUnitValidationTest {
         @Test
         @DisplayName("status alone narrows every location's units")
         void byStatus() {
-            when(mobileUnitRepository.findByStatus(eq("INACTIVE"), any(Pageable.class)))
+            when(mobileUnitRepository.findByStatus(eq("OUT_OF_SERVICE"), any(Pageable.class)))
                     .thenReturn(new PageImpl<>(List.of()));
 
-            assertThat(service.list(0, 20, null, "INACTIVE", false).getContent())
+            assertThat(service.list(0, 20, null, "OUT_OF_SERVICE", false).getContent())
                     .isEmpty();
         }
 
@@ -611,9 +620,10 @@ class MobileUnitValidationTest {
             MobileUnitEntity bare = MobileUnitEntity.builder()
                     .id(UUID.fromString("019200aa-0000-7000-8000-000000000002"))
                     .name("Van 8")
-                    .status("INACTIVE")
+                    .status("OUT_OF_SERVICE")
                     .build();
-            when(mobileUnitRepository.findByBaseLocation_Id(eq(BASE_ID), any(Pageable.class)))
+            when(mobileUnitRepository.findByBaseLocation_IdAndStatusNot(
+                            eq(BASE_ID), eq("RETIRED"), any(Pageable.class)))
                     .thenReturn(new PageImpl<>(List.of(van, bare)));
             when(coverageRuleRepository.findByMobileUnit_IdInOrderByPriorityAsc(List.of(UNIT_ID, bare.getId())))
                     .thenReturn(List.of(MobileUnitCoverageRuleEntity.builder()

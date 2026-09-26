@@ -51,6 +51,17 @@ public interface MobileUnitRepository extends JpaRepository<MobileUnitEntity, UU
     Page<MobileUnitEntity> findByStatus(String status, Pageable pageable);
 
     /**
+     * Default list, no status filter: one base location's units in every status except one
+     * (DECISION-LOCATION-026 — default lists hide {@code RETIRED}; an explicit status filter can
+     * still ask for it).
+     */
+    Page<MobileUnitEntity> findByBaseLocation_IdAndStatusNot(
+            UUID baseLocationId, String excludedStatus, Pageable pageable);
+
+    /** Same default-hides-{@code RETIRED} rule as {@link #findByBaseLocation_IdAndStatusNot}, unscoped by location. */
+    Page<MobileUnitEntity> findByStatusNot(String excludedStatus, Pageable pageable);
+
+    /**
      * Counts mobile units per base location for a single status, for a batch of
      * locations.
      *

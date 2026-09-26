@@ -374,9 +374,15 @@ class ReplicaAndManifestListenerContractTest {
             assertThat(captor.getValue().isActive()).isTrue();
             assertThat(captor.getValue().getAggregateVersion()).isEqualTo(3);
 
+            // #2264: pos-location no longer emits this fact, but a stray or replayed one is handled
+            // safely — the row, if still present, is marked inactive rather than removed.
+            when(bayRepository.findById(ID)).thenReturn(Optional.of(captor.getValue()));
             locationListener.onLocationEvent(envelope("evt-2", BayDeletedV1.EVENT_TYPE, """
                     {"bayId":"%s"}""".formatted(ID)));
-            verify(bayRepository).deleteById(ID);
+            verify(bayRepository, never()).deleteById(any());
+            ArgumentCaptor<ExtBayReplica> secondSave = ArgumentCaptor.forClass(ExtBayReplica.class);
+            verify(bayRepository, org.mockito.Mockito.times(2)).save(secondSave.capture());
+            assertThat(secondSave.getAllValues().get(1).isActive()).isFalse();
         }
 
         @Test

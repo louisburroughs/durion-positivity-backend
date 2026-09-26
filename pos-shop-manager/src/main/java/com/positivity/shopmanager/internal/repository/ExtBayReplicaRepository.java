@@ -14,19 +14,23 @@ public interface ExtBayReplicaRepository extends JpaRepository<ExtBayReplica, UU
      * Every active bay at one site, in display order — one query for the whole bay half of the
      * dashboard's unit roster (#1658 AC1).
      *
-     * <p>The order is spelled out in the query rather than left to a derived
-     * {@code OrderByNameAscBayIdAsc} method name because the derived form cannot say where nulls
-     * go, and {@code name} is legitimately null while the location domain's event is still in
+     * <p>The order is spelled out in the query rather than left to a derived method name because
+     * the derived form cannot say where nulls go, and both {@code displayOrder} and {@code name} are
+     * legitimately null — {@code displayOrder} until pos-location's owner sets one
+     * (DECISION-LOCATION-026, #2264), {@code name} while the location domain's event is still in
      * flight. Null placement is not portable — PostgreSQL sorts nulls last on ASC, H2 sorts them
      * first — so the same replica state would render two different rosters depending on the
-     * database. The tiers are: named bays before unnamed ones, then name, then {@code bayId} — the
-     * primary key, which makes the order total and the roster stable across refreshes.
+     * database. The tiers are: {@code displayOrder} (nulls last), then named bays before unnamed
+     * ones, then name, then {@code bayId} — the primary key, which makes the order total and the
+     * roster stable across refreshes.
      */
     @Query("""
             select b from ExtBayReplica b
             where b.locationId = :locationId
               and b.active = true
             order by
+              case when b.displayOrder is null then 1 else 0 end,
+              b.displayOrder asc,
               case when b.name is null then 1 else 0 end,
               b.name asc,
               b.bayId asc

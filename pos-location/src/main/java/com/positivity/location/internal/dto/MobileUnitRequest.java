@@ -8,6 +8,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -41,11 +43,44 @@ public class MobileUnitRequest {
     private UUID baseLocationId;
 
     @Schema(
-            description = "Operational status of the mobile unit, matched case-insensitively; INACTIVE when omitted",
+            description = "Operational status of the mobile unit, matched case-insensitively: ACTIVE, "
+                    + "OUT_OF_SERVICE or RETIRED. OUT_OF_SERVICE when omitted, with outOfServiceReason OTHER, "
+                    + "for a unit staged before its policy, capabilities and coverage are configured.",
             example = "ACTIVE",
-            allowableValues = {"ACTIVE", "INACTIVE"},
+            allowableValues = {"ACTIVE", "OUT_OF_SERVICE", "RETIRED"},
             requiredMode = NOT_REQUIRED)
     private String status;
+
+    @Schema(
+            description = "Reason the unit is OUT_OF_SERVICE (DECISION-LOCATION-026); required when status is "
+                    + "OUT_OF_SERVICE, refused with 422 OUT_OF_SERVICE_REASON_REQUIRED otherwise. Defaults to "
+                    + "OTHER when status is omitted entirely.",
+            example = "EQUIPMENT_FAILURE",
+            allowableValues = {
+                "EQUIPMENT_FAILURE",
+                "SCHEDULED_MAINTENANCE",
+                "INSPECTION",
+                "SAFETY_HOLD",
+                "FACILITY_ISSUE",
+                "OTHER"
+            },
+            requiredMode = NOT_REQUIRED)
+    private String outOfServiceReason;
+
+    @Schema(
+            description = "Free-text detail for outOfServiceReason (max 255 characters); required when "
+                    + "outOfServiceReason is OTHER, optional otherwise.",
+            example = "Awaiting hydraulic lift inspection",
+            maxLength = 255,
+            requiredMode = NOT_REQUIRED)
+    @Size(max = 255)
+    private String outOfServiceNote;
+
+    @Schema(
+            description = "Advisory expected return-to-service time; not used by scheduling.",
+            example = "2026-07-01T08:00:00Z",
+            requiredMode = NOT_REQUIRED)
+    private Instant expectedReturnAt;
 
     @Schema(
             description = "Identifier of the travel buffer policy applied to the mobile unit; must name an existing"

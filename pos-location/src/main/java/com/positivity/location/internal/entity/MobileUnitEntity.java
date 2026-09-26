@@ -73,6 +73,28 @@ public class MobileUnitEntity extends TenantScopedEntity {
     private String notes;
 
     /**
+     * Why the unit is {@code OUT_OF_SERVICE} (DECISION-LOCATION-026 rule 4, issue #2264): one of
+     * {@link com.positivity.location.internal.enums.OutOfServiceReason}, required whenever {@code
+     * status} is {@code OUT_OF_SERVICE} and cleared on return to {@code ACTIVE}.
+     */
+    @Column(name = "out_of_service_reason", length = 32)
+    private String outOfServiceReason;
+
+    /**
+     * Free-text detail (≤255) for {@link #outOfServiceReason}; required when the reason is {@code
+     * OTHER}, optional otherwise, cleared on return to {@code ACTIVE}.
+     */
+    @Column(name = "out_of_service_note", length = 255)
+    private String outOfServiceNote;
+
+    /**
+     * Advisory-only expected return time; never consulted by scheduling (DECISION-LOCATION-026
+     * rule 4). Cleared on return to {@code ACTIVE}.
+     */
+    @Column(name = "expected_return_at")
+    private Instant expectedReturnAt;
+
+    /**
      * Catalog operation codes the unit can perform off-site (CAP-325 D14) — the same vocabulary a
      * bay's specialty claims use, validated against the {@code ext_catalog_service} replica. The
      * location-owned capability registry this once referenced is retired (V5).

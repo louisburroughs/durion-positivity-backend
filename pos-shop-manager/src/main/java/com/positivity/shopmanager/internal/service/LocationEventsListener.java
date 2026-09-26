@@ -275,6 +275,13 @@ public class LocationEventsListener {
                         "maxDutyClass",
                         payload.maxDutyClass(),
                         existing == null ? null : existing.getMaxDutyClass()))
+                // displayOrder (DECISION-LOCATION-026, #2264) is additive the same way: absent from
+                // the payload means "not published", so the replicated value stands.
+                .displayOrder(mergeField(
+                        payloadNode,
+                        "displayOrder",
+                        payload.displayOrder(),
+                        existing == null ? null : existing.getDisplayOrder()))
                 // acceptsGeneralWork (DECISION-LOCATION-025, #2261) is additive within schema v1:
                 // null - whether absent or an explicit JSON null - always means "the publisher
                 // predates the field", never "no" (BayUpdatedV1 javadoc). So this reads only
@@ -287,9 +294,21 @@ public class LocationEventsListener {
                 .build());
     }
 
+    /**
+     * A stray {@code location.bay.deleted}: pos-location no longer emits this fact
+     * (DECISION-LOCATION-026, issue #2264) — retiring a bay now arrives as an ordinary {@code
+     * BayUpdatedV1} with {@code status = RETIRED}, applied by {@link #applyBayUpdated} exactly like
+     * any other status change. A replayed or long-delayed old event is handled safely rather than
+     * ignored: the row, if still present, is marked inactive instead of removed, so an appointment
+     * or workorder that already names this bay keeps resolving to a name.
+     */
     private void applyBayDeleted(JsonNode envelope) {
         BayDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), BayDeletedV1.class);
-        extBayReplicaRepository.deleteById(payload.bayId());
+        extBayReplicaRepository.findById(payload.bayId()).ifPresent(existing -> {
+            existing.setActive(false);
+            existing.setUpdatedAt(Instant.now(clock));
+            extBayReplicaRepository.save(existing);
+        });
     }
 
     /**
@@ -374,9 +393,20 @@ public class LocationEventsListener {
                 .build());
     }
 
+    /**
+     * A stray {@code location.mobile-unit.deleted}: pos-location no longer emits this fact
+     * (DECISION-LOCATION-026, issue #2264) — retiring a unit now arrives as an ordinary {@code
+     * MobileUnitUpdatedV1} with {@code status = RETIRED}, applied by {@link #applyMobileUnitUpdated}
+     * exactly like any other status change. A replayed or long-delayed old event is handled safely
+     * rather than ignored: the row, if still present, is marked inactive instead of removed.
+     */
     private void applyMobileUnitDeleted(JsonNode envelope) {
         MobileUnitDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), MobileUnitDeletedV1.class);
-        extMobileUnitReplicaRepository.deleteById(payload.mobileUnitId());
+        extMobileUnitReplicaRepository.findById(payload.mobileUnitId()).ifPresent(existing -> {
+            existing.setActive(false);
+            existing.setUpdatedAt(Instant.now(clock));
+            extMobileUnitReplicaRepository.save(existing);
+        });
     }
 
     private void applyLocationUpdated(JsonNode envelope) {

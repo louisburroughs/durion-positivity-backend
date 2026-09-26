@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,7 +41,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -149,7 +147,6 @@ class MobileUnitServiceTest {
         MobileUnitRequest request = MobileUnitRequest.builder()
                 .name("NorthVan")
                 .baseLocationId(baseLocationId)
-                .status("INACTIVE")
                 .build();
 
         assertThatThrownBy(() -> service.createMobileUnit(request))
@@ -171,7 +168,6 @@ class MobileUnitServiceTest {
         MobileUnitRequest request = MobileUnitRequest.builder()
                 .name("NorthVan")
                 .baseLocationId(baseLocationId)
-                .status("INACTIVE")
                 .build();
 
         assertThatThrownBy(() -> service.createMobileUnit(request))
@@ -318,13 +314,13 @@ class MobileUnitServiceTest {
         UUID firstId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID secondId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Order.asc("name"), Sort.Order.asc("id")));
-        when(mobileUnitRepository.findAll(pageable))
+        when(mobileUnitRepository.findByStatusNot(eq("RETIRED"), eq(pageable)))
                 .thenReturn(new PageImpl<>(
                         List.of(
                                 MobileUnitEntity.builder()
                                         .id(firstId)
                                         .name("A")
-                                        .status("INACTIVE")
+                                        .status("OUT_OF_SERVICE")
                                         .build(),
                                 MobileUnitEntity.builder()
                                         .id(secondId)
@@ -373,7 +369,7 @@ class MobileUnitServiceTest {
     void shouldPatchExistingMobileUnit() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // Complete apart from its status: the flip to ACTIVE is what the patch tests.
-        MobileUnitEntity existing = completeUnit(id, "INACTIVE");
+        MobileUnitEntity existing = completeUnit(id, "OUT_OF_SERVICE");
         when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
         when(mobileUnitRepository.save(existing)).thenReturn(existing);
         when(coverageRuleRepository.findByMobileUnit_IdOrderByPriorityAsc(id))
@@ -416,7 +412,7 @@ class MobileUnitServiceTest {
         MobileUnitEntity existing = MobileUnitEntity.builder()
                 .id(id)
                 .name("Bare")
-                .status("INACTIVE")
+                .status("OUT_OF_SERVICE")
                 .build();
         when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
 
@@ -546,7 +542,7 @@ class MobileUnitServiceTest {
         MobileUnitEntity inactiveUnit = MobileUnitEntity.builder()
                 .id(inactiveId)
                 .name("Inactive")
-                .status("INACTIVE")
+                .status("OUT_OF_SERVICE")
                 .baseLocation(Location.builder()
                         .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                         .build())
@@ -582,25 +578,45 @@ class MobileUnitServiceTest {
     }
 
     @Test
-    @DisplayName("#1668 - deleting a mobile unit clears coverage rules then publishes the tombstone")
-    void deleteMobileUnitPublishesTombstone() {
+    @DisplayName("#2264 - deleting a mobile unit retires it: coverage rules are kept, status becomes RETIRED")
+    void deleteMobileUnitRetiresRowAndKeepsCoverageRules() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         MobileUnitEntity existing =
                 MobileUnitEntity.builder().id(id).name("Van 1").status("ACTIVE").build();
         when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
+        when(mobileUnitRepository.save(existing)).thenReturn(existing);
 
         assertThat(service.deleteMobileUnit(id)).isTrue();
 
-        // mobile_unit_coverage_rules holds a plain FK with no cascade, so the rules must go first
-        // or the unit delete fails on the constraint.
-        InOrder inOrder = inOrder(coverageRuleRepository, mobileUnitRepository);
-        inOrder.verify(coverageRuleRepository).deleteByMobileUnit_Id(id);
-        inOrder.verify(mobileUnitRepository).delete(existing);
-        verify(locationFactPublisher).mobileUnitDeleted(existing);
+        // DECISION-LOCATION-026: DELETE retires and keeps coverage rules — they simply stop
+        // matching because the unit is no longer active.
+        assertThat(existing.getStatus()).isEqualTo("RETIRED");
+        verify(coverageRuleRepository, never()).deleteByMobileUnit_Id(any());
+        verify(mobileUnitRepository, never()).delete(any(MobileUnitEntity.class));
+        verify(mobileUnitRepository).save(existing);
+        verify(locationFactPublisher).mobileUnitChanged(existing);
     }
 
     @Test
-    @DisplayName("#1668 - deleting a mobile unit that does not exist publishes no tombstone")
+    @DisplayName("#2264 - retiring an already-retired mobile unit succeeds again rather than erroring")
+    void deleteMobileUnitAlreadyRetiredIsIdempotent() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        MobileUnitEntity existing = MobileUnitEntity.builder()
+                .id(id)
+                .name("Van 1")
+                .status("RETIRED")
+                .build();
+        when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
+        when(mobileUnitRepository.save(existing)).thenReturn(existing);
+
+        assertThat(service.deleteMobileUnit(id)).isTrue();
+
+        assertThat(existing.getStatus()).isEqualTo("RETIRED");
+        verify(locationFactPublisher).mobileUnitChanged(existing);
+    }
+
+    @Test
+    @DisplayName("#1668 - deleting a mobile unit that does not exist publishes nothing")
     void deleteMissingMobileUnitPublishesNothing() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.empty());
@@ -609,6 +625,7 @@ class MobileUnitServiceTest {
 
         verify(coverageRuleRepository, never()).deleteByMobileUnit_Id(any());
         verify(mobileUnitRepository, never()).delete(any(MobileUnitEntity.class));
-        verify(locationFactPublisher, never()).mobileUnitDeleted(any());
+        verify(mobileUnitRepository, never()).save(any(MobileUnitEntity.class));
+        verify(locationFactPublisher, never()).mobileUnitChanged(any());
     }
 }

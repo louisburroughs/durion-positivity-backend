@@ -46,8 +46,37 @@ public class BayResponse {
     @Schema(description = "Type classification of the bay", example = "LIFT", requiredMode = NOT_REQUIRED)
     private String bayType;
 
-    @Schema(description = "Operational status of the bay", example = "ACTIVE", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Operational status of the bay: ACTIVE, OUT_OF_SERVICE or RETIRED (DECISION-LOCATION-026).",
+            example = "ACTIVE",
+            allowableValues = {"ACTIVE", "OUT_OF_SERVICE", "RETIRED"},
+            requiredMode = NOT_REQUIRED)
     private String status;
+
+    @Schema(
+            description = "Reason the bay is OUT_OF_SERVICE; null unless status is OUT_OF_SERVICE.",
+            example = "EQUIPMENT_FAILURE",
+            requiredMode = NOT_REQUIRED)
+    private String outOfServiceReason;
+
+    @Schema(
+            description = "Free-text detail for outOfServiceReason; null unless status is OUT_OF_SERVICE.",
+            example = "Lift arm replaced under warranty",
+            requiredMode = NOT_REQUIRED)
+    private String outOfServiceNote;
+
+    @Schema(
+            description = "Advisory expected return-to-service time; not used by scheduling. Null unless status "
+                    + "is OUT_OF_SERVICE and one was given.",
+            example = "2026-07-01T08:00:00Z",
+            requiredMode = NOT_REQUIRED)
+    private Instant expectedReturnAt;
+
+    @Schema(
+            description = "Sort key for bay lists and the dispatch board; null sorts last, ties broken by name.",
+            example = "10",
+            requiredMode = NOT_REQUIRED)
+    private Integer displayOrder;
 
     @Schema(
             description = "Number of vehicles the bay physically accommodates at once. A bay is a single "

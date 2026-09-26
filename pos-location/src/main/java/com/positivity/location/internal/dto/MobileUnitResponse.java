@@ -43,11 +43,31 @@ public class MobileUnitResponse {
     private UUID baseLocationId;
 
     @Schema(
-            description = "Operational status of the mobile unit",
+            description = "Operational status of the mobile unit: ACTIVE, OUT_OF_SERVICE or RETIRED"
+                    + " (DECISION-LOCATION-026).",
             example = "ACTIVE",
-            allowableValues = {"ACTIVE", "INACTIVE"},
+            allowableValues = {"ACTIVE", "OUT_OF_SERVICE", "RETIRED"},
             requiredMode = NOT_REQUIRED)
     private String status;
+
+    @Schema(
+            description = "Reason the unit is OUT_OF_SERVICE; null unless status is OUT_OF_SERVICE.",
+            example = "EQUIPMENT_FAILURE",
+            requiredMode = NOT_REQUIRED)
+    private String outOfServiceReason;
+
+    @Schema(
+            description = "Free-text detail for outOfServiceReason; null unless status is OUT_OF_SERVICE.",
+            example = "Awaiting hydraulic lift inspection",
+            requiredMode = NOT_REQUIRED)
+    private String outOfServiceNote;
+
+    @Schema(
+            description = "Advisory expected return-to-service time; not used by scheduling. Null unless status "
+                    + "is OUT_OF_SERVICE and one was given.",
+            example = "2026-07-01T08:00:00Z",
+            requiredMode = NOT_REQUIRED)
+    private Instant expectedReturnAt;
 
     @Schema(
             description = "Identifier of the travel buffer policy applied to the mobile unit",
