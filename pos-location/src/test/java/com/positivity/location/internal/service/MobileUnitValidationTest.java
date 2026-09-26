@@ -373,6 +373,24 @@ class MobileUnitValidationTest {
         }
 
         @Test
+        @DisplayName("a rename that loses the race to the case-insensitive unique index is 409 MOBILE_UNIT_NAME_TAKEN")
+        void renameLosesRaceToUniqueIndex() {
+            MobileUnitEntity existing = unit("INACTIVE");
+            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
+            when(mobileUnitRepository.existsByBaseLocationIdAndNameIgnoreCaseAndIdNot(BASE_ID, "van 8", UNIT_ID))
+                    .thenReturn(false);
+            when(mobileUnitRepository.save(existing))
+                    .thenThrow(
+                            new org.springframework.dao.DataIntegrityViolationException(
+                                    "duplicate key value violates unique constraint \"uq_mobile_unit_base_location_lower_name\""));
+
+            assertThatThrownBy(() -> service.patch(UNIT_ID, Map.of("name", "van 8")))
+                    .isInstanceOf(DuplicateResourceException.class)
+                    .hasMessage("MOBILE_UNIT_NAME_TAKEN");
+            verify(locationFactPublisher, never()).mobileUnitChanged(any());
+        }
+
+        @Test
         @DisplayName("serviceCapabilityCodes that is not an array is 400 rather than clearing the claim")
         void capabilityCodesNotAnArray() {
             MobileUnitEntity existing = unit("INACTIVE");

@@ -1,8 +1,11 @@
 package com.positivity.location.internal.controller;
 
+import static com.positivity.location.config.LocationScopeTestSupport.SITE_IN_REACH;
+import static com.positivity.location.config.LocationScopeTestSupport.SITE_OUT_OF_REACH;
 import static com.positivity.location.config.LocationScopeTestSupport.as;
 import static com.positivity.location.config.LocationScopeTestSupport.clearCaller;
 import static com.positivity.location.config.LocationScopeTestSupport.preRollout;
+import static com.positivity.location.config.LocationScopeTestSupport.scopedOn;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -29,6 +32,7 @@ import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.MobileUnitService;
 import com.positivity.security.common.LocationScopeAutoConfiguration;
+import com.positivity.security.common.LocationScopeDeniedException;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.util.List;
 import java.util.Map;
@@ -105,6 +109,29 @@ class MobileUnitControllerTest {
                 .andExpect(jsonPath("$.content[0].baseLocationId").value(BASE_ID.toString()))
                 .andExpect(
                         jsonPath("$.content[0].coverageRules[0].serviceAreaId").value(AREA_ID.toString()));
+    }
+
+    @Test
+    @DisplayName("#2253 - a scoped caller naming a base location outside their reach is 403; the service is not called")
+    void listDeniesOutOfReachBaseLocation() throws Exception {
+        as(scopedOn(LocationPermissions.MOBILE_UNIT_READ));
+
+        mockMvc.perform(get(UNITS_URL).param("baseLocationId", SITE_OUT_OF_REACH.toString()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
+
+        verify(mobileUnitService, never()).list(anyInt(), anyInt(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("#2253 - a scoped caller naming a base location in reach gets that shop's units")
+    void listAllowsInReachBaseLocation() throws Exception {
+        when(mobileUnitService.list(0, 20, SITE_IN_REACH, null, false)).thenReturn(new PageImpl<>(List.of(van())));
+        as(scopedOn(LocationPermissions.MOBILE_UNIT_READ));
+
+        mockMvc.perform(get(UNITS_URL).param("baseLocationId", SITE_IN_REACH.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(UNIT_ID.toString()));
     }
 
     @Test

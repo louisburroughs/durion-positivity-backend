@@ -64,7 +64,10 @@ request field also carries `fieldErrors[0].field` naming it (`name`, `baseLocati
 | `NOT_FOUND` | 404 | The resource addressed by the path does not exist |
 
 A `DuplicateResourceException` answers its own code (`*_NAME_TAKEN`), not the generic `CONFLICT`
-(#2252). Mobile unit `status` is `ACTIVE` or `INACTIVE` only (V6 adds a `CHECK`), and travel
+(#2252). A mobile unit's name is unique at its base location ignoring case, held in the database by
+`uq_mobile_unit_base_location_lower_name` (V6) so concurrent writes cannot both commit. The
+`baseLocationId` filter on `GET /v1/mobile-units` is location-scope gated like `listBays`
+(`location-scope.yaml`). Mobile unit `status` is `ACTIVE` or `INACTIVE` only (V6 adds a `CHECK`), and travel
 buffer policy `bufferType` is `FLAT_MINUTES`, `PERCENTAGE_OF_TRAVEL` or `DISTANCE_MULTIPLIER` (also a
 `CHECK` since V6, #2249).
 

@@ -37,6 +37,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
@@ -399,8 +401,9 @@ public class MobileUnitServiceImpl implements MobileUnitService {
      * @return mobile unit page
      */
     @Transactional(readOnly = true)
+    @NonNull
     public Page<MobileUnitResponse> list(
-            int page, int size, UUID baseLocationId, String status, boolean includeCoverageRules) {
+            int page, int size, @Nullable UUID baseLocationId, @Nullable String status, boolean includeCoverageRules) {
         String statusFilter = normalizeStatusFilter(status);
         Pageable pageable = PageRequest.of(page, size, LIST_ORDER);
         Page<MobileUnitEntity> units;
@@ -425,7 +428,8 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         });
     }
 
-    private Map<UUID, List<CoverageRuleResponse>> coverageRulesByUnit(Collection<UUID> unitIds) {
+    @NonNull
+    private Map<UUID, List<CoverageRuleResponse>> coverageRulesByUnit(@NonNull Collection<UUID> unitIds) {
         if (unitIds.isEmpty()) {
             return Map.of();
         }
@@ -440,7 +444,8 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     }
 
     /** {@code null} for no status filter; otherwise the upper-cased status, or 400 when unknown. */
-    private static String normalizeStatusFilter(String status) {
+    @Nullable
+    private static String normalizeStatusFilter(@Nullable String status) {
         if (status == null || status.isBlank()) {
             return null;
         }

@@ -27,7 +27,11 @@ public interface MobileUnitRepository extends JpaRepository<MobileUnitEntity, UU
             """)
     boolean existsByBaseLocationIdAndNameIgnoreCase(UUID baseLocationId, String name);
 
-    /** The rename check: another unit at this base location already holds the name, ignoring case (#2252). */
+    /**
+     * The rename check: another unit at this base location already holds the name, ignoring case
+     * (#2252). A fast, friendly refusal only; {@code uq_mobile_unit_base_location_lower_name} (V6)
+     * is what holds under concurrent writes.
+     */
     @Query("""
             SELECT CASE WHEN COUNT(m) > 0 THEN true ELSE false END
             FROM MobileUnitEntity m

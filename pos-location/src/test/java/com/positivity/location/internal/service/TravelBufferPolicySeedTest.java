@@ -44,7 +44,7 @@ class TravelBufferPolicySeedTest {
     @Test
     @DisplayName("#2249 - the buffer_type CHECK allows exactly the types the API accepts")
     void checkConstraintMatchesSupportedTypes() throws IOException {
-        String migration = read("db/migration/V6__travel_buffer_type_and_mobile_unit_status_checks.sql");
+        String migration = read("db/migration/V6__travel_buffer_type_and_mobile_unit_status_and_name_keys.sql");
 
         assertThat(TravelBufferPolicyServiceImpl.SUPPORTED_BUFFER_TYPES)
                 .allSatisfy(type -> assertThat(migration).contains("'" + type + "'"));

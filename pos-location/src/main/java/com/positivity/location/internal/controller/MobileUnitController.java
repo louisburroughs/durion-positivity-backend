@@ -8,6 +8,7 @@ import com.positivity.location.internal.exception.InvalidFieldException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.MobileUnitService;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -145,8 +146,9 @@ public class MobileUnitController {
                     the unit id is known, and findEligibleMobileUnits to match units to a service address.
                     Preconditions: none beyond the location:mobile-unit:read authority.
                     Required inputs: none; page defaults to 0 and size to 20. baseLocationId (UUID) keeps only \
-                    units based there, status (ACTIVE or INACTIVE) only units in that status, and include \
-                    accepts coverageRules, which adds each unit's rules ordered by priority.
+                    units based there and is denied (403 LOCATION_SCOPE_DENIED) for a location-scoped caller \
+                    outside their reach, status (ACTIVE or INACTIVE) keeps only units in that status, and \
+                    include accepts coverageRules, which adds each unit's rules ordered by priority.
                     No events are emitted and no state changes; this is a read-only projection.
                     Returns 200 with a page of mobile units, empty when none match (including an unknown \
                     baseLocationId), and 400 VALIDATION_ERROR for an unknown status or include value.
@@ -156,6 +158,11 @@ public class MobileUnitController {
             responseCode = "400",
             description = "VALIDATION_ERROR: baseLocationId is not a UUID, status is not ACTIVE or INACTIVE, or"
                     + " include names something other than coverageRules.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks location:mobile-unit:read, or (LOCATION_SCOPE_DENIED) the named"
+                    + " baseLocationId is outside a location-scoped caller's reach.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_READ + "')")
     @SecurityRequirement(
@@ -179,6 +186,12 @@ public class MobileUnitController {
                     @RequestParam(required = false)
                     List<String> include) {
         boolean includeCoverageRules = parseInclude(include);
+        // A named base location is gated like BayController.listBays: a scoped caller asking for
+        // one shop's units is denied outside their reach (ADR-0061, location-scope.yaml). The
+        // unfiltered list keeps the tenant-wide view getMobileUnitById also gives.
+        if (baseLocationId != null) {
+            SecurityContextHelper.locationScope().require(LocationPermissions.MOBILE_UNIT_READ, baseLocationId);
+        }
         return ResponseEntity.ok(mobileUnitService.list(page, size, baseLocationId, status, includeCoverageRules));
     }
 
@@ -246,14 +259,14 @@ public class MobileUnitController {
                     name must be non-blank text, unique (ignoring case) at the unit's base location; status must \
                     be ACTIVE or INACTIVE (any case; null is refused); notes is text or null; \
                     travelBufferPolicyId is null to clear it or the id of an existing policy; \
-                    serviceCapabilityCodes is an array. Other keys are ignored.
+                    serviceCapabilityCodes is an array; other keys are ignored.
                     Emits a LOCATION_MOBILE_UNIT_UPDATE event.
                     Returns 200 with the updated unit; 404 NOT_FOUND when the unit does not exist; 400 \
                     VALIDATION_ERROR with fieldErrors for a value of the wrong shape; 409 MOBILE_UNIT_NAME_TAKEN \
                     when the new name is taken at the base location, or 409 when a concurrent update won the \
                     version race; 422 TRAVEL_BUFFER_POLICY_NOT_FOUND with fieldErrors for an unknown policy, and \
-                    422 when the result would be an incomplete ACTIVE unit or a capability code is unknown. \
-                    Nothing is saved on any refusal.
+                    422 when the result would be an incomplete ACTIVE unit or a capability code is unknown; \
+                    nothing is saved on any refusal.
                     """)
     @ApiResponse(responseCode = "200", description = "Mobile unit updated.")
     @ApiResponse(
