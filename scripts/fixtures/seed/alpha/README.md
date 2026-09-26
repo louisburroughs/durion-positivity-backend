@@ -470,8 +470,8 @@ about where part numbers come from first.
 | `operating-hours.csv` | 24 open days across the 4 shops (Mon–Sat each; Sunday closed) | gateway API pack (`PATCH /v1/locations/{id}` per site, carrying that site's whole week) |
 | `site-defaults.csv` | 6 rows, one per site | gateway API pack (`PUT /v1/locations/{id}/defaults` per row) |
 | `bays.csv` | 24 service bays (6 types; 21 from the seed and the SDK seeder's Bay 1–3 at ATX-RIV-001) | gateway API pack (`POST .../bays` per row; 409 = exists) |
-| `mobile-units.csv` | 9 mobile units, 8 `ACTIVE` and 1 parked (see below) | gateway API pack (`POST /location/mobile-units`, one call carrying the unit's policy, capabilities and coverage rules; an existing unit is skipped when it matches its row, or completed and activated in place when its row is `ACTIVE` and it is not) |
-| `mobile-unit-coverage-rules.csv` | 21 rules across the 8 `ACTIVE` units | read by the `mobile-units.csv` pack, not loaded on its own |
+| `mobile-units.csv` | 11 mobile units, 10 `ACTIVE` and 1 parked (see below); 9 based in Charlotte, 2 at the SDK seeder's ATX-RIV-001 | gateway API pack (`POST /location/mobile-units`, one call carrying the unit's policy, capabilities and coverage rules; an existing unit is skipped when it matches its row, or completed and activated in place when its row is `ACTIVE` and it is not) |
+| `mobile-unit-coverage-rules.csv` | 25 rules across the 10 `ACTIVE` units | read by the `mobile-units.csv` pack, not loaded on its own |
 
 Columns (`locations.csv`): `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
 
@@ -493,7 +493,7 @@ them, so no mobile unit showed as active. For each unit whose row is `ACTIVE` an
 of it, the pack now `PUT`s the fixture's coverage rules to `/location/mobile-units/{id}/coverage-rules`
 and then sends one `PATCH /location/mobile-units/{id}` carrying `travelBufferPolicyId`,
 `serviceCapabilityCodes` (a PATCH key since CAP-325) and `status: ACTIVE`. The rules go first because
-`PATCH` checks the merged unit against the same completeness rule create enforces. The eight `ACTIVE`
+`PATCH` checks the merged unit against the same completeness rule create enforces. The ten `ACTIVE`
 rows are activated; `MU-CLT-MAIN-03` is left `INACTIVE`. The summary line counts these as `activated`.
 
 Both fixtures key off names, like every other pack here. `travelBufferPolicyName` and
@@ -506,21 +506,30 @@ operation codes sent as `serviceCapabilityCodes`, normalized UPPER-DASH by the s
 strictly ascending `maxDistance` ending in a single blank catch-all — and it applies to *every* rule
 on the unit as soon as any one of them is `DISTANCE_TIER`. The four `DISTANCE_TIER` units here are
 written to satisfy that; regrouping or re-sorting the rows breaks them, and only against a live
-pos-location. The other four active units use `SERVICE_AREA` rules, which the tier check leaves
+pos-location. The other active units use `SERVICE_AREA` rules, which the tier check leaves
 alone. `scripts/tests/test_seed_alpha_mobile_units.py` pins both shapes.
 
 **`MU-CLT-MAIN-03` stays `INACTIVE`**, as it was in the original fixture. A parked unit is a
 legitimate state to have in demo data and it keeps the `INACTIVE` path exercised; it carries a
 policy and capabilities but no coverage rules, so activating it is a one-call change when something
-needs a ninth active unit.
+needs another active unit.
+
+**`MU-ATX-RIV-01` and `MU-ATX-RIV-02` exist for the SDK.** The `durion-positivity-sdk` integration
+suites run every workorder at their own site, ATX-RIV-001, and pos-workorder places a workorder only
+on a unit based at the workorder's site (`ServicePositionServiceImpl.resolvePosition`). Suite H
+builds its unit by copying the policy, capabilities and coverage rules of an ACTIVE unit already
+based at that site (`createActiveMobileUnit`), so with only Charlotte units it failed before its
+mobile-unit assignment ran, and the accelerated run's Riverside dispatch board had no mobile
+positions at all. The two units cover the `Austin Central` and `North Austin / Round Rock` areas,
+whose TX postal codes include the site's own 78701; `SdkSiteMobileUnitTest` pins both.
 
 Coverage resolves through postal codes and nothing else:
 `MobileUnitCoverageRuleRepository.findEligibleCoverageRules` inner-joins `serviceArea.postalCodes`,
 so an area with none covers no address however many rules point at it. That is why
-`GET /v1/mobile-units:eligible` returned nothing before #1986 — the 25 reference service areas had
+`GET /v1/mobile-units:eligible` returned nothing before #1986 — the reference service areas had
 no postal codes, and `PATCH /v1/service-areas/{id}` accepts only `description` and `active`, so they
 could not be added through the API. `R__seed_location_1_reference.sql` now seeds 91 NC/SC codes
-across the 25 areas, disjoint, so an address resolves to one area and rule priority alone orders the
+across the 25 Charlotte-market areas and 16 TX codes across the 2 Austin areas, all disjoint, so an address resolves to one area and rule priority alone orders the
 result. The quickest check after a seed is
 
 ```

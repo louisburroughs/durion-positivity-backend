@@ -102,7 +102,7 @@ class FixtureReferenceNamesTest(unittest.TestCase):
 
     def test_serviceAreaNamesAreSeeded(self):
         seeded = _seeded("service_areas", 1)
-        self.assertEqual(len(seeded), 25, f"expected the 25 seeded areas, got {len(seeded)}")
+        self.assertEqual(len(seeded), 27, f"expected the 27 seeded areas, got {len(seeded)}")
         for row in _rows("mobile-unit-coverage-rules.csv"):
             with self.subTest(unit=row["unitName"], area=row["serviceAreaName"]):
                 self.assertIn(row["serviceAreaName"], seeded)
@@ -122,8 +122,8 @@ class FixtureReferenceNamesTest(unittest.TestCase):
         because Flyway runs as the owner, which bypasses row-level security."""
         block = _postal_code_block()
         self.assertNotIn("::uuid", block, "postal code rows must not name a literal service area id")
-        self.assertEqual(block.count("SELECT sa.id, 'US', v.code"), 25)
-        self.assertEqual(block.count("AND sa.tenant_id = public.app_current_tenant()"), 25)
+        self.assertEqual(block.count("SELECT sa.id, 'US', v.code"), 27)
+        self.assertEqual(block.count("AND sa.tenant_id = public.app_current_tenant()"), 27)
 
     def test_postalCodesAreDisjointAcrossTheSeededAreas(self):
         """Overlap would make one address resolve to two areas, so the eligible list would carry
@@ -195,7 +195,7 @@ class ActiveUnitCompletenessTest(unittest.TestCase):
     def test_everyActiveUnitCarriesPolicyCapabilitiesAndCoverage(self):
         covered = {row["unitName"] for row in _rows("mobile-unit-coverage-rules.csv")}
         active = [row for row in _rows("mobile-units.csv") if row["status"] == "ACTIVE"]
-        self.assertEqual(len(active), 8, "8 of the 9 units are ACTIVE; MU-CLT-MAIN-03 stays parked")
+        self.assertEqual(len(active), 10, "10 of the 11 units are ACTIVE; MU-CLT-MAIN-03 stays parked")
         for row in active:
             with self.subTest(unit=row["name"]):
                 self.assertTrue(row["travelBufferPolicyName"])
@@ -207,6 +207,43 @@ class ActiveUnitCompletenessTest(unittest.TestCase):
         self.assertEqual([row["name"] for row in parked], ["MU-CLT-MAIN-03"])
         covered = {row["unitName"] for row in _rows("mobile-unit-coverage-rules.csv")}
         self.assertNotIn("MU-CLT-MAIN-03", covered)
+
+
+class SdkSiteMobileUnitTest(unittest.TestCase):
+    """The SDK integration suites place work on a mobile unit at their own site, ATX-RIV-001.
+
+    pos-workorder's ServicePositionServiceImpl.resolvePosition refuses a unit based at any other
+    site than the workorder's, and the SDK's createActiveMobileUnit builds its unit by copying the
+    policy, capabilities and coverage rules of an ACTIVE unit already based there -- failing suite H
+    in beforeAll, before H8 ever assigns, when there is none. Until these rows were added every
+    unit in this fixture was a Charlotte unit, so that copy had nothing to find."""
+
+    SDK_SITE = "ATX-RIV-001"
+
+    def test_theSdkSiteHasAnActiveUnitWithPolicyCapabilitiesAndCoverage(self):
+        covered = {row["unitName"] for row in _rows("mobile-unit-coverage-rules.csv")}
+        at_site = [row for row in _rows("mobile-units.csv")
+                   if row["baseLocationCode"] == self.SDK_SITE and row["status"] == "ACTIVE"
+                   and row["travelBufferPolicyName"] and row["capabilityCodes"] and row["name"] in covered]
+        self.assertTrue(at_site, f"no fully configured ACTIVE mobile unit is based at {self.SDK_SITE}")
+
+    def test_theSdkSiteUnitsCoverTheSitesOwnPostalCode(self):
+        """Coverage is geographic: a unit covering only Charlotte areas would be ACTIVE and still
+        eligible for no Austin address, which is the case createActiveMobileUnit's same-site rule
+        exists to avoid."""
+        with (_FIXTURES / "locations.csv").open(newline="") as handle:
+            site = next(row for row in csv.DictReader(handle) if row["code"] == self.SDK_SITE)
+        block = _postal_code_block()
+        areas_with_site_code = {
+            area for area in _areas_with_postal_codes()
+            if re.search(r"\('" + site["postalCode"] + r"'\)[^;]*WHERE sa\.name = '" + re.escape(area) + "'", block)}
+        units = {row["name"] for row in _rows("mobile-units.csv") if row["baseLocationCode"] == self.SDK_SITE}
+        for unit in units:
+            with self.subTest(unit=unit):
+                areas = {row["serviceAreaName"] for row in _rows("mobile-unit-coverage-rules.csv")
+                         if row["unitName"] == unit}
+                self.assertTrue(areas & areas_with_site_code,
+                                f"{unit} covers no area holding the site's own postal code {site['postalCode']}")
 
 
 class CoverageRuleAssemblyTest(unittest.TestCase):
@@ -283,7 +320,8 @@ class _StubGateway:
     def get(self, path, allow_error=False):
         if path == "/location/locations":
             return 200, [{"code": code, "id": f"loc-{code}"} for code in (
-                "CLT-MAIN-001", "CLT-NORTH-001", "CLT-SOUTH-001", "CLT-MOB-HUB-001", "CORP-HQ-001")]
+                "CLT-MAIN-001", "CLT-NORTH-001", "CLT-SOUTH-001", "CLT-MOB-HUB-001", "CORP-HQ-001",
+                "ATX-RIV-001")]
         if path == "/location/travel-buffer-policies":
             return 200, self.policies
         if path == "/location/service-areas":
@@ -339,10 +377,10 @@ class MobileUnitPackTest(unittest.TestCase):
     def _run(self, gateway):
         return seed_alpha.run_mobile_units(gateway, "location/mobile-units.csv", None)
 
-    def test_allNineUnitsArePostedAndThePackReportsSuccess(self):
+    def test_everyUnitIsPostedAndThePackReportsSuccess(self):
         gateway = _StubGateway()
         self.assertTrue(self._run(gateway))
-        self.assertEqual(len(gateway.posted), 9)
+        self.assertEqual(len(gateway.posted), 11)
 
     def test_theParkedUnitIsNotAFailureForHavingNoCoverageRules(self):
         """Absent from the coverage fixture is not the same as unresolvable in it. Conflating the
@@ -371,7 +409,8 @@ class MobileUnitPackTest(unittest.TestCase):
         self.assertTrue(self._run(gateway))
         self.assertEqual([body["name"] for body in gateway.posted],
                          ["MU-CLT-MAIN-02", "MU-CLT-MAIN-03", "MU-CLT-NORTH-01", "MU-CLT-NORTH-02",
-                          "MU-CLT-SOUTH-01", "MU-CLT-SOUTH-02", "MU-Charlotte-01"])
+                          "MU-CLT-SOUTH-01", "MU-CLT-SOUTH-02", "MU-Charlotte-01", "MU-ATX-RIV-01",
+                          "MU-ATX-RIV-02"])
 
     def test_capabilityCodesAreSplitOnSemicolonsAndBlanksDropped(self):
         """A trailing or doubled `;` would otherwise reach the service as an empty capability,
@@ -426,7 +465,7 @@ class LegacyIncompleteUnitTest(unittest.TestCase):
         activated = {path.split("/")[3] for verb, path, body in gateway.writes
                      if verb == "PATCH" and body["status"] == "ACTIVE"}
         self.assertEqual(activated, {f"id-{row['name']}" for row in self._active_rows()})
-        self.assertEqual(len(activated), 8)
+        self.assertEqual(len(activated), 10)
         self.assertNotIn("id-MU-CLT-MAIN-03", {path.split("/")[3] for _, path, _ in gateway.writes})
 
     def test_coverageIsReplacedBeforeTheStatusFlipSoThePatchPassesTheActiveCheck(self):
@@ -465,7 +504,7 @@ class LegacyIncompleteUnitTest(unittest.TestCase):
         gateway = _StubGateway(existing_units=self._legacy_nine())
         gateway.put_status = 400
         self.assertFalse(self._run(gateway))
-        self.assertEqual([verb for verb, _, _ in gateway.writes], ["PUT"] * 8)
+        self.assertEqual([verb for verb, _, _ in gateway.writes], ["PUT"] * 10)
 
     def test_theParkedUnitIsNotFlaggedBecauseTheFixtureOnlyWantsItToExist(self):
         """MU-CLT-MAIN-03 is INACTIVE in the fixture too, so a legacy INACTIVE row already matches

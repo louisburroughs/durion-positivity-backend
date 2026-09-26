@@ -84,12 +84,19 @@ ON CONFLICT (tenant_id, name) DO NOTHING;
 INSERT INTO service_areas (id, name, description, active, created_at, updated_at)
 VALUES ('fe5bd0c2-6c4b-9929-0f3f-00099be619d5'::uuid, 'far southern fringe beyond York/Lancaster', 'upper-piedmont-sc service area', TRUE, NOW(), NOW())
 ON CONFLICT (tenant_id, name) DO NOTHING;
+INSERT INTO service_areas (id, name, description, active, created_at, updated_at)
+VALUES ('01960003-0000-7000-8000-000000000001'::uuid, 'Austin Central', 'austin-core service area', TRUE, NOW(), NOW())
+ON CONFLICT (tenant_id, name) DO NOTHING;
+INSERT INTO service_areas (id, name, description, active, created_at, updated_at)
+VALUES ('01960003-0000-7000-8000-000000000002'::uuid, 'North Austin / Round Rock', 'austin-north service area', TRUE, NOW(), NOW())
+ON CONFLICT (tenant_id, name) DO NOTHING;
 
 -- Service area postal codes. The mobile-unit eligibility query resolves an address
 -- through these rows and nothing else -- MobileUnitCoverageRuleRepository inner-joins
 -- serviceArea.postalCodes, so an area without them covers no address however many
--- coverage rules point at it. NC/SC codes matching each area's name, and disjoint
--- across these 25 areas -- though nothing in the schema enforces that, so an area
+-- coverage rules point at it. Codes matching each area's name -- NC/SC for the
+-- Charlotte market, TX for the two Austin areas behind ATX-RIV-001 -- and disjoint
+-- across these 27 areas -- though nothing in the schema enforces that, so an area
 -- added later may overlap and a postal code may then resolve to more than one.
 --
 -- Resolved by name rather than by the literal ids above, and deliberately: the area
@@ -298,6 +305,22 @@ SELECT sa.id, 'US', v.code
 FROM service_areas sa
 CROSS JOIN (VALUES ('29009'), ('29010'), ('29020'), ('29045')) AS v(code)
 WHERE sa.name = 'far southern fringe beyond York/Lancaster'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Austin Central
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('78701'), ('78702'), ('78703'), ('78704'), ('78705'), ('78722'), ('78751'), ('78756')) AS v(code)
+WHERE sa.name = 'Austin Central'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- North Austin / Round Rock
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('78664'), ('78665'), ('78681'), ('78727'), ('78728'), ('78729'), ('78758'), ('78759')) AS v(code)
+WHERE sa.name = 'North Austin / Round Rock'
   AND sa.tenant_id = public.app_current_tenant()
 ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
 
