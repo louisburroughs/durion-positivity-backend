@@ -83,6 +83,15 @@ public class Location extends TenantScopedEntity {
 
     private String status;
 
+    /**
+     * The unit this location's forms show and accept for a distance (DECISION-LOCATION-028): {@code
+     * KM} or {@code MI}. Storage of a distance itself is always canonical kilometres; this field only
+     * decides the unit requests and responses at this location display and accept.
+     */
+    @Builder.Default
+    @Column(name = "distance_unit", length = 2, nullable = false)
+    private String distanceUnit = "KM";
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

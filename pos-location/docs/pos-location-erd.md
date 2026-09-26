@@ -69,7 +69,7 @@ String rule_type
 Integer priority
 Date valid_from
 Date valid_to
-BigDecimal max_distance
+BigDecimal max_distance_km
 Instant created_at
 Instant updated_at
 }

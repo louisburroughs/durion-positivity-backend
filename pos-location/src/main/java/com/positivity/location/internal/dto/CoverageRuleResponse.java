@@ -5,7 +5,6 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -72,8 +71,9 @@ public class CoverageRuleResponse {
     private Instant validTo;
 
     @Schema(
-            description = "Maximum service distance in kilometres covered by the rule",
-            example = "25.5",
+            description = "Maximum service distance covered by the rule, in the owning mobile unit's base"
+                    + " location's distanceUnit; null for a rule with no distance ceiling. Not yet evaluated:"
+                    + " coverage matches on the postal-code service area alone, since geocoding does not exist.",
             requiredMode = NOT_REQUIRED)
-    private BigDecimal maxDistance;
+    private DistanceDto maxDistance;
 }

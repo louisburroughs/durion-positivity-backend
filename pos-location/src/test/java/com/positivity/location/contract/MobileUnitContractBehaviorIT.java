@@ -577,7 +577,7 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                         .content("""
                                 {
                                   "name": "%s",
-                                  "bufferType": "FLAT_MINUTES",
+                                  "bufferType": "FIXED_MINUTES",
                                   "bufferValue": 15
                                 }
                                 """.formatted(name))))
@@ -606,7 +606,7 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
         String payload = """
                 {
                   "name": "Standard Travel Buffer",
-                  "bufferType": "FLAT_MINUTES",
+                  "bufferType": "FIXED_MINUTES",
                   "bufferValue": 15,
                   "notes": "default"
                 }

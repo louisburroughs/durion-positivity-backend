@@ -266,7 +266,9 @@ class CoverageRuleAssemblyTest(unittest.TestCase):
 
     def test_distanceTierUnitsSatisfyTheAscendingCatchAllRule(self):
         """Mirrors MobileUnitServiceImpl.validateDistanceTiers: strictly ascending, one trailing
-        null catch-all, applied across every rule on a unit that has any DISTANCE_TIER rule."""
+        null catch-all, applied across every rule on a unit that has any DISTANCE_TIER rule. Ordering
+        compares the converted-to-km value the API would compare, not the raw MI figure the fixture
+        carries (DECISION-LOCATION-028)."""
         for unit, rules in self._built().items():
             if not any(rule["ruleType"] == "DISTANCE_TIER" for rule in rules):
                 continue
@@ -274,12 +276,26 @@ class CoverageRuleAssemblyTest(unittest.TestCase):
                 distances = [rule.get("maxDistance") for rule in rules]
                 self.assertIsNone(distances[-1], "the last tier must be the null catch-all")
                 self.assertNotIn(None, distances[:-1], "only the last tier may be the catch-all")
-                ascending = [float(distance) for distance in distances[:-1]]
+                ascending = [float(distance["value"]) for distance in distances[:-1]]
                 self.assertEqual(ascending, sorted(set(ascending)), "tiers must be strictly ascending")
 
+    def test_maxDistanceIsAnExplicitValueAndUnitObject(self):
+        """DECISION-LOCATION-028: a bare number is refused, so every present maxDistance carries the
+        fixture's own unit (MI, ../durion/domains/location/.business-rules DECISION-LOCATION-028) rather than a raw figure."""
+        for unit, rules in self._built().items():
+            for index, rule in enumerate(rules):
+                with self.subTest(unit=unit, rule=index):
+                    distance = rule.get("maxDistance")
+                    if distance is None:
+                        continue
+                    self.assertIsInstance(distance, dict)
+                    self.assertEqual(distance["unit"], "MI")
+                    float(distance["value"])  # raises if not numeric text
+
     def test_blankMaxDistanceAndDatesAreOmittedRatherThanSentAsEmptyStrings(self):
-        """maxDistance is a BigDecimal and validFrom/validTo are LocalDate on CoverageRuleRequest;
-        an empty string is a 400, and a maxDistance of "" would also read as a non-null tier."""
+        """maxDistance is an explicit {value, unit} object and validFrom/validTo are ISO-8601
+        instants on CoverageRuleRequest; an empty string is a 400, and a maxDistance of "" would
+        also read as a non-null tier."""
         for unit, rules in self._built().items():
             for index, rule in enumerate(rules):
                 with self.subTest(unit=unit, rule=index):

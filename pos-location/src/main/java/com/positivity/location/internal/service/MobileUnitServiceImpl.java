@@ -2,6 +2,7 @@ package com.positivity.location.internal.service;
 
 import com.positivity.location.internal.dto.CoverageRuleRequest;
 import com.positivity.location.internal.dto.CoverageRuleResponse;
+import com.positivity.location.internal.dto.DistanceDto;
 import com.positivity.location.internal.dto.EligibleMobileUnitResponse;
 import com.positivity.location.internal.dto.MobileUnitRequest;
 import com.positivity.location.internal.dto.MobileUnitResponse;
@@ -261,15 +262,19 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             if (rule.getPriority() != null && rule.getPriority() < 0) {
                 throw InvalidFieldException.invalid(prefix + "priority", "priority must not be negative");
             }
-            if (rule.getMaxDistance() != null && rule.getMaxDistance().signum() < 0) {
-                throw InvalidFieldException.invalid(prefix + FIELD_MAX_DISTANCE, "maxDistance must not be negative");
-            }
+            // DECISION-LOCATION-028: a distance always carries its unit; parseOptionalKm refuses a bare
+            // number here and converts a valid {value, unit} object to canonical kilometres.
+            BigDecimal maxDistanceKm =
+                    DistanceUnits.parseOptionalKm(rule.getMaxDistance(), prefix + FIELD_MAX_DISTANCE);
             if (rule.getValidFrom() != null
                     && rule.getValidTo() != null
                     && !rule.getValidTo().isAfter(rule.getValidFrom())) {
                 throw InvalidFieldException.invalid(prefix + "validTo", "validTo must be after validFrom");
             }
-            normalized.add(rule.toBuilder().ruleType(ruleType).build());
+            normalized.add(rule.toBuilder()
+                    .ruleType(ruleType)
+                    .maxDistance(maxDistanceKm)
+                    .build());
         }
         List<CoverageRuleRequest> tiers = normalized.stream()
                 .filter(rule -> RULE_TYPE_DISTANCE_TIER.equals(rule.getRuleType()))
@@ -637,7 +642,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                     .priority(rule.getPriority() == null ? 0 : rule.getPriority())
                     .validFrom(rule.getValidFrom())
                     .validTo(rule.getValidTo())
-                    .maxDistance(rule.getMaxDistance())
+                    .maxDistanceKm((BigDecimal) rule.getMaxDistance())
                     .build());
         }
         List<MobileUnitCoverageRuleEntity> saved = coverageRuleRepository.saveAll(entities);
@@ -774,7 +779,9 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                 .priority(parseIntegerField(source.get("priority"), prefix + "priority"))
                 .validFrom(parseInstantField(source.get("validFrom"), prefix + "validFrom"))
                 .validTo(parseInstantField(source.get("validTo"), prefix + "validTo"))
-                .maxDistance(parseBigDecimalField(source.get(FIELD_MAX_DISTANCE), prefix + FIELD_MAX_DISTANCE))
+                // Carried through as raw data (a Map, or a bare number/string) and resolved centrally in
+                // validateCoverageRules, so the map path and the typed path refuse a bare number the same way.
+                .maxDistance(source.get(FIELD_MAX_DISTANCE))
                 .build();
     }
 
@@ -823,7 +830,32 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                 .priority(entity.getPriority())
                 .validFrom(entity.getValidFrom())
                 .validTo(entity.getValidTo())
-                .maxDistance(entity.getMaxDistance())
+                .maxDistance(toDistanceDto(entity.getMaxDistanceKm(), resolveDisplayUnit(entity)))
+                .build();
+    }
+
+    /**
+     * A rule's distance is shown in the owning mobile unit's base location's {@code distanceUnit}
+     * (DECISION-LOCATION-028 rule 3); {@code KM} when the unit, its base location, or the location's
+     * unit is not resolvable (built in memory, or the unit has none yet), which is also the schema
+     * default.
+     */
+    private String resolveDisplayUnit(MobileUnitCoverageRuleEntity entity) {
+        MobileUnitEntity unit = entity.getMobileUnit();
+        Location baseLocation = unit == null ? null : unit.getBaseLocation();
+        String unitCode = baseLocation == null ? null : baseLocation.getDistanceUnit();
+        String normalized = DistanceUnits.normalize(unitCode);
+        return normalized == null ? DistanceUnits.KM : normalized;
+    }
+
+    @Nullable
+    private DistanceDto toDistanceDto(@Nullable BigDecimal km, String unit) {
+        if (km == null) {
+            return null;
+        }
+        return DistanceDto.builder()
+                .value(DistanceUnits.fromKm(km, unit))
+                .unit(unit)
                 .build();
     }
 
@@ -854,7 +886,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             return parseBigDecimal(map.get(FIELD_MAX_DISTANCE));
         }
         if (entry instanceof CoverageRuleRequest request) {
-            return request.getMaxDistance();
+            return parseBigDecimal(request.getMaxDistance());
         }
         return parseBigDecimal(entry);
     }
@@ -871,17 +903,6 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         } catch (NumberFormatException | ArithmeticException exception) {
             throw InvalidFieldException.invalid(field, field + " must be a whole number");
         }
-    }
-
-    private static BigDecimal parseBigDecimalField(Object value, String field) {
-        if (value == null) {
-            return null;
-        }
-        BigDecimal parsed = parseBigDecimal(value);
-        if (parsed == null) {
-            throw InvalidFieldException.invalid(field, field + " must be a number");
-        }
-        return parsed;
     }
 
     private static BigDecimal parseBigDecimal(Object value) {

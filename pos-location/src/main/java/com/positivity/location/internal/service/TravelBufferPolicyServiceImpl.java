@@ -31,13 +31,23 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
 
     private static final String BUFFER_TYPE = "bufferType";
 
-    private static final String BUFFER_TYPE_INVALID =
-            "bufferType must be FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER";
+    private static final String BUFFER_TYPE_INVALID = "bufferType must be FIXED_MINUTES or DISTANCE_TIER";
+
+    private static final String FIXED_MINUTES_VALUE_INVALID = "bufferValue must be a whole number of minutes";
+
+    private static final String FIXED_MINUTES = "FIXED_MINUTES";
+    private static final String DISTANCE_TIER = "DISTANCE_TIER";
 
     private static final String TRAVEL_BUFFER_POLICY_NAME_TAKEN = "TRAVEL_BUFFER_POLICY_NAME_TAKEN";
     private static final String TRAVEL_BUFFER_POLICY_CONFLICT = "TRAVEL_BUFFER_POLICY_CONFLICT";
-    static final Set<String> SUPPORTED_BUFFER_TYPES =
-            Set.of("FLAT_MINUTES", "PERCENTAGE_OF_TRAVEL", "DISTANCE_MULTIPLIER");
+
+    /**
+     * DECISION-LOCATION-028 rule 5 / DECISION-LOCATION-015: the code's former {@code FLAT_MINUTES}
+     * is renamed to {@code FIXED_MINUTES}; {@code PERCENTAGE_OF_TRAVEL} and {@code
+     * DISTANCE_MULTIPLIER}, which no decision defines and which need routed travel time no service
+     * provides, are removed.
+     */
+    static final Set<String> SUPPORTED_BUFFER_TYPES = Set.of(FIXED_MINUTES, DISTANCE_TIER);
 
     protected final TravelBufferPolicyRepository repository;
 
@@ -162,6 +172,13 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         }
         if (bufferValue != null && bufferValue.signum() < 0) {
             throw InvalidFieldException.invalid(BUFFER_VALUE, "bufferValue must be non-negative");
+        }
+        // DECISION-LOCATION-015: FIXED_MINUTES is { minutes: int >= 0 } — bufferValue carries that
+        // count and must be a whole number, never a fraction of a minute.
+        if (FIXED_MINUTES.equals(bufferType)
+                && bufferValue != null
+                && bufferValue.stripTrailingZeros().scale() > 0) {
+            throw InvalidFieldException.invalid(BUFFER_VALUE, FIXED_MINUTES_VALUE_INVALID);
         }
     }
 

@@ -7,7 +7,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -68,9 +67,11 @@ public class CoverageRuleRequest {
     private Instant validTo;
 
     @Schema(
-            description = "Maximum service distance in kilometres covered by the rule",
-            example = "25.5",
+            implementation = DistanceDto.class,
+            description = "Maximum service distance covered by the rule, an explicit {value, unit} object (KM or"
+                    + " MI); converted at the edge and stored as kilometres (DECISION-LOCATION-028). A bare number"
+                    + " is refused. Not yet evaluated: coverage matches on the postal-code service area alone,"
+                    + " since geocoding does not exist.",
             requiredMode = NOT_REQUIRED)
-    @PositiveOrZero
-    private BigDecimal maxDistance;
+    private Object maxDistance;
 }

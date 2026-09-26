@@ -44,11 +44,20 @@ class TravelBufferPolicySeedTest {
     @Test
     @DisplayName("#2249 - the buffer_type CHECK allows exactly the types the API accepts")
     void checkConstraintMatchesSupportedTypes() throws IOException {
-        String migration = read("db/migration/V6__travel_buffer_type_and_mobile_unit_status_and_name_keys.sql");
+        // V6 first constrained buffer_type; #2266/DECISION-LOCATION-028 narrowed the accepted set
+        // again in V11, which is the CHECK now live in the database. The migration text still
+        // mentions the retired types in its UPDATE statements (converting old rows away from them),
+        // so only the CHECK clause itself is asserted against the supported set.
+        String migration = read("db/migration/V11__distance_units_and_travel_buffer_policy_types.sql");
+        String checkClause = migration.substring(migration.indexOf("travel_buffer_policies_buffer_type_check"));
 
         assertThat(TravelBufferPolicyServiceImpl.SUPPORTED_BUFFER_TYPES)
-                .allSatisfy(type -> assertThat(migration).contains("'" + type + "'"));
-        assertThat(migration).doesNotContain("IN ('MINUTES'");
+                .allSatisfy(type -> assertThat(checkClause).contains("'" + type + "'"));
+        assertThat(checkClause)
+                .doesNotContain("'FLAT_MINUTES'")
+                .doesNotContain("'PERCENTAGE_OF_TRAVEL'")
+                .doesNotContain("'DISTANCE_MULTIPLIER'")
+                .doesNotContain("IN ('MINUTES'");
     }
 
     private static String read(String path) throws IOException {

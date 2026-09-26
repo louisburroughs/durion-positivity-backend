@@ -96,12 +96,12 @@ class MobileUnitValidationTest {
                 .build();
     }
 
-    private static CoverageRuleRequest tier(BigDecimal maxDistance) {
+    private static CoverageRuleRequest tier(BigDecimal maxDistanceKm) {
         return CoverageRuleRequest.builder()
                 .serviceAreaId(AREA_ID)
                 .ruleType("DISTANCE_TIER")
                 .priority(1)
-                .maxDistance(maxDistance)
+                .maxDistance(maxDistanceKm == null ? null : Map.of("value", maxDistanceKm, "unit", "KM"))
                 .build();
     }
 

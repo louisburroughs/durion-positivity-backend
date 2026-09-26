@@ -467,12 +467,19 @@ def coverage_rules_by_unit(service_area_ids):
                 print(f"  WARN: coverage rule for {unit_name}: priority {row['priority']!r} is not a number")
                 unresolved.add(unit_name)
                 continue
-        # Left out entirely when the column is blank rather than sent as "": maxDistance is a
-        # BigDecimal and the two dates are ISO-8601 instants on CoverageRuleRequest (#2265), so an
-        # empty string is a 400 -- and a blank maxDistance is the null catch-all tier, which ""
-        # would not read as.
+        # Left out entirely when the column is blank rather than sent as "": maxDistance is now an
+        # explicit {value, unit} object (DECISION-LOCATION-028) and the two dates are ISO-8601
+        # instants on CoverageRuleRequest (#2265), so an empty string is a 400 -- and a blank
+        # maxDistance is the null catch-all tier, which "" would not read as. The fixture's own
+        # `unit` column carries the unit the `maxDistance` figure was authored in (every row here is
+        # MI); a row with a distance but no unit is a fixture bug, not a silent KM guess.
         if row.get("maxDistance"):
-            rule["maxDistance"] = row["maxDistance"]
+            unit = (row.get("unit") or "").strip().upper()
+            if not unit:
+                print(f"  WARN: coverage rule for {unit_name}: maxDistance {row['maxDistance']!r} has no unit")
+                unresolved.add(unit_name)
+                continue
+            rule["maxDistance"] = {"value": row["maxDistance"], "unit": unit}
         for date_field in ("validFrom", "validTo"):
             if row.get(date_field):
                 rule[date_field] = row[date_field]

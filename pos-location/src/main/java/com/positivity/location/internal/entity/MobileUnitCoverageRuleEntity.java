@@ -72,8 +72,9 @@ public class MobileUnitCoverageRuleEntity extends TenantScopedEntity {
     @Column(name = "valid_to")
     private Instant validTo;
 
-    @Column(name = "max_distance", precision = 10, scale = 2)
-    private BigDecimal maxDistance;
+    /** Canonical kilometres (DECISION-LOCATION-028); converted to and from the caller's unit at the edge. */
+    @Column(name = "max_distance_km", precision = 10, scale = 2)
+    private BigDecimal maxDistanceKm;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

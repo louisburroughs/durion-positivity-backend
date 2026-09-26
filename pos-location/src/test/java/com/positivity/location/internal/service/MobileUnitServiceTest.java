@@ -276,7 +276,7 @@ class MobileUnitServiceTest {
                         .mobileUnit(savedEntity)
                         .ruleType("DISTANCE_TIER")
                         .priority(2)
-                        .maxDistance(BigDecimal.valueOf(25))
+                        .maxDistanceKm(BigDecimal.valueOf(25))
                         .build());
         when(coverageRuleRepository.saveAll(anyList())).thenReturn(savedRules);
 
@@ -292,7 +292,7 @@ class MobileUnitServiceTest {
                                 .serviceAreaId(serviceAreaId)
                                 .ruleType("DISTANCE_TIER")
                                 .priority(1)
-                                .maxDistance(BigDecimal.valueOf(25))
+                                .maxDistance(Map.of("value", BigDecimal.valueOf(25), "unit", "KM"))
                                 .build(),
                         CoverageRuleRequest.builder()
                                 .serviceAreaId(serviceAreaId)

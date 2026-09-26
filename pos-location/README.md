@@ -70,8 +70,43 @@ A `DuplicateResourceException` answers its own code (`*_NAME_TAKEN`), not the ge
 `uq_mobile_unit_base_location_lower_name` (V6) so concurrent writes cannot both commit. The
 `baseLocationId` filter on `GET /v1/mobile-units` is location-scope gated like `listBays`
 (`location-scope.yaml`). Mobile unit `status` is `ACTIVE` or `INACTIVE` only (V6 adds a `CHECK`), and travel
-buffer policy `bufferType` is `FLAT_MINUTES`, `PERCENTAGE_OF_TRAVEL` or `DISTANCE_MULTIPLIER` (also a
-`CHECK` since V6, #2249).
+buffer policy `bufferType` is `FIXED_MINUTES` or `DISTANCE_TIER` (also a `CHECK`, V11, #2266 —
+supersedes the V6 `CHECK`; see "Distance units and travel buffer policy types" below).
+
+## Distance units and travel buffer policy types (DECISION-LOCATION-028, DECISION-LOCATION-015, #2266)
+
+Every distance in a request or response is an explicit `{ value, unit }` object, `unit` one of `KM`
+or `MI`; a bare number is refused (400 `VALIDATION_ERROR`, `fieldErrors` naming the field, and naming
+`<field>.unit` specifically for a missing or unknown unit). Storage is always canonical kilometres,
+rounded half-up to 2 decimals; conversion is exact (1 mi = 1.609344 km) and happens at the API edge
+(`DistanceUnits`), never in the database.
+
+- **Locations** (`Location.distanceUnit`, `location.distance_unit varchar(2) NOT NULL DEFAULT 'KM'
+  CHECK (... IN ('KM','MI'))`, migration V11): the unit a location's own forms show and accept.
+  `createLocation`/`updateLocation` default an omitted `distanceUnit` to `KM`; `patchLocation` leaves
+  it unchanged when omitted. Alpha's US locations are seeded `MI`
+  (`scripts/fixtures/seed/alpha/location/locations.csv`, carried through
+  `pos-bulk-loader`'s `LocationRecord`/`LocationLoaderStrategy` into the `LOCATION` bulk-ingest
+  payload) — a bulk-loader `distanceUnit` column left blank still defaults to `KM` at the ingest
+  endpoint.
+- **Mobile unit coverage rules** (`CoverageRuleRequest`/`CoverageRuleResponse.maxDistance`,
+  `mobile_unit_coverage_rules.max_distance_km numeric(10,2)`, renamed from `max_distance` by V11): a
+  rule's `maxDistance` is stored in kilometres and shown back in the unit's base location's
+  `distanceUnit` — the location, not the caller, decides the display unit. `DISTANCE_TIER` coverage
+  (`ruleType`, `maxDistance`) is stored, **not yet evaluated**: nothing evaluates distance until
+  geocoding exists, since neither locations nor customer addresses carry coordinates today.
+- **Travel buffer policies** (`bufferType`): only `FIXED_MINUTES` (`bufferValue` a non-negative whole
+  number of minutes, DECISION-LOCATION-015) and `DISTANCE_TIER` (stored, not yet evaluated — same
+  reason as coverage) are accepted. The former `FLAT_MINUTES` is renamed to `FIXED_MINUTES`;
+  `PERCENTAGE_OF_TRAVEL` and `DISTANCE_MULTIPLIER`, which no decision defines and which would need
+  routed travel time no service in this platform provides, are removed outright (pre-production, no
+  compatibility shim). Migration V11 converts existing rows: `FLAT_MINUTES` → `FIXED_MINUTES`
+  in place, and a removed type → `FIXED_MINUTES` with a 0-minute `bufferValue`, one `RAISE WARNING`
+  per row naming the policy so an operator can pick a real value.
+- The alpha coverage-rule fixture (`scripts/fixtures/seed/alpha/location/mobile-unit-coverage-rules.csv`)
+  carries its own explicit `unit` column (always `MI` today) rather than assuming a unit: `seed-alpha.py`
+  sends `maxDistance` as `{"value": <maxDistance>, "unit": <unit>}` and refuses (skipping the whole
+  unit, with a `WARN`) a row that names a distance with no unit.
 
 ## Mobile unit coverage eligibility (DECISION-LOCATION-027, DECISION-SHOPMGMT-023, #2265)
 

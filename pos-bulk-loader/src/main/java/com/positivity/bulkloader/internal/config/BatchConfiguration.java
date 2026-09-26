@@ -1608,7 +1608,8 @@ public class BatchConfiguration {
                     item.getPhoneNumber(),
                     parseLocationActive(item),
                     item.getLocationTypeName(),
-                    item.getTimezone()));
+                    item.getTimezone(),
+                    blankToNull(item.getDistanceUnit())));
         }
         return payloads;
     }
@@ -2006,7 +2007,8 @@ public class BatchConfiguration {
             String phoneNumber,
             Boolean active,
             String locationTypeName,
-            String timezone) {}
+            String timezone,
+            String distanceUnit) {}
 
     private record VehicleWriterPayload(
             UUID accountId,

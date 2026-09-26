@@ -33,6 +33,15 @@ public class LocationPatchRequest {
     private String status;
 
     @Schema(
+            description = "Unit this location's forms show and accept for a distance value"
+                    + " (DECISION-LOCATION-028); unchanged when omitted. Storage of a distance is always"
+                    + " canonical kilometres regardless of this setting.",
+            example = "MI",
+            allowableValues = {"KM", "MI"},
+            requiredMode = NOT_REQUIRED)
+    private String distanceUnit;
+
+    @Schema(
             description = "IANA timezone identifier for the location",
             example = "America/Chicago",
             requiredMode = NOT_REQUIRED)
