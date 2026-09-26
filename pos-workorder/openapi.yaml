@@ -3723,7 +3723,7 @@ paths:
       x-required-permissions:
       - workorder:workorder:delete
     get:
-      description: 'Returns the raw workorder record — status, customer, vehicle, estimate linkage, approval and completion fields — for one workorder id.
+      description: 'Returns the raw workorder record — status, customer, vehicle, estimate linkage, approval, completion fields, and the linked invoiceId — null until pos-invoice''s invoice fact has been handled, since generateWorkorderInvoice only queues the request — for one workorder id.
 
         Use this tool when the plain record is enough; use getWorkorderDetail instead for the role-aware view with capability flags, labor totals, and conditional financials.
 
@@ -10862,6 +10862,13 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
           format: uuid
           type: string
+        invoiceId:
+          description: Invoice linked to this work order. generateWorkorderInvoice only queues the request; the id is recorded when pos-invoice's invoice fact is handled, so it is null until that asynchronous linkage has happened
+          example: 550e8400-e29b-41d4-a716-446655440005
+          format: uuid
+          type:
+          - string
+          - 'null'
         isReopened:
           description: Whether the completed workorder is currently reopened for controlled edits
           type: boolean

@@ -815,6 +815,8 @@ paths:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1analytics~1invoicing-lag
   /v1/invoices/analytics/revenue-by-customer:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1analytics~1revenue-by-customer
+  /v1/invoices/by-workorder/{workorderId}:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1by-workorder~1{workorderId}
   /v1/invoices/deposits:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1deposits
   /v1/invoices/deposits/{depositCreditId}:

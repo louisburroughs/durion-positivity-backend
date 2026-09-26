@@ -6025,6 +6025,52 @@ paths:
       x-required-permissions:
       - inventory:on_hand:view
   /v1/inventory/reservations:
+    get:
+      description: 'Lists the reservations for a workorder''s part lines, each with its allocations — this read exists for shortage resolution: the shortage page holds only a workorderId (and the frontend''s allocationLineId, which names an allocation id), but listShortageOptions and resolveShortage need an allocationId, and this is the operation that supplies it.
+
+        Use this tool to find the allocationId for a workorder line before calling listShortageOptions or resolveShortage; do not use listBackorders, which lists already-opened backorders rather than the live reservation/allocation state.
+
+        Preconditions: none; a workorder with no part lines, or one with lines but no reservations, is not an error.
+
+        Required inputs: workorderId (UUID) query parameter; there is no request body.
+
+        Emits an INVENTORY_RESERVATION_LIST event; no state changes — this is a read-only projection. Each reservation''s allocations are narrowed to locations the caller''s token scope covers (ADR-0061); an allocation outside that reach is dropped, but a reservation left with no in-reach allocation is still returned with its quantities.
+
+        Returns 200 with an empty array when the workorder has no lines, has lines but no reservations, or is unknown — no replica row for the workorder is not an error here.
+
+        '
+      operationId: listReservationsForWorkorder
+      parameters:
+      - description: Workorder identifier
+        in: query
+        name: workorderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/WorkorderReservationResponse'
+                type: array
+          description: Reservations retrieved
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User lacks required reservation authority
+      security:
+      - bearerAuth:
+        - inventory:adjustment:create
+      summary: List reservations for a workorder
+      tags:
+      - Inventory Reservations
+      x-required-permissions:
+      - inventory:shortage:view
     post:
       description: 'Creates a soft reservation for a workorder line, or updates the existing reservation for that line to the requested stock item and quantity; creation records one SOFT allocation for the full quantity with no location and no ledger entry.
 
@@ -6953,7 +6999,7 @@ paths:
 
         Preconditions: allocationId must name a real allocation when sku or shortQuantity is omitted (they are then derived from the allocation''s reservation: sku from stockItemId, shortQuantity from requiredQuantity minus allocatedQuantity); SUBSTITUTE and TRANSFER_IN options appear only when locationId is provided, and SUBSTITUTE additionally requires sku to parse as a product UUID.
 
-        Required inputs: allocationId (UUID) — the UI''s allocationLineId names the same allocation; sku and shortQuantity (positive, decimal-capable per the product''s catalog precision_scale declaration) are optional and derived from the allocation when omitted; workorderLineId and locationId are optional but drive which options appear.
+        Required inputs: allocationId (UUID) — the UI''s allocationLineId names the same allocation; when only the workorderId is known, call listReservationsForWorkorder first to find it. sku and shortQuantity (positive, decimal-capable per the product''s catalog precision_scale declaration) are optional and derived from the allocation when omitted; workorderLineId and locationId are optional but drive which options appear.
 
         No events are emitted and no state changes; this is a read-only computation.
 
@@ -6962,7 +7008,7 @@ paths:
         '
       operationId: listShortageOptions
       parameters:
-      - description: Allocation experiencing the shortage; the UI's allocationLineId names the same allocation
+      - description: Allocation experiencing the shortage; the UI's allocationLineId names the same allocation, and listReservationsForWorkorder resolves it from a workorderId
         in: query
         name: allocationId
         required: true
@@ -14997,6 +15043,72 @@ components:
       required:
       - partReturnId
       - status
+      type: object
+    WorkorderReservationAllocationResponse:
+      description: One allocation under a reservation, narrowed to the caller's location-scope reach
+      properties:
+        allocatedQuantity:
+          description: Quantity allocated by this allocation
+          type: number
+        allocationId:
+          description: Identifier of the allocation
+          format: uuid
+          type: string
+        allocationState:
+          description: SOFT or HARD
+          enum:
+          - SOFT
+          - HARD
+          type: string
+        locationId:
+          description: Storage location or site the allocation is pinned to; null for an unlocated SOFT allocation
+          format: uuid
+          type: string
+        status:
+          description: ALLOCATED, PICKED, or RELEASED
+          enum:
+          - ALLOCATED
+          - PICKED
+          - RELEASED
+          type: string
+      type: object
+    WorkorderReservationResponse:
+      description: A reservation for one of a workorder's part lines, with its allocations
+      properties:
+        allocatedQuantity:
+          description: Quantity currently allocated against the reservation
+          type: number
+        allocations:
+          description: The reservation's allocations, narrowed to the caller's location-scope reach (ADR-0061); a reservation with no in-reach allocation is still listed with its quantities
+          items:
+            $ref: '#/components/schemas/WorkorderReservationAllocationResponse'
+          type: array
+        requiredQuantity:
+          description: Quantity required by the reservation
+          type: number
+        reservationId:
+          description: Identifier of the reservation
+          format: uuid
+          type: string
+        shortQuantity:
+          description: 'Quantity still short: requiredQuantity minus allocatedQuantity, floored at zero (matches how listShortageOptions/resolveShortage derive it from the allocation)'
+          type: number
+        sku:
+          description: SKU / stock-item identifier reserved
+          type: string
+        status:
+          description: Reservation lifecycle status
+          enum:
+          - PENDING
+          - PARTIALLY_FULFILLED
+          - FULFILLED
+          - BACKORDERED
+          - CANCELLED
+          type: string
+        workorderLineId:
+          description: Workorder line this reservation fulfils
+          format: uuid
+          type: string
       type: object
   securitySchemes:
     bearerAuth:
