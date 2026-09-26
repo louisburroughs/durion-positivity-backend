@@ -23,5 +23,8 @@ public interface InvoiceService {
     InvoiceDetailsResponse getInvoice(@NonNull UUID invoiceId);
 
     @NonNull
+    InvoiceDetailsResponse getInvoiceByWorkorder(@NonNull UUID workorderId);
+
+    @NonNull
     InvoiceDetailsResponse applyAdjustment(@NonNull UUID invoiceId, @NonNull AdjustmentRequest request);
 }

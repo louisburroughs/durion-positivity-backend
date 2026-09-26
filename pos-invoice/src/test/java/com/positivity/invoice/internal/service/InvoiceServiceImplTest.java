@@ -298,6 +298,86 @@ class InvoiceServiceImplTest {
         assertThat(result.isRequiresManagerApproval()).isFalse();
     }
 
+    // ---- getInvoiceByWorkorder ----
+
+    @Test
+    void getInvoiceByWorkorder_shouldReturnDetailResponse_whenFound() {
+        when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.of(draftInvoice));
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+
+        InvoiceDetailsResponse result = invoiceService.getInvoiceByWorkorder(workorderId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getInvoiceId()).isEqualTo(invoiceId);
+    }
+
+    @Test
+    void getInvoiceByWorkorder_shouldThrow_whenNotFound() {
+        when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> invoiceService.getInvoiceByWorkorder(workorderId))
+                .isInstanceOf(InvoiceNotFoundException.class);
+    }
+
+    @Nested
+    @DisplayName("getInvoiceByWorkorder location scope (ADR-0061 §3, #2232)")
+    class GetInvoiceByWorkorderLocationScope {
+
+        @BeforeEach
+        void stubLookup() {
+            when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.of(draftInvoice));
+        }
+
+        @Test
+        @DisplayName("invoice location in reach: detail is returned")
+        void inReach_returnsDetail() {
+            authenticate(viewScopedTo(REGION_NODE));
+            when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+
+            InvoiceDetailsResponse result = invoiceService.getInvoiceByWorkorder(workorderId);
+
+            assertThat(result.getInvoiceId()).isEqualTo(invoiceId);
+        }
+
+        @Test
+        @DisplayName("invoice location out of reach: LocationScopeDeniedException naming the view permission")
+        void outOfReach_denies() {
+            authenticate(viewScopedTo(OTHER_SHOP));
+            when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+
+            assertThatThrownBy(() -> invoiceService.getInvoiceByWorkorder(workorderId))
+                    .isInstanceOf(LocationScopeDeniedException.class)
+                    .asInstanceOf(
+                            org.assertj.core.api.InstanceOfAssertFactories.type(LocationScopeDeniedException.class))
+                    .satisfies(denied -> {
+                        assertThat(denied.permission())
+                                .isEqualTo(com.positivity.invoice.internal.security.InvoicePermissions.VIEW);
+                        assertThat(denied.locationId()).isEqualTo(locationId.toString());
+                    });
+        }
+
+        @Test
+        @DisplayName(
+                "missing linked invoice stays InvoiceNotFoundException for a scoped caller — existence precedes scope")
+        void missingInvoice_stays404() {
+            authenticate(viewScopedTo(OTHER_SHOP));
+            when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> invoiceService.getInvoiceByWorkorder(workorderId))
+                    .isInstanceOf(InvoiceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("caller whose view grant is global (claims present, permission unscoped) is unchanged")
+        void globalGrant_isNotLocationChecked() {
+            authenticate(LocationScope.of(Set.of(), Set.of(), Optional.of(Set.of(OTHER_SHOP)), true, RESOLVER));
+            when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+
+            assertThat(invoiceService.getInvoiceByWorkorder(workorderId).getInvoiceId())
+                    .isEqualTo(invoiceId);
+        }
+    }
+
     // ---- createInvoice(InvoiceGenerationRequest) ----
 
     @Test

@@ -46,6 +46,12 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** #2232: side-effect-free workorderId -> invoiceId lookup for the frontend. */
+    public static final EventTypeRegistration INVOICE_GET_BY_WORKORDER = EventTypeRegistration.fastRead(
+                    "INVOICE_GET_BY_WORKORDER", "Fetch invoice details by workorder id")
+            .apiVersion("1")
+            .build();
+
     public static final EventTypeRegistration INVOICE_ITEM_SEARCH = EventTypeRegistration.search(
                     "INVOICE_ITEM_SEARCH", "Search invoice line items by customer party for warranty correlation")
             .apiVersion("1")
@@ -219,6 +225,7 @@ public final class EventTypes {
                 INVOICE_CREATE_FROM_ORDER,
                 INVOICE_CANCEL,
                 INVOICE_GET,
+                INVOICE_GET_BY_WORKORDER,
                 INVOICE_SEARCH,
                 INVOICE_ITEM_SEARCH,
                 INVOICE_ANALYTICS_REVENUE_BY_CUSTOMER_VIEW,

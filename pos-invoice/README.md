@@ -33,6 +33,9 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 - `POST /v1/invoices/{invoiceId}/cancel` — terminal cancel of a DRAFT invoice before any money
   moved (order-void path, story C5); 409 once finalized or with authorized/captured payments
 - `GET /v1/invoices/{invoiceId}` — retrieve an invoice
+- `GET /v1/invoices/by-workorder/{workorderId}` — retrieve the invoice linked to a workorder
+  (side-effect-free workorderId → invoiceId lookup for the frontend, #2232); 404 when no invoice
+  is linked yet
 - `POST /v1/invoices/{invoiceId}/finalize` — finalize an invoice
 - `POST /v1/invoices/{invoiceId}/revert` — revert a finalized invoice
 - `POST /v1/invoices/{invoiceId}/adjustments` — apply an adjustment
