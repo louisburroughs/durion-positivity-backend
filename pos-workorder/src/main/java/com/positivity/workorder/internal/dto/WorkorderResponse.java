@@ -62,9 +62,11 @@ public class WorkorderResponse {
     private List<String> crmContactIds;
 
     @Schema(
-            description = "Invoice generated from this work order, once generateWorkorderInvoice has applied; "
-                    + "null before that",
+            description = "Invoice linked to this work order. generateWorkorderInvoice only queues the request;"
+                    + " the id is recorded when pos-invoice's invoice fact is handled, so it is null until that"
+                    + " asynchronous linkage has happened",
             example = "550e8400-e29b-41d4-a716-446655440005",
+            nullable = true,
             requiredMode = NOT_REQUIRED)
     private UUID invoiceId;
 
