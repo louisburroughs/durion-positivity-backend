@@ -41,6 +41,7 @@ Inventory management service for the Durion Positivity ETSMS platform. Manages s
 - `GET /v1/inventory/returns/reason-codes` — return reason code catalog (closed set: `NOT_NEEDED`, `WRONG_PART`, `CUSTOMER_REFUSED`, CAP-218 Story #177)
 - `POST /v1/inventory/returns/submit-to-stock` — post return lines to stock: persists the return record and posts a `RETURN_TO_STOCK` ledger entry per line
 - `GET /v1/inventory/receiving/workorders` — search cross-dock-eligible workorders by number (contains) or exact id (#2211)
+- `GET /v1/inventory/reservations` — list a workorder's reservations with their allocations (param: `workorderId`); the allocation-id lookup `listShortageOptions`/`resolveShortage` need, since the shortage page holds only a workorderId (#2233)
 - `GET /v1/inventory/shortage/options` — compute shortage resolution options (BACKORDER, SUBSTITUTE, TRANSFER_IN, EMERGENCY_PURCHASE, CANCEL_LINE), each with an expected-resolution date and cost delta where computable (params: `allocationId`, `sku`, `shortQuantity`, optional `workorderLineId`, `locationId`)
 - `POST /v1/inventory/shortage/resolve` — execute the chosen option atomically, creating the backing artifact (backorder / substitute reservation / transfer order / purchase suggestion); requires an `idempotencyKey` (retry-safe)
 - `GET /v1/inventory/backorders` — list backorders (filters: status, sku, location, workorderLine)
@@ -89,7 +90,11 @@ them (pre-rollout) is unscoped and behaves exactly as before. A denial is `403` 
   `listInventoryStorageLocations`, `listInventoryLocationZones`, `listPurchaseSuggestions`,
   `getAvailablePutawayTasks`, `getReplenishmentPolicies`, `listScraps`, `getValuation`,
   `getAvailabilityBySku`/`listAvailabilityBySku` (SKU-wide view summed over the reach; a storage
-  location or location, when named, is gated).
+  location or location, when named, is gated). `listReservationsForWorkorder` (#2233) narrows one
+  level deeper: `workorderId` names no location, so each reservation's individual allocations are
+  checked (`LocationScope.covers`) and an out-of-reach allocation is dropped from its `allocations`
+  array — the reservation itself is always listed, with its quantities, even when every allocation
+  is dropped.
 
 The reach is expanded over this module's own replica (`LocationHierarchyService.descendantsOf`
 on `location_ref` + `ext_location_parent`); there is no per-request call to pos-location. A

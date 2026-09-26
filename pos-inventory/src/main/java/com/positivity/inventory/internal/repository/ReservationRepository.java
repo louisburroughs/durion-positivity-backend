@@ -28,6 +28,14 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
     Optional<ReservationEntity> findByWorkorderLineIdOrSalesOrderLineId(UUID workorderLineId, UUID salesOrderLineId);
 
     /**
+     * Reservations for a set of workorder lines in one query (issue #2233), used by
+     * {@code listReservationsForWorkorder} over a workorder's part lines
+     * ({@code ExtWorkorderPartReplicaRepository.findByWorkorderId}) instead of looking each line up
+     * one at a time.
+     */
+    List<ReservationEntity> findByWorkorderLineIdIn(Collection<UUID> workorderLineIds);
+
+    /**
      * Open reservation remainders for one SKU (odoo-parity A2, issue #1028): sum of
      * {@code requiredQuantity - allocatedQuantity} (per reservation, floored at zero) over
      * reservations in the given statuses, optionally bounded to a due-date horizon.

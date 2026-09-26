@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.AllocationState;
 import com.positivity.tenancy.TenantAudited;
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +15,9 @@ import org.springframework.data.repository.query.Param;
 public interface AllocationRepository extends JpaRepository<AllocationEntity, UUID> {
 
     List<AllocationEntity> findByReservation(ReservationEntity reservation);
+
+    /** One query for every reservation of a work order (#2233), never a per-reservation loop. */
+    List<AllocationEntity> findByReservationIn(Collection<ReservationEntity> reservations);
 
     List<AllocationEntity> findByReservationAndAllocationState(ReservationEntity reservation, AllocationState state);
 

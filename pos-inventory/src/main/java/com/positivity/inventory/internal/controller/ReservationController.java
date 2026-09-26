@@ -4,11 +4,13 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
+import com.positivity.inventory.internal.dto.reservation.WorkorderReservationResponse;
 import com.positivity.inventory.internal.reservation.service.ReservationService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -16,15 +18,19 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -39,6 +45,52 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReservationController {
 
     private final ReservationService reservationService;
+
+    @GetMapping
+    @EmitEvent(id = "INVENTORY_RESERVATION_LIST", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:shortage:view"})
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.SHORTAGE_VIEW + "')")
+    @Operation(
+            operationId = "listReservationsForWorkorder",
+            summary = "List reservations for a workorder",
+            description = """
+                    Lists the reservations for a workorder's part lines, each with its allocations — this read \
+                    exists for shortage resolution: the shortage page holds only a workorderId (and the \
+                    frontend's allocationLineId, which names an allocation id), but listShortageOptions and \
+                    resolveShortage need an allocationId, and this is the operation that supplies it.
+                    Use this tool to find the allocationId for a workorder line before calling \
+                    listShortageOptions or resolveShortage; do not use listBackorders, which lists already-opened \
+                    backorders rather than the live reservation/allocation state.
+                    Preconditions: none; a workorder with no part lines, or one with lines but no reservations, \
+                    is not an error.
+                    Required inputs: workorderId (UUID) query parameter; there is no request body.
+                    Emits an INVENTORY_RESERVATION_LIST event; no state changes — this is a read-only projection. \
+                    Each reservation's allocations are narrowed to locations the caller's token scope covers \
+                    (ADR-0061); an allocation outside that reach is dropped, but a reservation left with no \
+                    in-reach allocation is still returned with its quantities.
+                    Returns 200 with an empty array when the workorder has no lines, has lines but no \
+                    reservations, or is unknown — no replica row for the workorder is not an error here.
+                    """,
+            tags = {"Inventory Reservations"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Reservations retrieved",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            array =
+                                    @ArraySchema(
+                                            schema = @Schema(implementation = WorkorderReservationResponse.class))))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required reservation authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<List<WorkorderReservationResponse>> listReservationsForWorkorder(
+            @Parameter(description = "Workorder identifier", required = true) @RequestParam UUID workorderId) {
+        return ResponseEntity.ok(reservationService.listReservationsForWorkorder(workorderId));
+    }
 
     @PostMapping()
     @EmitEvent(id = "INVENTORY_RESERVATION_CREATE_OR_UPDATE", apiVersion = "1")
