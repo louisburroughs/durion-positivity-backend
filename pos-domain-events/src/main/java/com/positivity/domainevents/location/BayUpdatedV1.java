@@ -38,6 +38,12 @@ import org.jspecify.annotations.Nullable;
  * the bay accepts. Null means unconstrained. It is a class number, not a token, so a consumer
  * compares it numerically against the job vehicle's {@code gvwrClass}.
  *
+ * <p>{@code acceptsGeneralWork} (DECISION-LOCATION-025, additive within schema version 1) is the
+ * owner's {@code BayType.acceptsGeneralWork()} for this bay's type — {@code false} only for
+ * {@code WASH_DETAIL}. It replaces deriving "does this type take general work" from the type name:
+ * a consumer must read it, not re-implement the {@code WASH_DETAIL} exception itself. Null on a
+ * pre-DECISION-LOCATION-025 emission, meaning "the publisher predates this field", never "no".
+ *
  * @param bayId bay identifier (also the envelope aggregateId)
  * @param locationId owning site identifier
  * @param name bay display name
@@ -49,6 +55,8 @@ import org.jspecify.annotations.Nullable;
  *     emission
  * @param maxDutyClass heaviest GVWR class (1–8) the bay accepts; null when unconstrained or on a
  *     pre-CAP-325 emission
+ * @param acceptsGeneralWork whether this bay type takes general work by default; false only for
+ *     {@code WASH_DETAIL}; null on a pre-DECISION-LOCATION-025 emission
  */
 public record BayUpdatedV1(
         @NonNull UUID bayId,
@@ -58,7 +66,8 @@ public record BayUpdatedV1(
         @Nullable String status,
         @Nullable List<String> serviceCapabilityCodes,
         @Nullable Integer maxConcurrentVehicles,
-        @Nullable Integer maxDutyClass) {
+        @Nullable Integer maxDutyClass,
+        @Nullable Boolean acceptsGeneralWork) {
 
     public static final String EVENT_TYPE = "location.bay.updated";
     public static final int SCHEMA_VERSION = 1;

@@ -14,6 +14,7 @@ import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.MobileUnitEntity;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.enums.AllowNewProductPolicy;
+import com.positivity.location.internal.enums.BayType;
 import com.positivity.location.internal.enums.StorageCategory;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import jakarta.persistence.EntityManager;
@@ -334,8 +335,27 @@ public class LocationFactPublisher {
                 bay.getStatus(),
                 bay.getServiceCapabilityCodes(),
                 bay.getMaxConcurrentVehicles(),
-                bay.getMaxDutyClass());
+                bay.getMaxDutyClass(),
+                acceptsGeneralWork(bay.getBayType()));
         publish(writer, BayUpdatedV1.EVENT_TYPE, BayUpdatedV1.SCHEMA_VERSION, bay.getId(), payload, bay.getVersion());
+    }
+
+    /**
+     * {@code BayType.acceptsGeneralWork()} for the bay's own type (DECISION-LOCATION-025). Null
+     * only for a {@code bayType} value {@link BayType} does not recognize, which never happens on
+     * a live path — {@code BayServiceImpl} validates against the enum before a bay is ever saved —
+     * but a null here reads exactly like a pre-DECISION-LOCATION-025 emission to consumers, which is
+     * the correct degraded answer for data this publisher cannot resolve.
+     */
+    private @Nullable Boolean acceptsGeneralWork(@Nullable String bayType) {
+        if (bayType == null) {
+            return null;
+        }
+        try {
+            return BayType.valueOf(bayType).acceptsGeneralWork();
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /**
