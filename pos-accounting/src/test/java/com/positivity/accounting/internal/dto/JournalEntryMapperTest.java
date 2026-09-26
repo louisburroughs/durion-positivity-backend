@@ -1,6 +1,9 @@
 package com.positivity.accounting.internal.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
@@ -22,13 +25,12 @@ class JournalEntryMapperTest {
     private static final UUID GL_ACCOUNT_ID = UUID.fromString("01900000-0000-7000-8000-000000005100");
 
     @Test
-    @DisplayName("toResponse - line takes accountCode and accountName from its GL account")
-    void toResponse_lineCarriesAccountCodeAndNameFromGlAccount() {
-        GLAccount account = new GLAccount(GL_ACCOUNT_ID);
-        account.setAccountCode("5100");
-        account.setAccountName("Inventory Shrinkage");
+    @DisplayName("toResponse - line answers with its stamped accountCode and accountName")
+    void toResponse_lineCarriesStampedAccountCodeAndName() {
         JournalEntryLine line = line();
-        line.setGlAccount(account);
+        line.setGlAccountId(GL_ACCOUNT_ID);
+        line.setAccountCode("5100");
+        line.setAccountName("Inventory Shrinkage");
 
         JournalEntryResponse.JournalEntryLineResponse response = mapSingleLine(line);
 
@@ -38,12 +40,28 @@ class JournalEntryMapperTest {
     }
 
     @Test
-    @DisplayName("toResponse - id-only GL account reference falls back to the line's stamped columns")
-    void toResponse_idOnlyAccountFallsBackToStampedColumns() {
+    @DisplayName("toResponse - stamped line does not touch its lazy GL account")
+    void toResponse_stampedLineDoesNotLoadGlAccount() {
+        GLAccount account = mock(GLAccount.class);
         JournalEntryLine line = line();
-        line.setGlAccountId(GL_ACCOUNT_ID);
+        line.setGlAccount(account);
         line.setAccountCode("5100");
         line.setAccountName("Inventory Shrinkage");
+
+        mapSingleLine(line);
+
+        verify(account, never()).getAccountCode();
+        verify(account, never()).getAccountName();
+    }
+
+    @Test
+    @DisplayName("toResponse - unstamped line falls back to its GL account")
+    void toResponse_unstampedLineFallsBackToGlAccount() {
+        GLAccount account = new GLAccount(GL_ACCOUNT_ID);
+        account.setAccountCode("5100");
+        account.setAccountName("Inventory Shrinkage");
+        JournalEntryLine line = line();
+        line.setGlAccount(account);
 
         JournalEntryResponse.JournalEntryLineResponse response = mapSingleLine(line);
 

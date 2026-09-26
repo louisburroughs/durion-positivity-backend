@@ -6,7 +6,6 @@ import com.positivity.accounting.internal.entity.JournalEntryLine;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Mapper for converting between JournalEntry entities and DTOs.
@@ -89,20 +88,25 @@ public final class JournalEntryMapper {
         JournalEntryResponse.JournalEntryLineResponse response = new JournalEntryResponse.JournalEntryLineResponse();
         response.setLineNumber(line.getLineNumber());
         response.setGlAccountId(line.getGlAccountId());
-        // The account is the source of truth; the line's denormalised columns (stamped when the
-        // line is built) cover an account reference that carries only its id.
-        GLAccount account = line.getGlAccount();
-        response.setAccountCode(firstNonNull(account == null ? null : account.getAccountCode(), line.getAccountCode()));
-        response.setAccountName(firstNonNull(account == null ? null : account.getAccountName(), line.getAccountName()));
+        // The line's denormalised columns are stamped when the line is built, so they answer
+        // without loading the lazy GL account (list pages map every line). Only a line persisted
+        // before stamping falls back to the account itself.
+        String accountCode = line.getAccountCode();
+        String accountName = line.getAccountName();
+        if (accountCode == null || accountName == null) {
+            GLAccount account = line.getGlAccount();
+            if (account != null) {
+                accountCode = accountCode != null ? accountCode : account.getAccountCode();
+                accountName = accountName != null ? accountName : account.getAccountName();
+            }
+        }
+        response.setAccountCode(accountCode);
+        response.setAccountName(accountName);
         response.setDebitAmount(line.getDebitAmount());
         response.setCreditAmount(line.getCreditAmount());
         response.setDescription(line.getDescription());
         response.setDimensions(line.getDimensions());
         return response;
-    }
-
-    private static @Nullable String firstNonNull(@Nullable String preferred, @Nullable String fallback) {
-        return preferred != null ? preferred : fallback;
     }
 
     private static JournalEntryLine toLineEntity(JournalEntryCreateRequest.@NonNull JournalEntryLineRequest request) {
