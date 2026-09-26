@@ -49,7 +49,7 @@ catalog:service:ingest, catalog:labor_standard:import and catalog:service_packag
 service-skill-requirements pack catalog:service_requirement:manage plus catalog:service_type:view and
 people:skill:view to resolve the services and skills it names, and
 for the labor-rate packs pricing:labor_rate:manage). The mobile-units pack additionally needs
-location:mobile-unit:manage and location:mobile-unit:read to create and list the units, plus
+location:mobile-unit:manage and location:mobile-unit:read to create, activate and list the units, plus
 location:travel-buffer-policy:read and location:service-area:read to resolve the policy and
 service area names its fixtures carry.
 """
@@ -391,11 +391,8 @@ def mobile_unit_shortfall(gateway, unit, row, rules):
     MobileUnitServiceImpl.validateCreateMobileUnitRequest demands at create, plus the coverage rules
     the list response does not carry -- fetched per unit, which only happens on a re-run.
 
-    There is deliberately no repair path here. A missing policy could be PATCHed and missing coverage
-    PUT, but serviceCapabilityCodes was not a PATCH key before CAP-325 (MobileUnitServiceImpl:58-60), so an incomplete unit
-    cannot be completed through the API at all; PATCHing it ACTIVE anyway would use PATCH's lack of
-    validation to build the exact state the create path refuses. Saying so and requiring a reset is
-    the honest option."""
+    A shortfall is repaired by complete_mobile_unit rather than reported: since CAP-325
+    serviceCapabilityCodes is a PATCH key, so every part of an ACTIVE unit can be set in place."""
     if row["status"].strip().upper() != "ACTIVE":
         return None
 
@@ -415,6 +412,31 @@ def mobile_unit_shortfall(gateway, unit, row, rules):
         elif not current:
             missing.append("has no coverage rules")
     return " and ".join(missing) if missing else None
+
+
+def complete_mobile_unit(gateway, unit, policy_id, capability_codes, rules):
+    """Bring an existing unit up to what an ACTIVE fixture row describes, in place; True on success.
+
+    This is the state an alpha seeded before #1986 is in: all nine names present as INACTIVE units
+    with no policy, capabilities or coverage, which the create-only path could only skip, leaving no
+    unit active. The coverage rules go first because PATCH checks the merged unit against the same
+    rule create enforces (MobileUnitServiceImpl.requireCompleteWhenActive reads the rules back), so
+    the status flip has to arrive with the policy and capabilities once the rules are already there.
+    PUT is a replace-set, so the unit ends with exactly the fixture's rules, in the fixture's order."""
+    name = unit["name"]
+    status_code, _ = gateway.put_json(
+        f"/location/mobile-units/{unit['id']}/coverage-rules", {"rules": rules}, allow_error=True)
+    if not 200 <= status_code < 300:
+        print(f"  WARN: mobile unit {name}: replacing coverage rules failed (HTTP {status_code})")
+        return False
+    status_code, _ = gateway.patch_json(
+        f"/location/mobile-units/{unit['id']}",
+        {"travelBufferPolicyId": policy_id, "serviceCapabilityCodes": capability_codes, "status": "ACTIVE"},
+        allow_error=True)
+    if not 200 <= status_code < 300:
+        print(f"  WARN: mobile unit {name}: activating failed (HTTP {status_code})")
+        return False
+    return True
 
 
 def coverage_rules_by_unit(service_area_ids):
@@ -470,6 +492,10 @@ def run_mobile_units(gateway, relative_path, _location_id):
     one call, coverage rules included, so the driver assembles it here rather than the loader
     growing three fields and a second fixture.
 
+    A unit that already exists is skipped when it matches its row, and completed in place when the
+    row is ACTIVE and the unit is not (complete_mobile_unit): an alpha seeded before #1986 holds
+    every unit INACTIVE and bare, and re-running the pack is how it gets its eight active units.
+
     Names, not ids, key both fixtures: the travel buffer policy and the service areas are tier-1
     reference data seeded by R__seed_location_1_reference.sql, and every other fixture in this tree
     names its references the same way."""
@@ -488,7 +514,7 @@ def run_mobile_units(gateway, relative_path, _location_id):
         print(f"  WARN: coverage rules name unit(s) absent from {os.path.basename(relative_path)}: "
               f"{', '.join(orphans)}")
 
-    created, skipped, failures = 0, 0, 0
+    created, activated, skipped, failures = 0, 0, 0, 0
     for row in unit_rows:
         name = row["name"]
         base_location_id = location_ids.get(row["baseLocationCode"])
@@ -514,27 +540,28 @@ def run_mobile_units(gateway, relative_path, _location_id):
             failures += 1
             continue
 
+        # CAP-325 D14: catalog operation codes, the same vocabulary a bay's specialty claim uses;
+        # pos-location validates each against its ext_catalog_service replica (422 otherwise).
+        capability_codes = [code for code in (row.get("capabilityCodes") or "").split(";") if code]
+
         current = existing.get(name)
         if current is not None:
             shortfall = mobile_unit_shortfall(gateway, current, row, rules)
             if shortfall is None:
                 skipped += 1
                 continue
-            # Counted as a failure rather than a skip: this is the state an alpha seeded before
-            # #1986 is in, and reporting it as "skipped" is how eligibility stays quietly empty.
-            print(f"  WARN: mobile unit {name} already exists but {shortfall}. It predates #1986 and "
-                  "cannot be completed through the API -- serviceCapabilityCodes was not a PATCH key before CAP-325. Reset the "
-                  "database and reseed, or delete this unit, to get an ACTIVE unit with coverage.")
-            failures += 1
+            print(f"  mobile unit {name} already exists but {shortfall}; completing and activating it")
+            if complete_mobile_unit(gateway, current, policy_id, capability_codes, rules):
+                activated += 1
+            else:
+                failures += 1
             continue
 
         body = {
             "name": name,
             "baseLocationId": base_location_id,
             "status": row["status"],
-            # CAP-325 D14: catalog operation codes, the same vocabulary a bay's specialty claim uses;
-            # pos-location validates each against its ext_catalog_service replica (422 otherwise).
-            "serviceCapabilityCodes": [code for code in (row.get("capabilityCodes") or "").split(";") if code],
+            "serviceCapabilityCodes": capability_codes,
             "coverageRules": rules,
         }
         if policy_id:
@@ -547,7 +574,7 @@ def run_mobile_units(gateway, relative_path, _location_id):
             print(f"  WARN: mobile unit {name}: HTTP {status_code}")
             failures += 1
 
-    print(f"  mobile units: created={created} skipped={skipped} failures={failures}")
+    print(f"  mobile units: created={created} activated={activated} skipped={skipped} failures={failures}")
     return failures == 0
 
 

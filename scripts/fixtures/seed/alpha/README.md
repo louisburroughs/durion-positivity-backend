@@ -470,7 +470,7 @@ about where part numbers come from first.
 | `operating-hours.csv` | 24 open days across the 4 shops (Mon–Sat each; Sunday closed) | gateway API pack (`PATCH /v1/locations/{id}` per site, carrying that site's whole week) |
 | `site-defaults.csv` | 6 rows, one per site | gateway API pack (`PUT /v1/locations/{id}/defaults` per row) |
 | `bays.csv` | 24 service bays (6 types; 21 from the seed and the SDK seeder's Bay 1–3 at ATX-RIV-001) | gateway API pack (`POST .../bays` per row; 409 = exists) |
-| `mobile-units.csv` | 9 mobile units, 8 `ACTIVE` and 1 parked (see below) | gateway API pack (`POST /location/mobile-units`, one call carrying the unit's policy, capabilities and coverage rules; existing names skipped via the list) |
+| `mobile-units.csv` | 9 mobile units, 8 `ACTIVE` and 1 parked (see below) | gateway API pack (`POST /location/mobile-units`, one call carrying the unit's policy, capabilities and coverage rules; an existing unit is skipped when it matches its row, or completed and activated in place when its row is `ACTIVE` and it is not) |
 | `mobile-unit-coverage-rules.csv` | 21 rules across the 8 `ACTIVE` units | read by the `mobile-units.csv` pack, not loaded on its own |
 
 Columns (`locations.csv`): `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
@@ -486,6 +486,15 @@ travelBufferPolicyId, serviceCapabilityCodes, and coverageRules" — and the loa
 carries only `name`, `baseLocationCode`, `status` and `notes`, so it cannot express an active unit
 at all. `POST /v1/mobile-units` takes the whole unit in one call, coverage rules included, so the
 driver assembles it rather than the loader growing three fields.
+
+**Re-running the pack activates an alpha seeded before #1986.** That alpha holds all nine names
+as `INACTIVE` units with no policy, capabilities or coverage, and a create-only pack could only skip
+them, so no mobile unit showed as active. For each unit whose row is `ACTIVE` and which falls short
+of it, the pack now `PUT`s the fixture's coverage rules to `/location/mobile-units/{id}/coverage-rules`
+and then sends one `PATCH /location/mobile-units/{id}` carrying `travelBufferPolicyId`,
+`serviceCapabilityCodes` (a PATCH key since CAP-325) and `status: ACTIVE`. The rules go first because
+`PATCH` checks the merged unit against the same completeness rule create enforces. The eight `ACTIVE`
+rows are activated; `MU-CLT-MAIN-03` is left `INACTIVE`. The summary line counts these as `activated`.
 
 Both fixtures key off names, like every other pack here. `travelBufferPolicyName` and
 `serviceAreaName` are resolved through `GET /location/travel-buffer-policies` and
