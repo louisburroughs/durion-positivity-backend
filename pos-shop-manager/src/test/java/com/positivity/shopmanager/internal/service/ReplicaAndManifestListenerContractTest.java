@@ -135,6 +135,13 @@ class ReplicaAndManifestListenerContractTest {
     private ExtLocationParentReplicaRepository extLocationParentRepository;
 
     @Mock
+    private com.positivity.shopmanager.internal.repository.ExtBaySpecialtyMapReplicaRepository
+            baySpecialtyMapRepository;
+
+    @Mock
+    private com.positivity.shopmanager.internal.repository.ExtBayTypeReplicaRepository bayTypeRepository;
+
+    @Mock
     private LocationHierarchyService locationHierarchyService;
 
     @Mock
@@ -289,6 +296,8 @@ class ReplicaAndManifestListenerContractTest {
                                 mobileUnitRepository,
                                 extLocationRepository,
                                 extLocationParentRepository,
+                                baySpecialtyMapRepository,
+                                bayTypeRepository,
                                 locationHierarchyService,
                                 org.mockito.Mockito.mock(ObjectProvider.class),
                                 org.mockito.Mockito.mock(PlatformTransactionManager.class))::onLocationEvent,
@@ -310,6 +319,8 @@ class ReplicaAndManifestListenerContractTest {
                 mobileUnitRepository,
                 extLocationRepository,
                 extLocationParentRepository,
+                baySpecialtyMapRepository,
+                bayTypeRepository,
                 locationHierarchyService,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 org.mockito.Mockito.mock(PlatformTransactionManager.class))::onLocationEvent;

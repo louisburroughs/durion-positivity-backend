@@ -282,6 +282,7 @@ but the event consumer writes them, and no synchronous call crosses a domain wal
 | `ext_workorder` | `workorder.events.v1` | `WorkorderEventsListener` |
 | `ext_bay`, `ext_mobile_unit` | `location.events.v1` | `LocationEventsListener` |
 | `ext_location`, `ext_location_parent` | `location.events.v1` | `LocationEventsListener` |
+| `ext_bay_type`, `ext_bay_specialty_map` | `location.events.v1` | `LocationEventsListener` (#2261) |
 
 **Bay/mobile-unit topology is event-sourced, not read live.** A synchronous `RestClient` into
 pos-location would work today but is a domain→domain call that ADR-0044 R1 forbids, and no standing
@@ -307,6 +308,32 @@ casing: pos-location's `BayEntity` and `MobileUnitEntity` carry no boolean activ
 mobile unit's status is a free-text column, so an absent, blank or unrecognised status means not
 active. pos-workorder derives the same fact the same way (#1656); the two consumers mirror one
 upstream aggregate and must not disagree about which units are in service.
+
+**Bay specialty map replica (#2261, DECISION-LOCATION-025).** `location.bay-specialty-map.updated`
+carries a tenant's *whole* bay-type specialty map — one entry per `BayType`, never a delta — telling
+"no bay claims this specialty" apart from "this is general work" (DECISION-SHOPMGMT-021 rule 4).
+`LocationEventsListener` applies it as a full replace: every `ext_bay_type` / `ext_bay_specialty_map`
+row for the tenant is deleted and one row per entry reinserted, in the same handler transaction as
+the `processed_events` mark. Two tables, mirroring pos-location's own
+`bay_specialty_operation` / `bay_specialty_map_version` split but folded into one master row per bay
+type since the map is only ever replaced atomically:
+
+- `ext_bay_type` — one row per `(tenant_id, bay_type)`: `accepts_general_work` and the
+  `aggregate_version` the tenant's whole map was last applied at (every row from one emission
+  carries the same version, which is what the `ReplicaVersionGuard` stale check reads back).
+- `ext_bay_specialty_map` — one row per `(tenant_id, bay_type, operation_code)` a bay type is the
+  only one able to perform (CAP-325 D14).
+
+Both start empty and stay empty until the map arrives for a tenant; an absent row must never be read
+as "not specialty" — it may just mean "not yet published" — so a consumer must keep behaving exactly
+as today (no operation is treated as specialty) until the map fills. Wiring that read into
+eligibility enforcement is a later story.
+
+`ext_bay` separately gains `accepts_general_work boolean NOT NULL DEFAULT true`, mapped from
+`BayUpdatedV1.acceptsGeneralWork` — additive within schema v1, so an absent or explicit-null field on
+the fact means the publisher predates it and the already-replicated value (or the column default for
+a brand-new row) is kept, the same additive-field guard style this listener already uses for
+`gvwrClass` on the vehicle replica.
 
 `WorkorderEventsListener` raises an in-process `WorkorderStatusChangedEvent` that keeps the linked
 appointment's status in step. It is consumed `AFTER_COMMIT`, in its own transaction, and a failure
