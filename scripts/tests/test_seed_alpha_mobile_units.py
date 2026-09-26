@@ -276,6 +276,9 @@ class _StubGateway:
         self.existing = [_as_unit(unit) for unit in existing_units]
         self.coverage_rules = coverage_rules if coverage_rules is not None else {}
         self.posted = []
+        self.writes = []
+        self.put_status = 200
+        self.patch_status = 200
 
     def get(self, path, allow_error=False):
         if path == "/location/locations":
@@ -300,6 +303,16 @@ class _StubGateway:
         assert path == "/location/mobile-units", path
         self.posted.append(body)
         return 201, {"id": "new"}
+
+    def put_json(self, path, body, allow_error=False):
+        assert path.startswith("/location/mobile-units/") and path.endswith("/coverage-rules"), path
+        self.writes.append(("PUT", path, body))
+        return self.put_status, None
+
+    def patch_json(self, path, body, allow_error=False):
+        assert path.startswith("/location/mobile-units/"), path
+        self.writes.append(("PATCH", path, body))
+        return self.patch_status, None
 
 
 def _as_unit(unit):
@@ -392,8 +405,9 @@ class MobileUnitPackTest(unittest.TestCase):
 
 class LegacyIncompleteUnitTest(unittest.TestCase):
     """An alpha seeded before #1986 carries all nine names as INACTIVE units with no policy,
-    capabilities or coverage (#1982 parked them). Skipping on the name alone would report a clean
-    run and leave `:eligible` empty forever, which is the failure this pack exists to end."""
+    capabilities or coverage (#1982 parked them). Skipping on the name alone left no unit active, so
+    the pack completes each unit its fixture wants ACTIVE in place -- coverage PUT, then one PATCH
+    carrying the policy, the capabilities and the status flip -- and leaves the parked one alone."""
 
     def _legacy_nine(self):
         return [{"name": row["name"], "status": "INACTIVE", "travelBufferPolicyId": None,
@@ -402,10 +416,56 @@ class LegacyIncompleteUnitTest(unittest.TestCase):
     def _run(self, gateway):
         return seed_alpha.run_mobile_units(gateway, "location/mobile-units.csv", None)
 
-    def test_aLegacySeededAlphaFailsLoudlyInsteadOfReportingSuccess(self):
+    def _active_rows(self):
+        return [row for row in _rows("mobile-units.csv") if row["status"] == "ACTIVE"]
+
+    def test_aLegacySeededAlphaActivatesEveryUnitExceptTheParkedOne(self):
         gateway = _StubGateway(existing_units=self._legacy_nine())
-        self.assertFalse(self._run(gateway), "must not report success when nothing was upgraded")
+        self.assertTrue(self._run(gateway))
         self.assertEqual(gateway.posted, [], "the names exist; posting would 409 per row")
+        activated = {path.split("/")[3] for verb, path, body in gateway.writes
+                     if verb == "PATCH" and body["status"] == "ACTIVE"}
+        self.assertEqual(activated, {f"id-{row['name']}" for row in self._active_rows()})
+        self.assertEqual(len(activated), 8)
+        self.assertNotIn("id-MU-CLT-MAIN-03", {path.split("/")[3] for _, path, _ in gateway.writes})
+
+    def test_coverageIsReplacedBeforeTheStatusFlipSoThePatchPassesTheActiveCheck(self):
+        """PATCH validates the merged unit (requireCompleteWhenActive reads the rules back), so the
+        rules must already be there when the ACTIVE status arrives."""
+        gateway = _StubGateway(existing_units=self._legacy_nine())
+        self._run(gateway)
+        for row in self._active_rows():
+            with self.subTest(unit=row["name"]):
+                verbs = [verb for verb, path, _ in gateway.writes if path.split("/")[3] == f"id-{row['name']}"]
+                self.assertEqual(verbs, ["PUT", "PATCH"])
+
+    def test_theActivatingPatchCarriesTheFixturesPolicyCapabilitiesAndRules(self):
+        gateway = _StubGateway(existing_units=self._legacy_nine())
+        self._run(gateway)
+        policy_ids = {policy["name"]: policy["id"] for policy in gateway.policies}
+        writes = {(verb, path.split("/")[3]): body for verb, path, body in gateway.writes}
+        coverage_counts = {}
+        for rule in _rows("mobile-unit-coverage-rules.csv"):
+            coverage_counts[rule["unitName"]] = coverage_counts.get(rule["unitName"], 0) + 1
+        for row in self._active_rows():
+            with self.subTest(unit=row["name"]):
+                patch = writes[("PATCH", f"id-{row['name']}")]
+                self.assertEqual(patch["travelBufferPolicyId"], policy_ids[row["travelBufferPolicyName"]])
+                self.assertEqual(patch["serviceCapabilityCodes"],
+                                 [code for code in row["capabilityCodes"].split(";") if code])
+                self.assertEqual(len(writes[("PUT", f"id-{row['name']}")]["rules"]),
+                                 coverage_counts[row["name"]])
+
+    def test_aRejectedActivationIsReportedAsAFailure(self):
+        gateway = _StubGateway(existing_units=self._legacy_nine())
+        gateway.patch_status = 422
+        self.assertFalse(self._run(gateway))
+
+    def test_aRejectedCoverageReplaceSkipsTheActivation(self):
+        gateway = _StubGateway(existing_units=self._legacy_nine())
+        gateway.put_status = 400
+        self.assertFalse(self._run(gateway))
+        self.assertEqual([verb for verb, _, _ in gateway.writes], ["PUT"] * 8)
 
     def test_theParkedUnitIsNotFlaggedBecauseTheFixtureOnlyWantsItToExist(self):
         """MU-CLT-MAIN-03 is INACTIVE in the fixture too, so a legacy INACTIVE row already matches
