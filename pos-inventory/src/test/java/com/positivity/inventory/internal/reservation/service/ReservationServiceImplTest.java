@@ -3,15 +3,21 @@ package com.positivity.inventory.internal.reservation.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
+import com.positivity.inventory.internal.dto.reservation.WorkorderReservationAllocationResponse;
+import com.positivity.inventory.internal.dto.reservation.WorkorderReservationResponse;
 import com.positivity.inventory.internal.entity.AllocationEntity;
+import com.positivity.inventory.internal.entity.ExtWorkorderPartReplica;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.AllocationState;
@@ -24,15 +30,22 @@ import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.AllocationRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.StorageLocationValidationService;
+import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationAncestorResolver;
+import com.positivity.security.common.LocationScope;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,6 +53,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Unit tests for {@link ReservationServiceImpl} — Story #29: Reserve/Allocate
@@ -84,7 +100,40 @@ class ReservationServiceImplTest {
     @Mock
     private StorageLocationValidationService storageLocationValidationService;
 
+    @Mock
+    private com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository
+            extWorkorderPartReplicaRepository;
+
     private ReservationServiceImpl service;
+
+    /** Trivial resolver: every location is its own (and only) ancestor on both dimensions. */
+    private static final LocationAncestorResolver SELF_RESOLVER =
+            locationId -> new AncestorSets(Set.of(locationId), Set.of(locationId));
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private static void authenticate(LocationScope scope) {
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "scoped-caller", null, List.of(new SimpleGrantedAuthority(InventoryPermissionRegistry.SHORTAGE_VIEW)));
+        authentication.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "scoped-caller",
+                GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                scope));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    private static LocationScope scopedTo(UUID... nodes) {
+        return LocationScope.of(
+                Set.of(),
+                Set.of(InventoryPermissionRegistry.SHORTAGE_VIEW),
+                Optional.of(Set.of(nodes)),
+                true,
+                SELF_RESOLVER);
+    }
 
     private static StorageLocationValidationService.StorageLocationValidation validation(
             boolean exists, boolean active) {
@@ -105,7 +154,8 @@ class ReservationServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
-                storageLocationValidationService);
+                storageLocationValidationService,
+                extWorkorderPartReplicaRepository);
         // Default lenient stubs for the SC1–SC7 scaffold tests
         lenient().when(reservationRepository.findByWorkorderLineId(any())).thenReturn(Optional.empty());
         lenient().when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -385,7 +435,8 @@ class ReservationServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
-                storageLocationValidationService);
+                storageLocationValidationService,
+                extWorkorderPartReplicaRepository);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ReservationEntity existing = ReservationEntity.builder()
@@ -418,7 +469,8 @@ class ReservationServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
-                storageLocationValidationService);
+                storageLocationValidationService,
+                extWorkorderPartReplicaRepository);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(reservationRepository.findByWorkorderLineId(workorderLineId)).thenReturn(Optional.empty());
@@ -459,7 +511,8 @@ class ReservationServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
-                storageLocationValidationService);
+                storageLocationValidationService,
+                extWorkorderPartReplicaRepository);
 
         UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(allocationRepository.findById(allocationId)).thenReturn(Optional.empty());
@@ -480,7 +533,8 @@ class ReservationServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
-                storageLocationValidationService);
+                storageLocationValidationService,
+                extWorkorderPartReplicaRepository);
 
         ReservationEntity reservation = ReservationEntity.builder()
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -528,7 +582,8 @@ class ReservationServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
-                storageLocationValidationService);
+                storageLocationValidationService,
+                extWorkorderPartReplicaRepository);
 
         ReservationEntity reservation = ReservationEntity.builder()
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -579,7 +634,8 @@ class ReservationServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
-                storageLocationValidationService);
+                storageLocationValidationService,
+                extWorkorderPartReplicaRepository);
 
         ReservationEntity reservation = ReservationEntity.builder()
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -633,7 +689,8 @@ class ReservationServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
-                storageLocationValidationService);
+                storageLocationValidationService,
+                extWorkorderPartReplicaRepository);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(reservationRepository.findByWorkorderLineId(workorderLineId)).thenReturn(Optional.empty());
@@ -653,7 +710,8 @@ class ReservationServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
-                storageLocationValidationService);
+                storageLocationValidationService,
+                extWorkorderPartReplicaRepository);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ReservationEntity reservation = ReservationEntity.builder()
@@ -688,7 +746,8 @@ class ReservationServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
-                storageLocationValidationService);
+                storageLocationValidationService,
+                extWorkorderPartReplicaRepository);
 
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         ReservationEntity reservation = ReservationEntity.builder()
@@ -1051,5 +1110,333 @@ class ReservationServiceImplTest {
         assertThatThrownBy(() -> service.cancelReservationForSalesOrderLine(salesOrderLineId))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Reservation not found");
+    }
+
+    // ─── Issue #2233: listReservationsForWorkorder ──────────────────────────────
+
+    @Test
+    @DisplayName("listReservationsForWorkorder maps reservation and allocation fields and computes shortQuantity")
+    void listReservationsForWorkorder_mapsFieldsAndComputesShortQuantity() {
+        authenticate(LocationScope.unscoped());
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000002001");
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000002002");
+        UUID reservationId = UUID.fromString("00000000-0000-0000-0000-000000002003");
+        UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000002004");
+        UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000002005");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000002006");
+
+        when(extWorkorderPartReplicaRepository.findByWorkorderId(workorderId))
+                .thenReturn(List.of(ExtWorkorderPartReplica.builder()
+                        .workorderLineId(workorderLineId)
+                        .workorderId(workorderId)
+                        .build()));
+
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(reservationId)
+                .workorderLineId(workorderLineId)
+                .stockItemId(stockItemId)
+                .requiredQuantity(new BigDecimal("10"))
+                .allocatedQuantity(new BigDecimal("4"))
+                .status(ReservationStatus.PARTIALLY_FULFILLED)
+                .build();
+        when(reservationRepository.findByWorkorderLineIdIn(List.of(workorderLineId)))
+                .thenReturn(List.of(reservation));
+
+        AllocationEntity allocation = AllocationEntity.builder()
+                .allocationId(allocationId)
+                .reservation(reservation)
+                .locationId(locationId)
+                .allocatedQuantity(new BigDecimal("4"))
+                .allocationState(AllocationState.HARD)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+        when(allocationRepository.findByReservationIn(anyCollection())).thenReturn(List.of(allocation));
+
+        List<WorkorderReservationResponse> result = service.listReservationsForWorkorder(workorderId);
+
+        assertThat(result).hasSize(1);
+        WorkorderReservationResponse response = result.get(0);
+        assertThat(response.getReservationId()).isEqualTo(reservationId);
+        assertThat(response.getWorkorderLineId()).isEqualTo(workorderLineId);
+        assertThat(response.getSku()).isEqualTo(stockItemId.toString());
+        assertThat(response.getRequiredQuantity()).isEqualByComparingTo("10");
+        assertThat(response.getAllocatedQuantity()).isEqualByComparingTo("4");
+        assertThat(response.getShortQuantity()).isEqualByComparingTo("6");
+        assertThat(response.getStatus()).isEqualTo(ReservationStatus.PARTIALLY_FULFILLED);
+        assertThat(response.getAllocations()).hasSize(1);
+        WorkorderReservationAllocationResponse allocationResponse =
+                response.getAllocations().get(0);
+        assertThat(allocationResponse.getAllocationId()).isEqualTo(allocationId);
+        assertThat(allocationResponse.getLocationId()).isEqualTo(locationId);
+        assertThat(allocationResponse.getAllocatedQuantity()).isEqualByComparingTo("4");
+        assertThat(allocationResponse.getAllocationState()).isEqualTo(AllocationState.HARD);
+        assertThat(allocationResponse.getStatus()).isEqualTo(AllocationStatus.ALLOCATED);
+        verify(allocationRepository, times(1)).findByReservationIn(anyCollection());
+        verify(allocationRepository, never()).findByReservation(any());
+    }
+
+    @Test
+    @DisplayName("listReservationsForWorkorder floors shortQuantity at zero when fully allocated")
+    void listReservationsForWorkorder_shortQuantityFlooredAtZero() {
+        authenticate(LocationScope.unscoped());
+        UUID workorderId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+
+        when(extWorkorderPartReplicaRepository.findByWorkorderId(workorderId))
+                .thenReturn(List.of(ExtWorkorderPartReplica.builder()
+                        .workorderLineId(workorderLineId)
+                        .workorderId(workorderId)
+                        .build()));
+
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(UUID.randomUUID())
+                .workorderLineId(workorderLineId)
+                .stockItemId(UUID.randomUUID())
+                .requiredQuantity(new BigDecimal("4"))
+                .allocatedQuantity(new BigDecimal("4"))
+                .status(ReservationStatus.FULFILLED)
+                .build();
+        when(reservationRepository.findByWorkorderLineIdIn(List.of(workorderLineId)))
+                .thenReturn(List.of(reservation));
+        when(allocationRepository.findByReservationIn(anyCollection())).thenReturn(List.of());
+
+        List<WorkorderReservationResponse> result = service.listReservationsForWorkorder(workorderId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getShortQuantity()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("listReservationsForWorkorder batches every line into one reservation query, not a loop")
+    void listReservationsForWorkorder_batchesIntoOneReservationQuery() {
+        authenticate(LocationScope.unscoped());
+        UUID workorderId = UUID.randomUUID();
+        UUID lineOne = UUID.randomUUID();
+        UUID lineTwo = UUID.randomUUID();
+
+        when(extWorkorderPartReplicaRepository.findByWorkorderId(workorderId))
+                .thenReturn(List.of(
+                        ExtWorkorderPartReplica.builder()
+                                .workorderLineId(lineOne)
+                                .workorderId(workorderId)
+                                .build(),
+                        ExtWorkorderPartReplica.builder()
+                                .workorderLineId(lineTwo)
+                                .workorderId(workorderId)
+                                .build()));
+        when(reservationRepository.findByWorkorderLineIdIn(List.of(lineOne, lineTwo)))
+                .thenReturn(List.of());
+
+        service.listReservationsForWorkorder(workorderId);
+
+        verify(reservationRepository, times(1)).findByWorkorderLineIdIn(List.of(lineOne, lineTwo));
+        verify(reservationRepository, never()).findByWorkorderLineId(any());
+    }
+
+    @Test
+    @DisplayName("listReservationsForWorkorder returns an empty list when the workorder has no part lines")
+    void listReservationsForWorkorder_noLines_returnsEmptyList() {
+        authenticate(LocationScope.unscoped());
+        UUID workorderId = UUID.randomUUID();
+        when(extWorkorderPartReplicaRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+
+        List<WorkorderReservationResponse> result = service.listReservationsForWorkorder(workorderId);
+
+        assertThat(result).isEmpty();
+        verify(reservationRepository, never()).findByWorkorderLineIdIn(any());
+    }
+
+    @Test
+    @DisplayName("listReservationsForWorkorder drops an out-of-reach allocation but keeps the reservation listed")
+    void listReservationsForWorkorder_narrowDropsOutOfReachAllocation() {
+        UUID inReachLocation = UUID.fromString("00000000-0000-0000-0000-000000003001");
+        UUID outOfReachLocation = UUID.fromString("00000000-0000-0000-0000-000000003002");
+        authenticate(scopedTo(inReachLocation));
+
+        UUID workorderId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+        when(extWorkorderPartReplicaRepository.findByWorkorderId(workorderId))
+                .thenReturn(List.of(ExtWorkorderPartReplica.builder()
+                        .workorderLineId(workorderLineId)
+                        .workorderId(workorderId)
+                        .build()));
+
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(UUID.randomUUID())
+                .workorderLineId(workorderLineId)
+                .stockItemId(UUID.randomUUID())
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
+                .status(ReservationStatus.FULFILLED)
+                .build();
+        when(reservationRepository.findByWorkorderLineIdIn(List.of(workorderLineId)))
+                .thenReturn(List.of(reservation));
+
+        AllocationEntity inReach = AllocationEntity.builder()
+                .allocationId(UUID.randomUUID())
+                .reservation(reservation)
+                .locationId(inReachLocation)
+                .allocatedQuantity(new BigDecimal("2"))
+                .allocationState(AllocationState.HARD)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+        AllocationEntity outOfReach = AllocationEntity.builder()
+                .allocationId(UUID.randomUUID())
+                .reservation(reservation)
+                .locationId(outOfReachLocation)
+                .allocatedQuantity(new BigDecimal("3"))
+                .allocationState(AllocationState.HARD)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+        when(allocationRepository.findByReservationIn(anyCollection())).thenReturn(List.of(inReach, outOfReach));
+
+        List<WorkorderReservationResponse> result = service.listReservationsForWorkorder(workorderId);
+
+        assertThat(result).hasSize(1);
+        WorkorderReservationResponse response = result.get(0);
+        assertThat(response.getReservationId()).isEqualTo(reservation.getReservationId());
+        assertThat(response.getRequiredQuantity()).isEqualByComparingTo("5");
+        assertThat(response.getAllocatedQuantity()).isEqualByComparingTo("5");
+        assertThat(response.getAllocations())
+                .extracting(WorkorderReservationAllocationResponse::getAllocationId)
+                .containsExactly(inReach.getAllocationId());
+    }
+
+    @Test
+    @DisplayName("listReservationsForWorkorder fails closed on an unlocated allocation for a scoped caller")
+    void listReservationsForWorkorder_unlocatedAllocation_droppedForScopedCaller_keptForUnscoped() {
+        UUID inReachLocation = UUID.fromString("00000000-0000-0000-0000-000000003001");
+        UUID workorderId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+        when(extWorkorderPartReplicaRepository.findByWorkorderId(workorderId))
+                .thenReturn(List.of(ExtWorkorderPartReplica.builder()
+                        .workorderLineId(workorderLineId)
+                        .workorderId(workorderId)
+                        .build()));
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(UUID.randomUUID())
+                .workorderLineId(workorderLineId)
+                .stockItemId(UUID.randomUUID())
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("2"))
+                .status(ReservationStatus.PARTIALLY_FULFILLED)
+                .build();
+        when(reservationRepository.findByWorkorderLineIdIn(List.of(workorderLineId)))
+                .thenReturn(List.of(reservation));
+        AllocationEntity unlocated = AllocationEntity.builder()
+                .allocationId(UUID.randomUUID())
+                .reservation(reservation)
+                .locationId(null)
+                .allocatedQuantity(new BigDecimal("2"))
+                .allocationState(AllocationState.SOFT)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+        when(allocationRepository.findByReservationIn(anyCollection())).thenReturn(List.of(unlocated));
+
+        // ADR-0061: a scoped caller never sees an allocation with no location (an empty id is not
+        // covered), but the reservation itself is still listed.
+        authenticate(scopedTo(inReachLocation));
+        List<WorkorderReservationResponse> scoped = service.listReservationsForWorkorder(workorderId);
+        assertThat(scoped).hasSize(1);
+        assertThat(scoped.get(0).getAllocations()).isEmpty();
+
+        // An unscoped (pre-rollout / global) caller keeps it.
+        authenticate(LocationScope.unscoped());
+        List<WorkorderReservationResponse> unscoped = service.listReservationsForWorkorder(workorderId);
+        assertThat(unscoped.get(0).getAllocations())
+                .extracting(WorkorderReservationAllocationResponse::getAllocationId)
+                .containsExactly(unlocated.getAllocationId());
+    }
+
+    @Test
+    @DisplayName("listReservationsForWorkorder still lists a reservation with no in-reach allocation")
+    void listReservationsForWorkorder_keepsReservationWithNoInReachAllocation() {
+        UUID inReachLocation = UUID.fromString("00000000-0000-0000-0000-000000003003");
+        UUID outOfReachLocation = UUID.fromString("00000000-0000-0000-0000-000000003004");
+        authenticate(scopedTo(inReachLocation));
+
+        UUID workorderId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+        when(extWorkorderPartReplicaRepository.findByWorkorderId(workorderId))
+                .thenReturn(List.of(ExtWorkorderPartReplica.builder()
+                        .workorderLineId(workorderLineId)
+                        .workorderId(workorderId)
+                        .build()));
+
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(UUID.randomUUID())
+                .workorderLineId(workorderLineId)
+                .stockItemId(UUID.randomUUID())
+                .requiredQuantity(new BigDecimal("3"))
+                .allocatedQuantity(new BigDecimal("3"))
+                .status(ReservationStatus.FULFILLED)
+                .build();
+        when(reservationRepository.findByWorkorderLineIdIn(List.of(workorderLineId)))
+                .thenReturn(List.of(reservation));
+
+        AllocationEntity outOfReach = AllocationEntity.builder()
+                .allocationId(UUID.randomUUID())
+                .reservation(reservation)
+                .locationId(outOfReachLocation)
+                .allocatedQuantity(new BigDecimal("3"))
+                .allocationState(AllocationState.HARD)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+        when(allocationRepository.findByReservationIn(anyCollection())).thenReturn(List.of(outOfReach));
+
+        List<WorkorderReservationResponse> result = service.listReservationsForWorkorder(workorderId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getReservationId()).isEqualTo(reservation.getReservationId());
+        assertThat(result.get(0).getAllocations()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("listReservationsForWorkorder keeps every allocation unchanged for a pre-rollout (unscoped) token")
+    void listReservationsForWorkorder_preRolloutToken_keepsAllocationsUnchanged() {
+        authenticate(LocationScope.unscoped());
+
+        UUID workorderId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+        when(extWorkorderPartReplicaRepository.findByWorkorderId(workorderId))
+                .thenReturn(List.of(ExtWorkorderPartReplica.builder()
+                        .workorderLineId(workorderLineId)
+                        .workorderId(workorderId)
+                        .build()));
+
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(UUID.randomUUID())
+                .workorderLineId(workorderLineId)
+                .stockItemId(UUID.randomUUID())
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
+                .status(ReservationStatus.FULFILLED)
+                .build();
+        when(reservationRepository.findByWorkorderLineIdIn(List.of(workorderLineId)))
+                .thenReturn(List.of(reservation));
+
+        AllocationEntity allocationOne = AllocationEntity.builder()
+                .allocationId(UUID.randomUUID())
+                .reservation(reservation)
+                .locationId(UUID.randomUUID())
+                .allocatedQuantity(new BigDecimal("2"))
+                .allocationState(AllocationState.HARD)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+        AllocationEntity allocationTwo = AllocationEntity.builder()
+                .allocationId(UUID.randomUUID())
+                .reservation(reservation)
+                .locationId(UUID.randomUUID())
+                .allocatedQuantity(new BigDecimal("3"))
+                .allocationState(AllocationState.HARD)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+        when(allocationRepository.findByReservationIn(anyCollection()))
+                .thenReturn(List.of(allocationOne, allocationTwo));
+
+        List<WorkorderReservationResponse> result = service.listReservationsForWorkorder(workorderId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getAllocations()).hasSize(2);
     }
 }

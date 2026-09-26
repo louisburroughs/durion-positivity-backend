@@ -3,7 +3,10 @@ package com.positivity.inventory.internal.reservation.service;
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
+import com.positivity.inventory.internal.dto.reservation.WorkorderReservationAllocationResponse;
+import com.positivity.inventory.internal.dto.reservation.WorkorderReservationResponse;
 import com.positivity.inventory.internal.entity.AllocationEntity;
+import com.positivity.inventory.internal.entity.ExtWorkorderPartReplica;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.AllocationState;
@@ -14,19 +17,24 @@ import com.positivity.inventory.internal.exception.InsufficientAtpException;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.AllocationRepository;
+import com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.InventoryFactPublisher;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.Quantities;
 import com.positivity.inventory.internal.service.StorageLocationValidationService;
+import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -44,6 +52,7 @@ public class ReservationServiceImpl implements ReservationService {
     private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final StorageLocationValidationService storageLocationValidationService;
+    private final ExtWorkorderPartReplicaRepository extWorkorderPartReplicaRepository;
 
     @Override
     public @NonNull ReservationResponse createOrUpdateReservation(@NonNull CreateReservationRequest request) {
@@ -153,6 +162,75 @@ public class ReservationServiceImpl implements ReservationService {
                 .findBySalesOrderLineId(salesOrderLineId)
                 .orElseThrow(() -> new ResourceNotFoundException("Reservation", salesOrderLineId.toString()));
         cancel(reservation);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull List<WorkorderReservationResponse> listReservationsForWorkorder(@NonNull UUID workorderId) {
+        List<UUID> workorderLineIds = extWorkorderPartReplicaRepository.findByWorkorderId(workorderId).stream()
+                .map(ExtWorkorderPartReplica::getWorkorderLineId)
+                .toList();
+        if (workorderLineIds.isEmpty()) {
+            return List.of();
+        }
+
+        // Issue #2233: one batched reservation query over every line, never a per-line loop.
+        List<ReservationEntity> reservations = reservationRepository.findByWorkorderLineIdIn(workorderLineIds);
+
+        // ADR-0061 §3: allocations outside the caller's reach are dropped per reservation, not the
+        // whole reservation — a reservation left with no in-reach allocation still carries its
+        // quantities.
+        LocationScope scope = SecurityContextHelper.locationScope();
+        // One allocation query for all reservations, grouped by reservation id.
+        Map<UUID, List<AllocationEntity>> allocationsByReservation = reservations.isEmpty()
+                ? Map.of()
+                : allocationRepository.findByReservationIn(reservations).stream()
+                        .collect(Collectors.groupingBy(
+                                allocation -> allocation.getReservation().getReservationId()));
+        return reservations.stream()
+                .map(reservation -> toWorkorderReservationResponse(
+                        reservation,
+                        allocationsByReservation.getOrDefault(reservation.getReservationId(), List.of()),
+                        scope))
+                .toList();
+    }
+
+    private WorkorderReservationResponse toWorkorderReservationResponse(
+            ReservationEntity reservation, List<AllocationEntity> reservationAllocations, LocationScope scope) {
+        BigDecimal required = Quantities.nz(reservation.getRequiredQuantity());
+        BigDecimal allocated = Quantities.nz(reservation.getAllocatedQuantity());
+        BigDecimal shortQuantity = required.subtract(allocated);
+        if (shortQuantity.signum() < 0) {
+            shortQuantity = BigDecimal.ZERO;
+        }
+
+        List<WorkorderReservationAllocationResponse> allocations = reservationAllocations.stream()
+                // ADR-0061: an allocation with no location fails closed for a scoped caller (an empty
+                // id is never covered); an unscoped caller keeps it.
+                .filter(allocation -> scope.covers(
+                        InventoryPermissionRegistry.SHORTAGE_VIEW,
+                        allocation.getLocationId() == null
+                                ? ""
+                                : allocation.getLocationId().toString()))
+                .map(allocation -> WorkorderReservationAllocationResponse.builder()
+                        .allocationId(allocation.getAllocationId())
+                        .locationId(allocation.getLocationId())
+                        .allocatedQuantity(allocation.getAllocatedQuantity())
+                        .allocationState(allocation.getAllocationState())
+                        .status(allocation.getStatus())
+                        .build())
+                .toList();
+
+        return WorkorderReservationResponse.builder()
+                .reservationId(reservation.getReservationId())
+                .workorderLineId(reservation.getWorkorderLineId())
+                .sku(reservation.getStockItemId().toString())
+                .requiredQuantity(reservation.getRequiredQuantity())
+                .allocatedQuantity(reservation.getAllocatedQuantity())
+                .shortQuantity(shortQuantity)
+                .status(reservation.getStatus())
+                .allocations(allocations)
+                .build();
     }
 
     private void cancel(ReservationEntity reservation) {

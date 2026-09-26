@@ -164,6 +164,10 @@ decisions:
     shape: gate
     permission: inventory:scrap:view
     reason: By-id sibling of the narrowed list; gated on the loaded scrap's locationId after the 404 with either held alternate (view or approve).
+  - operation: ReservationController.listReservationsForWorkorder
+    shape: narrow
+    permission: inventory:shortage:view
+    reason: workorderId names no location; each reservation's allocations are individually checked against the caller's reach (LocationScope.covers) and an out-of-reach allocation is dropped from the result rather than failing the request or dropping the reservation, since the reservation's own quantities carry no location (#2233).
   - operation: ShortageController.listShortageOptions
     shape: gate
     permission: inventory:shortage:view

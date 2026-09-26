@@ -66,7 +66,8 @@ public class ShortageController {
                     only when locationId is provided, and SUBSTITUTE additionally requires sku to parse as a \
                     product UUID.
                     Required inputs: allocationId (UUID) — the UI's allocationLineId names the same allocation; \
-                    sku and shortQuantity (positive, decimal-capable per the product's catalog precision_scale \
+                    when only the workorderId is known, call listReservationsForWorkorder first to find it. sku \
+                    and shortQuantity (positive, decimal-capable per the product's catalog precision_scale \
                     declaration) are optional and derived from the allocation when omitted; workorderLineId and \
                     locationId are optional but drive which options appear.
                     No events are emitted and no state changes; this is a read-only computation.
@@ -98,7 +99,8 @@ public class ShortageController {
     public ResponseEntity<List<ShortageOptionDto>> listShortageOptions(
             @Parameter(
                             description = "Allocation experiencing the shortage; the UI's allocationLineId names the"
-                                    + " same allocation")
+                                    + " same allocation, and listReservationsForWorkorder resolves it from a"
+                                    + " workorderId")
                     @RequestParam
                     UUID allocationId,
             @Parameter(

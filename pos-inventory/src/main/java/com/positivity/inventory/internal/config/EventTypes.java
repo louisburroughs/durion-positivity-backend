@@ -300,6 +300,13 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead("INVENTORY_GOODS_RECEIPT_GET", "Get goods receipt by ID")
                         .build(),
 
+                // ReservationController - 1 event (issue #2233)
+                EventTypeRegistration.fastRead(
+                                "INVENTORY_RESERVATION_LIST",
+                                "List reservations and allocations for a workorder (shortage-resolution"
+                                        + " allocation-id lookup)")
+                        .build(),
+
                 // ReallocationController - 1 event
                 EventTypeRegistration.write(
                                 "INVENTORY_ALLOCATION_REALLOCATE",
