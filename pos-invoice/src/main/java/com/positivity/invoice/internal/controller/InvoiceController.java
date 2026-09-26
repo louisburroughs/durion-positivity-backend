@@ -253,6 +253,39 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.getInvoice(invoiceId));
     }
 
+    @GetMapping("/by-workorder/{workorderId}")
+    @EmitEvent(id = "INVOICE_GET_BY_WORKORDER", apiVersion = "1")
+    @Operation(operationId = "getInvoiceByWorkorder", summary = "Get Invoice Details by Workorder", description = """
+                    Returns the full invoice detail — status, line items, adjustments, totals, tax breakdown, due \
+                    date and the resolved workorder number — for the invoice linked to a workorder.
+                    Use this tool when only the workorderId is known and there is no other side-effect-free path \
+                    to its invoiceId; use getInvoice instead once the invoiceId is already known.
+                    Preconditions: the workorder must have a linked invoice (generateWorkorderInvoice has \
+                    applied). A caller whose invoice:invoice:view grant is location-scoped must have the \
+                    invoice's location within reach (ADR-0061).
+                    Required inputs: workorderId (UUID) as a path parameter; there is no request body.
+                    Emits an INVOICE_GET_BY_WORKORDER audit event; no state changes — this is a read-only \
+                    projection.
+                    Returns 404 when no invoice is linked to the supplied workorderId, and 403 \
+                    LOCATION_SCOPE_DENIED when the invoice exists but its location is outside the caller's scope.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Invoice found")
+    @ApiResponse(
+            responseCode = "403",
+            description = VIEW_LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "No invoice linked to the supplied workorderId",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"invoice:invoice:view"})
+    public ResponseEntity<InvoiceDetailsResponse> getInvoiceByWorkorder(@PathVariable @NonNull UUID workorderId) {
+        return ResponseEntity.ok(invoiceService.getInvoiceByWorkorder(workorderId));
+    }
+
     @PostMapping("/{invoiceId}/adjustments")
     @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
     @EmitEvent(id = "INVOICE_ADJUSTMENT_APPLY", apiVersion = "1")

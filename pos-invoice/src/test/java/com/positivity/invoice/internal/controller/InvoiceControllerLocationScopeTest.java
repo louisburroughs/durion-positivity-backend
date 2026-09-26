@@ -422,6 +422,54 @@ class InvoiceControllerLocationScopeTest {
         }
     }
 
+    // ---------------------------------------------------------------------------------------
+    // GET /v1/invoices/by-workorder/{workorderId} (#2232) — same gate as getInvoice, reached
+    // through InvoiceServiceImpl#getInvoiceByWorkorder delegating to loadInvoiceDetail.
+    // ---------------------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("getInvoiceByWorkorder")
+    class GetInvoiceByWorkorder {
+
+        @Test
+        @DisplayName("an invoice the service lets through answers 200")
+        void inReach() throws Exception {
+            InvoiceDetailsResponse detail = new InvoiceDetailsResponse();
+            detail.setInvoiceId(INVOICE_ID);
+            when(invoiceService.getInvoiceByWorkorder(WORKORDER_ID)).thenReturn(detail);
+
+            as(scopedBiller());
+            mockMvc.perform(get(INVOICES_URL + "/by-workorder/{workorderId}", WORKORDER_ID))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.invoiceId").value(INVOICE_ID.toString()));
+        }
+
+        @Test
+        @DisplayName("a service-side scope denial answers 403 LOCATION_SCOPE_DENIED, not the module's FORBIDDEN")
+        void outOfReach() throws Exception {
+            when(invoiceService.getInvoiceByWorkorder(WORKORDER_ID))
+                    .thenThrow(new LocationScopeDeniedException(InvoicePermissions.VIEW, SHOP_B.toString()));
+
+            as(scopedBiller());
+            mockMvc.perform(get(INVOICES_URL + "/by-workorder/{workorderId}", WORKORDER_ID))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE))
+                    .andExpect(jsonPath("$.correlationId").exists())
+                    .andExpect(header().exists("X-Correlation-Id"));
+        }
+
+        @Test
+        @DisplayName("no invoice linked to the workorder stays 404 for a scoped caller")
+        void missingStays404() throws Exception {
+            when(invoiceService.getInvoiceByWorkorder(WORKORDER_ID))
+                    .thenThrow(new InvoiceNotFoundException("Invoice not found for workorder: " + WORKORDER_ID));
+
+            as(scopedBiller());
+            mockMvc.perform(get(INVOICES_URL + "/by-workorder/{workorderId}", WORKORDER_ID))
+                    .andExpect(status().isNotFound());
+        }
+    }
+
     /** Fixed clock for both advices, plus method security so {@code @PreAuthorize} is enforced. */
     @TestConfiguration
     @EnableMethodSecurity(prePostEnabled = true)

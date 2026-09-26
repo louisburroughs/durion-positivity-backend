@@ -126,6 +126,23 @@ public class InvoiceServiceImpl implements InvoiceService {
         return response;
     }
 
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @NonNull
+    public InvoiceDetailsResponse getInvoiceByWorkorder(@NonNull UUID workorderId) {
+        // Resolve workorderId -> invoiceId first (404 with a workorder-flavoured message when no
+        // invoice is linked), then delegate to loadInvoiceDetail through the proxy so the
+        // ADR-0061 location-scope check applied there — same lookup, same rule — is identical to
+        // getInvoice's.
+        UUID invoiceId = invoiceRepository
+                .findByWorkorderId(workorderId)
+                .map(Invoice::getId)
+                .orElseThrow(() -> new InvoiceNotFoundException("Invoice not found for workorder: " + workorderId));
+        InvoiceDetailsResponse response = self.loadInvoiceDetail(invoiceId);
+        response.setWorkorderNumber(resolveWorkorderNumber(response.getWorkorderId()));
+        return response;
+    }
+
     @Transactional(readOnly = true)
     @NonNull
     public InvoiceDetailsResponse loadInvoiceDetail(@NonNull UUID invoiceId) {

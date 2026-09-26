@@ -99,7 +99,7 @@ class InvoiceReadAuthorityTest {
         // which is exactly what a package move or an annotation change would cause.
         assertThat(checked)
                 .as("no GET handlers found — the reflection, not the code, is what broke")
-                .hasSize(6);
+                .hasSize(7);
     }
 
     /**
