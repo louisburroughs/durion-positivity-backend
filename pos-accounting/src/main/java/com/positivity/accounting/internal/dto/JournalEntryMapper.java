@@ -1,10 +1,12 @@
 package com.positivity.accounting.internal.dto;
 
+import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Mapper for converting between JournalEntry entities and DTOs.
@@ -87,11 +89,20 @@ public final class JournalEntryMapper {
         JournalEntryResponse.JournalEntryLineResponse response = new JournalEntryResponse.JournalEntryLineResponse();
         response.setLineNumber(line.getLineNumber());
         response.setGlAccountId(line.getGlAccountId());
+        // The account is the source of truth; the line's denormalised columns (stamped when the
+        // line is built) cover an account reference that carries only its id.
+        GLAccount account = line.getGlAccount();
+        response.setAccountCode(firstNonNull(account == null ? null : account.getAccountCode(), line.getAccountCode()));
+        response.setAccountName(firstNonNull(account == null ? null : account.getAccountName(), line.getAccountName()));
         response.setDebitAmount(line.getDebitAmount());
         response.setCreditAmount(line.getCreditAmount());
         response.setDescription(line.getDescription());
         response.setDimensions(line.getDimensions());
         return response;
+    }
+
+    private static @Nullable String firstNonNull(@Nullable String preferred, @Nullable String fallback) {
+        return preferred != null ? preferred : fallback;
     }
 
     private static JournalEntryLine toLineEntity(JournalEntryCreateRequest.@NonNull JournalEntryLineRequest request) {

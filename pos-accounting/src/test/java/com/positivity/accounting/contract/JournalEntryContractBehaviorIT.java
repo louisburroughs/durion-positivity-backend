@@ -17,6 +17,7 @@ import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
+import com.positivity.accounting.internal.service.GLPostingService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -64,6 +65,9 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private StatementLineMappingRepository statementLineMappingRepository;
+
+    @Autowired
+    private GLPostingService glPostingService;
 
     private static final String API_V1_JOURNAL_ENTRIES = "/v1/accounting/journal-entries";
     private static final String API_V1_GL_ACCOUNTS = "/v1/accounting/gl-accounts";
@@ -124,6 +128,35 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
     // ===============================================
     // HAPPY PATH SCENARIOS
     // ===============================================
+
+    @Test
+    @DisplayName("Posted inventory shrinkage entry - lines carry their GL account code and name (#2238)")
+    void testGetPostedShrinkageEntry_LinesCarryAccountCodeAndName() throws Exception {
+        // Given - an entry posted the way the scrap consumer posts it: Dr shrinkage / Cr inventory
+        UUID shrinkageAccountId = createGLAccount("5100", "Inventory Shrinkage", AccountType.EXPENSE);
+        UUID inventoryAccountId = createGLAccount("1300", "Inventory", AccountType.ASSET);
+        UUID entryId = glPostingService.postInventoryShrinkage(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                shrinkageAccountId,
+                inventoryAccountId,
+                new BigDecimal("25.00"),
+                LocalDateTime.now(TEST_CLOCK),
+                "Scrap write-off",
+                null);
+
+        // When / Then - read back through the controller, both lines answer with their account
+        mockMvc.perform(withAuth(get(API_V1_JOURNAL_ENTRIES + "/{journalEntryId}", entryId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("POSTED"))
+                .andExpect(jsonPath("$.lines.length()").value(2))
+                .andExpect(jsonPath("$.lines[0].glAccountId").value(shrinkageAccountId.toString()))
+                .andExpect(jsonPath("$.lines[0].accountCode").value("5100"))
+                .andExpect(jsonPath("$.lines[0].accountName").value("Inventory Shrinkage"))
+                .andExpect(jsonPath("$.lines[1].glAccountId").value(inventoryAccountId.toString()))
+                .andExpect(jsonPath("$.lines[1].accountCode").value("1300"))
+                .andExpect(jsonPath("$.lines[1].accountName").value("Inventory"));
+    }
 
     @Test
     @DisplayName("Create balanced journal entry - happy path")
