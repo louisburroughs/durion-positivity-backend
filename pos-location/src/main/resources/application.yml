@@ -111,6 +111,10 @@ pos:
       # claims against catalog operation codes. Consume-only: no manifest, no commands.
       catalog-events-topic: ${POS_LOCATION_CATALOG_EVENTS_TOPIC:catalog.events.v1}
       catalog-events-consumer-group: ${POS_LOCATION_CATALOG_EVENTS_CONSUMER_GROUP:pos-location-catalog-events}
+      # Tenant provisioning feed (ADR-0062 §7, DECISION-LOCATION-025): seeds a new tenant's bay
+      # specialty map from the platform template on tenant.created. Consume-only.
+      tenant-events-topic: ${POS_LOCATION_TENANT_EVENTS_TOPIC:tenant.events.v1}
+      tenant-events-consumer-group: ${POS_LOCATION_TENANT_EVENTS_CONSUMER_GROUP:pos-location-tenant-events}
     manifest:
       topic: ${POS_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
       window: ${POS_LOCATION_MANIFEST_WINDOW:PT1H}
