@@ -166,20 +166,22 @@ public class MobileUnitController {
                     travelBufferPolicyId and serviceCapabilityCodes.
                     Use this tool for status transitions, travel-buffer-policy reassignment and replacing the \
                     unit's capability claim; use replaceCoverageRules instead to change where the unit operates.
-                    Preconditions: the unit as it stands after the patch must satisfy what create demands of an \
-                    ACTIVE unit, so an ACTIVE result needs a travelBufferPolicyId, at least one \
-                    serviceCapabilityCode and at least one coverage rule already on the unit; activating an \
+                    Preconditions: for an existing unit, the unit as it stands after the patch must satisfy what \
+                    create demands of an ACTIVE unit, so an ACTIVE result needs a travelBufferPolicyId, at least \
+                    one serviceCapabilityCode and at least one coverage rule already on the unit; activating an \
                     incomplete unit means calling replaceCoverageRules first and then sending the status with the \
-                    policy and capabilities. serviceCapabilityCodes replaces the whole claim, and every code must \
-                    be an active catalog operationCode known to the location service's catalog replica. When the \
-                    unit id does not exist nothing is persisted and a synthesized response built from the patch is \
-                    echoed back, so callers must verify existence first with getMobileUnitById.
+                    policy and capabilities. For an existing unit, serviceCapabilityCodes replaces the whole claim \
+                    and every code must be an active catalog operationCode known to the location service's catalog \
+                    replica. When the unit id does not exist none of this is checked: nothing is persisted and a \
+                    synthesized response carrying only the patched name, status, notes and travelBufferPolicyId is \
+                    echoed back, without serviceCapabilityCodes, so callers must verify existence first with \
+                    getMobileUnitById.
                     Required inputs: id (UUID) as a path parameter and a JSON object of the fields to change; \
                     status values are upper-cased and a blank status normalizes to INACTIVE.
                     Emits a LOCATION_MOBILE_UNIT_UPDATE event.
-                    Returns 200 even for unknown ids (with the unpersisted echo), 409 when a name change \
-                    collides with another unit at the same base location, and 422 when the result would be an \
-                    incomplete ACTIVE unit or a capability code is unknown.
+                    Returns 200 even for unknown ids (with the unpersisted echo, whatever the patch holds), 409 \
+                    when a name change collides with another unit at the same base location, and, for an existing \
+                    unit, 422 when the result would be an incomplete ACTIVE unit or a capability code is unknown.
                     """)
     @ApiResponse(responseCode = "200", description = "Mobile units managed successfully.")
     @ApiResponse(
@@ -193,8 +195,9 @@ public class MobileUnitController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "The patched unit would be ACTIVE without a travel buffer policy, capabilities and coverage"
-                    + " rules, or a serviceCapabilityCode is not an active catalog operation code.",
+            description = "An existing unit would be ACTIVE after the patch without a travel buffer policy,"
+                    + " capabilities and coverage rules, or a serviceCapabilityCode is not an active catalog operation"
+                    + " code. Not returned for an unknown id, which answers 200 with an unpersisted echo.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
