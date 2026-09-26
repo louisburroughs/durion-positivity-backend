@@ -71,6 +71,13 @@ class LocationHierarchyServiceTest {
     private ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
 
     @Autowired
+    private com.positivity.shopmanager.internal.repository.ExtBaySpecialtyMapReplicaRepository
+            extBaySpecialtyMapReplicaRepository;
+
+    @Autowired
+    private com.positivity.shopmanager.internal.repository.ExtBayTypeReplicaRepository extBayTypeReplicaRepository;
+
+    @Autowired
     private ProcessedEventRepository processedEventRepository;
 
     @Autowired
@@ -92,6 +99,8 @@ class LocationHierarchyServiceTest {
                 extMobileUnitReplicaRepository,
                 extLocationReplicaRepository,
                 extLocationParentReplicaRepository,
+                extBaySpecialtyMapReplicaRepository,
+                extBayTypeReplicaRepository,
                 service,
                 Mockito.mock(ObjectProvider.class),
                 Mockito.mock(PlatformTransactionManager.class));

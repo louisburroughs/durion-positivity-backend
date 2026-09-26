@@ -68,6 +68,13 @@ class LocationEventsListenerTransactionTest {
     private ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
 
     @Autowired
+    private com.positivity.workorder.internal.repository.ExtBaySpecialtyMapReplicaRepository
+            extBaySpecialtyMapReplicaRepository;
+
+    @Autowired
+    private com.positivity.workorder.internal.repository.ExtBayTypeReplicaRepository extBayTypeReplicaRepository;
+
+    @Autowired
     private FailingLocationHierarchyService failingHierarchyService;
 
     @Autowired
@@ -92,6 +99,8 @@ class LocationEventsListenerTransactionTest {
                 failingHierarchyService,
                 extBayReplicaRepository,
                 extMobileUnitReplicaRepository,
+                extBaySpecialtyMapReplicaRepository,
+                extBayTypeReplicaRepository,
                 meterRegistry,
                 transactionManager);
     }

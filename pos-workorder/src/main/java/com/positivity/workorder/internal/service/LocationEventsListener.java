@@ -1,17 +1,23 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.location.BayDeletedV1;
+import com.positivity.domainevents.location.BaySpecialtyMapUpdatedV1;
 import com.positivity.domainevents.location.BayUpdatedV1;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.domainevents.location.MobileUnitDeletedV1;
 import com.positivity.domainevents.location.MobileUnitUpdatedV1;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
+import com.positivity.workorder.internal.entity.ExtBaySpecialtyMapReplica;
+import com.positivity.workorder.internal.entity.ExtBayTypeReplica;
 import com.positivity.workorder.internal.entity.ExtLocationParentReplica;
 import com.positivity.workorder.internal.entity.ExtLocationReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtBaySpecialtyMapReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtBayTypeReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
@@ -24,6 +30,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
@@ -78,6 +85,22 @@ import tools.jackson.databind.ObjectMapper;
  * instead of marking a shared transaction rollback-only through the {@code @Transactional}
  * recompute, and the failed record's mark is written in a separate transaction; transient failures
  * still propagate for container retry.
+ *
+ * <h2>Bay specialty map replica (#2261, DECISION-LOCATION-025)</h2>
+ *
+ * {@code location.bay-specialty-map.updated} carries a tenant's <em>whole</em> bay-type specialty
+ * map — one entry per {@code BayType}, never a delta — and is applied by deleting every
+ * {@link ExtBaySpecialtyMapReplica} / {@link ExtBayTypeReplica} row for the tenant and reinserting
+ * one per entry, in the same handler transaction as the {@code processed_events} mark. The stale
+ * guard is {@link ReplicaVersionGuard} on whichever {@code ext_bay_type} row happens to come back
+ * first for the tenant (every row from one emission carries the same {@code aggregateVersion}), no
+ * held row meaning version 0 so the very first map for a tenant is never treated as stale. An empty
+ * replica (nothing has arrived yet) makes
+ * {@link ExtBaySpecialtyMapReplicaRepository#existsByOperationCode} answer {@code false} for every
+ * operation code — no operation is specialty — which is exactly today's pre-replica behaviour;
+ * wiring that read into workorder placement is a later story. {@code ext_bay.acceptsGeneralWork}
+ * (see {@link #applyBayUpdated}) is a separate, additive {@code BayUpdatedV1} field and is merged
+ * independently of this map.
  */
 @Slf4j
 @Component
@@ -94,6 +117,8 @@ public class LocationEventsListener {
     private final LocationHierarchyService locationHierarchyService;
     private final ExtBayReplicaRepository extBayReplicaRepository;
     private final ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
+    private final ExtBaySpecialtyMapReplicaRepository extBaySpecialtyMapReplicaRepository;
+    private final ExtBayTypeReplicaRepository extBayTypeReplicaRepository;
     private final Counter payloadRejectedCounter;
 
     /** One transaction for the handler and its mark, one for a failed record's mark; see the class doc. */
@@ -108,6 +133,8 @@ public class LocationEventsListener {
             LocationHierarchyService locationHierarchyService,
             ExtBayReplicaRepository extBayReplicaRepository,
             ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository,
+            ExtBaySpecialtyMapReplicaRepository extBaySpecialtyMapReplicaRepository,
+            ExtBayTypeReplicaRepository extBayTypeReplicaRepository,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
@@ -118,6 +145,8 @@ public class LocationEventsListener {
         this.locationHierarchyService = locationHierarchyService;
         this.extBayReplicaRepository = extBayReplicaRepository;
         this.extMobileUnitReplicaRepository = extMobileUnitReplicaRepository;
+        this.extBaySpecialtyMapReplicaRepository = extBaySpecialtyMapReplicaRepository;
+        this.extBayTypeReplicaRepository = extBayTypeReplicaRepository;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -161,6 +190,7 @@ public class LocationEventsListener {
                     case BayDeletedV1.EVENT_TYPE -> applyBayDeleted(envelope);
                     case MobileUnitUpdatedV1.EVENT_TYPE -> applyMobileUnitUpdated(envelope);
                     case MobileUnitDeletedV1.EVENT_TYPE -> applyMobileUnitDeleted(envelope);
+                    case BaySpecialtyMapUpdatedV1.EVENT_TYPE -> applyBaySpecialtyMapUpdated(envelope);
                     // Ignored types (e.g. storage-location facts) still fall through to the
                     // processed_events insert below — see the class javadoc.
                     default -> log.debug("Ignoring location event type={} eventId={}", eventType, eventId);
@@ -259,6 +289,12 @@ public class LocationEventsListener {
                 .serviceCapabilityCodes(payload.serviceCapabilityCodes())
                 .maxConcurrentVehicles(payload.maxConcurrentVehicles())
                 .maxDutyClass(payload.maxDutyClass())
+                // acceptsGeneralWork (DECISION-LOCATION-025, #2261) is additive within schema v1:
+                // null - whether absent or an explicit JSON null - always means "the publisher
+                // predates the field", never "no" (BayUpdatedV1 javadoc). Keep the already-replicated
+                // value (or default true for a brand-new row) whenever the fact carries no boolean
+                // here, exactly the gvwrClass guard style VehicleEventsListener uses.
+                .acceptsGeneralWork(mergeAcceptsGeneralWork(payload.acceptsGeneralWork(), existing))
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
@@ -269,6 +305,68 @@ public class LocationEventsListener {
         BayDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), BayDeletedV1.class);
         extBayReplicaRepository.deleteById(payload.bayId());
         log.info("Deleted ext_bay bayId={}", payload.bayId());
+    }
+
+    /**
+     * {@code acceptsGeneralWork} on a bay row: {@code null} (absent or explicit JSON null) always
+     * means "the publisher predates the field" (BayUpdatedV1 javadoc), so the already-replicated
+     * value is kept, or the column default {@code true} stands for a brand-new row.
+     */
+    private static boolean mergeAcceptsGeneralWork(@Nullable Boolean newValue, @Nullable ExtBayReplica existing) {
+        if (newValue != null) {
+            return newValue;
+        }
+        return existing == null || existing.isAcceptsGeneralWork();
+    }
+
+    /**
+     * Full replace of the tenant's whole bay specialty map (#2261, DECISION-LOCATION-025): every
+     * {@code ext_bay_specialty_map} / {@code ext_bay_type} row for the bound tenant is deleted and
+     * one row per {@link BaySpecialtyMapUpdatedV1.Entry} is reinserted, inside the same handler
+     * transaction as the {@code processed_events} mark. The stale guard reads whichever
+     * {@code ext_bay_type} row happens to come back first for the tenant — every row from one
+     * emission carries the same {@code aggregateVersion} — treating "no row held" as version 0 so
+     * the tenant's first-ever map is never skipped as stale.
+     */
+    private void applyBaySpecialtyMapUpdated(JsonNode envelope) {
+        BaySpecialtyMapUpdatedV1 payload =
+                objectMapper.treeToValue(envelope.path("payload"), BaySpecialtyMapUpdatedV1.class);
+        long incomingVersion = payload.aggregateVersion();
+        long heldVersion = extBayTypeReplicaRepository
+                .findFirstByOrderByBayTypeAsc()
+                .map(ExtBayTypeReplica::getAggregateVersion)
+                .orElse(0L);
+        if (ReplicaVersionGuard.isStale(heldVersion, incomingVersion)) {
+            log.debug(
+                    "Ignoring stale bay specialty map tenantId={} version={} held={}",
+                    payload.tenantId(),
+                    incomingVersion,
+                    heldVersion);
+            return;
+        }
+        extBaySpecialtyMapReplicaRepository.deleteAll();
+        extBayTypeReplicaRepository.deleteAll();
+        Instant now = Instant.now(clock);
+        for (BaySpecialtyMapUpdatedV1.Entry entry : payload.entries()) {
+            extBayTypeReplicaRepository.save(ExtBayTypeReplica.builder()
+                    .bayType(entry.bayType())
+                    .acceptsGeneralWork(entry.acceptsGeneralWork())
+                    .aggregateVersion(incomingVersion)
+                    .updatedAt(now)
+                    .build());
+            for (String operationCode : entry.operationCodes()) {
+                extBaySpecialtyMapReplicaRepository.save(ExtBaySpecialtyMapReplica.builder()
+                        .bayType(entry.bayType())
+                        .operationCode(operationCode)
+                        .updatedAt(now)
+                        .build());
+            }
+        }
+        log.info(
+                "Applied bay specialty map tenantId={} version={} bayTypes={}",
+                payload.tenantId(),
+                incomingVersion,
+                payload.entries().size());
     }
 
     private void applyMobileUnitUpdated(JsonNode envelope) {
