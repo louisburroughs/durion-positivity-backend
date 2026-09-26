@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -33,7 +34,8 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
      * ({@code ExtWorkorderPartReplicaRepository.findByWorkorderId}) instead of looking each line up
      * one at a time.
      */
-    List<ReservationEntity> findByWorkorderLineIdIn(Collection<UUID> workorderLineIds);
+    @NonNull
+    List<ReservationEntity> findByWorkorderLineIdIn(@NonNull Collection<UUID> workorderLineIds);
 
     /**
      * Open reservation remainders for one SKU (odoo-parity A2, issue #1028): sum of

@@ -1303,6 +1303,52 @@ class ReservationServiceImplTest {
     }
 
     @Test
+    @DisplayName("listReservationsForWorkorder fails closed on an unlocated allocation for a scoped caller")
+    void listReservationsForWorkorder_unlocatedAllocation_droppedForScopedCaller_keptForUnscoped() {
+        UUID inReachLocation = UUID.fromString("00000000-0000-0000-0000-000000003001");
+        UUID workorderId = UUID.randomUUID();
+        UUID workorderLineId = UUID.randomUUID();
+        when(extWorkorderPartReplicaRepository.findByWorkorderId(workorderId))
+                .thenReturn(List.of(ExtWorkorderPartReplica.builder()
+                        .workorderLineId(workorderLineId)
+                        .workorderId(workorderId)
+                        .build()));
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(UUID.randomUUID())
+                .workorderLineId(workorderLineId)
+                .stockItemId(UUID.randomUUID())
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("2"))
+                .status(ReservationStatus.PARTIALLY_FULFILLED)
+                .build();
+        when(reservationRepository.findByWorkorderLineIdIn(List.of(workorderLineId)))
+                .thenReturn(List.of(reservation));
+        AllocationEntity unlocated = AllocationEntity.builder()
+                .allocationId(UUID.randomUUID())
+                .reservation(reservation)
+                .locationId(null)
+                .allocatedQuantity(new BigDecimal("2"))
+                .allocationState(AllocationState.SOFT)
+                .status(AllocationStatus.ALLOCATED)
+                .build();
+        when(allocationRepository.findByReservationIn(anyCollection())).thenReturn(List.of(unlocated));
+
+        // ADR-0061: a scoped caller never sees an allocation with no location (an empty id is not
+        // covered), but the reservation itself is still listed.
+        authenticate(scopedTo(inReachLocation));
+        List<WorkorderReservationResponse> scoped = service.listReservationsForWorkorder(workorderId);
+        assertThat(scoped).hasSize(1);
+        assertThat(scoped.get(0).getAllocations()).isEmpty();
+
+        // An unscoped (pre-rollout / global) caller keeps it.
+        authenticate(LocationScope.unscoped());
+        List<WorkorderReservationResponse> unscoped = service.listReservationsForWorkorder(workorderId);
+        assertThat(unscoped.get(0).getAllocations())
+                .extracting(WorkorderReservationAllocationResponse::getAllocationId)
+                .containsExactly(unlocated.getAllocationId());
+    }
+
+    @Test
     @DisplayName("listReservationsForWorkorder still lists a reservation with no in-reach allocation")
     void listReservationsForWorkorder_keepsReservationWithNoInReachAllocation() {
         UUID inReachLocation = UUID.fromString("00000000-0000-0000-0000-000000003003");

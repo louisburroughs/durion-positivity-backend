@@ -205,8 +205,13 @@ public class ReservationServiceImpl implements ReservationService {
         }
 
         List<WorkorderReservationAllocationResponse> allocations = reservationAllocations.stream()
-                .filter(allocation -> allocation.getLocationId() == null
-                        || scope.covers(InventoryPermissionRegistry.SHORTAGE_VIEW, allocation.getLocationId()))
+                // ADR-0061: an allocation with no location fails closed for a scoped caller (an empty
+                // id is never covered); an unscoped caller keeps it.
+                .filter(allocation -> scope.covers(
+                        InventoryPermissionRegistry.SHORTAGE_VIEW,
+                        allocation.getLocationId() == null
+                                ? ""
+                                : allocation.getLocationId().toString()))
                 .map(allocation -> WorkorderReservationAllocationResponse.builder()
                         .allocationId(allocation.getAllocationId())
                         .locationId(allocation.getLocationId())
