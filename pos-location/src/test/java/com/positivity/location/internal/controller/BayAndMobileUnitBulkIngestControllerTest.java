@@ -105,6 +105,43 @@ class BayAndMobileUnitBulkIngestControllerTest {
     }
 
     @Test
+    void bays_carryMaxDutyClassThroughToTheRequest() throws Exception {
+        when(bayService.createBay(eq(LOCATION_ID), any()))
+                .thenReturn(BayResponse.builder().id(ENTITY_ID).build());
+
+        BayBulkIngestRecord record = bay("Heavy Duty Bay");
+        record.setMaxDutyClass(8);
+
+        mockMvc.perform(post("/v1/locations/bays/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request(List.of(record)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(1));
+
+        org.mockito.Mockito.verify(bayService)
+                .createBay(
+                        eq(LOCATION_ID),
+                        org.mockito.ArgumentMatchers.argThat(
+                                (BayRequest req) -> Integer.valueOf(8).equals(req.getMaxDutyClass())));
+    }
+
+    @Test
+    void bays_omittedMaxDutyClassIsUnconstrained() throws Exception {
+        when(bayService.createBay(eq(LOCATION_ID), any()))
+                .thenReturn(BayResponse.builder().id(ENTITY_ID).build());
+
+        mockMvc.perform(post("/v1/locations/bays/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request(List.of(bay("Bay 1"))))))
+                .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(bayService)
+                .createBay(
+                        eq(LOCATION_ID),
+                        org.mockito.ArgumentMatchers.argThat((BayRequest req) -> req.getMaxDutyClass() == null));
+    }
+
+    @Test
     void bays_duplicateNameIsAlreadyThere_notAFailure() throws Exception {
         when(bayService.createBay(any(), any()))
                 .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "DUPLICATE_NAME"));
