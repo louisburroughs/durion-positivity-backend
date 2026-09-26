@@ -10089,6 +10089,17 @@ components:
           items:
             $ref: '#/components/schemas/ContractField'
           type: array
+        idempotencyOutcomes:
+          $ref: '#/components/schemas/IdempotencyOutcomesContract'
+        identifierStrategy:
+          $ref: '#/components/schemas/IdentifierStrategy'
+        processingStatuses:
+          $ref: '#/components/schemas/ProcessingStatusesContract'
+        traceabilityIds:
+          description: Identifiers usable to trace an event across the ingestion pipeline
+          items:
+            $ref: '#/components/schemas/TraceabilityIdDescriptor'
+          type: array
         version:
           description: Contract schema version
           example: '1.0'
@@ -10335,6 +10346,22 @@ components:
       - jobId
       - requestedAt
       - status
+      type: object
+    FactConsumptionIdempotency:
+      description: Idempotency mechanism for Kafka-consumed inventory posting facts
+      properties:
+        mechanism:
+          description: 'Dedup mechanism: a re-delivery is matched by its deterministic sourceEventId'
+          example: DETERMINISTIC_SOURCE_EVENT_ID
+          type: string
+        outcomes:
+          description: Every outcome this path can record, derived from IdempotencyOutcome.values() so it cannot drift from the code
+          items:
+            $ref: '#/components/schemas/IdempotencyOutcomeDescriptor'
+          type: array
+      required:
+      - mechanism
+      - outcomes
       type: object
     FieldError:
       description: Validation error for a specific request field
@@ -10988,6 +11015,60 @@ components:
       required:
       - hardLockDate
       - justification
+      type: object
+    IdempotencyOutcomeDescriptor:
+      description: One Kafka fact-consumption idempotency outcome and its meaning
+      properties:
+        description:
+          description: Human-readable meaning of the outcome
+          example: First delivery of this fact; a new AccountingEvent row was written.
+          type: string
+        outcome:
+          description: The outcome constant
+          enum:
+          - NEW
+          - DUPLICATE_IGNORED
+          example: NEW
+          type: string
+      required:
+      - description
+      - outcome
+      type: object
+    IdempotencyOutcomesContract:
+      description: The two idempotency mechanisms used by the accounting event ingestion pipeline
+      properties:
+        factConsumption:
+          $ref: '#/components/schemas/FactConsumptionIdempotency'
+        restSubmission:
+          $ref: '#/components/schemas/RestSubmissionIdempotency'
+      required:
+      - factConsumption
+      - restSubmission
+      type: object
+    IdentifierStrategy:
+      description: How accounting assigns and accepts the identifiers carried on an event envelope
+      properties:
+        domainKeyIdFormat:
+          description: 'Format of domainKeyId: the upstream domain''s own key, accepted as an opaque string and never required to be a UUID'
+          example: OPAQUE_STRING
+          type: string
+        eventIdMintedBy:
+          description: 'How eventId is assigned: minted server-side (AccountingEvent.eventId, @UUIDv7Id) unless the caller supplies eventId in the payload, which is then accepted verbatim'
+          example: SERVER_UNLESS_SUPPLIED
+          type: string
+        idFormat:
+          description: Primary-key format for every identifier accounting mints (AD-006 / ADR-0013)
+          example: UUIDv7
+          type: string
+        notes:
+          description: Additional notes on identifier handling
+          items:
+            type: string
+          type: array
+      required:
+      - domainKeyIdFormat
+      - eventIdMintedBy
+      - idFormat
       type: object
     IncomeStatementReport:
       description: Income statement (Profit & Loss) report built from POSTED journal entries
@@ -12803,6 +12884,57 @@ components:
       - originalPrice
       - reason
       type: object
+    ProcessingStatusDescriptor:
+      description: One accounting event processing status and its meaning
+      properties:
+        meaning:
+          description: Human-readable meaning of the status
+          example: Event has been successfully processed; a journal entry was created.
+          type: string
+        status:
+          description: The status constant
+          enum:
+          - RECEIVED
+          - PROCESSING
+          - PROCESSED
+          - FAILED
+          - SUSPENDED
+          - SKIPPED
+          example: PROCESSED
+          type: string
+      required:
+      - meaning
+      - status
+      type: object
+    ProcessingStatusesContract:
+      description: Every accounting event processing status, and the lifecycles that produce them
+      properties:
+        kafkaFactLifecycle:
+          description: 'Status sequence for a Kafka-consumed inventory posting fact: exactly one terminal row is written per consumed fact, never a non-terminal one'
+          example:
+          - PROCESSED|SKIPPED
+          items:
+            type: string
+          type: array
+        restSubmissionLifecycle:
+          description: Status sequence for an event submitted via POST /v1/accounting/events
+          example:
+          - RECEIVED
+          - PROCESSING
+          - PROCESSED|FAILED|SUSPENDED
+          items:
+            type: string
+          type: array
+        statuses:
+          description: Every AccountingEventStatus constant with its meaning, derived from the enum so it cannot drift from the code
+          items:
+            $ref: '#/components/schemas/ProcessingStatusDescriptor'
+          type: array
+      required:
+      - kafkaFactLifecycle
+      - restSubmissionLifecycle
+      - statuses
+      type: object
     ReceivedLineItem:
       description: Line item received from vendor
       properties:
@@ -13254,6 +13386,37 @@ components:
       - creditAmount
       - debitAmount
       - glAccountId
+      type: object
+    RestSubmissionIdempotency:
+      description: Idempotency mechanism for events submitted via POST /v1/accounting/events
+      properties:
+        mechanism:
+          description: Dedup mechanism
+          example: CONTENT_HASH
+          type: string
+        onDuplicateBehavior:
+          description: 'What happens on a detected replay: nothing is persisted'
+          example: A replay persists nothing; idempotencyOutcome is not applicable to this path and stays null.
+          type: string
+        onDuplicateErrorCode:
+          description: ApiError code returned for a detected replay
+          example: DUPLICATE_EVENT
+          type: string
+        onDuplicateHttpStatus:
+          description: HTTP status returned for a detected replay
+          example: 409
+          format: int32
+          type: integer
+        window:
+          description: Deduplication window
+          example: 24h
+          type: string
+      required:
+      - mechanism
+      - onDuplicateBehavior
+      - onDuplicateErrorCode
+      - onDuplicateHttpStatus
+      - window
       type: object
     SettlementLineResponse:
       description: Processor settlement line with its reconciliation match status
@@ -13707,6 +13870,25 @@ components:
       - snapshotContentHash
       - snapshotId
       - verifiedAt
+      type: object
+    TraceabilityIdDescriptor:
+      description: An identifier usable to trace an accounting event across the ingestion pipeline
+      properties:
+        description:
+          description: What the identifier is and how it is used
+          type: string
+        location:
+          description: 'Where the identifier is carried: a request/response header name, or a field on the ingestion response'
+          example: AccountingEventResponse.eventId
+          type: string
+        name:
+          description: Name of the identifier
+          example: eventId
+          type: string
+      required:
+      - description
+      - location
+      - name
       type: object
     TrialBalanceReport:
       description: Trial Balance report with per-account debit/credit/balance rows from POSTED journal lines, grand totals proving sum(debit) == sum(credit), and an entry-number gap-check footnote

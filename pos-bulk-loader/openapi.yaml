@@ -307,11 +307,11 @@ paths:
       - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/corrections:
     post:
-      description: 'Submits corrected field values for one or more audit records of a FAILED bulk load job, marking each accepted record CORRECTED.
+      description: 'Submits corrected field values for one or more audit records of a FAILED or PARTIAL bulk load job, marking each accepted record CORRECTED.
 
         Use this tool to fix several failed rows in one call; use submitSingleCorrection instead when correcting exactly one record and a per-record accept or reject status is wanted.
 
-        Preconditions: the job must belong to the authenticated operator and be in FAILED state; each auditRecordId must belong to that job.
+        Preconditions: the job must belong to the authenticated operator and be in FAILED or PARTIAL state; each auditRecordId must belong to that job.
 
         Required inputs: corrections, a non-empty list where each item carries auditRecordId (UUID) and correctedData, a map of field names to corrected string values.
 
@@ -319,7 +319,7 @@ paths:
 
         Correcting records does not re-run the import; call retryBulkLoadJob and then startJobProcessing to process the job again.
 
-        Returns 201 with accepted and rejected counts, 409 when the job is not in FAILED state, 404 when the job does not exist, and 403 when it belongs to another operator.
+        Returns 201 with accepted and rejected counts, 409 when the job is not in FAILED or PARTIAL state, 404 when the job does not exist, and 403 when it belongs to another operator.
 
         '
       operationId: submitCorrections
@@ -388,17 +388,19 @@ paths:
       - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/corrections/single:
     post:
-      description: 'Submits corrected field values for exactly one audit record of a FAILED bulk load job and reports whether the correction was accepted.
+      description: 'Submits corrected field values for exactly one audit record of a FAILED or PARTIAL bulk load job and reports whether the correction was accepted.
 
         Use this tool for interactive row-by-row fixing; use submitCorrections instead to correct a batch of records in one call.
 
-        Preconditions: the job must belong to the authenticated operator and be in FAILED state; the auditRecordId must belong to that job.
+        Preconditions: the job must belong to the authenticated operator and be in FAILED or PARTIAL state; the auditRecordId must belong to that job.
 
         Required inputs: auditRecordId (UUID) and correctedData, a map of field names to corrected string values.
 
         Emits a BULK_LOADER_CORRECTION_SUBMIT_SINGLE event and stores the corrected values on the audit record, setting its review status to CORRECTED when accepted; correcting a record does not re-run the import.
 
-        Returns 201 with status ACCEPTED or REJECTED plus a rejectionReason when rejected, 409 when the job is not in FAILED state, 404 when the job does not exist, and 403 when it belongs to another operator.
+        Returns 201 with status ACCEPTED or REJECTED plus a rejectionReason when rejected. The response also carries the corrected audit record (entityType, entityId, rowNumber, reviewStatus, reasonCodes, originalValues, correctedValues and createdAt) so callers can update their review queue view without a follow-up fetch; these fields are omitted when the audit record can no longer be reloaded.
+
+        Returns 409 when the job is not in FAILED or PARTIAL state, 404 when the job does not exist, and 403 when it belongs to another operator.
 
         '
       operationId: submitSingleCorrection
@@ -1579,11 +1581,71 @@ components:
           example: 00000000-0000-0000-0000-000000000001
           format: uuid
           type: string
+        correctedValues:
+          description: Serialized corrected values submitted for the row, if any
+          example:
+            price: '19.99'
+            sku: PROD-001
+          type:
+          - string
+          - 'null'
+        createdAt:
+          description: Timestamp when the audit record was created (ISO 8601)
+          example: '2026-01-15T09:30:00Z'
+          format: date-time
+          type:
+          - string
+          - 'null'
+        entityId:
+          description: Identifier of the entity created or updated from the row, if any
+          example: 00000000-0000-0000-0000-000000000003
+          format: uuid
+          type:
+          - string
+          - 'null'
+        entityType:
+          description: Type of the target entity for the processed row
+          example: CATALOG_PRODUCT
+          type:
+          - string
+          - 'null'
+        originalValues:
+          description: Serialized original values from the source row
+          example:
+            price: ''
+            sku: PROD-001
+          type:
+          - string
+          - 'null'
+        reasonCodes:
+          description: Machine-readable reason codes describing why the row needs review
+          example: MISSING_REQUIRED_FIELD,INVALID_PRICE
+          type:
+          - string
+          - 'null'
         rejectionReason:
           description: Reason for rejection if status is REJECTED
           example: Audit record does not belong to this job
           type:
           - string
+          - 'null'
+        reviewStatus:
+          description: Review status of the audit record
+          enum:
+          - PENDING
+          - APPROVED
+          - REJECTED
+          - CORRECTED
+          example: PENDING
+          type:
+          - string
+          - 'null'
+        rowNumber:
+          description: One-based row number within the source file
+          example: 42
+          format: int64
+          type:
+          - integer
           - 'null'
         status:
           description: Whether the correction was accepted or rejected
