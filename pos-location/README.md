@@ -203,8 +203,10 @@ published — because consumers delete without consulting a version.
 
 ### Bay specialty map, published per tenant (DECISION-LOCATION-025, CAP-325 D14/D14.1/D14.3)
 
-`bay_specialty_operation` (V4, seeded platform-only by `R__seed_location_2_bay_specialty.sql`) is
-the only source for whether a catalog `operationCode` is *specialty* — a bay's own
+`bay_specialty_operation` (V4, seeded by `R__seed_location_2_bay_specialty.sql` under both the
+alpha default tenant `...0001` and the platform tenant `...0000` — the provisioning template
+`BaySpecialtyMapProvisioningService` copies into every newly created tenant) is the only source for
+whether a catalog `operationCode` is *specialty* — a bay's own
 `serviceCapabilityCodes` (on `BayUpdatedV1`) say only what that one bay claims. Deriving "is this
 specialty" from which bays happen to be active at a location silently turns missing equipment into
 general work, so pos-location now publishes the map itself:

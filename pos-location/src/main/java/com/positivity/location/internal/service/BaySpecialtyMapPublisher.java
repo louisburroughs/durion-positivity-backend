@@ -34,11 +34,13 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>{@link #publishChanged} is for an actual change to the map: it bumps the tenant's
  * {@link BaySpecialtyMapVersionEntity} row and publishes at the new version. {@link
- * #publishCurrent} is for the once-per-tenant startup republish: it never bumps, since republishing
- * an unchanged map is not itself a change, and reads whatever version is already on record (1 if
- * the tenant has never had a version row, which a tenant provisioned before this fact existed could
- * legitimately not have). Both publish the complete map — one entry per {@link BayType}, including
- * a type with no specialty rows, whose {@code operationCodes} is then empty — never a delta.
+ * #publishCurrent} is for the once-per-tenant startup republish: it never bumps an existing row,
+ * since republishing an unchanged map is not itself a change, and reads whatever version is already
+ * on record. A tenant that has never had a version row (provisioned before this fact existed)
+ * publishes at 1 and persists that row in the same transaction, so a later {@link #publishChanged}
+ * bumps from it instead of also finding no row and re-emitting 1 (versions must strictly advance).
+ * Both publish the complete map — one entry per {@link BayType}, including a type with no specialty
+ * rows, whose {@code operationCodes} is then empty — never a delta.
  */
 @Slf4j
 @Component
@@ -104,11 +106,25 @@ public class BaySpecialtyMapPublisher {
         return next;
     }
 
+    /**
+     * The bound tenant's recorded version, or 1 if it has never had a version row — which this
+     * persists immediately so a later {@link #publishChanged} bumps from it instead of also reading
+     * "no row" and emitting the same version 1 again (versions must strictly advance).
+     */
     private long currentVersion() {
         return versionRepository
                 .findFirstByOrderByIdAsc()
                 .map(BaySpecialtyMapVersionEntity::getVersion)
-                .orElse(1L);
+                .orElseGet(this::persistInitialVersion);
+    }
+
+    private long persistInitialVersion() {
+        BaySpecialtyMapVersionEntity row = BaySpecialtyMapVersionEntity.builder()
+                .version(1L)
+                .updatedAt(Instant.now(clock))
+                .build();
+        versionRepository.save(row);
+        return 1L;
     }
 
     private void publish(UUID tenantId, long version) {

@@ -72,10 +72,9 @@ public class BayBulkIngestController extends AbstractBulkIngestController<BayBul
                     Use this tool when commissioning a location or seeding an environment; use createBay instead \
                     for a single bay.
                     Preconditions: each row's location must exist, and bayType must name a known bay type.
-                    Required inputs: jobId (UUID), locationId (UUID) and records, each with a name, a bayType and \
-                    maxConcurrentVehicles; a record's own locationId overrides the batch one. A record may also \
-                    carry an optional maxDutyClass (1-8, the heaviest GVWR class the bay accepts; omit for \
-                    unconstrained, CAP-325 D13).
+                    Required inputs: jobId (UUID), locationId (UUID) and records, each with a name, a bayType, \
+                    maxConcurrentVehicles and an optional maxDutyClass (1-8, the heaviest GVWR class the bay \
+                    accepts; omit for unconstrained, CAP-325 D13); a record's own locationId overrides the batch one.
                     Emits a LOCATION_BAY_BULK_INGEST event and a bay-created event per row.
                     Re-running the same file is safe: a bay name already present at its location is reported as \
                     already existing rather than as a failure.

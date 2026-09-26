@@ -22,6 +22,7 @@ CREATE TABLE public.ext_bay_type (
     aggregate_version bigint NOT NULL,
     updated_at timestamp(6) with time zone NOT NULL,
     CONSTRAINT ext_bay_type_pkey PRIMARY KEY (id),
+    CONSTRAINT ext_bay_type_tenant_key UNIQUE (tenant_id, id),
     CONSTRAINT uq_ext_bay_type_tenant_bay_type UNIQUE (tenant_id, bay_type)
 );
 
@@ -40,6 +41,7 @@ CREATE TABLE public.ext_bay_specialty_map (
     operation_code character varying(64) NOT NULL,
     updated_at timestamp(6) with time zone NOT NULL,
     CONSTRAINT ext_bay_specialty_map_pkey PRIMARY KEY (id),
+    CONSTRAINT ext_bay_specialty_map_tenant_key UNIQUE (tenant_id, id),
     CONSTRAINT uq_ext_bay_specialty_map_tenant_bay_op UNIQUE (tenant_id, bay_type, operation_code)
 );
 
@@ -60,3 +62,17 @@ ALTER TABLE public.ext_bay ADD COLUMN accepts_general_work boolean DEFAULT true 
 
 COMMENT ON COLUMN public.ext_bay.accepts_general_work IS
     'Whether this bay''s type takes general work by default (DECISION-LOCATION-025, #2261); false only for WASH_DETAIL. Mapped from BayUpdatedV1.acceptsGeneralWork; null on the fact keeps the already-replicated value.';
+
+-- The DEFAULT true above applied to every pre-existing row, including WASH_DETAIL bays (bay_type
+-- arrived in V5, still present today) -- the one type DECISION-LOCATION-025 says does not take
+-- general work. LocationEventsListener.mergeAcceptsGeneralWork keeps whatever is already
+-- replicated whenever an older location.bay.updated fact lacks the field, so a wash bay defaulted
+-- to true here has no guaranteed future fact to correct it. Backfill it directly, across every
+-- tenant: ext_bay is under FORCE ROW LEVEL SECURITY (V1) and Flyway connects as the owner with a
+-- transitional default tenant binding, so FORCE is lifted for this transaction's duration and
+-- restored before commit, same as pos-shop-manager's V11__staffing_replica_role_canonical.sql.
+ALTER TABLE public.ext_bay NO FORCE ROW LEVEL SECURITY;
+
+UPDATE public.ext_bay SET accepts_general_work = false WHERE bay_type = 'WASH_DETAIL';
+
+ALTER TABLE public.ext_bay FORCE ROW LEVEL SECURITY;

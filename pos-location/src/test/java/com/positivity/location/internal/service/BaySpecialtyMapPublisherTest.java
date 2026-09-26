@@ -149,7 +149,7 @@ class BaySpecialtyMapPublisherTest {
     }
 
     @Test
-    @DisplayName("publishCurrent defaults to version 1 for a tenant with no version row yet")
+    @DisplayName("publishCurrent defaults to version 1 for a tenant with no version row yet, and persists it")
     void publishCurrentDefaultsToOneWithNoVersionRow() {
         when(operationRepository.findAll()).thenReturn(List.of());
         when(versionRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
@@ -157,6 +157,36 @@ class BaySpecialtyMapPublisherTest {
         publisher.publishCurrent(TENANT_ID);
 
         assertThat(captured().aggregateVersion()).isEqualTo(1L);
+
+        ArgumentCaptor<BaySpecialtyMapVersionEntity> saved =
+                ArgumentCaptor.forClass(BaySpecialtyMapVersionEntity.class);
+        verify(versionRepository).save(saved.capture());
+        assertThat(saved.getValue().getVersion()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("startup with no version row persists version 1, so a later publishChanged emits 2")
+    void publishCurrentPersistsRowThenPublishChangedAdvances() {
+        when(operationRepository.findAll()).thenReturn(List.of());
+        when(versionRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
+
+        publisher.publishCurrent(TENANT_ID);
+
+        assertThat(captured().aggregateVersion()).isEqualTo(1L);
+        ArgumentCaptor<BaySpecialtyMapVersionEntity> saved =
+                ArgumentCaptor.forClass(BaySpecialtyMapVersionEntity.class);
+        verify(versionRepository).save(saved.capture());
+        BaySpecialtyMapVersionEntity persistedRow = saved.getValue();
+        assertThat(persistedRow.getVersion()).isEqualTo(1L);
+
+        // A fresh writer/mock invocation count for the second publish, with the repository now
+        // reflecting the row publishCurrent just persisted (as a real repository would on reread).
+        org.mockito.Mockito.reset(writer);
+        when(versionRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(persistedRow));
+
+        publisher.publishChanged(TENANT_ID);
+
+        assertThat(captured().aggregateVersion()).isEqualTo(2L);
     }
 
     @Test
