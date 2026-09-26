@@ -382,6 +382,56 @@ paths:
       - Invoice Analytics
       x-required-permissions:
       - invoice:analytics:view
+  /v1/invoices/by-workorder/{workorderId}:
+    get:
+      description: 'Returns the full invoice detail — status, line items, adjustments, totals, tax breakdown, due date and the resolved workorder number — for the invoice linked to a workorder.
+
+        Use this tool when only the workorderId is known and there is no other side-effect-free path to its invoiceId; use getInvoice instead once the invoiceId is already known.
+
+        Preconditions: the workorder must have a linked invoice (generateWorkorderInvoice has applied). A caller whose invoice:invoice:view grant is location-scoped must have the invoice''s location within reach (ADR-0061).
+
+        Required inputs: workorderId (UUID) as a path parameter; there is no request body.
+
+        Emits an INVOICE_GET_BY_WORKORDER audit event; no state changes — this is a read-only projection.
+
+        Returns 404 when no invoice is linked to the supplied workorderId, and 403 LOCATION_SCOPE_DENIED when the invoice exists but its location is outside the caller''s scope.
+
+        '
+      operationId: getInvoiceByWorkorder
+      parameters:
+      - in: path
+        name: workorderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceDetailsResponse'
+          description: Invoice found
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds invoice:invoice:view but its location scope does not cover the invoice's location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No invoice linked to the supplied workorderId
+      security:
+      - bearerAuth:
+        - invoice:invoice:view
+      summary: Get Invoice Details by Workorder
+      tags:
+      - Invoice
+      x-required-permissions:
+      - invoice:invoice:view
   /v1/invoices/deposits:
     get:
       description: 'Lists every deposit credit held against one source document, identified by its type and id.
