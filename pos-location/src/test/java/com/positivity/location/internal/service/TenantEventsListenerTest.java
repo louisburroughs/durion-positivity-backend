@@ -8,10 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.location.internal.entity.BaySpecialtyOperationEntity;
-import com.positivity.location.internal.repository.BaySpecialtyOperationRepository;
 import com.positivity.location.internal.repository.ProcessedEventRepository;
-import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenantContext;
 import java.util.List;
 import java.util.UUID;
@@ -23,15 +20,16 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * {@link TenantEventsListener}'s contract: only {@code tenant.created} provisions, the platform
- * template is read under the platform tenant, and the target tenant is bound before provisioning
- * runs so its writes and the idempotency check both land under the new tenant.
+ * template is read (via {@link BaySpecialtyMapProvisioningService#readPlatformTemplate()}, whose own
+ * "read under the platform tenant" contract is proven in {@code BaySpecialtyMapProvisioningServiceTest})
+ * before the new tenant is bound, and provisioning then runs entirely under that new tenant's
+ * binding.
  */
 class TenantEventsListenerTest {
 
     private static final UUID TENANT_ID = UUID.fromString("01990000-0000-7000-8000-0000000000c1");
 
     private final ProcessedEventRepository processedEventRepository = mock(ProcessedEventRepository.class);
-    private final BaySpecialtyOperationRepository operationRepository = mock(BaySpecialtyOperationRepository.class);
     private final BaySpecialtyMapProvisioningService provisioningService =
             mock(BaySpecialtyMapProvisioningService.class);
 
@@ -39,10 +37,9 @@ class TenantEventsListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new TenantEventsListener(
-                new ObjectMapper(), processedEventRepository, operationRepository, provisioningService);
+        listener = new TenantEventsListener(new ObjectMapper(), processedEventRepository, provisioningService);
         when(processedEventRepository.existsById(any())).thenReturn(false);
-        when(operationRepository.findAll()).thenReturn(List.of());
+        when(provisioningService.readPlatformTemplate()).thenReturn(List.of());
     }
 
     @AfterEach
@@ -61,11 +58,9 @@ class TenantEventsListenerTest {
     @Test
     @DisplayName("tenant.created reads the platform template and provisions the new tenant")
     void tenantCreatedProvisions() {
-        when(operationRepository.findAll())
-                .thenReturn(List.of(BaySpecialtyOperationEntity.builder()
-                        .bayType("ALIGNMENT")
-                        .operationCode("WHEEL-ALIGNMENT-4-WHEEL")
-                        .build()));
+        when(provisioningService.readPlatformTemplate())
+                .thenReturn(List.of(
+                        new BaySpecialtyMapProvisioningService.PlatformRow("ALIGNMENT", "WHEEL-ALIGNMENT-4-WHEEL")));
 
         listener.onTenantEvent(tenantCreated("01990000-0000-7000-8000-0000000000d1", TENANT_ID.toString()));
 
@@ -80,16 +75,34 @@ class TenantEventsListenerTest {
     }
 
     @Test
-    @DisplayName("The platform template is read under the platform tenant, not the new tenant")
-    void platformRowsReadUnderPlatformTenant() {
-        when(operationRepository.findAll()).thenAnswer(invocation -> {
-            assertThat(TenantContext.current()).contains(PlatformTenant.ID);
+    @DisplayName("The platform template is read before the new tenant is bound")
+    void platformTemplateReadBeforeTenantBound() {
+        when(provisioningService.readPlatformTemplate()).thenAnswer(invocation -> {
+            // readPlatformTemplate switches to the platform tenant and restores afterwards
+            // (proven in BaySpecialtyMapProvisioningServiceTest); from the listener's own thread,
+            // at the moment it calls this, nothing should be bound yet.
+            assertThat(TenantContext.current()).isEmpty();
             return List.of();
         });
 
         listener.onTenantEvent(tenantCreated("01990000-0000-7000-8000-0000000000d2", TENANT_ID.toString()));
 
         verify(provisioningService).provisionIfNeeded(eq(TENANT_ID), any(), eq(List.of()));
+    }
+
+    @Test
+    @DisplayName("provisionIfNeeded itself runs with the new tenant bound")
+    void provisioningRunsUnderNewTenant() {
+        org.mockito.Mockito.doAnswer(invocation -> {
+                    assertThat(TenantContext.current()).contains(TENANT_ID);
+                    return null;
+                })
+                .when(provisioningService)
+                .provisionIfNeeded(eq(TENANT_ID), any(), any());
+
+        listener.onTenantEvent(tenantCreated("01990000-0000-7000-8000-0000000000d7", TENANT_ID.toString()));
+
+        verify(provisioningService).provisionIfNeeded(eq(TENANT_ID), any(), any());
     }
 
     @Test
@@ -102,7 +115,7 @@ class TenantEventsListenerTest {
                 """.formatted(TENANT_ID));
 
         verify(provisioningService, never()).provisionIfNeeded(any(), any(), any());
-        verify(operationRepository, never()).findAll();
+        verify(provisioningService, never()).readPlatformTemplate();
     }
 
     @Test
@@ -114,7 +127,7 @@ class TenantEventsListenerTest {
         listener.onTenantEvent(tenantCreated("01990000-0000-7000-8000-0000000000d4", TENANT_ID.toString()));
 
         verify(provisioningService, never()).provisionIfNeeded(any(), any(), any());
-        verify(operationRepository, never()).findAll();
+        verify(provisioningService, never()).readPlatformTemplate();
     }
 
     @Test
@@ -148,7 +161,7 @@ class TenantEventsListenerTest {
     }
 
     @Test
-    @DisplayName("Nesting restores any previously-bound tenant rather than leaving the platform tenant bound")
+    @DisplayName("Nesting restores any previously-bound tenant rather than leaving the new tenant bound")
     void restoresPreviouslyBoundTenant() {
         UUID caller = UUID.fromString("01990000-0000-7000-8000-0000000000ca");
         TenantContext.bind(caller);

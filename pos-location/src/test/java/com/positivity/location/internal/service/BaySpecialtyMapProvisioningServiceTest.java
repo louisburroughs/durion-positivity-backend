@@ -11,11 +11,14 @@ import com.positivity.location.internal.entity.BaySpecialtyOperationEntity;
 import com.positivity.location.internal.entity.ProcessedEvent;
 import com.positivity.location.internal.repository.BaySpecialtyOperationRepository;
 import com.positivity.location.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +47,11 @@ class BaySpecialtyMapProvisioningServiceTest {
         service = new BaySpecialtyMapProvisioningService(
                 operationRepository, processedEventRepository, publisher, TEST_CLOCK);
         when(processedEventRepository.existsById(EVENT_ID)).thenReturn(false);
+    }
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
     }
 
     private List<BaySpecialtyMapProvisioningService.PlatformRow> platformRows() {
@@ -102,5 +110,68 @@ class BaySpecialtyMapProvisioningServiceTest {
         verify(operationRepository, never()).save(any());
         verify(processedEventRepository, never()).save(any());
         verify(publisher, never()).publishChanged(any());
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // readPlatformTemplate (startup-sweep and listener both read the template through this)
+    // -------------------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("readPlatformTemplate reads bay_specialty_operation under the platform tenant's own binding")
+    void readPlatformTemplateReadsUnderPlatformTenant() {
+        when(operationRepository.findAll()).thenAnswer(invocation -> {
+            assertThat(TenantContext.current()).contains(PlatformTenant.ID);
+            return List.of(BaySpecialtyOperationEntity.builder()
+                    .bayType("ALIGNMENT")
+                    .operationCode("WHEEL-ALIGNMENT-4-WHEEL")
+                    .build());
+        });
+
+        List<BaySpecialtyMapProvisioningService.PlatformRow> rows = service.readPlatformTemplate();
+
+        assertThat(rows)
+                .containsExactly(
+                        new BaySpecialtyMapProvisioningService.PlatformRow("ALIGNMENT", "WHEEL-ALIGNMENT-4-WHEEL"));
+        assertThat(TenantContext.current()).isEmpty();
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // provisionIfMissing (startup-sweep backfill: no processed_events at all)
+    // -------------------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("provisionIfMissing copies the template and publishes for an empty tenant, returning true")
+    void provisionIfMissingCopiesWhenEmpty() {
+        when(operationRepository.findAll()).thenReturn(List.of());
+
+        boolean backfilled = service.provisionIfMissing(TENANT_ID, platformRows());
+
+        assertThat(backfilled).isTrue();
+        ArgumentCaptor<BaySpecialtyOperationEntity> saved = ArgumentCaptor.forClass(BaySpecialtyOperationEntity.class);
+        verify(operationRepository, org.mockito.Mockito.times(2)).save(saved.capture());
+        assertThat(saved.getAllValues())
+                .extracting(BaySpecialtyOperationEntity::getBayType, BaySpecialtyOperationEntity::getOperationCode)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("ALIGNMENT", "WHEEL-ALIGNMENT-4-WHEEL"),
+                        org.assertj.core.groups.Tuple.tuple("TIRE_SERVICE", "TIRE-INSTALL-SET-4"));
+        verify(publisher).publishChanged(TENANT_ID);
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("provisionIfMissing leaves a non-empty tenant untouched and returns false")
+    void provisionIfMissingLeavesNonEmptyTenantAlone() {
+        when(operationRepository.findAll())
+                .thenReturn(List.of(BaySpecialtyOperationEntity.builder()
+                        .bayType("ALIGNMENT")
+                        .operationCode("WHEEL-ALIGNMENT-4-WHEEL")
+                        .build()));
+
+        boolean backfilled = service.provisionIfMissing(TENANT_ID, platformRows());
+
+        assertThat(backfilled).isFalse();
+        verify(operationRepository, never()).save(any());
+        verify(publisher, never()).publishChanged(any());
+        verify(processedEventRepository, never()).save(any());
     }
 }

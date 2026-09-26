@@ -1,9 +1,7 @@
 package com.positivity.location.internal.service;
 
 import com.positivity.domainevents.tenant.TenantEventTypes;
-import com.positivity.location.internal.repository.BaySpecialtyOperationRepository;
 import com.positivity.location.internal.repository.ProcessedEventRepository;
-import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.replica.TenantProjectionEvent;
 import java.util.List;
@@ -41,7 +39,6 @@ public class TenantEventsListener {
 
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
-    private final BaySpecialtyOperationRepository operationRepository;
     private final BaySpecialtyMapProvisioningService provisioningService;
 
     @KafkaListener(
@@ -76,12 +73,7 @@ public class TenantEventsListener {
         // Read the platform template before binding the new tenant (sequential, not nested — the
         // same shape pos-security-service's listener uses for its role-template read), so the
         // provisioning transaction below runs entirely under the new tenant's own binding.
-        List<BaySpecialtyMapProvisioningService.PlatformRow> platformRows = TenantContext.callAs(
-                PlatformTenant.ID,
-                () -> operationRepository.findAll().stream()
-                        .map(row -> new BaySpecialtyMapProvisioningService.PlatformRow(
-                                row.getBayType(), row.getOperationCode()))
-                        .toList());
+        List<BaySpecialtyMapProvisioningService.PlatformRow> platformRows = provisioningService.readPlatformTemplate();
 
         try {
             TenantContext.runAs(tenantId, () -> provisioningService.provisionIfNeeded(tenantId, eventId, platformRows));
