@@ -23,6 +23,7 @@ public class BayLoaderStrategy implements DomainLoaderStrategy<BayLoaderRecord> 
         record.setName(row.get("name"));
         record.setBayType(row.get("bayType"));
         record.setMaxConcurrentVehicles(row.get("maxConcurrentVehicles"));
+        record.setMaxDutyClass(row.get("maxDutyClass"));
         record.setStatus(row.get("status"));
         record.setLocationId(row.get("locationId"));
         return record;
@@ -51,7 +52,26 @@ public class BayLoaderStrategy implements DomainLoaderStrategy<BayLoaderRecord> 
         } else {
             LoaderValues.requireIntegerOrBlank(item.getMaxConcurrentVehicles(), "maxConcurrentVehicles", errors);
         }
+        validateMaxDutyClass(item, errors);
         LoaderValues.requireUuid(item.getLocationId(), "locationId", "a locationCode that resolves to one", errors);
         return errors;
+    }
+
+    /**
+     * A duty class is a maximum only (spec D13): blank means unconstrained, and a value must be a
+     * whole GVWR class between 1 (light duty) and 8 (heavy duty).
+     */
+    private static void validateMaxDutyClass(BayLoaderRecord item, List<String> errors) {
+        if (LoaderValues.isBlank(item.getMaxDutyClass())) {
+            return;
+        }
+        try {
+            int dutyClass = Integer.parseInt(item.getMaxDutyClass().trim());
+            if (dutyClass < 1 || dutyClass > 8) {
+                errors.add("maxDutyClass must be between 1 and 8");
+            }
+        } catch (NumberFormatException _) {
+            errors.add("maxDutyClass must be a whole number");
+        }
     }
 }

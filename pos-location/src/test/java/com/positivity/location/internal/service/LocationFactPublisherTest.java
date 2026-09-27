@@ -300,6 +300,41 @@ class LocationFactPublisherTest {
     }
 
     @Test
+    @DisplayName("DECISION-LOCATION-025: bay fact carries acceptsGeneralWork from the bay's own type")
+    void bayFactCarriesAcceptsGeneralWork() {
+        BayEntity alignmentBay = bay(UUID.randomUUID(), UUID.randomUUID(), "Alignment Bay", "ACTIVE", 6L);
+        alignmentBay.setBayType("ALIGNMENT");
+
+        publisher.bayChanged(alignmentBay);
+
+        BayUpdatedV1 fact = capturePayload(BayUpdatedV1.EVENT_TYPE, 6L, BayUpdatedV1.class);
+        assertThat(fact.acceptsGeneralWork()).isTrue();
+    }
+
+    @Test
+    @DisplayName("DECISION-LOCATION-025: WASH_DETAIL is the sole type that does not accept general work")
+    void washDetailDoesNotAcceptGeneralWork() {
+        BayEntity washBay = bay(UUID.randomUUID(), UUID.randomUUID(), "Wash Bay", "ACTIVE", 7L);
+        washBay.setBayType("WASH_DETAIL");
+
+        publisher.bayChanged(washBay);
+
+        BayUpdatedV1 fact = capturePayload(BayUpdatedV1.EVENT_TYPE, 7L, BayUpdatedV1.class);
+        assertThat(fact.acceptsGeneralWork()).isFalse();
+    }
+
+    @Test
+    @DisplayName("An unrecognised bayType resolves acceptsGeneralWork to null rather than throwing")
+    void unrecognisedBayTypeResolvesToNull() {
+        // The shared bay() fixture below uses "SERVICE", a placeholder that predates BayType and is
+        // not one of its constants.
+        publisher.bayChanged(bay(UUID.randomUUID(), UUID.randomUUID(), "Front Bay 1", "ACTIVE", 8L));
+
+        BayUpdatedV1 fact = capturePayload(BayUpdatedV1.EVENT_TYPE, 8L, BayUpdatedV1.class);
+        assertThat(fact.acceptsGeneralWork()).isNull();
+    }
+
+    @Test
     @DisplayName("#1668 bay tombstone is versioned one past every fact the aggregate published")
     void bayDeleteFact() {
         UUID bayId = UUID.randomUUID();

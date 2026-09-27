@@ -79,6 +79,16 @@ public class ExtBayReplica extends TenantScopedEntity {
     @Column(name = "max_duty_class")
     private Integer maxDutyClass;
 
+    /**
+     * Whether this bay's type takes general work by default (DECISION-LOCATION-025, #2261); false
+     * only for {@code WASH_DETAIL}. Mapped from {@code BayUpdatedV1.acceptsGeneralWork} when
+     * present; absent or explicit null means the publisher predates the field, so the
+     * already-replicated value is kept (or the column default, true, for a brand-new row) — never
+     * read as "no" (same additive-field guard style as {@code gvwrClass} in the vehicle listeners).
+     */
+    @Column(name = "accepts_general_work", nullable = false)
+    private boolean acceptsGeneralWork;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 

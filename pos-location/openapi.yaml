@@ -145,7 +145,7 @@ paths:
 
         Preconditions: each row''s location must exist, and bayType must name a known bay type.
 
-        Required inputs: jobId (UUID), locationId (UUID) and records, each with a name, a bayType and maxConcurrentVehicles; a record''s own locationId overrides the batch one.
+        Required inputs: jobId (UUID), locationId (UUID) and records, each with a name, a bayType, maxConcurrentVehicles and an optional maxDutyClass (1-8, the heaviest GVWR class the bay accepts; omit for unconstrained, CAP-325 D13); a record''s own locationId overrides the batch one.
 
         Emits a LOCATION_BAY_BULK_INGEST event and a bay-created event per row.
 
@@ -168,6 +168,7 @@ paths:
                   records:
                   - bayType: GENERAL_SERVICE
                     maxConcurrentVehicles: 1
+                    maxDutyClass: 3
                     name: Bay 1
                   - bayType: ALIGNMENT
                     maxConcurrentVehicles: 1
@@ -2915,6 +2916,13 @@ components:
           format: int32
           minimum: 1
           type: integer
+        maxDutyClass:
+          description: Heaviest GVWR class (1–8) the bay accepts; omit for unconstrained (CAP-325 D13).
+          example: 3
+          format: int32
+          maximum: 8
+          minimum: 1
+          type: integer
         name:
           description: Name of the bay, unique within its location
           example: Bay 1
@@ -2945,7 +2953,7 @@ components:
       description: Partial update payload for a service bay; null fields are left unchanged
       properties:
         bayType:
-          description: Type classification of the bay; must be a BayType value
+          description: Type classification of the bay; must be a BayType value. Changing bayType without also sending serviceCapabilityCodes resets the bay's codes to the new type's specialty-map defaults (CAP-325 D14 rule 3) — for example, retyping to GENERAL_SERVICE clears any alignment/tire/inspection claim rather than keeping it. Send serviceCapabilityCodes in the same request to state the bay's codes explicitly instead.
           example: GENERAL_SERVICE
           type: string
         capacity:

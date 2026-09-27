@@ -473,6 +473,13 @@ about where part numbers come from first.
 | `mobile-units.csv` | 11 mobile units, 10 `ACTIVE` and 1 parked (see below); 9 based in Charlotte, 2 at the SDK seeder's ATX-RIV-001 | gateway API pack (`POST /location/mobile-units`, one call carrying the unit's policy, capabilities and coverage rules; an existing unit is skipped when it matches its row, or completed and activated in place when its row is `ACTIVE` and it is not) |
 | `mobile-unit-coverage-rules.csv` | 25 rules across the 10 `ACTIVE` units | read by the `mobile-units.csv` pack, not loaded on its own |
 
+Columns (`bays.csv`): `locationCode,name,bayType,maxConcurrentVehicles,maxDutyClass` — `maxDutyClass` is the heaviest
+GVWR class (1–8) the bay accepts; blank means unconstrained (spec §7.2, D13, a maximum only). Ratings here follow
+the equipment a mixed light/medium shop typically runs, applied consistently by `bayType`: `HEAVY_DUTY` 8 (full
+range); `GENERAL_SERVICE` 3 (light-duty two-post lift); `ALIGNMENT` and `TIRE_SERVICE` 4 (racks and tire
+equipment rated for light/medium pickups and vans); `INSPECTION` 5 (an inspection lift/pit typically runs a
+class higher than the general-service lift beside it); `WASH_DETAIL` blank (no lift, so no ceiling to enforce).
+
 Columns (`locations.csv`): `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
 
 Columns (`mobile-units.csv`): `name,baseLocationCode,status,travelBufferPolicyName,capabilityCodes` — `capabilityCodes` is `;`-separated and holds **catalog operation codes** (CAP-325 D14: the same vocabulary as a bay's specialty claim, validated by pos-location against its `ext_catalog_service` replica, so the Tier 0 catalog pack must have landed first). The location-owned capability registry is retired (V5).

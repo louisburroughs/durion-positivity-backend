@@ -4,6 +4,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -36,4 +37,14 @@ public class BayBulkIngestRecord {
 
     @Schema(description = "Bay status; defaults to ACTIVE", example = "ACTIVE", requiredMode = NOT_REQUIRED)
     private String status;
+
+    @Schema(
+            description = "Heaviest GVWR class (1–8) the bay accepts; omit for unconstrained (CAP-325 D13).",
+            example = "3",
+            minimum = "1",
+            maximum = "8",
+            requiredMode = NOT_REQUIRED)
+    @Min(1)
+    @Max(8)
+    private Integer maxDutyClass;
 }

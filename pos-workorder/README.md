@@ -373,6 +373,33 @@ state (see `pos-location/README.md` and `docs/OPERATIONS_RUNBOOK.md`). The consu
 empty or partial replica by design — the panels render what the replica holds and converge as
 facts arrive.
 
+**Bay specialty map replica (#2261, DECISION-LOCATION-025).** `location.bay-specialty-map.updated`
+carries a tenant's *whole* bay-type specialty map — one entry per `BayType`, never a delta — so this
+module reads the same specialty definition pos-shop-manager does, without a synchronous cross-domain
+read (ADR-0044 §6). `LocationEventsListener` applies it as a full replace: every `ext_bay_type` /
+`ext_bay_specialty_map` row for the tenant is deleted and one row per entry reinserted, in the same
+handler transaction as the `processed_events` mark, guarded by `ReplicaVersionGuard` on whichever
+`ext_bay_type` row happens to come back first for the tenant (every row from one emission carries the
+same `aggregate_version`). Two tables, mirroring pos-location's own
+`bay_specialty_operation` / `bay_specialty_map_version` split but folded into one master row per bay
+type since the map is only ever replaced atomically:
+
+- `ext_bay_type` — one row per `(tenant_id, bay_type)`: `accepts_general_work` and the
+  `aggregate_version` the tenant's whole map was last applied at.
+- `ext_bay_specialty_map` — one row per `(tenant_id, bay_type, operation_code)` a bay type is the
+  only one able to perform (CAP-325 D14).
+
+Both start empty and stay empty until the map arrives for a tenant; an absent row must never be read
+as "not specialty" — it may just mean "not yet published" — so a consumer must keep behaving exactly
+as today (no operation is treated as specialty) until the map fills. Wiring that read into workorder
+placement is a later story.
+
+`ext_bay` separately gains `accepts_general_work boolean NOT NULL DEFAULT true`, mapped from
+`BayUpdatedV1.acceptsGeneralWork` — additive within schema v1, so an absent or explicit-null field on
+the fact means the publisher predates it and the already-replicated value (or the column default for
+a brand-new row) is kept, the same additive-field guard style this listener already uses for
+`gvwrClass` on the vehicle replica.
+
 ## Published workorder fact: assignment block (#1658)
 
 `workorder.workorder.updated` on `workorder.events.v1` (payload `WorkorderUpdatedV1` in
@@ -608,7 +635,7 @@ never reflected and answers the generic code for its status instead (#1720).
 | `workorder.kafka.events-topic` | `workorder.events.v1`      | Kafka topic for workorder events |
 | `workorder.kafka.catalog-events-topic` | `catalog.events.v1` | Catalog fact topic feeding the `ext_product_uom` replica |
 | `workorder.kafka.catalog-events-consumer-group` | `pos-workorder-catalog-events` | Consumer group for the catalog fact topic |
-| `workorder.kafka.location-events-topic` | `location.events.v1` | Location fact topic feeding the `ext_location`, `ext_bay` and `ext_mobile_unit` replicas |
+| `workorder.kafka.location-events-topic` | `location.events.v1` | Location fact topic feeding the `ext_location`, `ext_bay`, `ext_mobile_unit`, `ext_bay_type` and `ext_bay_specialty_map` replicas |
 | `workorder.kafka.location-events-consumer-group` | `pos-workorder-location-events` | Consumer group for the location fact topic |
 | `pos.workorder.fact-backfill.page-size` | `500` | Rows per transaction when backfilling actual-time workorder facts |
 | `pos.workorder.fact-backfill.max-rows-per-run` | `20000` | Rows per backfill command before it stops and reports a resume cursor |

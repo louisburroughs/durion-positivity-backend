@@ -7,10 +7,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.location.BaySpecialtyMapUpdatedV1;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.domainevents.location.StorageLocationUpdatedV1;
 import com.positivity.shopmanager.internal.entity.ExtBayReplica;
+import com.positivity.shopmanager.internal.entity.ExtBaySpecialtyMapReplica;
+import com.positivity.shopmanager.internal.entity.ExtBayTypeReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationParentReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
 import com.positivity.shopmanager.internal.entity.ProcessedEvent;
@@ -78,6 +81,13 @@ class LocationEventsListenerTest {
     private ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
 
     @Mock
+    private com.positivity.shopmanager.internal.repository.ExtBaySpecialtyMapReplicaRepository
+            extBaySpecialtyMapReplicaRepository;
+
+    @Mock
+    private com.positivity.shopmanager.internal.repository.ExtBayTypeReplicaRepository extBayTypeReplicaRepository;
+
+    @Mock
     private LocationHierarchyService locationHierarchyService;
 
     private LocationEventsListener listener;
@@ -93,6 +103,8 @@ class LocationEventsListenerTest {
                 extMobileUnitReplicaRepository,
                 extLocationReplicaRepository,
                 extLocationParentReplicaRepository,
+                extBaySpecialtyMapReplicaRepository,
+                extBayTypeReplicaRepository,
                 locationHierarchyService,
                 Mockito.mock(ObjectProvider.class),
                 Mockito.mock(PlatformTransactionManager.class));
@@ -457,5 +469,136 @@ class LocationEventsListenerTest {
         verify(extLocationReplicaRepository, never()).save(any());
         verify(locationHierarchyService, never()).recomputeAncestors(any());
         verify(processedEventRepository).save(any());
+    }
+
+    // -- #2261 DECISION-LOCATION-025: bay specialty map replica ---------------------------------
+
+    private static final UUID TENANT_ID = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
+
+    private static String baySpecialtyMapUpdated(String eventId, long version) {
+        return """
+                {"eventId":"%s","eventType":"%s","aggregateVersion":%d,
+                 "payload":{"tenantId":"%s","aggregateVersion":%d,
+                   "entries":[
+                     {"bayType":"ALIGNMENT","operationCodes":["ALIGN-4-WHEEL"],"acceptsGeneralWork":false},
+                     {"bayType":"GENERAL_SERVICE","operationCodes":[],"acceptsGeneralWork":true},
+                     {"bayType":"WASH_DETAIL","operationCodes":[],"acceptsGeneralWork":false}
+                   ]}}
+                """.formatted(eventId, BaySpecialtyMapUpdatedV1.EVENT_TYPE, version, TENANT_ID, version);
+    }
+
+    @Test
+    @DisplayName("#2261: applies a full replace of the tenant's bay specialty map")
+    void baySpecialtyMapAppliesFullReplace() {
+        when(extBayTypeReplicaRepository.findFirstByOrderByBayTypeAsc()).thenReturn(Optional.empty());
+
+        listener.onLocationEvent(baySpecialtyMapUpdated("evt-map-1", 1));
+
+        verify(extBaySpecialtyMapReplicaRepository).deleteAll();
+        verify(extBayTypeReplicaRepository).deleteAll();
+
+        ArgumentCaptor<ExtBayTypeReplica> bayTypeCaptor = ArgumentCaptor.forClass(ExtBayTypeReplica.class);
+        verify(extBayTypeReplicaRepository, Mockito.times(3)).save(bayTypeCaptor.capture());
+        assertThat(bayTypeCaptor.getAllValues())
+                .extracting(ExtBayTypeReplica::getBayType, ExtBayTypeReplica::isAcceptsGeneralWork)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("ALIGNMENT", false),
+                        org.assertj.core.groups.Tuple.tuple("GENERAL_SERVICE", true),
+                        org.assertj.core.groups.Tuple.tuple("WASH_DETAIL", false));
+        assertThat(bayTypeCaptor.getAllValues())
+                .allSatisfy(row -> assertThat(row.getAggregateVersion()).isEqualTo(1L));
+
+        ArgumentCaptor<ExtBaySpecialtyMapReplica> opCaptor = ArgumentCaptor.forClass(ExtBaySpecialtyMapReplica.class);
+        verify(extBaySpecialtyMapReplicaRepository).save(opCaptor.capture());
+        assertThat(opCaptor.getValue().getBayType()).isEqualTo("ALIGNMENT");
+        assertThat(opCaptor.getValue().getOperationCode()).isEqualTo("ALIGN-4-WHEEL");
+
+        verify(processedEventRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("#2261: ignores a strictly older bay specialty map version but re-applies an equal one")
+    void baySpecialtyMapStaleGuardIsStrictlyBelow() {
+        when(extBayTypeReplicaRepository.findFirstByOrderByBayTypeAsc())
+                .thenReturn(Optional.of(ExtBayTypeReplica.builder()
+                        .bayType("ALIGNMENT")
+                        .acceptsGeneralWork(false)
+                        .aggregateVersion(7)
+                        .build()));
+
+        listener.onLocationEvent(baySpecialtyMapUpdated("evt-map-old", 6));
+        verify(extBaySpecialtyMapReplicaRepository, never()).deleteAll();
+        verify(extBayTypeReplicaRepository, never()).deleteAll();
+        // The stale fact is still recorded so the owner's manifest reconciles.
+        verify(processedEventRepository).save(any());
+
+        listener.onLocationEvent(baySpecialtyMapUpdated("evt-map-equal", 7));
+        verify(extBaySpecialtyMapReplicaRepository).deleteAll();
+        verify(extBayTypeReplicaRepository).deleteAll();
+    }
+
+    @Test
+    @DisplayName("#2261: is idempotent on a replayed bay specialty map eventId")
+    void baySpecialtyMapReplayIsNoOp() {
+        when(processedEventRepository.existsById("evt-map-1")).thenReturn(true);
+
+        listener.onLocationEvent(baySpecialtyMapUpdated("evt-map-1", 1));
+
+        verify(extBaySpecialtyMapReplicaRepository, never()).deleteAll();
+        verify(extBayTypeReplicaRepository, never()).deleteAll();
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2261: acceptsGeneralWork maps true/false from BayUpdatedV1")
+    void bayAcceptsGeneralWorkIsMapped() {
+        listener.onLocationEvent(
+                """
+                {"eventId":"evt-agw-1","eventType":"%s","aggregateVersion":1,
+                 "payload":{"bayId":"%s","locationId":"%s","name":"Wash Bay","status":"ACTIVE",
+                   "acceptsGeneralWork":false}}
+                """.formatted(com.positivity.domainevents.location.BayUpdatedV1.EVENT_TYPE, LOCATION_ID, LOCATION_ID));
+
+        ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+        verify(extBayReplicaRepository).save(captor.capture());
+        assertThat(captor.getValue().isAcceptsGeneralWork()).isFalse();
+    }
+
+    @Test
+    @DisplayName("#2261: acceptsGeneralWork absent from the fact keeps the already-replicated value")
+    void bayAcceptsGeneralWorkAbsentKeepsExistingValue() {
+        when(extBayReplicaRepository.findById(any()))
+                .thenReturn(Optional.of(ExtBayReplica.builder()
+                        .bayId(LOCATION_ID)
+                        .locationId(LOCATION_ID)
+                        .acceptsGeneralWork(false)
+                        .aggregateVersion(1)
+                        .build()));
+
+        listener.onLocationEvent(
+                """
+                {"eventId":"evt-agw-2","eventType":"%s","aggregateVersion":2,
+                 "payload":{"bayId":"%s","locationId":"%s","name":"Wash Bay","status":"ACTIVE"}}
+                """.formatted(com.positivity.domainevents.location.BayUpdatedV1.EVENT_TYPE, LOCATION_ID, LOCATION_ID));
+
+        ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+        verify(extBayReplicaRepository).save(captor.capture());
+        // A pre-DECISION-LOCATION-025 producer's shape: no acceptsGeneralWork key at all, so the
+        // already-replicated false is kept rather than defaulting back to true.
+        assertThat(captor.getValue().isAcceptsGeneralWork()).isFalse();
+    }
+
+    @Test
+    @DisplayName("#2261: acceptsGeneralWork absent on a brand-new bay row defaults to true")
+    void bayAcceptsGeneralWorkAbsentOnNewRowDefaultsTrue() {
+        listener.onLocationEvent(
+                """
+                {"eventId":"evt-agw-3","eventType":"%s","aggregateVersion":1,
+                 "payload":{"bayId":"%s","locationId":"%s","name":"General Bay","status":"ACTIVE"}}
+                """.formatted(com.positivity.domainevents.location.BayUpdatedV1.EVENT_TYPE, LOCATION_ID, LOCATION_ID));
+
+        ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+        verify(extBayReplicaRepository).save(captor.capture());
+        assertThat(captor.getValue().isAcceptsGeneralWork()).isTrue();
     }
 }
