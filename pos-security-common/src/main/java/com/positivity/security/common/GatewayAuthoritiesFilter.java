@@ -170,10 +170,15 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
     }
 
     private Optional<UUID> resolveUserIdFromToken(String authorizationHeader, String username) {
-        if (authorizationHeader == null
-                || authorizationHeader.isBlank()
-                || !authorizationHeader.startsWith(BEARER_PREFIX)) {
-            loggr.warn("Missing bearer token while resolving userId for user '{}'", username);
+        if (authorizationHeader == null) {
+            // Expected: internal service-to-service clients authenticate with X-User/X-Authorities
+            // alone and send no token, so an absent header is not a fault (issue #2297).
+            loggr.debug("No Authorization header while resolving userId for user '{}'", username);
+            return Optional.empty();
+        }
+
+        if (authorizationHeader.isBlank() || !authorizationHeader.startsWith(BEARER_PREFIX)) {
+            loggr.warn("Malformed Authorization header (not a bearer token) for user '{}'", username);
             return Optional.empty();
         }
 
