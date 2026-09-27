@@ -269,7 +269,6 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(customerId);
         request.setCrmVehicleId(vehicleId);
-        request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-06-10T14:00:00Z"));
         request.setEndAt(Instant.parse("2025-06-10T15:00:00Z"));
         request.setServiceRequestIds(List.of(serviceRequestId));
@@ -304,7 +303,6 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(customerId);
         request.setCrmVehicleId(vehicleId);
-        request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-06-10T14:00:00Z"));
         request.setEndAt(Instant.parse("2025-06-10T15:00:00Z"));
         request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
@@ -334,7 +332,6 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-07-01T09:00:00Z"));
         request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
         request.setServiceRequestIds(null);
@@ -356,7 +353,6 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-07-01T09:00:00Z"));
         request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
         request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
@@ -388,7 +384,6 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(customerId);
         request.setCrmVehicleId(vehicleId);
-        request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-06-10T14:00:00Z"));
         request.setEndAt(Instant.parse("2025-06-10T15:00:00Z"));
         request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
@@ -417,7 +412,6 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(customerId);
         request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-07-01T09:00:00Z"));
         request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
         request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
@@ -437,7 +431,6 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmVehicleId(vehicleId);
-        request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-07-01T09:00:00Z"));
         request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
         request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
@@ -453,7 +446,6 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2025-07-01T09:00:00Z"));
         request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
         request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));

@@ -386,7 +386,6 @@ class AppointmentsServiceImplTest {
         request.setLocationId(locationId);
         request.setCrmCustomerId(customerId);
         request.setCrmVehicleId(vehicleId);
-        request.setResourceId("tech-1");
         request.setStartAt(Instant.parse("2026-03-10T10:00:00Z"));
         request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
         request.setServiceRequestIds(List.of(serviceRequestId));
@@ -636,7 +635,6 @@ class AppointmentsServiceImplTest {
         appointment.setAppointmentId(appointmentId);
         appointment.setStatus(status);
         appointment.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        appointment.setResourceId("resource-1");
         appointment.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
         appointment.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
         appointment.setStartAt(startAt);

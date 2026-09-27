@@ -380,7 +380,6 @@ class AppointmentsServiceImplStory11Test {
         appointment.setAppointmentId(appointmentId);
         appointment.setStatus(status);
         appointment.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        appointment.setResourceId("tech-1");
         appointment.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         appointment.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         appointment.setStartAt(ORIGINAL_START);

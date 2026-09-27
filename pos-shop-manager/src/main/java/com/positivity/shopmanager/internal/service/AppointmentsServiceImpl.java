@@ -182,10 +182,11 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         // Source eligibility validation (CAP-249 Story #12)
         validateSourceEligibility(request);
 
-        // Bay/mobile-unit eligibility (DECISION-SHOPMGMT-021): the same rule the opening search
-        // filters with, run here as a refusal. UNASSIGNED (the default when resourceType is
-        // omitted) runs no resource checks at all.
-        validateResourceEligibility(
+        // Bay/mobile-unit eligibility (DECISION-SHOPMGMT-021/-003): the same rule the opening
+        // search filters with, run here as a refusal. resourceType is inferred from the replicas
+        // when the caller names a resourceId but not its kind — submit is authoritative, so a
+        // caller cannot skip eligibility by simply omitting resourceType (DECISION-SHOPMGMT-011).
+        ResourceType resolvedResourceType = resolveAndValidateResourceType(
                 request.getLocationId(),
                 request.getResourceId(),
                 request.getResourceType(),
@@ -211,8 +212,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         List<DetectedConflict> conflicts = conflictEvaluator.evaluate(attempt);
         refuseIfHard(attempt, conflicts);
 
-        Appointment saved =
-                persistAppointment(request, actor, normalizedIdempotencyKey, customerSnapshot, vehicleSnapshot);
+        Appointment saved = persistAppointment(
+                request, actor, normalizedIdempotencyKey, customerSnapshot, vehicleSnapshot, resolvedResourceType);
         flushOrRefuseOverlap(attempt, request);
         conflictRecorder.recordAccepted(saved, conflicts);
         saveServiceRequests(saved, request.getServiceRequestIds());
@@ -343,12 +344,13 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             String actor,
             String normalizedIdempotencyKey,
             Map<String, Object> customerSnapshot,
-            Map<String, Object> vehicleSnapshot) {
+            Map<String, Object> vehicleSnapshot,
+            @NonNull ResourceType resourceType) {
         Appointment appointment = Appointment.builder()
                 .status(AppointmentStatus.SCHEDULED)
                 .locationId(request.getLocationId())
                 .resourceId(request.getResourceId())
-                .resourceType(resolveResourceType(request.getResourceType()).name())
+                .resourceType(resourceType.name())
                 .crmCustomerId(request.getCrmCustomerId())
                 .crmVehicleId(request.getCrmVehicleId())
                 .customerSnapshot(writeSnapshot(customerSnapshot))
@@ -366,20 +368,13 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     /**
-     * DECISION-SHOPMGMT-003: {@code resourceType} defaults to {@link ResourceType#UNASSIGNED} when
-     * the caller omits it, so every appointment stores one of the three values (never left null) and
-     * a caller that does not explicitly name {@code BAY} or {@code MOBILE_UNIT} gets no resource
-     * checks — the safe default for a {@code resourceId} the caller may not have meant to submit.
-     */
-    private static ResourceType resolveResourceType(@Nullable ResourceType requested) {
-        return requested == null ? ResourceType.UNASSIGNED : requested;
-    }
-
-    /**
-     * Parses a stored {@code appointment.resource_type}: {@code null} (never written, or a legacy
-     * value from before this column was constrained, such as the technician-resource-type reads
-     * elsewhere in this module) reads as {@link ResourceType#UNASSIGNED} — no resource checks —
-     * rather than failing an appointment reschedule wants to re-validate.
+     * Parses a stored {@code appointment.resource_type}. {@code null} (never written) reads as "no
+     * stated type" so {@link #resolveAndValidateResourceType} infers it from {@code resourceId}
+     * when reschedule re-validates an older appointment; a stored value that is not one of the
+     * three current constants — most notably {@code "TECHNICIAN"}, a distinct, already-existing
+     * resource-type reading used elsewhere in this module for mechanic-busy tracking, never written
+     * by this service — also reads as "no stated type" here, but callers that must keep such a
+     * value's own semantics (reschedule) check for it before calling this, not after.
      */
     private static @Nullable ResourceType parseStoredResourceType(@Nullable String stored) {
         if (stored == null) {
@@ -393,43 +388,105 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     }
 
     /**
-     * DECISION-SHOPMGMT-021: the one bay-eligibility rule, run here as a refusal (the opening search
-     * runs the same {@link BayEligibilityService} as a filter). {@code UNASSIGNED} runs nothing.
-     * {@code MOBILE_UNIT} runs existence, location and active checks only, until mobile scheduling
-     * lands (DECISION-SHOPMGMT-023). {@code BAY} additionally runs specialty and duty-class.
+     * DECISION-SHOPMGMT-021/-003: resolves and validates the resource axis for a booking, against
+     * the shared {@link BayEligibilityService} the opening search filters with. Submit is
+     * authoritative (DECISION-SHOPMGMT-011), so a caller cannot skip eligibility by naming a real
+     * {@code resourceId} while leaving {@code resourceType} out: the type is then inferred from
+     * whichever replica actually holds that id, and validated exactly as if the caller had stated
+     * it. Rules:
+     *
+     * <ul>
+     *   <li>no {@code resourceId}: {@code resourceType} must be absent or {@code UNASSIGNED} — a
+     *       stated {@code BAY}/{@code MOBILE_UNIT} needs a {@code resourceId} (400, field {@code
+     *       resourceId})
+     *   <li>{@code resourceId} present, {@code resourceType} explicitly {@code UNASSIGNED}: 400
+     *       (field {@code resourceId}) — contradictory
+     *   <li>{@code resourceId} present, {@code resourceType} omitted: inferred as {@code BAY} when
+     *       an {@code ext_bay} row exists for it, else {@code MOBILE_UNIT} when an {@code
+     *       ext_mobile_unit} row does; neither is 422 {@code SERVICE_POSITION_INVALID}
+     *   <li>{@code resourceType} explicitly {@code BAY} or {@code MOBILE_UNIT}: validated as that
+     *       kind — an id that resolves to the other kind, or to neither, is 422 {@code
+     *       SERVICE_POSITION_INVALID}
+     * </ul>
+     *
+     * <p>A validated {@code BAY} additionally runs specialty and duty-class; a {@code MOBILE_UNIT}
+     * runs existence, location and active checks only, until mobile scheduling lands
+     * (DECISION-SHOPMGMT-023).
+     *
+     * @return the resolved {@code resourceType} — for {@link #persistAppointment} to store, or for
+     *     reschedule to have proven against the appointment's own resource
      */
-    private void validateResourceEligibility(
+    private ResourceType resolveAndValidateResourceType(
             @NonNull UUID locationId,
             @Nullable String resourceId,
             @Nullable ResourceType requestedResourceType,
             @Nullable List<UUID> serviceRequestIds,
             @Nullable UUID crmVehicleId) {
-        ResourceType resourceType = resolveResourceType(requestedResourceType);
-        if (resourceType == ResourceType.UNASSIGNED) {
-            return;
+        boolean hasResourceId = resourceId != null && !resourceId.isBlank();
+
+        if (!hasResourceId) {
+            if (requestedResourceType != null && requestedResourceType != ResourceType.UNASSIGNED) {
+                throw new AppointmentValidationException(
+                        "resourceId is required when resourceType is " + requestedResourceType, "resourceId");
+            }
+            return ResourceType.UNASSIGNED;
         }
-        UUID resourceUuid = parseResourceId(resourceType, resourceId);
-        if (resourceType == ResourceType.MOBILE_UNIT) {
-            ExtMobileUnitReplica unit = mobileUnitReplicaRepository
-                    .findById(resourceUuid)
-                    .orElseThrow(() -> invalid(resourceType, resourceId, "is unknown"));
-            if (!locationId.equals(unit.getBaseLocationId())) {
-                throw invalid(resourceType, resourceId, "is based at another location");
-            }
-            if (!unit.isActive()) {
-                throw inactive(resourceType, resourceId);
-            }
-            return;
+        if (requestedResourceType == ResourceType.UNASSIGNED) {
+            throw new AppointmentValidationException(
+                    "resourceId must not be set when resourceType is UNASSIGNED", "resourceId");
         }
 
-        ExtBayReplica bay = bayReplicaRepository
-                .findById(resourceUuid)
-                .orElseThrow(() -> invalid(resourceType, resourceId, "is unknown"));
+        if (requestedResourceType == ResourceType.BAY) {
+            ExtBayReplica bay = findBayOrInvalid(resourceId);
+            validateBayEligibility(locationId, bay, resourceId, serviceRequestIds, crmVehicleId);
+            return ResourceType.BAY;
+        }
+        if (requestedResourceType == ResourceType.MOBILE_UNIT) {
+            ExtMobileUnitReplica unit = findMobileUnitOrInvalid(resourceId);
+            validateMobileUnitEligibility(locationId, unit, resourceId);
+            return ResourceType.MOBILE_UNIT;
+        }
+
+        // requestedResourceType == null: infer from whichever replica actually holds this id.
+        UUID resourceUuid = tryParseUuid(resourceId);
+        Optional<ExtBayReplica> bay =
+                resourceUuid == null ? Optional.empty() : bayReplicaRepository.findById(resourceUuid);
+        if (bay.isPresent()) {
+            validateBayEligibility(locationId, bay.get(), resourceId, serviceRequestIds, crmVehicleId);
+            return ResourceType.BAY;
+        }
+        Optional<ExtMobileUnitReplica> unit =
+                resourceUuid == null ? Optional.empty() : mobileUnitReplicaRepository.findById(resourceUuid);
+        if (unit.isPresent()) {
+            validateMobileUnitEligibility(locationId, unit.get(), resourceId);
+            return ResourceType.MOBILE_UNIT;
+        }
+        throw invalid("Resource", resourceId, "is not a known bay or mobile unit");
+    }
+
+    private ExtBayReplica findBayOrInvalid(String resourceId) {
+        return bayReplicaRepository
+                .findById(parseResourceIdOrInvalid("Bay", resourceId))
+                .orElseThrow(() -> invalid("Bay", resourceId, "is unknown"));
+    }
+
+    private ExtMobileUnitReplica findMobileUnitOrInvalid(String resourceId) {
+        return mobileUnitReplicaRepository
+                .findById(parseResourceIdOrInvalid("Mobile unit", resourceId))
+                .orElseThrow(() -> invalid("Mobile unit", resourceId, "is unknown"));
+    }
+
+    private void validateBayEligibility(
+            UUID locationId,
+            ExtBayReplica bay,
+            String resourceId,
+            @Nullable List<UUID> serviceRequestIds,
+            @Nullable UUID crmVehicleId) {
         if (!locationId.equals(bay.getLocationId())) {
-            throw invalid(resourceType, resourceId, "belongs to another location");
+            throw invalid("Bay", resourceId, "belongs to another location");
         }
         if (!bay.isActive()) {
-            throw inactive(resourceType, resourceId);
+            throw inactive("Bay", resourceId);
         }
 
         Set<String> operationCodes = bayEligibilityService.operationCodesOf(serviceRequestIds);
@@ -454,27 +511,40 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 });
     }
 
-    private static UUID parseResourceId(ResourceType resourceType, @Nullable String resourceId) {
-        if (resourceId == null || resourceId.isBlank()) {
-            throw invalid(resourceType, resourceId, "is required when resourceType is " + resourceType);
+    private void validateMobileUnitEligibility(UUID locationId, ExtMobileUnitReplica unit, String resourceId) {
+        if (!locationId.equals(unit.getBaseLocationId())) {
+            throw invalid("Mobile unit", resourceId, "is based at another location");
         }
+        if (!unit.isActive()) {
+            throw inactive("Mobile unit", resourceId);
+        }
+    }
+
+    private static @Nullable UUID tryParseUuid(String resourceId) {
         try {
             return UUID.fromString(resourceId);
         } catch (IllegalArgumentException malformed) {
-            throw invalid(resourceType, resourceId, "is not a recognised " + resourceType + " id");
+            return null;
         }
     }
 
-    private static ServicePositionEligibilityException invalid(
-            ResourceType resourceType, @Nullable String resourceId, String detail) {
-        return new ServicePositionEligibilityException(
-                Code.SERVICE_POSITION_INVALID, resourceType + " " + resourceId + " " + detail);
+    private static UUID parseResourceIdOrInvalid(String resourceLabel, String resourceId) {
+        UUID parsed = tryParseUuid(resourceId);
+        if (parsed == null) {
+            throw invalid(resourceLabel, resourceId, "is not a recognised id");
+        }
+        return parsed;
     }
 
-    private static ServicePositionEligibilityException inactive(
-            ResourceType resourceType, @Nullable String resourceId) {
+    private static ServicePositionEligibilityException invalid(
+            String resourceLabel, @Nullable String resourceId, String detail) {
         return new ServicePositionEligibilityException(
-                Code.SERVICE_POSITION_INACTIVE, resourceType + " " + resourceId + " is not ACTIVE");
+                Code.SERVICE_POSITION_INVALID, resourceLabel + " " + resourceId + " " + detail);
+    }
+
+    private static ServicePositionEligibilityException inactive(String resourceLabel, @Nullable String resourceId) {
+        return new ServicePositionEligibilityException(
+                Code.SERVICE_POSITION_INACTIVE, resourceLabel + " " + resourceId + " is not ACTIVE");
     }
 
     private void publishAppointmentCreatedEvents(@NonNull Appointment saved) {
@@ -570,17 +640,24 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         // DECISION-SHOPMGMT-021: reschedule re-runs the same eligibility rule submit does, against
         // the appointment's own (unchanged) resource — a bay that went out of service or lost its
         // specialty claim since booking is caught here rather than silently carried forward. A
-        // legacy appointment with no stored resourceType (created before this column was written)
-        // reads as UNASSIGNED: no resource checks (DECISION-SHOPMGMT-021, "existing appointments are
-        // not re-validated").
-        validateResourceEligibility(
-                appointment.getLocationId(),
-                appointment.getResourceId(),
-                parseStoredResourceType(appointment.getResourceType()),
-                appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId).stream()
-                        .map(AppointmentServiceRequest::getServiceEntityId)
-                        .toList(),
-                appointment.getCrmVehicleId());
+        // stored resourceType of "TECHNICIAN" is a distinct, already-existing reading this module
+        // uses for mechanic-busy tracking (never written by this service, and its resourceId is a
+        // person id, not a bay/mobile-unit id) and is skipped entirely, not passed through as
+        // UNASSIGNED — a real resourceId sits beside it, which the UNASSIGNED path would otherwise
+        // refuse as contradictory. Any other missing or unrecognised stored value — most commonly an
+        // appointment created before this column was written — is inferred from resourceId exactly
+        // as a fresh submit would, rather than silently skipping checks a real resourceId should
+        // still be subject to.
+        if (!SchedulingConflictEvaluator.TECHNICIAN_RESOURCE_TYPE.equalsIgnoreCase(appointment.getResourceType())) {
+            resolveAndValidateResourceType(
+                    appointment.getLocationId(),
+                    appointment.getResourceId(),
+                    parseStoredResourceType(appointment.getResourceType()),
+                    appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId).stream()
+                            .map(AppointmentServiceRequest::getServiceEntityId)
+                            .toList(),
+                    appointment.getCrmVehicleId());
+        }
 
         Instant previousStartAt = appointment.getStartAt();
         Instant previousEndAt = appointment.getEndAt();

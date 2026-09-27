@@ -32,10 +32,16 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
   fires (`FACILITY_CLOSED`, `OUTSIDE_OPERATING_HOURS`, `BAY_DOUBLE_BOOKED`, `MECHANIC_UNAVAILABLE`),
   listing every rule that fired with its code verbatim. SOFT rules (`FACILITY_NEAR_CAPACITY`) book
   and appear on the response as `conflicts[]`, each overridable until a manager overrides it.
-  `resourceType` (`BAY` | `MOBILE_UNIT` | `UNASSIGNED`, DECISION-SHOPMGMT-003) defaults to
-  `UNASSIGNED` when omitted and is persisted verbatim; for `BAY`/`MOBILE_UNIT` it is validated
-  against DECISION-SHOPMGMT-021 (below) and a failure is `422` with one of the `SERVICE_POSITION_*`
-  codes, never overridable.
+  `resourceType` (`BAY` | `MOBILE_UNIT` | `UNASSIGNED`, DECISION-SHOPMGMT-003) is persisted
+  verbatim, resolved as follows — submit is authoritative (DECISION-SHOPMGMT-011), so omitting
+  `resourceType` is never a way to skip DECISION-SHOPMGMT-021 eligibility on a real `resourceId`:
+  no `resourceId` resolves to `UNASSIGNED` (a stated `BAY`/`MOBILE_UNIT` with no `resourceId` is
+  `400 VALIDATION_ERROR`, field `resourceId`); a `resourceId` with `resourceType` explicitly
+  `UNASSIGNED` is refused the same way (contradictory); a `resourceId` with `resourceType` omitted
+  is **inferred** — an `ext_bay` row for that id makes it `BAY`, else an `ext_mobile_unit` row makes
+  it `MOBILE_UNIT`, else `422 SERVICE_POSITION_INVALID` — and validated exactly as if the caller had
+  stated it. A stated `BAY`/`MOBILE_UNIT` is validated against DECISION-SHOPMGMT-021 (below); a
+  failure is `422` with one of the `SERVICE_POSITION_*` codes, never overridable.
 - `POST /v1/appointments/{appointmentId}/conflict-override` — a manager accepts SOFT conflicts by id
   (`{conflictIds, overrideReason}`); requires `shop:conflict:override` and the appointment's location
   in scope. `400` for a conflict not recorded against the appointment, `409` for a HARD one (envelope,
@@ -202,22 +208,34 @@ is out (skipped when either is null); `bayEligibility` counts the two misses
 not arrived yet (an empty replica), specialty is derived instead from whichever of the location's
 bays claims the operation — today's pre-replica behaviour, logged once per tenant (WARN).
 
-**Submit and reschedule** (`resourceType` `BAY` or `MOBILE_UNIT`) refuse with **422** and no
-override, `fieldErrors` naming `resourceId`:
+**`resourceType` resolution is not a way around eligibility** (DECISION-SHOPMGMT-011: submit is
+authoritative). No `resourceId` resolves to `UNASSIGNED` (no resource checks); a `resourceId` with
+`resourceType` explicitly `UNASSIGNED` is refused as contradictory (`400 VALIDATION_ERROR`, field
+`resourceId`), as is a stated `BAY`/`MOBILE_UNIT` with no `resourceId`. A `resourceId` with
+`resourceType` omitted is **inferred**: an `ext_bay` row for that id makes it `BAY`, else an
+`ext_mobile_unit` row makes it `MOBILE_UNIT`; matching neither is `422 SERVICE_POSITION_INVALID`.
+Reschedule applies the same resolution to the appointment's own (stored) `resourceType`/`resourceId`
+— a `NULL` or otherwise unrecognised stored `resourceType` beside a real `resourceId` is inferred
+and validated exactly as a fresh submit would, not silently skipped; the one exception is a stored
+value of `TECHNICIAN`, a distinct, already-existing reading used elsewhere in this module for
+mechanic-busy tracking (never written by this service), which stays skipped.
+
+**Submit and reschedule** (`resourceType` `BAY` or `MOBILE_UNIT`, stated or inferred) refuse with
+**422** and no override, `fieldErrors` naming `resourceId`:
 
 | Condition | Code |
 | --- | --- |
-| `resourceId` unknown, or at another location | `SERVICE_POSITION_INVALID` |
+| `resourceId` unknown to the stated/inferred kind, at another location, or (when inferred) matching neither `ext_bay` nor `ext_mobile_unit` | `SERVICE_POSITION_INVALID` |
 | Resource not `ACTIVE` (out of service or retired) | `SERVICE_POSITION_INACTIVE` |
 | A `BAY` does not claim a specialty operation on the appointment, or takes no general work and the appointment has general operations | `SERVICE_POSITION_NOT_EQUIPPED` |
 | Vehicle GVWR class above the bay's `maxDutyClass` | `SERVICE_POSITION_DUTY_CLASS_EXCEEDED` |
 
-`resourceType` `UNASSIGNED` (the default when omitted) runs no resource checks. `MOBILE_UNIT` runs
-existence, location and active checks only, until mobile scheduling lands
-(DECISION-SHOPMGMT-023) — no specialty or duty-class check. The near-capacity divisor
-(`FACILITY_NEAR_CAPACITY`, above) counts only active bays with `accepts_general_work`. Existing
-appointments are not re-validated; DECISION-SHOPMGMT-022 (a later story) surfaces any that sit in
-a now-ineligible bay.
+`MOBILE_UNIT` (stated or inferred) runs existence, location and active checks only, until mobile
+scheduling lands (DECISION-SHOPMGMT-023) — no specialty or duty-class check. The near-capacity
+divisor (`FACILITY_NEAR_CAPACITY`, above) counts only active bays with `accepts_general_work`.
+Existing appointments' own resource is not re-validated except on reschedule (above);
+DECISION-SHOPMGMT-022 (a later story) surfaces any that sit in a now-ineligible bay without a
+reschedule.
 
 Skill (CAP-329 D10, read through `SkillRequirementResolver`, the same reading the submit-time
 evaluator uses): competence never withholds an opening. A technician holding every required

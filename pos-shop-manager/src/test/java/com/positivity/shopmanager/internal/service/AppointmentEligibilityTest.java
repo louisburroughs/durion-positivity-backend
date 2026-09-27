@@ -21,6 +21,7 @@ import com.positivity.shopmanager.internal.entity.ExtMobileUnitReplica;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
 import com.positivity.shopmanager.internal.enums.ResourceType;
+import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
 import com.positivity.shopmanager.internal.exception.ServicePositionEligibilityException;
 import com.positivity.shopmanager.internal.exception.ServicePositionEligibilityException.Code;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
@@ -186,12 +187,12 @@ class AppointmentEligibilityTest {
                 .build();
     }
 
-    // ── UNASSIGNED: no resource checks ──────────────────────────────────────────────────────────
+    // ── UNASSIGNED: no resourceId, no resource checks ───────────────────────────────────────────────
 
     @Test
-    @DisplayName("UNASSIGNED (explicit) runs no resource checks and is persisted verbatim")
-    void unassignedRunsNoChecks() {
-        appointmentsService.createAppointment(createRequest(ResourceType.UNASSIGNED, "garbage"), null, null);
+    @DisplayName("UNASSIGNED (explicit) with no resourceId runs no resource checks and is persisted verbatim")
+    void unassignedWithNoResourceIdRunsNoChecks() {
+        appointmentsService.createAppointment(createRequest(ResourceType.UNASSIGNED, null), null, null);
 
         verify(bayReplicaRepository, never()).findById(any());
         verify(mobileUnitReplicaRepository, never()).findById(any());
@@ -201,7 +202,7 @@ class AppointmentEligibilityTest {
     }
 
     @Test
-    @DisplayName("resourceType omitted defaults to UNASSIGNED: persisted, no resource checks")
+    @DisplayName("resourceType and resourceId both omitted default to UNASSIGNED: persisted, no resource checks")
     void omittedResourceTypeDefaultsToUnassigned() {
         AppointmentCreateRequest request = createRequest(null, null);
 
@@ -211,6 +212,101 @@ class AppointmentEligibilityTest {
         ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
         verify(appointmentRepository).save(captor.capture());
         assertThat(captor.getValue().getResourceType()).isEqualTo("UNASSIGNED");
+    }
+
+    @Test
+    @DisplayName("UNASSIGNED with a resourceId set is refused as contradictory: 400 VALIDATION_ERROR, field"
+            + " resourceId — omitting resourceType cannot be used to skip eligibility on a real resourceId")
+    void unassignedWithResourceIdIsContradictory() {
+        assertThatThrownBy(() -> appointmentsService.createAppointment(
+                        createRequest(ResourceType.UNASSIGNED, BAY_ID.toString()), null, null))
+                .isInstanceOfSatisfying(
+                        AppointmentValidationException.class,
+                        e -> assertThat(e.getField()).isEqualTo("resourceId"));
+        verify(bayReplicaRepository, never()).findById(any());
+        verify(mobileUnitReplicaRepository, never()).findById(any());
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("BAY stated with no resourceId is 400 VALIDATION_ERROR, field resourceId")
+    void bayWithoutResourceIdIs400() {
+        assertThatThrownBy(
+                        () -> appointmentsService.createAppointment(createRequest(ResourceType.BAY, null), null, null))
+                .isInstanceOfSatisfying(
+                        AppointmentValidationException.class,
+                        e -> assertThat(e.getField()).isEqualTo("resourceId"));
+    }
+
+    @Test
+    @DisplayName("MOBILE_UNIT stated with no resourceId is 400 VALIDATION_ERROR, field resourceId")
+    void mobileUnitWithoutResourceIdIs400() {
+        assertThatThrownBy(() -> appointmentsService.createAppointment(
+                        createRequest(ResourceType.MOBILE_UNIT, null), null, null))
+                .isInstanceOfSatisfying(
+                        AppointmentValidationException.class,
+                        e -> assertThat(e.getField()).isEqualTo("resourceId"));
+    }
+
+    // ── resourceType omitted, resourceId present: inferred, never skipped ───────────────────────────
+
+    @Test
+    @DisplayName("a resourceId with no resourceType is inferred as BAY from ext_bay, and validated as one")
+    void resourceIdInfersBayWhenExtBayRowExists() {
+        ExtBayReplica bay = activeBay(BAY_ID, LOCATION_ID);
+        when(bayReplicaRepository.findById(BAY_ID)).thenReturn(Optional.of(bay));
+        when(bayReplicaRepository.findActiveByLocationOrdered(LOCATION_ID)).thenReturn(List.of(bay));
+        when(bayEligibilityService.refusalFor(eq(bay), any(), any(), any())).thenReturn(Optional.empty());
+
+        appointmentsService.createAppointment(createRequest(null, BAY_ID.toString()), null, null);
+
+        verify(mobileUnitReplicaRepository, never()).findById(any());
+        ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+        verify(appointmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getResourceType()).isEqualTo("BAY");
+    }
+
+    @Test
+    @DisplayName("a resourceId with no resourceType is inferred as MOBILE_UNIT from ext_mobile_unit when it is not"
+            + " an ext_bay row, and validated as one")
+    void resourceIdInfersMobileUnitWhenExtMobileUnitRowExists() {
+        when(bayReplicaRepository.findById(MOBILE_UNIT_ID)).thenReturn(Optional.empty());
+        when(mobileUnitReplicaRepository.findById(MOBILE_UNIT_ID))
+                .thenReturn(Optional.of(activeMobileUnit(MOBILE_UNIT_ID, LOCATION_ID)));
+
+        appointmentsService.createAppointment(createRequest(null, MOBILE_UNIT_ID.toString()), null, null);
+
+        verify(bayEligibilityService, never()).refusalFor(any(), any(), any(), any());
+        ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+        verify(appointmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getResourceType()).isEqualTo("MOBILE_UNIT");
+    }
+
+    @Test
+    @DisplayName("a resourceId with no resourceType that is neither an ext_bay nor an ext_mobile_unit row is 422"
+            + " SERVICE_POSITION_INVALID — omitting resourceType is not a way to skip validation")
+    void resourceIdUnknownToEitherReplicaIsInvalid() {
+        UUID unknownId = UUID.fromString("01960003-0000-7000-8000-0000000000ff");
+        when(bayReplicaRepository.findById(unknownId)).thenReturn(Optional.empty());
+        when(mobileUnitReplicaRepository.findById(unknownId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                        appointmentsService.createAppointment(createRequest(null, unknownId.toString()), null, null))
+                .isInstanceOfSatisfying(
+                        ServicePositionEligibilityException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(Code.SERVICE_POSITION_INVALID));
+    }
+
+    @Test
+    @DisplayName("a non-UUID resourceId with no resourceType cannot resolve to either replica: 422"
+            + " SERVICE_POSITION_INVALID")
+    void nonUuidResourceIdWithNoResourceTypeIsInvalid() {
+        assertThatThrownBy(() -> appointmentsService.createAppointment(createRequest(null, "not-a-uuid"), null, null))
+                .isInstanceOfSatisfying(
+                        ServicePositionEligibilityException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(Code.SERVICE_POSITION_INVALID));
+        verify(bayReplicaRepository, never()).findById(any());
+        verify(mobileUnitReplicaRepository, never()).findById(any());
     }
 
     // ── BAY ──────────────────────────────────────────────────────────────────────────────────────
@@ -455,21 +551,54 @@ class AppointmentEligibilityTest {
     }
 
     @Test
-    @DisplayName("reschedule of a legacy appointment with no stored resourceType (never written) runs no resource"
-            + " checks — existing appointments are not re-validated")
-    void rescheduleOfLegacyNullResourceTypeSkipsChecks() {
+    @DisplayName("reschedule of a legacy appointment with no stored resourceType (never written) infers it from"
+            + " resourceId and validates, instead of silently skipping checks a real resourceId should still be"
+            + " subject to")
+    void rescheduleOfLegacyNullResourceTypeInfersAndValidates() {
         scheduledAppointment(BAY_ID.toString(), null);
+        ExtBayReplica bay = activeBay(BAY_ID, LOCATION_ID);
+        when(bayReplicaRepository.findById(BAY_ID)).thenReturn(Optional.of(bay));
+        when(bayReplicaRepository.findActiveByLocationOrdered(LOCATION_ID)).thenReturn(List.of(bay));
+        when(bayEligibilityService.refusalFor(eq(bay), any(), any(), any())).thenReturn(Optional.empty());
 
         appointmentsService.rescheduleAppointment(APPOINTMENT_ID, rescheduleRequest());
 
-        verify(bayReplicaRepository, never()).findById(any());
+        verify(bayReplicaRepository).findById(BAY_ID);
         verify(rescheduleHistoryRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("reschedule of a legacy appointment whose resourceId is unknown to either replica now refuses,"
+            + " rather than silently letting it through")
+    void rescheduleOfLegacyNullResourceTypeWithUnknownResourceIdRefuses() {
+        scheduledAppointment(BAY_ID.toString(), null);
+        when(bayReplicaRepository.findById(BAY_ID)).thenReturn(Optional.empty());
+        when(mobileUnitReplicaRepository.findById(BAY_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(APPOINTMENT_ID, rescheduleRequest()))
+                .isInstanceOfSatisfying(
+                        ServicePositionEligibilityException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(Code.SERVICE_POSITION_INVALID));
+        verify(rescheduleHistoryRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("reschedule of an UNASSIGNED appointment runs no resource checks")
     void rescheduleOfUnassignedAppointmentSkipsChecks() {
         scheduledAppointment(null, "UNASSIGNED");
+
+        appointmentsService.rescheduleAppointment(APPOINTMENT_ID, rescheduleRequest());
+
+        verify(bayReplicaRepository, never()).findById(any());
+        verify(mobileUnitReplicaRepository, never()).findById(any());
+        verify(rescheduleHistoryRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("reschedule of an appointment stored with resourceType TECHNICIAN (a distinct, already-existing"
+            + " reading used elsewhere for mechanic-busy tracking) stays skipped, not inferred")
+    void rescheduleOfTechnicianResourceTypeStaysSkipped() {
+        scheduledAppointment("tech-1", "TECHNICIAN");
 
         appointmentsService.rescheduleAppointment(APPOINTMENT_ID, rescheduleRequest());
 

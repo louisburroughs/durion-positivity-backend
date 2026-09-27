@@ -82,16 +82,20 @@ public class AppointmentsController {
                     belong to the customer; the requested window must not overlap another SCHEDULED appointment on \
                     the same resource at the location; when sourceType (ESTIMATE or WORK_ORDER) is set, sourceId is \
                     required, the source must be eligible for scheduling, and no appointment may already exist for \
-                    that source; when resourceType is BAY or MOBILE_UNIT, resourceId must resolve to an ACTIVE \
-                    resource at locationId that is eligible for the appointment's services and vehicle \
-                    (DECISION-SHOPMGMT-021) — a BAY must claim every specialty operation on the appointment (or take \
-                    no general work, per its bay type's specialty map) and accommodate the vehicle's GVWR class.
+                    that source; when resourceType is BAY or MOBILE_UNIT (stated or inferred, see below), resourceId \
+                    must resolve to an ACTIVE resource at locationId that is eligible for the appointment's services \
+                    and vehicle (DECISION-SHOPMGMT-021) — a BAY must claim every specialty operation on the \
+                    appointment (or take no general work, per its bay type's specialty map) and accommodate the \
+                    vehicle's GVWR class.
                     Required inputs: crmCustomerId, crmVehicleId and locationId (UUIDs), startAt and endAt (UTC \
                     instants, startAt before endAt) and at least one serviceRequestIds entry; an optional \
                     Idempotency-Key header (non-blank, max 128 characters) makes retries safe and replays the \
                     original response only when the retried request matches the stored appointment's scheduling \
-                    fields. resourceType (BAY, MOBILE_UNIT or UNASSIGNED) defaults to UNASSIGNED — which runs no \
-                    resource checks — when omitted.
+                    fields. resourceType (BAY, MOBILE_UNIT or UNASSIGNED) is optional but is never a way to skip \
+                    eligibility on a real resourceId: omit both to book UNASSIGNED; name a resourceId with \
+                    resourceType omitted and it is inferred as BAY or MOBILE_UNIT from whichever replica holds that \
+                    id (400 if resourceId is set with resourceType UNASSIGNED, or unset with BAY/MOBILE_UNIT; 422 \
+                    SERVICE_POSITION_INVALID if it matches neither replica).
                     Emits a SHOPMGR_APPOINTMENT_CREATE event and persists customer and vehicle snapshots on the \
                     appointment, which is created in SCHEDULED status with resourceType stored verbatim.
                     A caller whose appointments:create or shop:schedule:edit grant is location-scoped must have \
@@ -112,7 +116,9 @@ public class AppointmentsController {
                     + " resubmission of the same booking (CAP-326). No new appointment was created.")
     @ApiResponse(
             responseCode = "400",
-            description = "Validation error — duplicate source appointment, or request fields are invalid.",
+            description = "Validation error — duplicate source appointment, request fields are invalid, or"
+                    + " resourceId/resourceType are contradictory (fieldErrors names resourceId): resourceType BAY"
+                    + " or MOBILE_UNIT with no resourceId, or resourceId set with resourceType UNASSIGNED.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -281,7 +287,9 @@ public class AppointmentsController {
                     status; completed, cancelled and other statuses cannot be rescheduled; the appointment's own \
                     resource (resourceType/resourceId, unchanged by this call) must still pass DECISION-SHOPMGMT-021 \
                     eligibility against its services and vehicle — a bay taken out of service or that lost its \
-                    specialty claim since booking is caught here, not silently carried forward.
+                    specialty claim since booking is caught here, not silently carried forward; a stored \
+                    resourceType that is missing or unrecognised (most commonly an appointment booked before this \
+                    field existed) is inferred from resourceId exactly as a fresh submit would, not skipped.
                     Required inputs: newStartAt and newEndAt (UTC instants, newStartAt before newEndAt) and a reason \
                     code; rescheduleReasonNotes (max 1000 characters) is mandatory when reason is OTHER, and \
                     notifyCustomer defaults to true.

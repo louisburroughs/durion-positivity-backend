@@ -242,7 +242,6 @@ class AppointmentsServiceImplWorkorderActualsTest {
         appointment.setAppointmentId(APPOINTMENT_ID);
         appointment.setStatus(status);
         appointment.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        appointment.setResourceId("BAY-01");
         appointment.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
         appointment.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
         appointment.setStartAt(startAt);

@@ -77,7 +77,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleAppointmentValidation(
             AppointmentValidationException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return respond(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", exception.getMessage(), correlationId);
+        if (exception.getField() == null) {
+            return respond(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", exception.getMessage(), correlationId);
+        }
+        // DECISION-SHOPMGMT-021: a contradictory resourceId/resourceType pair names its field, so
+        // the caller does not have to parse a free-text message to find which one to fix.
+        ApiError body = ApiError.withFieldErrors(
+                "VALIDATION_ERROR",
+                exception.getMessage(),
+                HttpStatus.BAD_REQUEST.value(),
+                Instant.now(clock).toString(),
+                correlationId.toString(),
+                List.of(new ApiError.FieldError(exception.getField(), exception.getMessage())));
+        return respond(HttpStatus.BAD_REQUEST, body, correlationId);
     }
 
     @ExceptionHandler(SourceNotEligibleException.class)
