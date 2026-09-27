@@ -1,10 +1,12 @@
 package com.positivity.shopmanager;
 
 import com.positivity.shopmanager.internal.entity.ConflictRule;
+import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.shopmanager.internal.enums.ConflictResourceType;
 import com.positivity.shopmanager.internal.enums.ConflictSeverity;
 import com.positivity.shopmanager.internal.repository.ConflictRuleRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -29,9 +31,13 @@ import java.util.UUID;
  *       local date, HARD {@code MECHANIC_UNAVAILABLE} fires and the booking is refused 409
  *       (#2035 answer 5). A test asserting the accepted path must roster somebody first;
  *       {@link #rosterTechnician} is the replica row {@code people.events.v1} would have written.
+ *   <li>{@code ext_location_bay} — a booking that names a {@code resourceId} must name a bay or
+ *       mobile unit the location replica knows, or it is refused 422 {@code SERVICE_POSITION_INVALID}
+ *       (#2268). {@link #registerBay} is the replica row {@code location.events.v1} would have
+ *       written for an ACTIVE, general-work bay.
  * </ul>
  *
- * <p>Both helpers converge on re-run, so a {@code @BeforeEach} may call them for every test.
+ * <p>The helpers converge on re-run, so a {@code @BeforeEach} may call them for every test.
  */
 public final class SchedulingWorldFixture {
 
@@ -141,6 +147,28 @@ public final class SchedulingWorldFixture {
                 .updatedAt(Instant.parse("2026-01-01T00:00:00Z"))
                 .build());
         return personId;
+    }
+
+    /**
+     * Registers one ACTIVE bay at {@code locationId} that takes general work and has no specialty
+     * or duty-class limit, so it is eligible for any booking a contract test makes there.
+     *
+     * @param name a label the test knows the bay by; the same label at the same location always
+     *     yields the same bay id
+     * @return the bay id, which is the {@code resourceId} a booking on this bay carries
+     */
+    public static UUID registerBay(ExtBayReplicaRepository bayReplicaRepository, UUID locationId, String name) {
+        UUID bayId = derivedId("bay:" + locationId + ":" + name);
+        bayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(bayId)
+                .locationId(locationId)
+                .name(name)
+                .active(true)
+                .acceptsGeneralWork(true)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.parse("2026-01-01T00:00:00Z"))
+                .build());
+        return bayId;
     }
 
     private static ConflictRule rule(
