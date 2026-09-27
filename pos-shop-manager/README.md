@@ -32,12 +32,18 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
   fires (`FACILITY_CLOSED`, `OUTSIDE_OPERATING_HOURS`, `BAY_DOUBLE_BOOKED`, `MECHANIC_UNAVAILABLE`),
   listing every rule that fired with its code verbatim. SOFT rules (`FACILITY_NEAR_CAPACITY`) book
   and appear on the response as `conflicts[]`, each overridable until a manager overrides it.
+  `resourceType` (`BAY` | `MOBILE_UNIT` | `UNASSIGNED`, DECISION-SHOPMGMT-003) defaults to
+  `UNASSIGNED` when omitted and is persisted verbatim; for `BAY`/`MOBILE_UNIT` it is validated
+  against DECISION-SHOPMGMT-021 (below) and a failure is `422` with one of the `SERVICE_POSITION_*`
+  codes, never overridable.
 - `POST /v1/appointments/{appointmentId}/conflict-override` — a manager accepts SOFT conflicts by id
   (`{conflictIds, overrideReason}`); requires `shop:conflict:override` and the appointment's location
   in scope. `400` for a conflict not recorded against the appointment, `409` for a HARD one (envelope,
   nothing written) or one already overridden (`CONFLICT_ALREADY_OVERRIDDEN`).
 - `GET /v1/appointments/{appointmentId}` — retrieve an appointment
-- `PUT /v1/appointments/{appointmentId}/reschedule` — reschedule an appointment; the same rules as creation apply, and the appointment's own slot does not count against it
+- `PUT /v1/appointments/{appointmentId}/reschedule` — reschedule an appointment; the same rules as
+  creation apply, including DECISION-SHOPMGMT-021 bay/mobile-unit eligibility against the
+  appointment's own (unchanged) resource, and the appointment's own slot does not count against it
 - `DELETE /v1/appointments/{appointmentId}/cancel` — cancel an appointment
 - `GET /v1/schedules/view` — shop schedule view
 - `GET /v1/bays` / `GET /v1/{locationId}/bays/{bayId}` — retrieve bays
@@ -172,16 +178,46 @@ location's `checkInBufferMinutes` before and `cleanupBufferMinutes` after, fits 
 inside the day's operating window, and at which a technician rostered that day (day grain, from
 `ext_staffing_assignment`; PTO is not modelled) is not on an overlapping held appointment
 (minute grain). One opening per gap per bay, at real minute resolution; closed days and
-holiday closures are skipped, never reported as full. Ranking: earliest start, then `CERTIFIED`
-before `AWAITING`, then bay.
+holiday closures are skipped, never reported as full. Ranking (search only; never changes
+eligibility): earliest start, then `CERTIFIED` before `AWAITING`, then general bays before
+specialty bays doing general work (D14 rule 6), then a *weak* best-fit tiebreak — the smallest
+adequate `maxDutyClass`, a null ceiling read as class 8 — then `displayOrder` (not yet a replica
+field on this branch) or name.
 
-Bay eligibility (CAP-325 D13/D14): a bay is eligible for an operation when it claims the
-operation code in `serviceCapabilityCodes`; an operation no bay at the location claims is
-general work, which every bay but a `WASH_DETAIL` one may do — general bays ranked before
-specialty bays at the same start, so the rack stays free for alignment work without the shop
-ever reading as full. A bay whose `maxDutyClass` is below the vehicle's class is out;
-`bayEligibility` counts the two misses separately. Empty list reasons are exactly two:
-`NO_ELIGIBLE_BAY_AT_LOCATION` and `ALL_ELIGIBLE_BAYS_BOOKED`.
+### Bay eligibility (CAP-325 D13/D14, DECISION-SHOPMGMT-021)
+
+`BayEligibilityService` is the **one** eligibility function, shared by the opening search (which
+filters against it) and appointment create/reschedule (which refuse against it): search, submit
+and reschedule never disagree. **Specialty is defined by the tenant's bay-type specialty map**
+(D14.1, replicated from `location.bay-specialty-map.updated` into `ext_bay_specialty_map` /
+`ext_bay_type`), not by which bays happen to be active — an operation is specialty iff the map
+names it for some `BayType`, and a bay must claim every specialty operation on the appointment (in
+its own `serviceCapabilityCodes`) to take it; a specialty operation no active bay at the location
+claims is unbookable there, never falling back to general work. An operation the map does not name
+is general work, open to any bay whose `accepts_general_work` is true (`false` only for
+`WASH_DETAIL`, DECISION-LOCATION-025). A bay whose `maxDutyClass` is below the vehicle's GVWR class
+is out (skipped when either is null); `bayEligibility` counts the two misses
+(`excludedByCapability`, `excludedByDutyClass`) separately. Empty list reasons are exactly two:
+`NO_ELIGIBLE_BAY_AT_LOCATION` and `ALL_ELIGIBLE_BAYS_BOOKED`. While a tenant's specialty map has
+not arrived yet (an empty replica), specialty is derived instead from whichever of the location's
+bays claims the operation — today's pre-replica behaviour, logged once per tenant (WARN).
+
+**Submit and reschedule** (`resourceType` `BAY` or `MOBILE_UNIT`) refuse with **422** and no
+override, `fieldErrors` naming `resourceId`:
+
+| Condition | Code |
+| --- | --- |
+| `resourceId` unknown, or at another location | `SERVICE_POSITION_INVALID` |
+| Resource not `ACTIVE` (out of service or retired) | `SERVICE_POSITION_INACTIVE` |
+| A `BAY` does not claim a specialty operation on the appointment, or takes no general work and the appointment has general operations | `SERVICE_POSITION_NOT_EQUIPPED` |
+| Vehicle GVWR class above the bay's `maxDutyClass` | `SERVICE_POSITION_DUTY_CLASS_EXCEEDED` |
+
+`resourceType` `UNASSIGNED` (the default when omitted) runs no resource checks. `MOBILE_UNIT` runs
+existence, location and active checks only, until mobile scheduling lands
+(DECISION-SHOPMGMT-023) — no specialty or duty-class check. The near-capacity divisor
+(`FACILITY_NEAR_CAPACITY`, above) counts only active bays with `accepts_general_work`. Existing
+appointments are not re-validated; DECISION-SHOPMGMT-022 (a later story) surfaces any that sit in
+a now-ineligible bay.
 
 Skill (CAP-329 D10, read through `SkillRequirementResolver`, the same reading the submit-time
 evaluator uses): competence never withholds an opening. A technician holding every required

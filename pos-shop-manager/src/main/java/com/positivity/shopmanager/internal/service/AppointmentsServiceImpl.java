@@ -18,6 +18,8 @@ import com.positivity.shopmanager.internal.dto.ScheduleViewResponse;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.AppointmentAudit;
 import com.positivity.shopmanager.internal.entity.AppointmentServiceRequest;
+import com.positivity.shopmanager.internal.entity.ExtBayReplica;
+import com.positivity.shopmanager.internal.entity.ExtMobileUnitReplica;
 import com.positivity.shopmanager.internal.entity.ExtPersonReplica;
 import com.positivity.shopmanager.internal.entity.RescheduleHistory;
 import com.positivity.shopmanager.internal.entity.Shop;
@@ -25,6 +27,7 @@ import com.positivity.shopmanager.internal.enums.AppointmentAction;
 import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
+import com.positivity.shopmanager.internal.enums.ResourceType;
 import com.positivity.shopmanager.internal.event.AppointmentCancelledEvent;
 import com.positivity.shopmanager.internal.event.AppointmentCreatedEvent;
 import com.positivity.shopmanager.internal.event.AppointmentCreatedFromEstimateEvent;
@@ -37,10 +40,14 @@ import com.positivity.shopmanager.internal.exception.KeylessDuplicateReplayExcep
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
+import com.positivity.shopmanager.internal.exception.ServicePositionEligibilityException;
+import com.positivity.shopmanager.internal.exception.ServicePositionEligibilityException.Code;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
@@ -107,6 +114,10 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final SchedulingConflictEvaluator conflictEvaluator;
     private final SchedulingConflictRecorder conflictRecorder;
     private final BookingHorizonPolicy bookingHorizonPolicy;
+    private final ExtBayReplicaRepository bayReplicaRepository;
+    private final ExtMobileUnitReplicaRepository mobileUnitReplicaRepository;
+    private final BayEligibilityService bayEligibilityService;
+    private final SkillRequirementResolver skillRequirementResolver;
 
     /**
      * Creates an appointment from an Estimate or Workorder.
@@ -170,6 +181,16 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         // Source eligibility validation (CAP-249 Story #12)
         validateSourceEligibility(request);
+
+        // Bay/mobile-unit eligibility (DECISION-SHOPMGMT-021): the same rule the opening search
+        // filters with, run here as a refusal. UNASSIGNED (the default when resourceType is
+        // omitted) runs no resource checks at all.
+        validateResourceEligibility(
+                request.getLocationId(),
+                request.getResourceId(),
+                request.getResourceType(),
+                request.getServiceRequestIds(),
+                request.getCrmVehicleId());
 
         // A keyless exact resubmission replays the appointment it duplicates rather than booking a
         // second one (spec D17 item 3, DECISION-SHOPMGMT-014): not a new row, not a 409.
@@ -327,6 +348,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .status(AppointmentStatus.SCHEDULED)
                 .locationId(request.getLocationId())
                 .resourceId(request.getResourceId())
+                .resourceType(resolveResourceType(request.getResourceType()).name())
                 .crmCustomerId(request.getCrmCustomerId())
                 .crmVehicleId(request.getCrmVehicleId())
                 .customerSnapshot(writeSnapshot(customerSnapshot))
@@ -341,6 +363,118 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .build();
 
         return appointmentRepository.save(appointment);
+    }
+
+    /**
+     * DECISION-SHOPMGMT-003: {@code resourceType} defaults to {@link ResourceType#UNASSIGNED} when
+     * the caller omits it, so every appointment stores one of the three values (never left null) and
+     * a caller that does not explicitly name {@code BAY} or {@code MOBILE_UNIT} gets no resource
+     * checks — the safe default for a {@code resourceId} the caller may not have meant to submit.
+     */
+    private static ResourceType resolveResourceType(@Nullable ResourceType requested) {
+        return requested == null ? ResourceType.UNASSIGNED : requested;
+    }
+
+    /**
+     * Parses a stored {@code appointment.resource_type}: {@code null} (never written, or a legacy
+     * value from before this column was constrained, such as the technician-resource-type reads
+     * elsewhere in this module) reads as {@link ResourceType#UNASSIGNED} — no resource checks —
+     * rather than failing an appointment reschedule wants to re-validate.
+     */
+    private static @Nullable ResourceType parseStoredResourceType(@Nullable String stored) {
+        if (stored == null) {
+            return null;
+        }
+        try {
+            return ResourceType.valueOf(stored);
+        } catch (IllegalArgumentException notARecognisedValue) {
+            return null;
+        }
+    }
+
+    /**
+     * DECISION-SHOPMGMT-021: the one bay-eligibility rule, run here as a refusal (the opening search
+     * runs the same {@link BayEligibilityService} as a filter). {@code UNASSIGNED} runs nothing.
+     * {@code MOBILE_UNIT} runs existence, location and active checks only, until mobile scheduling
+     * lands (DECISION-SHOPMGMT-023). {@code BAY} additionally runs specialty and duty-class.
+     */
+    private void validateResourceEligibility(
+            @NonNull UUID locationId,
+            @Nullable String resourceId,
+            @Nullable ResourceType requestedResourceType,
+            @Nullable List<UUID> serviceRequestIds,
+            @Nullable UUID crmVehicleId) {
+        ResourceType resourceType = resolveResourceType(requestedResourceType);
+        if (resourceType == ResourceType.UNASSIGNED) {
+            return;
+        }
+        UUID resourceUuid = parseResourceId(resourceType, resourceId);
+        if (resourceType == ResourceType.MOBILE_UNIT) {
+            ExtMobileUnitReplica unit = mobileUnitReplicaRepository
+                    .findById(resourceUuid)
+                    .orElseThrow(() -> invalid(resourceType, resourceId, "is unknown"));
+            if (!locationId.equals(unit.getBaseLocationId())) {
+                throw invalid(resourceType, resourceId, "is based at another location");
+            }
+            if (!unit.isActive()) {
+                throw inactive(resourceType, resourceId);
+            }
+            return;
+        }
+
+        ExtBayReplica bay = bayReplicaRepository
+                .findById(resourceUuid)
+                .orElseThrow(() -> invalid(resourceType, resourceId, "is unknown"));
+        if (!locationId.equals(bay.getLocationId())) {
+            throw invalid(resourceType, resourceId, "belongs to another location");
+        }
+        if (!bay.isActive()) {
+            throw inactive(resourceType, resourceId);
+        }
+
+        Set<String> operationCodes = bayEligibilityService.operationCodesOf(serviceRequestIds);
+        Integer gvwrClass = skillRequirementResolver.gvwrClassOf(crmVehicleId);
+        List<ExtBayReplica> locationBays = bayReplicaRepository.findActiveByLocationOrdered(locationId);
+        bayEligibilityService
+                .refusalFor(bay, locationBays, operationCodes, gvwrClass)
+                .ifPresent(refusal -> {
+                    throw switch (refusal) {
+                        case NOT_EQUIPPED ->
+                            new ServicePositionEligibilityException(
+                                    Code.SERVICE_POSITION_NOT_EQUIPPED,
+                                    "Bay " + resourceId
+                                            + " does not claim every specialty operation on this appointment, or"
+                                            + " takes no general work");
+                        case DUTY_CLASS_EXCEEDED ->
+                            new ServicePositionEligibilityException(
+                                    Code.SERVICE_POSITION_DUTY_CLASS_EXCEEDED,
+                                    "Vehicle GVWR class " + gvwrClass + " exceeds bay " + resourceId
+                                            + "'s maxDutyClass " + bay.getMaxDutyClass());
+                    };
+                });
+    }
+
+    private static UUID parseResourceId(ResourceType resourceType, @Nullable String resourceId) {
+        if (resourceId == null || resourceId.isBlank()) {
+            throw invalid(resourceType, resourceId, "is required when resourceType is " + resourceType);
+        }
+        try {
+            return UUID.fromString(resourceId);
+        } catch (IllegalArgumentException malformed) {
+            throw invalid(resourceType, resourceId, "is not a recognised " + resourceType + " id");
+        }
+    }
+
+    private static ServicePositionEligibilityException invalid(
+            ResourceType resourceType, @Nullable String resourceId, String detail) {
+        return new ServicePositionEligibilityException(
+                Code.SERVICE_POSITION_INVALID, resourceType + " " + resourceId + " " + detail);
+    }
+
+    private static ServicePositionEligibilityException inactive(
+            ResourceType resourceType, @Nullable String resourceId) {
+        return new ServicePositionEligibilityException(
+                Code.SERVICE_POSITION_INACTIVE, resourceType + " " + resourceId + " is not ACTIVE");
     }
 
     private void publishAppointmentCreatedEvents(@NonNull Appointment saved) {
@@ -432,6 +566,21 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         // row against the reschedule allowance (DECISION-SHOPMGMT-004).
         bookingHorizonPolicy.verifyWithinHorizon(
                 request.getNewStartAt(), resolveZoneId(appointment.getLocationId()), Instant.now(clock));
+
+        // DECISION-SHOPMGMT-021: reschedule re-runs the same eligibility rule submit does, against
+        // the appointment's own (unchanged) resource — a bay that went out of service or lost its
+        // specialty claim since booking is caught here rather than silently carried forward. A
+        // legacy appointment with no stored resourceType (created before this column was written)
+        // reads as UNASSIGNED: no resource checks (DECISION-SHOPMGMT-021, "existing appointments are
+        // not re-validated").
+        validateResourceEligibility(
+                appointment.getLocationId(),
+                appointment.getResourceId(),
+                parseStoredResourceType(appointment.getResourceType()),
+                appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId).stream()
+                        .map(AppointmentServiceRequest::getServiceEntityId)
+                        .toList(),
+                appointment.getCrmVehicleId());
 
         Instant previousStartAt = appointment.getStartAt();
         Instant previousEndAt = appointment.getEndAt();

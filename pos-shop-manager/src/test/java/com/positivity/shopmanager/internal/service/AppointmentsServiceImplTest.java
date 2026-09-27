@@ -36,6 +36,8 @@ import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchExce
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
@@ -118,7 +120,11 @@ class AppointmentsServiceImplTest {
                 workOrderAppointmentMappingRepository,
                 conflictEvaluator,
                 conflictRecorder,
-                new BookingHorizonPolicy(180));
+                new BookingHorizonPolicy(180),
+                mock(ExtBayReplicaRepository.class),
+                mock(ExtMobileUnitReplicaRepository.class),
+                mock(BayEligibilityService.class),
+                mock(SkillRequirementResolver.class));
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.positivity.shopmanager.internal.service;
 
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.ConflictRule;
+import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
 import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
@@ -384,9 +385,11 @@ public class SchedulingConflictEvaluator {
     // ── CAPACITY ────────────────────────────────────────────────────────────────────────────────
 
     private void evaluateCapacity(BookingAttempt attempt, @Nullable ZoneId zone, List<DetectedConflict> detected) {
-        int bays = extBayReplicaRepository
-                .findActiveByLocationOrdered(attempt.locationId())
-                .size();
+        // DECISION-SHOPMGMT-021: the divisor is bays that can actually absorb the overflow — a
+        // WASH_DETAIL bay (accepts_general_work=false) never relieves capacity pressure.
+        long bays = extBayReplicaRepository.findActiveByLocationOrdered(attempt.locationId()).stream()
+                .filter(ExtBayReplica::isAcceptsGeneralWork)
+                .count();
         if (bays == 0) {
             return;
         }

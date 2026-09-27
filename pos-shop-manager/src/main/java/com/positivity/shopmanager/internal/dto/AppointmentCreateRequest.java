@@ -4,6 +4,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
+import com.positivity.shopmanager.internal.enums.ResourceType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -48,6 +49,19 @@ public class AppointmentCreateRequest {
             example = "BAY-04",
             requiredMode = NOT_REQUIRED)
     private String resourceId;
+
+    /**
+     * DECISION-SHOPMGMT-003/-021: which axis {@code resourceId} names. Defaults to {@code
+     * UNASSIGNED} when omitted, which runs no resource checks at all — a caller naming a real
+     * {@code BAY} or {@code MOBILE_UNIT} must say so to have it validated (DECISION-SHOPMGMT-021).
+     */
+    @Schema(
+            description = "Which axis resourceId names; defaults to UNASSIGNED (no resource checks) when omitted."
+                    + " BAY runs the full DECISION-SHOPMGMT-021 eligibility rule; MOBILE_UNIT runs existence,"
+                    + " location and active checks only.",
+            example = "BAY",
+            requiredMode = NOT_REQUIRED)
+    private ResourceType resourceType;
 
     @Schema(
             description = "Appointment start instant in UTC (ISO-8601)",
