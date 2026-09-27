@@ -2,10 +2,15 @@ package com.positivity.security.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import jakarta.servlet.ServletException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -14,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.LoggerFactory;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -152,6 +158,50 @@ class GatewayAuthoritiesFilterUserIdTest {
                 .extracting(a -> a.getAuthority())
                 .contains("crm:party:view");
         assertThat(userIdFrom(authentication)).as(description).isNull();
+    }
+
+    @Test
+    @DisplayName("a header-only service-to-service call with no Authorization header does not WARN")
+    void missingAuthorizationHeaderDoesNotWarn() throws Exception {
+        // Internal clients (pos-workorder -> pos-tax, pos-invoice -> pos-tax, ...) authenticate
+        // with X-User/X-Authorities and deliberately send no token. Every such call used to log a
+        // WARN, burying real problems under thousands of expected lines (issue #2297).
+        List<ILoggingEvent> events = captureFilterLogs(null);
+
+        assertThat(events).filteredOn(event -> event.getLevel() == Level.WARN).isEmpty();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(
+            value = {
+                "a blank header | '   '",
+                "a header that is not a bearer token | Basic dXNlcjpwYXNz",
+                "a bearer token that is only whitespace | Bearer    ",
+                "a token with fewer than two dot-separated parts | Bearer not-a-jwt"
+            },
+            delimiter = '|')
+    @DisplayName("a present but unusable Authorization header still WARNs")
+    void malformedAuthorizationHeaderWarns(String description, String authorizationHeader) throws Exception {
+        // A header that is present but broken does point at a faulty caller, so it stays visible.
+        List<ILoggingEvent> events = captureFilterLogs(authorizationHeader);
+
+        assertThat(events)
+                .as(description)
+                .filteredOn(event -> event.getLevel() == Level.WARN)
+                .hasSize(1);
+    }
+
+    private List<ILoggingEvent> captureFilterLogs(String authorizationHeader) throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(GatewayAuthoritiesFilter.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            runFilter(authorizationHeader);
+            return List.copyOf(appender.list);
+        } finally {
+            logger.detachAppender(appender);
+        }
     }
 
     @ParameterizedTest(name = "payload {0} leaves the userId absent")
