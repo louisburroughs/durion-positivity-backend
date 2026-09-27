@@ -3,6 +3,7 @@ package com.positivity.location.contract;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.location.BaseContractIntegrationTest;
@@ -178,9 +179,11 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("#77 - PATCH /v1/locations/{locationId}/bays/{bayId} returns 200")
     void patchBay_returnsOk() throws Exception {
+        // Going out of service needs a reason from the fixed list (DECISION-LOCATION-026, #2264).
         String payload = """
         {
           "status": "OUT_OF_SERVICE",
+          "outOfServiceReason": "SCHEDULED_MAINTENANCE",
           "name": "Lane-A1-Maintenance"
         }
         """;
@@ -189,5 +192,21 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void patchBay_outOfServiceWithoutReason_returnsUnprocessable() throws Exception {
+        // The same status change without a reason is refused (DECISION-LOCATION-026, #2264).
+        String payload = """
+        {
+          "status": "OUT_OF_SERVICE"
+        }
+        """;
+
+        mockMvc.perform(withGatewayAuth(patch("/v1/locations/{locationId}/bays/{bayId}", locationId, existingBayId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("OUT_OF_SERVICE_REASON_REQUIRED"));
     }
 }
