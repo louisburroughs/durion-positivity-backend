@@ -23,7 +23,7 @@ public final class DownstreamPermissionCatalog {
      * {@code PermissionCode.CATALOG_VERSION}.
      * Updated automatically by {@code scripts/generate-permissions.py --sync}.
      */
-    public static final int CATALOG_VERSION = 92;
+    public static final int CATALOG_VERSION = 93;
 
     /**
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
@@ -740,7 +740,10 @@ public final class DownstreamPermissionCatalog {
         // @PreAuthorize annotation, and these two are enforced only via an in-body
         // SecurityContextHelper.hasAuthority check ──────────────────────────────
         "PERM_invoice:payment:override", // 540
-        "PERM_invoice:receipt:reprint_override" // 541
+        "PERM_invoice:receipt:reprint_override", // 541
+
+        // ── New batch (bits 542–542) ──────────────────────────────────────────
+        "PERM_appointments:reschedule:approve" // 542
     };
 
     public static String authorityForBit(int bitIndex) {
