@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -27,6 +28,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -87,6 +89,9 @@ class AppointmentsServiceImplWorkorderActualsTest {
 
     private AppointmentsServiceImpl appointmentsService;
 
+    private final AffectedAppointmentEvaluator affectedAppointmentEvaluator = mock(AffectedAppointmentEvaluator.class);
+    private final RescheduleApprovalGuard rescheduleApprovalGuard = mock(RescheduleApprovalGuard.class);
+
     private final SchedulingConflictEvaluator conflictEvaluator =
             org.mockito.Mockito.mock(SchedulingConflictEvaluator.class);
     private final SchedulingConflictRecorder conflictRecorder =
@@ -115,7 +120,11 @@ class AppointmentsServiceImplWorkorderActualsTest {
                 mock(ExtBayReplicaRepository.class),
                 mock(ExtMobileUnitReplicaRepository.class),
                 mock(BayEligibilityService.class),
-                mock(SkillRequirementResolver.class));
+                mock(SkillRequirementResolver.class),
+                affectedAppointmentEvaluator,
+                rescheduleApprovalGuard);
+
+        lenient().when(affectedAppointmentEvaluator.evaluate(any(), any())).thenReturn(Map.of());
 
         when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(APPOINTMENT_ID))
                 .thenReturn(List.<AppointmentServiceRequest>of());

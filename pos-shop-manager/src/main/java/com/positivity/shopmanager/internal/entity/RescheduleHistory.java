@@ -98,6 +98,39 @@ public class RescheduleHistory extends TenantScopedEntity {
     @Column(name = "notification_status", length = 50)
     private String notificationStatus;
 
+    /**
+     * DECISION-SHOPMGMT-004: whether this reschedule counts against the 2-free-reschedules
+     * allowance. {@code false} only for a shop-caused reschedule — reason {@code EQUIPMENT_ISSUE},
+     * or the appointment was already DECISION-SHOPMGMT-022 "affected" at the moment of this
+     * reschedule, evaluated before any change — never for an ordinary customer-caused one.
+     */
+    @Column(name = "counts_against_allowance", nullable = false, updatable = false)
+    private boolean countsAgainstAllowance;
+
+    /**
+     * The appointment's resource before this reschedule (DECISION-SHOPMGMT-022 rule 3), in the same
+     * shape as {@code appointment.resource_id} (a bay/mobile-unit id, or the legacy technician
+     * reading); {@code null} when it had none (UNASSIGNED).
+     */
+    @Column(name = "previous_resource_id", length = 128, updatable = false)
+    private String previousResourceId;
+
+    /**
+     * The resource this reschedule moved the appointment onto, when the caller named a {@code
+     * newResourceId}/{@code newResourceType}; {@code null} when this reschedule did not touch the
+     * resource axis.
+     */
+    @Column(name = "new_resource_id", length = 128, updatable = false)
+    private String newResourceId;
+
+    /**
+     * The manager's reason for approving a reschedule beyond the free allowance
+     * (DECISION-SHOPMGMT-004, {@code appointments:reschedule:approve}); {@code null} for every
+     * reschedule that needed no approval.
+     */
+    @Column(name = "approval_reason", length = 1000, updatable = false)
+    private String approvalReason;
+
     @NonNull
     @Column(name = "created_at", nullable = false, updatable = false)
     @CreatedDate

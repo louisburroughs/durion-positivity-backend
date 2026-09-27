@@ -14,6 +14,7 @@ import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.OpeningSearchPolicyException;
+import com.positivity.shopmanager.internal.exception.RescheduleApprovalReasonRequiredException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
@@ -397,7 +398,10 @@ class GlobalExceptionHandlerTest {
                                     new ServicePositionEligibilityException(
                                             ServicePositionEligibilityException.Code.SERVICE_POSITION_INVALID,
                                             "BAY " + LOCATION_ID + " is unknown"),
-                                    request)));
+                                    request)),
+                    Named.of("handleRescheduleApprovalReasonRequired", (HandlerInvocation)
+                            request -> sut.handleRescheduleApprovalReasonRequired(
+                                    new RescheduleApprovalReasonRequiredException(), request)));
         }
 
         @ParameterizedTest

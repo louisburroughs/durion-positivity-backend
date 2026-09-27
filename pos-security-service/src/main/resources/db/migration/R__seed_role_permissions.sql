@@ -407,6 +407,7 @@ FROM (VALUES
     ('appointments:cancel', 'appointments', '', 'cancel', 162),
     ('appointments:create', 'appointments', '', 'create', 159),
     ('appointments:reschedule', 'appointments', '', 'reschedule', 161),
+    ('appointments:reschedule:approve', 'appointments', 'reschedule', 'approve', 542),
     ('appointments:view', 'appointments', '', 'view', 160),
     ('bulkImport:status:read', 'bulkImport', 'status', 'read', 240),
     ('bulkImport:upload:execute', 'bulkImport', 'upload', 'execute', 239),
@@ -1419,6 +1420,7 @@ FROM (VALUES
     ('SHOP_MANAGER', 'accounting:analytics:view'),
     -- #2003: the count-plan form and every other inventory location read is gated on this; the
     -- role held inventory:availability:read without it, so the page's only data load 403'd.
+    ('SHOP_MANAGER', 'appointments:reschedule:approve'),
     ('SHOP_MANAGER', 'inventory:location:view'),
     ('SHOP_MANAGER', 'invoice:analytics:view'),
     ('SHOP_MANAGER', 'invoice:finalize:override'),
@@ -1718,6 +1720,7 @@ BEGIN
         ('appointments:cancel'),
         ('appointments:create'),
         ('appointments:reschedule'),
+        ('appointments:reschedule:approve'),
         ('appointments:view'),
         ('bulkImport:status:read'),
         ('bulkImport:upload:execute'),

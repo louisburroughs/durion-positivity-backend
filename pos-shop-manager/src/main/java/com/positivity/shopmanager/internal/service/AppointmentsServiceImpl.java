@@ -38,6 +38,7 @@ import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
 import com.positivity.shopmanager.internal.exception.KeylessDuplicateReplayException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
+import com.positivity.shopmanager.internal.exception.RescheduleApprovalReasonRequiredException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
 import com.positivity.shopmanager.internal.exception.ServicePositionEligibilityException;
@@ -68,6 +69,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -97,6 +99,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AppointmentsServiceImpl implements AppointmentsService {
     private static final String SYSTEM = "system";
+
+    /** DECISION-SHOPMGMT-004: reschedules allowed before {@code appointments:reschedule:approve} is required. */
+    private static final int MAX_FREE_RESCHEDULES = 2;
+
     private final AppointmentRepository appointmentRepository;
     private final AppointmentAuditRepository appointmentAuditRepository;
     private final RescheduleHistoryRepository rescheduleHistoryRepository;
@@ -118,6 +124,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final ExtMobileUnitReplicaRepository mobileUnitReplicaRepository;
     private final BayEligibilityService bayEligibilityService;
     private final SkillRequirementResolver skillRequirementResolver;
+    private final AffectedAppointmentEvaluator affectedAppointmentEvaluator;
+    private final RescheduleApprovalGuard rescheduleApprovalGuard;
 
     /**
      * Creates an appointment from an Estimate or Workorder.
@@ -617,9 +625,6 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                             + appointment.getStatus());
         }
 
-        // TODO CAP-249 follow-up: enforce max 2 reschedules using
-        // rescheduleHistoryRepository.countByAppointmentId(appointmentId)
-
         if (request.getReason() == null) {
             throw new AppointmentValidationException("reason is required for rescheduling");
         }
@@ -630,6 +635,15 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             throw new AppointmentValidationException("rescheduleReasonNotes is required when reason is OTHER");
         }
 
+        // DECISION-SHOPMGMT-004/-022: the appointment's own affected state, judged BEFORE any field
+        // of it changes — an exemption is decided on the condition that drove this reschedule, not
+        // on where the appointment lands afterward. A reschedule is shop-caused, and so exempt from
+        // the 2-free-reschedules allowance, when its reason is EQUIPMENT_ISSUE or the appointment
+        // was already DECISION-SHOPMGMT-022 affected.
+        boolean shopCaused = request.getReason() == RescheduleReasonCode.EQUIPMENT_ISSUE
+                || affectedAppointmentEvaluator.evaluateOne(appointment);
+        enforceRescheduleAllowance(appointmentId, shopCaused, request);
+
         // A reschedule is a write too, so the booking horizon binds it exactly as it binds a create
         // (DECISION-SHOPMGMT-019). Checked after the required fields and before the appointment is
         // touched: a refused reschedule leaves the previous window in place and records no history
@@ -637,25 +651,51 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         bookingHorizonPolicy.verifyWithinHorizon(
                 request.getNewStartAt(), resolveZoneId(appointment.getLocationId()), Instant.now(clock));
 
-        // DECISION-SHOPMGMT-021: reschedule re-runs the same eligibility rule submit does, against
-        // the appointment's own (unchanged) resource — a bay that went out of service or lost its
-        // specialty claim since booking is caught here rather than silently carried forward. A
-        // stored resourceType of "TECHNICIAN" is a distinct, already-existing reading this module
-        // uses for mechanic-busy tracking (never written by this service, and its resourceId is a
-        // person id, not a bay/mobile-unit id) and is skipped entirely, not passed through as
-        // UNASSIGNED — a real resourceId sits beside it, which the UNASSIGNED path would otherwise
-        // refuse as contradictory. Any other missing or unrecognised stored value — most commonly an
-        // appointment created before this column was written — is inferred from resourceId exactly
-        // as a fresh submit would, rather than silently skipping checks a real resourceId should
-        // still be subject to.
-        if (!SchedulingConflictEvaluator.TECHNICIAN_RESOURCE_TYPE.equalsIgnoreCase(appointment.getResourceType())) {
-            resolveAndValidateResourceType(
+        List<UUID> serviceRequestIds =
+                appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId).stream()
+                        .map(AppointmentServiceRequest::getServiceEntityId)
+                        .toList();
+
+        // DECISION-SHOPMGMT-022 rule 3: a reschedule may move the appointment onto a different
+        // resource — most commonly off one that has gone out of service. When the caller names
+        // either field, only the NEW resource is resolved and validated (DECISION-SHOPMGMT-021,
+        // the same rule submit uses); the appointment's OLD resource is never re-validated in this
+        // branch, so moving off an affected resource cannot be refused by the very condition being
+        // fixed. Leaving both fields absent keeps today's behaviour: the appointment's own
+        // (unchanged) resource is re-validated, below.
+        boolean movingResource = request.getNewResourceId() != null || request.getNewResourceType() != null;
+        String previousResourceId = appointment.getResourceId();
+        String targetResourceId = previousResourceId;
+        ResourceType targetResourceType = null;
+        if (movingResource) {
+            String newResourceIdText = request.getNewResourceId() == null
+                    ? null
+                    : request.getNewResourceId().toString();
+            targetResourceType = resolveAndValidateResourceType(
+                    appointment.getLocationId(),
+                    newResourceIdText,
+                    request.getNewResourceType(),
+                    serviceRequestIds,
+                    appointment.getCrmVehicleId());
+            targetResourceId = newResourceIdText;
+        } else if (!SchedulingConflictEvaluator.TECHNICIAN_RESOURCE_TYPE.equalsIgnoreCase(
+                appointment.getResourceType())) {
+            // DECISION-SHOPMGMT-021: reschedule re-runs the same eligibility rule submit does,
+            // against the appointment's own (unchanged) resource — a bay that went out of service or
+            // lost its specialty claim since booking is caught here rather than silently carried
+            // forward. A stored resourceType of "TECHNICIAN" is a distinct, already-existing reading
+            // this module uses for mechanic-busy tracking (never written by this service, and its
+            // resourceId is a person id, not a bay/mobile-unit id) and is skipped entirely, not
+            // passed through as UNASSIGNED — a real resourceId sits beside it, which the UNASSIGNED
+            // path would otherwise refuse as contradictory. Any other missing or unrecognised stored
+            // value — most commonly an appointment created before this column was written — is
+            // inferred from resourceId exactly as a fresh submit would, rather than silently skipping
+            // checks a real resourceId should still be subject to.
+            targetResourceType = resolveAndValidateResourceType(
                     appointment.getLocationId(),
                     appointment.getResourceId(),
                     parseStoredResourceType(appointment.getResourceType()),
-                    appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId).stream()
-                            .map(AppointmentServiceRequest::getServiceEntityId)
-                            .toList(),
+                    serviceRequestIds,
                     appointment.getCrmVehicleId());
         }
 
@@ -664,27 +704,32 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         // Same rules as creation (CAP-326): the appointment's own current slot does not count
         // against it, and the exclusion constraint checks the UPDATE exactly as it would an INSERT.
+        // The attempt is evaluated against targetResourceId — the resource the appointment ends up
+        // on, which is the appointment's own resource unless this reschedule is moving it.
         BookingAttempt attempt = new BookingAttempt(
                 appointment.getLocationId(),
-                appointment.getResourceId(),
+                targetResourceId,
                 request.getNewStartAt(),
                 request.getNewEndAt(),
                 appointmentId,
-                appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId).stream()
-                        .map(AppointmentServiceRequest::getServiceEntityId)
-                        .toList(),
+                serviceRequestIds,
                 appointment.getCrmVehicleId());
         List<DetectedConflict> conflicts = conflictEvaluator.evaluate(attempt);
         refuseIfHard(attempt, conflicts);
 
         appointment.setStartAt(request.getNewStartAt());
         appointment.setEndAt(request.getNewEndAt());
+        if (movingResource) {
+            appointment.setResourceId(targetResourceId);
+            appointment.setResourceType(targetResourceType.name());
+        }
         Appointment saved = appointmentRepository.save(appointment);
         flushOrRefuseOverlap(attempt, null);
         conflictRecorder.recordAccepted(saved, conflicts);
 
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         Instant rescheduledAt = Instant.now(clock);
+        String newResourceIdForRecord = movingResource ? targetResourceId : null;
 
         AppointmentAudit audit = AppointmentAudit.builder()
                 .appointment(appointment)
@@ -708,6 +753,10 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .rescheduledBy(actorId)
                 .rescheduledAt(rescheduledAt)
                 .notifyCustomer(request.isNotifyCustomer())
+                .countsAgainstAllowance(!shopCaused)
+                .previousResourceId(previousResourceId)
+                .newResourceId(newResourceIdForRecord)
+                .approvalReason(request.getApprovalReason())
                 .createdAt(rescheduledAt)
                 .build());
 
@@ -727,11 +776,42 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                     rescheduledAt,
                     null, // estimateId: not yet a typed UUID on Appointment entity
                     null, // workOrderId: not yet a typed UUID on Appointment entity
-                    null // assignmentStatus: resolved via assignment lookup in future story
-                    ));
+                    null, // assignmentStatus: resolved via assignment lookup in future story
+                    previousResourceId,
+                    newResourceIdForRecord));
         }
 
         return toResponse(saved);
+    }
+
+    /**
+     * DECISION-SHOPMGMT-004: the 3rd and later reschedule of an appointment that is not
+     * shop-caused needs {@code appointments:reschedule:approve} and a non-blank {@code
+     * approvalReason}; the first two, and every shop-caused one, need neither. Checked before the
+     * appointment is touched, like every other reschedule precondition — a refused reschedule
+     * leaves the appointment and its reschedule count exactly as they were, since the rejected
+     * attempt is never recorded to {@code reschedule_history} (the count this method itself reads
+     * next time).
+     *
+     * @throws org.springframework.security.access.AccessDeniedException the caller lacks
+     *     {@code appointments:reschedule:approve} (403)
+     * @throws RescheduleApprovalReasonRequiredException {@code approvalReason} is missing or blank
+     *     (422 {@code RESCHEDULE_APPROVAL_REASON_REQUIRED})
+     */
+    private void enforceRescheduleAllowance(
+            @NonNull UUID appointmentId, boolean shopCaused, @NonNull RescheduleAppointmentRequest request) {
+        if (shopCaused) {
+            return;
+        }
+        long priorCountedReschedules =
+                rescheduleHistoryRepository.countByAppointmentIdAndCountsAgainstAllowanceTrue(appointmentId);
+        if (priorCountedReschedules < MAX_FREE_RESCHEDULES) {
+            return;
+        }
+        rescheduleApprovalGuard.requireApprovalPermission();
+        if (request.getApprovalReason() == null || request.getApprovalReason().isBlank()) {
+            throw new RescheduleApprovalReasonRequiredException();
+        }
     }
 
     /**
@@ -867,11 +947,19 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             throw new LocationNotFoundException(request.getLocationId());
         }
 
+        // DECISION-SHOPMGMT-022, evaluated once for the whole board rather than once per event
+        // (AffectedAppointmentEvaluator batches its own replica/service-request/vehicle reads).
+        Map<UUID, Boolean> affectedByAppointmentId =
+                affectedAppointmentEvaluator.evaluate(request.getLocationId(), locationAppointments);
+
         Map<ResourceLaneKey, List<ScheduleViewResponse.ScheduleEventView>> eventsByLane = new HashMap<>();
         for (Appointment appointment : locationAppointments) {
             ResourceLaneKey laneKey = new ResourceLaneKey(
                     defaultResourceId(appointment.getResourceId()), defaultResourceType(appointment.getResourceType()));
-            eventsByLane.computeIfAbsent(laneKey, key -> new ArrayList<>()).add(toScheduleEvent(appointment));
+            eventsByLane
+                    .computeIfAbsent(laneKey, key -> new ArrayList<>())
+                    .add(toScheduleEvent(
+                            appointment, affectedByAppointmentId.getOrDefault(appointment.getAppointmentId(), false)));
         }
 
         Map<ResourceLaneKey, List<ScheduleViewResponse.ScheduleEventView>> filteredByType =
@@ -894,6 +982,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         List<ScheduleViewResponse.ScheduleResourceView> resources = filteredByType.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> toResourceView(entry.getKey(), entry.getValue(), resourceNames.get(entry.getKey())))
+                .map(resourceView -> applyAffectedFilter(resourceView, request.getAffected()))
+                .filter(Objects::nonNull)
                 .toList();
 
         ScheduleViewResponse response = new ScheduleViewResponse();
@@ -1086,33 +1176,123 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         return resourceView;
     }
 
+    /**
+     * DECISION-SHOPMGMT-022's {@code affected} filter: applied after {@link #toResourceView} so
+     * conflict detection above still sees every event on the lane, never a pre-filtered subset. A
+     * {@code null} filter (the default) passes every resource view through unchanged; {@code true}
+     * or {@code false} narrows each lane's events to the matching ones, and a lane left with none is
+     * dropped from the board entirely rather than shown empty.
+     */
+    private ScheduleViewResponse.@Nullable ScheduleResourceView applyAffectedFilter(
+            ScheduleViewResponse.ScheduleResourceView resourceView, @Nullable Boolean affected) {
+        if (affected == null) {
+            return resourceView;
+        }
+        List<ScheduleViewResponse.ScheduleEventView> matching = resourceView.getEvents().stream()
+                .filter(event -> affected == event.isAffected())
+                .toList();
+        if (matching.isEmpty()) {
+            return null;
+        }
+        resourceView.setEvents(matching);
+        return resourceView;
+    }
+
     private Map<ResourceLaneKey, String> resolveResourceNames(Set<ResourceLaneKey> laneKeys) {
         Map<ResourceLaneKey, String> resourceNames = HashMap.newHashMap(laneKeys.size());
         if (laneKeys.isEmpty()) {
             return resourceNames;
         }
 
-        Map<String, List<ResourceLaneKey>> technicianLanesByResourceId = indexResourceLanes(laneKeys, resourceNames);
-        if (technicianLanesByResourceId.isEmpty()) {
-            return resourceNames;
-        }
-
-        applyTechnicianDisplayNames(technicianLanesByResourceId, resourceNames);
-        return resourceNames;
-    }
-
-    private Map<String, List<ResourceLaneKey>> indexResourceLanes(
-            Set<ResourceLaneKey> laneKeys, Map<ResourceLaneKey, String> resourceNames) {
         Map<String, List<ResourceLaneKey>> technicianLanesByResourceId = new HashMap<>();
+        Map<String, List<ResourceLaneKey>> bayLanesByResourceId = new HashMap<>();
+        Map<String, List<ResourceLaneKey>> mobileUnitLanesByResourceId = new HashMap<>();
         for (ResourceLaneKey laneKey : laneKeys) {
             resourceNames.put(laneKey, defaultResourceDisplayName(laneKey));
             if ("TECHNICIAN".equalsIgnoreCase(laneKey.resourceType())) {
                 technicianLanesByResourceId
                         .computeIfAbsent(laneKey.resourceId(), ignored -> new ArrayList<>())
                         .add(laneKey);
+            } else if (ResourceType.BAY.name().equalsIgnoreCase(laneKey.resourceType())) {
+                bayLanesByResourceId
+                        .computeIfAbsent(laneKey.resourceId(), ignored -> new ArrayList<>())
+                        .add(laneKey);
+            } else if (ResourceType.MOBILE_UNIT.name().equalsIgnoreCase(laneKey.resourceType())) {
+                mobileUnitLanesByResourceId
+                        .computeIfAbsent(laneKey.resourceId(), ignored -> new ArrayList<>())
+                        .add(laneKey);
             }
         }
-        return technicianLanesByResourceId;
+
+        if (!technicianLanesByResourceId.isEmpty()) {
+            applyTechnicianDisplayNames(technicianLanesByResourceId, resourceNames);
+        }
+        if (!bayLanesByResourceId.isEmpty()) {
+            applyBayDisplayNames(bayLanesByResourceId, resourceNames);
+        }
+        if (!mobileUnitLanesByResourceId.isEmpty()) {
+            applyMobileUnitDisplayNames(mobileUnitLanesByResourceId, resourceNames);
+        }
+        return resourceNames;
+    }
+
+    /**
+     * Bay display names come from {@code ext_bay.name} (#2270), looked up by {@link
+     * ExtBayReplicaRepository#findAllById}, never the active-only {@code
+     * findActiveByLocationOrdered} — a bay that has gone out of service or been retired is kept as
+     * an {@code active=false} row, never deleted (DECISION-LOCATION-026), specifically so an
+     * appointment that still names it (DECISION-SHOPMGMT-022's affected queue, most of all) can
+     * still show a name rather than a bare id. Falls back to the raw id when the replica has not
+     * arrived yet, or its name is blank.
+     */
+    private void applyBayDisplayNames(
+            Map<String, List<ResourceLaneKey>> bayLanesByResourceId, Map<ResourceLaneKey, String> resourceNames) {
+        Map<String, UUID> bayIdByResourceId = parseResourceIds(bayLanesByResourceId.keySet());
+        if (bayIdByResourceId.isEmpty()) {
+            return;
+        }
+        Map<UUID, ExtBayReplica> bayById = bayReplicaRepository.findAllById(bayIdByResourceId.values()).stream()
+                .collect(Collectors.toMap(ExtBayReplica::getBayId, bay -> bay));
+        bayIdByResourceId.forEach((resourceId, bayId) -> {
+            ExtBayReplica bay = bayById.get(bayId);
+            String name = bay == null || bay.getName() == null || bay.getName().isBlank() ? resourceId : bay.getName();
+            for (ResourceLaneKey laneKey : bayLanesByResourceId.get(resourceId)) {
+                resourceNames.put(laneKey, name);
+            }
+        });
+    }
+
+    /** Mobile-unit counterpart of {@link #applyBayDisplayNames}, from {@code ext_mobile_unit.name}. */
+    private void applyMobileUnitDisplayNames(
+            Map<String, List<ResourceLaneKey>> mobileUnitLanesByResourceId,
+            Map<ResourceLaneKey, String> resourceNames) {
+        Map<String, UUID> unitIdByResourceId = parseResourceIds(mobileUnitLanesByResourceId.keySet());
+        if (unitIdByResourceId.isEmpty()) {
+            return;
+        }
+        Map<UUID, ExtMobileUnitReplica> unitById =
+                mobileUnitReplicaRepository.findAllById(unitIdByResourceId.values()).stream()
+                        .collect(Collectors.toMap(ExtMobileUnitReplica::getMobileUnitId, unit -> unit));
+        unitIdByResourceId.forEach((resourceId, unitId) -> {
+            ExtMobileUnitReplica unit = unitById.get(unitId);
+            String name =
+                    unit == null || unit.getName() == null || unit.getName().isBlank() ? resourceId : unit.getName();
+            for (ResourceLaneKey laneKey : mobileUnitLanesByResourceId.get(resourceId)) {
+                resourceNames.put(laneKey, name);
+            }
+        });
+    }
+
+    /** Every {@code resourceId} in {@code resourceIds} that parses as a UUID, keyed by itself. */
+    private static Map<String, UUID> parseResourceIds(Set<String> resourceIds) {
+        Map<String, UUID> byResourceId = new LinkedHashMap<>();
+        for (String resourceId : resourceIds) {
+            UUID parsed = tryParseUuid(resourceId);
+            if (parsed != null) {
+                byResourceId.put(resourceId, parsed);
+            }
+        }
+        return byResourceId;
     }
 
     private String defaultResourceDisplayName(ResourceLaneKey laneKey) {
@@ -1176,7 +1356,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         return name.isBlank() ? "Technician " + personId : name;
     }
 
-    private ScheduleViewResponse.ScheduleEventView toScheduleEvent(Appointment appointment) {
+    private ScheduleViewResponse.ScheduleEventView toScheduleEvent(Appointment appointment, boolean affected) {
         ScheduleViewResponse.ScheduleEventView event = new ScheduleViewResponse.ScheduleEventView();
         event.setEventId("APT-" + appointment.getAppointmentId());
         event.setEventType("APPOINTMENT");
@@ -1187,6 +1367,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         event.setHasConflict(false);
         event.setSeverity(null);
         event.setConflictDetails(null);
+        event.setAffected(affected);
         return event;
     }
 
@@ -1429,6 +1610,9 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         response.setActualStartAt(actuals == null ? null : actuals.workStartedAt());
         response.setActualEndAt(actuals == null ? null : actuals.completedAt());
         response.setExpectedEndAt(actuals == null ? null : actuals.expectedEndAt());
+        // DECISION-SHOPMGMT-022: derived fresh on every read, never stored (see toResponse's
+        // javadoc note above resolveWorkorderActuals — this is likewise never called in a loop).
+        response.setAffected(affectedAppointmentEvaluator.evaluateOne(appointment));
         return response;
     }
 

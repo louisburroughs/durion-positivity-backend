@@ -1,9 +1,9 @@
-generatedAt: "2026-09-27T01:18:43.332042+00:00"
+generatedAt: "2026-09-27T02:19:26.367340+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 506
-  uniquePermissionCount: 506
+  permissionCount: 507
+  uniquePermissionCount: 507
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -868,7 +868,7 @@ manifests:
     domain: "shop"
     serviceName: "pos-shop-manager"
     version: "1.0"
-    permissionCount: 17
+    permissionCount: 18
     permissions:
       - name: "shop:location:view"
         description: "View shop/location details"
@@ -904,6 +904,8 @@ manifests:
         description: "Reschedule appointments"
       - name: "appointments:cancel"
         description: "Cancel appointments"
+      - name: "appointments:reschedule:approve"
+        description: "Approve a reschedule beyond the free allowance (DECISION-SHOPMGMT-004)"
   - module: "pos-supplier"
     path: "pos-supplier/src/main/resources/permissions.yaml"
     domain: "supplier"
@@ -1520,6 +1522,12 @@ permissions:
     source: "pos-shop-manager/src/main/resources/permissions.yaml"
   - name: "appointments:reschedule"
     description: "Reschedule appointments"
+    domain: "shop"
+    serviceName: "pos-shop-manager"
+    module: "pos-shop-manager"
+    source: "pos-shop-manager/src/main/resources/permissions.yaml"
+  - name: "appointments:reschedule:approve"
+    description: "Approve a reschedule beyond the free allowance (DECISION-SHOPMGMT-004)"
     domain: "shop"
     serviceName: "pos-shop-manager"
     module: "pos-shop-manager"

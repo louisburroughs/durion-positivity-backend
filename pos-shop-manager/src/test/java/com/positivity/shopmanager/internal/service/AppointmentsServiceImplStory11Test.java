@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -30,6 +31,7 @@ import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappin
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -95,6 +97,9 @@ class AppointmentsServiceImplStory11Test {
 
     private AppointmentsServiceImpl appointmentsService;
 
+    private final AffectedAppointmentEvaluator affectedAppointmentEvaluator = mock(AffectedAppointmentEvaluator.class);
+    private final RescheduleApprovalGuard rescheduleApprovalGuard = mock(RescheduleApprovalGuard.class);
+
     private static final Instant FIXED_NOW = Instant.parse("2026-03-01T12:00:00Z");
     private static final Instant ORIGINAL_START = Instant.parse("2026-03-10T10:00:00Z");
     private static final Instant ORIGINAL_END = Instant.parse("2026-03-10T11:00:00Z");
@@ -129,7 +134,11 @@ class AppointmentsServiceImplStory11Test {
                 mock(ExtBayReplicaRepository.class),
                 mock(ExtMobileUnitReplicaRepository.class),
                 mock(BayEligibilityService.class),
-                mock(SkillRequirementResolver.class));
+                mock(SkillRequirementResolver.class),
+                affectedAppointmentEvaluator,
+                rescheduleApprovalGuard);
+
+        lenient().when(affectedAppointmentEvaluator.evaluate(any(), any())).thenReturn(Map.of());
     }
 
     // ─── AC: Expanded eligibility — allowed statuses ──────────────────────────

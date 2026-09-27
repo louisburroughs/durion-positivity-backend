@@ -69,6 +69,16 @@ public final class ShopPermissions {
     /** Owned by the appointments domain. */
     public static final String APPOINTMENTS_VIEW = "appointments:view";
 
+    /**
+     * Approve a reschedule beyond the free allowance (DECISION-SHOPMGMT-004): the 3rd or later
+     * reschedule of an appointment that is not shop-caused. Checked in {@code
+     * AppointmentsServiceImpl#rescheduleAppointment} through {@link
+     * com.positivity.shopmanager.internal.service.RescheduleApprovalGuard}, not at the controller,
+     * because whether it is required at all depends on the appointment's own reschedule history —
+     * the first two reschedules, and every shop-caused one, need no permission at all.
+     */
+    public static final String APPOINTMENTS_RESCHEDULE_APPROVE = "appointments:reschedule:approve";
+
     private ShopPermissions() {
         // Utility class - prevent instantiation
     }

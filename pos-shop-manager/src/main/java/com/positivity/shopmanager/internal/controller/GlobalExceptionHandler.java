@@ -13,6 +13,7 @@ import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.OpeningSearchPolicyException;
+import com.positivity.shopmanager.internal.exception.RescheduleApprovalReasonRequiredException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
@@ -210,6 +211,25 @@ public class GlobalExceptionHandler {
                 Instant.now(clock).toString(),
                 correlationId.toString(),
                 List.of(new ApiError.FieldError("resourceId", exception.getMessage())));
+        return respond(HttpStatus.UNPROCESSABLE_CONTENT, body, correlationId);
+    }
+
+    /**
+     * DECISION-SHOPMGMT-004: approval was required for this reschedule (the 3rd or later non-exempt
+     * one) but {@code approvalReason} was missing or blank. {@code fieldErrors} names {@code
+     * approvalReason} so the caller does not have to parse the message to find which field to fix.
+     */
+    @ExceptionHandler(RescheduleApprovalReasonRequiredException.class)
+    public ResponseEntity<ApiError> handleRescheduleApprovalReasonRequired(
+            RescheduleApprovalReasonRequiredException exception, HttpServletRequest request) {
+        UUID correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.withFieldErrors(
+                RescheduleApprovalReasonRequiredException.CODE,
+                exception.getMessage(),
+                HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                Instant.now(clock).toString(),
+                correlationId.toString(),
+                List.of(new ApiError.FieldError("approvalReason", exception.getMessage())));
         return respond(HttpStatus.UNPROCESSABLE_CONTENT, body, correlationId);
     }
 

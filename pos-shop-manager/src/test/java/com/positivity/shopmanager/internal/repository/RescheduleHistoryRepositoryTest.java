@@ -76,6 +76,38 @@ class RescheduleHistoryRepositoryTest {
                 .isZero();
     }
 
+    /**
+     * DECISION-SHOPMGMT-004: a shop-caused (exempt) reschedule is recorded with {@code
+     * counts_against_allowance = false} and must not count toward the 2-free-reschedules
+     * threshold, even though it still counts in the plain {@link
+     * RescheduleHistoryRepository#countByAppointmentId} total.
+     */
+    @Test
+    void countByAppointmentIdAndCountsAgainstAllowanceTrueExcludesExemptReschedules() {
+        UUID appointmentId = UUID.fromString("01960011-0000-7000-8000-000000000035");
+        insertAppointment(appointmentId);
+        insertRescheduleHistory(
+                UUID.fromString("01960011-0000-7000-8000-000000000045"),
+                appointmentId,
+                Instant.parse("2026-02-01T09:00:00Z"),
+                true);
+        insertRescheduleHistory(
+                UUID.fromString("01960011-0000-7000-8000-000000000046"),
+                appointmentId,
+                Instant.parse("2026-02-02T09:00:00Z"),
+                true);
+        insertRescheduleHistory(
+                UUID.fromString("01960011-0000-7000-8000-000000000047"),
+                appointmentId,
+                Instant.parse("2026-02-03T09:00:00Z"),
+                false);
+
+        assertThat(rescheduleHistoryRepository.countByAppointmentId(appointmentId))
+                .isEqualTo(3);
+        assertThat(rescheduleHistoryRepository.countByAppointmentIdAndCountsAgainstAllowanceTrue(appointmentId))
+                .isEqualTo(2);
+    }
+
     private void insertAppointment(UUID appointmentId) {
         jdbcTemplate.update("""
                 INSERT INTO appointment
@@ -87,13 +119,18 @@ class RescheduleHistoryRepositoryTest {
     }
 
     private void insertRescheduleHistory(UUID rescheduleId, UUID appointmentId, Instant rescheduledAt) {
+        insertRescheduleHistory(rescheduleId, appointmentId, rescheduledAt, true);
+    }
+
+    private void insertRescheduleHistory(
+            UUID rescheduleId, UUID appointmentId, Instant rescheduledAt, boolean countsAgainstAllowance) {
         jdbcTemplate.update("""
                 INSERT INTO reschedule_history
                     (tenant_id, reschedule_id, appointment_id, previous_start_at, previous_end_at,
                      new_start_at, new_end_at, reschedule_reason, rescheduled_by, rescheduled_at,
-                     notify_customer, created_at)
+                     notify_customer, counts_against_allowance, created_at)
                 VALUES ('01900000-0000-7000-8000-000000000001', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
-                        'CUSTOMER_REQUEST', 'test-user', ?, false, CURRENT_TIMESTAMP)
-                """, rescheduleId, appointmentId, rescheduledAt);
+                        'CUSTOMER_REQUEST', 'test-user', ?, false, ?, CURRENT_TIMESTAMP)
+                """, rescheduleId, appointmentId, rescheduledAt, countsAgainstAllowance);
     }
 }

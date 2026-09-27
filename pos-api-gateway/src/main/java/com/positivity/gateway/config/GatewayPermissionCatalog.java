@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 92;
+    public static final int CATALOG_VERSION = 93;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -714,7 +714,10 @@ public final class GatewayPermissionCatalog {
         // @PreAuthorize annotation, and these two are enforced only via an in-body
         // SecurityContextHelper.hasAuthority check ──────────────────────────────
         "PERM_invoice:payment:override", // 540
-        "PERM_invoice:receipt:reprint_override" // 541
+        "PERM_invoice:receipt:reprint_override", // 541
+
+        // ── New batch (bits 542–542) ──────────────────────────────────────────
+        "PERM_appointments:reschedule:approve" // 542
     };
 
     public static String authorityForBit(int bitIndex) {

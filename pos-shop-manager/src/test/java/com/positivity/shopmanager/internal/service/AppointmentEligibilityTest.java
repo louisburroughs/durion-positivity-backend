@@ -119,6 +119,12 @@ class AppointmentEligibilityTest {
     @Mock
     private SkillRequirementResolver skillRequirementResolver;
 
+    @Mock
+    private AffectedAppointmentEvaluator affectedAppointmentEvaluator;
+
+    @Mock
+    private RescheduleApprovalGuard rescheduleApprovalGuard;
+
     private final SchedulingConflictEvaluator conflictEvaluator = mock(SchedulingConflictEvaluator.class);
     private final SchedulingConflictRecorder conflictRecorder = mock(SchedulingConflictRecorder.class);
 
@@ -147,10 +153,13 @@ class AppointmentEligibilityTest {
                 bayReplicaRepository,
                 mobileUnitReplicaRepository,
                 bayEligibilityService,
-                skillRequirementResolver);
+                skillRequirementResolver,
+                affectedAppointmentEvaluator,
+                rescheduleApprovalGuard);
 
         lenient().when(crmSnapshotService.getCustomerById(any(UUID.class))).thenReturn(Map.of());
         lenient().when(crmSnapshotService.getVehicleById(any(UUID.class))).thenReturn(Map.of());
+        lenient().when(affectedAppointmentEvaluator.evaluate(any(), any())).thenReturn(Map.of());
         lenient().when(appointmentRepository.save(any(Appointment.class))).thenAnswer(invocation -> {
             Appointment appointment = invocation.getArgument(0);
             appointment.setAppointmentId(APPOINTMENT_ID);
