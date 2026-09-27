@@ -151,7 +151,7 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                       "ruleType": "POSTAL_CODE_LIST",
                       "priority": 1,
                       "serviceAreaId": "018f1f5a-a444-7333-8222-444444444444",
-                      "validFrom": "2026-01-01",
+                      "validFrom": "2026-01-01T00:00:00Z",
                       "validTo": null
                     }
                   ]
