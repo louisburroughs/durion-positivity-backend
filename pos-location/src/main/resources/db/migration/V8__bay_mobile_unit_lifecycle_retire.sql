@@ -8,7 +8,9 @@
 -- bays.status has never had a CHECK. mobile_units.status has carried mobile_units_status_check
 -- (ACTIVE, INACTIVE) since V6; INACTIVE is retired outright (pre-production, no compatibility
 -- shim), so every mobile unit at INACTIVE becomes OUT_OF_SERVICE with reason OTHER and note
--- 'migrated from INACTIVE' before the new CHECK lands.
+-- 'migrated from INACTIVE' before the new CHECK lands. The V6 CHECK is dropped before that UPDATE:
+-- it does not admit OUT_OF_SERVICE, so on a database that holds an INACTIVE unit (alpha does) the
+-- UPDATE would violate it and the whole migration would roll back.
 --
 -- Both tables are under FORCE ROW LEVEL SECURITY (V1 baseline) and Flyway connects as the owner,
 -- which carries a transitional default tenant binding (postgres/init-tenancy.sh). Without lifting
@@ -29,13 +31,13 @@ ALTER TABLE public.mobile_units ADD COLUMN out_of_service_reason varchar(32);
 ALTER TABLE public.mobile_units ADD COLUMN out_of_service_note varchar(255);
 ALTER TABLE public.mobile_units ADD COLUMN expected_return_at timestamptz;
 
+ALTER TABLE public.mobile_units DROP CONSTRAINT mobile_units_status_check;
+
 UPDATE public.mobile_units
    SET status = 'OUT_OF_SERVICE',
        out_of_service_reason = 'OTHER',
        out_of_service_note = 'migrated from INACTIVE'
  WHERE status = 'INACTIVE';
-
-ALTER TABLE public.mobile_units DROP CONSTRAINT mobile_units_status_check;
 
 ALTER TABLE public.bays
     ADD CONSTRAINT bays_status_check

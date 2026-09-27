@@ -17,7 +17,11 @@
 -- already named this the v1 schema; the code used FLAT_MINUTES instead). PERCENTAGE_OF_TRAVEL and
 -- DISTANCE_MULTIPLIER, which no decision defines and which need routed travel time no service
 -- provides, become FIXED_MINUTES with a zero-minute buffer_value, one RAISE WARNING per row naming
--- the policy so an operator can pick a real minutes value.
+-- the policy so an operator can pick a real minutes value. The V6 CHECK
+-- (travel_buffer_policies_buffer_type_check) is dropped before either UPDATE: it does not admit
+-- FIXED_MINUTES, so on a database that holds a FLAT_MINUTES policy (every one seeded by
+-- R__seed_location_1_reference before #2266, alpha included) the rename would violate it and the whole
+-- migration would roll back. The new CHECK lands once the rows carry the new names.
 --
 -- travel_buffer_policies is under FORCE ROW LEVEL SECURITY and Flyway connects as the owner with a
 -- transitional default tenant binding (postgres/init-tenancy.sh); FORCE is lifted for this
@@ -31,6 +35,7 @@ ALTER TABLE public.location
 ALTER TABLE public.mobile_unit_coverage_rules RENAME COLUMN max_distance TO max_distance_km;
 
 ALTER TABLE public.travel_buffer_policies NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.travel_buffer_policies DROP CONSTRAINT travel_buffer_policies_buffer_type_check;
 
 UPDATE public.travel_buffer_policies SET buffer_type = 'FIXED_MINUTES' WHERE buffer_type = 'FLAT_MINUTES';
 
@@ -54,7 +59,6 @@ BEGIN
     END LOOP;
 END $$;
 
-ALTER TABLE public.travel_buffer_policies DROP CONSTRAINT travel_buffer_policies_buffer_type_check;
 ALTER TABLE public.travel_buffer_policies
     ADD CONSTRAINT travel_buffer_policies_buffer_type_check
     CHECK (buffer_type IS NULL OR buffer_type IN ('FIXED_MINUTES', 'DISTANCE_TIER'));
