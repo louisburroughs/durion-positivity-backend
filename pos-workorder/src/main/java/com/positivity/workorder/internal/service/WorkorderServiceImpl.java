@@ -1068,6 +1068,25 @@ public class WorkorderServiceImpl implements WorkorderService {
             incomingResourceId = null;
             incomingResourceType = null;
         }
+        // #2269: the vehicle's GVWR class above the position's maxDutyClass is refused the same way
+        // an inactive or occupied position is — a lift's rated capacity is a physical limit this
+        // listener must not quietly disagree with the dispatcher's own assignServicePosition path
+        // over, but a refusal thrown from inside recordPositionChange would cost the location and
+        // mechanics too (same reasoning as the two checks above). Asked, not caught: an unknown
+        // vehicle or ceiling class answers true and never drops the position (spec D11).
+        if (!servicePositionService.isWithinDutyClass(
+                incomingResourceType, incomingResourceId, workorder.getVehicleId())) {
+            log.warn(
+                    "Inbound assignment for workorder {} names {} {}, whose duty-class ceiling the "
+                            + "vehicle's GVWR class exceeds; applying the location and mechanics and "
+                            + "leaving this workorder unplaced",
+                    workorder.getId(),
+                    incomingResourceType,
+                    incomingResourceId);
+            droppedBecause = "over duty class";
+            incomingResourceId = null;
+            incomingResourceType = null;
+        }
         String positionReason = droppedBecause == null
                 ? "Assignment context updated"
                 : "Assignment context updated; requested position was " + droppedBecause;
