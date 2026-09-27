@@ -326,6 +326,15 @@ mirrored additively from `BayUpdatedV1.displayOrder`. `ExtBayReplicaRepository.f
 sorts the dashboard's bay roster by `displayOrder` (nulls last), then name-then-id, matching the
 order pos-location's own `GET .../bays` uses.
 
+`ext_mobile_unit` gains `max_duty_class` (integer, nullable, `CHECK` 1–8, **V14** —
+DECISION-LOCATION-029, #2267), the mobile-unit counterpart of `ext_bay.max_duty_class` (same GVWR
+axis, CAP-325 D13). `applyMobileUnitUpdated` merges it with the same additive-field guard
+`applyLocationUpdated` already uses (`mergeField`): absent from the raw fact means the publisher
+predates the field, so the already-replicated value stands, never read as "unconstrained". #2269
+checks it at placement. The optional identity fields DECISION-LOCATION-029 also adds to the owner's
+`mobile_units` (`unitNumber`, `vin`, `licensePlate`, `plateRegion`) are display-only and are not
+replicated here.
+
 **Bay specialty map replica (#2261, DECISION-LOCATION-025).** `location.bay-specialty-map.updated`
 carries a tenant's *whole* bay-type specialty map — one entry per `BayType`, never a delta — telling
 "no bay claims this specialty" apart from "this is general work" (DECISION-SHOPMGMT-021 rule 4).

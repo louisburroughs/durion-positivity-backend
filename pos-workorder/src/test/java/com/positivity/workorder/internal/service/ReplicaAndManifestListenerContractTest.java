@@ -449,6 +449,38 @@ class ReplicaAndManifestListenerContractTest {
         }
 
         @Test
+        @DisplayName("#2267: a fact carrying maxDutyClass replicates it onto ext_mobile_unit")
+        void mobileUnitMaxDutyClassIsReplicated() {
+            locationListener.onLocationEvent(
+                    envelope("evt-1", MobileUnitUpdatedV1.EVENT_TYPE, """
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"ACTIVE",
+                     "maxDutyClass":5}""".formatted(ID, SITE_ID)));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository).save(captor.capture());
+            assertThat(captor.getValue().getMaxDutyClass()).isEqualTo(5);
+        }
+
+        @Test
+        @DisplayName("#2267: a fact without the maxDutyClass field keeps the ceiling already replicated")
+        void mobileUnitMaxDutyClassAbsentKeepsExisting() {
+            when(mobileUnitRepository.findById(ID))
+                    .thenReturn(Optional.of(ExtMobileUnitReplica.builder()
+                            .mobileUnitId(ID)
+                            .maxDutyClass(5)
+                            .aggregateVersion(1)
+                            .build()));
+
+            locationListener.onLocationEvent(
+                    envelope("evt-1", MobileUnitUpdatedV1.EVENT_TYPE, """
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"ACTIVE"}""".formatted(ID, SITE_ID)));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository).save(captor.capture());
+            assertThat(captor.getValue().getMaxDutyClass()).isEqualTo(5);
+        }
+
+        @Test
         @DisplayName("#1656: an unknown location-domain fact is ignored but still recorded for the manifest")
         void unknownFactTypeIsRecordedNotApplied() {
             // pos-location publishes storage-location facts this module ignores. An ignored fact may

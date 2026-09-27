@@ -62,6 +62,9 @@ public class MobileUnitServiceImpl implements MobileUnitService {
 
     private static final String MOBILE_UNIT_NAME_TAKEN = "MOBILE_UNIT_NAME_TAKEN";
     private static final String MOBILE_UNIT_CONFLICT = "MOBILE_UNIT_CONFLICT";
+    /** DECISION-LOCATION-029, issue #2267: a duplicate unitNumber, vin, or licensePlate+plateRegion. */
+    private static final String MOBILE_UNIT_IDENTITY_TAKEN = "MOBILE_UNIT_IDENTITY_TAKEN";
+
     private static final String STATUS_ACTIVE = LifecycleStatusSupport.ACTIVE;
     private static final String STATUS_OUT_OF_SERVICE = LifecycleStatusSupport.OUT_OF_SERVICE;
     private static final String STATUS_RETIRED = LifecycleStatusSupport.RETIRED;
@@ -81,6 +84,11 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     private static final String PATCH_KEY_OUT_OF_SERVICE_REASON = "outOfServiceReason";
     private static final String PATCH_KEY_OUT_OF_SERVICE_NOTE = "outOfServiceNote";
     private static final String PATCH_KEY_EXPECTED_RETURN_AT = "expectedReturnAt";
+    private static final String PATCH_KEY_MAX_DUTY_CLASS = MobileUnitIdentitySupport.FIELD_MAX_DUTY_CLASS;
+    private static final String PATCH_KEY_UNIT_NUMBER = MobileUnitIdentitySupport.FIELD_UNIT_NUMBER;
+    private static final String PATCH_KEY_VIN = MobileUnitIdentitySupport.FIELD_VIN;
+    private static final String PATCH_KEY_LICENSE_PLATE = MobileUnitIdentitySupport.FIELD_LICENSE_PLATE;
+    private static final String PATCH_KEY_PLATE_REGION = MobileUnitIdentitySupport.FIELD_PLATE_REGION;
     static final String ACTIVE_UNIT_INCOMPLETE =
             "ACTIVE mobile unit requires travelBufferPolicyId, serviceCapabilityCodes, and coverageRules";
     private static final String FIELD_MAX_DISTANCE = "maxDistance";
@@ -168,6 +176,14 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         Instant expectedReturnAt =
                 STATUS_OUT_OF_SERVICE.equals(normalizedStatus) ? request.getExpectedReturnAt() : null;
         LifecycleStatusSupport.requireReasonWhenOutOfService(normalizedStatus, outOfServiceReason, outOfServiceNote);
+        // DECISION-LOCATION-029 (#2267): a duty ceiling and optional, display-only identity.
+        // Validated/normalized here regardless of entry path (typed request, map payload, or bulk
+        // ingest all converge on this method), the same defense-in-depth as requireName above.
+        Integer maxDutyClass = MobileUnitIdentitySupport.requireMaxDutyClass(request.getMaxDutyClass());
+        String unitNumber = MobileUnitIdentitySupport.normalizeUnitNumber(request.getUnitNumber());
+        String vin = MobileUnitIdentitySupport.normalizeVin(request.getVin());
+        String licensePlate = MobileUnitIdentitySupport.normalizeLicensePlate(request.getLicensePlate());
+        String plateRegion = MobileUnitIdentitySupport.normalizePlateRegion(request.getPlateRegion());
         List<String> serviceCapabilityCodes = nonNullList(request.getServiceCapabilityCodes());
         List<CoverageRuleRequest> coverageRules =
                 validateCoverageRules(nonNullList(request.getCoverageRules()), FIELD_COVERAGE_RULES);
@@ -189,6 +205,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         if (mobileUnitRepository.existsByBaseLocationIdAndNameIgnoreCase(baseLocationId, name)) {
             throw new DuplicateResourceException(MOBILE_UNIT_NAME_TAKEN);
         }
+        requireIdentityAvailable(unitNumber, vin, licensePlate, plateRegion);
 
         MobileUnitEntity persisted = persistMobileUnitEntity(
                 request,
@@ -198,7 +215,12 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                 validatedCodes,
                 outOfServiceReason,
                 outOfServiceNote,
-                expectedReturnAt);
+                expectedReturnAt,
+                maxDutyClass,
+                unitNumber,
+                vin,
+                licensePlate,
+                plateRegion);
         if (!coverageRules.isEmpty()) {
             saveCoverageRules(persisted, coverageRules, serviceAreas);
         }
@@ -248,6 +270,57 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                     TRAVEL_BUFFER_POLICY_NOT_FOUND,
                     PATCH_KEY_TRAVEL_BUFFER_POLICY_ID,
                     "travelBufferPolicyId does not reference an existing travel buffer policy");
+        }
+    }
+
+    /**
+     * 409 {@code MOBILE_UNIT_IDENTITY_TAKEN} (DECISION-LOCATION-029, #2267) for a create whose
+     * {@code unitNumber}, {@code vin}, or {@code licensePlate}+{@code plateRegion} pair is already
+     * held by another unit in the tenant. A fast, friendly pre-check only; V10's partial unique
+     * indexes are what holds under concurrent writes ({@link #toMobileUnitConflictException}).
+     * {@code licensePlate} and {@code plateRegion} are checked together only when both are set —
+     * a plate recorded without its region is not a duplicate of anything.
+     */
+    private void requireIdentityAvailable(
+            @Nullable String unitNumber,
+            @Nullable String vin,
+            @Nullable String licensePlate,
+            @Nullable String plateRegion) {
+        if (unitNumber != null && mobileUnitRepository.existsByUnitNumber(unitNumber)) {
+            throw new DuplicateResourceException(
+                    MOBILE_UNIT_IDENTITY_TAKEN, MobileUnitIdentitySupport.FIELD_UNIT_NUMBER);
+        }
+        if (vin != null && mobileUnitRepository.existsByVin(vin)) {
+            throw new DuplicateResourceException(MOBILE_UNIT_IDENTITY_TAKEN, MobileUnitIdentitySupport.FIELD_VIN);
+        }
+        if (licensePlate != null
+                && plateRegion != null
+                && mobileUnitRepository.existsByLicensePlateAndPlateRegion(licensePlate, plateRegion)) {
+            throw new DuplicateResourceException(
+                    MOBILE_UNIT_IDENTITY_TAKEN, MobileUnitIdentitySupport.FIELD_LICENSE_PLATE);
+        }
+    }
+
+    /** {@link #requireIdentityAvailable}'s patch counterpart: excludes the unit being patched itself. */
+    private void requireIdentityAvailableForPatch(
+            UUID excludedId,
+            @Nullable String unitNumber,
+            @Nullable String vin,
+            @Nullable String licensePlate,
+            @Nullable String plateRegion) {
+        if (unitNumber != null && mobileUnitRepository.existsByUnitNumberAndIdNot(unitNumber, excludedId)) {
+            throw new DuplicateResourceException(
+                    MOBILE_UNIT_IDENTITY_TAKEN, MobileUnitIdentitySupport.FIELD_UNIT_NUMBER);
+        }
+        if (vin != null && mobileUnitRepository.existsByVinAndIdNot(vin, excludedId)) {
+            throw new DuplicateResourceException(MOBILE_UNIT_IDENTITY_TAKEN, MobileUnitIdentitySupport.FIELD_VIN);
+        }
+        if (licensePlate != null
+                && plateRegion != null
+                && mobileUnitRepository.existsByLicensePlateAndPlateRegionAndIdNot(
+                        licensePlate, plateRegion, excludedId)) {
+            throw new DuplicateResourceException(
+                    MOBILE_UNIT_IDENTITY_TAKEN, MobileUnitIdentitySupport.FIELD_LICENSE_PLATE);
         }
     }
 
@@ -337,7 +410,12 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             Set<String> serviceCapabilityCodes,
             @Nullable String outOfServiceReason,
             @Nullable String outOfServiceNote,
-            @Nullable Instant expectedReturnAt) {
+            @Nullable Instant expectedReturnAt,
+            @Nullable Integer maxDutyClass,
+            @Nullable String unitNumber,
+            @Nullable String vin,
+            @Nullable String licensePlate,
+            @Nullable String plateRegion) {
         MobileUnitEntity entity = MobileUnitEntity.builder()
                 .name(name)
                 .baseLocation(baseLocation)
@@ -348,6 +426,11 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                 .outOfServiceReason(outOfServiceReason)
                 .outOfServiceNote(outOfServiceNote)
                 .expectedReturnAt(expectedReturnAt)
+                .maxDutyClass(maxDutyClass)
+                .unitNumber(unitNumber)
+                .vin(vin)
+                .licensePlate(licensePlate)
+                .plateRegion(plateRegion)
                 .build();
 
         try {
@@ -595,6 +678,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             entity.setServiceCapabilityCodes(new LinkedHashSet<>(serviceCapabilityCodeValidator.validate(
                     stringList(changes.get(PATCH_KEY_SERVICE_CAPABILITY_CODES)))));
         }
+        applyIdentityFields(entity, changes);
         // The merged state, not the patch alone, has to satisfy what create demands of an ACTIVE
         // unit: a status flip, a cleared claim or a dropped policy each leave it incomplete
         // otherwise (#2045 review). Coverage rules live in their own table, so they are read back.
@@ -811,7 +895,16 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                                 : String.valueOf(request.get(PATCH_KEY_OUT_OF_SERVICE_NOTE)))
                 .expectedReturnAt(
                         parseInstantField(request.get(PATCH_KEY_EXPECTED_RETURN_AT), PATCH_KEY_EXPECTED_RETURN_AT))
+                .maxDutyClass(parseIntegerField(request.get(PATCH_KEY_MAX_DUTY_CLASS), PATCH_KEY_MAX_DUTY_CLASS))
+                .unitNumber(stringOrNull(request.get(PATCH_KEY_UNIT_NUMBER)))
+                .vin(stringOrNull(request.get(PATCH_KEY_VIN)))
+                .licensePlate(stringOrNull(request.get(PATCH_KEY_LICENSE_PLATE)))
+                .plateRegion(stringOrNull(request.get(PATCH_KEY_PLATE_REGION)))
                 .build();
+    }
+
+    private static @Nullable String stringOrNull(@Nullable Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     private CoverageRuleRequest toCoverageRuleRequest(Map<String, Object> source, String prefix) {
@@ -857,6 +950,11 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                 .outOfServiceReason(entity.getOutOfServiceReason())
                 .outOfServiceNote(entity.getOutOfServiceNote())
                 .expectedReturnAt(entity.getExpectedReturnAt())
+                .maxDutyClass(entity.getMaxDutyClass())
+                .unitNumber(entity.getUnitNumber())
+                .vin(entity.getVin())
+                .licensePlate(entity.getLicensePlate())
+                .plateRegion(entity.getPlateRegion())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
@@ -935,6 +1033,56 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         }
         LifecycleStatusSupport.requireReasonWhenOutOfService(
                 entity.getStatus(), entity.getOutOfServiceReason(), entity.getOutOfServiceNote());
+    }
+
+    /**
+     * Applies {@code changes}' duty-ceiling and identity keys (DECISION-LOCATION-029, #2267): a key
+     * present in the map (including an explicit {@code null}) replaces the stored value for that
+     * field, clearing it on {@code null}; an absent key leaves it unchanged. Uniqueness is checked
+     * only for a key the patch actually touches, against the merged value once every key has been
+     * applied, so a patch that leaves {@code licensePlate} untouched while setting {@code
+     * plateRegion} still checks the pair.
+     */
+    private void applyIdentityFields(MobileUnitEntity entity, Map<String, Object> changes) {
+        if (changes.containsKey(PATCH_KEY_MAX_DUTY_CLASS)) {
+            entity.setMaxDutyClass(MobileUnitIdentitySupport.requireMaxDutyClass(
+                    parseIntegerField(changes.get(PATCH_KEY_MAX_DUTY_CLASS), PATCH_KEY_MAX_DUTY_CLASS)));
+        }
+        if (changes.containsKey(PATCH_KEY_UNIT_NUMBER)) {
+            entity.setUnitNumber(MobileUnitIdentitySupport.normalizeUnitNumber(
+                    requireTextOrNull(changes.get(PATCH_KEY_UNIT_NUMBER), PATCH_KEY_UNIT_NUMBER)));
+        }
+        if (changes.containsKey(PATCH_KEY_VIN)) {
+            entity.setVin(MobileUnitIdentitySupport.normalizeVin(
+                    requireTextOrNull(changes.get(PATCH_KEY_VIN), PATCH_KEY_VIN)));
+        }
+        boolean plateTouched = changes.containsKey(PATCH_KEY_LICENSE_PLATE);
+        boolean regionTouched = changes.containsKey(PATCH_KEY_PLATE_REGION);
+        if (plateTouched) {
+            entity.setLicensePlate(MobileUnitIdentitySupport.normalizeLicensePlate(
+                    requireTextOrNull(changes.get(PATCH_KEY_LICENSE_PLATE), PATCH_KEY_LICENSE_PLATE)));
+        }
+        if (regionTouched) {
+            entity.setPlateRegion(MobileUnitIdentitySupport.normalizePlateRegion(
+                    requireTextOrNull(changes.get(PATCH_KEY_PLATE_REGION), PATCH_KEY_PLATE_REGION)));
+        }
+        requireIdentityAvailableForPatch(
+                entity.getId(),
+                changes.containsKey(PATCH_KEY_UNIT_NUMBER) ? entity.getUnitNumber() : null,
+                changes.containsKey(PATCH_KEY_VIN) ? entity.getVin() : null,
+                (plateTouched || regionTouched) ? entity.getLicensePlate() : null,
+                (plateTouched || regionTouched) ? entity.getPlateRegion() : null);
+    }
+
+    /** {@code null} stays {@code null}; anything else must be text, else 400 naming {@code field}. */
+    private static @Nullable String requireTextOrNull(@Nullable Object value, String field) {
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof String text)) {
+            throw InvalidFieldException.invalid(field, field + " must be text or null");
+        }
+        return text;
     }
 
     private BigDecimal extractMaxDistance(Object entry) {
@@ -1048,6 +1196,10 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         if (isNameConstraintViolation(exception)) {
             return new DuplicateResourceException(MOBILE_UNIT_NAME_TAKEN);
         }
+        String identityField = identityConstraintField(exception);
+        if (identityField != null) {
+            return new DuplicateResourceException(MOBILE_UNIT_IDENTITY_TAKEN, identityField);
+        }
         return new DuplicateResourceException(MOBILE_UNIT_CONFLICT);
     }
 
@@ -1057,6 +1209,27 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                 || details.contains("uq_mobile_units_base_location_name")
                 || details.contains("base_location_id")
                 || details.contains("lower(name)");
+    }
+
+    /**
+     * The field name for a V10 partial-unique-index violation (DECISION-LOCATION-029, #2267), the
+     * race-safe counterpart to {@link #requireIdentityAvailable}/{@link
+     * #requireIdentityAvailableForPatch}: two concurrent writes can both pass the pre-check and only
+     * one commits, and the loser must still answer 409 {@code MOBILE_UNIT_IDENTITY_TAKEN} naming the
+     * field, not an unmapped 500. {@code null} when the violation names none of these three indexes.
+     */
+    private @Nullable String identityConstraintField(Throwable throwable) {
+        String details = lowerCaseMessages(throwable);
+        if (details.contains("uq_mobile_units_tenant_unit_number")) {
+            return MobileUnitIdentitySupport.FIELD_UNIT_NUMBER;
+        }
+        if (details.contains("uq_mobile_units_tenant_vin")) {
+            return MobileUnitIdentitySupport.FIELD_VIN;
+        }
+        if (details.contains("uq_mobile_units_tenant_license_plate")) {
+            return MobileUnitIdentitySupport.FIELD_LICENSE_PLATE;
+        }
+        return null;
     }
 
     private String lowerCaseMessages(Throwable throwable) {

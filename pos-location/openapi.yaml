@@ -819,13 +819,13 @@ paths:
       - location:write
   /v1/locations/{locationId}/bays:
     get:
-      description: 'Lists the service bays of a location as a page, optionally filtered by status and bayType.
+      description: 'Lists the service bays of a location as a page, sorted by displayOrder (nulls last) then name, optionally filtered by status and bayType.
 
         Use this tool to see bay capacity and status for a shop; use getBay instead when the bay id is already known.
 
         Preconditions: the location must exist.
 
-        Required inputs: locationId (UUID) as a path parameter; status (ACTIVE or OUT_OF_SERVICE) and bayType filters are optional, and page defaults to 0 with size 20.
+        Required inputs: locationId (UUID) as a path parameter; status (ACTIVE, OUT_OF_SERVICE or RETIRED) and bayType filters are optional, and page defaults to 0 with size 20. Omitting status hides RETIRED bays; naming status=RETIRED explicitly includes them.
 
         No events are emitted and no state changes; this is a read-only projection.
 
@@ -902,13 +902,13 @@ paths:
 
         Use this tool when adding physical work capacity to a shop; do not use patchBay, which modifies a bay that already exists, and use createStorageLocation for inventory storage rather than vehicle bays.
 
-        Preconditions: the location must exist, no bay of that location may already use the name (case-insensitive), and any serviceCapabilityCodes must name active catalog operation codes (a GENERAL_SERVICE bay declares none).
+        Preconditions: the location must exist, no bay of that location may already use the name (case-insensitive, including a retired bay''s name), any serviceCapabilityCodes must name active catalog operation codes (a GENERAL_SERVICE bay declares none), and a status of OUT_OF_SERVICE must carry outOfServiceReason, with outOfServiceNote also required for OTHER.
 
-        Required inputs: name, bayType (one of GENERAL_SERVICE, ALIGNMENT, TIRE_SERVICE, HEAVY_DUTY, INSPECTION or WASH_DETAIL) and capacity.maxConcurrentVehicles of at least 1; status is optional, defaults to ACTIVE and only also accepts OUT_OF_SERVICE.
+        Required inputs: name, bayType (one of GENERAL_SERVICE, ALIGNMENT, TIRE_SERVICE, HEAVY_DUTY, INSPECTION or WASH_DETAIL) and capacity.maxConcurrentVehicles of at least 1; status is optional and defaults to ACTIVE, also accepting OUT_OF_SERVICE or RETIRED; displayOrder is optional and controls list ordering.
 
         Emits a LOCATION_BAY_CREATE event; no other records are touched.
 
-        Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when the location does not exist and 409 when the bay name is already taken at that location.
+        Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when the location does not exist, 409 when the bay name is already taken at that location (including a retired bay), and 422 OUT_OF_SERVICE_REASON_REQUIRED when status is OUT_OF_SERVICE without a reason, or with OTHER and no note.
 
         '
       operationId: createBay
@@ -968,7 +968,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Bay name already taken at this location.
+          description: Bay name already taken at this location, including a retired bay's name.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'OUT_OF_SERVICE_REASON_REQUIRED: status is OUT_OF_SERVICE without outOfServiceReason, or outOfServiceReason is OTHER without outOfServiceNote.'
       security:
       - bearerAuth:
         - location:bay:manage
@@ -979,17 +985,17 @@ paths:
       - location:bay:manage
   /v1/locations/{locationId}/bays/{bayId}:
     delete:
-      description: 'Deletes a bay permanently by id and publishes a deletion fact so replica consumers drop the row from their dispatch and roster views.
+      description: 'Retires a bay by id: status becomes RETIRED and an update fact is published so replica consumers mark the row inactive rather than removing it. Nothing is hard-deleted.
 
-        Use this tool only when a bay was created in error; use patchBay with status OUT_OF_SERVICE instead to take a real bay out of service, which keeps it visible as inactive rather than removing it.
+        Use this tool to take a bay out of use for good; use patchBay with status OUT_OF_SERVICE instead for a temporary stand-down that records a reason, and patchBay with status ACTIVE or OUT_OF_SERVICE to bring a retired bay back into service.
 
         Preconditions: the location must exist and the bay must belong to it; there is no usage check, so callers must confirm the bay is not referenced by scheduled work first.
 
         Required inputs: locationId and bayId (UUIDs) as path parameters; there is no request body.
 
-        Emits a LOCATION_BAY_DELETE event; the row is hard-deleted, not soft-deleted.
+        Emits a LOCATION_BAY_DELETE audit event, but the Kafka fact replica consumers see is an ordinary location.bay.updated with status RETIRED, not a tombstone; the bay''s name stays reserved, so a later create or rename to the same name at this location still returns 409 BAY_NAME_TAKEN.
 
-        Returns 204 on success, 400 when either id does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), and 404 when the location or bay does not exist.
+        Returns 204 on success, 400 when either id does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), and 404 when the location or bay does not exist; retiring an already-RETIRED bay succeeds again rather than erroring.
 
         '
       operationId: deleteBay
@@ -1010,7 +1016,7 @@ paths:
           type: string
       responses:
         '204':
-          description: Bay deleted successfully.
+          description: Bay retired successfully.
         '400':
           content:
             application/json:
@@ -1038,7 +1044,7 @@ paths:
       security:
       - bearerAuth:
         - location:bay:manage
-      summary: Delete a Service Bay
+      summary: Retire a Service Bay
       tags:
       - Bay API
       x-required-permissions:
@@ -1105,17 +1111,17 @@ paths:
       x-required-permissions:
       - location:bay:read
     patch:
-      description: 'Applies a partial update to a bay, changing only the supplied fields: name, bayType, status, capacity and the capability or skill requirement lists.
+      description: 'Applies a partial update to a bay, changing only the supplied fields: name, bayType, status, the out-of-service reason/note/expected-return fields, displayOrder, capacity and the capability or skill requirement lists.
 
-        Use this tool for status transitions between ACTIVE and OUT_OF_SERVICE and for capacity changes; do not use createBay, which adds a new bay.
+        Use this tool for status transitions among ACTIVE, OUT_OF_SERVICE and RETIRED and for capacity changes; do not use createBay, which adds a new bay, and do not use this tool to retire a bay for good — use deleteBay, which also sets RETIRED.
 
-        Preconditions: the location must exist, the bay must belong to it, and a new name must not collide with another bay at the same location.
+        Preconditions: the location must exist, the bay must belong to it, a new name must not collide with another bay at the same location (including a retired one), and a resulting status of OUT_OF_SERVICE must carry outOfServiceReason, with outOfServiceNote also required for OTHER; returning to ACTIVE clears all three fields regardless of what else is sent.
 
         Required inputs: locationId and bayId (UUIDs) as path parameters and a body with at least one field; capacity.maxConcurrentVehicles, when supplied, must be at least 1.
 
         Emits a LOCATION_BAY_UPDATE event; no other records are touched.
 
-        Returns 400 when either id does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when the location or bay does not exist and 409 when the new name is already taken at that location.
+        Returns 400 when either id does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when the location or bay does not exist, 409 when the new name is already taken at that location, and 422 OUT_OF_SERVICE_REASON_REQUIRED when the resulting status is OUT_OF_SERVICE without a reason, or with OTHER and no note.
 
         '
       operationId: patchBay
@@ -1173,6 +1179,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Bay name already taken at this location, or a concurrent update won the version race.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'OUT_OF_SERVICE_REASON_REQUIRED: the resulting status is OUT_OF_SERVICE without outOfServiceReason, or outOfServiceReason is OTHER without outOfServiceNote.'
       security:
       - bearerAuth:
         - location:bay:manage
@@ -1851,17 +1863,19 @@ paths:
       - location:write
   /v1/mobile-units:
     get:
-      description: 'Lists all mobile units as a page with status, base location and travel buffer policy references.
+      description: 'Lists mobile units as a page, ordered by name, with status, base location and travel buffer policy references; optionally narrowed to one base location and/or status, and optionally with each unit''s coverage rules.
 
-        Use this tool to enumerate or browse units; use getMobileUnitById instead when the unit id is known, and findEligibleMobileUnits to match units to a service address.
+        Use this tool to enumerate or browse units, or to read one shop''s units (baseLocationId) and their coverage (include=coverageRules) in one request; use getMobileUnitById instead when the unit id is known, and findEligibleMobileUnits to match units to a service address.
 
         Preconditions: none beyond the location:mobile-unit:read authority.
 
-        Required inputs: none; page defaults to 0 and size to 20.
+        Required inputs: none; page defaults to 0 and size to 20. baseLocationId (UUID) keeps only units based there and is denied (403 LOCATION_SCOPE_DENIED) for a location-scoped caller outside their reach, status (ACTIVE, OUT_OF_SERVICE or RETIRED) keeps only units in that status, and include accepts coverageRules, which adds each unit''s rules ordered by priority.
+
+        Omitting status hides RETIRED units; naming status=RETIRED explicitly includes them.
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 200 with a page of mobile units, empty when none exist.
+        Returns 200 with a page of mobile units, empty when none match (including an unknown baseLocationId), and 400 VALIDATION_ERROR for an unknown status or include value.
 
         '
       operationId: listMobileUnits
@@ -1880,6 +1894,30 @@ paths:
           default: 20
           format: int32
           type: integer
+      - description: Only units based at this location
+        example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+        in: query
+        name: baseLocationId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Only units in this status (ACTIVE, OUT_OF_SERVICE or RETIRED)
+        example: ACTIVE
+        in: query
+        name: status
+        required: false
+        schema:
+          type: string
+      - description: Related data to embed; coverageRules adds each unit's coverage rules
+        example: coverageRules
+        in: query
+        name: include
+        required: false
+        schema:
+          items:
+            type: string
+          type: array
       responses:
         '200':
           content:
@@ -1887,6 +1925,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/PageMobileUnitResponse'
           description: Mobile units retrieved successfully.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: baseLocationId is not a UUID, status is not ACTIVE, OUT_OF_SERVICE or RETIRED, or include names something other than coverageRules.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks location:mobile-unit:read, or (LOCATION_SCOPE_DENIED) the named baseLocationId is outside a location-scoped caller's reach.
       security:
       - bearerAuth:
         - location:mobile-unit:read
@@ -1896,17 +1946,17 @@ paths:
       x-required-permissions:
       - location:mobile-unit:read
     post:
-      description: 'Creates a mobile service unit with an optional base location, travel buffer policy, capability list and initial coverage rules.
+      description: 'Creates a mobile service unit at a base location, with an optional travel buffer policy, capability list and initial coverage rules.
 
         Use this tool when commissioning a van or truck that serves customers off-site; do not use patchMobileUnit, which updates an existing unit, and change coverage later with replaceCoverageRules.
 
-        Preconditions: a unit created with status ACTIVE must include travelBufferPolicyId, serviceCapabilityCodes and coverageRules; the travel buffer policy must exist, every serviceCapabilityCode must be an active catalog operationCode known to the location service''s catalog replica, DISTANCE_TIER coverage rules must be strictly ascending by maxDistance and end with a null catch-all tier, and the name must be unique at the base location.
+        Preconditions: a unit created with status ACTIVE must include travelBufferPolicyId, serviceCapabilityCodes and coverageRules; a status of OUT_OF_SERVICE must carry outOfServiceReason, with outOfServiceNote also required for OTHER; the base location, the travel buffer policy and every rule''s service area must exist, every serviceCapabilityCode must be an active catalog operationCode known to the location service''s catalog replica, each coverage rule''s ruleType must be SERVICE_AREA or DISTANCE_TIER, DISTANCE_TIER coverage rules must be strictly ascending by maxDistance and end with one null catch-all tier, the name must be unique (ignoring case, including a retired unit''s name) at the base location, maxDutyClass (when given) must be a GVWR class 1-8, vin (when given) must be exactly 17 characters excluding I, O and Q, plateRegion (when given) must be an ISO 3166-2 code (for example US-NC), and unitNumber, vin, and licensePlate+plateRegion must each be unique within the tenant when set.
 
-        Required inputs: name; status defaults to INACTIVE when omitted, and baseLocationId, travelBufferPolicyId, notes, serviceCapabilityCodes and coverageRules are optional for inactive units.
+        Required inputs: name and baseLocationId; status is ACTIVE, OUT_OF_SERVICE or RETIRED and defaults to OUT_OF_SERVICE (with outOfServiceReason OTHER) when omitted, and travelBufferPolicyId, notes, serviceCapabilityCodes, coverageRules, maxDutyClass and the display-only unitNumber, vin, licensePlate and plateRegion are optional unless the unit is ACTIVE, and the identity fields are never read by scheduling.
 
         Emits a LOCATION_MOBILE_UNIT_CREATE event and persists any supplied coverage rules in the same transaction.
 
-        Returns 201 with the created unit and 409 when the name is already taken at the base location.
+        Returns 201 with the created unit; 400 VALIDATION_ERROR with fieldErrors for a blank name, a missing baseLocationId, an unknown status, a malformed coverage rule, an out-of-range maxDutyClass, a malformed vin or plateRegion; 422 with fieldErrors (LOCATION_NOT_FOUND, TRAVEL_BUFFER_POLICY_NOT_FOUND, SERVICE_AREA_NOT_FOUND, OUT_OF_SERVICE_REASON_REQUIRED) when an id names nothing or the out-of-service reason rules are not met, and 422 for an incomplete ACTIVE unit or an unknown capability code; 409 MOBILE_UNIT_NAME_TAKEN when the name is already taken at the base location, and 409 MOBILE_UNIT_IDENTITY_TAKEN with fieldErrors when unitNumber, vin, or licensePlate+plateRegion collides with another unit in the tenant.
 
         '
       operationId: createMobileUnit
@@ -1941,12 +1991,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/MobileUnitResponse'
           description: Mobile unit created successfully.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: blank name, missing baseLocationId, a status other than ACTIVE, OUT_OF_SERVICE or RETIRED, a coverage rule with an unknown ruleType, no serviceAreaId, a negative priority or maxDistance, validTo before validFrom, or DISTANCE_TIER rules out of order, a maxDutyClass outside 1-8, a vin that is not exactly 17 characters or contains I, O or Q, or a plateRegion that is not an ISO 3166-2 code. fieldErrors names the field.'
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Mobile unit name already taken at the base location.
+          description: 'MOBILE_UNIT_NAME_TAKEN: the name is already taken at the base location, including a retired unit''s name; or MOBILE_UNIT_IDENTITY_TAKEN (fieldErrors names the field) when unitNumber, vin, or licensePlate+plateRegion is already held by another unit in the tenant.'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: LOCATION_NOT_FOUND, TRAVEL_BUFFER_POLICY_NOT_FOUND or SERVICE_AREA_NOT_FOUND (fieldErrors names the field) when an id names nothing; OUT_OF_SERVICE_REASON_REQUIRED when status is OUT_OF_SERVICE without a reason, or OTHER without a note; otherwise an ACTIVE unit without a travel buffer policy, capabilities and coverage rules, or a serviceCapabilityCode that is not an active catalog operation code.
       security:
       - bearerAuth:
         - location:mobile-unit:manage
@@ -2022,17 +2084,17 @@ paths:
       - location:mobile-unit:manage
   /v1/mobile-units/{id}:
     delete:
-      description: 'Deletes a mobile unit permanently by id, removing its coverage rules and capability assignments, and publishes a deletion fact so replica consumers drop the row from their dispatch and roster views.
+      description: 'Retires a mobile unit by id: status becomes RETIRED and an update fact is published so replica consumers mark the row inactive rather than removing it. Nothing is hard-deleted, and the unit''s coverage rules are kept — they simply stop matching because the unit is no longer active.
 
-        Use this tool only when a unit was created in error; use patchMobileUnit with status INACTIVE instead to stand down a real unit, which keeps it visible as inactive rather than removing it.
+        Use this tool to take a unit out of use for good; use patchMobileUnit with status OUT_OF_SERVICE instead for a temporary stand-down that records a reason, and patchMobileUnit with status ACTIVE or OUT_OF_SERVICE to bring a retired unit back into service.
 
         Preconditions: the unit must exist; there is no usage check, so callers must confirm the unit is not referenced by scheduled work first.
 
         Required inputs: id (UUID) as a path parameter; there is no request body.
 
-        Emits a LOCATION_MOBILE_UNIT_DELETE event; the row is hard-deleted, not soft-deleted, and its coverage rules are deleted with it.
+        Emits a LOCATION_MOBILE_UNIT_DELETE audit event, but the Kafka fact replica consumers see is an ordinary location.mobile-unit.updated with status RETIRED, not a tombstone; the unit''s name stays reserved, so a later create or rename to the same name at the base location still returns 409 MOBILE_UNIT_NAME_TAKEN.
 
-        Returns 204 on success and 404 when the mobile unit does not exist.
+        Returns 204 on success and 404 when the mobile unit does not exist; retiring an already-RETIRED unit succeeds again rather than erroring.
 
         '
       operationId: deleteMobileUnit
@@ -2047,7 +2109,7 @@ paths:
           type: string
       responses:
         '204':
-          description: Mobile unit deleted successfully.
+          description: Mobile unit retired successfully.
         '403':
           content:
             application/json:
@@ -2069,7 +2131,7 @@ paths:
       security:
       - bearerAuth:
         - location:mobile-unit:manage
-      summary: Delete a Mobile Unit
+      summary: Retire a Mobile Unit
       tags:
       - Mobile Unit API
       x-required-permissions:
@@ -2119,17 +2181,17 @@ paths:
       x-required-permissions:
       - location:mobile-unit:read
     patch:
-      description: 'Applies a partial update to a mobile unit, accepting the keys name, status, notes, travelBufferPolicyId and serviceCapabilityCodes.
+      description: 'Applies a partial update to a mobile unit, accepting the keys name, status, outOfServiceReason, outOfServiceNote, expectedReturnAt, notes, travelBufferPolicyId, serviceCapabilityCodes, maxDutyClass, unitNumber, vin, licensePlate and plateRegion.
 
-        Use this tool for status transitions, travel-buffer-policy reassignment and replacing the unit''s capability claim; use replaceCoverageRules instead to change where the unit operates.
+        Use this tool for status transitions among ACTIVE, OUT_OF_SERVICE and RETIRED, travel-buffer-policy reassignment, replacing the unit''s capability claim, and changing its duty ceiling or identity fields; use replaceCoverageRules instead to change where the unit operates, and deleteMobileUnit instead to retire a unit for good.
 
-        Preconditions: for an existing unit, the unit as it stands after the patch must satisfy what create demands of an ACTIVE unit, so an ACTIVE result needs a travelBufferPolicyId, at least one serviceCapabilityCode and at least one coverage rule already on the unit; activating an incomplete unit means calling replaceCoverageRules first and then sending the status with the policy and capabilities. For an existing unit, serviceCapabilityCodes replaces the whole claim and every code must be an active catalog operationCode known to the location service''s catalog replica. When the unit id does not exist none of this is checked: nothing is persisted and a synthesized response carrying only the patched name, status, notes and travelBufferPolicyId is echoed back, without serviceCapabilityCodes, so callers must verify existence first with getMobileUnitById.
+        Preconditions: the unit must exist. The unit as it stands after the patch must satisfy what create demands of an ACTIVE unit, so an ACTIVE result needs a travelBufferPolicyId, at least one serviceCapabilityCode and at least one coverage rule already on the unit, and a resulting status of OUT_OF_SERVICE must carry outOfServiceReason, with outOfServiceNote also required for OTHER; returning to ACTIVE clears all three out-of-service fields regardless of what else is sent. serviceCapabilityCodes replaces the whole claim and every code must be an active catalog operationCode known to the location service''s catalog replica; maxDutyClass, when given, must be a GVWR class 1-8; vin, when given, must be exactly 17 characters excluding I, O and Q; plateRegion, when given, must be an ISO 3166-2 code; and unitNumber, vin, and licensePlate+plateRegion must each stay unique within the tenant, excluding the unit itself.
 
-        Required inputs: id (UUID) as a path parameter and a JSON object of the fields to change; status values are upper-cased and a blank status normalizes to INACTIVE.
+        Required inputs: id (UUID) as a path parameter and a JSON object of the fields to change. name must be non-blank text, unique (ignoring case, including a retired unit''s name) at the unit''s base location; status must be ACTIVE, OUT_OF_SERVICE or RETIRED (any case; null is refused); notes is text or null; travelBufferPolicyId is null to clear it or the id of an existing policy; serviceCapabilityCodes is an array; maxDutyClass, unitNumber, vin, licensePlate and plateRegion are each cleared by sending null, and the four identity fields are display only, never read by scheduling; other keys are ignored.
 
         Emits a LOCATION_MOBILE_UNIT_UPDATE event.
 
-        Returns 200 even for unknown ids (with the unpersisted echo, whatever the patch holds), 409 when a name change collides with another unit at the same base location, and, for an existing unit, 422 when the result would be an incomplete ACTIVE unit or a capability code is unknown.
+        Returns 200 with the updated unit; 404 NOT_FOUND when the unit does not exist; 400 VALIDATION_ERROR with fieldErrors for a value of the wrong shape, an out-of-range maxDutyClass, or a malformed vin or plateRegion; 409 MOBILE_UNIT_NAME_TAKEN when the new name is taken at the base location, 409 MOBILE_UNIT_IDENTITY_TAKEN with fieldErrors when the new unitNumber, vin, or licensePlate+plateRegion collides with another unit in the tenant, or 409 when a concurrent update won the version race; 422 TRAVEL_BUFFER_POLICY_NOT_FOUND or OUT_OF_SERVICE_REASON_REQUIRED with fieldErrors for an unknown policy or a missing/incomplete out-of-service reason, and 422 when the result would be an incomplete ACTIVE unit or a capability code is unknown; nothing is saved on any refusal.
 
         '
       operationId: patchMobileUnit
@@ -2159,25 +2221,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MobileUnitResponse'
-          description: Mobile units managed successfully.
+          description: Mobile unit updated.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: blank or non-text name, a status other than ACTIVE, OUT_OF_SERVICE or RETIRED (null included), non-text notes, a travelBufferPolicyId that is not a UUID, serviceCapabilityCodes that is not an array, a maxDutyClass outside 1-8, a non-numeric maxDutyClass, a vin that is not exactly 17 characters or contains I, O or Q, a plateRegion that is not an ISO 3166-2 code, or a non-text unitNumber/vin/licensePlate/plateRegion. fieldErrors names the field.'
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Caller lacks location:mobile-unit:manage.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Mobile unit not found.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Mobile unit name already taken at the base location, or a concurrent update won the version race.
+          description: MOBILE_UNIT_NAME_TAKEN when the new name is taken at the base location (including a retired unit's name); MOBILE_UNIT_IDENTITY_TAKEN (fieldErrors names the field) when the new unitNumber, vin, or licensePlate+plateRegion is already held by another unit in the tenant; or OPTIMISTIC_LOCK_FAILED when a concurrent update won the version race.
         '422':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: An existing unit would be ACTIVE after the patch without a travel buffer policy, capabilities and coverage rules, or a serviceCapabilityCode is not an active catalog operation code. Not returned for an unknown id, which answers 200 with an unpersisted echo.
+          description: TRAVEL_BUFFER_POLICY_NOT_FOUND (fieldErrors names travelBufferPolicyId) for an unknown policy; OUT_OF_SERVICE_REASON_REQUIRED when the resulting status is OUT_OF_SERVICE without a reason, or OTHER without a note; otherwise the unit would be ACTIVE after the patch without a travel buffer policy, capabilities and coverage rules, or a serviceCapabilityCode is not an active catalog operation code.
       security:
       - bearerAuth:
         - location:mobile-unit:manage
@@ -2231,13 +2305,13 @@ paths:
 
         Use this tool whenever coverage changes, sending the complete desired rule set; do not use patchMobileUnit, which cannot modify coverage.
 
-        Preconditions: the mobile unit must exist; a referenced serviceAreaId that does not resolve is stored as a rule without a service area rather than rejected.
+        Preconditions: the mobile unit must exist; every rule''s serviceAreaId must name an existing service area; DISTANCE_TIER rules must be strictly ascending by maxDistance and end with one null catch-all tier; an ACTIVE unit must keep at least one rule. The replacement set is checked in full before the existing rules are touched, so a refusal changes nothing.
 
-        Required inputs: id (UUID) as a path parameter and a body of the form {"rules": [...]}, each rule carrying ruleType and optionally serviceAreaId, priority (defaults to 0), validFrom, validTo and maxDistance.
+        Required inputs: id (UUID) as a path parameter and a body of the form {"rules": [...]}, each rule carrying ruleType (SERVICE_AREA or DISTANCE_TIER, any case) and serviceAreaId, and optionally priority (non-negative, defaults to 0), validFrom, validTo (not before validFrom) and maxDistance (non-negative).
 
         Emits a LOCATION_COVERAGE_RULES_REPLACE event.
 
-        Returns 404 when the mobile unit does not exist; an omitted or empty rules array clears all coverage.
+        Returns 200 with the saved rules ordered by priority; 400 VALIDATION_ERROR with fieldErrors (rules[i].field) for a malformed rule or tiers out of order; 404 when the mobile unit does not exist; 422 SERVICE_AREA_NOT_FOUND with fieldErrors for an unknown service area, and 422 when the set would leave an ACTIVE unit with no rules. An omitted or empty rules array clears all coverage of an INACTIVE unit.
 
         '
       operationId: replaceCoverageRules
@@ -2274,12 +2348,24 @@ paths:
                   $ref: '#/components/schemas/CoverageRuleResponse'
                 type: array
           description: Coverage rules replaced successfully.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: rules is not an array, or a rule has an unknown ruleType, no serviceAreaId, a value of the wrong type, a negative priority or maxDistance, validTo before validFrom, or the DISTANCE_TIER rules are out of order. fieldErrors names the field.'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Mobile unit not found.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: SERVICE_AREA_NOT_FOUND (fieldErrors names rules[i].serviceAreaId) for an unknown service area, or the replacement would leave an ACTIVE unit with no coverage rules.
       security:
       - bearerAuth:
         - location:mobile-unit:manage
@@ -2658,7 +2744,7 @@ paths:
 
         Emits a LOCATION_TRAVEL_BUFFER_POLICY_CREATE event.
 
-        Returns 201 with the created policy and 409 when the name is already taken.
+        Returns 201 with the created policy, 400 VALIDATION_ERROR with fieldErrors for a blank name, an unknown bufferType or a negative bufferValue, and 409 TRAVEL_BUFFER_POLICY_NAME_TAKEN when the name is already taken.
 
         '
       operationId: createTravelBufferPolicy
@@ -2684,12 +2770,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/TravelBufferPolicyResponse'
           description: Travel buffer policy created
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: blank name, a bufferType other than FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER, or a negative bufferValue. fieldErrors names the field.'
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Travel buffer policy name already taken
+          description: 'TRAVEL_BUFFER_POLICY_NAME_TAKEN: the name is already taken'
       security:
       - bearerAuth:
         - location:travel-buffer-policy:manage
@@ -2710,7 +2802,7 @@ paths:
 
         Emits a LOCATION_TRAVEL_BUFFER_POLICY_PATCH event.
 
-        Returns 400 when the id is not a valid UUID and 404 when no policy exists for it.
+        Returns 200 with the patched policy, 400 VALIDATION_ERROR when the id is not a valid UUID or (with fieldErrors) when bufferType is not a supported value, bufferValue is not a non-negative number or notes is not text, and 404 when no policy exists for the id.
 
         '
       operationId: patchTravelBufferPolicy
@@ -2744,7 +2836,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Invalid travel buffer policy id
+          description: 'VALIDATION_ERROR: the id is not a UUID, or bufferType, bufferValue or notes is invalid (fieldErrors names the field)'
         '404':
           content:
             application/json:
@@ -2875,11 +2967,21 @@ components:
       description: Partial update payload for a service bay; null fields are left unchanged
       properties:
         bayType:
-          description: Type classification of the bay; must be a BayType value
+          description: Type classification of the bay; must be a BayType value. Changing bayType without also sending serviceCapabilityCodes resets the bay's codes to the new type's specialty-map defaults (CAP-325 D14 rule 3) — for example, retyping to GENERAL_SERVICE clears any alignment/tire/inspection claim rather than keeping it. Send serviceCapabilityCodes in the same request to state the bay's codes explicitly instead.
           example: GENERAL_SERVICE
           type: string
         capacity:
           $ref: '#/components/schemas/BayCapacityRequest'
+        displayOrder:
+          description: Sort key for bay lists and the dispatch board; null leaves the current value unchanged, the same as every other nullable field on this patch.
+          example: 10
+          format: int32
+          type: integer
+        expectedReturnAt:
+          description: Advisory expected return-to-service time; not used by scheduling. Null leaves the current value unchanged unless status is patched to ACTIVE, which always clears it.
+          example: '2026-07-01T08:00:00Z'
+          format: date-time
+          type: string
         maxConcurrentVehicles:
           description: Number of vehicles the bay physically accommodates at once. A bay is a single bookable resource regardless of this value; register separate bays for independently bookable stalls.
           example: 1
@@ -2897,6 +2999,23 @@ components:
           description: Display name of the bay
           example: Bay A1
           type: string
+        outOfServiceNote:
+          description: Free-text detail for outOfServiceReason (max 255 characters); required when the resulting outOfServiceReason is OTHER. Null leaves the current note unchanged unless status is patched to ACTIVE, which always clears it.
+          example: Lift arm replaced under warranty
+          maxLength: 255
+          minLength: 0
+          type: string
+        outOfServiceReason:
+          description: Reason the bay is OUT_OF_SERVICE (DECISION-LOCATION-026); required when the resulting status is OUT_OF_SERVICE, refused with 422 OUT_OF_SERVICE_REASON_REQUIRED otherwise. Null leaves the current reason unchanged unless status is patched to ACTIVE, which always clears it.
+          enum:
+          - EQUIPMENT_FAILURE
+          - SCHEDULED_MAINTENANCE
+          - INSPECTION
+          - SAFETY_HOLD
+          - FACILITY_ISSUE
+          - OTHER
+          example: EQUIPMENT_FAILURE
+          type: string
         serviceCapabilityCodes:
           description: Catalog operation codes this bay type is the only one able to perform (CAP-325 D14). Null leaves unchanged; an empty list clears to general. Each value must be an active catalog operationCode; unknown codes are rejected 422.
           example:
@@ -2905,7 +3024,11 @@ components:
             type: string
           type: array
         status:
-          description: Operational status of the bay
+          description: 'Operational status of the bay: ACTIVE, OUT_OF_SERVICE or RETIRED. Going OUT_OF_SERVICE requires outOfServiceReason in this same request or already on the bay; returning to ACTIVE clears outOfServiceReason, outOfServiceNote and expectedReturnAt. DELETE is the usual way to RETIRE a bay; RETIRED here is reversible the same as OUT_OF_SERVICE.'
+          enum:
+          - ACTIVE
+          - OUT_OF_SERVICE
+          - RETIRED
           example: ACTIVE
           type: string
       type: object
@@ -2919,6 +3042,16 @@ components:
           type: string
         capacity:
           $ref: '#/components/schemas/BayCapacityRequest'
+        displayOrder:
+          description: Sort key for bay lists and the dispatch board; bays without a value sort last, ties broken by name.
+          example: 10
+          format: int32
+          type: integer
+        expectedReturnAt:
+          description: Advisory expected return-to-service time; not used by scheduling.
+          example: '2026-07-01T08:00:00Z'
+          format: date-time
+          type: string
         maxConcurrentVehicles:
           description: Number of vehicles the bay physically accommodates at once. A bay is a single bookable resource regardless of this value; register separate bays for independently bookable stalls.
           example: 1
@@ -2937,6 +3070,23 @@ components:
           example: Bay A1
           minLength: 1
           type: string
+        outOfServiceNote:
+          description: Free-text detail for outOfServiceReason (max 255 characters); required when outOfServiceReason is OTHER, optional otherwise.
+          example: Lift arm replaced under warranty
+          maxLength: 255
+          minLength: 0
+          type: string
+        outOfServiceReason:
+          description: Reason the bay is OUT_OF_SERVICE (DECISION-LOCATION-026); required when status is OUT_OF_SERVICE, refused with 422 OUT_OF_SERVICE_REASON_REQUIRED otherwise.
+          enum:
+          - EQUIPMENT_FAILURE
+          - SCHEDULED_MAINTENANCE
+          - INSPECTION
+          - SAFETY_HOLD
+          - FACILITY_ISSUE
+          - OTHER
+          example: EQUIPMENT_FAILURE
+          type: string
         serviceCapabilityCodes:
           description: Catalog operation codes this bay type is the only one able to perform (CAP-325 D14). Omit or send empty for a general bay. Each value must be an active catalog operationCode (UPPER-DASH, ADR-0059 §3); unknown codes are rejected 422.
           example:
@@ -2945,7 +3095,11 @@ components:
             type: string
           type: array
         status:
-          description: Operational status of the bay
+          description: 'Operational status of the bay: ACTIVE, OUT_OF_SERVICE or RETIRED; defaults to ACTIVE.'
+          enum:
+          - ACTIVE
+          - OUT_OF_SERVICE
+          - RETIRED
           example: ACTIVE
           type: string
       required:
@@ -2963,6 +3117,16 @@ components:
         createdAt:
           description: Timestamp when the bay was created (ISO 8601)
           example: '2026-06-18T08:00:00Z'
+          format: date-time
+          type: string
+        displayOrder:
+          description: Sort key for bay lists and the dispatch board; null sorts last, ties broken by name.
+          example: 10
+          format: int32
+          type: integer
+        expectedReturnAt:
+          description: Advisory expected return-to-service time; not used by scheduling. Null unless status is OUT_OF_SERVICE and one was given.
+          example: '2026-07-01T08:00:00Z'
           format: date-time
           type: string
         id:
@@ -2996,6 +3160,14 @@ components:
           description: Display name of the bay
           example: Bay A1
           type: string
+        outOfServiceNote:
+          description: Free-text detail for outOfServiceReason; null unless status is OUT_OF_SERVICE.
+          example: Lift arm replaced under warranty
+          type: string
+        outOfServiceReason:
+          description: Reason the bay is OUT_OF_SERVICE; null unless status is OUT_OF_SERVICE.
+          example: EQUIPMENT_FAILURE
+          type: string
         serviceCapabilityCodes:
           description: Catalog operation codes this bay type is the only one able to perform (CAP-325 D14). Empty for a general bay, which is eligible for every operation no specialty bay claims. Values are catalog operationCodes, UPPER-DASH per ADR-0059 §3.
           example:
@@ -3004,7 +3176,11 @@ components:
             type: string
           type: array
         status:
-          description: Operational status of the bay
+          description: 'Operational status of the bay: ACTIVE, OUT_OF_SERVICE or RETIRED (DECISION-LOCATION-026).'
+          enum:
+          - ACTIVE
+          - OUT_OF_SERVICE
+          - RETIRED
           example: ACTIVE
           type: string
       required:
@@ -3230,12 +3406,15 @@ components:
           minimum: 0
           type: integer
         ruleType:
-          description: Type of coverage rule
-          example: INCLUDE
+          description: Type of coverage rule, matched case-insensitively. SERVICE_AREA covers the whole service area; DISTANCE_TIER covers it up to maxDistance, and a unit's DISTANCE_TIER rules must be strictly ascending by maxDistance and end with one rule whose maxDistance is null.
+          enum:
+          - SERVICE_AREA
+          - DISTANCE_TIER
+          example: SERVICE_AREA
           minLength: 1
           type: string
         serviceAreaId:
-          description: Identifier of the service area this rule applies to
+          description: 'Identifier of the service area this rule applies to; must name an existing service area (422 SERVICE_AREA_NOT_FOUND otherwise). Required for every rule type: a DISTANCE_TIER rule is a tier within its service area, and a rule without one never matches an address.'
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
           type: string
@@ -3245,7 +3424,7 @@ components:
           format: date
           type: string
         validTo:
-          description: Date until which the rule is effective
+          description: Date until which the rule is effective; must not be before validFrom
           example: '2026-12-31'
           format: date
           type: string
@@ -3277,7 +3456,10 @@ components:
           type: integer
         ruleType:
           description: Type of coverage rule
-          example: INCLUDE
+          enum:
+          - SERVICE_AREA
+          - DISTANCE_TIER
+          example: SERVICE_AREA
           type: string
         serviceAreaId:
           description: Identifier of the service area this rule applies to
@@ -3818,6 +4000,13 @@ components:
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
           format: uuid
           type: string
+        maxDutyClass:
+          description: Heaviest GVWR class (1-8) the unit accepts; omit for unconstrained (DECISION-LOCATION-029, the bay's axis per CAP-325 D13).
+          example: 3
+          format: int32
+          maximum: 8
+          minimum: 1
+          type: integer
         name:
           description: Name of the unit, unique for its base location
           example: Van 01
@@ -3838,15 +4027,33 @@ components:
       description: Request payload for creating or updating a mobile unit
       properties:
         baseLocationId:
-          description: Identifier of the base location the mobile unit operates from
+          description: Identifier of the base location the mobile unit operates from; must name an existing location (422 LOCATION_NOT_FOUND otherwise)
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
           type: string
         coverageRules:
-          description: Coverage rules defining where the mobile unit can operate
+          description: Coverage rules defining where the mobile unit can operate. Required, non-empty, for an ACTIVE unit.
           items:
             $ref: '#/components/schemas/CoverageRuleRequest'
           type: array
+        expectedReturnAt:
+          description: Advisory expected return-to-service time; not used by scheduling.
+          example: '2026-07-01T08:00:00Z'
+          format: date-time
+          type: string
+        licensePlate:
+          description: License plate number, paired with plateRegion for uniqueness; display only; not used by scheduling. Unique per tenant together with plateRegion when both are set; a patch can clear it with null.
+          example: ABC-1234
+          maxLength: 16
+          minLength: 0
+          type: string
+        maxDutyClass:
+          description: Heaviest GVWR class (1-8) the unit accepts; omit for unconstrained (DECISION-LOCATION-029, the bay's axis per CAP-325 D13).
+          example: 3
+          format: int32
+          maximum: 8
+          minimum: 1
+          type: integer
         name:
           description: Display name of the mobile unit
           example: Van 7
@@ -3855,6 +4062,29 @@ components:
         notes:
           description: Free-text notes about the mobile unit
           example: Equipped with hydraulic lift
+          type: string
+        outOfServiceNote:
+          description: Free-text detail for outOfServiceReason (max 255 characters); required when outOfServiceReason is OTHER, optional otherwise.
+          example: Awaiting hydraulic lift inspection
+          maxLength: 255
+          minLength: 0
+          type: string
+        outOfServiceReason:
+          description: Reason the unit is OUT_OF_SERVICE (DECISION-LOCATION-026); required when status is OUT_OF_SERVICE, refused with 422 OUT_OF_SERVICE_REASON_REQUIRED otherwise. Defaults to OTHER when status is omitted entirely.
+          enum:
+          - EQUIPMENT_FAILURE
+          - SCHEDULED_MAINTENANCE
+          - INSPECTION
+          - SAFETY_HOLD
+          - FACILITY_ISSUE
+          - OTHER
+          example: EQUIPMENT_FAILURE
+          type: string
+        plateRegion:
+          description: ISO 3166-2 region code for licensePlate (for example US-NC), normalized to upper case; rejected with 400 unless it matches that format. Display only; not used by scheduling. Unique per tenant together with licensePlate when both are set; a patch can clear it with null.
+          example: US-NC
+          maxLength: 6
+          minLength: 0
           type: string
         serviceCapabilityCodes:
           description: 'Catalog operation codes this unit can perform off-site (CAP-325 D14): each must be an active catalog operationCode (UPPER-DASH, ADR-0059 §3), matched case-insensitively; unknown or retired codes are rejected 422. Required, non-empty, for an ACTIVE unit.'
@@ -3865,15 +4095,32 @@ components:
             type: string
           type: array
         status:
-          description: Operational status of the mobile unit
+          description: 'Operational status of the mobile unit, matched case-insensitively: ACTIVE, OUT_OF_SERVICE or RETIRED. OUT_OF_SERVICE when omitted, with outOfServiceReason OTHER, for a unit staged before its policy, capabilities and coverage are configured.'
+          enum:
+          - ACTIVE
+          - OUT_OF_SERVICE
+          - RETIRED
           example: ACTIVE
           type: string
         travelBufferPolicyId:
-          description: Identifier of the travel buffer policy applied to the mobile unit
+          description: Identifier of the travel buffer policy applied to the mobile unit; must name an existing policy (422 TRAVEL_BUFFER_POLICY_NOT_FOUND otherwise). Required for an ACTIVE unit.
           example: 01960003-0000-7000-8000-000000000002
           format: uuid
           type: string
+        unitNumber:
+          description: Fleet/unit number painted on the vehicle; display only; not used by scheduling. Unique per tenant when set; a patch can clear it with null.
+          example: Fleet-107
+          maxLength: 32
+          minLength: 0
+          type: string
+        vin:
+          description: 17-character vehicle identification number (ISO 3779), normalized to upper case; rejected with 400 unless it is exactly 17 characters and excludes I, O and Q. Display only; not used by scheduling. Unique per tenant when set; a patch can clear it with null.
+          example: 1HGCM82633A004352
+          maxLength: 17
+          minLength: 17
+          type: string
       required:
+      - baseLocationId
       - name
       type: object
     MobileUnitResponse:
@@ -3884,9 +4131,19 @@ components:
           example: 01960003-0000-7000-8000-000000000002
           format: uuid
           type: string
+        coverageRules:
+          description: The unit's coverage rules ordered by ascending priority. Present only on listMobileUnits with include=coverageRules; absent otherwise (read them with listCoverageRules).
+          items:
+            $ref: '#/components/schemas/CoverageRuleResponse'
+          type: array
         createdAt:
           description: Timestamp when the mobile unit was created (ISO 8601)
           example: '2026-06-18T08:00:00Z'
+          format: date-time
+          type: string
+        expectedReturnAt:
+          description: Advisory expected return-to-service time; not used by scheduling. Null unless status is OUT_OF_SERVICE and one was given.
+          example: '2026-07-01T08:00:00Z'
           format: date-time
           type: string
         id:
@@ -3894,6 +4151,15 @@ components:
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
           type: string
+        licensePlate:
+          description: License plate number; display only, not used by scheduling; null when not set.
+          example: ABC-1234
+          type: string
+        maxDutyClass:
+          description: Heaviest GVWR class (1-8) the unit accepts; null when unconstrained (DECISION-LOCATION-029).
+          example: 3
+          format: int32
+          type: integer
         name:
           description: Display name of the mobile unit
           example: Van 7
@@ -3901,6 +4167,18 @@ components:
         notes:
           description: Free-text notes about the mobile unit
           example: Equipped with hydraulic lift
+          type: string
+        outOfServiceNote:
+          description: Free-text detail for outOfServiceReason; null unless status is OUT_OF_SERVICE.
+          example: Awaiting hydraulic lift inspection
+          type: string
+        outOfServiceReason:
+          description: Reason the unit is OUT_OF_SERVICE; null unless status is OUT_OF_SERVICE.
+          example: EQUIPMENT_FAILURE
+          type: string
+        plateRegion:
+          description: ISO 3166-2 region code for licensePlate, upper case; display only, not used by scheduling; null when not set.
+          example: US-NC
           type: string
         serviceCapabilityCodes:
           description: Catalog operation codes this unit can perform off-site (CAP-325 D14), UPPER-DASH per ADR-0059 §3; empty for a unit that has not declared any.
@@ -3911,7 +4189,11 @@ components:
             type: string
           type: array
         status:
-          description: Operational status of the mobile unit
+          description: 'Operational status of the mobile unit: ACTIVE, OUT_OF_SERVICE or RETIRED (DECISION-LOCATION-026).'
+          enum:
+          - ACTIVE
+          - OUT_OF_SERVICE
+          - RETIRED
           example: ACTIVE
           type: string
         travelBufferPolicyId:
@@ -3919,10 +4201,18 @@ components:
           example: 01960003-0000-7000-8000-000000000003
           format: uuid
           type: string
+        unitNumber:
+          description: Fleet/unit number painted on the vehicle; display only, not used by scheduling; null when not set.
+          example: Fleet-107
+          type: string
         updatedAt:
           description: Timestamp when the mobile unit was last updated (ISO 8601)
           example: '2026-06-18T08:00:00Z'
           format: date-time
+          type: string
+        vin:
+          description: 17-character vehicle identification number, upper case; display only, not used by scheduling; null when not set.
+          example: 1HGCM82633A004352
           type: string
       required:
       - id

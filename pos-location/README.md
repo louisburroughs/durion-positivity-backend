@@ -65,6 +65,7 @@ request field also carries `fieldErrors[0].field` naming it (`name`, `baseLocati
 | `UNPROCESSABLE_CONTENT` | 422 | An ACTIVE mobile unit without a travel buffer policy, capabilities and coverage rules, or an unknown capability code |
 | `OUT_OF_SERVICE_REASON_REQUIRED` | 422 | A bay or mobile unit's resulting status is `OUT_OF_SERVICE` without `outOfServiceReason`, or `outOfServiceReason` is `OTHER` without `outOfServiceNote` (DECISION-LOCATION-026, #2264) |
 | `MOBILE_UNIT_NAME_TAKEN` | 409 | Another mobile unit at the same base location has the name (ignoring case), **including a retired unit's name** (#2264) |
+| `MOBILE_UNIT_IDENTITY_TAKEN` | 409 | Another mobile unit in the tenant already has this `unitNumber`, `vin`, or `licensePlate`+`plateRegion` pair (DECISION-LOCATION-029, #2267); `fieldErrors` names the field |
 | `BAY_NAME_TAKEN` | 409 | Another bay at the same location has the name, **including a retired bay's name** (#2264) |
 | `TRAVEL_BUFFER_POLICY_NAME_TAKEN` | 409 | Another travel buffer policy has the name |
 | `OPTIMISTIC_LOCK_FAILED` | 409 | A concurrent update to the same bay or mobile unit won the version race |
@@ -81,6 +82,29 @@ location-scope gated like `listBays` (`location-scope.yaml`). Bay and mobile uni
 #2264 — mobile units previously also accepted `INACTIVE`, retired with no compatibility shim), and
 travel buffer policy `bufferType` is `FLAT_MINUTES`, `PERCENTAGE_OF_TRAVEL` or `DISTANCE_MULTIPLIER`
 (also a `CHECK` since V6, #2249).
+
+## Mobile unit duty ceiling and identity (DECISION-LOCATION-029, #2267)
+
+A mobile unit carries an optional `maxDutyClass` (1–8), the same GVWR-class-ceiling axis a bay's
+`maxDutyClass` uses (CAP-325 D13, V8) — null means unconstrained. It also carries four optional,
+display-only identity fields: `unitNumber`, `vin`, `licensePlate` and `plateRegion`. None of the
+five are read by scheduling or eligibility; there is no equipment list, usual crew or hours on a
+mobile unit (spec D14.2 — crew is People's, hours follow the unit's base location per
+DECISION-SHOPMGMT-023).
+
+- `maxDutyClass` outside 1–8 is refused 400 `VALIDATION_ERROR`.
+- `vin`, when given, is normalized to upper case and must be exactly 17 characters, never
+  containing `I`, `O` or `Q` (ISO 3779); otherwise 400 `VALIDATION_ERROR`.
+- `plateRegion`, when given, is normalized to upper case and must be an ISO 3166-2 code (for
+  example `US-NC`); otherwise 400 `VALIDATION_ERROR`.
+- `unitNumber`, `vin`, and the `licensePlate`+`plateRegion` pair are each unique per tenant while
+  set, held in the database by partial unique indexes (`uq_mobile_units_tenant_unit_number`,
+  `uq_mobile_units_tenant_vin`, `uq_mobile_units_tenant_license_plate`, migration **V10**) so
+  concurrent writes cannot both commit; a duplicate is refused 409 `MOBILE_UNIT_IDENTITY_TAKEN`
+  with `fieldErrors` naming the field. `licensePlate` and `plateRegion` are checked together only
+  once both are set — a plate recorded without its region is not a duplicate of anything.
+- A `PATCH` clears any of the five by sending `null`; an absent key leaves it unchanged.
+- `MobileUnitUpdatedV1` carries all five, additively (schema version 4).
 
 ## Location scope (ADR-0061, #1872)
 

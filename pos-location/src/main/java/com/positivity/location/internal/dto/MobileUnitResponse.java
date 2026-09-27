@@ -106,4 +106,38 @@ public class MobileUnitResponse {
             requiredMode = NOT_REQUIRED)
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private List<CoverageRuleResponse> coverageRules;
+
+    @Schema(
+            description =
+                    "Heaviest GVWR class (1-8) the unit accepts; null when unconstrained " + "(DECISION-LOCATION-029).",
+            example = "3",
+            requiredMode = NOT_REQUIRED)
+    private Integer maxDutyClass;
+
+    @Schema(
+            description = "Fleet/unit number painted on the vehicle; display only, not used by scheduling; null"
+                    + " when not set.",
+            example = "Fleet-107",
+            requiredMode = NOT_REQUIRED)
+    private String unitNumber;
+
+    @Schema(
+            description = "17-character vehicle identification number, upper case; display only, not used by"
+                    + " scheduling; null when not set.",
+            example = "1HGCM82633A004352",
+            requiredMode = NOT_REQUIRED)
+    private String vin;
+
+    @Schema(
+            description = "License plate number; display only, not used by scheduling; null when not set.",
+            example = "ABC-1234",
+            requiredMode = NOT_REQUIRED)
+    private String licensePlate;
+
+    @Schema(
+            description = "ISO 3166-2 region code for licensePlate, upper case; display only, not used by"
+                    + " scheduling; null when not set.",
+            example = "US-NC",
+            requiredMode = NOT_REQUIRED)
+    private String plateRegion;
 }

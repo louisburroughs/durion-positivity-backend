@@ -376,7 +376,8 @@ public class LocationEventsListener {
     }
 
     private void applyMobileUnitUpdated(JsonNode envelope) {
-        MobileUnitUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), MobileUnitUpdatedV1.class);
+        JsonNode payloadNode = envelope.path("payload");
+        MobileUnitUpdatedV1 payload = objectMapper.treeToValue(payloadNode, MobileUnitUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtMobileUnitReplica existing =
                 extMobileUnitReplicaRepository.findById(payload.mobileUnitId()).orElse(null);
@@ -388,6 +389,15 @@ public class LocationEventsListener {
                 .baseLocationId(payload.baseLocationId())
                 .name(payload.name())
                 .active(isActiveStatus(payload.status()))
+                // maxDutyClass (DECISION-LOCATION-029, #2267) is additive within v4, the same guard
+                // style as ext_bay.maxDutyClass in applyBayUpdated: absent from the payload means
+                // "the publisher predates the field", so the already-replicated value stands, never
+                // read as "unconstrained".
+                .maxDutyClass(mergeField(
+                        payloadNode,
+                        "maxDutyClass",
+                        payload.maxDutyClass(),
+                        existing == null ? null : existing.getMaxDutyClass()))
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

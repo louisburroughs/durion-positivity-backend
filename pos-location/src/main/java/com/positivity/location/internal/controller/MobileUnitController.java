@@ -81,33 +81,43 @@ public class MobileUnitController {
                     travel buffer policy and every rule's service area must exist, every serviceCapabilityCode \
                     must be an active catalog operationCode known to the location service's catalog replica, \
                     each coverage rule's ruleType must be SERVICE_AREA or DISTANCE_TIER, DISTANCE_TIER coverage \
-                    rules must be strictly ascending by maxDistance and end with one null catch-all tier, and \
-                    the name must be unique (ignoring case, including a retired unit's name) at the base location.
+                    rules must be strictly ascending by maxDistance and end with one null catch-all tier, the \
+                    name must be unique (ignoring case, including a retired unit's name) at the base location, \
+                    maxDutyClass (when given) must be a GVWR class 1-8, vin (when given) must be exactly 17 \
+                    characters excluding I, O and Q, plateRegion (when given) must be an ISO 3166-2 code (for \
+                    example US-NC), and unitNumber, vin, and licensePlate+plateRegion must each be unique within \
+                    the tenant when set.
                     Required inputs: name and baseLocationId; status is ACTIVE, OUT_OF_SERVICE or RETIRED and \
                     defaults to OUT_OF_SERVICE (with outOfServiceReason OTHER) when omitted, and \
-                    travelBufferPolicyId, notes, serviceCapabilityCodes and coverageRules are optional unless \
-                    the unit is ACTIVE.
+                    travelBufferPolicyId, notes, serviceCapabilityCodes, coverageRules, maxDutyClass and the \
+                    display-only unitNumber, vin, licensePlate and plateRegion are optional unless the unit is \
+                    ACTIVE, and the identity fields are never read by scheduling.
                     Emits a LOCATION_MOBILE_UNIT_CREATE event and persists any supplied coverage rules in the \
                     same transaction.
                     Returns 201 with the created unit; 400 VALIDATION_ERROR with fieldErrors for a blank name, a \
-                    missing baseLocationId, an unknown status or a malformed coverage rule; 422 with fieldErrors \
-                    (LOCATION_NOT_FOUND, TRAVEL_BUFFER_POLICY_NOT_FOUND, SERVICE_AREA_NOT_FOUND, \
-                    OUT_OF_SERVICE_REASON_REQUIRED) when an id names nothing or the out-of-service reason rules \
-                    are not met, and 422 for an incomplete ACTIVE unit or an unknown capability code; 409 \
-                    MOBILE_UNIT_NAME_TAKEN when the name is already taken at the base location.
+                    missing baseLocationId, an unknown status, a malformed coverage rule, an out-of-range \
+                    maxDutyClass, a malformed vin or plateRegion; 422 with fieldErrors (LOCATION_NOT_FOUND, \
+                    TRAVEL_BUFFER_POLICY_NOT_FOUND, SERVICE_AREA_NOT_FOUND, OUT_OF_SERVICE_REASON_REQUIRED) when \
+                    an id names nothing or the out-of-service reason rules are not met, and 422 for an incomplete \
+                    ACTIVE unit or an unknown capability code; 409 MOBILE_UNIT_NAME_TAKEN when the name is \
+                    already taken at the base location, and 409 MOBILE_UNIT_IDENTITY_TAKEN with fieldErrors when \
+                    unitNumber, vin, or licensePlate+plateRegion collides with another unit in the tenant.
                     """)
     @ApiResponse(responseCode = "201", description = "Mobile unit created successfully.")
     @ApiResponse(
             responseCode = "400",
             description = "VALIDATION_ERROR: blank name, missing baseLocationId, a status other than ACTIVE,"
-                    + " OUT_OF_SERVICE or RETIRED, or a coverage rule with an unknown ruleType, no serviceAreaId, a"
+                    + " OUT_OF_SERVICE or RETIRED, a coverage rule with an unknown ruleType, no serviceAreaId, a"
                     + " negative priority or maxDistance, validTo before validFrom, or DISTANCE_TIER rules out of"
-                    + " order. fieldErrors names the field.",
+                    + " order, a maxDutyClass outside 1-8, a vin that is not exactly 17 characters or contains I, O"
+                    + " or Q, or a plateRegion that is not an ISO 3166-2 code. fieldErrors names the field.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "MOBILE_UNIT_NAME_TAKEN: the name is already taken at the base location, including a"
-                    + " retired unit's name.",
+                    + " retired unit's name; or MOBILE_UNIT_IDENTITY_TAKEN (fieldErrors names the field) when"
+                    + " unitNumber, vin, or licensePlate+plateRegion is already held by another unit in the"
+                    + " tenant.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -254,38 +264,49 @@ public class MobileUnitController {
 
     @Operation(operationId = "patchMobileUnit", summary = "Patch Fields of a Mobile Unit", description = """
                     Applies a partial update to a mobile unit, accepting the keys name, status, outOfServiceReason, \
-                    outOfServiceNote, expectedReturnAt, notes, travelBufferPolicyId and serviceCapabilityCodes.
+                    outOfServiceNote, expectedReturnAt, notes, travelBufferPolicyId, serviceCapabilityCodes, \
+                    maxDutyClass, unitNumber, vin, licensePlate and plateRegion.
                     Use this tool for status transitions among ACTIVE, OUT_OF_SERVICE and RETIRED, \
-                    travel-buffer-policy reassignment and replacing the unit's capability claim; use \
-                    replaceCoverageRules instead to change where the unit operates, and deleteMobileUnit instead \
-                    to retire a unit for good.
+                    travel-buffer-policy reassignment, replacing the unit's capability claim, and changing its \
+                    duty ceiling or identity fields; use replaceCoverageRules instead to change where the unit \
+                    operates, and deleteMobileUnit instead to retire a unit for good.
                     Preconditions: the unit must exist. The unit as it stands after the patch must satisfy what \
                     create demands of an ACTIVE unit, so an ACTIVE result needs a travelBufferPolicyId, at least \
                     one serviceCapabilityCode and at least one coverage rule already on the unit, and a resulting \
                     status of OUT_OF_SERVICE must carry outOfServiceReason, with outOfServiceNote also required \
                     for OTHER; returning to ACTIVE clears all three out-of-service fields regardless of what else \
                     is sent. serviceCapabilityCodes replaces the whole claim and every code must be an active \
-                    catalog operationCode known to the location service's catalog replica.
+                    catalog operationCode known to the location service's catalog replica; maxDutyClass, when \
+                    given, must be a GVWR class 1-8; vin, when given, must be exactly 17 characters excluding I, \
+                    O and Q; plateRegion, when given, must be an ISO 3166-2 code; and unitNumber, vin, and \
+                    licensePlate+plateRegion must each stay unique within the tenant, excluding the unit itself.
                     Required inputs: id (UUID) as a path parameter and a JSON object of the fields to change. \
                     name must be non-blank text, unique (ignoring case, including a retired unit's name) at the \
                     unit's base location; status must be ACTIVE, OUT_OF_SERVICE or RETIRED (any case; null is \
                     refused); notes is text or null; travelBufferPolicyId is null to clear it or the id of an \
-                    existing policy; serviceCapabilityCodes is an array; other keys are ignored.
+                    existing policy; serviceCapabilityCodes is an array; maxDutyClass, unitNumber, vin, \
+                    licensePlate and plateRegion are each cleared by sending null, and the four identity fields \
+                    are display only, never read by scheduling; other keys are ignored.
                     Emits a LOCATION_MOBILE_UNIT_UPDATE event.
                     Returns 200 with the updated unit; 404 NOT_FOUND when the unit does not exist; 400 \
-                    VALIDATION_ERROR with fieldErrors for a value of the wrong shape; 409 MOBILE_UNIT_NAME_TAKEN \
-                    when the new name is taken at the base location, or 409 when a concurrent update won the \
-                    version race; 422 TRAVEL_BUFFER_POLICY_NOT_FOUND or OUT_OF_SERVICE_REASON_REQUIRED with \
-                    fieldErrors for an unknown policy or a missing/incomplete out-of-service reason, and 422 when \
-                    the result would be an incomplete ACTIVE unit or a capability code is unknown; nothing is \
-                    saved on any refusal.
+                    VALIDATION_ERROR with fieldErrors for a value of the wrong shape, an out-of-range \
+                    maxDutyClass, or a malformed vin or plateRegion; 409 MOBILE_UNIT_NAME_TAKEN when the new name \
+                    is taken at the base location, 409 MOBILE_UNIT_IDENTITY_TAKEN with fieldErrors when the new \
+                    unitNumber, vin, or licensePlate+plateRegion collides with another unit in the tenant, or 409 \
+                    when a concurrent update won the version race; 422 TRAVEL_BUFFER_POLICY_NOT_FOUND or \
+                    OUT_OF_SERVICE_REASON_REQUIRED with fieldErrors for an unknown policy or a \
+                    missing/incomplete out-of-service reason, and 422 when the result would be an incomplete \
+                    ACTIVE unit or a capability code is unknown; nothing is saved on any refusal.
                     """)
     @ApiResponse(responseCode = "200", description = "Mobile unit updated.")
     @ApiResponse(
             responseCode = "400",
             description = "VALIDATION_ERROR: blank or non-text name, a status other than ACTIVE, OUT_OF_SERVICE or"
-                    + " RETIRED (null included), non-text notes, a travelBufferPolicyId that is not a UUID, or"
-                    + " serviceCapabilityCodes that is not an array. fieldErrors names the field.",
+                    + " RETIRED (null included), non-text notes, a travelBufferPolicyId that is not a UUID,"
+                    + " serviceCapabilityCodes that is not an array, a maxDutyClass outside 1-8, a non-numeric"
+                    + " maxDutyClass, a vin that is not exactly 17 characters or contains I, O or Q, a"
+                    + " plateRegion that is not an ISO 3166-2 code, or a non-text unitNumber/vin/licensePlate/"
+                    + "plateRegion. fieldErrors names the field.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -298,8 +319,9 @@ public class MobileUnitController {
     @ApiResponse(
             responseCode = "409",
             description = "MOBILE_UNIT_NAME_TAKEN when the new name is taken at the base location (including a"
-                    + " retired unit's name), or OPTIMISTIC_LOCK_FAILED when a concurrent update won the version"
-                    + " race.",
+                    + " retired unit's name); MOBILE_UNIT_IDENTITY_TAKEN (fieldErrors names the field) when the"
+                    + " new unitNumber, vin, or licensePlate+plateRegion is already held by another unit in the"
+                    + " tenant; or OPTIMISTIC_LOCK_FAILED when a concurrent update won the version race.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",

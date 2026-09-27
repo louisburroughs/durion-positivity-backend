@@ -444,7 +444,12 @@ public class LocationFactPublisher {
                         : List.copyOf(mobileUnit.getServiceCapabilityCodes()),
                 mobileUnit.getOutOfServiceReason(),
                 mobileUnit.getOutOfServiceNote(),
-                mobileUnit.getExpectedReturnAt());
+                mobileUnit.getExpectedReturnAt(),
+                mobileUnit.getMaxDutyClass(),
+                mobileUnit.getUnitNumber(),
+                mobileUnit.getVin(),
+                mobileUnit.getLicensePlate(),
+                mobileUnit.getPlateRegion());
         publish(
                 writer,
                 MobileUnitUpdatedV1.EVENT_TYPE,

@@ -457,6 +457,27 @@ class LocationFactPublisherTest {
     }
 
     @Test
+    @DisplayName("#2267 v4 carries the duty ceiling and identity fields")
+    void mobileUnitFactCarriesDutyCeilingAndIdentity() {
+        UUID unitId = UUID.randomUUID();
+        MobileUnitEntity unit = mobileUnit(unitId, UUID.randomUUID(), "Van 1", "ACTIVE", 22L);
+        unit.setMaxDutyClass(5);
+        unit.setUnitNumber("Fleet-107");
+        unit.setVin("1HGCM82633A004352");
+        unit.setLicensePlate("ABC-1234");
+        unit.setPlateRegion("US-NC");
+
+        publisher.mobileUnitChanged(unit);
+
+        MobileUnitUpdatedV1 fact = capturePayload(MobileUnitUpdatedV1.EVENT_TYPE, 22L, MobileUnitUpdatedV1.class);
+        assertThat(fact.maxDutyClass()).isEqualTo(5);
+        assertThat(fact.unitNumber()).isEqualTo("Fleet-107");
+        assertThat(fact.vin()).isEqualTo("1HGCM82633A004352");
+        assertThat(fact.licensePlate()).isEqualTo("ABC-1234");
+        assertThat(fact.plateRegion()).isEqualTo("US-NC");
+    }
+
+    @Test
     @DisplayName("#1668 bay and mobile-unit facts ride the same topic and source as every location fact")
     void newFactsUseTheEstablishedEnvelope() {
         publisher.bayChanged(bay(UUID.randomUUID(), UUID.randomUUID(), "Front Bay 1", "ACTIVE", 1L));

@@ -41,6 +41,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -173,6 +174,204 @@ class MobileUnitServiceTest {
         assertThatThrownBy(() -> service.createMobileUnit(request))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessage("MOBILE_UNIT_NAME_TAKEN");
+    }
+
+    @Test
+    @DisplayName("#2267 - maxDutyClass outside 1-8 rejects create with 400 naming the field")
+    void shouldRejectMaxDutyClassOutsideRangeOnCreate() {
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .maxDutyClass(9)
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(InvalidFieldException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getCode()).isEqualTo(InvalidFieldException.VALIDATION_ERROR);
+                    assertThat(e.getField()).isEqualTo("maxDutyClass");
+                });
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2267 - a VIN that is not 17 characters rejects create with 400 naming the field")
+    void shouldRejectMalformedVinOnCreate() {
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .vin("SHORT-VIN")
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(InvalidFieldException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getField()).isEqualTo("vin");
+                });
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2267 - a malformed plateRegion rejects create with 400 naming the field")
+    void shouldRejectMalformedPlateRegionOnCreate() {
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .plateRegion("NORTHCAROLINA")
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(InvalidFieldException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getField()).isEqualTo("plateRegion");
+                });
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2267 - create persists the duty ceiling and identity, normalizing vin and plateRegion")
+    void shouldPersistDutyClassAndNormalizedIdentityOnCreate() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
+        when(mobileUnitRepository.save(any(MobileUnitEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(baseLocationId)
+                .maxDutyClass(5)
+                .unitNumber("Fleet-107")
+                .vin(" 1hgcm82633a004352 ")
+                .licensePlate("ABC-1234")
+                .plateRegion(" us-nc ")
+                .build();
+
+        MobileUnitResponse response = service.createMobileUnit(request);
+
+        assertThat(response.getMaxDutyClass()).isEqualTo(5);
+        assertThat(response.getUnitNumber()).isEqualTo("Fleet-107");
+        assertThat(response.getVin()).isEqualTo("1HGCM82633A004352");
+        assertThat(response.getLicensePlate()).isEqualTo("ABC-1234");
+        assertThat(response.getPlateRegion()).isEqualTo("US-NC");
+
+        ArgumentCaptor<MobileUnitEntity> captor = ArgumentCaptor.forClass(MobileUnitEntity.class);
+        verify(mobileUnitRepository).save(captor.capture());
+        assertThat(captor.getValue().getVin()).isEqualTo("1HGCM82633A004352");
+        assertThat(captor.getValue().getPlateRegion()).isEqualTo("US-NC");
+    }
+
+    @Test
+    @DisplayName("#2267 - a duplicate unitNumber within the tenant is refused with 409 naming the field")
+    void shouldRejectDuplicateUnitNumberOnCreate() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
+        when(mobileUnitRepository.existsByUnitNumber("Fleet-107")).thenReturn(true);
+
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(baseLocationId)
+                .unitNumber("Fleet-107")
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(DuplicateResourceException.class, e -> {
+                    assertThat(e.getMessage()).isEqualTo("MOBILE_UNIT_IDENTITY_TAKEN");
+                    assertThat(e.getField()).isEqualTo("unitNumber");
+                });
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2267 - a duplicate vin within the tenant is refused with 409 naming the field")
+    void shouldRejectDuplicateVinOnCreate() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
+        when(mobileUnitRepository.existsByVin("1HGCM82633A004352")).thenReturn(true);
+
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(baseLocationId)
+                .vin("1hgcm82633a004352")
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(DuplicateResourceException.class, e -> {
+                    assertThat(e.getMessage()).isEqualTo("MOBILE_UNIT_IDENTITY_TAKEN");
+                    assertThat(e.getField()).isEqualTo("vin");
+                });
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName(
+            "#2267 - a duplicate licensePlate+plateRegion pair is refused with 409; the plate alone is not checked")
+    void shouldRejectDuplicateLicensePlateAndPlateRegionOnCreate() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
+        when(mobileUnitRepository.existsByLicensePlateAndPlateRegion("ABC-1234", "US-NC"))
+                .thenReturn(true);
+
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(baseLocationId)
+                .licensePlate("ABC-1234")
+                .plateRegion("us-nc")
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(DuplicateResourceException.class, e -> {
+                    assertThat(e.getMessage()).isEqualTo("MOBILE_UNIT_IDENTITY_TAKEN");
+                    assertThat(e.getField()).isEqualTo("licensePlate");
+                });
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2267 - a licensePlate with no plateRegion is never checked for a duplicate")
+    void shouldNotCheckLicensePlateDuplicateWithoutPlateRegion() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
+        when(mobileUnitRepository.save(any(MobileUnitEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(baseLocationId)
+                .licensePlate("ABC-1234")
+                .build();
+
+        service.createMobileUnit(request);
+
+        verify(mobileUnitRepository, never()).existsByLicensePlateAndPlateRegion(any(), any());
+        verify(mobileUnitRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("#2267 - a vin unique-index violation from the db maps to 409 identity-taken, naming the field")
+    void shouldMapVinConstraintViolationToIdentityTakenConflict() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
+        when(mobileUnitRepository.save(any(MobileUnitEntity.class)))
+                .thenThrow(new DataIntegrityViolationException(
+                        "duplicate key value violates unique constraint \"uq_mobile_units_tenant_vin\""));
+
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(baseLocationId)
+                .vin("1HGCM82633A004352")
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(DuplicateResourceException.class, e -> {
+                    assertThat(e.getMessage()).isEqualTo("MOBILE_UNIT_IDENTITY_TAKEN");
+                    assertThat(e.getField()).isEqualTo("vin");
+                });
     }
 
     @Test

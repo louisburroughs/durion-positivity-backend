@@ -23,6 +23,7 @@ public class MobileUnitLoaderStrategy implements DomainLoaderStrategy<MobileUnit
         record.setName(row.get("name"));
         record.setStatus(row.get("status"));
         record.setNotes(row.get("notes"));
+        record.setMaxDutyClass(row.get("maxDutyClass"));
         record.setBaseLocationId(row.get("baseLocationId"));
         return record;
     }
@@ -44,6 +45,26 @@ public class MobileUnitLoaderStrategy implements DomainLoaderStrategy<MobileUnit
         }
         LoaderValues.requireUuid(
                 item.getBaseLocationId(), "baseLocationId", "a baseLocationCode that resolves to one", errors);
+        validateMaxDutyClass(item, errors);
         return errors;
+    }
+
+    /**
+     * A duty class is a maximum only (DECISION-LOCATION-029, #2267, the same rule
+     * {@code BayLoaderStrategy} applies): blank means unconstrained, and a value must be a whole
+     * GVWR class between 1 (light duty) and 8 (heavy duty).
+     */
+    private static void validateMaxDutyClass(MobileUnitLoaderRecord item, List<String> errors) {
+        if (LoaderValues.isBlank(item.getMaxDutyClass())) {
+            return;
+        }
+        try {
+            int dutyClass = Integer.parseInt(item.getMaxDutyClass().trim());
+            if (dutyClass < 1 || dutyClass > 8) {
+                errors.add("maxDutyClass must be between 1 and 8");
+            }
+        } catch (NumberFormatException _) {
+            errors.add("maxDutyClass must be a whole number");
+        }
     }
 }

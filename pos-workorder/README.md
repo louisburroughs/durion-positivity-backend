@@ -293,6 +293,14 @@ real event and leave both panels permanently empty. Retiring a resource (`DELETE
 is just another status change to derive `active = false` from: it arrives as `status = RETIRED` on
 the ordinary `updated` fact, not a delete, and the row is never removed from the replica.
 
+`ext_mobile_unit` gains `max_duty_class` (integer, nullable, `CHECK` 1–8, **V10** —
+DECISION-LOCATION-029, #2267), the mobile-unit counterpart of `ext_bay.max_duty_class` (same GVWR
+axis, CAP-325 D13). `applyMobileUnitUpdated` merges it with an additive-field guard (absent from the
+raw fact means the publisher predates the field, so the already-replicated value stands, never read
+as "unconstrained"); #2269 checks it at placement. The optional identity fields
+DECISION-LOCATION-029 also adds to the owner's `mobile_units` (`unitNumber`, `vin`, `licensePlate`,
+`plateRegion`) are display-only and are not replicated here.
+
 Both panels list **every active unit at the location** (bays by `location_id`, units by
 `base_location_id`), including units holding no work, which report `assignedWorkorderId: null`.
 A unit reads as occupied while **any** still-open workorder holds it, which is why occupancy comes

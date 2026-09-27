@@ -425,6 +425,20 @@ class MobileUnitPackTest(unittest.TestCase):
                 self.assertEqual(by_name[row["name"]]["serviceCapabilityCodes"], expected)
                 self.assertNotIn("", by_name[row["name"]]["serviceCapabilityCodes"])
 
+    def test_maxDutyClassIsCarriedFromTheFixtureAsAnInteger(self):
+        """DECISION-LOCATION-029 (#2267): the fleet-PM vans need a duty ceiling to be eligible for
+        that work once #2269 checks it at placement. Sent as an int, never the fixture's string."""
+        gateway = _StubGateway()
+        self._run(gateway)
+        by_name = {body["name"]: body for body in gateway.posted}
+        for row in _rows("mobile-units.csv"):
+            with self.subTest(unit=row["name"]):
+                expected = row.get("maxDutyClass", "").strip()
+                if expected:
+                    self.assertEqual(by_name[row["name"]]["maxDutyClass"], int(expected))
+                else:
+                    self.assertNotIn("maxDutyClass", by_name[row["name"]])
+
     def test_multiplePagesOfExistingUnitsAreAllRead(self):
         """The skip check is only sound if it sees every unit; a reader that stops after page 0
         would re-POST everything past the first page and collect 409s."""
@@ -549,8 +563,9 @@ class LegacyIncompleteUnitTest(unittest.TestCase):
 
 class PackRegistrationTest(unittest.TestCase):
     def test_mobileUnitsIsAnApiPackNotABulkLoaderDomain(self):
-        """The loader's MOBILE_UNIT strategy carries only name/baseLocationCode/status/notes, so it
-        cannot express an ACTIVE unit at all."""
+        """The loader's MOBILE_UNIT strategy carries name/baseLocationCode/status/notes/maxDutyClass
+        (#2267) but not travelBufferPolicyName or capabilityCodes, so it cannot express an ACTIVE
+        unit at all."""
         domains = dict(seed_alpha.PACK_FILES)
         self.assertEqual(domains["location/mobile-units.csv"], "@mobile-units")
         self.assertIn("@mobile-units", seed_alpha.API_PACKS)

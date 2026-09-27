@@ -642,4 +642,144 @@ class MobileUnitValidationTest {
             assertThat(page.getContent().get(1).getCoverageRules()).isEmpty();
         }
     }
+
+    @Nested
+    @DisplayName("Duty ceiling and identity (DECISION-LOCATION-029, #2267)")
+    class IdentityAndDutyClass {
+
+        private MobileUnitEntity unitWithIdentity(String status) {
+            MobileUnitEntity existing = unit(status);
+            existing.setMaxDutyClass(5);
+            existing.setUnitNumber("Fleet-107");
+            existing.setVin("1HGCM82633A004352");
+            existing.setLicensePlate("ABC-1234");
+            existing.setPlateRegion("US-NC");
+            return existing;
+        }
+
+        @Test
+        @DisplayName("create: an out-of-range maxDutyClass is 400 on maxDutyClass")
+        void createRejectsOutOfRangeMaxDutyClass() {
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() ->
+                    service.createMobileUnit(inactiveUnit().maxDutyClass(0).build()));
+
+            assertField(thrown, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "maxDutyClass");
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("create: a VIN containing O is 400 on vin, even after upper-casing")
+        void createRejectsVinWithExcludedLetter() {
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> service.createMobileUnit(
+                    inactiveUnit().vin("1hgcmo2633a004352").build()));
+
+            assertField(thrown, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "vin");
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("create: a plateRegion missing the country-code hyphen is 400 on plateRegion")
+        void createRejectsMalformedPlateRegion() {
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() ->
+                    service.createMobileUnit(inactiveUnit().plateRegion("USNC").build()));
+
+            assertField(thrown, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "plateRegion");
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("patch: null clears maxDutyClass and every identity field, one key at a time")
+        void patchClearsEachFieldWithNull() {
+            MobileUnitEntity existing = unitWithIdentity("OUT_OF_SERVICE");
+            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
+            when(mobileUnitRepository.save(existing)).thenReturn(existing);
+            Map<String, Object> patch = new HashMap<>();
+            patch.put("maxDutyClass", null);
+            patch.put("unitNumber", null);
+            patch.put("vin", null);
+            patch.put("licensePlate", null);
+            patch.put("plateRegion", null);
+
+            MobileUnitResponse patched = service.patch(UNIT_ID, patch);
+
+            assertThat(patched.getMaxDutyClass()).isNull();
+            assertThat(patched.getUnitNumber()).isNull();
+            assertThat(patched.getVin()).isNull();
+            assertThat(patched.getLicensePlate()).isNull();
+            assertThat(patched.getPlateRegion()).isNull();
+        }
+
+        @Test
+        @DisplayName("patch: an absent key leaves the stored value unchanged")
+        void patchLeavesAbsentFieldsUnchanged() {
+            MobileUnitEntity existing = unitWithIdentity("OUT_OF_SERVICE");
+            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
+            when(mobileUnitRepository.save(existing)).thenReturn(existing);
+
+            MobileUnitResponse patched = service.patch(UNIT_ID, Map.of("notes", "checked in"));
+
+            assertThat(patched.getMaxDutyClass()).isEqualTo(5);
+            assertThat(patched.getUnitNumber()).isEqualTo("Fleet-107");
+            assertThat(patched.getVin()).isEqualTo("1HGCM82633A004352");
+            assertThat(patched.getLicensePlate()).isEqualTo("ABC-1234");
+            assertThat(patched.getPlateRegion()).isEqualTo("US-NC");
+        }
+
+        @Test
+        @DisplayName("patch: an out-of-range maxDutyClass is 400, and nothing is saved")
+        void patchRejectsOutOfRangeMaxDutyClass() {
+            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(unit("OUT_OF_SERVICE")));
+
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(
+                    () -> service.patch(UNIT_ID, Map.of("maxDutyClass", 9)));
+
+            assertField(thrown, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "maxDutyClass");
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("patch: a non-text vin is 400 rather than being stringified and stored")
+        void patchRejectsNonTextVin() {
+            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(unit("OUT_OF_SERVICE")));
+
+            Throwable thrown =
+                    org.assertj.core.api.Assertions.catchThrowable(() -> service.patch(UNIT_ID, Map.of("vin", 12345)));
+
+            assertField(thrown, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "vin");
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("patch: renaming the unitNumber onto another unit's is 409 MOBILE_UNIT_IDENTITY_TAKEN")
+        void patchRejectsDuplicateUnitNumber() {
+            MobileUnitEntity existing = unit("OUT_OF_SERVICE");
+            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
+            when(mobileUnitRepository.existsByUnitNumberAndIdNot("Fleet-999", UNIT_ID))
+                    .thenReturn(true);
+
+            assertThatThrownBy(() -> service.patch(UNIT_ID, Map.of("unitNumber", "Fleet-999")))
+                    .isInstanceOfSatisfying(DuplicateResourceException.class, e -> {
+                        assertThat(e.getMessage()).isEqualTo("MOBILE_UNIT_IDENTITY_TAKEN");
+                        assertThat(e.getField()).isEqualTo("unitNumber");
+                    });
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("patch: pairing an existing licensePlate with a new plateRegion is checked as the pair")
+        void patchRejectsDuplicatePlatePairWhenOnlyRegionChanges() {
+            MobileUnitEntity existing = unit("OUT_OF_SERVICE");
+            existing.setLicensePlate("ABC-1234");
+            when(mobileUnitRepository.findById(UNIT_ID)).thenReturn(Optional.of(existing));
+            when(mobileUnitRepository.existsByLicensePlateAndPlateRegionAndIdNot("ABC-1234", "US-SC", UNIT_ID))
+                    .thenReturn(true);
+
+            assertThatThrownBy(() -> service.patch(UNIT_ID, Map.of("plateRegion", "US-SC")))
+                    .isInstanceOfSatisfying(DuplicateResourceException.class, e -> {
+                        assertThat(e.getMessage()).isEqualTo("MOBILE_UNIT_IDENTITY_TAKEN");
+                        assertThat(e.getField()).isEqualTo("licensePlate");
+                    });
+            assertNothingWritten();
+        }
+    }
 }

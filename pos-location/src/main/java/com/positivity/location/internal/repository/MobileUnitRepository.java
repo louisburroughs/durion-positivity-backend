@@ -97,4 +97,31 @@ public interface MobileUnitRepository extends JpaRepository<MobileUnitEntity, UU
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("SELECT m FROM MobileUnitEntity m WHERE m.id > :afterId ORDER BY m.id ASC")
     List<MobileUnitEntity> findBackfillPage(@Param("afterId") UUID afterId, Pageable pageable);
+
+    // Identity uniqueness (DECISION-LOCATION-029, #2267): exact match, case-sensitive except for
+    // vin, which is always stored upper-cased by MobileUnitIdentitySupport.normalizeVin before it
+    // reaches these queries. Row-level security already scopes every query by tenant, the same as
+    // existsByBaseLocationIdAndNameIgnoreCase above; V10's partial unique indexes are what holds
+    // under concurrent writes (MobileUnitServiceImpl.toMobileUnitConflictException).
+
+    /** Fast, friendly pre-check for a duplicate {@code unitNumber} within the tenant. */
+    boolean existsByUnitNumber(String unitNumber);
+
+    /** The rename check: another unit already holds this {@code unitNumber}. */
+    boolean existsByUnitNumberAndIdNot(String unitNumber, UUID excludedId);
+
+    /** Fast, friendly pre-check for a duplicate {@code vin} within the tenant. */
+    boolean existsByVin(String vin);
+
+    /** The rename check: another unit already holds this {@code vin}. */
+    boolean existsByVinAndIdNot(String vin, UUID excludedId);
+
+    /**
+     * Fast, friendly pre-check for a duplicate {@code (licensePlate, plateRegion)} pair within the
+     * tenant — a plate number alone repeats across states/regions, so the pair is what is unique.
+     */
+    boolean existsByLicensePlateAndPlateRegion(String licensePlate, String plateRegion);
+
+    /** The rename check: another unit already holds this {@code (licensePlate, plateRegion)} pair. */
+    boolean existsByLicensePlateAndPlateRegionAndIdNot(String licensePlate, String plateRegion, UUID excludedId);
 }

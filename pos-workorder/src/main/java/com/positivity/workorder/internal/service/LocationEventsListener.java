@@ -382,7 +382,8 @@ public class LocationEventsListener {
     }
 
     private void applyMobileUnitUpdated(JsonNode envelope) {
-        MobileUnitUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), MobileUnitUpdatedV1.class);
+        JsonNode payloadNode = envelope.path("payload");
+        MobileUnitUpdatedV1 payload = objectMapper.treeToValue(payloadNode, MobileUnitUpdatedV1.class);
         requireSiteScope(payload.baseLocationId(), MobileUnitUpdatedV1.EVENT_TYPE, "baseLocationId");
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtMobileUnitReplica existing =
@@ -395,10 +396,30 @@ public class LocationEventsListener {
                 .baseLocationId(payload.baseLocationId())
                 .name(payload.name())
                 .active(isActiveStatus(payload.status()))
+                // maxDutyClass (DECISION-LOCATION-029, #2267) is additive within v4: absent from the
+                // payload means "the publisher predates the field", so the already-replicated value
+                // stands, never read as "unconstrained" — the same guard applyBayUpdated should use
+                // for ext_bay.maxDutyClass, made explicit here with mergeField.
+                .maxDutyClass(mergeField(
+                        payloadNode,
+                        "maxDutyClass",
+                        payload.maxDutyClass(),
+                        existing == null ? null : existing.getMaxDutyClass()))
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
         log.info("Updated ext_mobile_unit mobileUnitId={} version={}", payload.mobileUnitId(), aggregateVersion);
+    }
+
+    /**
+     * Additive-field guard (#2267, mirroring the shop-manager listener's {@code mergeField}):
+     * {@code fieldName} absent from the raw envelope means the publisher predates it, so the
+     * already-replicated value is kept; present (including an explicit JSON null) means the new
+     * value applies.
+     */
+    private static <T> @Nullable T mergeField(
+            JsonNode payloadNode, String fieldName, @Nullable T newValue, @Nullable T existingValue) {
+        return payloadNode.has(fieldName) ? newValue : existingValue;
     }
 
     /**
