@@ -377,4 +377,32 @@ class RescheduleResourceMoveAndAllowanceTest {
         verify(rescheduleHistoryRepository).save(captor.capture());
         assertThat(captor.getValue().isCountsAgainstAllowance()).isTrue();
     }
+
+    @Test
+    @DisplayName("#2280 F5: a 1st reschedule that sends an approvalReason anyway stores null — approval was not"
+            + " actually required")
+    void firstRescheduleWithApprovalReasonSentAnywayStoresNull() {
+        ExtBayReplica oldBay = bay(OLD_BAY_ID, true);
+        lenient().when(bayReplicaRepository.findById(OLD_BAY_ID)).thenReturn(Optional.of(oldBay));
+        lenient()
+                .when(bayReplicaRepository.findActiveByLocationOrdered(LOCATION_ID))
+                .thenReturn(List.of(oldBay));
+        lenient()
+                .when(bayEligibilityService.refusalFor(eq(oldBay), any(), any(), any()))
+                .thenReturn(Optional.empty());
+
+        scheduledAppointment(OLD_BAY_ID);
+        when(rescheduleHistoryRepository.countByAppointmentIdAndCountsAgainstAllowanceTrue(APPOINTMENT_ID))
+                .thenReturn(0L);
+
+        RescheduleAppointmentRequest request = baseRequest();
+        request.setApprovalReason("Sent even though nobody asked for it");
+
+        appointmentsService.rescheduleAppointment(APPOINTMENT_ID, request);
+
+        verify(rescheduleApprovalGuard, never()).requireApprovalPermission();
+        ArgumentCaptor<RescheduleHistory> captor = ArgumentCaptor.forClass(RescheduleHistory.class);
+        verify(rescheduleHistoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getApprovalReason()).isNull();
+    }
 }

@@ -649,7 +649,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         // was already DECISION-SHOPMGMT-022 affected.
         boolean shopCaused = request.getReason() == RescheduleReasonCode.EQUIPMENT_ISSUE
                 || affectedAppointmentEvaluator.evaluateOne(appointment);
-        enforceRescheduleAllowance(appointmentId, shopCaused, request);
+        boolean approvalRequired = enforceRescheduleAllowance(appointmentId, shopCaused, request);
 
         // A reschedule is a write too, so the booking horizon binds it exactly as it binds a create
         // (DECISION-SHOPMGMT-019). Checked after the required fields and before the appointment is
@@ -764,7 +764,9 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .countsAgainstAllowance(!shopCaused)
                 .previousResourceId(previousResourceId)
                 .newResourceId(newResourceIdForRecord)
-                .approvalReason(request.getApprovalReason())
+                // #2280 F5: only the 3rd+ non-exempt reschedule actually required approval — persist
+                // the reason only then, not on every reschedule that happens to carry one in the request.
+                .approvalReason(approvalRequired ? request.getApprovalReason() : null)
                 .createdAt(rescheduledAt)
                 .build());
 
@@ -801,25 +803,29 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      * attempt is never recorded to {@code reschedule_history} (the count this method itself reads
      * next time).
      *
+     * @return whether this reschedule actually required approval (3rd+ non-exempt) — {@code false}
+     *     for the first two, or any shop-caused one; {@link #rescheduleAppointment} uses this to
+     *     decide whether {@code approvalReason} is persisted (#2280 F5).
      * @throws org.springframework.security.access.AccessDeniedException the caller lacks
      *     {@code appointments:reschedule:approve} (403)
      * @throws RescheduleApprovalReasonRequiredException {@code approvalReason} is missing or blank
      *     (422 {@code RESCHEDULE_APPROVAL_REASON_REQUIRED})
      */
-    private void enforceRescheduleAllowance(
+    private boolean enforceRescheduleAllowance(
             @NonNull UUID appointmentId, boolean shopCaused, @NonNull RescheduleAppointmentRequest request) {
         if (shopCaused) {
-            return;
+            return false;
         }
         long priorCountedReschedules =
                 rescheduleHistoryRepository.countByAppointmentIdAndCountsAgainstAllowanceTrue(appointmentId);
         if (priorCountedReschedules < MAX_FREE_RESCHEDULES) {
-            return;
+            return false;
         }
         rescheduleApprovalGuard.requireApprovalPermission();
         if (request.getApprovalReason() == null || request.getApprovalReason().isBlank()) {
             throw new RescheduleApprovalReasonRequiredException();
         }
+        return true;
     }
 
     /**
