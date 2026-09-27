@@ -170,7 +170,7 @@ class RescheduleResourceMoveAndAllowanceTest {
                 .startAt(START_AT)
                 .endAt(END_AT)
                 .build();
-        when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
         lenient()
                 .when(appointmentRepository.save(any(Appointment.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

@@ -218,7 +218,7 @@ class AppointmentsServiceImplWorkorderActualsTest {
     @DisplayName("AC2 - a reschedule moves the planned window and leaves the actuals untouched")
     void rescheduleAppointment_movesPlannedWindow_leavesActualsUnaffected() {
         Appointment appointment = buildAppointment(AppointmentStatus.SCHEDULED, PLANNED_START, PLANNED_END);
-        when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Instant actualStart = Instant.parse("2026-06-18T09:05:00Z");

@@ -509,7 +509,7 @@ class AppointmentEligibilityTest {
                 .startAt(START_AT)
                 .endAt(END_AT)
                 .build();
-        when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
         when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(APPOINTMENT_ID))
                 .thenReturn(List.of(AppointmentServiceRequest.builder()
                         .serviceEntityId(SERVICE_REQUEST_ID)

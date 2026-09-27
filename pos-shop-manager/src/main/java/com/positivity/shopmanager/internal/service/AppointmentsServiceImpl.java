@@ -613,8 +613,12 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             throw new AppointmentValidationException("newStartAt must be before newEndAt");
         }
 
+        // DECISION-SHOPMGMT-004 (#2280 F3): findByIdForUpdate, not findById — a pessimistic write
+        // lock held for the rest of this transaction serialises concurrent reschedules of the same
+        // appointment, so enforceRescheduleAllowance's count and this method's own reschedule_history
+        // insert are atomic together and cannot both observe "under the free allowance" at once.
         Appointment appointment = appointmentRepository
-                .findById(appointmentId)
+                .findByIdForUpdate(appointmentId)
                 .orElseThrow(() -> new AppointmentNotFoundException(appointmentId));
 
         if (appointment.getStatus() != AppointmentStatus.SCHEDULED

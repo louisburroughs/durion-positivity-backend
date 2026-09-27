@@ -153,7 +153,7 @@ class AppointmentsServiceImplStory11Test {
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.CUSTOMER_REQUEST, null, false);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         AppointmentResponse response = appointmentsService.rescheduleAppointment(appointmentId, request);
@@ -174,7 +174,7 @@ class AppointmentsServiceImplStory11Test {
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.CHECKED_IN);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.SHOP_CAPACITY, null, false);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         AppointmentResponse response = appointmentsService.rescheduleAppointment(appointmentId, request);
@@ -193,7 +193,7 @@ class AppointmentsServiceImplStory11Test {
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.WAITING_FOR_PARTS);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.PARTS_DELAY, null, false);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         AppointmentResponse response = appointmentsService.rescheduleAppointment(appointmentId, request);
@@ -213,7 +213,7 @@ class AppointmentsServiceImplStory11Test {
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.CANCELLED);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.CUSTOMER_REQUEST, null, false);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
 
         assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(appointmentId, request))
                 .isInstanceOf(AppointmentStateException.class)
@@ -230,7 +230,7 @@ class AppointmentsServiceImplStory11Test {
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.WORK_IN_PROGRESS);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.CUSTOMER_REQUEST, null, false);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
 
         assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(appointmentId, request))
                 .isInstanceOf(AppointmentStateException.class)
@@ -248,7 +248,7 @@ class AppointmentsServiceImplStory11Test {
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.OTHER, null, false);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
 
         assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(appointmentId, request))
                 .isInstanceOf(AppointmentValidationException.class)
@@ -264,7 +264,7 @@ class AppointmentsServiceImplStory11Test {
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.OTHER, "   ", false);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
 
         assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(appointmentId, request))
                 .isInstanceOf(AppointmentValidationException.class)
@@ -281,7 +281,7 @@ class AppointmentsServiceImplStory11Test {
         RescheduleAppointmentRequest request =
                 buildRequest(RescheduleReasonCode.OTHER, "Customer rescheduled due to work conflict", false);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         AppointmentResponse response = appointmentsService.rescheduleAppointment(appointmentId, request);
@@ -303,7 +303,7 @@ class AppointmentsServiceImplStory11Test {
         Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.WEATHER, "Storm warning", true);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         appointmentsService.rescheduleAppointment(appointmentId, request);
@@ -341,7 +341,7 @@ class AppointmentsServiceImplStory11Test {
 
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.MECHANIC_UNAVAILABLE, null, false);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         appointmentsService.rescheduleAppointment(appointmentId, request);
@@ -374,7 +374,7 @@ class AppointmentsServiceImplStory11Test {
 
         RescheduleAppointmentRequest request = buildRequest(RescheduleReasonCode.CUSTOMER_REQUEST, null, true);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         appointmentsService.rescheduleAppointment(appointmentId, request);

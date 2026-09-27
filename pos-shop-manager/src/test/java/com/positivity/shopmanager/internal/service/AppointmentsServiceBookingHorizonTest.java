@@ -158,7 +158,7 @@ class AppointmentsServiceBookingHorizonTest {
         appointment.setStatus(AppointmentStatus.SCHEDULED);
         appointment.setStartAt(previousStartAt);
         appointment.setEndAt(previousEndAt);
-        when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
 
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
         request.setNewStartAt(BEYOND_HORIZON);

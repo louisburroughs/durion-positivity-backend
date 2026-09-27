@@ -151,7 +151,7 @@ class AppointmentsServiceImplTest {
         request.setNewEndAt(newEnd);
         request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId))
                 .thenReturn(List.<AppointmentServiceRequest>of());
@@ -183,7 +183,7 @@ class AppointmentsServiceImplTest {
         request.setNewEndAt(Instant.parse("2026-03-11T11:00:00Z"));
         request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.empty());
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.empty());
 
         assertThrows(
                 AppointmentNotFoundException.class,
@@ -203,7 +203,7 @@ class AppointmentsServiceImplTest {
         request.setNewEndAt(Instant.parse("2026-03-11T11:00:00Z"));
         request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
 
         assertThrows(
                 AppointmentStateException.class,

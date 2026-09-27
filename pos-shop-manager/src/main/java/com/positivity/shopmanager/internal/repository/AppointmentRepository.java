@@ -2,6 +2,7 @@ package com.positivity.shopmanager.internal.repository;
 
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID> {
@@ -16,6 +18,20 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     Optional<Appointment> findByAppointmentIdAndStatus(UUID appointmentId, AppointmentStatus status);
 
     Optional<Appointment> findByIdempotencyKey(String idempotencyKey);
+
+    /**
+     * DECISION-SHOPMGMT-004: {@link
+     * com.positivity.shopmanager.internal.service.AppointmentsServiceImpl#rescheduleAppointment}'s
+     * only finder for the appointment it reschedules. Serialises concurrent reschedules of the same
+     * appointment for the whole transaction: {@code enforceRescheduleAllowance} reads the prior
+     * reschedule count and the transaction later inserts a {@code reschedule_history} row for this
+     * one, and without a lock spanning both, two concurrent reschedules can each read the count
+     * before either commits its insert and both pass the free-allowance gate (#2280 F3). A plain
+     * {@code findById} does not take this row lock, so it must not be used on this path.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from Appointment a where a.appointmentId = :id")
+    Optional<Appointment> findByIdForUpdate(@NonNull UUID id);
 
     @Query("""
                         SELECT appointment

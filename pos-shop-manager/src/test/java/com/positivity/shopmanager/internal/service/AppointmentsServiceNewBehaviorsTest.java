@@ -155,7 +155,7 @@ class AppointmentsServiceNewBehaviorsTest {
 
     @Test
     void rescheduleAppointment_Success() {
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(i -> i.getArgument(0));
 
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
@@ -193,7 +193,7 @@ class AppointmentsServiceNewBehaviorsTest {
     @Test
     void rescheduleAppointment_Failure_WrongStatus() {
         appointment.setStatus(AppointmentStatus.CANCELLED);
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
         request.setNewStartAt(Instant.now(TEST_CLOCK));
         request.setNewEndAt(Instant.now(TEST_CLOCK).plus(1, ChronoUnit.HOURS));
