@@ -46,10 +46,16 @@ class TravelBufferPolicySeedTest {
     void checkConstraintMatchesSupportedTypes() throws IOException {
         // V6 first constrained buffer_type; #2266/DECISION-LOCATION-028 narrowed the accepted set
         // again in V11, which is the CHECK now live in the database. The migration text still
-        // mentions the retired types in its UPDATE statements (converting old rows away from them),
-        // so only the CHECK clause itself is asserted against the supported set.
+        // mentions the retired types in its header comment and in the UPDATE statements that
+        // convert old rows away from them (the V6 CHECK is dropped ahead of those, so the constraint
+        // name appears before them too), so only the ADD CONSTRAINT clause itself is asserted
+        // against the supported set.
         String migration = read("db/migration/V11__distance_units_and_travel_buffer_policy_types.sql");
-        String checkClause = migration.substring(migration.indexOf("travel_buffer_policies_buffer_type_check"));
+        int addConstraint = migration.indexOf("ADD CONSTRAINT travel_buffer_policies_buffer_type_check");
+        assertThat(addConstraint)
+                .as("V11 re-adds travel_buffer_policies_buffer_type_check")
+                .isNotNegative();
+        String checkClause = migration.substring(addConstraint);
 
         assertThat(TravelBufferPolicyServiceImpl.SUPPORTED_BUFFER_TYPES)
                 .allSatisfy(type -> assertThat(checkClause).contains("'" + type + "'"));
