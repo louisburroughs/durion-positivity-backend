@@ -482,7 +482,7 @@ class higher than the general-service lift beside it); `WASH_DETAIL` blank (no l
 
 Columns (`locations.csv`): `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone,distanceUnit` — `distanceUnit` (`KM`/`MI`, DECISION-LOCATION-028) is every row's own display unit; alpha's US sites are seeded `MI`, and a blank value defaults to `KM` at the ingest endpoint (`LocationBulkIngestController`).
 
-Columns (`mobile-units.csv`): `name,baseLocationCode,status,travelBufferPolicyName,capabilityCodes` — `capabilityCodes` is `;`-separated and holds **catalog operation codes** (CAP-325 D14: the same vocabulary as a bay's specialty claim, validated by pos-location against its `ext_catalog_service` replica, so the Tier 0 catalog pack must have landed first). The location-owned capability registry is retired (V5).
+Columns (`mobile-units.csv`): `name,baseLocationCode,status,travelBufferPolicyName,capabilityCodes,maxDutyClass,outOfServiceReason,outOfServiceNote` — `capabilityCodes` is `;`-separated and holds **catalog operation codes** (CAP-325 D14: the same vocabulary as a bay's specialty claim, validated by pos-location against its `ext_catalog_service` replica, so the Tier 0 catalog pack must have landed first). The location-owned capability registry is retired (V5). `outOfServiceReason`/`outOfServiceNote` (DECISION-LOCATION-026, #2264) are sent only when the row carries them and are required — 422 `OUT_OF_SERVICE_REASON_REQUIRED` otherwise — whenever `status` is the explicit literal `OUT_OF_SERVICE`: the service only supplies its own `OTHER` default when `status` is left blank entirely, never when a row names `OUT_OF_SERVICE` outright.
 
 Columns (`mobile-unit-coverage-rules.csv`): `unitName,serviceAreaName,ruleType,priority,maxDistance,unit,validFrom,validTo` — `maxDistance` blank is the catch-all tier; `validFrom`/`validTo` blank means always in effect. `unit` (`KM`/`MI`, DECISION-LOCATION-028) names the unit the fixture's `maxDistance` figure is authored in — always `MI` today — and `seed-alpha.py` sends the pair as an explicit `{"value": maxDistance, "unit": unit}` object rather than a bare number; a row with a `maxDistance` but no `unit` is a fixture bug and drops the whole unit with a `WARN`, the same as an unresolvable service area.
 
@@ -501,7 +501,7 @@ of it, the pack now `PUT`s the fixture's coverage rules to `/location/mobile-uni
 and then sends one `PATCH /location/mobile-units/{id}` carrying `travelBufferPolicyId`,
 `serviceCapabilityCodes` (a PATCH key since CAP-325) and `status: ACTIVE`. The rules go first because
 `PATCH` checks the merged unit against the same completeness rule create enforces. The ten `ACTIVE`
-rows are activated; `MU-CLT-MAIN-03` is left `INACTIVE`. The summary line counts these as `activated`.
+rows are activated; `MU-CLT-MAIN-03` is left `OUT_OF_SERVICE`. The summary line counts these as `activated`.
 
 Both fixtures key off names, like every other pack here. `travelBufferPolicyName` and
 `serviceAreaName` are resolved through `GET /location/travel-buffer-policies` and
@@ -516,8 +516,9 @@ written to satisfy that; regrouping or re-sorting the rows breaks them, and only
 pos-location. The other active units use `SERVICE_AREA` rules, which the tier check leaves
 alone. `scripts/tests/test_seed_alpha_mobile_units.py` pins both shapes.
 
-**`MU-CLT-MAIN-03` stays `INACTIVE`**, as it was in the original fixture. A parked unit is a
-legitimate state to have in demo data and it keeps the `INACTIVE` path exercised; it carries a
+**`MU-CLT-MAIN-03` stays `OUT_OF_SERVICE`** (`SCHEDULED_MAINTENANCE`, DECISION-LOCATION-026 —
+`INACTIVE` is no longer a status the lifecycle accepts, #2264/PR #2278). A parked unit is a
+legitimate state to have in demo data and it keeps the non-`ACTIVE` path exercised; it carries a
 policy and capabilities but no coverage rules, so activating it is a one-call change when something
 needs another active unit.
 

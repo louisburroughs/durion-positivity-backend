@@ -405,7 +405,11 @@ class MobileUnitPackTest(unittest.TestCase):
         gateway = _StubGateway()
         self.assertTrue(self._run(gateway))
         parked = next(body for body in gateway.posted if body["name"] == "MU-CLT-MAIN-03")
-        self.assertEqual(parked["status"], "INACTIVE")
+        self.assertEqual(parked["status"], "OUT_OF_SERVICE")
+        # DECISION-LOCATION-026 (#2264): an explicit OUT_OF_SERVICE status requires an explicit
+        # reason (422 otherwise) -- the fixture carries one so the row does not need OTHER/note.
+        self.assertEqual(parked["outOfServiceReason"], "SCHEDULED_MAINTENANCE")
+        self.assertNotIn("outOfServiceNote", parked)
         self.assertEqual(parked["coverageRules"], [])
         self.assertTrue(parked["serviceCapabilityCodes"], "parked, but still an equipped van")
 
@@ -537,8 +541,9 @@ class LegacyIncompleteUnitTest(unittest.TestCase):
         self.assertEqual([verb for verb, _, _ in gateway.writes], ["PUT"] * 10)
 
     def test_theParkedUnitIsNotFlaggedBecauseTheFixtureOnlyWantsItToExist(self):
-        """MU-CLT-MAIN-03 is INACTIVE in the fixture too, so a legacy INACTIVE row already matches
-        what is asked for -- flagging it would demand a reset for a unit that is correct."""
+        """MU-CLT-MAIN-03 is OUT_OF_SERVICE (not ACTIVE) in the fixture too, so a legacy INACTIVE
+        row already matches what is asked for -- flagging it would demand a reset for a unit that
+        is correct."""
         parked = next(unit for unit in self._legacy_nine() if unit["name"] == "MU-CLT-MAIN-03")
         row = next(r for r in _rows("mobile-units.csv") if r["name"] == "MU-CLT-MAIN-03")
         self.assertIsNone(seed_alpha.mobile_unit_shortfall(_StubGateway(), parked, row, []))

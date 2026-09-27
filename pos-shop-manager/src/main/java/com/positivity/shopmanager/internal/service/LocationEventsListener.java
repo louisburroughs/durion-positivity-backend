@@ -301,11 +301,28 @@ public class LocationEventsListener {
      * any other status change. A replayed or long-delayed old event is handled safely rather than
      * ignored: the row, if still present, is marked inactive instead of removed, so an appointment
      * or workorder that already names this bay keeps resolving to a name.
+     *
+     * <p>Guarded by the same {@code aggregateVersion} comparison as {@link #applyBayUpdated} (HIGH
+     * finding, PR #2278): a pre-#2264 delete can be delivered long after a newer {@code
+     * BayUpdatedV1} has already reactivated the row (e.g. {@code RETIRED} → {@code ACTIVE}), and
+     * applying it unconditionally would silently retire a bay that is back in service. A stale
+     * delete is ignored; an accepted one marks the row inactive and stores its version so a still
+     * older or equal-but-repeated delete cannot regress it further.
      */
     private void applyBayDeleted(JsonNode envelope) {
         BayDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), BayDeletedV1.class);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         extBayReplicaRepository.findById(payload.bayId()).ifPresent(existing -> {
+            if (ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
+                log.debug(
+                        "Ignoring stale bay delete bayId={} version={} held={}",
+                        payload.bayId(),
+                        aggregateVersion,
+                        existing.getAggregateVersion());
+                return;
+            }
             existing.setActive(false);
+            existing.setAggregateVersion(aggregateVersion);
             existing.setUpdatedAt(Instant.now(clock));
             extBayReplicaRepository.save(existing);
         });
@@ -409,11 +426,27 @@ public class LocationEventsListener {
      * MobileUnitUpdatedV1} with {@code status = RETIRED}, applied by {@link #applyMobileUnitUpdated}
      * exactly like any other status change. A replayed or long-delayed old event is handled safely
      * rather than ignored: the row, if still present, is marked inactive instead of removed.
+     *
+     * <p>Guarded by the same {@code aggregateVersion} comparison as {@link #applyMobileUnitUpdated}
+     * (HIGH finding, PR #2278): a pre-#2264 delete can be delivered long after a newer {@code
+     * MobileUnitUpdatedV1} has already reactivated the row, and applying it unconditionally would
+     * silently stand down a unit that is back in service. A stale delete is ignored; an accepted
+     * one marks the row inactive and stores its version.
      */
     private void applyMobileUnitDeleted(JsonNode envelope) {
         MobileUnitDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), MobileUnitDeletedV1.class);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         extMobileUnitReplicaRepository.findById(payload.mobileUnitId()).ifPresent(existing -> {
+            if (ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
+                log.debug(
+                        "Ignoring stale mobile unit delete mobileUnitId={} version={} held={}",
+                        payload.mobileUnitId(),
+                        aggregateVersion,
+                        existing.getAggregateVersion());
+                return;
+            }
             existing.setActive(false);
+            existing.setAggregateVersion(aggregateVersion);
             existing.setUpdatedAt(Instant.now(clock));
             extMobileUnitReplicaRepository.save(existing);
         });

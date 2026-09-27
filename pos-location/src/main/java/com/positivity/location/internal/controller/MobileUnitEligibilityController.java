@@ -3,6 +3,7 @@ package com.positivity.location.internal.controller;
 import com.positivity.location.internal.dto.EligibleMobileUnitResponse;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.MobileUnitService;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -54,12 +55,19 @@ public class MobileUnitEligibilityController {
                     listed (units have no general-work default).
                     No events are emitted and no state changes; this is a read-only projection.
                     Returns 200 with the eligible units, empty when nothing covers the address on that instant, \
-                    and 400 VALIDATION_ERROR with fieldErrors naming baseLocationId when it is missing.
+                    400 VALIDATION_ERROR with fieldErrors naming baseLocationId when it is missing, and 403 \
+                    LOCATION_SCOPE_DENIED when baseLocationId is outside a location-scoped caller's reach \
+                    (ADR-0061, gated the same way as listMobileUnits' baseLocationId filter).
                     """)
     @ApiResponse(responseCode = "200", description = "Eligible mobile units returned.")
     @ApiResponse(
             responseCode = "400",
             description = "VALIDATION_ERROR: baseLocationId is missing or not a UUID.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks location:mobile-unit:read, or (LOCATION_SCOPE_DENIED) the named"
+                    + " baseLocationId is outside a location-scoped caller's reach.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_READ + "')")
     @GetMapping("/v1/mobile-units:eligible")
@@ -68,7 +76,8 @@ public class MobileUnitEligibilityController {
             @RequestParam String countryCode,
             @RequestParam Instant at,
             @Parameter(
-                            description = "Only units based at this location; required",
+                            description = "Only units based at this location",
+                            required = true,
                             example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01")
                     @RequestParam(required = false)
                     UUID baseLocationId,
@@ -77,6 +86,14 @@ public class MobileUnitEligibilityController {
                             example = "OIL-CHANGE-FULL-SYNTHETIC")
                     @RequestParam(required = false)
                     List<String> operationCodes) {
+        // baseLocationId names the shop whose units are offered, gated the same way
+        // BayController.listBays and MobileUnitController.listMobileUnits gate their own
+        // baseLocationId/locationId filter (ADR-0061, location-scope.yaml, PR #2278 MEDIUM). Left
+        // conditional on non-null so a caller who omits it still gets the service's own 400
+        // VALIDATION_ERROR rather than a 403 for a parameter that was never supplied.
+        if (baseLocationId != null) {
+            SecurityContextHelper.locationScope().require(LocationPermissions.MOBILE_UNIT_READ, baseLocationId);
+        }
         return ResponseEntity.ok(mobileUnitService.findEligibleMobileUnits(
                 postalCode, countryCode, at, baseLocationId, normalizeOperationCodes(operationCodes)));
     }

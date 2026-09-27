@@ -2404,7 +2404,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 200 with the eligible units, empty when nothing covers the address on that instant, and 400 VALIDATION_ERROR with fieldErrors naming baseLocationId when it is missing.
+        Returns 200 with the eligible units, empty when nothing covers the address on that instant, 400 VALIDATION_ERROR with fieldErrors naming baseLocationId when it is missing, and 403 LOCATION_SCOPE_DENIED when baseLocationId is outside a location-scoped caller''s reach (ADR-0061, gated the same way as listMobileUnits'' baseLocationId filter).
 
         '
       operationId: findEligibleMobileUnits
@@ -2425,11 +2425,11 @@ paths:
         schema:
           format: date-time
           type: string
-      - description: Only units based at this location; required
+      - description: Only units based at this location
         example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
         in: query
         name: baseLocationId
-        required: false
+        required: true
         schema:
           format: uuid
           type: string
@@ -2457,6 +2457,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'VALIDATION_ERROR: baseLocationId is missing or not a UUID.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks location:mobile-unit:read, or (LOCATION_SCOPE_DENIED) the named baseLocationId is outside a location-scoped caller's reach.
       security:
       - bearerAuth:
         - location:mobile-unit:read

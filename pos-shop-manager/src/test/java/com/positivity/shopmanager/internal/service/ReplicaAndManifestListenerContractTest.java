@@ -13,7 +13,9 @@ import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
 import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
+import com.positivity.domainevents.location.BayDeletedV1;
 import com.positivity.domainevents.location.BayUpdatedV1;
+import com.positivity.domainevents.location.MobileUnitDeletedV1;
 import com.positivity.domainevents.location.MobileUnitUpdatedV1;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
@@ -477,6 +479,81 @@ class ReplicaAndManifestListenerContractTest {
             assertThat(captor.getValue().getBayType()).isEqualTo("LIFT");
             assertThat(captor.getValue().getLocationId()).isEqualTo(ID);
             assertThat(captor.getValue().isActive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("PR #2278 HIGH: a stray bay delete older than the held version is ignored")
+        void staleBayDeleteIsIgnored() {
+            when(bayRepository.findById(ID))
+                    .thenReturn(Optional.of(ExtBayReplica.builder()
+                            .bayId(ID)
+                            .locationId(ID)
+                            .active(true)
+                            .aggregateVersion(9)
+                            .build()));
+
+            locationListener().accept("""
+                    {"eventId":"evt-1","eventType":"%s","aggregateVersion":5,"payload":{"bayId":"%s"}}""".formatted(BayDeletedV1.EVENT_TYPE, ID));
+
+            verify(bayRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("PR #2278 HIGH: a bay delete newer than the held version marks it inactive and stores the version")
+        void newerBayDeleteMarksInactiveAndStoresVersion() {
+            when(bayRepository.findById(ID))
+                    .thenReturn(Optional.of(ExtBayReplica.builder()
+                            .bayId(ID)
+                            .locationId(ID)
+                            .active(true)
+                            .aggregateVersion(5)
+                            .build()));
+
+            locationListener().accept("""
+                    {"eventId":"evt-1","eventType":"%s","aggregateVersion":9,"payload":{"bayId":"%s"}}""".formatted(BayDeletedV1.EVENT_TYPE, ID));
+
+            ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+            verify(bayRepository).save(captor.capture());
+            assertThat(captor.getValue().isActive()).isFalse();
+            assertThat(captor.getValue().getAggregateVersion()).isEqualTo(9);
+        }
+
+        @Test
+        @DisplayName("PR #2278 HIGH: a stray mobile-unit delete older than the held version is ignored")
+        void staleMobileUnitDeleteIsIgnored() {
+            when(mobileUnitRepository.findById(ID))
+                    .thenReturn(Optional.of(ExtMobileUnitReplica.builder()
+                            .mobileUnitId(ID)
+                            .baseLocationId(ID)
+                            .active(true)
+                            .aggregateVersion(9)
+                            .build()));
+
+            locationListener().accept("""
+                    {"eventId":"evt-1","eventType":"%s","aggregateVersion":5,"payload":{"mobileUnitId":"%s"}}""".formatted(MobileUnitDeletedV1.EVENT_TYPE, ID));
+
+            verify(mobileUnitRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName(
+                "PR #2278 HIGH: a mobile-unit delete newer than the held version marks it inactive and stores the version")
+        void newerMobileUnitDeleteMarksInactiveAndStoresVersion() {
+            when(mobileUnitRepository.findById(ID))
+                    .thenReturn(Optional.of(ExtMobileUnitReplica.builder()
+                            .mobileUnitId(ID)
+                            .baseLocationId(ID)
+                            .active(true)
+                            .aggregateVersion(5)
+                            .build()));
+
+            locationListener().accept("""
+                    {"eventId":"evt-1","eventType":"%s","aggregateVersion":9,"payload":{"mobileUnitId":"%s"}}""".formatted(MobileUnitDeletedV1.EVENT_TYPE, ID));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository).save(captor.capture());
+            assertThat(captor.getValue().isActive()).isFalse();
+            assertThat(captor.getValue().getAggregateVersion()).isEqualTo(9);
         }
 
         @Test

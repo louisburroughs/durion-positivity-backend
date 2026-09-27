@@ -574,6 +574,17 @@ def run_mobile_units(gateway, relative_path, _location_id):
         }
         if policy_id:
             body["travelBufferPolicyId"] = policy_id
+        # DECISION-LOCATION-026 (#2264): an explicit status of OUT_OF_SERVICE requires an explicit
+        # outOfServiceReason (422 OUT_OF_SERVICE_REASON_REQUIRED otherwise) -- the service only
+        # supplies the OTHER default itself when status is omitted entirely, not when the fixture
+        # names OUT_OF_SERVICE outright. outOfServiceNote is only required when the reason is
+        # OTHER, so it is sent only when the fixture carries one.
+        out_of_service_reason = (row.get("outOfServiceReason") or "").strip()
+        if out_of_service_reason:
+            body["outOfServiceReason"] = out_of_service_reason
+        out_of_service_note = (row.get("outOfServiceNote") or "").strip()
+        if out_of_service_note:
+            body["outOfServiceNote"] = out_of_service_note
         # DECISION-LOCATION-029 (#2267): the duty-class ceiling the alpha vans need to be eligible
         # for FLEET-PM-* work once #2269 checks it at placement. Left out entirely when blank so a
         # unit whose fixture row carries none is created unconstrained rather than sent maxDutyClass=0.

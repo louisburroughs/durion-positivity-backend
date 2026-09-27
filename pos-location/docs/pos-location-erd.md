@@ -6,6 +6,37 @@ String description
 Instant created_at
 Instant updated_at
 }
+location {
+UUID id
+String name
+String normalized_name
+String code
+String status
+String distance_unit
+Instant created_at
+Instant updated_at
+String hr_location_id
+String timezone
+TEXT operating_hours
+TEXT holiday_closures
+Integer check_in_buffer_minutes
+Integer cleanup_buffer_minutes
+UUID default_staging_location_id
+UUID default_quarantine_location_id
+Long version
+UUID geographical_location_id
+String address_line1
+String address_line2
+String city
+String state
+String postal_code
+String country
+String mailing_address
+String phone_number
+Boolean is_active
+UUID location_type_id
+UUID responsible_person_id
+}
 bays {
 UUID id
 UUID location_id
@@ -16,6 +47,10 @@ String status
 Integer max_concurrent_vehicles
 TEXT service_capability_codes
 Integer max_duty_class
+String out_of_service_reason
+String out_of_service_note
+Instant expected_return_at
+Integer display_order
 Instant created_at
 Instant last_modified_at
 }
@@ -56,6 +91,14 @@ UUID base_location_id
 String status
 UUID travel_buffer_policy_id
 String notes
+String out_of_service_reason
+String out_of_service_note
+Instant expected_return_at
+Integer max_duty_class
+String unit_number
+String vin
+String license_plate
+String plate_region
 Instant created_at
 Instant updated_at
 UUID created_by
@@ -67,8 +110,8 @@ UUID mobile_unit_id
 UUID service_area_id
 String rule_type
 Integer priority
-Date valid_from
-Date valid_to
+Instant valid_from
+Instant valid_to
 BigDecimal max_distance_km
 Instant created_at
 Instant updated_at
