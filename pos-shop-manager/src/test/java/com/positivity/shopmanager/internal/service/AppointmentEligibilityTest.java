@@ -211,6 +211,20 @@ class AppointmentEligibilityTest {
     }
 
     @Test
+    @DisplayName("#2280 F4: a blank resourceId resolves to UNASSIGNED and is normalised to a stored null,"
+            + " not carried through as the blank string")
+    void blankResourceIdWithNoResourceTypeStoresNullResourceId() {
+        appointmentsService.createAppointment(createRequest(null, ""), null, null);
+
+        verify(bayReplicaRepository, never()).findById(any());
+        verify(mobileUnitReplicaRepository, never()).findById(any());
+        ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+        verify(appointmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getResourceType()).isEqualTo("UNASSIGNED");
+        assertThat(captor.getValue().getResourceId()).isNull();
+    }
+
+    @Test
     @DisplayName("resourceType and resourceId both omitted default to UNASSIGNED: persisted, no resource checks")
     void omittedResourceTypeDefaultsToUnassigned() {
         AppointmentCreateRequest request = createRequest(null, null);

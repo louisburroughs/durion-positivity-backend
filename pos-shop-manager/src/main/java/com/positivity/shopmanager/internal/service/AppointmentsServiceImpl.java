@@ -354,10 +354,13 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             Map<String, Object> customerSnapshot,
             Map<String, Object> vehicleSnapshot,
             @NonNull ResourceType resourceType) {
+        // #2280 F4: resolveAndValidateResourceType treats a blank resourceId as absent and resolves
+        // UNASSIGNED, but request.getResourceId() itself is still that blank string — persist null
+        // instead of carrying it through verbatim.
         Appointment appointment = Appointment.builder()
                 .status(AppointmentStatus.SCHEDULED)
                 .locationId(request.getLocationId())
-                .resourceId(request.getResourceId())
+                .resourceId(resourceType == ResourceType.UNASSIGNED ? null : request.getResourceId())
                 .resourceType(resourceType.name())
                 .crmCustomerId(request.getCrmCustomerId())
                 .crmVehicleId(request.getCrmVehicleId())
@@ -724,7 +727,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         appointment.setStartAt(request.getNewStartAt());
         appointment.setEndAt(request.getNewEndAt());
         if (movingResource) {
-            appointment.setResourceId(targetResourceId);
+            // #2280 F4: same normalisation as create — UNASSIGNED never carries a stored resourceId.
+            appointment.setResourceId(targetResourceType == ResourceType.UNASSIGNED ? null : targetResourceId);
             appointment.setResourceType(targetResourceType.name());
         }
         Appointment saved = appointmentRepository.save(appointment);
