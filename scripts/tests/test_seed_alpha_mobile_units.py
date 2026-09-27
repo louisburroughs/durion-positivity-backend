@@ -266,7 +266,9 @@ class CoverageRuleAssemblyTest(unittest.TestCase):
 
     def test_distanceTierUnitsSatisfyTheAscendingCatchAllRule(self):
         """Mirrors MobileUnitServiceImpl.validateDistanceTiers: strictly ascending, one trailing
-        null catch-all, applied across every rule on a unit that has any DISTANCE_TIER rule."""
+        null catch-all, applied across every rule on a unit that has any DISTANCE_TIER rule. Ordering
+        compares the converted-to-km value the API would compare, not the raw MI figure the fixture
+        carries (DECISION-LOCATION-028)."""
         for unit, rules in self._built().items():
             if not any(rule["ruleType"] == "DISTANCE_TIER" for rule in rules):
                 continue
@@ -274,12 +276,26 @@ class CoverageRuleAssemblyTest(unittest.TestCase):
                 distances = [rule.get("maxDistance") for rule in rules]
                 self.assertIsNone(distances[-1], "the last tier must be the null catch-all")
                 self.assertNotIn(None, distances[:-1], "only the last tier may be the catch-all")
-                ascending = [float(distance) for distance in distances[:-1]]
+                ascending = [float(distance["value"]) for distance in distances[:-1]]
                 self.assertEqual(ascending, sorted(set(ascending)), "tiers must be strictly ascending")
 
+    def test_maxDistanceIsAnExplicitValueAndUnitObject(self):
+        """DECISION-LOCATION-028: a bare number is refused, so every present maxDistance carries the
+        fixture's own unit (MI, ../durion/domains/location/.business-rules DECISION-LOCATION-028) rather than a raw figure."""
+        for unit, rules in self._built().items():
+            for index, rule in enumerate(rules):
+                with self.subTest(unit=unit, rule=index):
+                    distance = rule.get("maxDistance")
+                    if distance is None:
+                        continue
+                    self.assertIsInstance(distance, dict)
+                    self.assertEqual(distance["unit"], "MI")
+                    float(distance["value"])  # raises if not numeric text
+
     def test_blankMaxDistanceAndDatesAreOmittedRatherThanSentAsEmptyStrings(self):
-        """maxDistance is a BigDecimal and validFrom/validTo are LocalDate on CoverageRuleRequest;
-        an empty string is a 400, and a maxDistance of "" would also read as a non-null tier."""
+        """maxDistance is an explicit {value, unit} object and validFrom/validTo are ISO-8601
+        instants on CoverageRuleRequest; an empty string is a 400, and a maxDistance of "" would
+        also read as a non-null tier."""
         for unit, rules in self._built().items():
             for index, rule in enumerate(rules):
                 with self.subTest(unit=unit, rule=index):
@@ -389,7 +405,11 @@ class MobileUnitPackTest(unittest.TestCase):
         gateway = _StubGateway()
         self.assertTrue(self._run(gateway))
         parked = next(body for body in gateway.posted if body["name"] == "MU-CLT-MAIN-03")
-        self.assertEqual(parked["status"], "INACTIVE")
+        self.assertEqual(parked["status"], "OUT_OF_SERVICE")
+        # DECISION-LOCATION-026 (#2264): an explicit OUT_OF_SERVICE status requires an explicit
+        # reason (422 otherwise) -- the fixture carries one so the row does not need OTHER/note.
+        self.assertEqual(parked["outOfServiceReason"], "SCHEDULED_MAINTENANCE")
+        self.assertNotIn("outOfServiceNote", parked)
         self.assertEqual(parked["coverageRules"], [])
         self.assertTrue(parked["serviceCapabilityCodes"], "parked, but still an equipped van")
 
@@ -424,6 +444,20 @@ class MobileUnitPackTest(unittest.TestCase):
                 expected = [code for code in row["capabilityCodes"].split(";") if code]
                 self.assertEqual(by_name[row["name"]]["serviceCapabilityCodes"], expected)
                 self.assertNotIn("", by_name[row["name"]]["serviceCapabilityCodes"])
+
+    def test_maxDutyClassIsCarriedFromTheFixtureAsAnInteger(self):
+        """DECISION-LOCATION-029 (#2267): the fleet-PM vans need a duty ceiling to be eligible for
+        that work once #2269 checks it at placement. Sent as an int, never the fixture's string."""
+        gateway = _StubGateway()
+        self._run(gateway)
+        by_name = {body["name"]: body for body in gateway.posted}
+        for row in _rows("mobile-units.csv"):
+            with self.subTest(unit=row["name"]):
+                expected = row.get("maxDutyClass", "").strip()
+                if expected:
+                    self.assertEqual(by_name[row["name"]]["maxDutyClass"], int(expected))
+                else:
+                    self.assertNotIn("maxDutyClass", by_name[row["name"]])
 
     def test_multiplePagesOfExistingUnitsAreAllRead(self):
         """The skip check is only sound if it sees every unit; a reader that stops after page 0
@@ -507,8 +541,9 @@ class LegacyIncompleteUnitTest(unittest.TestCase):
         self.assertEqual([verb for verb, _, _ in gateway.writes], ["PUT"] * 10)
 
     def test_theParkedUnitIsNotFlaggedBecauseTheFixtureOnlyWantsItToExist(self):
-        """MU-CLT-MAIN-03 is INACTIVE in the fixture too, so a legacy INACTIVE row already matches
-        what is asked for -- flagging it would demand a reset for a unit that is correct."""
+        """MU-CLT-MAIN-03 is OUT_OF_SERVICE (not ACTIVE) in the fixture too, so a legacy INACTIVE
+        row already matches what is asked for -- flagging it would demand a reset for a unit that
+        is correct."""
         parked = next(unit for unit in self._legacy_nine() if unit["name"] == "MU-CLT-MAIN-03")
         row = next(r for r in _rows("mobile-units.csv") if r["name"] == "MU-CLT-MAIN-03")
         self.assertIsNone(seed_alpha.mobile_unit_shortfall(_StubGateway(), parked, row, []))
@@ -549,8 +584,9 @@ class LegacyIncompleteUnitTest(unittest.TestCase):
 
 class PackRegistrationTest(unittest.TestCase):
     def test_mobileUnitsIsAnApiPackNotABulkLoaderDomain(self):
-        """The loader's MOBILE_UNIT strategy carries only name/baseLocationCode/status/notes, so it
-        cannot express an ACTIVE unit at all."""
+        """The loader's MOBILE_UNIT strategy carries name/baseLocationCode/status/notes/maxDutyClass
+        (#2267) but not travelBufferPolicyName or capabilityCodes, so it cannot express an ACTIVE
+        unit at all."""
         domains = dict(seed_alpha.PACK_FILES)
         self.assertEqual(domains["location/mobile-units.csv"], "@mobile-units")
         self.assertIn("@mobile-units", seed_alpha.API_PACKS)

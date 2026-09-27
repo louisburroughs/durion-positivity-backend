@@ -290,11 +290,23 @@ grant covers it — it would require a new recorded ADR-0044 exception on the po
 (#786). pos-workorder made the same call the other way in #1656.
 
 **Consequence, stated plainly:** pos-location publishes bay and mobile-unit facts as of #1668 —
-`location.bay.updated` / `location.bay.deleted` and `location.mobile-unit.updated` /
-`location.mobile-unit.deleted` on `location.events.v1`, alongside the `location.location.*` and
-`location.storage-location.updated` facts its `LocationFactPublisher` already emitted. The fact
-contracts this module consumes are the canonical records in `pos-domain-events`
-(`com.positivity.domainevents.location`); this module declares no mirror of them.
+`location.bay.updated` and `location.mobile-unit.updated` on `location.events.v1`, alongside the
+`location.location.*` and `location.storage-location.updated` facts its `LocationFactPublisher`
+already emitted. The fact contracts this module consumes are the canonical records in
+`pos-domain-events` (`com.positivity.domainevents.location`); this module declares no mirror of
+them.
+
+**Retirement no longer deletes the replica row (DECISION-LOCATION-026, #2264).** `DELETE` on a bay
+or mobile unit at pos-location now retires it (`status = RETIRED`) instead of hard-deleting, and the
+fact it publishes is an ordinary `location.bay.updated` / `location.mobile-unit.updated` — never
+`location.bay.deleted` / `location.mobile-unit.deleted`. `LocationEventsListener.applyBayUpdated` /
+`applyMobileUnitUpdated` already derive `active` from the raw `status` (see below), so a retirement
+is indistinguishable from any other non-`ACTIVE` status change: the row stays, `active` flips to
+`false`, and an appointment or workorder that already names it keeps resolving to a name.
+`applyBayDeleted` / `applyMobileUnitDeleted` still exist for a stray or replayed pre-#2264 delivery
+of the retired `BayDeletedV1` / `MobileUnitDeletedV1` facts — pos-location no longer emits either —
+and now handle one the same defensive way: if the replica row still exists, it is marked
+`active = false` rather than removed. Neither method calls `deleteById` any more.
 
 `ext_bay` and `ext_mobile_unit` nonetheless **start empty**, and the dashboard's `units[]` with
 them, until the owner backfills: the facts are forward-only, so a bay or mobile unit that existed
@@ -308,6 +320,20 @@ casing: pos-location's `BayEntity` and `MobileUnitEntity` carry no boolean activ
 mobile unit's status is a free-text column, so an absent, blank or unrecognised status means not
 active. pos-workorder derives the same fact the same way (#1656); the two consumers mirror one
 upstream aggregate and must not disagree about which units are in service.
+
+`ext_bay` also carries `display_order` (integer, nullable, **V13** — DECISION-LOCATION-026, #2264),
+mirrored additively from `BayUpdatedV1.displayOrder`. `ExtBayReplicaRepository.findActiveByLocationOrdered`
+sorts the dashboard's bay roster by `displayOrder` (nulls last), then name-then-id, matching the
+order pos-location's own `GET .../bays` uses.
+
+`ext_mobile_unit` gains `max_duty_class` (integer, nullable, `CHECK` 1–8, **V14** —
+DECISION-LOCATION-029, #2267), the mobile-unit counterpart of `ext_bay.max_duty_class` (same GVWR
+axis, CAP-325 D13). `applyMobileUnitUpdated` merges it with the same additive-field guard
+`applyLocationUpdated` already uses (`mergeField`): absent from the raw fact means the publisher
+predates the field, so the already-replicated value stands, never read as "unconstrained". #2269
+checks it at placement. The optional identity fields DECISION-LOCATION-029 also adds to the owner's
+`mobile_units` (`unitNumber`, `vin`, `licensePlate`, `plateRegion`) are display-only and are not
+replicated here.
 
 **Bay specialty map replica (#2261, DECISION-LOCATION-025).** `location.bay-specialty-map.updated`
 carries a tenant's *whole* bay-type specialty map — one entry per `BayType`, never a delta — telling

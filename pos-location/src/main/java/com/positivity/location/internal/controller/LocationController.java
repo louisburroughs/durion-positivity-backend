@@ -267,13 +267,19 @@ public class LocationController {
                     Preconditions: no existing location may share the same name (case-insensitive) or code, and a \
                     type referenced by id must already exist; a type given only by name is created on the fly.
                     Required inputs: name, code and type (id or name); timezone must be a valid IANA zone id, \
-                    operatingHours entries must have unique dayOfWeek values with openTime before closeTime, and \
-                    active defaults to true.
+                    operatingHours entries must have unique dayOfWeek values with openTime before closeTime, \
+                    active defaults to true, and distanceUnit (KM or MI, DECISION-LOCATION-028) defaults to KM.
                     Emits a LOCATION_LOCATION_CREATE event and publishes a location fact for replica consumers.
                     Returns 409 when the name or code is already taken, 422 when the timezone or operating hours \
-                    are invalid, and 400 when a referenced location type id is unknown.
+                    are invalid, and 400 when a referenced location type id is unknown or distanceUnit is \
+                    something other than KM or MI.
                     """)
     @ApiResponse(responseCode = "201", description = "Location created successfully.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: an unknown location type id, or distanceUnit other than KM or MI"
+                    + " (fieldErrors names distanceUnit).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Location name or code already taken.",
@@ -312,13 +318,19 @@ public class LocationController {
                     instead to change selected fields and leave the rest untouched.
                     Preconditions: the location must exist, and no other location may already use the new name.
                     Required inputs: locationId (UUID) as a path parameter plus a full body with name, code and \
-                    type; omitted optional fields are overwritten with the request values, not preserved.
+                    type; omitted optional fields are overwritten with the request values, not preserved, and an \
+                    omitted distanceUnit (KM or MI, DECISION-LOCATION-028) resets to KM.
                     Emits a LOCATION_LOCATION_UPDATE event and publishes a location fact for replica consumers.
                     Returns 404 when the location does not exist, 403 LOCATION_SCOPE_DENIED when it exists but a \
                     location-scoped location:write grant does not cover it (ADR-0061), 409 when the name or code \
-                    collides with another location, and 422 when the timezone or operating hours are invalid.
+                    collides with another location, 422 when the timezone or operating hours are invalid, and 400 \
+                    VALIDATION_ERROR when distanceUnit is something other than KM or MI.
                     """)
     @ApiResponse(responseCode = "200", description = "Location updated successfully.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: distanceUnit is something other than KM or MI (fieldErrors names it).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
@@ -374,7 +386,8 @@ public class LocationController {
 
     @Operation(operationId = "patchLocation", summary = "Patch Selected Fields of a Location", description = """
                     Applies a partial update to a location, changing only the supplied fields: name, status, \
-                    timezone, operatingHours, holidayClosures, checkInBufferMinutes and cleanupBufferMinutes.
+                    timezone, operatingHours, holidayClosures, checkInBufferMinutes, cleanupBufferMinutes and \
+                    distanceUnit.
                     The response echoes the stored timezone, operatingHours and holidayClosures, so a caller sees \
                     what the server kept and which zone the hours are read in — they are facility-local, and hours \
                     published without a timezone keep whichever zone the location already carries.
@@ -382,14 +395,20 @@ public class LocationController {
                     updateLocation, which overwrites every mutable field including address and type.
                     Preconditions: the location must exist, and a new name must not be used by another location.
                     Required inputs: locationId (UUID) as a path parameter and a body with at least one field; \
-                    status only accepts the value INACTIVE to deactivate, and reactivation is not supported \
-                    through this operation.
+                    status only accepts the value INACTIVE to deactivate, reactivation is not supported through \
+                    this operation, and distanceUnit (KM or MI, DECISION-LOCATION-028) is left unchanged when \
+                    omitted.
                     Emits a LOCATION_PATCH event and publishes a location fact for replica consumers.
                     Returns 404 when the location does not exist, 403 LOCATION_SCOPE_DENIED when it exists but a \
                     location-scoped location:write grant does not cover it (ADR-0061), 409 when the new name is \
-                    taken, and 422 when a supplied timezone or operating-hours entry is invalid.
+                    taken, and 422 when a supplied timezone or operating-hours entry is invalid, and 400 \
+                    VALIDATION_ERROR when distanceUnit is something other than KM or MI.
                     """)
     @ApiResponse(responseCode = "200", description = "Location patched successfully.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: distanceUnit is something other than KM or MI (fieldErrors names it).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,

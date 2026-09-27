@@ -36,6 +36,24 @@ public interface BayRepository extends JpaRepository<BayEntity, UUID> {
     @Query("SELECT b FROM BayEntity b WHERE b.location.id = :locationId AND b.bayType = :bayType")
     Page<BayEntity> findByLocationIdAndBayType(UUID locationId, String bayType, Pageable pageable);
 
+    /**
+     * Default list, no status filter: every status except one (DECISION-LOCATION-026 — default
+     * lists hide {@code RETIRED}; the caller's explicit status filter can still ask for it).
+     */
+    @Query("SELECT b FROM BayEntity b WHERE b.location.id = :locationId AND b.status <> :excludedStatus")
+    Page<BayEntity> findByLocationIdAndStatusNot(UUID locationId, String excludedStatus, Pageable pageable);
+
+    /** Same default-hides-{@code RETIRED} rule as {@link #findByLocationIdAndStatusNot}, plus a bayType filter. */
+    @Query("""
+            SELECT b
+            FROM BayEntity b
+            WHERE b.location.id = :locationId
+              AND b.bayType = :bayType
+              AND b.status <> :excludedStatus
+            """)
+    Page<BayEntity> findByLocationIdAndBayTypeAndStatusNot(
+            UUID locationId, String bayType, String excludedStatus, Pageable pageable);
+
     @Query("""
             SELECT b
             FROM BayEntity b

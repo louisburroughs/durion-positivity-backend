@@ -1608,7 +1608,8 @@ public class BatchConfiguration {
                     item.getPhoneNumber(),
                     parseLocationActive(item),
                     item.getLocationTypeName(),
-                    item.getTimezone()));
+                    item.getTimezone(),
+                    blankToNull(item.getDistanceUnit())));
         }
         return payloads;
     }
@@ -1904,12 +1905,14 @@ public class BatchConfiguration {
                     UUID.fromString(item.getBaseLocationId().trim()),
                     item.getName(),
                     blankToNull(item.getStatus()),
-                    blankToNull(item.getNotes())));
+                    blankToNull(item.getNotes()),
+                    parseIntegerOrNull(item.getMaxDutyClass())));
         }
         return payloads;
     }
 
-    private record MobileUnitWriterPayload(UUID baseLocationId, String name, String status, String notes) {}
+    private record MobileUnitWriterPayload(
+            UUID baseLocationId, String name, String status, String notes, Integer maxDutyClass) {}
 
     private List<StaffingAssignmentWriterPayload> mapStaffingAssignmentPayloads(
             List<StaffingAssignmentLoaderRecord> items) {
@@ -2006,7 +2009,8 @@ public class BatchConfiguration {
             String phoneNumber,
             Boolean active,
             String locationTypeName,
-            String timezone) {}
+            String timezone,
+            String distanceUnit) {}
 
     private record VehicleWriterPayload(
             UUID accountId,

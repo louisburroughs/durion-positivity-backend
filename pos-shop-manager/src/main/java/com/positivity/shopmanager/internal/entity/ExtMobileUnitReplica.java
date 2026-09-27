@@ -44,6 +44,14 @@ public class ExtMobileUnitReplica extends TenantScopedEntity {
     @Column(name = "active", nullable = false)
     private boolean active;
 
+    /**
+     * Heaviest GVWR class (1–8) the unit accepts (DECISION-LOCATION-029, #2267), the mobile-unit
+     * counterpart of {@link ExtBayReplica#getMaxDutyClass()}. NULL means unconstrained or not yet
+     * published — #2269's placement check must not read NULL as "no vehicle qualifies".
+     */
+    @Column(name = "max_duty_class")
+    private Integer maxDutyClass;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 

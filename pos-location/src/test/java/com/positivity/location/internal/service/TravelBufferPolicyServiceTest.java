@@ -58,7 +58,7 @@ class TravelBufferPolicyServiceTest {
         TravelBufferPolicyEntity persisted = TravelBufferPolicyEntity.builder()
                 .id(java.util.UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .name("Standard Buffer")
-                .bufferType("FLAT_MINUTES")
+                .bufferType("FIXED_MINUTES")
                 .bufferValue(new BigDecimal("15"))
                 .notes("default policy")
                 .createdAt(Instant.now(TEST_CLOCK))
@@ -68,7 +68,7 @@ class TravelBufferPolicyServiceTest {
 
         Map<String, Object> request = Map.of(
                 "name", "Standard Buffer",
-                "bufferType", "FLAT_MINUTES",
+                "bufferType", "FIXED_MINUTES",
                 "bufferValue", new BigDecimal("15"),
                 "notes", "default policy");
 
@@ -76,7 +76,7 @@ class TravelBufferPolicyServiceTest {
 
         assertThat(created).isNotNull();
         assertThat(created.getName()).isEqualTo("Standard Buffer");
-        assertThat(created.getBufferType()).isEqualTo("FLAT_MINUTES");
+        assertThat(created.getBufferType()).isEqualTo("FIXED_MINUTES");
         assertThat(created.getBufferValue()).isEqualByComparingTo("15");
     }
 
@@ -88,7 +88,7 @@ class TravelBufferPolicyServiceTest {
 
         Map<String, Object> request = Map.of(
                 "name", "Standard Buffer",
-                "bufferType", "FLAT_MINUTES",
+                "bufferType", "FIXED_MINUTES",
                 "bufferValue", new BigDecimal("15"),
                 "notes", "default policy");
 
@@ -109,8 +109,7 @@ class TravelBufferPolicyServiceTest {
             assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(e.getCode()).isEqualTo("VALIDATION_ERROR");
             assertThat(e.getField()).isEqualTo("bufferType");
-            assertThat(e.getReason())
-                    .isEqualTo("bufferType must be FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER");
+            assertThat(e.getReason()).isEqualTo("bufferType must be FIXED_MINUTES or DISTANCE_TIER");
         });
     }
 
@@ -123,8 +122,7 @@ class TravelBufferPolicyServiceTest {
             assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(e.getCode()).isEqualTo("VALIDATION_ERROR");
             assertThat(e.getField()).isEqualTo("bufferType");
-            assertThat(e.getReason())
-                    .isEqualTo("bufferType must be FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER");
+            assertThat(e.getReason()).isEqualTo("bufferType must be FIXED_MINUTES or DISTANCE_TIER");
         });
     }
 
@@ -135,7 +133,7 @@ class TravelBufferPolicyServiceTest {
         TravelBufferPolicyEntity existing = TravelBufferPolicyEntity.builder()
                 .id(policyId)
                 .name("Standard")
-                .bufferType("FLAT_MINUTES")
+                .bufferType("FIXED_MINUTES")
                 .bufferValue(new BigDecimal("15"))
                 .notes("old")
                 .build();
@@ -156,7 +154,7 @@ class TravelBufferPolicyServiceTest {
     void shouldRejectNegativeBufferValue() {
         Map<String, Object> request = Map.of(
                 "name", "Negative Buffer",
-                "bufferType", "PERCENTAGE_OF_TRAVEL",
+                "bufferType", "FIXED_MINUTES",
                 "bufferValue", new BigDecimal("-1"));
 
         assertThatThrownBy(() -> service.create(request)).isInstanceOfSatisfying(InvalidFieldException.class, e -> {
@@ -176,7 +174,7 @@ class TravelBufferPolicyServiceTest {
         TravelBufferPolicyEntity existing = TravelBufferPolicyEntity.builder()
                 .id(policyId)
                 .name("Standard")
-                .bufferType("FLAT_MINUTES")
+                .bufferType("FIXED_MINUTES")
                 .bufferValue(new BigDecimal("15"))
                 .build();
         when(repository.findById(policyId)).thenReturn(java.util.Optional.of(existing));
@@ -186,8 +184,7 @@ class TravelBufferPolicyServiceTest {
                     assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
                     assertThat(e.getCode()).isEqualTo("VALIDATION_ERROR");
                     assertThat(e.getField()).isEqualTo("bufferType");
-                    assertThat(e.getReason())
-                            .isEqualTo("bufferType must be FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER");
+                    assertThat(e.getReason()).isEqualTo("bufferType must be FIXED_MINUTES or DISTANCE_TIER");
                 });
         verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
     }
@@ -195,7 +192,7 @@ class TravelBufferPolicyServiceTest {
     @Test
     @DisplayName("#76 - patch invalid id returns bad request")
     void shouldRejectPatchWhenIdIsInvalid() {
-        assertThatThrownBy(() -> service.patch("not-a-uuid", Map.of("bufferType", "FLAT_MINUTES", "bufferValue", 12)))
+        assertThatThrownBy(() -> service.patch("not-a-uuid", Map.of("bufferType", "FIXED_MINUTES", "bufferValue", 12)))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400 BAD_REQUEST");
         verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
@@ -208,7 +205,7 @@ class TravelBufferPolicyServiceTest {
         when(repository.findById(policyId)).thenReturn(java.util.Optional.empty());
 
         assertThatThrownBy(() ->
-                        service.patch(policyId.toString(), Map.of("bufferType", "FLAT_MINUTES", "bufferValue", 12)))
+                        service.patch(policyId.toString(), Map.of("bufferType", "FIXED_MINUTES", "bufferValue", 12)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Travel buffer policy not found");
         verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
@@ -220,13 +217,13 @@ class TravelBufferPolicyServiceTest {
         TravelBufferPolicyEntity first = TravelBufferPolicyEntity.builder()
                 .id(java.util.UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .name("Standard")
-                .bufferType("FLAT_MINUTES")
+                .bufferType("FIXED_MINUTES")
                 .bufferValue(new BigDecimal("10"))
                 .build();
         TravelBufferPolicyEntity second = TravelBufferPolicyEntity.builder()
                 .id(java.util.UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .name("Distance")
-                .bufferType("DISTANCE_MULTIPLIER")
+                .bufferType("DISTANCE_TIER")
                 .bufferValue(new BigDecimal("1.5"))
                 .build();
         when(repository.findAll()).thenReturn(List.of(first, second));
@@ -235,7 +232,7 @@ class TravelBufferPolicyServiceTest {
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getName()).isEqualTo("Standard");
-        assertThat(result.get(1).getBufferType()).isEqualTo("DISTANCE_MULTIPLIER");
+        assertThat(result.get(1).getBufferType()).isEqualTo("DISTANCE_TIER");
     }
 
     @Test
@@ -243,13 +240,13 @@ class TravelBufferPolicyServiceTest {
     void shouldCreateTypedRequestWithNullBufferValue() {
         TravelBufferPolicyRequest request = TravelBufferPolicyRequest.builder()
                 .name("No Value")
-                .bufferType("FLAT_MINUTES")
+                .bufferType("FIXED_MINUTES")
                 .bufferValue(null)
                 .build();
         TravelBufferPolicyEntity persisted = TravelBufferPolicyEntity.builder()
                 .id(java.util.UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .name("No Value")
-                .bufferType("FLAT_MINUTES")
+                .bufferType("FIXED_MINUTES")
                 .bufferValue(null)
                 .build();
         when(repository.save(any(TravelBufferPolicyEntity.class))).thenReturn(persisted);
@@ -267,7 +264,7 @@ class TravelBufferPolicyServiceTest {
         TravelBufferPolicyEntity existing = TravelBufferPolicyEntity.builder()
                 .id(policyId)
                 .name("Standard")
-                .bufferType("FLAT_MINUTES")
+                .bufferType("FIXED_MINUTES")
                 .build();
         when(repository.findById(policyId)).thenReturn(java.util.Optional.of(existing));
         Map<String, Object> patch = new java.util.HashMap<>();
@@ -277,7 +274,7 @@ class TravelBufferPolicyServiceTest {
                 .isInstanceOfSatisfying(
                         InvalidFieldException.class,
                         e -> assertThat(e.getField()).isEqualTo("bufferType"));
-        assertThat(existing.getBufferType()).isEqualTo("FLAT_MINUTES");
+        assertThat(existing.getBufferType()).isEqualTo("FIXED_MINUTES");
         verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
     }
 
@@ -288,7 +285,7 @@ class TravelBufferPolicyServiceTest {
         TravelBufferPolicyEntity existing = TravelBufferPolicyEntity.builder()
                 .id(policyId)
                 .name("Standard")
-                .bufferType("FLAT_MINUTES")
+                .bufferType("FIXED_MINUTES")
                 .bufferValue(new BigDecimal("15"))
                 .build();
         when(repository.findById(policyId)).thenReturn(java.util.Optional.of(existing));
@@ -302,11 +299,112 @@ class TravelBufferPolicyServiceTest {
     }
 
     @Test
+    @DisplayName("#2266 - DISTANCE_TIER is an accepted bufferType")
+    void shouldAcceptDistanceTierBufferType() {
+        TravelBufferPolicyEntity persisted = TravelBufferPolicyEntity.builder()
+                .id(java.util.UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .name("Tiered")
+                .bufferType("DISTANCE_TIER")
+                .build();
+        when(repository.save(any(TravelBufferPolicyEntity.class))).thenReturn(persisted);
+
+        TravelBufferPolicyResponse created = service.create(TravelBufferPolicyRequest.builder()
+                .name("Tiered")
+                .bufferType("DISTANCE_TIER")
+                .build());
+
+        assertThat(created.getBufferType()).isEqualTo("DISTANCE_TIER");
+    }
+
+    @Test
+    @DisplayName("#2266 - the retired FLAT_MINUTES type is refused; only FIXED_MINUTES is accepted")
+    void shouldRejectRetiredFlatMinutesType() {
+        Map<String, Object> request =
+                Map.of("name", "Old Name", "bufferType", "FLAT_MINUTES", "bufferValue", new BigDecimal("15"));
+
+        assertThatThrownBy(() -> service.create(request)).isInstanceOfSatisfying(InvalidFieldException.class, e -> {
+            assertThat(e.getField()).isEqualTo("bufferType");
+            assertThat(e.getReason()).isEqualTo("bufferType must be FIXED_MINUTES or DISTANCE_TIER");
+        });
+    }
+
+    @Test
+    @DisplayName("#2266 - PERCENTAGE_OF_TRAVEL and DISTANCE_MULTIPLIER are refused, per DECISION-LOCATION-028")
+    void shouldRejectRemovedBufferTypes() {
+        for (String removedType : List.of("PERCENTAGE_OF_TRAVEL", "DISTANCE_MULTIPLIER")) {
+            Map<String, Object> request =
+                    Map.of("name", "Removed " + removedType, "bufferType", removedType, "bufferValue", 1);
+
+            assertThatThrownBy(() -> service.create(request))
+                    .as("bufferType %s", removedType)
+                    .isInstanceOfSatisfying(
+                            InvalidFieldException.class,
+                            e -> assertThat(e.getField()).isEqualTo("bufferType"));
+        }
+    }
+
+    @Test
+    @DisplayName("#2266 - DECISION-LOCATION-015: a FIXED_MINUTES bufferValue must be a whole number of minutes")
+    void shouldRejectFractionalFixedMinutesValue() {
+        Map<String, Object> request =
+                Map.of("name", "Fractional", "bufferType", "FIXED_MINUTES", "bufferValue", new BigDecimal("15.5"));
+
+        assertThatThrownBy(() -> service.create(request)).isInstanceOfSatisfying(InvalidFieldException.class, e -> {
+            assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(e.getCode()).isEqualTo("VALIDATION_ERROR");
+            assertThat(e.getField()).isEqualTo("bufferValue");
+            assertThat(e.getReason()).isEqualTo("bufferValue must be a whole number of minutes");
+        });
+    }
+
+    @Test
+    @DisplayName("#2266 - a whole-number FIXED_MINUTES bufferValue, even written with trailing zeros, is accepted")
+    void shouldAcceptWholeNumberFixedMinutesValueWithTrailingZeros() {
+        TravelBufferPolicyEntity persisted = TravelBufferPolicyEntity.builder()
+                .id(java.util.UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .name("Whole")
+                .bufferType("FIXED_MINUTES")
+                .bufferValue(new BigDecimal("30.00"))
+                .build();
+        when(repository.save(any(TravelBufferPolicyEntity.class))).thenReturn(persisted);
+
+        TravelBufferPolicyResponse created = service.create(TravelBufferPolicyRequest.builder()
+                .name("Whole")
+                .bufferType("FIXED_MINUTES")
+                .bufferValue(new BigDecimal("30.00"))
+                .build());
+
+        assertThat(created.getBufferValue()).isEqualByComparingTo("30");
+    }
+
+    @Test
+    @DisplayName("#2266 - patch to a fractional FIXED_MINUTES bufferValue is refused")
+    void shouldRejectPatchToFractionalFixedMinutesValue() {
+        java.util.UUID policyId = java.util.UUID.fromString("00000000-0000-0000-0000-000000000001");
+        TravelBufferPolicyEntity existing = TravelBufferPolicyEntity.builder()
+                .id(policyId)
+                .name("Standard")
+                .bufferType("FIXED_MINUTES")
+                .bufferValue(new BigDecimal("15"))
+                .build();
+        when(repository.findById(policyId)).thenReturn(java.util.Optional.of(existing));
+
+        // patch() applies a numeric bufferValue to the in-memory entity before the final
+        // validateRequest pass rejects it (pre-existing shape, not changed here); what #2266 adds is
+        // that nothing is persisted for a fractional FIXED_MINUTES value.
+        assertThatThrownBy(() -> service.patch(policyId.toString(), Map.of("bufferValue", new BigDecimal("15.25"))))
+                .isInstanceOfSatisfying(
+                        InvalidFieldException.class,
+                        e -> assertThat(e.getField()).isEqualTo("bufferValue"));
+        verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
+    }
+
+    @Test
     @DisplayName("#2252 - create with a blank name is 400 on name")
     void shouldRejectCreateWithBlankName() {
         TravelBufferPolicyRequest request = TravelBufferPolicyRequest.builder()
                 .name("  ")
-                .bufferType("FLAT_MINUTES")
+                .bufferType("FIXED_MINUTES")
                 .build();
 
         assertThatThrownBy(() -> service.create(request))

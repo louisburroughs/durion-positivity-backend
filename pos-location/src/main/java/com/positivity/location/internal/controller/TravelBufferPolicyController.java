@@ -50,19 +50,20 @@ public class TravelBufferPolicyController {
                     Use this tool before assigning the policy to mobile units via createMobileUnit or \
                     patchMobileUnit; do not use patchTravelBufferPolicy, which edits an existing policy.
                     Preconditions: the name must not collide with an existing policy.
-                    Required inputs: name and bufferType, one of FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or \
-                    DISTANCE_MULTIPLIER; bufferValue is optional, must be non-negative, and is interpreted \
-                    according to the bufferType.
+                    Required inputs: name and bufferType, one of FIXED_MINUTES or DISTANCE_TIER \
+                    (DECISION-LOCATION-015); bufferValue is optional, must be non-negative, and for FIXED_MINUTES \
+                    must be a whole number of minutes.
                     Emits a LOCATION_TRAVEL_BUFFER_POLICY_CREATE event.
                     Returns 201 with the created policy, 400 VALIDATION_ERROR with fieldErrors for a blank name, \
-                    an unknown bufferType or a negative bufferValue, and 409 TRAVEL_BUFFER_POLICY_NAME_TAKEN when \
-                    the name is already taken.
+                    an unknown bufferType, a negative bufferValue or a fractional FIXED_MINUTES bufferValue, and \
+                    409 TRAVEL_BUFFER_POLICY_NAME_TAKEN when the name is already taken.
                     """)
     @ApiResponse(responseCode = "201", description = "Travel buffer policy created")
     @ApiResponse(
             responseCode = "400",
-            description = "VALIDATION_ERROR: blank name, a bufferType other than FLAT_MINUTES, PERCENTAGE_OF_TRAVEL"
-                    + " or DISTANCE_MULTIPLIER, or a negative bufferValue. fieldErrors names the field.",
+            description = "VALIDATION_ERROR: blank name, a bufferType other than FIXED_MINUTES or DISTANCE_TIER, a"
+                    + " negative bufferValue, or a fractional bufferValue on a FIXED_MINUTES policy. fieldErrors"
+                    + " names the field.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
@@ -82,9 +83,9 @@ public class TravelBufferPolicyController {
                             content =
                                     @Content(
                                             mediaType = "application/json",
-                                            examples = @ExampleObject(name = "Flat minutes buffer", value = """
+                                            examples = @ExampleObject(name = "Fixed minutes buffer", value = """
                                                                     {"name":"Standard Metro Buffer",
-                                                                     "bufferType":"FLAT_MINUTES",
+                                                                     "bufferType":"FIXED_MINUTES",
                                                                      "bufferValue":30,
                                                                      "notes":"Applies during peak hours only"}
                                                                     """)))
@@ -121,15 +122,16 @@ public class TravelBufferPolicyController {
                     bufferValue and notes.
                     Use this tool to tune buffer behavior; do not use it to rename a policy, whose name is \
                     immutable after createTravelBufferPolicy.
-                    Preconditions: the policy must exist; the resulting bufferType must remain one of \
-                    FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER and the resulting bufferValue \
-                    non-negative.
+                    Preconditions: the policy must exist; the resulting bufferType must remain FIXED_MINUTES or \
+                    DISTANCE_TIER, the resulting bufferValue non-negative, and a FIXED_MINUTES bufferValue a whole \
+                    number of minutes.
                     Required inputs: id (UUID) as a path parameter and a JSON object of the fields to change; \
                     keys other than bufferType, bufferValue and notes are silently ignored.
                     Emits a LOCATION_TRAVEL_BUFFER_POLICY_PATCH event.
                     Returns 200 with the patched policy, 400 VALIDATION_ERROR when the id is not a valid UUID or \
                     (with fieldErrors) when bufferType is not a supported value, bufferValue is not a \
-                    non-negative number or notes is not text, and 404 when no policy exists for the id.
+                    non-negative number, a FIXED_MINUTES bufferValue is fractional, or notes is not text, and 404 \
+                    when no policy exists for the id.
                     """)
     @ApiResponse(responseCode = "200", description = "Travel buffer policy patched")
     @ApiResponse(

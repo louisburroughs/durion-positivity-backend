@@ -57,4 +57,12 @@ public class LocationBulkIngestRecord {
             example = "STORE",
             requiredMode = NOT_REQUIRED)
     private String locationTypeName;
+
+    @Schema(
+            description = "Unit this location's forms show and accept for a distance value"
+                    + " (DECISION-LOCATION-028); KM when omitted.",
+            example = "MI",
+            allowableValues = {"KM", "MI"},
+            requiredMode = NOT_REQUIRED)
+    private String distanceUnit;
 }

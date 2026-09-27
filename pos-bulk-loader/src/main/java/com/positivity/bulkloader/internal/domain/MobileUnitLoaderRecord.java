@@ -10,6 +10,7 @@ public class MobileUnitLoaderRecord {
     private String name;
     private String status;
     private String notes;
+    private String maxDutyClass;
 
     /** Resolved from {@code baseLocationCode}, or supplied directly. */
     private String baseLocationId;

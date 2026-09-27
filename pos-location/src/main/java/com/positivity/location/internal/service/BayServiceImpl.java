@@ -14,14 +14,16 @@ import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.BaySpecialtyOperationRepository;
 import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
 import com.positivity.location.internal.repository.LocationRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,9 +40,12 @@ public class BayServiceImpl implements BayService {
 
     private static final String BAY_NAME_TAKEN = "BAY_NAME_TAKEN";
     private static final String BAY_CONFLICT = "BAY_CONFLICT";
-    private static final String STATUS_ACTIVE = "ACTIVE";
-    private static final String STATUS_OUT_OF_SERVICE = "OUT_OF_SERVICE";
-    private static final Set<String> ALLOWED_STATUSES = Set.of(STATUS_ACTIVE, STATUS_OUT_OF_SERVICE);
+    private static final String STATUS_ACTIVE = LifecycleStatusSupport.ACTIVE;
+    private static final String STATUS_OUT_OF_SERVICE = LifecycleStatusSupport.OUT_OF_SERVICE;
+    private static final String STATUS_RETIRED = LifecycleStatusSupport.RETIRED;
+    /** DECISION-LOCATION-026 rule 5: bay lists sort by displayOrder (nulls last), then name. */
+    private static final Sort BAY_LIST_ORDER =
+            Sort.by(Sort.Order.asc("displayOrder").nullsLast(), Sort.Order.asc("name"));
 
     private final BayRepository bayRepository;
     private final LocationRepository locationRepository;
@@ -73,6 +78,18 @@ public class BayServiceImpl implements BayService {
         if (maxConcurrentVehicles < 1) {
             throw new IllegalArgumentException("capacity.maxConcurrentVehicles must be >= 1");
         }
+        String outOfServiceReason = LifecycleStatusSupport.normalizeReason(request.getOutOfServiceReason());
+        String outOfServiceNote = request.getOutOfServiceNote();
+        LifecycleStatusSupport.requireNoteLength(outOfServiceNote);
+        Instant expectedReturnAt = request.getExpectedReturnAt();
+        if (!STATUS_OUT_OF_SERVICE.equals(status)) {
+            // Only OUT_OF_SERVICE carries these fields; a caller naming them for another status has
+            // them silently dropped rather than stored inert (DECISION-LOCATION-026 rule 4).
+            outOfServiceReason = null;
+            outOfServiceNote = null;
+            expectedReturnAt = null;
+        }
+        LifecycleStatusSupport.requireReasonWhenOutOfService(status, outOfServiceReason, outOfServiceNote);
 
         if (bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, name)
                 || bayRepository
@@ -97,6 +114,10 @@ public class BayServiceImpl implements BayService {
                 .maxConcurrentVehicles(maxConcurrentVehicles)
                 .serviceCapabilityCodes(validatedCapabilityCodes)
                 .maxDutyClass(request.getMaxDutyClass())
+                .outOfServiceReason(outOfServiceReason)
+                .outOfServiceNote(outOfServiceNote)
+                .expectedReturnAt(expectedReturnAt)
+                .displayOrder(request.getDisplayOrder())
                 .build();
 
         try {
@@ -118,17 +139,22 @@ public class BayServiceImpl implements BayService {
 
         String normalizedStatus = status == null || status.isBlank() ? null : normalizeStatus(status);
         String normalizedBayType = bayType == null || bayType.isBlank() ? null : normalizeBayType(bayType);
+        // DECISION-LOCATION-026 rule 5: displayOrder (nulls last), then name — imposed here rather
+        // than left to the caller's Pageable, which never carries a sort of its own.
+        Pageable ordered = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), BAY_LIST_ORDER);
 
         Page<BayEntity> page;
         if (normalizedStatus != null && normalizedBayType != null) {
             page = bayRepository.findByLocationIdAndStatusAndBayType(
-                    locationId, normalizedStatus, normalizedBayType, pageable);
+                    locationId, normalizedStatus, normalizedBayType, ordered);
         } else if (normalizedStatus != null) {
-            page = bayRepository.findByLocationIdAndStatus(locationId, normalizedStatus, pageable);
+            page = bayRepository.findByLocationIdAndStatus(locationId, normalizedStatus, ordered);
         } else if (normalizedBayType != null) {
-            page = bayRepository.findByLocationIdAndBayType(locationId, normalizedBayType, pageable);
+            // No explicit status filter: default lists hide RETIRED (DECISION-LOCATION-008/026).
+            page = bayRepository.findByLocationIdAndBayTypeAndStatusNot(
+                    locationId, normalizedBayType, STATUS_RETIRED, ordered);
         } else {
-            page = bayRepository.findByLocationId(locationId, pageable);
+            page = bayRepository.findByLocationIdAndStatusNot(locationId, STATUS_RETIRED, ordered);
         }
         return page.map(this::toResponse);
     }
@@ -172,6 +198,7 @@ public class BayServiceImpl implements BayService {
         if (patch.getStatus() != null) {
             existing.setStatus(normalizeStatus(patch.getStatus()));
         }
+        applyOutOfServiceFields(existing, patch);
 
         Integer maxConcurrentVehicles = null;
         if (patch.getCapacity() != null) {
@@ -193,6 +220,9 @@ public class BayServiceImpl implements BayService {
         if (patch.getMaxDutyClass() != null) {
             existing.setMaxDutyClass(patch.getMaxDutyClass());
         }
+        if (patch.getDisplayOrder() != null) {
+            existing.setDisplayOrder(patch.getDisplayOrder());
+        }
 
         try {
             BayEntity saved = bayRepository.save(existing);
@@ -208,17 +238,17 @@ public class BayServiceImpl implements BayService {
     }
 
     /**
-     * Hard-deletes a bay and emits the {@code location.bay.deleted} tombstone (issue #1668).
+     * Retires a bay (DECISION-LOCATION-026 rule 1, issue #2264): the row stays and {@code status}
+     * becomes {@code RETIRED}. Nothing is hard-deleted, so consumers keep their replica row and an
+     * appointment or workorder that already names this bay still resolves to it.
      *
-     * <p>Loads the row before deleting it so the fact can be versioned from its final
-     * {@code @Version}, the same load-before-delete shape {@code LocationServiceImpl.deleteLocation}
-     * uses: the tombstone publisher needs the entity, not just the id. A bay id that resolves to
-     * nothing has no state to version and no delete to announce, so it is a silent no-op rather
-     * than an unconditional publish — a caller retrying a delete for an id that never existed must
-     * not produce a tombstone every time.
+     * <p>Idempotent: retiring an already-{@code RETIRED} bay is a normal update, not an error —
+     * a retried delete for the same bay must not fail just because the first one already landed.
+     * A bay id that resolves to nothing has no state to change and publishes nothing, the same
+     * silent-no-op contract the former hard delete kept.
      *
-     * <p>Taking a bay out of service is a status change via {@link #patchBay}, not a delete;
-     * consumers remove the replica row unconditionally here.
+     * <p>{@code RETIRED} is reversible ({@code patchBay} back to {@code ACTIVE} or {@code
+     * OUT_OF_SERVICE}); it carries no error code of its own.
      */
     public boolean deleteBay(UUID locationId, UUID bayId) {
         validateLocationExists(locationId);
@@ -227,9 +257,10 @@ public class BayServiceImpl implements BayService {
         if (existing == null) {
             return false;
         }
+        existing.setStatus(STATUS_RETIRED);
         try {
-            bayRepository.delete(existing);
-            locationFactPublisher.bayDeleted(existing);
+            BayEntity saved = bayRepository.save(existing);
+            locationFactPublisher.bayChanged(saved);
         } catch (OptimisticLockingFailureException exception) {
             throw toBayOptimisticLockException(exception);
         }
@@ -269,11 +300,35 @@ public class BayServiceImpl implements BayService {
     }
 
     private String normalizeStatus(String value) {
-        String resolved = value == null ? STATUS_ACTIVE : value.trim().toUpperCase(Locale.ROOT);
-        if (!ALLOWED_STATUSES.contains(resolved)) {
-            throw new IllegalArgumentException("Invalid status: " + value);
+        return LifecycleStatusSupport.normalizeStatus(value, STATUS_ACTIVE);
+    }
+
+    /**
+     * Applies {@code patch}'s out-of-service fields to {@code existing} (DECISION-LOCATION-026 rule
+     * 4). A patched field with a non-null value replaces the stored one; an omitted (null) field
+     * leaves the stored value unchanged — except that a status patch resolving to {@code ACTIVE}
+     * always clears all three, regardless of what the patch also sent. The resulting state is
+     * validated only when the resulting status is {@code OUT_OF_SERVICE}: a reason must be present,
+     * and {@code OTHER} must carry a non-blank note.
+     */
+    private void applyOutOfServiceFields(BayEntity existing, BayPatchRequest patch) {
+        if (patch.getOutOfServiceReason() != null) {
+            existing.setOutOfServiceReason(LifecycleStatusSupport.normalizeReason(patch.getOutOfServiceReason()));
         }
-        return resolved;
+        if (patch.getOutOfServiceNote() != null) {
+            LifecycleStatusSupport.requireNoteLength(patch.getOutOfServiceNote());
+            existing.setOutOfServiceNote(patch.getOutOfServiceNote());
+        }
+        if (patch.getExpectedReturnAt() != null) {
+            existing.setExpectedReturnAt(patch.getExpectedReturnAt());
+        }
+        if (STATUS_ACTIVE.equals(existing.getStatus())) {
+            existing.setOutOfServiceReason(null);
+            existing.setOutOfServiceNote(null);
+            existing.setExpectedReturnAt(null);
+        }
+        LifecycleStatusSupport.requireReasonWhenOutOfService(
+                existing.getStatus(), existing.getOutOfServiceReason(), existing.getOutOfServiceNote());
     }
 
     private String normalizeBayType(String value) {
@@ -370,6 +425,10 @@ public class BayServiceImpl implements BayService {
                 .serviceCapabilityCodes(
                         entity.getServiceCapabilityCodes() == null ? List.of() : entity.getServiceCapabilityCodes())
                 .maxDutyClass(entity.getMaxDutyClass())
+                .outOfServiceReason(entity.getOutOfServiceReason())
+                .outOfServiceNote(entity.getOutOfServiceNote())
+                .expectedReturnAt(entity.getExpectedReturnAt())
+                .displayOrder(entity.getDisplayOrder())
                 .createdAt(entity.getCreatedAt())
                 .lastModifiedAt(entity.getUpdatedAt())
                 .build();

@@ -70,6 +70,15 @@ public class LocationRequestDTO {
     private Boolean active;
 
     @Schema(
+            description = "Unit this location's forms show and accept for a distance value (DECISION-LOCATION-028);"
+                    + " KM when omitted. Storage of a distance is always canonical kilometres regardless of this"
+                    + " setting.",
+            example = "KM",
+            allowableValues = {"KM", "MI"},
+            requiredMode = NOT_REQUIRED)
+    private String distanceUnit;
+
+    @Schema(
             description = "People-contact person identifier of the person responsible for the location",
             example = "01960011-0000-7000-8000-000000000001",
             requiredMode = NOT_REQUIRED)

@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,7 +32,6 @@ import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +40,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InOrder;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -149,7 +147,6 @@ class MobileUnitServiceTest {
         MobileUnitRequest request = MobileUnitRequest.builder()
                 .name("NorthVan")
                 .baseLocationId(baseLocationId)
-                .status("INACTIVE")
                 .build();
 
         assertThatThrownBy(() -> service.createMobileUnit(request))
@@ -171,12 +168,209 @@ class MobileUnitServiceTest {
         MobileUnitRequest request = MobileUnitRequest.builder()
                 .name("NorthVan")
                 .baseLocationId(baseLocationId)
-                .status("INACTIVE")
                 .build();
 
         assertThatThrownBy(() -> service.createMobileUnit(request))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessage("MOBILE_UNIT_NAME_TAKEN");
+    }
+
+    @Test
+    @DisplayName("#2267 - maxDutyClass outside 1-8 rejects create with 400 naming the field")
+    void shouldRejectMaxDutyClassOutsideRangeOnCreate() {
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .maxDutyClass(9)
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(InvalidFieldException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getCode()).isEqualTo(InvalidFieldException.VALIDATION_ERROR);
+                    assertThat(e.getField()).isEqualTo("maxDutyClass");
+                });
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2267 - a VIN that is not 17 characters rejects create with 400 naming the field")
+    void shouldRejectMalformedVinOnCreate() {
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .vin("SHORT-VIN")
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(InvalidFieldException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getField()).isEqualTo("vin");
+                });
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2267 - a malformed plateRegion rejects create with 400 naming the field")
+    void shouldRejectMalformedPlateRegionOnCreate() {
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .plateRegion("NORTHCAROLINA")
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(InvalidFieldException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getField()).isEqualTo("plateRegion");
+                });
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2267 - create persists the duty ceiling and identity, normalizing vin and plateRegion")
+    void shouldPersistDutyClassAndNormalizedIdentityOnCreate() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
+        when(mobileUnitRepository.save(any(MobileUnitEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(baseLocationId)
+                .maxDutyClass(5)
+                .unitNumber("Fleet-107")
+                .vin(" 1hgcm82633a004352 ")
+                .licensePlate("ABC-1234")
+                .plateRegion(" us-nc ")
+                .build();
+
+        MobileUnitResponse response = service.createMobileUnit(request);
+
+        assertThat(response.getMaxDutyClass()).isEqualTo(5);
+        assertThat(response.getUnitNumber()).isEqualTo("Fleet-107");
+        assertThat(response.getVin()).isEqualTo("1HGCM82633A004352");
+        assertThat(response.getLicensePlate()).isEqualTo("ABC-1234");
+        assertThat(response.getPlateRegion()).isEqualTo("US-NC");
+
+        ArgumentCaptor<MobileUnitEntity> captor = ArgumentCaptor.forClass(MobileUnitEntity.class);
+        verify(mobileUnitRepository).save(captor.capture());
+        assertThat(captor.getValue().getVin()).isEqualTo("1HGCM82633A004352");
+        assertThat(captor.getValue().getPlateRegion()).isEqualTo("US-NC");
+    }
+
+    @Test
+    @DisplayName("#2267 - a duplicate unitNumber within the tenant is refused with 409 naming the field")
+    void shouldRejectDuplicateUnitNumberOnCreate() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
+        when(mobileUnitRepository.existsByUnitNumber("Fleet-107")).thenReturn(true);
+
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(baseLocationId)
+                .unitNumber("Fleet-107")
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(DuplicateResourceException.class, e -> {
+                    assertThat(e.getMessage()).isEqualTo("MOBILE_UNIT_IDENTITY_TAKEN");
+                    assertThat(e.getField()).isEqualTo("unitNumber");
+                });
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2267 - a duplicate vin within the tenant is refused with 409 naming the field")
+    void shouldRejectDuplicateVinOnCreate() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
+        when(mobileUnitRepository.existsByVin("1HGCM82633A004352")).thenReturn(true);
+
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(baseLocationId)
+                .vin("1hgcm82633a004352")
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(DuplicateResourceException.class, e -> {
+                    assertThat(e.getMessage()).isEqualTo("MOBILE_UNIT_IDENTITY_TAKEN");
+                    assertThat(e.getField()).isEqualTo("vin");
+                });
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName(
+            "#2267 - a duplicate licensePlate+plateRegion pair is refused with 409; the plate alone is not checked")
+    void shouldRejectDuplicateLicensePlateAndPlateRegionOnCreate() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
+        when(mobileUnitRepository.existsByLicensePlateAndPlateRegion("ABC-1234", "US-NC"))
+                .thenReturn(true);
+
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(baseLocationId)
+                .licensePlate("ABC-1234")
+                .plateRegion("us-nc")
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(DuplicateResourceException.class, e -> {
+                    assertThat(e.getMessage()).isEqualTo("MOBILE_UNIT_IDENTITY_TAKEN");
+                    assertThat(e.getField()).isEqualTo("licensePlate");
+                });
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2267 - a licensePlate with no plateRegion is never checked for a duplicate")
+    void shouldNotCheckLicensePlateDuplicateWithoutPlateRegion() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
+        when(mobileUnitRepository.save(any(MobileUnitEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(baseLocationId)
+                .licensePlate("ABC-1234")
+                .build();
+
+        service.createMobileUnit(request);
+
+        verify(mobileUnitRepository, never()).existsByLicensePlateAndPlateRegion(any(), any());
+        verify(mobileUnitRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("#2267 - a vin unique-index violation from the db maps to 409 identity-taken, naming the field")
+    void shouldMapVinConstraintViolationToIdentityTakenConflict() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(baseLocationId))
+                .thenReturn(Optional.of(Location.builder().id(baseLocationId).build()));
+        when(mobileUnitRepository.save(any(MobileUnitEntity.class)))
+                .thenThrow(new DataIntegrityViolationException(
+                        "duplicate key value violates unique constraint \"uq_mobile_units_tenant_vin\""));
+
+        MobileUnitRequest request = MobileUnitRequest.builder()
+                .name("Van 1")
+                .baseLocationId(baseLocationId)
+                .vin("1HGCM82633A004352")
+                .build();
+
+        assertThatThrownBy(() -> service.createMobileUnit(request))
+                .isInstanceOfSatisfying(DuplicateResourceException.class, e -> {
+                    assertThat(e.getMessage()).isEqualTo("MOBILE_UNIT_IDENTITY_TAKEN");
+                    assertThat(e.getField()).isEqualTo("vin");
+                });
     }
 
     @Test
@@ -277,7 +471,7 @@ class MobileUnitServiceTest {
                         .mobileUnit(savedEntity)
                         .ruleType("DISTANCE_TIER")
                         .priority(2)
-                        .maxDistance(BigDecimal.valueOf(25))
+                        .maxDistanceKm(BigDecimal.valueOf(25))
                         .build());
         when(coverageRuleRepository.saveAll(anyList())).thenReturn(savedRules);
 
@@ -293,7 +487,7 @@ class MobileUnitServiceTest {
                                 .serviceAreaId(serviceAreaId)
                                 .ruleType("DISTANCE_TIER")
                                 .priority(1)
-                                .maxDistance(BigDecimal.valueOf(25))
+                                .maxDistance(Map.of("value", BigDecimal.valueOf(25), "unit", "KM"))
                                 .build(),
                         CoverageRuleRequest.builder()
                                 .serviceAreaId(serviceAreaId)
@@ -318,13 +512,13 @@ class MobileUnitServiceTest {
         UUID firstId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID secondId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Order.asc("name"), Sort.Order.asc("id")));
-        when(mobileUnitRepository.findAll(pageable))
+        when(mobileUnitRepository.findByStatusNot(eq("RETIRED"), eq(pageable)))
                 .thenReturn(new PageImpl<>(
                         List.of(
                                 MobileUnitEntity.builder()
                                         .id(firstId)
                                         .name("A")
-                                        .status("INACTIVE")
+                                        .status("OUT_OF_SERVICE")
                                         .build(),
                                 MobileUnitEntity.builder()
                                         .id(secondId)
@@ -373,7 +567,7 @@ class MobileUnitServiceTest {
     void shouldPatchExistingMobileUnit() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // Complete apart from its status: the flip to ACTIVE is what the patch tests.
-        MobileUnitEntity existing = completeUnit(id, "INACTIVE");
+        MobileUnitEntity existing = completeUnit(id, "OUT_OF_SERVICE");
         when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
         when(mobileUnitRepository.save(existing)).thenReturn(existing);
         when(coverageRuleRepository.findByMobileUnit_IdOrderByPriorityAsc(id))
@@ -416,7 +610,7 @@ class MobileUnitServiceTest {
         MobileUnitEntity existing = MobileUnitEntity.builder()
                 .id(id)
                 .name("Bare")
-                .status("INACTIVE")
+                .status("OUT_OF_SERVICE")
                 .build();
         when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
 
@@ -529,27 +723,24 @@ class MobileUnitServiceTest {
     }
 
     @Test
-    @DisplayName("#76 - eligible mobile units include only active and deduplicate by unit")
+    @DisplayName("#76/#2265 - eligible mobile units include only active and deduplicate by unit")
     void shouldFindEligibleMobileUnitsWithActiveDeduplication() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
         UUID activeId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID inactiveId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID inactiveId = UUID.fromString("00000000-0000-0000-0000-000000000002");
         Instant now = Instant.now(TEST_CLOCK);
 
         MobileUnitEntity activeUnit = MobileUnitEntity.builder()
                 .id(activeId)
                 .name("Active")
                 .status("ACTIVE")
-                .baseLocation(Location.builder()
-                        .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                        .build())
+                .baseLocation(Location.builder().id(baseLocationId).build())
                 .build();
         MobileUnitEntity inactiveUnit = MobileUnitEntity.builder()
                 .id(inactiveId)
                 .name("Inactive")
-                .status("INACTIVE")
-                .baseLocation(Location.builder()
-                        .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                        .build())
+                .status("OUT_OF_SERVICE")
+                .baseLocation(Location.builder().id(baseLocationId).build())
                 .build();
 
         MobileUnitCoverageRuleEntity firstForActive = MobileUnitCoverageRuleEntity.builder()
@@ -571,10 +762,10 @@ class MobileUnitServiceTest {
                 .ruleType("ZIP")
                 .build();
 
-        when(coverageRuleRepository.findEligibleCoverageRules(eq("94107"), eq("US"), any(LocalDate.class)))
+        when(coverageRuleRepository.findEligibleCoverageRules(eq("94107"), eq("US"), eq(now), eq(baseLocationId)))
                 .thenReturn(List.of(firstForActive, secondForSameActive, forInactive));
 
-        var eligible = service.findEligibleMobileUnits("94107", "US", now);
+        var eligible = service.findEligibleMobileUnits("94107", "US", now, baseLocationId, null);
 
         assertThat(eligible).hasSize(1);
         assertThat(eligible.get(0).getId()).isEqualTo(activeId);
@@ -582,25 +773,102 @@ class MobileUnitServiceTest {
     }
 
     @Test
-    @DisplayName("#1668 - deleting a mobile unit clears coverage rules then publishes the tombstone")
-    void deleteMobileUnitPublishesTombstone() {
+    @DisplayName("#2265 - eligible mobile units require baseLocationId")
+    void shouldRequireBaseLocationIdForEligibility() {
+        assertThatThrownBy(() -> service.findEligibleMobileUnits("94107", "US", Instant.now(TEST_CLOCK), null, null))
+                .isInstanceOfSatisfying(InvalidFieldException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getCode()).isEqualTo("VALIDATION_ERROR");
+                    assertThat(e.getField()).isEqualTo("baseLocationId");
+                });
+    }
+
+    @Test
+    @DisplayName("#2265 - eligible mobile units require every requested operationCode")
+    void shouldExcludeUnitsMissingAnyRequestedOperationCode() {
+        UUID baseLocationId = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+        UUID fullyEquippedId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        UUID partiallyEquippedId = UUID.fromString("00000000-0000-0000-0000-000000000004");
+        Instant now = Instant.now(TEST_CLOCK);
+
+        MobileUnitEntity fullyEquipped = MobileUnitEntity.builder()
+                .id(fullyEquippedId)
+                .name("Fully Equipped")
+                .status("ACTIVE")
+                .baseLocation(Location.builder().id(baseLocationId).build())
+                .build();
+        fullyEquipped.getServiceCapabilityCodes().add("CAP-A");
+        fullyEquipped.getServiceCapabilityCodes().add("CAP-B");
+        MobileUnitEntity partiallyEquipped = MobileUnitEntity.builder()
+                .id(partiallyEquippedId)
+                .name("Partially Equipped")
+                .status("ACTIVE")
+                .baseLocation(Location.builder().id(baseLocationId).build())
+                .build();
+        partiallyEquipped.getServiceCapabilityCodes().add("CAP-A");
+
+        MobileUnitCoverageRuleEntity ruleForFull = MobileUnitCoverageRuleEntity.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000005"))
+                .mobileUnit(fullyEquipped)
+                .priority(1)
+                .ruleType("SERVICE_AREA")
+                .build();
+        MobileUnitCoverageRuleEntity ruleForPartial = MobileUnitCoverageRuleEntity.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000006"))
+                .mobileUnit(partiallyEquipped)
+                .priority(2)
+                .ruleType("SERVICE_AREA")
+                .build();
+
+        when(coverageRuleRepository.findEligibleCoverageRules(eq("94107"), eq("US"), eq(now), eq(baseLocationId)))
+                .thenReturn(List.of(ruleForFull, ruleForPartial));
+
+        var eligible = service.findEligibleMobileUnits("94107", "US", now, baseLocationId, List.of("cap-a", "cap-b"));
+
+        assertThat(eligible).hasSize(1);
+        assertThat(eligible.get(0).getId()).isEqualTo(fullyEquippedId);
+    }
+
+    @Test
+    @DisplayName("#2264 - deleting a mobile unit retires it: coverage rules are kept, status becomes RETIRED")
+    void deleteMobileUnitRetiresRowAndKeepsCoverageRules() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         MobileUnitEntity existing =
                 MobileUnitEntity.builder().id(id).name("Van 1").status("ACTIVE").build();
         when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
+        when(mobileUnitRepository.save(existing)).thenReturn(existing);
 
         assertThat(service.deleteMobileUnit(id)).isTrue();
 
-        // mobile_unit_coverage_rules holds a plain FK with no cascade, so the rules must go first
-        // or the unit delete fails on the constraint.
-        InOrder inOrder = inOrder(coverageRuleRepository, mobileUnitRepository);
-        inOrder.verify(coverageRuleRepository).deleteByMobileUnit_Id(id);
-        inOrder.verify(mobileUnitRepository).delete(existing);
-        verify(locationFactPublisher).mobileUnitDeleted(existing);
+        // DECISION-LOCATION-026: DELETE retires and keeps coverage rules — they simply stop
+        // matching because the unit is no longer active.
+        assertThat(existing.getStatus()).isEqualTo("RETIRED");
+        verify(coverageRuleRepository, never()).deleteByMobileUnit_Id(any());
+        verify(mobileUnitRepository, never()).delete(any(MobileUnitEntity.class));
+        verify(mobileUnitRepository).save(existing);
+        verify(locationFactPublisher).mobileUnitChanged(existing);
     }
 
     @Test
-    @DisplayName("#1668 - deleting a mobile unit that does not exist publishes no tombstone")
+    @DisplayName("#2264 - retiring an already-retired mobile unit succeeds again rather than erroring")
+    void deleteMobileUnitAlreadyRetiredIsIdempotent() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        MobileUnitEntity existing = MobileUnitEntity.builder()
+                .id(id)
+                .name("Van 1")
+                .status("RETIRED")
+                .build();
+        when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
+        when(mobileUnitRepository.save(existing)).thenReturn(existing);
+
+        assertThat(service.deleteMobileUnit(id)).isTrue();
+
+        assertThat(existing.getStatus()).isEqualTo("RETIRED");
+        verify(locationFactPublisher).mobileUnitChanged(existing);
+    }
+
+    @Test
+    @DisplayName("#1668 - deleting a mobile unit that does not exist publishes nothing")
     void deleteMissingMobileUnitPublishesNothing() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.empty());
@@ -609,6 +877,7 @@ class MobileUnitServiceTest {
 
         verify(coverageRuleRepository, never()).deleteByMobileUnit_Id(any());
         verify(mobileUnitRepository, never()).delete(any(MobileUnitEntity.class));
-        verify(locationFactPublisher, never()).mobileUnitDeleted(any());
+        verify(mobileUnitRepository, never()).save(any(MobileUnitEntity.class));
+        verify(locationFactPublisher, never()).mobileUnitChanged(any());
     }
 }

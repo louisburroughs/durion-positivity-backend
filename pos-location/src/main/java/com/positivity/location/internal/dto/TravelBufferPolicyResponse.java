@@ -38,11 +38,18 @@ public class TravelBufferPolicyResponse {
             requiredMode = NOT_REQUIRED)
     private String name;
 
-    @Schema(description = "Type of buffer the policy applies", example = "FIXED_MINUTES", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Type of buffer the policy applies: FIXED_MINUTES or DISTANCE_TIER (DECISION-LOCATION-015)."
+                    + " DISTANCE_TIER is stored, not yet evaluated: nothing evaluates distance until geocoding"
+                    + " exists.",
+            example = "FIXED_MINUTES",
+            allowableValues = {"FIXED_MINUTES", "DISTANCE_TIER"},
+            requiredMode = NOT_REQUIRED)
     private String bufferType;
 
     @Schema(
-            description = "Numeric value of the buffer (interpretation depends on buffer type)",
+            description = "Numeric value of the buffer; for FIXED_MINUTES a non-negative whole number of minutes,"
+                    + " for DISTANCE_TIER an unevaluated placeholder",
             example = "30",
             requiredMode = NOT_REQUIRED)
     private BigDecimal bufferValue;

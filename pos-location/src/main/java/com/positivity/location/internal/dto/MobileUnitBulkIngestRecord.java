@@ -4,6 +4,8 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import java.util.UUID;
 import lombok.Data;
@@ -24,13 +26,25 @@ public class MobileUnitBulkIngestRecord {
     private UUID baseLocationId;
 
     @Schema(
-            description = "Unit status; defaults to INACTIVE. A unit created ACTIVE must also carry a travel"
-                    + " buffer policy, capabilities and coverage rules, none of which this record expresses —"
-                    + " so an ACTIVE row is rejected by the service rather than created half-configured.",
-            example = "INACTIVE",
+            description =
+                    "Unit status; defaults to OUT_OF_SERVICE (reason OTHER). A unit created ACTIVE must also carry a travel"
+                            + " buffer policy, capabilities and coverage rules, none of which this record expresses —"
+                            + " so an ACTIVE row is rejected by the service rather than created half-configured.",
+            example = "OUT_OF_SERVICE",
             requiredMode = NOT_REQUIRED)
     private String status;
 
     @Schema(description = "Free-text notes", example = "Mobile tyre fitting", requiredMode = NOT_REQUIRED)
     private String notes;
+
+    @Schema(
+            description = "Heaviest GVWR class (1-8) the unit accepts; omit for unconstrained "
+                    + "(DECISION-LOCATION-029, the bay's axis per CAP-325 D13).",
+            example = "3",
+            minimum = "1",
+            maximum = "8",
+            requiredMode = NOT_REQUIRED)
+    @Min(1)
+    @Max(8)
+    private Integer maxDutyClass;
 }

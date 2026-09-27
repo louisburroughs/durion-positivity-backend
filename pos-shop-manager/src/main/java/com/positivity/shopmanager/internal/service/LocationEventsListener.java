@@ -275,6 +275,13 @@ public class LocationEventsListener {
                         "maxDutyClass",
                         payload.maxDutyClass(),
                         existing == null ? null : existing.getMaxDutyClass()))
+                // displayOrder (DECISION-LOCATION-026, #2264) is additive the same way: absent from
+                // the payload means "not published", so the replicated value stands.
+                .displayOrder(mergeField(
+                        payloadNode,
+                        "displayOrder",
+                        payload.displayOrder(),
+                        existing == null ? null : existing.getDisplayOrder()))
                 // acceptsGeneralWork (DECISION-LOCATION-025, #2261) is additive within schema v1:
                 // null - whether absent or an explicit JSON null - always means "the publisher
                 // predates the field", never "no" (BayUpdatedV1 javadoc). So this reads only
@@ -287,9 +294,38 @@ public class LocationEventsListener {
                 .build());
     }
 
+    /**
+     * A stray {@code location.bay.deleted}: pos-location no longer emits this fact
+     * (DECISION-LOCATION-026, issue #2264) — retiring a bay now arrives as an ordinary {@code
+     * BayUpdatedV1} with {@code status = RETIRED}, applied by {@link #applyBayUpdated} exactly like
+     * any other status change. A replayed or long-delayed old event is handled safely rather than
+     * ignored: the row, if still present, is marked inactive instead of removed, so an appointment
+     * or workorder that already names this bay keeps resolving to a name.
+     *
+     * <p>Guarded by the same {@code aggregateVersion} comparison as {@link #applyBayUpdated} (HIGH
+     * finding, PR #2278): a pre-#2264 delete can be delivered long after a newer {@code
+     * BayUpdatedV1} has already reactivated the row (e.g. {@code RETIRED} → {@code ACTIVE}), and
+     * applying it unconditionally would silently retire a bay that is back in service. A stale
+     * delete is ignored; an accepted one marks the row inactive and stores its version so a still
+     * older or equal-but-repeated delete cannot regress it further.
+     */
     private void applyBayDeleted(JsonNode envelope) {
         BayDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), BayDeletedV1.class);
-        extBayReplicaRepository.deleteById(payload.bayId());
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        extBayReplicaRepository.findById(payload.bayId()).ifPresent(existing -> {
+            if (ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
+                log.debug(
+                        "Ignoring stale bay delete bayId={} version={} held={}",
+                        payload.bayId(),
+                        aggregateVersion,
+                        existing.getAggregateVersion());
+                return;
+            }
+            existing.setActive(false);
+            existing.setAggregateVersion(aggregateVersion);
+            existing.setUpdatedAt(Instant.now(clock));
+            extBayReplicaRepository.save(existing);
+        });
     }
 
     /**
@@ -357,7 +393,8 @@ public class LocationEventsListener {
     }
 
     private void applyMobileUnitUpdated(JsonNode envelope) {
-        MobileUnitUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), MobileUnitUpdatedV1.class);
+        JsonNode payloadNode = envelope.path("payload");
+        MobileUnitUpdatedV1 payload = objectMapper.treeToValue(payloadNode, MobileUnitUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtMobileUnitReplica existing =
                 extMobileUnitReplicaRepository.findById(payload.mobileUnitId()).orElse(null);
@@ -369,14 +406,50 @@ public class LocationEventsListener {
                 .baseLocationId(payload.baseLocationId())
                 .name(payload.name())
                 .active(isActiveStatus(payload.status()))
+                // maxDutyClass (DECISION-LOCATION-029, #2267) is additive within v4, the same guard
+                // style as ext_bay.maxDutyClass in applyBayUpdated: absent from the payload means
+                // "the publisher predates the field", so the already-replicated value stands, never
+                // read as "unconstrained".
+                .maxDutyClass(mergeField(
+                        payloadNode,
+                        "maxDutyClass",
+                        payload.maxDutyClass(),
+                        existing == null ? null : existing.getMaxDutyClass()))
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
     }
 
+    /**
+     * A stray {@code location.mobile-unit.deleted}: pos-location no longer emits this fact
+     * (DECISION-LOCATION-026, issue #2264) — retiring a unit now arrives as an ordinary {@code
+     * MobileUnitUpdatedV1} with {@code status = RETIRED}, applied by {@link #applyMobileUnitUpdated}
+     * exactly like any other status change. A replayed or long-delayed old event is handled safely
+     * rather than ignored: the row, if still present, is marked inactive instead of removed.
+     *
+     * <p>Guarded by the same {@code aggregateVersion} comparison as {@link #applyMobileUnitUpdated}
+     * (HIGH finding, PR #2278): a pre-#2264 delete can be delivered long after a newer {@code
+     * MobileUnitUpdatedV1} has already reactivated the row, and applying it unconditionally would
+     * silently stand down a unit that is back in service. A stale delete is ignored; an accepted
+     * one marks the row inactive and stores its version.
+     */
     private void applyMobileUnitDeleted(JsonNode envelope) {
         MobileUnitDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), MobileUnitDeletedV1.class);
-        extMobileUnitReplicaRepository.deleteById(payload.mobileUnitId());
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        extMobileUnitReplicaRepository.findById(payload.mobileUnitId()).ifPresent(existing -> {
+            if (ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
+                log.debug(
+                        "Ignoring stale mobile unit delete mobileUnitId={} version={} held={}",
+                        payload.mobileUnitId(),
+                        aggregateVersion,
+                        existing.getAggregateVersion());
+                return;
+            }
+            existing.setActive(false);
+            existing.setAggregateVersion(aggregateVersion);
+            existing.setUpdatedAt(Instant.now(clock));
+            extMobileUnitReplicaRepository.save(existing);
+        });
     }
 
     private void applyLocationUpdated(JsonNode envelope) {

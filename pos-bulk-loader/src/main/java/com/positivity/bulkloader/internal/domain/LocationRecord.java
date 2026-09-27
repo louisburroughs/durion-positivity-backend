@@ -16,4 +16,7 @@ public class LocationRecord {
     private String active;
     private String locationTypeName;
     private String timezone;
+
+    /** {@code KM} or {@code MI} (DECISION-LOCATION-028); the ingest endpoint defaults to KM when blank. */
+    private String distanceUnit;
 }

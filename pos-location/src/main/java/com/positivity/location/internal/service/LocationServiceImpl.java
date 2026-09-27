@@ -23,6 +23,7 @@ import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.LocationParent;
 import com.positivity.location.internal.entity.LocationType;
 import com.positivity.location.internal.entity.ParentType;
+import com.positivity.location.internal.exception.InvalidFieldException;
 import com.positivity.location.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import com.positivity.location.internal.repository.LocationRepository;
@@ -60,6 +61,7 @@ public class LocationServiceImpl implements LocationService {
     private static final String STATUS_INACTIVE = "INACTIVE";
     private static final String INVALID_TIMEZONE = "INVALID_TIMEZONE";
     private static final String INVALID_OPERATING_HOURS = "INVALID_OPERATING_HOURS";
+    private static final String FIELD_DISTANCE_UNIT = "distanceUnit";
     private static final String LOCATION_NAME_TAKEN = "LOCATION_NAME_TAKEN";
     private static final String LOCATION_CODE_TAKEN = "LOCATION_CODE_TAKEN";
     private static final String DATA_INTEGRITY_VIOLATION = "DATA_INTEGRITY_VIOLATION";
@@ -153,6 +155,7 @@ public class LocationServiceImpl implements LocationService {
     public LocationResponseDTO createLocation(LocationRequestDTO request) {
         validateTimezone(request.getTimezone());
         validateOperatingHours(request.getOperatingHours());
+        validateDistanceUnit(request.getDistanceUnit());
         String normalizedName = normalizeName(request.getName());
         // Issue CAP-136 #78: conflict on duplicate name. The repository check gives a
         // friendly fast path; the uq_location_normalized_name constraint (V7) is the
@@ -176,6 +179,7 @@ public class LocationServiceImpl implements LocationService {
         Location location = existingLocation.get();
         validateTimezone(request.getTimezone());
         validateOperatingHours(request.getOperatingHours());
+        validateDistanceUnit(request.getDistanceUnit());
         String normalizedName = normalizeName(request.getName());
         if (locationRepository.findByNormalizedNameAndIdNot(normalizedName, id).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, LOCATION_NAME_TAKEN);
@@ -230,6 +234,10 @@ public class LocationServiceImpl implements LocationService {
 
         if (patch.getCleanupBufferMinutes() != null) {
             location.setCleanupBufferMinutes(patch.getCleanupBufferMinutes());
+        }
+
+        if (patch.getDistanceUnit() != null) {
+            location.setDistanceUnit(resolveDistanceUnit(patch.getDistanceUnit()));
         }
 
         if (patch.getStatus() != null && patch.getStatus().equalsIgnoreCase(STATUS_INACTIVE)) {
@@ -587,6 +595,28 @@ public class LocationServiceImpl implements LocationService {
         }
         location.setResponsiblePersonId(request.getResponsiblePersonId());
         location.setType(resolveLocationType(request.getType()));
+        location.setDistanceUnit(resolveDistanceUnit(request.getDistanceUnit()));
+    }
+
+    /** Throws only, for the same fail-fast-before-anything-else spot {@link #validateTimezone} uses. */
+    private void validateDistanceUnit(String distanceUnit) {
+        resolveDistanceUnit(distanceUnit);
+    }
+
+    /**
+     * {@code KM} (the schema default) for a {@code null} or blank value; the normalized unit for
+     * {@code KM}/{@code MI} in any case; 400 {@code VALIDATION_ERROR} naming {@code distanceUnit}
+     * otherwise (DECISION-LOCATION-028).
+     */
+    private String resolveDistanceUnit(String distanceUnit) {
+        if (distanceUnit == null || distanceUnit.isBlank()) {
+            return DistanceUnits.KM;
+        }
+        String normalized = DistanceUnits.normalize(distanceUnit);
+        if (normalized == null) {
+            throw InvalidFieldException.invalid(FIELD_DISTANCE_UNIT, "distanceUnit must be KM or MI");
+        }
+        return normalized;
     }
 
     private void validateTimezone(String timezone) {
@@ -769,6 +799,7 @@ public class LocationServiceImpl implements LocationService {
                 .phoneNumber(location.getPhoneNumber())
                 .active(location.isActive())
                 .responsiblePersonId(location.getResponsiblePersonId())
+                .distanceUnit(location.getDistanceUnit())
                 .type(toLocationTypeDto(location.getType()))
                 .timezone(location.getTimezone())
                 .operatingHours(parseOperatingHours(location))

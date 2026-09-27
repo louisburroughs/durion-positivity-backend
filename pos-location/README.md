@@ -33,12 +33,19 @@ Location hierarchy and physical space management service for the Durion Positivi
 - `GET /v1/locations/{id}/coverage-rules` — service area coverage rules
 - `GET /v1/bays/{bayId}` — retrieve a bay
 - `POST /v1/locations/{locationId}/bays` — add a bay to a location
-- `DELETE /v1/locations/{locationId}/bays/{bayId}` — hard-delete a bay (#1668)
-- `DELETE /v1/mobile-units/{id}` — hard-delete a mobile unit and its coverage rules (#1668)
+- `PATCH /v1/locations/{locationId}/bays/{bayId}` — update a bay, including status transitions among
+  `ACTIVE` / `OUT_OF_SERVICE` / `RETIRED` (DECISION-LOCATION-026, #2264)
+- `DELETE /v1/locations/{locationId}/bays/{bayId}` — retire a bay (sets `status = RETIRED`; no hard
+  delete, DECISION-LOCATION-026, #2264)
+- `PATCH /v1/mobile-units/{id}` — update a mobile unit, including status transitions among `ACTIVE` /
+  `OUT_OF_SERVICE` / `RETIRED` (#2264)
+- `DELETE /v1/mobile-units/{id}` — retire a mobile unit (sets `status = RETIRED`; coverage rules are
+  kept, no hard delete, #2264)
 - `GET /v1/locations/{storageLocationId}` — retrieve a storage location
 - `POST /v1/locations/{siteId}/storage-locations` — create a storage location
 - `PATCH /v1/locations/{siteId}/storage-locations/{storageLocationId}` — patch a storage location
-- `GET /v1/mobile-units:eligible` — eligible mobile units for scheduling
+- `GET /v1/mobile-units:eligible?baseLocationId=&postalCode=&countryCode=&at=&operationCodes=` —
+  eligible mobile units for scheduling, scoped to `baseLocationId` (required, #2265)
 - `GET /v1/mobile-units?baseLocationId=&status=&include=coverageRules` — one shop's units (and, with
   `include=coverageRules`, each unit's rules in the same response); every filter is optional (#2253)
 - `PUT /v1/mobile-units/{id}/coverage-rules` — replace a unit's coverage, validated as create is (#2248)
@@ -56,20 +63,110 @@ request field also carries `fieldErrors[0].field` naming it (`name`, `baseLocati
 | `LOCATION_NOT_FOUND` | 422 | A mobile unit's `baseLocationId` names no location |
 | `TRAVEL_BUFFER_POLICY_NOT_FOUND` | 422 | A mobile unit's `travelBufferPolicyId` names no policy |
 | `SERVICE_AREA_NOT_FOUND` | 422 | A coverage rule's `serviceAreaId` names no service area |
+| `SERVICE_AREA_INACTIVE` | 422 | A coverage rule's `serviceAreaId` names a service area whose `active` is `false` (#2265) |
 | `UNPROCESSABLE_CONTENT` | 422 | An ACTIVE mobile unit without a travel buffer policy, capabilities and coverage rules, or an unknown capability code |
-| `MOBILE_UNIT_NAME_TAKEN` | 409 | Another mobile unit at the same base location has the name (ignoring case) |
-| `BAY_NAME_TAKEN` | 409 | Another bay at the same location has the name |
+| `OUT_OF_SERVICE_REASON_REQUIRED` | 422 | A bay or mobile unit's resulting status is `OUT_OF_SERVICE` without `outOfServiceReason`, or `outOfServiceReason` is `OTHER` without `outOfServiceNote` (DECISION-LOCATION-026, #2264) |
+| `MOBILE_UNIT_NAME_TAKEN` | 409 | Another mobile unit at the same base location has the name (ignoring case), **including a retired unit's name** (#2264) |
+| `MOBILE_UNIT_IDENTITY_TAKEN` | 409 | Another mobile unit in the tenant already has this `unitNumber`, `vin`, or `licensePlate`+`plateRegion` pair (DECISION-LOCATION-029, #2267); `fieldErrors` names the field |
+| `BAY_NAME_TAKEN` | 409 | Another bay at the same location has the name, **including a retired bay's name** (#2264) |
 | `TRAVEL_BUFFER_POLICY_NAME_TAKEN` | 409 | Another travel buffer policy has the name |
-| `OPTIMISTIC_LOCK_FAILED` | 409 | A concurrent update to the same mobile unit won the version race |
+| `OPTIMISTIC_LOCK_FAILED` | 409 | A concurrent update to the same bay or mobile unit won the version race |
 | `NOT_FOUND` | 404 | The resource addressed by the path does not exist |
 
 A `DuplicateResourceException` answers its own code (`*_NAME_TAKEN`), not the generic `CONFLICT`
 (#2252). A mobile unit's name is unique at its base location ignoring case, held in the database by
-`uq_mobile_unit_base_location_lower_name` (V6) so concurrent writes cannot both commit. The
-`baseLocationId` filter on `GET /v1/mobile-units` is location-scope gated like `listBays`
-(`location-scope.yaml`). Mobile unit `status` is `ACTIVE` or `INACTIVE` only (V6 adds a `CHECK`), and travel
-buffer policy `bufferType` is `FLAT_MINUTES`, `PERCENTAGE_OF_TRAVEL` or `DISTANCE_MULTIPLIER` (also a
-`CHECK` since V6, #2249).
+`uq_mobile_unit_base_location_lower_name` (V6) so concurrent writes cannot both commit; a bay's name
+is unique per location by `uq_bays_location_normalized_name`. Neither uniqueness check excludes
+`RETIRED` rows, so a retired resource's name stays reserved and reactivation can never collide
+(DECISION-LOCATION-026 rule 3). The `baseLocationId` filter on `GET /v1/mobile-units` is
+location-scope gated like `listBays` (`location-scope.yaml`). Bay and mobile unit `status` is
+`ACTIVE`, `OUT_OF_SERVICE` or `RETIRED` (a `CHECK` on both tables since **V8**, DECISION-LOCATION-026,
+#2264 — mobile units previously also accepted `INACTIVE`, retired with no compatibility shim), and
+travel buffer policy `bufferType` is `FIXED_MINUTES` or `DISTANCE_TIER` (also a `CHECK`, V11, #2266 —
+supersedes the V6 `CHECK`; see "Distance units and travel buffer policy types" below).
+
+## Mobile unit duty ceiling and identity (DECISION-LOCATION-029, #2267)
+
+A mobile unit carries an optional `maxDutyClass` (1–8), the same GVWR-class-ceiling axis a bay's
+`maxDutyClass` uses (CAP-325 D13, V8) — null means unconstrained. It also carries four optional,
+display-only identity fields: `unitNumber`, `vin`, `licensePlate` and `plateRegion`. None of the
+five are read by scheduling or eligibility; there is no equipment list, usual crew or hours on a
+mobile unit (spec D14.2 — crew is People's, hours follow the unit's base location per
+DECISION-SHOPMGMT-023).
+
+- `maxDutyClass` outside 1–8 is refused 400 `VALIDATION_ERROR`.
+- `vin`, when given, is normalized to upper case and must be exactly 17 characters, never
+  containing `I`, `O` or `Q` (ISO 3779); otherwise 400 `VALIDATION_ERROR`.
+- `plateRegion`, when given, is normalized to upper case and must be an ISO 3166-2 code (for
+  example `US-NC`); otherwise 400 `VALIDATION_ERROR`.
+- `unitNumber`, `vin`, and the `licensePlate`+`plateRegion` pair are each unique per tenant while
+  set, held in the database by partial unique indexes (`uq_mobile_units_tenant_unit_number`,
+  `uq_mobile_units_tenant_vin`, `uq_mobile_units_tenant_license_plate`, migration **V10**) so
+  concurrent writes cannot both commit; a duplicate is refused 409 `MOBILE_UNIT_IDENTITY_TAKEN`
+  with `fieldErrors` naming the field. `licensePlate` and `plateRegion` are checked together only
+  once both are set — a plate recorded without its region is not a duplicate of anything.
+- A `PATCH` clears any of the five by sending `null`; an absent key leaves it unchanged.
+- `MobileUnitUpdatedV1` carries all five, additively (schema version 4).
+
+## Distance units and travel buffer policy types (DECISION-LOCATION-028, DECISION-LOCATION-015, #2266)
+
+Every distance in a request or response is an explicit `{ value, unit }` object, `unit` one of `KM`
+or `MI`; a bare number is refused (400 `VALIDATION_ERROR`, `fieldErrors` naming the field, and naming
+`<field>.unit` specifically for a missing or unknown unit). Storage is always canonical kilometres,
+rounded half-up to 2 decimals; conversion is exact (1 mi = 1.609344 km) and happens at the API edge
+(`DistanceUnits`), never in the database.
+
+- **Locations** (`Location.distanceUnit`, `location.distance_unit varchar(2) NOT NULL DEFAULT 'KM'
+  CHECK (... IN ('KM','MI'))`, migration V11): the unit a location's own forms show and accept.
+  `createLocation`/`updateLocation` default an omitted `distanceUnit` to `KM`; `patchLocation` leaves
+  it unchanged when omitted. Alpha's US locations are seeded `MI`
+  (`scripts/fixtures/seed/alpha/location/locations.csv`, carried through
+  `pos-bulk-loader`'s `LocationRecord`/`LocationLoaderStrategy` into the `LOCATION` bulk-ingest
+  payload) — a bulk-loader `distanceUnit` column left blank still defaults to `KM` at the ingest
+  endpoint.
+- **Mobile unit coverage rules** (`CoverageRuleRequest`/`CoverageRuleResponse.maxDistance`,
+  `mobile_unit_coverage_rules.max_distance_km numeric(10,2)`, renamed from `max_distance` by V11): a
+  rule's `maxDistance` is stored in kilometres and shown back in the unit's base location's
+  `distanceUnit` — the location, not the caller, decides the display unit. `DISTANCE_TIER` coverage
+  (`ruleType`, `maxDistance`) is stored, **not yet evaluated**: nothing evaluates distance until
+  geocoding exists, since neither locations nor customer addresses carry coordinates today.
+- **Travel buffer policies** (`bufferType`): only `FIXED_MINUTES` (`bufferValue` a non-negative whole
+  number of minutes, DECISION-LOCATION-015) and `DISTANCE_TIER` (stored, not yet evaluated — same
+  reason as coverage) are accepted. The former `FLAT_MINUTES` is renamed to `FIXED_MINUTES`;
+  `PERCENTAGE_OF_TRAVEL` and `DISTANCE_MULTIPLIER`, which no decision defines and which would need
+  routed travel time no service in this platform provides, are removed outright (pre-production, no
+  compatibility shim). Migration V11 converts existing rows: `FLAT_MINUTES` → `FIXED_MINUTES`
+  in place, and a removed type → `FIXED_MINUTES` with a 0-minute `bufferValue`, one `RAISE WARNING`
+  per row naming the policy so an operator can pick a real value.
+- The alpha coverage-rule fixture (`scripts/fixtures/seed/alpha/location/mobile-unit-coverage-rules.csv`)
+  carries its own explicit `unit` column (always `MI` today) rather than assuming a unit: `seed-alpha.py`
+  sends `maxDistance` as `{"value": <maxDistance>, "unit": <unit>}` and refuses (skipping the whole
+  unit, with a `WARN`) a row that names a distance with no unit.
+
+## Mobile unit coverage eligibility (DECISION-LOCATION-027, DECISION-SHOPMGMT-023, #2265)
+
+`GET /v1/mobile-units:eligible` finds the ACTIVE mobile units eligible to cover a service address:
+
+- `baseLocationId` is **required** (400 `VALIDATION_ERROR` with `fieldErrors` naming it when missing)
+  and scopes the answer to units based there — a unit only takes work from its own base location
+  (DECISION-SHOPMGMT-023 rule 1), matching `pos-workorder`'s same-site placement rule.
+  `postalCode`, `countryCode` and `at` (an ISO-8601 instant) stay required as before.
+- `operationCodes` is optional and repeatable/comma-separated, like `include` on `GET
+  /v1/mobile-units`; when sent, a unit must claim **every** code listed against its
+  `serviceCapabilityCodes` — unlike a `GENERAL_SERVICE` bay, a mobile unit has no general-work
+  default.
+- A coverage rule only matches when its service area's `active` is `true`. Retiring an area
+  (`PATCH /v1/service-areas/{id}` with `active: false`) keeps every rule pointing at it — nothing is
+  deleted — but none of them match again until the area is reactivated; deactivating an area never
+  changes any unit's own `status`.
+- Results are ordered by `priority` ascending, then mobile unit id, as **one** ranking across the
+  named location's units — ties are broken deterministically rather than left to per-rule ordering.
+- `mobile_unit_coverage_rules.validFrom`/`validTo` are UTC instants (DECISION-LOCATION-017), not
+  calendar dates: `validFrom` is inclusive, `validTo` is exclusive, and both are compared against
+  `at` directly. Migration V9 converted the previous `date` columns so an existing window reads
+  unchanged: `validFrom` becomes that day's UTC midnight, and `validTo` becomes the **next** day's
+  UTC midnight (the old inclusive end-of-day date now falls just inside the exclusive window).
+  Creating or replacing a rule requires `validTo` to be strictly after `validFrom` when both are set.
 
 ## Location scope (ADR-0061, #1872)
 
@@ -155,21 +252,28 @@ existing `location.events.v1` topic (issue #1668, ADR-0044 §6):
 
 | Event type                     | Payload                                             | When |
 | ------------------------------ | --------------------------------------------------- | ---- |
-| `location.bay.updated`         | `bayId`, `locationId`, `name`, `bayType`, `status`  | bay created or changed, including a status change |
-| `location.bay.deleted`         | `bayId`                                             | bay hard-deleted via `DELETE /v1/locations/{locationId}/bays/{bayId}` |
-| `location.mobile-unit.updated` | `mobileUnitId`, `baseLocationId`, `name`, `status`  | unit created or changed, including a re-base |
-| `location.mobile-unit.deleted` | `mobileUnitId`                                      | unit hard-deleted via `DELETE /v1/mobile-units/{id}` |
+| `location.bay.updated`         | `bayId`, `locationId`, `name`, `bayType`, `status`, `serviceCapabilityCodes`, `maxConcurrentVehicles`, `maxDutyClass`, `acceptsGeneralWork`, `outOfServiceReason`, `outOfServiceNote`, `expectedReturnAt`, `displayOrder`  | bay created or changed, including every status change — **retiring a bay is an `updated` fact with `status = RETIRED`, not a delete** (#2264) |
+| `location.mobile-unit.updated` | `mobileUnitId`, `baseLocationId`, `name`, `status`, `serviceCapabilityCodes`, `outOfServiceReason`, `outOfServiceNote`, `expectedReturnAt`  | unit created or changed, including a re-base or a retirement (`status = RETIRED`) |
 | `location.bay-specialty-map.updated` | `tenantId`, `entries[]` (`bayType`, `operationCodes[]`, `acceptsGeneralWork`), `aggregateVersion` | a tenant's bay specialty map changes, and once per active tenant at startup |
+
+`location.bay.deleted` (`BayDeletedV1`) and `location.mobile-unit.deleted` (`MobileUnitDeletedV1`)
+are **no longer emitted** (DECISION-LOCATION-026, #2264): `DELETE` retires instead of hard-deleting,
+so there is no tombstone. The record classes stay in `pos-domain-events` and consumers still handle
+one defensively — a stray or replayed pre-#2264 delivery marks the replica row inactive rather than
+removing it — but pos-location's own publishers no longer call them.
 
 Records live in `pos-domain-events` (`com.positivity.domainevents.location`). Consumers —
 pos-workorder's dispatch board and pos-shop-manager's unit roster — hold `ext_bay` /
 `ext_mobile_unit` replicas fed only by these facts.
 
-**`status` is the raw lifecycle string, never a derived `active` boolean.** `BayEntity.status` is
-`ACTIVE` | `OUT_OF_SERVICE`; `MobileUnitEntity.status` is written only as `ACTIVE` | `INACTIVE`.
-Consumers derive activeness themselves with an allow-list on `ACTIVE`, so an unrecognised status
-reads as inactive rather than as an error. Taking a unit out of service is a status change on the
-`updated` fact — the replica keeps the row and flips it inactive; only a `deleted` fact removes it.
+**`status` is the raw lifecycle string, never a derived `active` boolean.** Both `BayEntity.status`
+and `MobileUnitEntity.status` are `ACTIVE` | `OUT_OF_SERVICE` | `RETIRED` (DECISION-LOCATION-026,
+#2264 — mobile units previously also wrote `INACTIVE`; a **V8** migration moved every `INACTIVE` row
+to `OUT_OF_SERVICE` with reason `OTHER` and note `'migrated from INACTIVE'`, with no compatibility
+shim for the retired value). Consumers derive activeness themselves with an allow-list on `ACTIVE`,
+so an unrecognised status, `OUT_OF_SERVICE` and `RETIRED` alike, reads as inactive rather than as an
+error. Every status change, including retirement, travels on the `updated` fact — the replica keeps
+the row and flips it inactive; nothing ever removes it any more.
 
 A mobile unit with **no base location** publishes nothing. A base site is optional on that
 aggregate, so a unit without one is a legitimate owner-side state rather than malformed data — but
@@ -179,11 +283,13 @@ can never return. Such a unit cannot be dispatched from anywhere, so withholding
 nothing; assigning a base site publishes an ordinary update. A bay cannot hit this case —
 `bays.location_id` is `NOT NULL`.
 
-Deletion is a hard delete for a unit created in error, not the way to retire a real one: use PATCH
-with `OUT_OF_SERVICE` / `INACTIVE` for that. Deleting a mobile unit also removes its coverage rules
-(`mobile_unit_coverage_rules` holds a plain FK with no cascade, so they are cleared first) and its
-capability assignments. Neither delete performs a usage check, so callers must confirm the resource
-is not referenced by scheduled work first.
+`DELETE` retires both a bay and a mobile unit (DECISION-LOCATION-026, #2264): the row stays,
+`status` becomes `RETIRED`, and nothing is hard-deleted — there is no longer a distinction between
+"created in error" and "standing down a real one". Retiring a mobile unit keeps its coverage rules;
+they simply stop matching because the unit is no longer active, the same way an inactive service
+area's rules are kept but stop matching (DECISION-LOCATION-027). Neither delete performs a usage
+check, so callers must confirm the resource is not referenced by scheduled work first (an open
+workorder stays on a resource that leaves service, issue #2001).
 
 **The site scope rides every `updated` emission**, not only the mutation that changed it, because
 consumers rebuild the whole replica row from the payload. Note the deliberate asymmetry: a bay names
@@ -198,8 +304,59 @@ an out-of-order pair could drop or resurrect the row.
 
 `bays` and `mobile_units` each gained a `version` column in **V9**, seeded to 0. It backs the
 envelope's `aggregateVersion`, which strictly advances per committed mutation so a consumer's stale
-guard is sound (#1486). Tombstones publish at `version + 1` — one past every fact the aggregate has
-published — because consumers delete without consulting a version.
+guard is sound (#1486). Neither aggregate publishes a tombstone any more (#2264) — retirement is an
+ordinary `updated` fact at the row's own version, the same as any other change.
+
+## Bay and mobile-unit lifecycle (DECISION-LOCATION-026, #2264)
+
+Bays and mobile units share one status set — `ACTIVE`, `OUT_OF_SERVICE`, `RETIRED` — enforced by a
+database `CHECK` on both tables (**V8**). Statuses had drifted before this: bays had `ACTIVE` /
+`OUT_OF_SERVICE` with no `CHECK`, and mobile units had `ACTIVE` / `INACTIVE` (V6). `INACTIVE` is
+retired outright, pre-production, with no compatibility shim: **V8** moves every mobile unit at
+`INACTIVE` to `OUT_OF_SERVICE` with `outOfServiceReason = OTHER` and `outOfServiceNote = 'migrated
+from INACTIVE'`.
+
+- **`DELETE` retires** (`BayServiceImpl.deleteBay`, `MobileUnitServiceImpl.deleteMobileUnit`): the
+  row and its name stay, `status` becomes `RETIRED`, and the published fact is an ordinary `updated`,
+  never a tombstone. Retrying a delete on an already-`RETIRED` resource succeeds again rather than
+  erroring.
+- **`RETIRED` is reversible** (`PATCH` back to `ACTIVE` or `OUT_OF_SERVICE`) and carries **no error
+  code of its own**. Placing work on, or booking, a retired resource returns the existing 422
+  `SERVICE_POSITION_INACTIVE` (issue #2001), the same as any other non-active status.
+- **Retired names stay reserved.** The name-uniqueness checks (`existsByLocationIdAndNameIgnoreCase`
+  for bays, `existsByBaseLocationIdAndNameIgnoreCase` for mobile units) never filter by status, so
+  creating or renaming to a retired resource's name still returns 409 `BAY_NAME_TAKEN` /
+  `MOBILE_UNIT_NAME_TAKEN` — reactivation therefore never clashes.
+- **Going `OUT_OF_SERVICE` requires a reason** — `outOfServiceReason` is one of `EQUIPMENT_FAILURE`,
+  `SCHEDULED_MAINTENANCE`, `INSPECTION`, `SAFETY_HOLD`, `FACILITY_ISSUE`, `OTHER`
+  (`com.positivity.location.internal.enums.OutOfServiceReason`), enforced by
+  `LifecycleStatusSupport.requireReasonWhenOutOfService` for both bays and mobile units. Missing it
+  is 422 `OUT_OF_SERVICE_REASON_REQUIRED`, naming `outOfServiceReason`; `OTHER` without a non-blank
+  `outOfServiceNote` (≤255 chars) is the same code, naming `outOfServiceNote`. `expectedReturnAt`
+  (timestamptz) is optional and purely advisory — its `@Schema` says "not used by scheduling", and
+  nothing here reads it. **All three clear (become `null`) the moment the resource returns to
+  `ACTIVE`**, regardless of what else the same request sends.
+- **A mobile unit created without a `status`** now defaults to `OUT_OF_SERVICE` with the
+  system-supplied reason `OTHER` (formerly it defaulted to the retired `INACTIVE`, which needed no
+  reason) — a unit staged before its travel buffer policy, capabilities and coverage rules exist. A
+  caller that also sends its own `outOfServiceReason` on that same status-less create keeps that
+  reason instead of the default.
+- **Bays gain `displayOrder`** (integer, nullable): `GET .../bays` sorts by `displayOrder` (nulls
+  last), then `name`, imposed by `BayServiceImpl.listBays` regardless of the caller's `Pageable`.
+- **Default lists hide `RETIRED`.** `GET .../bays` and `GET /v1/mobile-units` exclude `RETIRED` when
+  no `status` filter is given (`findByLocationIdAndStatusNot` / `findByBaseLocation_IdAndStatusNot` /
+  `findByStatusNot`); naming `status=RETIRED` explicitly still returns them
+  (DECISION-LOCATION-008/026).
+
+## Consumers no longer delete replica rows (#2264)
+
+pos-shop-manager and pos-workorder's `LocationEventsListener.applyBayDeleted` /
+`applyMobileUnitDeleted` used to call `deleteById` on `location.bay.deleted` /
+`location.mobile-unit.deleted`. Since pos-location no longer emits either fact, both handlers now
+treat a stray or replayed delivery defensively: if the replica row still exists, they mark it
+`active = false` instead of removing it, the same outcome a retirement's `updated` fact already
+produces through the ordinary `isActiveStatus` derivation. A retirement itself never reaches these
+methods at all — it is an `updated` fact like any other status change.
 
 ### Bay specialty map, published per tenant (DECISION-LOCATION-025, CAP-325 D14/D14.1/D14.3)
 

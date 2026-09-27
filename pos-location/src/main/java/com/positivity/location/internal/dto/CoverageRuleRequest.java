@@ -7,8 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
-import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,9 +27,10 @@ import lombok.NoArgsConstructor;
 public class CoverageRuleRequest {
 
     @Schema(
-            description = "Identifier of the service area this rule applies to; must name an existing service area"
-                    + " (422 SERVICE_AREA_NOT_FOUND otherwise). Required for every rule type: a DISTANCE_TIER rule"
-                    + " is a tier within its service area, and a rule without one never matches an address.",
+            description = "Identifier of the service area this rule applies to; must name an existing, active"
+                    + " service area (422 SERVICE_AREA_NOT_FOUND when unknown, 422 SERVICE_AREA_INACTIVE when it"
+                    + " exists but active is false). Required for every rule type: a DISTANCE_TIER rule is a tier"
+                    + " within its service area, and a rule without one never matches an address.",
             example = "01960003-0000-7000-8000-000000000001",
             requiredMode = REQUIRED)
     @NotNull
@@ -53,19 +53,25 @@ public class CoverageRuleRequest {
     @PositiveOrZero
     private Integer priority;
 
-    @Schema(description = "Date from which the rule is effective", example = "2026-06-18", requiredMode = NOT_REQUIRED)
-    private LocalDate validFrom;
+    @Schema(
+            description = "UTC instant from which the rule is effective, inclusive (DECISION-LOCATION-017)",
+            example = "2026-06-18T00:00:00Z",
+            requiredMode = NOT_REQUIRED)
+    private Instant validFrom;
 
     @Schema(
-            description = "Date until which the rule is effective; must not be before validFrom",
-            example = "2026-12-31",
+            description = "UTC instant until which the rule is effective, exclusive; must be after validFrom"
+                    + " (DECISION-LOCATION-017)",
+            example = "2026-12-31T00:00:00Z",
             requiredMode = NOT_REQUIRED)
-    private LocalDate validTo;
+    private Instant validTo;
 
     @Schema(
-            description = "Maximum service distance in kilometres covered by the rule",
-            example = "25.5",
+            implementation = DistanceDto.class,
+            description = "Maximum service distance covered by the rule, an explicit {value, unit} object (KM or"
+                    + " MI); converted at the edge and stored as kilometres (DECISION-LOCATION-028). A bare number"
+                    + " is refused. Not yet evaluated: coverage matches on the postal-code service area alone,"
+                    + " since geocoding does not exist.",
             requiredMode = NOT_REQUIRED)
-    @PositiveOrZero
-    private BigDecimal maxDistance;
+    private Object maxDistance;
 }

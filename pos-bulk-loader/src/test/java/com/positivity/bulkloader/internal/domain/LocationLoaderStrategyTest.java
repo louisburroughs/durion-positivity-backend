@@ -28,7 +28,8 @@ class LocationLoaderStrategyTest {
                 Map.entry("phoneNumber", "704-555-0142"),
                 Map.entry("active", "true"),
                 Map.entry("locationTypeName", "STORE"),
-                Map.entry("timezone", "America/New_York"));
+                Map.entry("timezone", "America/New_York"),
+                Map.entry("distanceUnit", "MI"));
 
         LocationRecord result = strategy.mapRow(row);
 
@@ -44,6 +45,7 @@ class LocationLoaderStrategyTest {
         assertThat(result.getActive()).isEqualTo("true");
         assertThat(result.getLocationTypeName()).isEqualTo("STORE");
         assertThat(result.getTimezone()).isEqualTo("America/New_York");
+        assertThat(result.getDistanceUnit()).isEqualTo("MI");
     }
 
     @Test
@@ -66,6 +68,7 @@ class LocationLoaderStrategyTest {
         assertThat(result.getActive()).isNull();
         assertThat(result.getLocationTypeName()).isNull();
         assertThat(result.getTimezone()).isNull();
+        assertThat(result.getDistanceUnit()).isNull();
     }
 
     // ─── validate ────────────────────────────────────────────────────────────

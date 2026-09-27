@@ -9,7 +9,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -44,6 +43,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -53,6 +53,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 /**
  * RED tests for Bay service contract behaviors required by Story #77.
@@ -112,23 +113,26 @@ class BayServiceTest {
     @DisplayName("listBays_variousFilters_coversAllBranches")
     void listBays_variousFilters_coversAllBranches() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        Pageable pageable = mock(Pageable.class);
+        Pageable pageable = PageRequest.of(0, 10);
         when(locationRepository.existsById(locationId)).thenReturn(true);
         Page<BayEntity> mockPage = new PageImpl<>(List.of(defaultBay(locationId)));
         // Both filters
-        when(bayRepository.findByLocationIdAndStatusAndBayType(eq(locationId), anyString(), anyString(), eq(pageable)))
+        when(bayRepository.findByLocationIdAndStatusAndBayType(
+                        eq(locationId), anyString(), anyString(), any(Pageable.class)))
                 .thenReturn(mockPage);
         bayService.listBays(locationId, "ACTIVE", "GENERAL_SERVICE", pageable);
         // Status only
-        when(bayRepository.findByLocationIdAndStatus(eq(locationId), anyString(), eq(pageable)))
+        when(bayRepository.findByLocationIdAndStatus(eq(locationId), anyString(), any(Pageable.class)))
                 .thenReturn(mockPage);
         bayService.listBays(locationId, "ACTIVE", null, pageable);
-        // BayType only
-        when(bayRepository.findByLocationIdAndBayType(eq(locationId), anyString(), eq(pageable)))
+        // BayType only: default hides RETIRED (DECISION-LOCATION-026)
+        when(bayRepository.findByLocationIdAndBayTypeAndStatusNot(
+                        eq(locationId), anyString(), eq("RETIRED"), any(Pageable.class)))
                 .thenReturn(mockPage);
         bayService.listBays(locationId, null, "GENERAL_SERVICE", pageable);
-        // Neither
-        when(bayRepository.findByLocationId(locationId, pageable)).thenReturn(mockPage);
+        // Neither: default hides RETIRED (DECISION-LOCATION-026)
+        when(bayRepository.findByLocationIdAndStatusNot(eq(locationId), eq("RETIRED"), any(Pageable.class)))
+                .thenReturn(mockPage);
         bayService.listBays(locationId, null, null, pageable);
         verify(locationRepository, times(4)).existsById(locationId);
     }
@@ -159,9 +163,11 @@ class BayServiceTest {
         BayPatchRequest patchType = new BayPatchRequest();
         patchType.setBayType("GENERAL_SERVICE");
         bayService.patchBay(locationId, bayId, patchType);
-        // Patch status
-        BayPatchRequest patchStatus = new BayPatchRequest();
-        patchStatus.setStatus("OUT_OF_SERVICE");
+        // Patch status (OUT_OF_SERVICE requires a reason, DECISION-LOCATION-026)
+        BayPatchRequest patchStatus = BayPatchRequest.builder()
+                .status("OUT_OF_SERVICE")
+                .outOfServiceReason("EQUIPMENT_FAILURE")
+                .build();
         bayService.patchBay(locationId, bayId, patchStatus);
         // Patch maxConcurrentVehicles
         BayPatchRequest patchMax = new BayPatchRequest();
@@ -510,19 +516,27 @@ class BayServiceTest {
     }
 
     @Test
-    @DisplayName("listBays_noFilters_callsFindByLocationId")
+    @DisplayName("listBays_noFilters_defaultHidesRetiredAndOrdersByDisplayOrderThenName")
     void listBays_noFilters_callsFindByLocationId() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         PageRequest pageable = PageRequest.of(0, 10);
         BayEntity entity = defaultBay(locationId);
 
         when(locationRepository.existsById(locationId)).thenReturn(true);
-        when(bayRepository.findByLocationId(locationId, pageable)).thenReturn(new PageImpl<>(List.of(entity)));
+        when(bayRepository.findByLocationIdAndStatusNot(eq(locationId), eq("RETIRED"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(entity)));
 
         Page<BayResponse> page = bayService.listBays(locationId, null, null, pageable);
 
         assertThat(page.getContent()).hasSize(1);
-        verify(bayRepository).findByLocationId(locationId, pageable);
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(bayRepository).findByLocationIdAndStatusNot(eq(locationId), eq("RETIRED"), captor.capture());
+        // DECISION-LOCATION-026 rule 5: displayOrder (nulls last), then name.
+        List<Sort.Order> orders = captor.getValue().getSort().toList();
+        assertThat(orders).hasSize(2);
+        assertThat(orders.get(0).getProperty()).isEqualTo("displayOrder");
+        assertThat(orders.get(0).getNullHandling()).isEqualTo(Sort.NullHandling.NULLS_LAST);
+        assertThat(orders.get(1).getProperty()).isEqualTo("name");
     }
 
     @Test
@@ -533,30 +547,33 @@ class BayServiceTest {
         BayEntity entity = defaultBay(locationId);
 
         when(locationRepository.existsById(locationId)).thenReturn(true);
-        when(bayRepository.findByLocationIdAndStatus(locationId, "ACTIVE", pageable))
+        when(bayRepository.findByLocationIdAndStatus(eq(locationId), eq("ACTIVE"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
 
         Page<BayResponse> page = bayService.listBays(locationId, "active", null, pageable);
 
         assertThat(page.getContent()).hasSize(1);
-        verify(bayRepository).findByLocationIdAndStatus(locationId, "ACTIVE", pageable);
+        verify(bayRepository).findByLocationIdAndStatus(eq(locationId), eq("ACTIVE"), any(Pageable.class));
     }
 
     @Test
-    @DisplayName("listBays_filterByBayType_callsFindByLocationIdAndBayType")
+    @DisplayName("listBays_filterByBayType_defaultHidesRetired")
     void listBays_filterByBayType_callsFindByLocationIdAndBayType() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         PageRequest pageable = PageRequest.of(0, 10);
         BayEntity entity = defaultBay(locationId);
 
         when(locationRepository.existsById(locationId)).thenReturn(true);
-        when(bayRepository.findByLocationIdAndBayType(locationId, "GENERAL_SERVICE", pageable))
+        when(bayRepository.findByLocationIdAndBayTypeAndStatusNot(
+                        eq(locationId), eq("GENERAL_SERVICE"), eq("RETIRED"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
 
         Page<BayResponse> page = bayService.listBays(locationId, null, "general_service", pageable);
 
         assertThat(page.getContent()).hasSize(1);
-        verify(bayRepository).findByLocationIdAndBayType(locationId, "GENERAL_SERVICE", pageable);
+        verify(bayRepository)
+                .findByLocationIdAndBayTypeAndStatusNot(
+                        eq(locationId), eq("GENERAL_SERVICE"), eq("RETIRED"), any(Pageable.class));
     }
 
     @Test
@@ -567,13 +584,16 @@ class BayServiceTest {
         BayEntity entity = defaultBay(locationId);
 
         when(locationRepository.existsById(locationId)).thenReturn(true);
-        when(bayRepository.findByLocationIdAndStatusAndBayType(locationId, "OUT_OF_SERVICE", "ALIGNMENT", pageable))
+        when(bayRepository.findByLocationIdAndStatusAndBayType(
+                        eq(locationId), eq("OUT_OF_SERVICE"), eq("ALIGNMENT"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
 
         Page<BayResponse> page = bayService.listBays(locationId, "out_of_service", "alignment", pageable);
 
         assertThat(page.getContent()).hasSize(1);
-        verify(bayRepository).findByLocationIdAndStatusAndBayType(locationId, "OUT_OF_SERVICE", "ALIGNMENT", pageable);
+        verify(bayRepository)
+                .findByLocationIdAndStatusAndBayType(
+                        eq(locationId), eq("OUT_OF_SERVICE"), eq("ALIGNMENT"), any(Pageable.class));
     }
 
     @Test
@@ -582,12 +602,12 @@ class BayServiceTest {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         PageRequest pageable = PageRequest.of(0, 5);
         when(locationRepository.existsById(locationId)).thenReturn(true);
-        when(bayRepository.findByLocationId(locationId, pageable))
+        when(bayRepository.findByLocationIdAndStatusNot(eq(locationId), eq("RETIRED"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(defaultBay(locationId))));
 
         bayService.listBays(locationId, "  ", " ", pageable);
 
-        verify(bayRepository).findByLocationId(locationId, pageable);
+        verify(bayRepository).findByLocationIdAndStatusNot(eq(locationId), eq("RETIRED"), any(Pageable.class));
     }
 
     @Test
@@ -776,12 +796,18 @@ class BayServiceTest {
         BayResponse deactivated = bayService.patchBay(
                 locationId,
                 bayId,
-                BayPatchRequest.builder().status("OUT_OF_SERVICE").build());
+                BayPatchRequest.builder()
+                        .status("OUT_OF_SERVICE")
+                        .outOfServiceReason("SCHEDULED_MAINTENANCE")
+                        .build());
         BayResponse reactivated = bayService.patchBay(
                 locationId, bayId, BayPatchRequest.builder().status("ACTIVE").build());
 
         assertThat(deactivated.getStatus()).isEqualTo("OUT_OF_SERVICE");
+        assertThat(deactivated.getOutOfServiceReason()).isEqualTo("SCHEDULED_MAINTENANCE");
         assertThat(reactivated.getStatus()).isEqualTo("ACTIVE");
+        // DECISION-LOCATION-026 rule 4: all three out-of-service fields clear on return to ACTIVE.
+        assertThat(reactivated.getOutOfServiceReason()).isNull();
         verify(bayRepository, times(2)).save(any(BayEntity.class));
     }
 
@@ -870,8 +896,10 @@ class BayServiceTest {
         when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(existing));
         when(bayRepository.save(existing)).thenReturn(existing);
 
-        BayPatchRequest patch =
-                BayPatchRequest.builder().status("OUT_OF_SERVICE").build();
+        BayPatchRequest patch = BayPatchRequest.builder()
+                .status("OUT_OF_SERVICE")
+                .outOfServiceReason("EQUIPMENT_FAILURE")
+                .build();
         bayService.patchBay(locationId, bayId, patch);
 
         // A bay taken out of service keeps its replica row and flips inactive; consumers derive
@@ -880,8 +908,9 @@ class BayServiceTest {
     }
 
     @Test
-    @DisplayName("#1668 - deleting a bay publishes the tombstone from the row's final version")
-    void deleteBayPublishesTombstone() {
+    @DisplayName(
+            "#2264 - deleting a bay retires it: the row is kept, status becomes RETIRED, and an update fact is published")
+    void deleteBayRetiresRow() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
         UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
         BayEntity existing = BayEntity.builder()
@@ -893,26 +922,177 @@ class BayServiceTest {
                 .build();
         when(locationRepository.existsById(locationId)).thenReturn(true);
         when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(existing));
+        when(bayRepository.save(existing)).thenReturn(existing);
 
         assertThat(bayService.deleteBay(locationId, bayId)).isTrue();
 
-        // Loaded before the delete so the tombstone can be versioned from its final @Version.
-        verify(bayRepository).delete(existing);
-        verify(locationFactPublisher).bayDeleted(existing);
+        // DECISION-LOCATION-026: DELETE retires. Nothing is hard-deleted, and the fact published is
+        // an ordinary update, not a tombstone, so consumers keep the replica row.
+        assertThat(existing.getStatus()).isEqualTo("RETIRED");
+        verify(bayRepository, never()).delete(any(BayEntity.class));
+        verify(bayRepository).save(existing);
+        verify(locationFactPublisher).bayChanged(existing);
     }
 
     @Test
-    @DisplayName("#1668 - deleting a bay that does not exist publishes no tombstone")
+    @DisplayName("#2264 - retiring an already-retired bay succeeds again rather than erroring")
+    void deleteBayAlreadyRetiredIsIdempotent() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        BayEntity existing = BayEntity.builder()
+                .id(bayId)
+                .name("Front Bay 1")
+                .bayType("SERVICE")
+                .status("RETIRED")
+                .maxConcurrentVehicles(1)
+                .build();
+        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(existing));
+        when(bayRepository.save(existing)).thenReturn(existing);
+
+        assertThat(bayService.deleteBay(locationId, bayId)).isTrue();
+
+        assertThat(existing.getStatus()).isEqualTo("RETIRED");
+        verify(locationFactPublisher).bayChanged(existing);
+    }
+
+    @Test
+    @DisplayName("#1668 - deleting a bay that does not exist publishes nothing")
     void deleteMissingBayPublishesNothing() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
         UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
         when(locationRepository.existsById(locationId)).thenReturn(true);
         when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.empty());
 
-        // A retried delete for an id that never existed must not emit a tombstone every time.
+        // A retried delete for an id that never existed must not publish a fact every time.
         assertThat(bayService.deleteBay(locationId, bayId)).isFalse();
 
-        verify(bayRepository, never()).delete(any(BayEntity.class));
-        verify(locationFactPublisher, never()).bayDeleted(any());
+        verify(bayRepository, never()).save(any(BayEntity.class));
+        verify(locationFactPublisher, never()).bayChanged(any());
+    }
+
+    @Test
+    @DisplayName("#2264 - createBay OUT_OF_SERVICE without a reason returns 422 OUT_OF_SERVICE_REASON_REQUIRED")
+    void createBay_outOfServiceMissingReason_throws422() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        BayRequest request = validCreateRequest();
+        request.setStatus("OUT_OF_SERVICE");
+
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
+
+        assertThatThrownBy(() -> bayService.createBay(locationId, request))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .extracting(exception ->
+                        ((org.springframework.web.server.ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY);
+        verify(bayRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2264 - createBay OUT_OF_SERVICE with reason OTHER but no note returns 422")
+    void createBay_outOfServiceOtherWithoutNote_throws422() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        BayRequest request = validCreateRequest();
+        request.setStatus("OUT_OF_SERVICE");
+        request.setOutOfServiceReason("OTHER");
+
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
+
+        assertThatThrownBy(() -> bayService.createBay(locationId, request))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .extracting(exception ->
+                        ((org.springframework.web.server.ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY);
+        verify(bayRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2264 - createBay OUT_OF_SERVICE with OTHER and a note succeeds")
+    void createBay_outOfServiceOtherWithNote_succeeds() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        BayRequest request = validCreateRequest();
+        request.setStatus("OUT_OF_SERVICE");
+        request.setOutOfServiceReason("OTHER");
+        request.setOutOfServiceNote("Awaiting parts");
+
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName()))
+                .thenReturn(false);
+        when(bayRepository.findByLocationIdAndNormalizedName(
+                        locationId, request.getName().toLowerCase()))
+                .thenReturn(Optional.empty());
+        when(bayRepository.save(any(BayEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0, BayEntity.class));
+
+        BayResponse response = bayService.createBay(locationId, request);
+
+        assertThat(response.getStatus()).isEqualTo("OUT_OF_SERVICE");
+        assertThat(response.getOutOfServiceReason()).isEqualTo("OTHER");
+        assertThat(response.getOutOfServiceNote()).isEqualTo("Awaiting parts");
+    }
+
+    @Test
+    @DisplayName("#2264 - patchBay OUT_OF_SERVICE without a reason returns 422 OUT_OF_SERVICE_REASON_REQUIRED")
+    void patchBay_outOfServiceMissingReason_throws422() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        BayEntity existing = defaultBay(locationId);
+        existing.setId(bayId);
+
+        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(existing));
+
+        BayPatchRequest patch =
+                BayPatchRequest.builder().status("OUT_OF_SERVICE").build();
+
+        assertThatThrownBy(() -> bayService.patchBay(locationId, bayId, patch))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .extracting(exception ->
+                        ((org.springframework.web.server.ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY);
+        verify(bayRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2264 - a RETIRED bay can be reactivated via patchBay")
+    void patchBay_reactivateRetiredBay_succeeds() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        BayEntity existing = defaultBay(locationId);
+        existing.setId(bayId);
+        existing.setStatus("RETIRED");
+
+        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(existing));
+        when(bayRepository.save(any(BayEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0, BayEntity.class));
+
+        BayResponse response = bayService.patchBay(
+                locationId, bayId, BayPatchRequest.builder().status("ACTIVE").build());
+
+        assertThat(response.getStatus()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("#2264 - creating a bay named like a retired bay at the same location returns 409 BAY_NAME_TAKEN")
+    void createBay_nameMatchesRetiredBay_throwsConflict() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        BayRequest request = validCreateRequest();
+
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
+        // The uniqueness check does not filter by status, so a retired bay's name still counts —
+        // exercised here by having the exists-check answer true regardless of the retired row's
+        // status, the same as it would for any other bay at this location.
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName()))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> bayService.createBay(locationId, request))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessageContaining("BAY_NAME_TAKEN");
+        verify(bayRepository, never()).save(any());
     }
 }

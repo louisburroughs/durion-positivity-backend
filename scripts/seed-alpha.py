@@ -467,11 +467,19 @@ def coverage_rules_by_unit(service_area_ids):
                 print(f"  WARN: coverage rule for {unit_name}: priority {row['priority']!r} is not a number")
                 unresolved.add(unit_name)
                 continue
-        # Left out entirely when the column is blank rather than sent as "": maxDistance is a
-        # BigDecimal and the two dates are LocalDate on CoverageRuleRequest, so an empty string is
-        # a 400 -- and a blank maxDistance is the null catch-all tier, which "" would not read as.
+        # Left out entirely when the column is blank rather than sent as "": maxDistance is now an
+        # explicit {value, unit} object (DECISION-LOCATION-028) and the two dates are ISO-8601
+        # instants on CoverageRuleRequest (#2265), so an empty string is a 400 -- and a blank
+        # maxDistance is the null catch-all tier, which "" would not read as. The fixture's own
+        # `unit` column carries the unit the `maxDistance` figure was authored in (every row here is
+        # MI); a row with a distance but no unit is a fixture bug, not a silent KM guess.
         if row.get("maxDistance"):
-            rule["maxDistance"] = row["maxDistance"]
+            unit = (row.get("unit") or "").strip().upper()
+            if not unit:
+                print(f"  WARN: coverage rule for {unit_name}: maxDistance {row['maxDistance']!r} has no unit")
+                unresolved.add(unit_name)
+                continue
+            rule["maxDistance"] = {"value": row["maxDistance"], "unit": unit}
         for date_field in ("validFrom", "validTo"):
             if row.get(date_field):
                 rule[date_field] = row[date_field]
@@ -566,6 +574,23 @@ def run_mobile_units(gateway, relative_path, _location_id):
         }
         if policy_id:
             body["travelBufferPolicyId"] = policy_id
+        # DECISION-LOCATION-026 (#2264): an explicit status of OUT_OF_SERVICE requires an explicit
+        # outOfServiceReason (422 OUT_OF_SERVICE_REASON_REQUIRED otherwise) -- the service only
+        # supplies the OTHER default itself when status is omitted entirely, not when the fixture
+        # names OUT_OF_SERVICE outright. outOfServiceNote is only required when the reason is
+        # OTHER, so it is sent only when the fixture carries one.
+        out_of_service_reason = (row.get("outOfServiceReason") or "").strip()
+        if out_of_service_reason:
+            body["outOfServiceReason"] = out_of_service_reason
+        out_of_service_note = (row.get("outOfServiceNote") or "").strip()
+        if out_of_service_note:
+            body["outOfServiceNote"] = out_of_service_note
+        # DECISION-LOCATION-029 (#2267): the duty-class ceiling the alpha vans need to be eligible
+        # for FLEET-PM-* work once #2269 checks it at placement. Left out entirely when blank so a
+        # unit whose fixture row carries none is created unconstrained rather than sent maxDutyClass=0.
+        max_duty_class = (row.get("maxDutyClass") or "").strip()
+        if max_duty_class:
+            body["maxDutyClass"] = int(max_duty_class)
 
         status_code, _ = gateway.post_json("/location/mobile-units", body, allow_error=True)
         if 200 <= status_code < 300:
