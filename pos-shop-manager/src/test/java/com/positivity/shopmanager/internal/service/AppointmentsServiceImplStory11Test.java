@@ -21,6 +21,8 @@ import com.positivity.shopmanager.internal.exception.AppointmentValidationExcept
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
@@ -123,7 +125,11 @@ class AppointmentsServiceImplStory11Test {
                 mock(WorkOrderAppointmentMappingRepository.class),
                 conflictEvaluator,
                 conflictRecorder,
-                new BookingHorizonPolicy(180));
+                new BookingHorizonPolicy(180),
+                mock(ExtBayReplicaRepository.class),
+                mock(ExtMobileUnitReplicaRepository.class),
+                mock(BayEligibilityService.class),
+                mock(SkillRequirementResolver.class));
     }
 
     // ─── AC: Expanded eligibility — allowed statuses ──────────────────────────
@@ -374,7 +380,6 @@ class AppointmentsServiceImplStory11Test {
         appointment.setAppointmentId(appointmentId);
         appointment.setStatus(status);
         appointment.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        appointment.setResourceId("tech-1");
         appointment.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         appointment.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         appointment.setStartAt(ORIGINAL_START);
