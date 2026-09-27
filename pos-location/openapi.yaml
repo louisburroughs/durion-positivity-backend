@@ -73,11 +73,11 @@ paths:
 
         Preconditions: no existing location may share the same name (case-insensitive) or code, and a type referenced by id must already exist; a type given only by name is created on the fly.
 
-        Required inputs: name, code and type (id or name); timezone must be a valid IANA zone id, operatingHours entries must have unique dayOfWeek values with openTime before closeTime, and active defaults to true.
+        Required inputs: name, code and type (id or name); timezone must be a valid IANA zone id, operatingHours entries must have unique dayOfWeek values with openTime before closeTime, active defaults to true, and distanceUnit (KM or MI, DECISION-LOCATION-028) defaults to KM.
 
         Emits a LOCATION_LOCATION_CREATE event and publishes a location fact for replica consumers.
 
-        Returns 409 when the name or code is already taken, 422 when the timezone or operating hours are invalid, and 400 when a referenced location type id is unknown.
+        Returns 409 when the name or code is already taken, 422 when the timezone or operating hours are invalid, and 400 when a referenced location type id is unknown or distanceUnit is something other than KM or MI.
 
         '
       operationId: createLocation
@@ -117,6 +117,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/LocationResponseDTO'
           description: Location created successfully.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: an unknown location type id, or distanceUnit other than KM or MI (fieldErrors names distanceUnit).'
         '409':
           content:
             application/json:
@@ -649,7 +655,7 @@ paths:
       x-required-permissions:
       - location:read
     patch:
-      description: 'Applies a partial update to a location, changing only the supplied fields: name, status, timezone, operatingHours, holidayClosures, checkInBufferMinutes and cleanupBufferMinutes.
+      description: 'Applies a partial update to a location, changing only the supplied fields: name, status, timezone, operatingHours, holidayClosures, checkInBufferMinutes, cleanupBufferMinutes and distanceUnit.
 
         The response echoes the stored timezone, operatingHours and holidayClosures, so a caller sees what the server kept and which zone the hours are read in — they are facility-local, and hours published without a timezone keep whichever zone the location already carries.
 
@@ -657,11 +663,11 @@ paths:
 
         Preconditions: the location must exist, and a new name must not be used by another location.
 
-        Required inputs: locationId (UUID) as a path parameter and a body with at least one field; status only accepts the value INACTIVE to deactivate, and reactivation is not supported through this operation.
+        Required inputs: locationId (UUID) as a path parameter and a body with at least one field; status only accepts the value INACTIVE to deactivate, reactivation is not supported through this operation, and distanceUnit (KM or MI, DECISION-LOCATION-028) is left unchanged when omitted.
 
         Emits a LOCATION_PATCH event and publishes a location fact for replica consumers.
 
-        Returns 404 when the location does not exist, 403 LOCATION_SCOPE_DENIED when it exists but a location-scoped location:write grant does not cover it (ADR-0061), 409 when the new name is taken, and 422 when a supplied timezone or operating-hours entry is invalid.
+        Returns 404 when the location does not exist, 403 LOCATION_SCOPE_DENIED when it exists but a location-scoped location:write grant does not cover it (ADR-0061), 409 when the new name is taken, and 422 when a supplied timezone or operating-hours entry is invalid, and 400 VALIDATION_ERROR when distanceUnit is something other than KM or MI.
 
         '
       operationId: patchLocation
@@ -693,6 +699,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/LocationResponseDTO'
           description: Location patched successfully.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: distanceUnit is something other than KM or MI (fieldErrors names it).'
         '403':
           content:
             application/json:
@@ -732,11 +744,11 @@ paths:
 
         Preconditions: the location must exist, and no other location may already use the new name.
 
-        Required inputs: locationId (UUID) as a path parameter plus a full body with name, code and type; omitted optional fields are overwritten with the request values, not preserved.
+        Required inputs: locationId (UUID) as a path parameter plus a full body with name, code and type; omitted optional fields are overwritten with the request values, not preserved, and an omitted distanceUnit (KM or MI, DECISION-LOCATION-028) resets to KM.
 
         Emits a LOCATION_LOCATION_UPDATE event and publishes a location fact for replica consumers.
 
-        Returns 404 when the location does not exist, 403 LOCATION_SCOPE_DENIED when it exists but a location-scoped location:write grant does not cover it (ADR-0061), 409 when the name or code collides with another location, and 422 when the timezone or operating hours are invalid.
+        Returns 404 when the location does not exist, 403 LOCATION_SCOPE_DENIED when it exists but a location-scoped location:write grant does not cover it (ADR-0061), 409 when the name or code collides with another location, 422 when the timezone or operating hours are invalid, and 400 VALIDATION_ERROR when distanceUnit is something other than KM or MI.
 
         '
       operationId: updateLocation
@@ -785,6 +797,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/LocationResponseDTO'
           description: Location updated successfully.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: distanceUnit is something other than KM or MI (fieldErrors names it).'
         '403':
           content:
             application/json:
@@ -1996,7 +2014,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VALIDATION_ERROR: blank name, missing baseLocationId, a status other than ACTIVE, OUT_OF_SERVICE or RETIRED, a coverage rule with an unknown ruleType, no serviceAreaId, a negative priority or maxDistance, validTo before validFrom, or DISTANCE_TIER rules out of order, a maxDutyClass outside 1-8, a vin that is not exactly 17 characters or contains I, O or Q, or a plateRegion that is not an ISO 3166-2 code. fieldErrors names the field.'
+          description: 'VALIDATION_ERROR: blank name, missing baseLocationId, a status other than ACTIVE, OUT_OF_SERVICE or RETIRED, a coverage rule with an unknown ruleType, no serviceAreaId, a negative priority, a maxDistance that is a bare number or names an unknown unit, validTo before validFrom, or DISTANCE_TIER rules out of order, a maxDutyClass outside 1-8, a vin that is not exactly 17 characters or contains I, O or Q, or a plateRegion that is not an ISO 3166-2 code. fieldErrors names the field.'
         '409':
           content:
             application/json:
@@ -2307,7 +2325,7 @@ paths:
 
         Preconditions: the mobile unit must exist; every rule''s serviceAreaId must name an existing service area; DISTANCE_TIER rules must be strictly ascending by maxDistance and end with one null catch-all tier; an ACTIVE unit must keep at least one rule. The replacement set is checked in full before the existing rules are touched, so a refusal changes nothing.
 
-        Required inputs: id (UUID) as a path parameter and a body of the form {"rules": [...]}, each rule carrying ruleType (SERVICE_AREA or DISTANCE_TIER, any case) and serviceAreaId, and optionally priority (non-negative, defaults to 0), validFrom, validTo (not before validFrom) and maxDistance (non-negative).
+        Required inputs: id (UUID) as a path parameter and a body of the form {"rules": [...]}, each rule carrying ruleType (SERVICE_AREA or DISTANCE_TIER, any case) and serviceAreaId, and optionally priority (non-negative, defaults to 0), validFrom, validTo (not before validFrom) and maxDistance, an explicit {value, unit} object (KM or MI, DECISION-LOCATION-028) converted and stored as kilometres; a bare number is refused.
 
         Emits a LOCATION_COVERAGE_RULES_REPLACE event.
 
@@ -2353,7 +2371,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VALIDATION_ERROR: rules is not an array, or a rule has an unknown ruleType, no serviceAreaId, a value of the wrong type, a negative priority or maxDistance, validTo before validFrom, or the DISTANCE_TIER rules are out of order. fieldErrors names the field.'
+          description: 'VALIDATION_ERROR: rules is not an array, or a rule has an unknown ruleType, no serviceAreaId, a value of the wrong type, a negative priority, a maxDistance that is a bare number or names an unknown unit, validTo before validFrom, or the DISTANCE_TIER rules are out of order. fieldErrors names the field.'
         '404':
           content:
             application/json:
@@ -2376,17 +2394,17 @@ paths:
       - location:mobile-unit:manage
   /v1/mobile-units:eligible:
     get:
-      description: 'Finds the ACTIVE mobile units whose coverage rules include a postal code on a given date, ordered by ascending rule priority.
+      description: 'Finds the ACTIVE mobile units based at baseLocationId whose coverage rules include a postal code at a given instant, ordered by priority ascending and then by unit id, one deterministic ranking across that location''s units (DECISION-LOCATION-027).
 
-        Use this tool when dispatching a mobile service request to a customer address; use listMobileUnits instead for plain enumeration without eligibility matching.
+        Use this tool when dispatching a mobile service request to a customer address at a known location; use listMobileUnits instead for plain enumeration without eligibility matching.
 
-        Preconditions: coverage rules must already link units to service areas containing the postal code; units whose status is not ACTIVE are excluded.
+        Preconditions: coverage rules must already link units to service areas containing the postal code; only rules on an active service area match, units whose status is not ACTIVE are excluded, and a unit only takes work from its own base location (DECISION-SHOPMGMT-023 rule 1).
 
-        Required inputs: postalCode, countryCode and at (an ISO-8601 instant), all mandatory; the instant is reduced to a UTC calendar date for validFrom and validTo matching.
+        Required inputs: postalCode, countryCode, at (an ISO-8601 instant) and baseLocationId, all mandatory; validFrom/validTo are matched against at as UTC instants, validFrom inclusive and validTo exclusive. operationCodes is optional and, when sent, a unit must claim every code listed (units have no general-work default).
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 200 with the eligible units, empty when nothing covers the address on that date.
+        Returns 200 with the eligible units, empty when nothing covers the address on that instant, and 400 VALIDATION_ERROR with fieldErrors naming baseLocationId when it is missing.
 
         '
       operationId: findEligibleMobileUnits
@@ -2407,6 +2425,23 @@ paths:
         schema:
           format: date-time
           type: string
+      - description: Only units based at this location; required
+        example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+        in: query
+        name: baseLocationId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Operation codes the unit must claim every one of; optional
+        example: OIL-CHANGE-FULL-SYNTHETIC
+        in: query
+        name: operationCodes
+        required: false
+        schema:
+          items:
+            type: string
+          type: array
       responses:
         '200':
           content:
@@ -2416,10 +2451,16 @@ paths:
                   $ref: '#/components/schemas/EligibleMobileUnitResponse'
                 type: array
           description: Eligible mobile units returned.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: baseLocationId is missing or not a UUID.'
       security:
       - bearerAuth:
         - location:mobile-unit:read
-      summary: Find Eligible Mobile Units for Address
+      summary: Find Eligible Mobile Units for Address and Base Location
       tags:
       - mobile-unit-eligibility-controller
       x-required-permissions:
@@ -2740,11 +2781,11 @@ paths:
 
         Preconditions: the name must not collide with an existing policy.
 
-        Required inputs: name and bufferType, one of FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER; bufferValue is optional, must be non-negative, and is interpreted according to the bufferType.
+        Required inputs: name and bufferType, one of FIXED_MINUTES or DISTANCE_TIER (DECISION-LOCATION-015); bufferValue is optional, must be non-negative, and for FIXED_MINUTES must be a whole number of minutes.
 
         Emits a LOCATION_TRAVEL_BUFFER_POLICY_CREATE event.
 
-        Returns 201 with the created policy, 400 VALIDATION_ERROR with fieldErrors for a blank name, an unknown bufferType or a negative bufferValue, and 409 TRAVEL_BUFFER_POLICY_NAME_TAKEN when the name is already taken.
+        Returns 201 with the created policy, 400 VALIDATION_ERROR with fieldErrors for a blank name, an unknown bufferType, a negative bufferValue or a fractional FIXED_MINUTES bufferValue, and 409 TRAVEL_BUFFER_POLICY_NAME_TAKEN when the name is already taken.
 
         '
       operationId: createTravelBufferPolicy
@@ -2752,10 +2793,10 @@ paths:
         content:
           application/json:
             examples:
-              Flat minutes buffer:
-                description: Flat minutes buffer
+              Fixed minutes buffer:
+                description: Fixed minutes buffer
                 value:
-                  bufferType: FLAT_MINUTES
+                  bufferType: FIXED_MINUTES
                   bufferValue: 30
                   name: Standard Metro Buffer
                   notes: Applies during peak hours only
@@ -2775,7 +2816,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VALIDATION_ERROR: blank name, a bufferType other than FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER, or a negative bufferValue. fieldErrors names the field.'
+          description: 'VALIDATION_ERROR: blank name, a bufferType other than FIXED_MINUTES or DISTANCE_TIER, a negative bufferValue, or a fractional bufferValue on a FIXED_MINUTES policy. fieldErrors names the field.'
         '409':
           content:
             application/json:
@@ -2796,13 +2837,13 @@ paths:
 
         Use this tool to tune buffer behavior; do not use it to rename a policy, whose name is immutable after createTravelBufferPolicy.
 
-        Preconditions: the policy must exist; the resulting bufferType must remain one of FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER and the resulting bufferValue non-negative.
+        Preconditions: the policy must exist; the resulting bufferType must remain FIXED_MINUTES or DISTANCE_TIER, the resulting bufferValue non-negative, and a FIXED_MINUTES bufferValue a whole number of minutes.
 
         Required inputs: id (UUID) as a path parameter and a JSON object of the fields to change; keys other than bufferType, bufferValue and notes are silently ignored.
 
         Emits a LOCATION_TRAVEL_BUFFER_POLICY_PATCH event.
 
-        Returns 200 with the patched policy, 400 VALIDATION_ERROR when the id is not a valid UUID or (with fieldErrors) when bufferType is not a supported value, bufferValue is not a non-negative number or notes is not text, and 404 when no policy exists for the id.
+        Returns 200 with the patched policy, 400 VALIDATION_ERROR when the id is not a valid UUID or (with fieldErrors) when bufferType is not a supported value, bufferValue is not a non-negative number, a FIXED_MINUTES bufferValue is fractional, or notes is not text, and 404 when no policy exists for the id.
 
         '
       operationId: patchTravelBufferPolicy
@@ -3395,10 +3436,7 @@ components:
       description: Request payload defining a coverage rule for a mobile unit
       properties:
         maxDistance:
-          description: Maximum service distance in kilometres covered by the rule
-          example: 25.5
-          minimum: 0
-          type: number
+          $ref: '#/components/schemas/DistanceDto'
         priority:
           description: Evaluation priority of the rule (lower is evaluated first)
           example: 1
@@ -3414,19 +3452,19 @@ components:
           minLength: 1
           type: string
         serviceAreaId:
-          description: 'Identifier of the service area this rule applies to; must name an existing service area (422 SERVICE_AREA_NOT_FOUND otherwise). Required for every rule type: a DISTANCE_TIER rule is a tier within its service area, and a rule without one never matches an address.'
+          description: 'Identifier of the service area this rule applies to; must name an existing, active service area (422 SERVICE_AREA_NOT_FOUND when unknown, 422 SERVICE_AREA_INACTIVE when it exists but active is false). Required for every rule type: a DISTANCE_TIER rule is a tier within its service area, and a rule without one never matches an address.'
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
           type: string
         validFrom:
-          description: Date from which the rule is effective
-          example: '2026-06-18'
-          format: date
+          description: UTC instant from which the rule is effective, inclusive (DECISION-LOCATION-017)
+          example: '2026-06-18T00:00:00Z'
+          format: date-time
           type: string
         validTo:
-          description: Date until which the rule is effective; must not be before validFrom
-          example: '2026-12-31'
-          format: date
+          description: UTC instant until which the rule is effective, exclusive; must be after validFrom (DECISION-LOCATION-017)
+          example: '2026-12-31T00:00:00Z'
+          format: date-time
           type: string
       required:
       - ruleType
@@ -3441,9 +3479,7 @@ components:
           format: uuid
           type: string
         maxDistance:
-          description: Maximum service distance in kilometres covered by the rule
-          example: 25.5
-          type: number
+          $ref: '#/components/schemas/DistanceDto'
         mobileUnitId:
           description: Identifier of the mobile unit this rule belongs to
           example: 01960003-0000-7000-8000-000000000002
@@ -3467,19 +3503,37 @@ components:
           format: uuid
           type: string
         validFrom:
-          description: Date from which the rule is effective
-          example: '2026-06-18'
-          format: date
+          description: UTC instant from which the rule is effective, inclusive
+          example: '2026-06-18T00:00:00Z'
+          format: date-time
           type: string
         validTo:
-          description: Date until which the rule is effective
-          example: '2026-12-31'
-          format: date
+          description: UTC instant until which the rule is effective, exclusive
+          example: '2026-12-31T00:00:00Z'
+          format: date-time
           type: string
       required:
       - id
       - mobileUnitId
       - serviceAreaId
+      type: object
+    DistanceDto:
+      description: A distance with its explicit unit; a bare number is refused
+      properties:
+        unit:
+          description: Unit the value is expressed in
+          enum:
+          - KM
+          - MI
+          example: KM
+          type: string
+        value:
+          description: Numeric distance value, non-negative
+          example: 25.5
+          type: number
+      required:
+      - unit
+      - value
       type: object
     EligibleMobileUnitResponse:
       description: Response payload describing a mobile unit eligible to cover a request
@@ -3580,6 +3634,13 @@ components:
         countryCode:
           description: ISO 3166-1 alpha-2 country code
           example: US
+          type: string
+        distanceUnit:
+          description: Unit this location's forms show and accept for a distance value (DECISION-LOCATION-028); KM when omitted.
+          enum:
+          - KM
+          - MI
+          example: MI
           type: string
         locationTypeName:
           description: Name of the location type to resolve during ingest
@@ -3687,6 +3748,13 @@ components:
           format: int32
           minimum: 0
           type: integer
+        distanceUnit:
+          description: Unit this location's forms show and accept for a distance value (DECISION-LOCATION-028); unchanged when omitted. Storage of a distance is always canonical kilometres regardless of this setting.
+          enum:
+          - KM
+          - MI
+          example: MI
+          type: string
         holidayClosures:
           description: Holiday closures for the location
           items:
@@ -3791,6 +3859,13 @@ components:
           description: Country of the location
           example: US
           type: string
+        distanceUnit:
+          description: Unit this location's forms show and accept for a distance value (DECISION-LOCATION-028); KM when omitted. Storage of a distance is always canonical kilometres regardless of this setting.
+          enum:
+          - KM
+          - MI
+          example: KM
+          type: string
         geographicalLocationId:
           description: Identifier of the associated geographical location
           example: 01960003-0000-7000-8000-000000000001
@@ -3861,7 +3936,7 @@ components:
           format: int32
           type: integer
         activeMobileUnitCount:
-          description: Number of mobile units based at the location with status ACTIVE; INACTIVE units are excluded and an inactive location always reports 0
+          description: Number of mobile units based at the location with status ACTIVE; units in any other status are excluded and an inactive location always reports 0
           example: 1
           format: int32
           type: integer
@@ -3884,6 +3959,13 @@ components:
         country:
           description: Country of the location
           example: US
+          type: string
+        distanceUnit:
+          description: Unit this location's forms show and accept for a distance value (DECISION-LOCATION-028); every distance in a request or response for this location is expressed in this unit. Storage of a distance is always canonical kilometres regardless of this setting.
+          enum:
+          - KM
+          - MI
+          example: KM
           type: string
         geographicalLocationId:
           description: Identifier of the associated geographical location
@@ -3950,6 +4032,7 @@ components:
       - active
       - activeBayCount
       - activeMobileUnitCount
+      - distanceUnit
       - hasRepairCapability
       - id
       - name
@@ -4017,8 +4100,8 @@ components:
           example: Mobile tyre fitting
           type: string
         status:
-          description: Unit status; defaults to INACTIVE. A unit created ACTIVE must also carry a travel buffer policy, capabilities and coverage rules, none of which this record expresses — so an ACTIVE row is rejected by the service rather than created half-configured.
-          example: INACTIVE
+          description: Unit status; defaults to OUT_OF_SERVICE (reason OTHER). A unit created ACTIVE must also carry a travel buffer policy, capabilities and coverage rules, none of which this record expresses — so an ACTIVE row is rejected by the service rather than created half-configured.
+          example: OUT_OF_SERVICE
           type: string
       required:
       - name
@@ -4954,12 +5037,15 @@ components:
       description: Request payload for creating or updating a travel buffer policy
       properties:
         bufferType:
-          description: Type of buffer the policy applies; one of FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER
-          example: FLAT_MINUTES
+          description: 'Type of buffer the policy applies; one of FIXED_MINUTES or DISTANCE_TIER (DECISION-LOCATION-015). DISTANCE_TIER is stored, not yet evaluated: nothing evaluates distance until geocoding exists.'
+          enum:
+          - FIXED_MINUTES
+          - DISTANCE_TIER
+          example: FIXED_MINUTES
           minLength: 1
           type: string
         bufferValue:
-          description: Numeric value of the buffer (interpretation depends on buffer type)
+          description: Numeric value of the buffer; for FIXED_MINUTES a non-negative whole number of minutes, for DISTANCE_TIER an unevaluated placeholder
           example: 30
           minimum: 0
           type: number
@@ -4980,11 +5066,14 @@ components:
       description: Response payload describing a travel buffer policy
       properties:
         bufferType:
-          description: Type of buffer the policy applies
+          description: 'Type of buffer the policy applies: FIXED_MINUTES or DISTANCE_TIER (DECISION-LOCATION-015). DISTANCE_TIER is stored, not yet evaluated: nothing evaluates distance until geocoding exists.'
+          enum:
+          - FIXED_MINUTES
+          - DISTANCE_TIER
           example: FIXED_MINUTES
           type: string
         bufferValue:
-          description: Numeric value of the buffer (interpretation depends on buffer type)
+          description: Numeric value of the buffer; for FIXED_MINUTES a non-negative whole number of minutes, for DISTANCE_TIER an unevaluated placeholder
           example: 30
           type: number
         createdAt:

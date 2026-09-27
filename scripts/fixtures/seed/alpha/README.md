@@ -480,11 +480,11 @@ range); `GENERAL_SERVICE` 3 (light-duty two-post lift); `ALIGNMENT` and `TIRE_SE
 equipment rated for light/medium pickups and vans); `INSPECTION` 5 (an inspection lift/pit typically runs a
 class higher than the general-service lift beside it); `WASH_DETAIL` blank (no lift, so no ceiling to enforce).
 
-Columns (`locations.csv`): `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
+Columns (`locations.csv`): `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone,distanceUnit` — `distanceUnit` (`KM`/`MI`, DECISION-LOCATION-028) is every row's own display unit; alpha's US sites are seeded `MI`, and a blank value defaults to `KM` at the ingest endpoint (`LocationBulkIngestController`).
 
 Columns (`mobile-units.csv`): `name,baseLocationCode,status,travelBufferPolicyName,capabilityCodes` — `capabilityCodes` is `;`-separated and holds **catalog operation codes** (CAP-325 D14: the same vocabulary as a bay's specialty claim, validated by pos-location against its `ext_catalog_service` replica, so the Tier 0 catalog pack must have landed first). The location-owned capability registry is retired (V5).
 
-Columns (`mobile-unit-coverage-rules.csv`): `unitName,serviceAreaName,ruleType,priority,maxDistance,validFrom,validTo` — `maxDistance` blank is the catch-all tier, and `validFrom`/`validTo` blank means always in effect.
+Columns (`mobile-unit-coverage-rules.csv`): `unitName,serviceAreaName,ruleType,priority,maxDistance,unit,validFrom,validTo` — `maxDistance` blank is the catch-all tier; `validFrom`/`validTo` blank means always in effect. `unit` (`KM`/`MI`, DECISION-LOCATION-028) names the unit the fixture's `maxDistance` figure is authored in — always `MI` today — and `seed-alpha.py` sends the pair as an explicit `{"value": maxDistance, "unit": unit}` object rather than a bare number; a row with a `maxDistance` but no `unit` is a fixture bug and drops the whole unit with a `WARN`, the same as an unresolvable service area.
 
 **Mobile units are an API pack, not a loader domain (#1986).** pos-location refuses an `ACTIVE`
 mobile unit that has no `travelBufferPolicyId`, `serviceCapabilityCodes` and `coverageRules` —

@@ -547,7 +547,27 @@ class BatchConfigurationWriterTest {
         assertThat(request.getRecords().get(0).toString())
                 .contains("name=Charlotte South")
                 .contains("code=CLT-SOUTH")
-                .contains("active=true");
+                .contains("active=true")
+                .contains("distanceUnit=null");
+    }
+
+    @Test
+    void locationBulkIngestWriter_distanceUnit_passesThrough() {
+        LocationRecord location = new LocationRecord();
+        location.setName("Riverside Auto Service");
+        location.setCode("ATX-RIV-001");
+        location.setCountryCode("US");
+        location.setDistanceUnit("MI");
+
+        ItemWriter<NumberedRecord<LocationRecord>> writer = batchConfiguration.locationBulkIngestWriter(
+                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+        assertThatCode(() -> writer.write(Chunk.of(numbered(0, location)))).doesNotThrowAnyException();
+        ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(requestBodySpec).body(bodyCaptor.capture());
+        @SuppressWarnings("unchecked")
+        var request = (com.positivity.bulkingest.BulkIngestRequest<Object>) bodyCaptor.getValue();
+        assertThat(request.getRecords().get(0).toString()).contains("distanceUnit=MI");
     }
 
     @Test

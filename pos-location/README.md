@@ -44,7 +44,8 @@ Location hierarchy and physical space management service for the Durion Positivi
 - `GET /v1/locations/{storageLocationId}` — retrieve a storage location
 - `POST /v1/locations/{siteId}/storage-locations` — create a storage location
 - `PATCH /v1/locations/{siteId}/storage-locations/{storageLocationId}` — patch a storage location
-- `GET /v1/mobile-units:eligible` — eligible mobile units for scheduling
+- `GET /v1/mobile-units:eligible?baseLocationId=&postalCode=&countryCode=&at=&operationCodes=` —
+  eligible mobile units for scheduling, scoped to `baseLocationId` (required, #2265)
 - `GET /v1/mobile-units?baseLocationId=&status=&include=coverageRules` — one shop's units (and, with
   `include=coverageRules`, each unit's rules in the same response); every filter is optional (#2253)
 - `PUT /v1/mobile-units/{id}/coverage-rules` — replace a unit's coverage, validated as create is (#2248)
@@ -62,6 +63,7 @@ request field also carries `fieldErrors[0].field` naming it (`name`, `baseLocati
 | `LOCATION_NOT_FOUND` | 422 | A mobile unit's `baseLocationId` names no location |
 | `TRAVEL_BUFFER_POLICY_NOT_FOUND` | 422 | A mobile unit's `travelBufferPolicyId` names no policy |
 | `SERVICE_AREA_NOT_FOUND` | 422 | A coverage rule's `serviceAreaId` names no service area |
+| `SERVICE_AREA_INACTIVE` | 422 | A coverage rule's `serviceAreaId` names a service area whose `active` is `false` (#2265) |
 | `UNPROCESSABLE_CONTENT` | 422 | An ACTIVE mobile unit without a travel buffer policy, capabilities and coverage rules, or an unknown capability code |
 | `OUT_OF_SERVICE_REASON_REQUIRED` | 422 | A bay or mobile unit's resulting status is `OUT_OF_SERVICE` without `outOfServiceReason`, or `outOfServiceReason` is `OTHER` without `outOfServiceNote` (DECISION-LOCATION-026, #2264) |
 | `MOBILE_UNIT_NAME_TAKEN` | 409 | Another mobile unit at the same base location has the name (ignoring case), **including a retired unit's name** (#2264) |
@@ -80,8 +82,8 @@ is unique per location by `uq_bays_location_normalized_name`. Neither uniqueness
 location-scope gated like `listBays` (`location-scope.yaml`). Bay and mobile unit `status` is
 `ACTIVE`, `OUT_OF_SERVICE` or `RETIRED` (a `CHECK` on both tables since **V8**, DECISION-LOCATION-026,
 #2264 — mobile units previously also accepted `INACTIVE`, retired with no compatibility shim), and
-travel buffer policy `bufferType` is `FLAT_MINUTES`, `PERCENTAGE_OF_TRAVEL` or `DISTANCE_MULTIPLIER`
-(also a `CHECK` since V6, #2249).
+travel buffer policy `bufferType` is `FIXED_MINUTES` or `DISTANCE_TIER` (also a `CHECK`, V11, #2266 —
+supersedes the V6 `CHECK`; see "Distance units and travel buffer policy types" below).
 
 ## Mobile unit duty ceiling and identity (DECISION-LOCATION-029, #2267)
 
@@ -105,6 +107,66 @@ DECISION-SHOPMGMT-023).
   once both are set — a plate recorded without its region is not a duplicate of anything.
 - A `PATCH` clears any of the five by sending `null`; an absent key leaves it unchanged.
 - `MobileUnitUpdatedV1` carries all five, additively (schema version 4).
+
+## Distance units and travel buffer policy types (DECISION-LOCATION-028, DECISION-LOCATION-015, #2266)
+
+Every distance in a request or response is an explicit `{ value, unit }` object, `unit` one of `KM`
+or `MI`; a bare number is refused (400 `VALIDATION_ERROR`, `fieldErrors` naming the field, and naming
+`<field>.unit` specifically for a missing or unknown unit). Storage is always canonical kilometres,
+rounded half-up to 2 decimals; conversion is exact (1 mi = 1.609344 km) and happens at the API edge
+(`DistanceUnits`), never in the database.
+
+- **Locations** (`Location.distanceUnit`, `location.distance_unit varchar(2) NOT NULL DEFAULT 'KM'
+  CHECK (... IN ('KM','MI'))`, migration V11): the unit a location's own forms show and accept.
+  `createLocation`/`updateLocation` default an omitted `distanceUnit` to `KM`; `patchLocation` leaves
+  it unchanged when omitted. Alpha's US locations are seeded `MI`
+  (`scripts/fixtures/seed/alpha/location/locations.csv`, carried through
+  `pos-bulk-loader`'s `LocationRecord`/`LocationLoaderStrategy` into the `LOCATION` bulk-ingest
+  payload) — a bulk-loader `distanceUnit` column left blank still defaults to `KM` at the ingest
+  endpoint.
+- **Mobile unit coverage rules** (`CoverageRuleRequest`/`CoverageRuleResponse.maxDistance`,
+  `mobile_unit_coverage_rules.max_distance_km numeric(10,2)`, renamed from `max_distance` by V11): a
+  rule's `maxDistance` is stored in kilometres and shown back in the unit's base location's
+  `distanceUnit` — the location, not the caller, decides the display unit. `DISTANCE_TIER` coverage
+  (`ruleType`, `maxDistance`) is stored, **not yet evaluated**: nothing evaluates distance until
+  geocoding exists, since neither locations nor customer addresses carry coordinates today.
+- **Travel buffer policies** (`bufferType`): only `FIXED_MINUTES` (`bufferValue` a non-negative whole
+  number of minutes, DECISION-LOCATION-015) and `DISTANCE_TIER` (stored, not yet evaluated — same
+  reason as coverage) are accepted. The former `FLAT_MINUTES` is renamed to `FIXED_MINUTES`;
+  `PERCENTAGE_OF_TRAVEL` and `DISTANCE_MULTIPLIER`, which no decision defines and which would need
+  routed travel time no service in this platform provides, are removed outright (pre-production, no
+  compatibility shim). Migration V11 converts existing rows: `FLAT_MINUTES` → `FIXED_MINUTES`
+  in place, and a removed type → `FIXED_MINUTES` with a 0-minute `bufferValue`, one `RAISE WARNING`
+  per row naming the policy so an operator can pick a real value.
+- The alpha coverage-rule fixture (`scripts/fixtures/seed/alpha/location/mobile-unit-coverage-rules.csv`)
+  carries its own explicit `unit` column (always `MI` today) rather than assuming a unit: `seed-alpha.py`
+  sends `maxDistance` as `{"value": <maxDistance>, "unit": <unit>}` and refuses (skipping the whole
+  unit, with a `WARN`) a row that names a distance with no unit.
+
+## Mobile unit coverage eligibility (DECISION-LOCATION-027, DECISION-SHOPMGMT-023, #2265)
+
+`GET /v1/mobile-units:eligible` finds the ACTIVE mobile units eligible to cover a service address:
+
+- `baseLocationId` is **required** (400 `VALIDATION_ERROR` with `fieldErrors` naming it when missing)
+  and scopes the answer to units based there — a unit only takes work from its own base location
+  (DECISION-SHOPMGMT-023 rule 1), matching `pos-workorder`'s same-site placement rule.
+  `postalCode`, `countryCode` and `at` (an ISO-8601 instant) stay required as before.
+- `operationCodes` is optional and repeatable/comma-separated, like `include` on `GET
+  /v1/mobile-units`; when sent, a unit must claim **every** code listed against its
+  `serviceCapabilityCodes` — unlike a `GENERAL_SERVICE` bay, a mobile unit has no general-work
+  default.
+- A coverage rule only matches when its service area's `active` is `true`. Retiring an area
+  (`PATCH /v1/service-areas/{id}` with `active: false`) keeps every rule pointing at it — nothing is
+  deleted — but none of them match again until the area is reactivated; deactivating an area never
+  changes any unit's own `status`.
+- Results are ordered by `priority` ascending, then mobile unit id, as **one** ranking across the
+  named location's units — ties are broken deterministically rather than left to per-rule ordering.
+- `mobile_unit_coverage_rules.validFrom`/`validTo` are UTC instants (DECISION-LOCATION-017), not
+  calendar dates: `validFrom` is inclusive, `validTo` is exclusive, and both are compared against
+  `at` directly. Migration V9 converted the previous `date` columns so an existing window reads
+  unchanged: `validFrom` becomes that day's UTC midnight, and `validTo` becomes the **next** day's
+  UTC midnight (the old inclusive end-of-day date now falls just inside the exclusive window).
+  Creating or replacing a rule requires `validTo` to be strictly after `validFrom` when both are set.
 
 ## Location scope (ADR-0061, #1872)
 

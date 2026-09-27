@@ -108,9 +108,10 @@ public class MobileUnitController {
             responseCode = "400",
             description = "VALIDATION_ERROR: blank name, missing baseLocationId, a status other than ACTIVE,"
                     + " OUT_OF_SERVICE or RETIRED, a coverage rule with an unknown ruleType, no serviceAreaId, a"
-                    + " negative priority or maxDistance, validTo before validFrom, or DISTANCE_TIER rules out of"
-                    + " order, a maxDutyClass outside 1-8, a vin that is not exactly 17 characters or contains I, O"
-                    + " or Q, or a plateRegion that is not an ISO 3166-2 code. fieldErrors names the field.",
+                    + " negative priority, a maxDistance that is a bare number or names an unknown unit, validTo"
+                    + " before validFrom, or DISTANCE_TIER rules out of order, a maxDutyClass outside 1-8, a vin that"
+                    + " is not exactly 17 characters or contains I, O or Q, or a plateRegion that is not an ISO"
+                    + " 3166-2 code. fieldErrors names the field.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
@@ -424,7 +425,8 @@ public class MobileUnitController {
                     Required inputs: id (UUID) as a path parameter and a body of the form {"rules": [...]}, each \
                     rule carrying ruleType (SERVICE_AREA or DISTANCE_TIER, any case) and serviceAreaId, and \
                     optionally priority (non-negative, defaults to 0), validFrom, validTo (not before validFrom) \
-                    and maxDistance (non-negative).
+                    and maxDistance, an explicit {value, unit} object (KM or MI, DECISION-LOCATION-028) converted \
+                    and stored as kilometres; a bare number is refused.
                     Emits a LOCATION_COVERAGE_RULES_REPLACE event.
                     Returns 200 with the saved rules ordered by priority; 400 VALIDATION_ERROR with fieldErrors \
                     (rules[i].field) for a malformed rule or tiers out of order; 404 when the mobile unit does not \
@@ -436,8 +438,9 @@ public class MobileUnitController {
     @ApiResponse(
             responseCode = "400",
             description = "VALIDATION_ERROR: rules is not an array, or a rule has an unknown ruleType, no"
-                    + " serviceAreaId, a value of the wrong type, a negative priority or maxDistance, validTo before"
-                    + " validFrom, or the DISTANCE_TIER rules are out of order. fieldErrors names the field.",
+                    + " serviceAreaId, a value of the wrong type, a negative priority, a maxDistance that is a bare"
+                    + " number or names an unknown unit, validTo before validFrom, or the DISTANCE_TIER rules are"
+                    + " out of order. fieldErrors names the field.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",

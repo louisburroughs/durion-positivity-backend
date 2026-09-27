@@ -1051,6 +1051,91 @@ class LocationServiceTest {
         assertThat(person.getFirstName()).isNull();
     }
 
+    @Test
+    @DisplayName("#2266 - distanceUnit defaults to KM when omitted on create")
+    void createLocation_omittedDistanceUnit_defaultsToKm() {
+        LocationType locationType =
+                LocationType.builder().id(UUID.randomUUID()).name("Shop").build();
+        LocationRequestDTO request = validRequest("KM Default Shop", "KM-DEFAULT-001");
+        when(locationTypeRepository.findByNameIgnoreCase("Shop")).thenReturn(Optional.of(locationType));
+        when(locationRepository.saveAndFlush(any(Location.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        LocationResponseDTO response = locationService.createLocation(request);
+
+        assertThat(response.getDistanceUnit()).isEqualTo("KM");
+    }
+
+    @Test
+    @DisplayName("#2266 - a MI distanceUnit is accepted and echoed back, matched case-insensitively")
+    void createLocation_miDistanceUnit_isAcceptedAndEchoed() {
+        LocationType locationType =
+                LocationType.builder().id(UUID.randomUUID()).name("Shop").build();
+        LocationRequestDTO request = validRequest("MI Shop", "MI-SHOP-001");
+        request.setDistanceUnit(" mi ");
+        when(locationTypeRepository.findByNameIgnoreCase("Shop")).thenReturn(Optional.of(locationType));
+        when(locationRepository.saveAndFlush(any(Location.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        LocationResponseDTO response = locationService.createLocation(request);
+
+        assertThat(response.getDistanceUnit()).isEqualTo("MI");
+    }
+
+    @Test
+    @DisplayName("#2266 - an unknown distanceUnit is 400 VALIDATION_ERROR on distanceUnit")
+    void createLocation_unknownDistanceUnit_isRejected() {
+        LocationRequestDTO request = validRequest("Bad Unit Shop", "BAD-UNIT-001");
+        request.setDistanceUnit("YARDS");
+
+        assertThatThrownBy(() -> locationService.createLocation(request))
+                .isInstanceOfSatisfying(com.positivity.location.internal.exception.InvalidFieldException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getField()).isEqualTo("distanceUnit");
+                });
+        verify(locationRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("#2266 - patchLocation updates distanceUnit")
+    void patchLocation_updatesDistanceUnit() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Location existing = Location.builder()
+                .id(locationId)
+                .name("Existing Shop")
+                .code("EXIST-001")
+                .active(true)
+                .build();
+        when(locationRepository.findById(locationId)).thenReturn(Optional.of(existing));
+        when(locationRepository.saveAndFlush(existing)).thenReturn(existing);
+
+        LocationResponseDTO response = locationService.patchLocation(
+                locationId, LocationPatchRequest.builder().distanceUnit("MI").build());
+
+        assertThat(response.getDistanceUnit()).isEqualTo("MI");
+    }
+
+    @Test
+    @DisplayName("#2266 - patchLocation rejects an unknown distanceUnit, writing nothing")
+    void patchLocation_unknownDistanceUnit_isRejected() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Location existing = Location.builder()
+                .id(locationId)
+                .name("Existing Shop")
+                .code("EXIST-001")
+                .active(true)
+                .build();
+        when(locationRepository.findById(locationId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> locationService.patchLocation(
+                        locationId,
+                        LocationPatchRequest.builder().distanceUnit("FURLONGS").build()))
+                .isInstanceOfSatisfying(com.positivity.location.internal.exception.InvalidFieldException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getField()).isEqualTo("distanceUnit");
+                });
+        assertThat(existing.getDistanceUnit()).isEqualTo("KM");
+        verify(locationRepository, never()).saveAndFlush(any());
+    }
+
     private static LocationRequestDTO validRequest(String name, String code) {
         return LocationRequestDTO.builder()
                 .name(name)

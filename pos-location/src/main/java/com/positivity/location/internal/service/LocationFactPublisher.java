@@ -376,7 +376,7 @@ public class LocationFactPublisher {
      * an unguarded delete on the consumer side, so the pair could have resurrected or dropped the
      * row if it arrived out of order. There is no such tombstone any more.
      *
-     * <p>{@code status} is published raw ({@code ACTIVE} | {@code INACTIVE}), never a derived
+     * <p>{@code status} is published raw ({@code ACTIVE} | {@code OUT_OF_SERVICE} | {@code RETIRED}), never a derived
      * boolean.
      *
      * <p>A unit with no base location publishes nothing — see the guard below for why that is

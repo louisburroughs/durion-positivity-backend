@@ -145,6 +145,7 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
         request.setPhoneNumber(ingestRecord.getPhoneNumber());
         request.setTimezone(ingestRecord.getTimezone());
         request.setActive(ingestRecord.getActive() == null ? Boolean.TRUE : ingestRecord.getActive());
+        request.setDistanceUnit(ingestRecord.getDistanceUnit());
         request.setType(LocationTypeDTO.builder()
                 .name(firstNonBlank(ingestRecord.getLocationTypeName(), DEFAULT_LOCATION_TYPE_NAME))
                 .build());

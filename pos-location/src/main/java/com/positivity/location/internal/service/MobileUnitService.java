@@ -52,5 +52,17 @@ public interface MobileUnitService {
 
     List<CoverageRuleResponse> getCoverageRules(UUID id);
 
-    List<EligibleMobileUnitResponse> findEligibleMobileUnits(String postalCode, String countryCode, Instant at);
+    /**
+     * Eligible active mobile units for a service request, scoped to one base location
+     * (DECISION-LOCATION-027).
+     *
+     * @param baseLocationId required: only units based here are considered
+     * @param operationCodes optional: a unit must claim every one
+     */
+    List<EligibleMobileUnitResponse> findEligibleMobileUnits(
+            String postalCode,
+            String countryCode,
+            Instant at,
+            @Nullable UUID baseLocationId,
+            @Nullable List<String> operationCodes);
 }

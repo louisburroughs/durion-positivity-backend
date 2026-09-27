@@ -26,10 +26,11 @@ public class MobileUnitBulkIngestRecord {
     private UUID baseLocationId;
 
     @Schema(
-            description = "Unit status; defaults to INACTIVE. A unit created ACTIVE must also carry a travel"
-                    + " buffer policy, capabilities and coverage rules, none of which this record expresses —"
-                    + " so an ACTIVE row is rejected by the service rather than created half-configured.",
-            example = "INACTIVE",
+            description =
+                    "Unit status; defaults to OUT_OF_SERVICE (reason OTHER). A unit created ACTIVE must also carry a travel"
+                            + " buffer policy, capabilities and coverage rules, none of which this record expresses —"
+                            + " so an ACTIVE row is rejected by the service rather than created half-configured.",
+            example = "OUT_OF_SERVICE",
             requiredMode = NOT_REQUIRED)
     private String status;
 

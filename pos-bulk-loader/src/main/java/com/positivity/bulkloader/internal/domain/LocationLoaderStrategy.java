@@ -30,6 +30,7 @@ public class LocationLoaderStrategy implements DomainLoaderStrategy<LocationReco
         item.setActive(row.get("active"));
         item.setLocationTypeName(row.get("locationTypeName"));
         item.setTimezone(row.get("timezone"));
+        item.setDistanceUnit(row.get("distanceUnit"));
         return item;
     }
 

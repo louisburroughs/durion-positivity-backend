@@ -70,6 +70,16 @@ public class LocationResponseDTO {
     private boolean active;
 
     @Schema(
+            description = "Unit this location's forms show and accept for a distance value"
+                    + " (DECISION-LOCATION-028); every distance in a request or response for this location is"
+                    + " expressed in this unit. Storage of a distance is always canonical kilometres regardless"
+                    + " of this setting.",
+            example = "KM",
+            allowableValues = {"KM", "MI"},
+            requiredMode = REQUIRED)
+    private String distanceUnit;
+
+    @Schema(
             description = "People-contact person identifier of the person responsible for the location",
             example = "01960011-0000-7000-8000-000000000001",
             requiredMode = NOT_REQUIRED)
@@ -122,8 +132,9 @@ public class LocationResponseDTO {
     private int activeBayCount;
 
     @Schema(
-            description = "Number of mobile units based at the location with status ACTIVE; INACTIVE units are "
-                    + "excluded and an inactive location always reports 0",
+            description =
+                    "Number of mobile units based at the location with status ACTIVE; units in any other status are "
+                            + "excluded and an inactive location always reports 0",
             example = "1",
             requiredMode = REQUIRED)
     private int activeMobileUnitCount;

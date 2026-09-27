@@ -2,6 +2,7 @@ package com.positivity.location.internal.service;
 
 import com.positivity.location.internal.dto.CoverageRuleRequest;
 import com.positivity.location.internal.dto.CoverageRuleResponse;
+import com.positivity.location.internal.dto.DistanceDto;
 import com.positivity.location.internal.dto.EligibleMobileUnitResponse;
 import com.positivity.location.internal.dto.MobileUnitRequest;
 import com.positivity.location.internal.dto.MobileUnitResponse;
@@ -22,8 +23,6 @@ import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -102,6 +101,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     static final String TRAVEL_BUFFER_POLICY_NOT_FOUND = "TRAVEL_BUFFER_POLICY_NOT_FOUND";
     static final String LOCATION_NOT_FOUND = "LOCATION_NOT_FOUND";
     static final String SERVICE_AREA_NOT_FOUND = "SERVICE_AREA_NOT_FOUND";
+    static final String SERVICE_AREA_INACTIVE = "SERVICE_AREA_INACTIVE";
     private static final String MOBILE_UNIT_NOT_FOUND = "Mobile unit not found";
     private static final String DISTANCE_TIERS_INVALID =
             "DISTANCE_TIER rules must be strictly ascending by maxDistance and end with one null catch-all";
@@ -363,15 +363,19 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             if (rule.getPriority() != null && rule.getPriority() < 0) {
                 throw InvalidFieldException.invalid(prefix + "priority", "priority must not be negative");
             }
-            if (rule.getMaxDistance() != null && rule.getMaxDistance().signum() < 0) {
-                throw InvalidFieldException.invalid(prefix + FIELD_MAX_DISTANCE, "maxDistance must not be negative");
-            }
+            // DECISION-LOCATION-028: a distance always carries its unit; parseOptionalKm refuses a bare
+            // number here and converts a valid {value, unit} object to canonical kilometres.
+            BigDecimal maxDistanceKm =
+                    DistanceUnits.parseOptionalKm(rule.getMaxDistance(), prefix + FIELD_MAX_DISTANCE);
             if (rule.getValidFrom() != null
                     && rule.getValidTo() != null
-                    && rule.getValidTo().isBefore(rule.getValidFrom())) {
-                throw InvalidFieldException.invalid(prefix + "validTo", "validTo must not be before validFrom");
+                    && !rule.getValidTo().isAfter(rule.getValidFrom())) {
+                throw InvalidFieldException.invalid(prefix + "validTo", "validTo must be after validFrom");
             }
-            normalized.add(rule.toBuilder().ruleType(ruleType).build());
+            normalized.add(rule.toBuilder()
+                    .ruleType(ruleType)
+                    .maxDistance(maxDistanceKm)
+                    .build());
         }
         List<CoverageRuleRequest> tiers = normalized.stream()
                 .filter(rule -> RULE_TYPE_DISTANCE_TIER.equals(rule.getRuleType()))
@@ -382,7 +386,11 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         return normalized;
     }
 
-    /** 422 naming the first rule whose serviceAreaId resolves to nothing; otherwise the areas by id. */
+    /**
+     * 422 naming the first rule whose serviceAreaId resolves to nothing ({@code
+     * SERVICE_AREA_NOT_FOUND}) or names an inactive area ({@code SERVICE_AREA_INACTIVE},
+     * DECISION-LOCATION-027 rule 1); otherwise the areas by id.
+     */
     private Map<UUID, ServiceAreaEntity> resolveServiceAreas(List<CoverageRuleRequest> rules, String field) {
         if (rules.isEmpty()) {
             return Map.of();
@@ -392,11 +400,19 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         Map<UUID, ServiceAreaEntity> found = serviceAreaRepository.findAllById(ids).stream()
                 .collect(Collectors.toMap(ServiceAreaEntity::getId, Function.identity()));
         for (int i = 0; i < rules.size(); i++) {
-            if (!found.containsKey(rules.get(i).getServiceAreaId())) {
+            UUID areaId = rules.get(i).getServiceAreaId();
+            ServiceAreaEntity area = found.get(areaId);
+            if (area == null) {
                 throw InvalidFieldException.unknownReference(
                         SERVICE_AREA_NOT_FOUND,
                         field + "[" + i + "].serviceAreaId",
                         "serviceAreaId does not reference an existing service area");
+            }
+            if (Boolean.FALSE.equals(area.getActive())) {
+                throw InvalidFieldException.unknownReference(
+                        SERVICE_AREA_INACTIVE,
+                        field + "[" + i + "].serviceAreaId",
+                        "serviceAreaId names a service area that is not active");
             }
         }
         return found;
@@ -547,7 +563,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
      * @param page                 zero-based page index
      * @param size                 page size
      * @param baseLocationId       only units based here; {@code null} for every location
-     * @param status               only units in this status (ACTIVE or INACTIVE, any case);
+     * @param status               only units in this status (ACTIVE, OUT_OF_SERVICE or RETIRED, any case);
      *                             {@code null} or blank for every status
      * @param includeCoverageRules whether each unit carries its coverage rules, read for the
      *                             whole page in one query
@@ -624,7 +640,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
      * Applies partial updates to a mobile unit.
      *
      * <p>Every recognised key is checked before anything is written (#2252): a name must be
-     * non-blank text and not taken at the unit's base location; status must be ACTIVE or INACTIVE
+     * non-blank text and not taken at the unit's base location; status must be ACTIVE, OUT_OF_SERVICE or RETIRED
      * (never null); notes must be text or null; travelBufferPolicyId must be null (clears it) or
      * the id of an existing policy; serviceCapabilityCodes must be an array.
      *
@@ -688,7 +704,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         MobileUnitEntity saved;
         try {
             saved = mobileUnitRepository.save(entity);
-            // Status transitions (ACTIVE <-> INACTIVE) travel on this fact and keep the replica row
+            // Status transitions (ACTIVE, OUT_OF_SERVICE, RETIRED) travel on this fact and keep the replica row
             // (issue #1668). An unknown id never gets here: it is a 404 above (#2252).
             //
             // Inside the try because the publisher flushes: since #1668 gave this aggregate a
@@ -777,7 +793,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                     .priority(rule.getPriority() == null ? 0 : rule.getPriority())
                     .validFrom(rule.getValidFrom())
                     .validTo(rule.getValidTo())
-                    .maxDistance(rule.getMaxDistance())
+                    .maxDistanceKm((BigDecimal) rule.getMaxDistance())
                     .build());
         }
         List<MobileUnitCoverageRuleEntity> saved = coverageRuleRepository.saveAll(entities);
@@ -822,25 +838,40 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     }
 
     /**
-     * Finds eligible active mobile units for a service request.
+     * Finds eligible active mobile units for a service request, scoped to one base location
+     * (DECISION-LOCATION-027, DECISION-SHOPMGMT-023 rule 1): a unit only takes work from its base
+     * location. Ranking is one deterministic sequence across that location's units — priority
+     * ascending, ties broken by unit id — not a per-rule order, since the repository query already
+     * orders that way and the first rule seen for a unit is kept.
      *
-     * @param postalCode  postal code
-     * @param countryCode country code
-     * @param at          effective time
-     * @return eligible units ordered by priority ascending
+     * @param postalCode     postal code
+     * @param countryCode    country code
+     * @param at             effective instant; {@code null} defaults to now
+     * @param baseLocationId required: only units based here are considered
+     * @param operationCodes optional: a unit must claim every one (no general-work default)
+     * @return eligible units ordered by priority ascending, then unit id
      */
     @Transactional(readOnly = true)
-    public List<EligibleMobileUnitResponse> findEligibleMobileUnits(String postalCode, String countryCode, Instant at) {
-        LocalDate atDate = at == null
-                ? LocalDate.now(ZoneOffset.UTC)
-                : at.atZone(ZoneOffset.UTC).toLocalDate();
+    public List<EligibleMobileUnitResponse> findEligibleMobileUnits(
+            String postalCode, String countryCode, Instant at, UUID baseLocationId, List<String> operationCodes) {
+        if (baseLocationId == null) {
+            throw InvalidFieldException.invalid(FIELD_BASE_LOCATION_ID, "baseLocationId is required");
+        }
+        Instant effectiveAt = at == null ? Instant.now(clock) : at;
         List<MobileUnitCoverageRuleEntity> rules =
-                coverageRuleRepository.findEligibleCoverageRules(postalCode, countryCode, atDate);
+                coverageRuleRepository.findEligibleCoverageRules(postalCode, countryCode, effectiveAt, baseLocationId);
+
+        List<String> requiredCodes = nonNullList(operationCodes).stream()
+                .map(ServiceCapabilityCodeValidator::normalize)
+                .toList();
 
         Map<UUID, EligibleMobileUnitResponse> ordered = new LinkedHashMap<>();
         for (MobileUnitCoverageRuleEntity rule : rules) {
             MobileUnitEntity unit = rule.getMobileUnit();
             if (unit == null || !STATUS_ACTIVE.equalsIgnoreCase(unit.getStatus())) {
+                continue;
+            }
+            if (!requiredCodes.isEmpty() && !unit.getServiceCapabilityCodes().containsAll(requiredCodes)) {
                 continue;
             }
             ordered.putIfAbsent(
@@ -916,9 +947,11 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                 .serviceAreaId(parseUuidField(source.get("serviceAreaId"), prefix + "serviceAreaId"))
                 .ruleType(source.get("ruleType") == null ? null : String.valueOf(source.get("ruleType")))
                 .priority(parseIntegerField(source.get("priority"), prefix + "priority"))
-                .validFrom(parseLocalDateField(source.get("validFrom"), prefix + "validFrom"))
-                .validTo(parseLocalDateField(source.get("validTo"), prefix + "validTo"))
-                .maxDistance(parseBigDecimalField(source.get(FIELD_MAX_DISTANCE), prefix + FIELD_MAX_DISTANCE))
+                .validFrom(parseInstantField(source.get("validFrom"), prefix + "validFrom"))
+                .validTo(parseInstantField(source.get("validTo"), prefix + "validTo"))
+                // Carried through as raw data (a Map, or a bare number/string) and resolved centrally in
+                // validateCoverageRules, so the map path and the typed path refuse a bare number the same way.
+                .maxDistance(source.get(FIELD_MAX_DISTANCE))
                 .build();
     }
 
@@ -975,7 +1008,32 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                 .priority(entity.getPriority())
                 .validFrom(entity.getValidFrom())
                 .validTo(entity.getValidTo())
-                .maxDistance(entity.getMaxDistance())
+                .maxDistance(toDistanceDto(entity.getMaxDistanceKm(), resolveDisplayUnit(entity)))
+                .build();
+    }
+
+    /**
+     * A rule's distance is shown in the owning mobile unit's base location's {@code distanceUnit}
+     * (DECISION-LOCATION-028 rule 3); {@code KM} when the unit, its base location, or the location's
+     * unit is not resolvable (built in memory, or the unit has none yet), which is also the schema
+     * default.
+     */
+    private String resolveDisplayUnit(MobileUnitCoverageRuleEntity entity) {
+        MobileUnitEntity unit = entity.getMobileUnit();
+        Location baseLocation = unit == null ? null : unit.getBaseLocation();
+        String unitCode = baseLocation == null ? null : baseLocation.getDistanceUnit();
+        String normalized = DistanceUnits.normalize(unitCode);
+        return normalized == null ? DistanceUnits.KM : normalized;
+    }
+
+    @Nullable
+    private DistanceDto toDistanceDto(@Nullable BigDecimal km, String unit) {
+        if (km == null) {
+            return null;
+        }
+        return DistanceDto.builder()
+                .value(DistanceUnits.fromKm(km, unit))
+                .unit(unit)
                 .build();
     }
 
@@ -1093,7 +1151,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             return parseBigDecimal(map.get(FIELD_MAX_DISTANCE));
         }
         if (entry instanceof CoverageRuleRequest request) {
-            return request.getMaxDistance();
+            return parseBigDecimal(request.getMaxDistance());
         }
         return parseBigDecimal(entry);
     }
@@ -1112,17 +1170,6 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         }
     }
 
-    private static BigDecimal parseBigDecimalField(Object value, String field) {
-        if (value == null) {
-            return null;
-        }
-        BigDecimal parsed = parseBigDecimal(value);
-        if (parsed == null) {
-            throw InvalidFieldException.invalid(field, field + " must be a number");
-        }
-        return parsed;
-    }
-
     private static BigDecimal parseBigDecimal(Object value) {
         if (value == null) {
             return null;
@@ -1134,17 +1181,6 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             return new BigDecimal(String.valueOf(value).trim());
         } catch (NumberFormatException ignored) {
             return null;
-        }
-    }
-
-    private static LocalDate parseLocalDateField(Object value, String field) {
-        if (value == null) {
-            return null;
-        }
-        try {
-            return LocalDate.parse(String.valueOf(value).trim());
-        } catch (DateTimeParseException exception) {
-            throw InvalidFieldException.invalid(field, field + " must be an ISO-8601 date (yyyy-MM-dd)");
         }
     }
 
