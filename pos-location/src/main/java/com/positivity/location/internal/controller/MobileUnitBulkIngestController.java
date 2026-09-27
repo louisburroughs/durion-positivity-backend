@@ -158,6 +158,7 @@ public class MobileUnitBulkIngestController extends AbstractBulkIngestController
         unitRequest.setBaseLocationId(baseLocationId);
         unitRequest.setStatus(record.getStatus());
         unitRequest.setNotes(record.getNotes());
+        unitRequest.setMaxDutyClass(record.getMaxDutyClass());
         return unitRequest;
     }
 

@@ -36,7 +36,9 @@ import org.springframework.web.server.ResponseStatusException;
  * {@link DuplicateResourceException} is {@code @ResponseStatus(CONFLICT)} with no reason, which the
  * shared catch-all renders as a bare {@code CONFLICT}; its message is always a machine code
  * ({@code MOBILE_UNIT_NAME_TAKEN}, {@code BAY_NAME_TAKEN}, ...), so it becomes the code here and a
- * client can tell "name taken" from any other conflict (#2252).
+ * client can tell "name taken" from any other conflict (#2252). One that also names a field (for
+ * example {@code MOBILE_UNIT_IDENTITY_TAKEN}, #2267) answers with {@code fieldErrors} naming it,
+ * the same shape {@link InvalidFieldException} uses.
  *
  * <p>Everything else — Spring MVC's own web exceptions, validation failures, the catch-all — is
  * left to pos-web-common's {@code GlobalApiExceptionHandler} (ADR-0056), which answers with the
@@ -103,14 +105,20 @@ public class LocationGlobalExceptionHandler {
         HttpStatus status = HttpStatus.CONFLICT;
         String reason = ex.getMessage();
         String code = reason != null && MACHINE_CODE.matcher(reason).matches() ? reason : statusCode(status);
+        String message = defaultMessage(status);
+        String timestamp = Instant.now(clock).toString();
+        ApiError body = ex.getField() == null
+                ? ApiError.of(code, message, status.value(), timestamp, correlationId)
+                : ApiError.withFieldErrors(
+                        code,
+                        message,
+                        status.value(),
+                        timestamp,
+                        correlationId,
+                        List.of(new ApiError.FieldError(ex.getField(), message)));
         return ResponseEntity.status(status)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(ApiError.of(
-                        code,
-                        defaultMessage(status),
-                        status.value(),
-                        Instant.now(clock).toString(),
-                        correlationId));
+                .body(body);
     }
 
     private static String resolveCorrelationId(HttpServletRequest request) {

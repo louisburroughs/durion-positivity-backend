@@ -43,11 +43,31 @@ public class MobileUnitResponse {
     private UUID baseLocationId;
 
     @Schema(
-            description = "Operational status of the mobile unit",
+            description = "Operational status of the mobile unit: ACTIVE, OUT_OF_SERVICE or RETIRED"
+                    + " (DECISION-LOCATION-026).",
             example = "ACTIVE",
-            allowableValues = {"ACTIVE", "INACTIVE"},
+            allowableValues = {"ACTIVE", "OUT_OF_SERVICE", "RETIRED"},
             requiredMode = NOT_REQUIRED)
     private String status;
+
+    @Schema(
+            description = "Reason the unit is OUT_OF_SERVICE; null unless status is OUT_OF_SERVICE.",
+            example = "EQUIPMENT_FAILURE",
+            requiredMode = NOT_REQUIRED)
+    private String outOfServiceReason;
+
+    @Schema(
+            description = "Free-text detail for outOfServiceReason; null unless status is OUT_OF_SERVICE.",
+            example = "Awaiting hydraulic lift inspection",
+            requiredMode = NOT_REQUIRED)
+    private String outOfServiceNote;
+
+    @Schema(
+            description = "Advisory expected return-to-service time; not used by scheduling. Null unless status "
+                    + "is OUT_OF_SERVICE and one was given.",
+            example = "2026-07-01T08:00:00Z",
+            requiredMode = NOT_REQUIRED)
+    private Instant expectedReturnAt;
 
     @Schema(
             description = "Identifier of the travel buffer policy applied to the mobile unit",
@@ -86,4 +106,38 @@ public class MobileUnitResponse {
             requiredMode = NOT_REQUIRED)
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private List<CoverageRuleResponse> coverageRules;
+
+    @Schema(
+            description =
+                    "Heaviest GVWR class (1-8) the unit accepts; null when unconstrained " + "(DECISION-LOCATION-029).",
+            example = "3",
+            requiredMode = NOT_REQUIRED)
+    private Integer maxDutyClass;
+
+    @Schema(
+            description = "Fleet/unit number painted on the vehicle; display only, not used by scheduling; null"
+                    + " when not set.",
+            example = "Fleet-107",
+            requiredMode = NOT_REQUIRED)
+    private String unitNumber;
+
+    @Schema(
+            description = "17-character vehicle identification number, upper case; display only, not used by"
+                    + " scheduling; null when not set.",
+            example = "1HGCM82633A004352",
+            requiredMode = NOT_REQUIRED)
+    private String vin;
+
+    @Schema(
+            description = "License plate number; display only, not used by scheduling; null when not set.",
+            example = "ABC-1234",
+            requiredMode = NOT_REQUIRED)
+    private String licensePlate;
+
+    @Schema(
+            description = "ISO 3166-2 region code for licensePlate, upper case; display only, not used by"
+                    + " scheduling; null when not set.",
+            example = "US-NC",
+            requiredMode = NOT_REQUIRED)
+    private String plateRegion;
 }

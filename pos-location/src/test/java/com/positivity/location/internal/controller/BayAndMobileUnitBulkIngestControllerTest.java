@@ -80,7 +80,7 @@ class BayAndMobileUnitBulkIngestControllerTest {
     private static MobileUnitBulkIngestRecord unit(String name) {
         MobileUnitBulkIngestRecord record = new MobileUnitBulkIngestRecord();
         record.setName(name);
-        record.setStatus("INACTIVE");
+        record.setStatus("OUT_OF_SERVICE");
         return record;
     }
 

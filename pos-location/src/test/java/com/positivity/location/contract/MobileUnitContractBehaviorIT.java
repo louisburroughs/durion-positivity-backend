@@ -101,7 +101,6 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 {
                   "name": "MU-101",
                   "baseLocationId": "%s",
-                  "status": "INACTIVE",
                   "notes": "new unit"
                 }
                 """.formatted(createBaseLocation());
@@ -342,11 +341,11 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
     void shouldChangeEligibilityWhenPostalCodesAreReplaced() throws Exception {
         // The acceptance criterion of #1991 is not "the DTO comes back changed" but "coverage
         // resolution follows", so this drives the real query either side of the replacement.
-        // The unit is created INACTIVE and then flipped, and going ACTIVE now requires a complete
-        // unit (CAP-325 D14): a travel buffer policy, a capability claim and coverage rules. The
-        // claim validates against the catalog replica, which Flyway would seed and the H2 test
-        // profile does not, so the IT plants the operation code itself. Eligibility still reads
-        // status, coverage rules and postal codes only.
+        // The unit is created status-less (defaults to OUT_OF_SERVICE) and then flipped, and going
+        // ACTIVE now requires a complete unit (CAP-325 D14): a travel buffer policy, a capability
+        // claim and coverage rules. The claim validates against the catalog replica, which Flyway
+        // would seed and the H2 test profile does not, so the IT plants the operation code itself.
+        // Eligibility still reads status, coverage rules and postal codes only.
         String areaId = createServiceArea("Eligibility Shift Zone", "98160");
         String policyId = createTravelBufferPolicy("Eligibility Shift Buffer");
         seedCatalogOperationCode("CAP-MOBILE-DIAGNOSTIC");
@@ -357,7 +356,6 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                                 {
                                   "name": "MU-ELIGIBILITY-1991",
                                   "baseLocationId": "%s",
-                                  "status": "INACTIVE",
                                   "travelBufferPolicyId": "%s",
                                   "serviceCapabilityCodes": [ "CAP-MOBILE-DIAGNOSTIC" ],
                                   "coverageRules": [

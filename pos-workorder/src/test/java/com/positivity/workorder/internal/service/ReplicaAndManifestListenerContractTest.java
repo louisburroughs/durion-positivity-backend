@@ -374,9 +374,15 @@ class ReplicaAndManifestListenerContractTest {
             assertThat(captor.getValue().isActive()).isTrue();
             assertThat(captor.getValue().getAggregateVersion()).isEqualTo(3);
 
+            // #2264: pos-location no longer emits this fact, but a stray or replayed one is handled
+            // safely — the row, if still present, is marked inactive rather than removed.
+            when(bayRepository.findById(ID)).thenReturn(Optional.of(captor.getValue()));
             locationListener.onLocationEvent(envelope("evt-2", BayDeletedV1.EVENT_TYPE, """
                     {"bayId":"%s"}""".formatted(ID)));
-            verify(bayRepository).deleteById(ID);
+            verify(bayRepository, never()).deleteById(any());
+            ArgumentCaptor<ExtBayReplica> secondSave = ArgumentCaptor.forClass(ExtBayReplica.class);
+            verify(bayRepository, org.mockito.Mockito.times(2)).save(secondSave.capture());
+            assertThat(secondSave.getAllValues().get(1).isActive()).isFalse();
         }
 
         @Test
@@ -440,6 +446,38 @@ class ReplicaAndManifestListenerContractTest {
             assertThat(captor.getAllValues())
                     .extracting(ExtMobileUnitReplica::isActive)
                     .containsExactly(false, false, true);
+        }
+
+        @Test
+        @DisplayName("#2267: a fact carrying maxDutyClass replicates it onto ext_mobile_unit")
+        void mobileUnitMaxDutyClassIsReplicated() {
+            locationListener.onLocationEvent(
+                    envelope("evt-1", MobileUnitUpdatedV1.EVENT_TYPE, """
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"ACTIVE",
+                     "maxDutyClass":5}""".formatted(ID, SITE_ID)));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository).save(captor.capture());
+            assertThat(captor.getValue().getMaxDutyClass()).isEqualTo(5);
+        }
+
+        @Test
+        @DisplayName("#2267: a fact without the maxDutyClass field keeps the ceiling already replicated")
+        void mobileUnitMaxDutyClassAbsentKeepsExisting() {
+            when(mobileUnitRepository.findById(ID))
+                    .thenReturn(Optional.of(ExtMobileUnitReplica.builder()
+                            .mobileUnitId(ID)
+                            .maxDutyClass(5)
+                            .aggregateVersion(1)
+                            .build()));
+
+            locationListener.onLocationEvent(
+                    envelope("evt-1", MobileUnitUpdatedV1.EVENT_TYPE, """
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"ACTIVE"}""".formatted(ID, SITE_ID)));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository).save(captor.capture());
+            assertThat(captor.getValue().getMaxDutyClass()).isEqualTo(5);
         }
 
         @Test

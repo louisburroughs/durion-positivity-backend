@@ -73,6 +73,28 @@ public class MobileUnitEntity extends TenantScopedEntity {
     private String notes;
 
     /**
+     * Why the unit is {@code OUT_OF_SERVICE} (DECISION-LOCATION-026 rule 4, issue #2264): one of
+     * {@link com.positivity.location.internal.enums.OutOfServiceReason}, required whenever {@code
+     * status} is {@code OUT_OF_SERVICE} and cleared on return to {@code ACTIVE}.
+     */
+    @Column(name = "out_of_service_reason", length = 32)
+    private String outOfServiceReason;
+
+    /**
+     * Free-text detail (≤255) for {@link #outOfServiceReason}; required when the reason is {@code
+     * OTHER}, optional otherwise, cleared on return to {@code ACTIVE}.
+     */
+    @Column(name = "out_of_service_note", length = 255)
+    private String outOfServiceNote;
+
+    /**
+     * Advisory-only expected return time; never consulted by scheduling (DECISION-LOCATION-026
+     * rule 4). Cleared on return to {@code ACTIVE}.
+     */
+    @Column(name = "expected_return_at")
+    private Instant expectedReturnAt;
+
+    /**
      * Catalog operation codes the unit can perform off-site (CAP-325 D14) — the same vocabulary a
      * bay's specialty claims use, validated against the {@code ext_catalog_service} replica. The
      * location-owned capability registry this once referenced is retired (V5).
@@ -82,6 +104,35 @@ public class MobileUnitEntity extends TenantScopedEntity {
     @CollectionTable(name = "mobile_unit_service_capability_codes", joinColumns = @JoinColumn(name = "mobile_unit_id"))
     @Column(name = "operation_code", length = 64, nullable = false)
     private Set<String> serviceCapabilityCodes = new LinkedHashSet<>();
+
+    /**
+     * Heaviest GVWR class (1–8) the unit accepts (DECISION-LOCATION-029, issue #2267), the same
+     * axis {@code BayEntity.maxDutyClass} uses (spec D13, V8). Null means unconstrained.
+     */
+    @Column(name = "max_duty_class")
+    private Integer maxDutyClass;
+
+    /**
+     * Optional, display-only identity (DECISION-LOCATION-029): never read by scheduling or
+     * eligibility, and unique per tenant only while set (V10's partial unique indexes).
+     */
+    @Column(name = "unit_number", length = 32)
+    private String unitNumber;
+
+    /** Normalized upper-case, 17 characters, never containing I, O or Q; unique per tenant while set. */
+    @Column(name = "vin", length = 17)
+    private String vin;
+
+    /**
+     * Paired with {@link #plateRegion} for uniqueness (a plate number alone repeats across
+     * states/regions) — unique per tenant only while both are set.
+     */
+    @Column(name = "license_plate", length = 16)
+    private String licensePlate;
+
+    /** ISO 3166-2 (for example {@code US-NC}); see {@link #licensePlate}. */
+    @Column(name = "plate_region", length = 6)
+    private String plateRegion;
 
     /**
      * Aggregate version backing the {@code location.mobile-unit.*} facts'

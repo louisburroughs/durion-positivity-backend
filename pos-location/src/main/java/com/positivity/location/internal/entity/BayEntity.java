@@ -99,6 +99,35 @@ public class BayEntity extends TenantScopedEntity {
     private Integer maxDutyClass;
 
     /**
+     * Why the bay is {@code OUT_OF_SERVICE} (DECISION-LOCATION-026 rule 4, issue #2264): one of
+     * {@link com.positivity.location.internal.enums.OutOfServiceReason}, required whenever {@code
+     * status} is {@code OUT_OF_SERVICE} and cleared on return to {@code ACTIVE}.
+     */
+    @Column(name = "out_of_service_reason", length = 32)
+    private String outOfServiceReason;
+
+    /**
+     * Free-text detail (≤255) for {@link #outOfServiceReason}; required when the reason is {@code
+     * OTHER}, optional otherwise, cleared on return to {@code ACTIVE}.
+     */
+    @Column(name = "out_of_service_note", length = 255)
+    private String outOfServiceNote;
+
+    /**
+     * Advisory-only expected return time; never consulted by scheduling (DECISION-LOCATION-026
+     * rule 4). Cleared on return to {@code ACTIVE}.
+     */
+    @Column(name = "expected_return_at")
+    private Instant expectedReturnAt;
+
+    /**
+     * Sort key for bay lists and the dispatch board (DECISION-LOCATION-026 rule 5); {@code null}
+     * sorts last, ties broken by name.
+     */
+    @Column(name = "display_order")
+    private Integer displayOrder;
+
+    /**
      * Aggregate version backing the {@code location.bay.*} facts' {@code aggregateVersion}
      * (issue #1668, contract established in #1486). Strictly increments on every committed
      * mutation, so two bay changes landing in the same millisecond can never tie and a consumer's

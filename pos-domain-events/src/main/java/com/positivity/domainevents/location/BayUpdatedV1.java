@@ -1,5 +1,6 @@
 package com.positivity.domainevents.location;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -44,11 +45,19 @@ import org.jspecify.annotations.Nullable;
  * a consumer must read it, not re-implement the {@code WASH_DETAIL} exception itself. Null on a
  * pre-DECISION-LOCATION-025 emission, meaning "the publisher predates this field", never "no".
  *
+ * <p>{@code status}, {@code outOfServiceReason}, {@code outOfServiceNote} and {@code
+ * expectedReturnAt} (DECISION-LOCATION-026, additive within schema version 1, issue #2264):
+ * {@code status} now also carries {@code RETIRED}, which no longer has its own tombstone fact — see
+ * {@link BayDeletedV1}, which pos-location no longer emits. The three out-of-service fields are
+ * null except when {@code status} is {@code OUT_OF_SERVICE}, and all three clear (become null) the
+ * moment the bay returns to {@code ACTIVE}. {@code displayOrder} is the owner's sort key for bay
+ * lists; a consumer that renders an ordered roster reads it, nulls last.
+ *
  * @param bayId bay identifier (also the envelope aggregateId)
  * @param locationId owning site identifier
  * @param name bay display name
  * @param bayType owner's bay type discriminator
- * @param status raw lifecycle status, {@code ACTIVE} or {@code OUT_OF_SERVICE}
+ * @param status raw lifecycle status, {@code ACTIVE}, {@code OUT_OF_SERVICE} or {@code RETIRED}
  * @param serviceCapabilityCodes catalog operation codes this bay type is the only one able to
  *     perform; empty for a general bay; null on a pre-CAP-325 emission
  * @param maxConcurrentVehicles how many vehicles the bay physically holds; null on a pre-CAP-325
@@ -57,6 +66,11 @@ import org.jspecify.annotations.Nullable;
  *     pre-CAP-325 emission
  * @param acceptsGeneralWork whether this bay type takes general work by default; false only for
  *     {@code WASH_DETAIL}; null on a pre-DECISION-LOCATION-025 emission
+ * @param outOfServiceReason why the bay is {@code OUT_OF_SERVICE}; null otherwise or on a
+ *     pre-DECISION-LOCATION-026 emission
+ * @param outOfServiceNote free-text detail for {@code outOfServiceReason}; null when not given
+ * @param expectedReturnAt advisory expected return-to-service time; never used by scheduling
+ * @param displayOrder sort key for bay lists and the dispatch board; null sorts last
  */
 public record BayUpdatedV1(
         @NonNull UUID bayId,
@@ -67,7 +81,11 @@ public record BayUpdatedV1(
         @Nullable List<String> serviceCapabilityCodes,
         @Nullable Integer maxConcurrentVehicles,
         @Nullable Integer maxDutyClass,
-        @Nullable Boolean acceptsGeneralWork) {
+        @Nullable Boolean acceptsGeneralWork,
+        @Nullable String outOfServiceReason,
+        @Nullable String outOfServiceNote,
+        @Nullable Instant expectedReturnAt,
+        @Nullable Integer displayOrder) {
 
     public static final String EVENT_TYPE = "location.bay.updated";
     public static final int SCHEMA_VERSION = 1;
@@ -79,5 +97,32 @@ public record BayUpdatedV1(
         if (maxDutyClass != null && (maxDutyClass < 1 || maxDutyClass > 8)) {
             throw new IllegalArgumentException("maxDutyClass must be a GVWR class 1..8, was " + maxDutyClass);
         }
+    }
+
+    /** The pre-DECISION-LOCATION-026 shape, for a caller that carries none of the four new fields. */
+    public BayUpdatedV1(
+            @NonNull UUID bayId,
+            @Nullable UUID locationId,
+            @Nullable String name,
+            @Nullable String bayType,
+            @Nullable String status,
+            @Nullable List<String> serviceCapabilityCodes,
+            @Nullable Integer maxConcurrentVehicles,
+            @Nullable Integer maxDutyClass,
+            @Nullable Boolean acceptsGeneralWork) {
+        this(
+                bayId,
+                locationId,
+                name,
+                bayType,
+                status,
+                serviceCapabilityCodes,
+                maxConcurrentVehicles,
+                maxDutyClass,
+                acceptsGeneralWork,
+                null,
+                null,
+                null,
+                null);
     }
 }

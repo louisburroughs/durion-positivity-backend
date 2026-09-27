@@ -521,6 +521,38 @@ class ReplicaAndManifestListenerContractTest {
         }
 
         @Test
+        @DisplayName("#2267: a fact carrying maxDutyClass replicates it onto ext_mobile_unit")
+        void mobileUnitMaxDutyClassIsReplicated() {
+            locationListener().accept("""
+                            {"eventId":"evt-1","eventType":"%s","aggregateVersion":3,"payload":{
+                              "mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"ACTIVE",
+                              "maxDutyClass":5}}""".formatted(MobileUnitUpdatedV1.EVENT_TYPE, ID, ID));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository).save(captor.capture());
+            assertThat(captor.getValue().getMaxDutyClass()).isEqualTo(5);
+        }
+
+        @Test
+        @DisplayName("#2267: a fact without the maxDutyClass field keeps the ceiling already replicated")
+        void mobileUnitMaxDutyClassAbsentKeepsExisting() {
+            when(mobileUnitRepository.findById(ID))
+                    .thenReturn(Optional.of(ExtMobileUnitReplica.builder()
+                            .mobileUnitId(ID)
+                            .maxDutyClass(5)
+                            .aggregateVersion(1)
+                            .build()));
+
+            locationListener().accept("""
+                            {"eventId":"evt-1","eventType":"%s","aggregateVersion":2,"payload":{
+                              "mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"ACTIVE"}}""".formatted(MobileUnitUpdatedV1.EVENT_TYPE, ID, ID));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository).save(captor.capture());
+            assertThat(captor.getValue().getMaxDutyClass()).isEqualTo(5);
+        }
+
+        @Test
         @DisplayName("stale guard: skips a strictly-older snapshot, re-applies an equal one")
         void staleGuard() {
             when(vehicleRepository.findById(ID))

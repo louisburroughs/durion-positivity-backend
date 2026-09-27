@@ -87,6 +87,13 @@ public class ExtBayReplica extends TenantScopedEntity {
     @Column(name = "accepts_general_work", nullable = false)
     private boolean acceptsGeneralWork;
 
+    /**
+     * Sort key for the dashboard's bay roster (DECISION-LOCATION-026, issue #2264), mirrored from
+     * the owner's {@code bays.display_order}; NULL sorts last (see {@link ExtBayReplicaRepository}).
+     */
+    @Column(name = "display_order")
+    private Integer displayOrder;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 

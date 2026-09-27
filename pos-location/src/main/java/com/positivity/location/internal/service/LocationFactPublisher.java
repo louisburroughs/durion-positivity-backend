@@ -1,11 +1,9 @@
 package com.positivity.location.internal.service;
 
 import com.positivity.domainevents.DomainEventEnvelope;
-import com.positivity.domainevents.location.BayDeletedV1;
 import com.positivity.domainevents.location.BayUpdatedV1;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
-import com.positivity.domainevents.location.MobileUnitDeletedV1;
 import com.positivity.domainevents.location.MobileUnitUpdatedV1;
 import com.positivity.domainevents.location.StorageLocationUpdatedV1;
 import com.positivity.location.internal.config.OutboxEventWriter;
@@ -37,8 +35,10 @@ import org.springframework.stereotype.Component;
  *
  * <p>Every location/storage-location mutation site calls {@link #locationChanged},
  * {@link #locationDeleted} or {@link #storageLocationChanged} inside its business transaction;
- * bay and mobile-unit sites call {@link #bayChanged}, {@link #bayDeleted},
- * {@link #mobileUnitChanged} or {@link #mobileUnitDeleted} the same way (issue #1668).
+ * bay and mobile-unit sites call {@link #bayChanged} or {@link #mobileUnitChanged} the same way
+ * (issue #1668). Retiring either aggregate (DECISION-LOCATION-026, issue #2264) is a {@code status}
+ * change like any other, published through these same methods — there is no bay/mobile-unit
+ * tombstone fact any more.
  * When Kafka publishing is disabled ({@code pos.location.kafka.enabled=false}) the outbox writer
  * bean is absent and every method is a no-op, so callers never need their own guard.
  *
@@ -336,7 +336,11 @@ public class LocationFactPublisher {
                 bay.getServiceCapabilityCodes(),
                 bay.getMaxConcurrentVehicles(),
                 bay.getMaxDutyClass(),
-                acceptsGeneralWork(bay.getBayType()));
+                acceptsGeneralWork(bay.getBayType()),
+                bay.getOutOfServiceReason(),
+                bay.getOutOfServiceNote(),
+                bay.getExpectedReturnAt(),
+                bay.getDisplayOrder());
         publish(writer, BayUpdatedV1.EVENT_TYPE, BayUpdatedV1.SCHEMA_VERSION, bay.getId(), payload, bay.getVersion());
     }
 
@@ -359,32 +363,6 @@ public class LocationFactPublisher {
     }
 
     /**
-     * Emit {@code location.bay.deleted} for a bay removed in the current transaction (issue #1668).
-     *
-     * <p>Takes the deleted {@link BayEntity}, not just its id, so the fact can be versioned
-     * deterministically as {@code version + 1} (#1486) — one past every fact this aggregate has
-     * ever published — the same tombstone pattern {@link #locationDeleted} follows. Consumers
-     * delete the replica row unconditionally, consulting no version, so a tombstone that did not
-     * outrank every update could lose a race against one still in flight.
-     *
-     * <p>The caller must have loaded the entity before deleting it; a delete of an id nothing was
-     * found for has nothing to version and must not call this method at all.
-     */
-    public void bayDeleted(@NonNull BayEntity bay) {
-        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
-        if (writer == null) {
-            return;
-        }
-        publish(
-                writer,
-                BayDeletedV1.EVENT_TYPE,
-                BayDeletedV1.SCHEMA_VERSION,
-                bay.getId(),
-                new BayDeletedV1(bay.getId()),
-                bay.getVersion() + 1);
-    }
-
-    /**
      * Emit {@code location.mobile-unit.updated} for a just-saved mobile unit (issue #1668).
      *
      * <p>Flushed before reading {@code aggregateVersion} for the same reason
@@ -393,10 +371,10 @@ public class LocationFactPublisher {
      * <p>Carries {@code baseLocationId} on every emission, which is what makes a re-base
      * replicable: a unit moved from site A to site B publishes an ordinary update naming B, and
      * because consumers rebuild the row from the payload and scope their rosters by that column,
-     * the unit leaves A's roster and joins B's on the next read. A re-base is deliberately not
-     * expressed as a delete followed by an update — {@link #mobileUnitDeleted} is an unguarded
-     * delete on the consumer side, so the pair could resurrect or drop the row if it arrived out of
-     * order.
+     * the unit leaves A's roster and joins B's on the next read. A re-base was, before issue #2264,
+     * never expressed as a delete followed by an update — the retired {@code mobileUnitDeleted} was
+     * an unguarded delete on the consumer side, so the pair could have resurrected or dropped the
+     * row if it arrived out of order. There is no such tombstone any more.
      *
      * <p>{@code status} is published raw ({@code ACTIVE} | {@code INACTIVE}), never a derived
      * boolean.
@@ -463,7 +441,15 @@ public class LocationFactPublisher {
                 mobileUnit.getStatus(),
                 mobileUnit.getServiceCapabilityCodes() == null
                         ? List.of()
-                        : List.copyOf(mobileUnit.getServiceCapabilityCodes()));
+                        : List.copyOf(mobileUnit.getServiceCapabilityCodes()),
+                mobileUnit.getOutOfServiceReason(),
+                mobileUnit.getOutOfServiceNote(),
+                mobileUnit.getExpectedReturnAt(),
+                mobileUnit.getMaxDutyClass(),
+                mobileUnit.getUnitNumber(),
+                mobileUnit.getVin(),
+                mobileUnit.getLicensePlate(),
+                mobileUnit.getPlateRegion());
         publish(
                 writer,
                 MobileUnitUpdatedV1.EVENT_TYPE,
@@ -471,29 +457,6 @@ public class LocationFactPublisher {
                 mobileUnit.getId(),
                 payload,
                 mobileUnit.getVersion());
-    }
-
-    /**
-     * Emit {@code location.mobile-unit.deleted} for a mobile unit removed in the current
-     * transaction (issue #1668).
-     *
-     * <p>Versioned {@code version + 1} for the same reason {@link #bayDeleted} is: consumers delete
-     * the replica row without consulting a version, so the tombstone must outrank every update the
-     * aggregate has published. Standing a unit down is a {@code status} change on
-     * {@link #mobileUnitChanged}, not a tombstone.
-     */
-    public void mobileUnitDeleted(@NonNull MobileUnitEntity mobileUnit) {
-        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
-        if (writer == null) {
-            return;
-        }
-        publish(
-                writer,
-                MobileUnitDeletedV1.EVENT_TYPE,
-                MobileUnitDeletedV1.SCHEMA_VERSION,
-                mobileUnit.getId(),
-                new MobileUnitDeletedV1(mobileUnit.getId()),
-                mobileUnit.getVersion() + 1);
     }
 
     private List<LocationUpdatedV1.ParentRef> parentRefs(@NonNull UUID locationId) {

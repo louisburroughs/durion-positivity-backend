@@ -566,6 +566,12 @@ def run_mobile_units(gateway, relative_path, _location_id):
         }
         if policy_id:
             body["travelBufferPolicyId"] = policy_id
+        # DECISION-LOCATION-029 (#2267): the duty-class ceiling the alpha vans need to be eligible
+        # for FLEET-PM-* work once #2269 checks it at placement. Left out entirely when blank so a
+        # unit whose fixture row carries none is created unconstrained rather than sent maxDutyClass=0.
+        max_duty_class = (row.get("maxDutyClass") or "").strip()
+        if max_duty_class:
+            body["maxDutyClass"] = int(max_duty_class)
 
         status_code, _ = gateway.post_json("/location/mobile-units", body, allow_error=True)
         if 200 <= status_code < 300:

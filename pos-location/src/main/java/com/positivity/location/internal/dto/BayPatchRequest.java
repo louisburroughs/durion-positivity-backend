@@ -7,6 +7,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
+import java.time.Instant;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,8 +41,48 @@ public class BayPatchRequest {
             requiredMode = NOT_REQUIRED)
     private String bayType;
 
-    @Schema(description = "Operational status of the bay", example = "ACTIVE", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Operational status of the bay: ACTIVE, OUT_OF_SERVICE or RETIRED. Going OUT_OF_SERVICE "
+                    + "requires outOfServiceReason in this same request or already on the bay; returning to ACTIVE "
+                    + "clears outOfServiceReason, outOfServiceNote and expectedReturnAt. DELETE is the usual way to "
+                    + "RETIRE a bay; RETIRED here is reversible the same as OUT_OF_SERVICE.",
+            example = "ACTIVE",
+            allowableValues = {"ACTIVE", "OUT_OF_SERVICE", "RETIRED"},
+            requiredMode = NOT_REQUIRED)
     private String status;
+
+    @Schema(
+            description = "Reason the bay is OUT_OF_SERVICE (DECISION-LOCATION-026); required when the resulting "
+                    + "status is OUT_OF_SERVICE, refused with 422 OUT_OF_SERVICE_REASON_REQUIRED otherwise. Null "
+                    + "leaves the current reason unchanged unless status is patched to ACTIVE, which always clears it.",
+            example = "EQUIPMENT_FAILURE",
+            allowableValues = {
+                "EQUIPMENT_FAILURE",
+                "SCHEDULED_MAINTENANCE",
+                "INSPECTION",
+                "SAFETY_HOLD",
+                "FACILITY_ISSUE",
+                "OTHER"
+            },
+            requiredMode = NOT_REQUIRED)
+    private String outOfServiceReason;
+
+    @Schema(
+            description = "Free-text detail for outOfServiceReason (max 255 characters); required when the "
+                    + "resulting outOfServiceReason is OTHER. Null leaves the current note unchanged unless status "
+                    + "is patched to ACTIVE, which always clears it.",
+            example = "Lift arm replaced under warranty",
+            maxLength = 255,
+            requiredMode = NOT_REQUIRED)
+    @Size(max = 255)
+    private String outOfServiceNote;
+
+    @Schema(
+            description = "Advisory expected return-to-service time; not used by scheduling. Null leaves the "
+                    + "current value unchanged unless status is patched to ACTIVE, which always clears it.",
+            example = "2026-07-01T08:00:00Z",
+            requiredMode = NOT_REQUIRED)
+    private Instant expectedReturnAt;
 
     @Schema(
             description = "Number of vehicles the bay physically accommodates at once. A bay is a single "
@@ -72,4 +114,11 @@ public class BayPatchRequest {
     @Min(1)
     @Max(8)
     private Integer maxDutyClass;
+
+    @Schema(
+            description = "Sort key for bay lists and the dispatch board; null leaves the current value unchanged, "
+                    + "the same as every other nullable field on this patch.",
+            example = "10",
+            requiredMode = NOT_REQUIRED)
+    private Integer displayOrder;
 }
