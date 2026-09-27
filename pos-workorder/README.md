@@ -97,6 +97,23 @@ fact is not validated against the replicas, so it does not refuse — an inactiv
 the way an occupied one is, and the location and mechanics are applied with the workorder left
 unplaced.
 
+**Placement checks duty class, never specialty (DECISION-SHOPMGMT-021 rule 3, #2269).** Bay
+eligibility — specialty capability and duty class together — is `pos-shop-manager`'s rule, enforced
+at appointment submit and reschedule; workorder placement keeps its existing site and active checks
+and adds **duty class only**, because a vehicle legitimately moves between bays within one
+workorder (an oil change in a general bay, then the alignment rack), and specialty capability is not
+a promise placement makes. A `BAY` or `MOBILE_UNIT` whose `maxDutyClass` is below the vehicle's
+`gvwrClass` (`ExtVehicleReplica`, via the workorder's vehicle) is refused with `422
+SERVICE_POSITION_DUTY_CLASS_EXCEEDED`, with `fieldErrors` naming `resourceId` — the same code and
+status pos-shop-manager's own submit-time check answers. Either class unknown skips the check
+entirely: an unreplicated vehicle or a `maxDutyClass` the publisher has not sent yet never refuses.
+The rule is enforced on every path that places a workorder: `PUT .../position`
+(`ServicePositionServiceImpl.resolvePosition`), the inbound pos-shop-manager assignment fact
+(`handleAssignmentUpdated`, asked without an exception the same way the inactive and occupied checks
+are, so an over-class position is dropped and the location and mechanics still apply), and the
+operational-context override (`recordPositionChange`, which does not skip duty class the way it
+skips site and active — a lift's rated capacity is a physical limit an override cannot waive).
+
 **`ASSIGNED` means a technician *and* somewhere to work (#2010, #2011).** A workorder is `ASSIGNED`
 when it has a current technician **and** stands on a `BAY` or a `MOBILE_UNIT`; a `HOLD` is a parking
 space, not a place work happens, so it does not count. Either half missing is `APPROVED`. One method
@@ -627,6 +644,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `UOM_CONVERSION_UNDEFINED` | 422 | `uomCode` names no conversion row for the referenced product |
 | `SERVICE_POSITION_INVALID` | 422 | The named bay or mobile unit is unknown to the location replicas, belongs to a different site than the workorder, or is otherwise not one this workorder can be placed on |
 | `SERVICE_POSITION_INACTIVE` | 422 | The named bay or mobile unit is one pos-location has not marked active |
+| `SERVICE_POSITION_DUTY_CLASS_EXCEEDED` | 422 | The vehicle's GVWR class is above the position's `maxDutyClass` (DECISION-SHOPMGMT-021 rule 3); skipped when either class is unknown. Same code and status as pos-shop-manager's own submit-time check |
 | `TECHNICIAN_NOT_FOUND` | 422 | The technician named on an assignment is unknown to the `ext_person` replica |
 | `TECHNICIAN_NOT_STAFFED_AT_SITE` | 422 | The technician is not staffed at the workorder's site |
 | `UNPROCESSABLE_CONTENT` | 422 | Generic code for a 422 `ResponseStatusException` whose reason is free text |

@@ -87,8 +87,10 @@ public class OperationalContextController {
                     Emits a WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE event and marks the workorder fact changed for \
                     downstream replication.
                     Returns 404 when no workorder exists for the id, 403 LOCATION_SCOPE_DENIED when the \
-                    caller's location scope does not cover locationId, and 409 when work has already started \
-                    and the context is locked.
+                    caller's location scope does not cover locationId, 409 when work has already started and \
+                    the context is locked, and 422 SERVICE_POSITION_DUTY_CLASS_EXCEEDED when the assigned \
+                    resource's maxDutyClass is below the vehicle's GVWR class — the one eligibility rule an \
+                    override cannot waive, unlike site and active which this path does not re-validate.
                     """)
     @ApiResponse(responseCode = "200", description = "Override applied")
     @ApiResponse(
@@ -102,6 +104,12 @@ public class OperationalContextController {
     @ApiResponse(
             responseCode = "409",
             description = "Context locked (work started)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "The assigned resource's maxDutyClass is below the vehicle's GVWR class "
+                    + "(ApiError.code SERVICE_POSITION_DUTY_CLASS_EXCEEDED, ApiError.fieldErrors naming "
+                    + "resourceId; skipped when either class is unknown)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<OperationalContextResponse> overrideOperationalContext(
             @PathVariable UUID workorderId,
