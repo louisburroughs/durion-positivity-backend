@@ -207,6 +207,19 @@ public class ServicePositionServiceImpl implements ServicePositionService {
             }
         }
 
+        if (effectiveType != null && effectiveType.isExclusive()) {
+            // #2269/#2280 F7: non-negotiable on every path that reaches here, override included — a
+            // lift's rated capacity is a physical limit, not an eligibility a manager's exception can
+            // waive the way the site and active checks (assignPosition-only, see resolvePosition) can
+            // be. assignPosition already refused this in resolvePosition before recordPositionChange
+            // is ever reached, so the check here is a no-op for that path and the one that matters for
+            // overrideOperationalContext, which calls straight in — including naming the placement the
+            // workorder is already on, which is exactly why this runs before the unchanged-placement
+            // short-circuit below rather than after it: an over-class position never becomes
+            // acceptable just because it is also the current one.
+            requireDutyClassWithinCeiling(workorder, effectiveType, resourceId);
+        }
+
         Optional<ServicePositionAssignment> currentPlacement =
                 positionRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
 
@@ -223,13 +236,6 @@ public class ServicePositionServiceImpl implements ServicePositionService {
         }
 
         if (effectiveType != null && effectiveType.isExclusive()) {
-            // #2269: non-negotiable on every path that reaches here, override included — a lift's
-            // rated capacity is a physical limit, not an eligibility a manager's exception can waive
-            // the way the site and active checks (assignPosition-only, see resolvePosition) can be.
-            // assignPosition already refused this in resolvePosition before recordPositionChange is
-            // ever reached, so the check here is a no-op for that path and the one that matters for
-            // overrideOperationalContext, which calls straight in.
-            requireDutyClassWithinCeiling(workorder, effectiveType, resourceId);
             requirePositionFree(workorderId, effectiveType, resourceId);
         }
 

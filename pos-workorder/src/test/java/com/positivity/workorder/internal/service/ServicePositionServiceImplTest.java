@@ -983,6 +983,39 @@ class ServicePositionServiceImplTest {
                     .doesNotThrowAnyException();
             assertThat(savedPlacement().getResourceId()).isEqualTo(BAY_ID);
         }
+
+        @Test
+        @DisplayName("#2280 F7: override naming the workorder's own over-class position is still refused, not"
+                + " let through by the unchanged-placement short-circuit")
+        void overrideNamingTheCurrentOverClassPositionIsRefused() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenBay(BAY_ID, SITE_ID, 3, null);
+            givenVehicle(VEHICLE_ID, 7);
+            givenCurrentPlacement(ResourceType.BAY, BAY_ID);
+
+            assertThatThrownBy(
+                            () -> service.recordPositionChange(workorder, ResourceType.BAY, BAY_ID, ACTOR, "Override"))
+                    .isInstanceOf(ServicePositionDutyClassExceededException.class);
+
+            verify(positionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("#2280 F7: naming the workorder's own within-class position is still a no-op — no history row")
+        void unchangedPlacementWithinClassStillReturnsEarlyWithNoHistoryRow() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenBay(BAY_ID, SITE_ID, 5, null);
+            givenVehicle(VEHICLE_ID, 3);
+            givenCurrentPlacement(ResourceType.BAY, BAY_ID);
+
+            assertThatCode(() -> service.recordPositionChange(workorder, ResourceType.BAY, BAY_ID, ACTOR, "Override"))
+                    .doesNotThrowAnyException();
+
+            verify(positionRepository, never()).save(any());
+            verify(positionRepository, never()).saveAndFlush(any());
+        }
     }
 
     /**
