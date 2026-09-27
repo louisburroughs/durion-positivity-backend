@@ -392,7 +392,8 @@ class AppointmentEligibilityTest {
         ExtBayReplica bay = activeBay(BAY_ID, LOCATION_ID);
         when(bayReplicaRepository.findById(BAY_ID)).thenReturn(Optional.of(bay));
         when(bayReplicaRepository.findActiveByLocationOrdered(LOCATION_ID)).thenReturn(List.of(bay));
-        when(bayEligibilityService.operationCodesOf(any())).thenReturn(Set.of("WHEEL-ALIGNMENT-4-WHEEL"));
+        when(bayEligibilityService.operationCodesOf(any()))
+                .thenReturn(new BayEligibilityService.BookedOperations(Set.of("WHEEL-ALIGNMENT-4-WHEEL"), false));
         when(bayEligibilityService.refusalFor(eq(bay), any(), any(), any()))
                 .thenReturn(Optional.of(BayEligibilityService.Refusal.NOT_EQUIPPED));
 

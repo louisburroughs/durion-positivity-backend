@@ -57,6 +57,11 @@ class BayEligibilityServiceTest {
                 .build();
     }
 
+    /** A booking with no service whose operation code could not be resolved (the common case here). */
+    private static BayEligibilityService.BookedOperations operations(Set<String> codes) {
+        return new BayEligibilityService.BookedOperations(codes, false);
+    }
+
     @Test
     @DisplayName("rule 4: with the map present, a specialty operation is unbookable in a bay that does not claim it,"
             + " even though a general bay is active")
@@ -67,7 +72,7 @@ class BayEligibilityServiceTest {
         List<ExtBayReplica> bays = List.of(bay(BAY_1, List.of(), true, null));
 
         BayEligibilityService.Eligibility eligibility =
-                service.eligibleBays(bays, Set.of("WHEEL-ALIGNMENT-4-WHEEL"), null);
+                service.eligibleBays(bays, operations(Set.of("WHEEL-ALIGNMENT-4-WHEEL")), null);
 
         assertThat(eligibility.eligible()).isEmpty();
         assertThat(eligibility.byCapability()).isEqualTo(1);
@@ -83,7 +88,7 @@ class BayEligibilityServiceTest {
         ExtBayReplica rack = bay(RACK, List.of("WHEEL-ALIGNMENT-4-WHEEL"), true, null);
 
         Optional<BayEligibilityService.Refusal> refusal =
-                service.refusalFor(rack, List.of(rack), Set.of("WHEEL-ALIGNMENT-4-WHEEL"), null);
+                service.refusalFor(rack, List.of(rack), operations(Set.of("WHEEL-ALIGNMENT-4-WHEEL")), null);
 
         assertThat(refusal).isEmpty();
     }
@@ -97,7 +102,7 @@ class BayEligibilityServiceTest {
         ExtBayReplica general = bay(BAY_1, List.of(), true, null);
 
         Optional<BayEligibilityService.Refusal> refusal =
-                service.refusalFor(general, List.of(general), Set.of("OIL-CHANGE-FULL-SYNTHETIC"), null);
+                service.refusalFor(general, List.of(general), operations(Set.of("OIL-CHANGE-FULL-SYNTHETIC")), null);
 
         assertThat(refusal).isEmpty();
     }
@@ -111,7 +116,7 @@ class BayEligibilityServiceTest {
         ExtBayReplica wash = bay(WASH, List.of(), false, null);
 
         Optional<BayEligibilityService.Refusal> refusal =
-                service.refusalFor(wash, List.of(wash), Set.of("OIL-CHANGE-FULL-SYNTHETIC"), null);
+                service.refusalFor(wash, List.of(wash), operations(Set.of("OIL-CHANGE-FULL-SYNTHETIC")), null);
 
         assertThat(refusal).contains(BayEligibilityService.Refusal.NOT_EQUIPPED);
     }
@@ -121,12 +126,12 @@ class BayEligibilityServiceTest {
     void dutyClassCapsButSkipsWhenEitherSideUnknown() {
         ExtBayReplica ceilingThree = bay(BAY_1, List.of(), true, 3);
 
-        assertThat(service.refusalFor(ceilingThree, List.of(ceilingThree), Set.of(), 7))
+        assertThat(service.refusalFor(ceilingThree, List.of(ceilingThree), operations(Set.of()), 7))
                 .contains(BayEligibilityService.Refusal.DUTY_CLASS_EXCEEDED);
-        assertThat(service.refusalFor(ceilingThree, List.of(ceilingThree), Set.of(), null))
+        assertThat(service.refusalFor(ceilingThree, List.of(ceilingThree), operations(Set.of()), null))
                 .isEmpty();
         ExtBayReplica unconstrained = bay(RACK, List.of(), true, null);
-        assertThat(service.refusalFor(unconstrained, List.of(unconstrained), Set.of(), 7))
+        assertThat(service.refusalFor(unconstrained, List.of(unconstrained), operations(Set.of()), 7))
                 .isEmpty();
     }
 
@@ -142,9 +147,9 @@ class BayEligibilityServiceTest {
         Set<String> specialty = service.specialtyOperations(Set.of("WHEEL-ALIGNMENT-4-WHEEL"), bays);
 
         assertThat(specialty).containsExactly("WHEEL-ALIGNMENT-4-WHEEL");
-        assertThat(service.refusalFor(general, bays, Set.of("WHEEL-ALIGNMENT-4-WHEEL"), null))
+        assertThat(service.refusalFor(general, bays, operations(Set.of("WHEEL-ALIGNMENT-4-WHEEL")), null))
                 .contains(BayEligibilityService.Refusal.NOT_EQUIPPED);
-        assertThat(service.refusalFor(rack, bays, Set.of("WHEEL-ALIGNMENT-4-WHEEL"), null))
+        assertThat(service.refusalFor(rack, bays, operations(Set.of("WHEEL-ALIGNMENT-4-WHEEL")), null))
                 .isEmpty();
     }
 
@@ -168,7 +173,7 @@ class BayEligibilityServiceTest {
         List<ExtBayReplica> bays = List.of(general, wash);
 
         BayEligibilityService.Eligibility eligibility =
-                service.eligibleBays(bays, Set.of("OIL-CHANGE-FULL-SYNTHETIC"), 7);
+                service.eligibleBays(bays, operations(Set.of("OIL-CHANGE-FULL-SYNTHETIC")), 7);
 
         assertThat(eligibility.active()).isEqualTo(2);
         assertThat(eligibility.eligible()).isEmpty();
@@ -194,11 +199,38 @@ class BayEligibilityServiceTest {
                                 .active(true)
                                 .build()));
 
-        Set<String> codes = service.operationCodesOf(List.of(SERVICE_1, UUID.randomUUID()));
+        // The second requested id matches neither returned row, so it is unresolved too.
+        BayEligibilityService.BookedOperations booked = service.operationCodesOf(List.of(SERVICE_1, UUID.randomUUID()));
 
-        assertThat(codes).containsExactly("WHEEL-ALIGNMENT-4-WHEEL");
-        assertThat(service.operationCodesOf(null)).isEmpty();
-        assertThat(service.operationCodesOf(List.of())).isEmpty();
+        assertThat(booked.codes()).containsExactly("WHEEL-ALIGNMENT-4-WHEEL");
+        assertThat(booked.hasUnresolvedOperation()).isTrue();
+        assertThat(service.operationCodesOf(List.of(SERVICE_1)).hasUnresolvedOperation())
+                .isFalse();
+        assertThat(service.operationCodesOf(null)).isEqualTo(BayEligibilityService.BookedOperations.NONE);
+        assertThat(service.operationCodesOf(List.of())).isEqualTo(BayEligibilityService.BookedOperations.NONE);
+    }
+
+    @Test
+    @DisplayName("#2280 F6: a booked service with no resolvable operation code is still general work — a"
+            + " WASH_DETAIL bay (accepts_general_work=false) refuses it, not passes it through invisibly")
+    void unresolvedOperationCodeStillCountsAsGeneralWorkForAWashBay() {
+        ExtBayReplica wash = bay(WASH, List.of(), false, null);
+        BayEligibilityService.BookedOperations booked = new BayEligibilityService.BookedOperations(Set.of(), true);
+
+        Optional<BayEligibilityService.Refusal> refusal = service.refusalFor(wash, List.of(wash), booked, null);
+
+        assertThat(refusal).contains(BayEligibilityService.Refusal.NOT_EQUIPPED);
+    }
+
+    @Test
+    @DisplayName("#2280 F6: the same unresolved-operation booking is eligible on a bay that accepts general work")
+    void unresolvedOperationCodeIsEligibleOnAGeneralBay() {
+        ExtBayReplica general = bay(BAY_1, List.of(), true, null);
+        BayEligibilityService.BookedOperations booked = new BayEligibilityService.BookedOperations(Set.of(), true);
+
+        Optional<BayEligibilityService.Refusal> refusal = service.refusalFor(general, List.of(general), booked, null);
+
+        assertThat(refusal).isEmpty();
     }
 
     @Test
@@ -218,7 +250,7 @@ class BayEligibilityServiceTest {
     void emptyOperationSetIsTriviallyGeneral() {
         assertThat(service.specialtyOperations(Set.of(), List.of())).isEmpty();
         BayEligibilityService.Eligibility eligibility =
-                service.eligibleBays(List.of(bay(BAY_1, List.of(), true, null)), Set.of(), null);
+                service.eligibleBays(List.of(bay(BAY_1, List.of(), true, null)), operations(Set.of()), null);
         assertThat(eligibility.eligible()).hasSize(1);
     }
 }

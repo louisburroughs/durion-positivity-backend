@@ -500,11 +500,11 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             throw inactive("Bay", resourceId);
         }
 
-        Set<String> operationCodes = bayEligibilityService.operationCodesOf(serviceRequestIds);
+        BayEligibilityService.BookedOperations operations = bayEligibilityService.operationCodesOf(serviceRequestIds);
         Integer gvwrClass = skillRequirementResolver.gvwrClassOf(crmVehicleId);
         List<ExtBayReplica> locationBays = bayReplicaRepository.findActiveByLocationOrdered(locationId);
         bayEligibilityService
-                .refusalFor(bay, locationBays, operationCodes, gvwrClass)
+                .refusalFor(bay, locationBays, operations, gvwrClass)
                 .ifPresent(refusal -> {
                     throw switch (refusal) {
                         case NOT_EQUIPPED ->

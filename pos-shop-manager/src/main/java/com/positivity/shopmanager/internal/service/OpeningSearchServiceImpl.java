@@ -143,13 +143,19 @@ public class OpeningSearchServiceImpl implements OpeningSearchService {
         List<OpeningConstraint> constraints = constraints(!configured.isEmpty());
 
         List<ExtBayReplica> bays = bayRepository.findActiveByLocationOrdered(query.locationId());
-        Set<String> operationCodes = services.values().stream()
+        // loadServices already refused any serviceId with no catalog row at all (ResourceNotFoundException),
+        // so "unresolved" here means only a resolved row with a blank/null operationCode (F6, #2280) — still
+        // general work, and BookedOperations must carry that even though it drops out of the code set below.
+        List<String> normalizedCodes = services.values().stream()
                 .map(ExtCatalogServiceReplica::getOperationCode)
                 .map(SkillRequirementResolver::normalize)
+                .toList();
+        Set<String> operationCodes = normalizedCodes.stream()
                 .filter(code -> !code.isEmpty())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        BayEligibilityService.Eligibility eligibility =
-                bayEligibilityService.eligibleBays(bays, operationCodes, gvwrClass);
+        boolean hasUnresolvedOperation = normalizedCodes.stream().anyMatch(String::isEmpty);
+        BayEligibilityService.Eligibility eligibility = bayEligibilityService.eligibleBays(
+                bays, new BayEligibilityService.BookedOperations(operationCodes, hasUnresolvedOperation), gvwrClass);
 
         LocalDate firstDate = query.earliestStart().atZone(zone).toLocalDate();
         Instant horizonEnd =

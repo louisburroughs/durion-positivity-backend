@@ -194,8 +194,17 @@ public class AffectedAppointmentEvaluator {
                 .map(operationCodeByServiceId::get)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+        // F6/#2280: a serviceRequestId absent from operationCodeByServiceId is one loadOperationCodes
+        // could not resolve a code for (blank/null on the replica, or no matching catalog row) — still
+        // general work, and must not silently vanish from the eligibility check as though unbooked.
+        boolean hasUnresolvedOperation =
+                serviceRequestIds.stream().anyMatch(id -> !operationCodeByServiceId.containsKey(id));
         return bayEligibilityService
-                .refusalFor(bay, locationBays, operationCodes, gvwrClass)
+                .refusalFor(
+                        bay,
+                        locationBays,
+                        new BayEligibilityService.BookedOperations(operationCodes, hasUnresolvedOperation),
+                        gvwrClass)
                 .isPresent(); // (c) no longer eligible
     }
 

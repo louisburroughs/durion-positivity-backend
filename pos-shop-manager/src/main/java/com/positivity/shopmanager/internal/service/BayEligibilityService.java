@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -66,19 +67,31 @@ public class BayEligibilityService {
             @NonNull Map<UUID, Refusal> refusalByBay) {}
 
     /**
+     * A booking's operation codes, plus whether at least one of its booked services had no
+     * resolvable operation code (blank/null on the catalog replica, or no matching catalog row at
+     * all). {@link #codes} alone would make such a service invisible to {@link #checkBay}'s
+     * general-work count (F6, #2280): an operation the specialty map does not name is general work
+     * by definition (class doc, rule 4), and a service this module cannot classify at all is
+     * exactly that — never simply dropped as though it were not booked.
+     */
+    public record BookedOperations(@NonNull Set<String> codes, boolean hasUnresolvedOperation) {
+        public static final BookedOperations NONE = new BookedOperations(Set.of(), false);
+    }
+
+    /**
      * Filters {@code bays} (every bay at the appointment's location) against every operation on the
      * appointment and the vehicle's GVWR class. Used by the opening search to build its eligible
      * list and counts, and internally by {@link #refusalFor} for one named bay.
      */
     public @NonNull Eligibility eligibleBays(
-            @NonNull List<ExtBayReplica> bays, @NonNull Set<String> operationCodes, @Nullable Integer gvwrClass) {
-        Set<String> specialty = specialtyOperations(operationCodes, bays);
+            @NonNull List<ExtBayReplica> bays, @NonNull BookedOperations operations, @Nullable Integer gvwrClass) {
+        Set<String> specialty = specialtyOperations(operations.codes(), bays);
         List<ExtBayReplica> eligible = new ArrayList<>();
         Map<UUID, Refusal> refusalByBay = new LinkedHashMap<>();
         int byCapability = 0;
         int byDutyClass = 0;
         for (ExtBayReplica bay : bays) {
-            Optional<Refusal> refusal = checkBay(bay, operationCodes, specialty, gvwrClass);
+            Optional<Refusal> refusal = checkBay(bay, operations, specialty, gvwrClass);
             if (refusal.isEmpty()) {
                 eligible.add(bay);
                 continue;
@@ -102,19 +115,24 @@ public class BayEligibilityService {
     public @NonNull Optional<Refusal> refusalFor(
             @NonNull ExtBayReplica bay,
             @NonNull List<ExtBayReplica> locationBays,
-            @NonNull Set<String> operationCodes,
+            @NonNull BookedOperations operations,
             @Nullable Integer gvwrClass) {
-        Set<String> specialty = specialtyOperations(operationCodes, locationBays);
-        return checkBay(bay, operationCodes, specialty, gvwrClass);
+        Set<String> specialty = specialtyOperations(operations.codes(), locationBays);
+        return checkBay(bay, operations, specialty, gvwrClass);
     }
 
     private Optional<Refusal> checkBay(
             ExtBayReplica bay,
-            Set<String> operationCodes,
+            BookedOperations operations,
             Set<String> specialtyOperations,
             @Nullable Integer gvwrClass) {
         boolean claimsAllSpecialty = specialtyOperations.stream().allMatch(op -> claims(bay, op));
-        boolean hasGeneralWork = operationCodes.size() > specialtyOperations.size();
+        // F6/#2280: a booked service whose operation code could not be resolved always counts as
+        // general work — it is never named by the specialty map, so dropping it from the code set
+        // (operationCodesOf) must not also drop it from this count, or a WASH_DETAIL bay
+        // (accepts_general_work=false) would wrongly pass such a booking.
+        boolean hasGeneralWork =
+                operations.hasUnresolvedOperation() || operations.codes().size() > specialtyOperations.size();
         if (!claimsAllSpecialty || (hasGeneralWork && !bay.isAcceptsGeneralWork())) {
             return Optional.of(Refusal.NOT_EQUIPPED);
         }
@@ -145,16 +163,31 @@ public class BayEligibilityService {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    /** The catalog operation codes named by {@code serviceIds}, normalized and de-duplicated. */
-    public @NonNull Set<String> operationCodesOf(@Nullable Collection<UUID> serviceIds) {
+    /**
+     * The catalog operation codes named by {@code serviceIds}, normalized and de-duplicated, plus
+     * whether any of {@code serviceIds} has no resolvable code of its own (blank/null on the
+     * replica, or no matching catalog row at all) — see {@link BookedOperations}.
+     */
+    public @NonNull BookedOperations operationCodesOf(@Nullable Collection<UUID> serviceIds) {
         if (serviceIds == null || serviceIds.isEmpty()) {
-            return Set.of();
+            return BookedOperations.NONE;
         }
-        return catalogServiceRepository.findAllByServiceIdIn(serviceIds).stream()
-                .map(ExtCatalogServiceReplica::getOperationCode)
-                .map(SkillRequirementResolver::normalize)
-                .filter(code -> !code.isEmpty())
-                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<UUID, ExtCatalogServiceReplica> byServiceId =
+                catalogServiceRepository.findAllByServiceIdIn(serviceIds).stream()
+                        .collect(Collectors.toMap(
+                                ExtCatalogServiceReplica::getServiceId, Function.identity(), (a, b) -> a));
+        Set<String> codes = new LinkedHashSet<>();
+        boolean hasUnresolvedOperation = false;
+        for (UUID serviceId : serviceIds) {
+            ExtCatalogServiceReplica service = byServiceId.get(serviceId);
+            String normalized = service == null ? "" : SkillRequirementResolver.normalize(service.getOperationCode());
+            if (normalized.isEmpty()) {
+                hasUnresolvedOperation = true;
+            } else {
+                codes.add(normalized);
+            }
+        }
+        return new BookedOperations(codes, hasUnresolvedOperation);
     }
 
     static boolean claims(ExtBayReplica bay, String operation) {
