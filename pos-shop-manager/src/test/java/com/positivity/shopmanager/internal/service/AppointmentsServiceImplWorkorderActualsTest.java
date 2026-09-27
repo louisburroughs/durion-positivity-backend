@@ -16,6 +16,8 @@ import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
@@ -109,7 +111,11 @@ class AppointmentsServiceImplWorkorderActualsTest {
                 workOrderAppointmentMappingRepository,
                 conflictEvaluator,
                 conflictRecorder,
-                new BookingHorizonPolicy(180));
+                new BookingHorizonPolicy(180),
+                mock(ExtBayReplicaRepository.class),
+                mock(ExtMobileUnitReplicaRepository.class),
+                mock(BayEligibilityService.class),
+                mock(SkillRequirementResolver.class));
 
         when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(APPOINTMENT_ID))
                 .thenReturn(List.<AppointmentServiceRequest>of());
@@ -236,7 +242,6 @@ class AppointmentsServiceImplWorkorderActualsTest {
         appointment.setAppointmentId(APPOINTMENT_ID);
         appointment.setStatus(status);
         appointment.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        appointment.setResourceId("BAY-01");
         appointment.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
         appointment.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
         appointment.setStartAt(startAt);

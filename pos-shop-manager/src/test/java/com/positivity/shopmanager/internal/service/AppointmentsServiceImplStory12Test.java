@@ -26,6 +26,8 @@ import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
@@ -135,7 +137,11 @@ class AppointmentsServiceImplStory12Test {
                 mock(WorkOrderAppointmentMappingRepository.class),
                 conflictEvaluator,
                 conflictRecorder,
-                new BookingHorizonPolicy(180));
+                new BookingHorizonPolicy(180),
+                mock(ExtBayReplicaRepository.class),
+                mock(ExtMobileUnitReplicaRepository.class),
+                mock(BayEligibilityService.class),
+                mock(SkillRequirementResolver.class));
 
         // Stub CRM clients for tests that reach the CRM call path (before source
         // validation)
@@ -430,7 +436,6 @@ class AppointmentsServiceImplStory12Test {
                 .idempotencyKey("test-key")
                 .status(AppointmentStatus.SCHEDULED)
                 .locationId(LOCATION_ID)
-                .resourceId("BAY-01")
                 .crmCustomerId(CUSTOMER_ID)
                 .crmVehicleId(VEHICLE_ID)
                 .startAt(Instant.parse("2026-04-01T10:00:00Z"))
@@ -483,7 +488,6 @@ class AppointmentsServiceImplStory12Test {
         request.setLocationId(LOCATION_ID);
         request.setCrmCustomerId(CUSTOMER_ID);
         request.setCrmVehicleId(VEHICLE_ID);
-        request.setResourceId("BAY-01");
         request.setStartAt(Instant.parse("2026-04-01T10:00:00Z"));
         request.setEndAt(Instant.parse("2026-04-01T11:00:00Z"));
         request.setServiceRequestIds(List.of(SERVICE_REQUEST_ID));
