@@ -15,6 +15,7 @@ import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
 import com.positivity.shopmanager.internal.repository.ConflictRuleRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.SchedulingConflictRepository;
 import com.positivity.shopmanager.internal.service.CrmSnapshotService;
@@ -80,6 +81,12 @@ class AppointmentCreateContractBehaviorIT extends BaseContractIntegrationTest {
     private ExtStaffingAssignmentReplicaRepository staffingAssignmentRepository;
 
     @Autowired
+    private ExtBayReplicaRepository bayReplicaRepository;
+
+    /** The ACTIVE bay the accepted-path bookings name; set by {@code @BeforeEach}. */
+    private String testBayId;
+
+    @Autowired
     private AppointmentRepository appointmentRepository;
 
     @Autowired
@@ -106,11 +113,14 @@ class AppointmentCreateContractBehaviorIT extends BaseContractIntegrationTest {
     /**
      * The booking preconditions CAP-326 added: the seeded rule catalog the evaluator resolves every
      * code against, and an ACTIVE technician at the test location, without whom HARD
-     * MECHANIC_UNAVAILABLE refuses each creation these tests expect to succeed.
+     * MECHANIC_UNAVAILABLE refuses each creation these tests expect to succeed. And a bay the
+     * location replica knows: a named resourceId that is not one is refused 422 (#2268).
      */
     private void seedSchedulingWorld() {
         SchedulingWorldFixture.seedConflictRules(conflictRuleRepository);
         SchedulingWorldFixture.rosterTechnician(staffingAssignmentRepository, TEST_LOCATION_ID);
+        testBayId = SchedulingWorldFixture.registerBay(bayReplicaRepository, TEST_LOCATION_ID, "BAY-01")
+                .toString();
     }
 
     @BeforeEach
@@ -349,11 +359,11 @@ class AppointmentCreateContractBehaviorIT extends BaseContractIntegrationTest {
                                   "crmCustomerId":     "%s",
                                   "crmVehicleId":      "%s",
                                   "locationId":        "%s",
-                                  "resourceId":        "BAY-01",
+                                  "resourceId":        "%s",
                                   "startAt":           "2026-04-01T14:00:00Z",
                                   "endAt":             "2026-04-01T15:00:00Z",
                                   "serviceRequestIds": ["%s"]
                                 }
-                                """.formatted(crmCustomerId, crmVehicleId, TEST_LOCATION_ID, TEST_SERVICE_REQUEST_ID);
+                                """.formatted(crmCustomerId, crmVehicleId, TEST_LOCATION_ID, testBayId, TEST_SERVICE_REQUEST_ID);
     }
 }

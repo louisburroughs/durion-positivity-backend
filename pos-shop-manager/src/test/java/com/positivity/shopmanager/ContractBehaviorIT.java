@@ -9,6 +9,7 @@ import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
 import com.positivity.shopmanager.internal.repository.ConflictRuleRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.SchedulingConflictRepository;
 import com.positivity.shopmanager.internal.service.CrmSnapshotService;
@@ -51,6 +52,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private ExtStaffingAssignmentReplicaRepository staffingAssignmentRepository;
+
+    @Autowired
+    private ExtBayReplicaRepository bayReplicaRepository;
 
     @Autowired
     private AppointmentRepository appointmentRepository;
@@ -96,6 +100,17 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         SchedulingWorldFixture.rosterTechnician(staffingAssignmentRepository, UUID.fromString(LOCATION));
     }
 
+    /**
+     * The id of an ACTIVE bay at {@link #LOCATION} known by {@code name}. A booking that names a
+     * resource must name one the location replica holds (#2268), so each test books a registered
+     * bay rather than a free-text label; the same name is the same bay, which the conflict test
+     * relies on.
+     */
+    private String bay(String name) {
+        return SchedulingWorldFixture.registerBay(bayReplicaRepository, UUID.fromString(LOCATION), name)
+                .toString();
+    }
+
     @Override
     protected String defaultAuthorities() {
         return "appointments:create,appointments:view,appointments:reschedule,appointments:cancel,shop:schedule:edit,shop:schedule:view";
@@ -107,7 +122,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CP-001: Successfully create appointment with valid fields")
     void testCreateAppointment_HappyPath() throws Exception {
         String payload = createAppointmentPayload(
-                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-01-27T19:30:00Z", "2026-01-27T20:30:00Z", "BAY-1");
+                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-01-27T19:30:00Z", "2026-01-27T20:30:00Z", bay("BAY-1"));
         mockMvc.perform(withGatewayAuth(post("/v1/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)
@@ -121,7 +136,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CP-002: Successfully retrieve appointment by ID")
     void testGetAppointment_HappyPath() throws Exception {
         String payload = createAppointmentPayload(
-                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-02-15T15:00:00Z", "2026-02-15T16:30:00Z", "BAY-2");
+                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-02-15T15:00:00Z", "2026-02-15T16:30:00Z", bay("BAY-2"));
         MvcResult createResult = mockMvc.perform(withGatewayAuth(post("/v1/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)
@@ -151,7 +166,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 LOCATION,
                 "2026-03-01T14:00:00Z",
                 "2026-03-01T15:00:00Z",
-                "BAY-1",
+                bay("BAY-1"),
                 "INVALID_TYPE",
                 "SRC-001");
         mockMvc.perform(withGatewayAuth(post("/v1/appointments")
@@ -165,7 +180,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("VE-002: Reject appointment with end time before start time")
     void testCreateAppointment_InvalidTimeRange() throws Exception {
         String invalidPayload = createAppointmentPayload(
-                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-03-15T20:00:00Z", "2026-03-15T19:00:00Z", "BAY-1");
+                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-03-15T20:00:00Z", "2026-03-15T19:00:00Z", bay("BAY-1"));
         mockMvc.perform(withGatewayAuth(post("/v1/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalidPayload)
@@ -197,7 +212,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     void testCreateAppointment_Idempotent() throws Exception {
         String idempotencyKey = "idem-appt-" + System.currentTimeMillis();
         String payload = createAppointmentPayload(
-                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-04-20T16:00:00Z", "2026-04-20T17:30:00Z", "BAY-3");
+                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-04-20T16:00:00Z", "2026-04-20T17:30:00Z", bay("BAY-3"));
 
         MvcResult result1 = mockMvc.perform(withGatewayAuth(post("/v1/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -235,7 +250,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CC-001: Prevent hard conflicts (double-booking same bay and time slot)")
     void testCreateAppointment_HardConflict() throws Exception {
         String payload1 = createAppointmentPayload(
-                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-05-01T14:00:00Z", "2026-05-01T15:00:00Z", "BAY-CONFLICT");
+                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-05-01T14:00:00Z", "2026-05-01T15:00:00Z", bay("BAY-CONFLICT"));
         mockMvc.perform(withGatewayAuth(post("/v1/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload1)
@@ -244,7 +259,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Different customer+vehicle booking overlapping slot in same bay
         String payload2 = createAppointmentPayload(
-                CUSTOMER_2, VEHICLE_2, LOCATION, "2026-05-01T14:30:00Z", "2026-05-01T15:30:00Z", "BAY-CONFLICT");
+                CUSTOMER_2, VEHICLE_2, LOCATION, "2026-05-01T14:30:00Z", "2026-05-01T15:30:00Z", bay("BAY-CONFLICT"));
         // CAP-326: BAY_DOUBLE_BOOKED is a HARD rule, so the refusal is the
         // DECISION-SHOPMGMT-002 conflict envelope with 409 (the endpoint's documented answer for a
         // hard conflict), not the 400 VALIDATION_ERROR this assertion expected before the
@@ -263,7 +278,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("CC-002: Cancel appointment transitions status to CANCELLED")
     void testCancelAppointment_StatusTransition() throws Exception {
         String payload = createAppointmentPayload(
-                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-05-15T19:00:00Z", "2026-05-15T20:00:00Z", "BAY-CANCEL");
+                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-05-15T19:00:00Z", "2026-05-15T20:00:00Z", bay("BAY-CANCEL"));
         MvcResult createResult = mockMvc.perform(withGatewayAuth(post("/v1/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)
@@ -291,7 +306,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("FF-001: Response includes ISO 8601 startAt and createdAt timestamps")
     void testAppointment_TimestampFieldsPresent() throws Exception {
         String payload = createAppointmentPayload(
-                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-06-01T15:30:00Z", "2026-06-01T16:30:00Z", "BAY-1");
+                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-06-01T15:30:00Z", "2026-06-01T16:30:00Z", bay("BAY-1"));
         mockMvc.perform(withGatewayAuth(post("/v1/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)
@@ -305,7 +320,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("FF-002: Response contains expected appointment fields with correct initial status")
     void testAppointment_ResponseFields() throws Exception {
         String payload = createAppointmentPayload(
-                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-06-15T21:00:00Z", "2026-06-15T22:00:00Z", "BAY-1");
+                CUSTOMER_1, VEHICLE_1, LOCATION, "2026-06-15T21:00:00Z", "2026-06-15T22:00:00Z", bay("BAY-1"));
         MvcResult result = mockMvc.perform(withGatewayAuth(post("/v1/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)

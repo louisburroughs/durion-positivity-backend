@@ -15,8 +15,10 @@ import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.ConflictRuleRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
+import com.positivity.shopmanager.internal.repository.SchedulingConflictRepository;
 import com.positivity.shopmanager.internal.service.CrmSnapshotService;
 import java.time.Instant;
 import java.util.List;
@@ -101,10 +103,19 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
     private RescheduleHistoryRepository rescheduleHistoryRepository;
 
     @Autowired
+    private SchedulingConflictRepository schedulingConflictRepository;
+
+    @Autowired
     private ConflictRuleRepository conflictRuleRepository;
 
     @Autowired
     private ExtStaffingAssignmentReplicaRepository staffingAssignmentRepository;
+
+    @Autowired
+    private ExtBayReplicaRepository bayReplicaRepository;
+
+    /** The ACTIVE bay the accepted-path bookings name; set by {@code @BeforeEach}. */
+    private String testBayId;
 
     // Mocked to prevent context-startup failures; not invoked by reschedule/cancel
     // stubs
@@ -118,6 +129,9 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
      */
     @BeforeEach
     void cleanDatabase() {
+        // An accepted reschedule records the conflicts it was evaluated against, and those rows
+        // reference the appointment.
+        schedulingConflictRepository.deleteAll();
         appointmentAuditRepository.deleteAll();
         rescheduleHistoryRepository.deleteAll();
         appointmentRepository.deleteAll();
@@ -126,6 +140,10 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
         // here is a 500 or a 409 about the empty world rather than about rescheduling.
         SchedulingWorldFixture.seedConflictRules(conflictRuleRepository);
         SchedulingWorldFixture.rosterTechnician(staffingAssignmentRepository, TEST_LOCATION_ID);
+        // The appointment's resource is re-validated on reschedule, and a resourceId the location
+        // replica does not know is refused 422 (#2268).
+        testBayId = SchedulingWorldFixture.registerBay(bayReplicaRepository, TEST_LOCATION_ID, "BAY-01")
+                .toString();
     }
 
     @Override
@@ -168,7 +186,7 @@ class AppointmentRescheduleCancelContractBehaviorIT extends BaseContractIntegrat
                 .crmCustomerId(TEST_CUSTOMER_ID)
                 .crmVehicleId(TEST_VEHICLE_ID)
                 .locationId(TEST_LOCATION_ID)
-                .resourceId("BAY-01")
+                .resourceId(testBayId)
                 .startAt(BASE_START)
                 .endAt(BASE_END)
                 .status(status)
