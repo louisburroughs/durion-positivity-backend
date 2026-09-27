@@ -59,8 +59,10 @@ public class ScheduleController {
                     Preconditions: the location must exist as a shop; the day window is computed in the shop's \
                     configured timezone, falling back to UTC when none is configured.
                     Required inputs: locationId (UUID) and date (YYYY-MM-DD); resourceType and resourceId are \
-                    optional filters, includeAvailabilityOverlay defaults to false, and range defaults to \
-                    LOCATION_HOURS (06:00-18:00 local) with FULL_DAY covering midnight to midnight.
+                    optional filters, includeAvailabilityOverlay defaults to false, range defaults to \
+                    LOCATION_HOURS (06:00-18:00 local) with FULL_DAY covering midnight to midnight, and the \
+                    optional affected filter (DECISION-SHOPMGMT-022) narrows the board to only affected \
+                    appointments (true, the reschedule queue) or only unaffected ones (false), omitted for both.
                     Emits a SHOPMGR_SCHEDULE_VIEW audit event; no state changes occur, and when the overlay is \
                     requested availabilityOverlayStatus reports AVAILABLE or UNAVAILABLE with an \
                     HR_SYSTEM_UNAVAILABLE warning when the staffing replica has no data for the location.
@@ -98,6 +100,11 @@ public class ScheduleController {
             @Parameter(description = "Schedule window range", required = false)
                     @RequestParam(defaultValue = "LOCATION_HOURS")
                     String range,
+            @Parameter(
+                            description = "DECISION-SHOPMGMT-022 filter: true for only affected appointments (the"
+                                    + " reschedule queue), false for only unaffected ones, omitted for both")
+                    @RequestParam(required = false)
+                    Boolean affected,
             @Parameter(description = "Correlation ID for request tracing")
                     @RequestHeader(value = "X-Correlation-Id", required = false)
                     UUID correlationId) {
@@ -111,14 +118,16 @@ public class ScheduleController {
         request.setResourceId(resourceId);
         request.setIncludeAvailabilityOverlay(includeAvailabilityOverlay);
         request.setRange(range);
+        request.setAffected(affected);
         log.info(
-                "Schedule view requested. locationId={}, date={}, resourceType={}, resourceId={}, includeAvailabilityOverlay={}, range={}, X-Correlation-Id={}",
+                "Schedule view requested. locationId={}, date={}, resourceType={}, resourceId={}, includeAvailabilityOverlay={}, range={}, affected={}, X-Correlation-Id={}",
                 locationId,
                 date,
                 resourceType,
                 resourceId,
                 includeAvailabilityOverlay,
                 range,
+                affected,
                 correlationId);
         ScheduleViewResponse response = appointmentsService.getScheduleView(request, correlationId);
         return ResponseEntity.ok(response);

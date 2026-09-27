@@ -129,4 +129,16 @@ public class AppointmentResponse {
 
     @Schema(description = "Snapshot of vehicle attributes captured at booking time", requiredMode = NOT_REQUIRED)
     private Map<String, Object> vehicleSnapshot;
+
+    @Schema(
+            description = "DECISION-SHOPMGMT-022: true when this appointment is still SCHEDULED, starts in the "
+                    + "future, names a BAY or MOBILE_UNIT resource, and that resource is now missing, not ACTIVE "
+                    + "(out of service or retired), or — for a BAY — no longer passes DECISION-SHOPMGMT-021 "
+                    + "eligibility for the appointment's services and vehicle. Derived at read time from the "
+                    + "resource replicas, never stored; a resource returning to service or eligibility clears it "
+                    + "on the next read. An affected appointment is not blocked from anything — it belongs in the "
+                    + "reschedule queue (GET /v1/schedules/view?affected=true).",
+            example = "false",
+            requiredMode = REQUIRED)
+    private boolean affected;
 }

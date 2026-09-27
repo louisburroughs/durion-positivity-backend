@@ -98,6 +98,9 @@ class AppointmentsServiceNewBehaviorsTest {
     // F5 fix: manual constructor injection so Clock is never null
     private AppointmentsServiceImpl appointmentsService;
 
+    private final AffectedAppointmentEvaluator affectedAppointmentEvaluator = mock(AffectedAppointmentEvaluator.class);
+    private final RescheduleApprovalGuard rescheduleApprovalGuard = mock(RescheduleApprovalGuard.class);
+
     private UUID appointmentId;
     private Appointment appointment;
 
@@ -131,7 +134,11 @@ class AppointmentsServiceNewBehaviorsTest {
                 mock(ExtBayReplicaRepository.class),
                 mock(ExtMobileUnitReplicaRepository.class),
                 mock(BayEligibilityService.class),
-                mock(SkillRequirementResolver.class));
+                mock(SkillRequirementResolver.class),
+                affectedAppointmentEvaluator,
+                rescheduleApprovalGuard);
+
+        lenient().when(affectedAppointmentEvaluator.evaluate(any(), any())).thenReturn(Map.of());
 
         appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         appointment = new Appointment();

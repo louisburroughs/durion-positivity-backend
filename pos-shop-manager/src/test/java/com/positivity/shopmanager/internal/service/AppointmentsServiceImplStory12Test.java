@@ -104,6 +104,9 @@ class AppointmentsServiceImplStory12Test {
 
     private AppointmentsServiceImpl appointmentsService;
 
+    private final AffectedAppointmentEvaluator affectedAppointmentEvaluator = mock(AffectedAppointmentEvaluator.class);
+    private final RescheduleApprovalGuard rescheduleApprovalGuard = mock(RescheduleApprovalGuard.class);
+
     private static final Instant FIXED_NOW = Instant.parse("2026-03-01T12:00:00Z");
     private static final UUID LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -141,7 +144,11 @@ class AppointmentsServiceImplStory12Test {
                 mock(ExtBayReplicaRepository.class),
                 mock(ExtMobileUnitReplicaRepository.class),
                 mock(BayEligibilityService.class),
-                mock(SkillRequirementResolver.class));
+                mock(SkillRequirementResolver.class),
+                affectedAppointmentEvaluator,
+                rescheduleApprovalGuard);
+
+        lenient().when(affectedAppointmentEvaluator.evaluate(any(), any())).thenReturn(Map.of());
 
         // Stub CRM clients for tests that reach the CRM call path (before source
         // validation)

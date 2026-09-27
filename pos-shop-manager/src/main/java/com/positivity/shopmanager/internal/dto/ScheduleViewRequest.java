@@ -52,4 +52,11 @@ public class ScheduleViewRequest {
             example = "LOCATION_HOURS",
             requiredMode = NOT_REQUIRED)
     private String range;
+
+    @Schema(
+            description = "DECISION-SHOPMGMT-022 filter: true returns only affected appointments (the reschedule "
+                    + "queue), false returns only unaffected ones, and omitted (the default) returns both.",
+            example = "true",
+            requiredMode = NOT_REQUIRED)
+    private Boolean affected;
 }

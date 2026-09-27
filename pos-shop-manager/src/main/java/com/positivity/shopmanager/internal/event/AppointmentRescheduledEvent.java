@@ -12,6 +12,10 @@ import java.util.UUID;
  * newEndAt, optional estimateId/workOrderId, and assignment status for
  * downstream
  * consumers (workexec, notification).
+ *
+ * <p>#2270 (DECISION-SHOPMGMT-022 rule 3): {@code previousResourceId}/{@code newResourceId} carry
+ * the resource axis when a reschedule moved the appointment onto a different bay or mobile unit;
+ * both are {@code null} when the resource did not change as part of this reschedule.
  */
 public record AppointmentRescheduledEvent(
         UUID appointmentId,
@@ -25,4 +29,6 @@ public record AppointmentRescheduledEvent(
         Instant rescheduledAt,
         UUID estimateId,
         UUID workOrderId,
-        String assignmentStatus) {}
+        String assignmentStatus,
+        String previousResourceId,
+        String newResourceId) {}

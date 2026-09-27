@@ -127,6 +127,16 @@ public class ScheduleViewResponse {
 
         @Schema(description = "Details of the conflict when present", requiredMode = NOT_REQUIRED)
         private ConflictDetails conflictDetails;
+
+        @Schema(
+                description = "DECISION-SHOPMGMT-022: true when this appointment (event) is SCHEDULED, starts in "
+                        + "the future, names a BAY or MOBILE_UNIT resource, and that resource is now missing, not "
+                        + "ACTIVE, or (a BAY) no longer eligible for the appointment's services and vehicle. "
+                        + "Derived at read time, never stored. The `affected` query parameter on this endpoint "
+                        + "filters on this same flag.",
+                example = "false",
+                requiredMode = REQUIRED)
+        private boolean affected;
     }
 
     @Data

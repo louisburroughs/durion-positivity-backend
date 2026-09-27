@@ -46,12 +46,19 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
   (`{conflictIds, overrideReason}`); requires `shop:conflict:override` and the appointment's location
   in scope. `400` for a conflict not recorded against the appointment, `409` for a HARD one (envelope,
   nothing written) or one already overridden (`CONFLICT_ALREADY_OVERRIDDEN`).
-- `GET /v1/appointments/{appointmentId}` — retrieve an appointment
+- `GET /v1/appointments/{appointmentId}` — retrieve an appointment. The response carries
+  `affected` (DECISION-SHOPMGMT-022, below).
 - `PUT /v1/appointments/{appointmentId}/reschedule` — reschedule an appointment; the same rules as
-  creation apply, including DECISION-SHOPMGMT-021 bay/mobile-unit eligibility against the
-  appointment's own (unchanged) resource, and the appointment's own slot does not count against it
+  creation apply, including DECISION-SHOPMGMT-021 bay/mobile-unit eligibility against the resource
+  the appointment ends up on. By default that is the appointment's own (unchanged) resource, and
+  the appointment's own slot does not count against it; optional `newResourceType`/`newResourceId`
+  move it onto a different bay or mobile unit instead (DECISION-SHOPMGMT-022 rule 3) — only the new
+  resource is validated, never the old one, so moving off a now-ineligible resource always
+  succeeds. DECISION-SHOPMGMT-004's reschedule allowance (below) also applies.
 - `DELETE /v1/appointments/{appointmentId}/cancel` — cancel an appointment
-- `GET /v1/schedules/view` — shop schedule view
+- `GET /v1/schedules/view` — shop schedule view. Each event carries `affected`, and the optional
+  `affected` query parameter (`true`/`false`) filters the board to only affected or only
+  unaffected appointments (DECISION-SHOPMGMT-022, below); omitted returns both.
 - `GET /v1/bays` / `GET /v1/{locationId}/bays/{bayId}` — retrieve bays
 - `POST /v1/{locationId}/bays` — add a bay
 - `DELETE /v1/{locationId}/bays/{bayId}` — remove a bay
@@ -234,7 +241,7 @@ mechanic-busy tracking (never written by this service), which stays skipped.
 scheduling lands (DECISION-SHOPMGMT-023) — no specialty or duty-class check. The near-capacity
 divisor (`FACILITY_NEAR_CAPACITY`, above) counts only active bays with `accepts_general_work`.
 Existing appointments' own resource is not re-validated except on reschedule (above);
-DECISION-SHOPMGMT-022 (a later story) surfaces any that sit in a now-ineligible bay without a
+DECISION-SHOPMGMT-022 (below) surfaces any that sit in a now-ineligible bay without forcing a
 reschedule.
 
 Skill (CAP-329 D10, read through `SkillRequirementResolver`, the same reading the submit-time
@@ -248,6 +255,56 @@ never as a `noOpeningReason`: `NO_COMPETENT_MECHANIC_ROSTERED` with `missingSkil
 is rostered on any open day in the horizon (#2035 answer 5 — never a competence rule), in which
 case the list is empty and `noOpeningReason` stays null. `NOT_IN_TENANT` and
 `alternateLocations[]` are deliberately absent (DECISION-SHOPMGMT-012).
+
+## Affected appointments and the reschedule allowance (#2270)
+
+### Affected (DECISION-SHOPMGMT-022)
+
+When a bay or mobile unit goes out of service, is retired, or loses the eligibility a booking
+relied on, `pos-location` never blocks the change — it cannot see appointments (ADR-0044) and the
+equipment is broken whatever the system says. Instead, `pos-shop-manager` derives **`affected`** at
+read time, for every held, not-yet-started appointment on a `BAY`/`MOBILE_UNIT` resource:
+
+- status is `SCHEDULED` — the only "held, pre-work" status in `AppointmentStatus`; every other
+  pre-terminal status (`CHECKED_IN`, `WORK_IN_PROGRESS`, `WAITING_FOR_PARTS`, `QUALITY_CHECK`,
+  `READY_FOR_PICKUP`, `REOPENED`) means the visit is already under way, so moving it is a
+  shop-floor reassignment, not a reschedule-queue item;
+- `startAt` is in the future;
+- `resourceType` is `BAY` or `MOBILE_UNIT` — never `UNASSIGNED` or the legacy `TECHNICIAN` reading;
+- and the named resource is missing from its replica, is not `ACTIVE` (`ext_bay`/`ext_mobile_unit`
+  collapse both `OUT_OF_SERVICE` and `RETIRED` into one `active=false` row, so "not ACTIVE" already
+  covers both), or — for a `BAY` only — no longer passes the DECISION-SHOPMGMT-021 eligibility rule
+  (`BayEligibilityService.refusalFor`). A mobile unit runs existence and active checks only, same
+  as `resolveAndValidateResourceType` (DECISION-SHOPMGMT-023: no per-unit eligibility check exists
+  yet beyond that).
+
+Nothing is stored: `AffectedAppointmentEvaluator` computes it fresh on every read, batching its
+replica/service-request/vehicle reads once per location rather than once per appointment, so a
+resource returning to service (or regaining eligibility) clears the flag on the very next read. It
+is exposed as `affected` on `GET /v1/appointments/{id}` and on every event in
+`GET /v1/schedules/view`, which also takes an optional `affected` (`true`/`false`) query parameter
+— `true` is the reschedule queue. A retired or out-of-service bay/mobile unit keeps its replica row
+(DECISION-LOCATION-026), including its `name`, so an affected appointment's resource is still
+nameable on the board, not a bare id.
+
+### The reschedule allowance and its shop-caused exemption (DECISION-SHOPMGMT-004)
+
+Up to 2 reschedules of an appointment are free. The 3rd and later reschedule needs the caller to
+hold `appointments:reschedule:approve` and to send a non-blank `approvalReason` (max 1000
+characters) — permission-only gating, enforced server-side, no separate approval workflow. Missing
+the permission is `403` (the module's ordinary `AccessDeniedException` path, `RescheduleApprovalGuard`
+mirroring `ConflictOverrideService`'s always-`@PreAuthorize`-gated shape); holding it but sending no
+`approvalReason` is `422 RESCHEDULE_APPROVAL_REASON_REQUIRED` (`fieldErrors` names
+`approvalReason`). A refused reschedule records no history row, so it never counts.
+
+A reschedule is **shop-caused**, and so exempt from the count, when either its `reason` is
+`EQUIPMENT_ISSUE` or the appointment was DECISION-SHOPMGMT-022 affected **at the moment of the
+reschedule, evaluated before any field of it changes** — moving an appointment off a bay that just
+failed is never held against the customer. `reschedule_history.counts_against_allowance` records
+which; the allowance is the count of an appointment's history rows with it `true`.
+`RescheduleAppointmentRequest.newResourceType`/`newResourceId` (DECISION-SHOPMGMT-022 rule 3, above)
+and `approvalReason` are independent of each other — a reschedule can move the resource, need
+approval, both, or neither.
 
 ## Shop dashboard (`GET /v1/shop-dashboard`)
 

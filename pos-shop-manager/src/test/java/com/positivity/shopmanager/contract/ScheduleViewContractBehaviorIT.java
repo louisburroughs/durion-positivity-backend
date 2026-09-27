@@ -7,10 +7,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.shopmanager.BaseContractIntegrationTest;
 import com.positivity.shopmanager.PosShopManagerApplication;
 import com.positivity.shopmanager.internal.entity.Appointment;
+import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.Shop;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.service.CrmSnapshotService;
 import java.time.Instant;
@@ -107,6 +109,9 @@ class ScheduleViewContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private ShopRepository shopRepository;
 
+    @Autowired
+    private ExtBayReplicaRepository bayReplicaRepository;
+
     // Mocked to prevent context-startup failures; not invoked by schedule view
     // operations
     @MockitoBean
@@ -120,6 +125,7 @@ class ScheduleViewContractBehaviorIT extends BaseContractIntegrationTest {
     void cleanDatabase() {
         appointmentAuditRepository.deleteAll();
         appointmentRepository.deleteAll();
+        bayReplicaRepository.deleteAll();
         shopRepository.deleteAll();
 
         shopRepository.save(Shop.builder()
@@ -436,5 +442,132 @@ class ScheduleViewContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.resources").isArray())
                 .andExpect(jsonPath("$.resources[*].resourceId")
                         .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is("BAY-01"))));
+    }
+
+    // ─── SV13-15: DECISION-SHOPMGMT-022 affected flag and filter (#2270) ─────────
+    //
+    // A far-future date, distinct from TEST_DATE above: "affected" requires startAt to be in the
+    // future relative to the real clock this @SpringBootTest runs under, and TEST_DATE predates
+    // this decision by design (SV1-12 only ever assert resourceType/hasConflict, never affected).
+
+    private static final String FUTURE_TEST_DATE = "2099-06-01";
+    private static final Instant FUTURE_09_00 = Instant.parse("2099-06-01T09:00:00Z");
+    private static final Instant FUTURE_10_00 = Instant.parse("2099-06-01T10:00:00Z");
+
+    @Test
+    @DisplayName("SV13: an appointment on a retired bay is reported affected, and the bay's name still resolves")
+    void should_report_affected_true_and_resolve_the_name_for_an_appointment_on_a_retired_bay() throws Exception {
+        UUID retiredBayId = UUID.fromString("cccccccc-0000-0000-0000-000000000001");
+        bayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(retiredBayId)
+                .locationId(TEST_LOCATION_ID)
+                .name("Bay 7")
+                .active(false)
+                .acceptsGeneralWork(true)
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .build());
+        saveAppointment(TEST_LOCATION_ID, retiredBayId.toString(), "BAY", FUTURE_09_00, FUTURE_10_00);
+
+        mockMvc.perform(withGatewayAuth(get("/v1/schedules/view")
+                        .param("locationId", TEST_LOCATION_ID.toString())
+                        .param("date", FUTURE_TEST_DATE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resources[0].resourceName").value("Bay 7"))
+                .andExpect(jsonPath("$.resources[0].events[0].affected").value(true));
+    }
+
+    @Test
+    @DisplayName("SV14: a future appointment on an active, eligible bay is reported not affected")
+    void should_report_affected_false_for_a_future_appointment_on_an_active_bay() throws Exception {
+        UUID activeBayId = UUID.fromString("cccccccc-0000-0000-0000-000000000002");
+        bayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(activeBayId)
+                .locationId(TEST_LOCATION_ID)
+                .name("Bay 8")
+                .active(true)
+                .acceptsGeneralWork(true)
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .build());
+        saveAppointment(TEST_LOCATION_ID, activeBayId.toString(), "BAY", FUTURE_09_00, FUTURE_10_00);
+
+        mockMvc.perform(withGatewayAuth(get("/v1/schedules/view")
+                        .param("locationId", TEST_LOCATION_ID.toString())
+                        .param("date", FUTURE_TEST_DATE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resources[0].events[0].affected").value(false));
+    }
+
+    @Test
+    @DisplayName("SV15: affected=true returns only the affected appointments (the reschedule queue)")
+    void should_filter_to_only_affected_appointments_when_affected_true() throws Exception {
+        UUID retiredBayId = UUID.fromString("cccccccc-0000-0000-0000-000000000003");
+        UUID activeBayId = UUID.fromString("cccccccc-0000-0000-0000-000000000004");
+        bayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(retiredBayId)
+                .locationId(TEST_LOCATION_ID)
+                .name("Bay 9")
+                .active(false)
+                .acceptsGeneralWork(true)
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .build());
+        bayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(activeBayId)
+                .locationId(TEST_LOCATION_ID)
+                .name("Bay 10")
+                .active(true)
+                .acceptsGeneralWork(true)
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .build());
+        saveAppointment(TEST_LOCATION_ID, retiredBayId.toString(), "BAY", FUTURE_09_00, FUTURE_10_00);
+        saveAppointment(TEST_LOCATION_ID, activeBayId.toString(), "BAY", FUTURE_09_00, FUTURE_10_00);
+
+        mockMvc.perform(withGatewayAuth(get("/v1/schedules/view")
+                        .param("locationId", TEST_LOCATION_ID.toString())
+                        .param("date", FUTURE_TEST_DATE)
+                        .param("affected", "true")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resources", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.resources[0].resourceId").value(retiredBayId.toString()))
+                .andExpect(jsonPath("$.resources[0].events[0].affected").value(true));
+    }
+
+    @Test
+    @DisplayName("SV16: affected=false returns only the unaffected appointments")
+    void should_filter_to_only_unaffected_appointments_when_affected_false() throws Exception {
+        UUID retiredBayId = UUID.fromString("cccccccc-0000-0000-0000-000000000005");
+        UUID activeBayId = UUID.fromString("cccccccc-0000-0000-0000-000000000006");
+        bayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(retiredBayId)
+                .locationId(TEST_LOCATION_ID)
+                .name("Bay 11")
+                .active(false)
+                .acceptsGeneralWork(true)
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .build());
+        bayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(activeBayId)
+                .locationId(TEST_LOCATION_ID)
+                .name("Bay 12")
+                .active(true)
+                .acceptsGeneralWork(true)
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .build());
+        saveAppointment(TEST_LOCATION_ID, retiredBayId.toString(), "BAY", FUTURE_09_00, FUTURE_10_00);
+        saveAppointment(TEST_LOCATION_ID, activeBayId.toString(), "BAY", FUTURE_09_00, FUTURE_10_00);
+
+        mockMvc.perform(withGatewayAuth(get("/v1/schedules/view")
+                        .param("locationId", TEST_LOCATION_ID.toString())
+                        .param("date", FUTURE_TEST_DATE)
+                        .param("affected", "false")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resources", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.resources[0].resourceId").value(activeBayId.toString()))
+                .andExpect(jsonPath("$.resources[0].events[0].affected").value(false));
     }
 }
