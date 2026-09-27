@@ -25,6 +25,7 @@ import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.internal.exception.PromotionValidationException.PromotionErrorCode;
 import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
+import com.positivity.workorder.internal.exception.ServicePositionDutyClassExceededException;
 import com.positivity.workorder.internal.exception.ServicePositionInactiveException;
 import com.positivity.workorder.internal.exception.ServicePositionInvalidException;
 import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
@@ -230,6 +231,11 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleServicePositionInvalid", (HandlerInvocation)
                             request -> handler.handleServicePositionInvalid(
                                     new ServicePositionInvalidException("unknown bay"), request)),
+                    Named.of("handleServicePositionDutyClassExceeded", (HandlerInvocation)
+                            request -> handler.handleServicePositionDutyClassExceeded(
+                                    new ServicePositionDutyClassExceededException(
+                                            ResourceType.BAY, SOME_ID, "Bay 3", 7, 3),
+                                    request)),
                     Named.of("handleWorkorderClosed", (HandlerInvocation) request ->
                             handler.handleWorkorderClosed(new WorkorderClosedException(SOME_ID, "COMPLETED"), request)),
                     Named.of("handleTechnicianAlreadyAssigned", (HandlerInvocation)
@@ -390,6 +396,35 @@ class GlobalExceptionHandlerTest {
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().code()).isEqualTo("INTERNAL_ERROR");
             assertThat(response.getBody().message()).doesNotContain(SOME_ID.toString());
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // ServicePositionDutyClassExceededException (DECISION-SHOPMGMT-021 rule 3, #2269)
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("ServicePositionDutyClassExceededException (#2269)")
+    class ServicePositionDutyClassExceeded {
+
+        private final GlobalExceptionHandler handler =
+                new GlobalExceptionHandler(XCorrelationIdHeader.fixedClockProviderForTests());
+
+        @Test
+        @DisplayName("422, naming resourceId in fieldErrors and the position in referenceId")
+        void refusesWithFieldErrorAndReferenceId() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+
+            ResponseEntity<ApiError> response = handler.handleServicePositionDutyClassExceeded(
+                    new ServicePositionDutyClassExceededException(ResourceType.BAY, SOME_ID, "Lift 3", 7, 3), request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("SERVICE_POSITION_DUTY_CLASS_EXCEEDED");
+            assertThat(response.getBody().status()).isEqualTo(422);
+            assertThat(response.getBody().referenceId()).isEqualTo(SOME_ID.toString());
+            assertThat(response.getBody().fieldErrors()).isNotNull().hasSize(1);
+            assertThat(response.getBody().fieldErrors().get(0).field()).isEqualTo("resourceId");
         }
     }
 

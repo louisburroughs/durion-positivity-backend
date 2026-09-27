@@ -16,11 +16,13 @@ import com.positivity.workorder.internal.dto.AssignServicePositionRequest;
 import com.positivity.workorder.internal.dto.ServicePositionResponse;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
+import com.positivity.workorder.internal.entity.ExtVehicleReplica;
 import com.positivity.workorder.internal.entity.ServicePositionAssignment;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.ServicePositionDutyClassExceededException;
 import com.positivity.workorder.internal.exception.ServicePositionInactiveException;
 import com.positivity.workorder.internal.exception.ServicePositionInvalidException;
 import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
@@ -28,6 +30,7 @@ import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.workorder.internal.repository.ServicePositionAssignmentRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -72,6 +75,7 @@ class ServicePositionServiceImplTest {
     private static final UUID OTHER_BAY_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f3306");
     private static final UUID MOBILE_UNIT_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f3307");
     private static final UUID TECHNICIAN_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f3308");
+    private static final UUID VEHICLE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f330c");
     private static final Instant NOW = Instant.parse("2026-03-10T09:00:00Z");
     private static final LocalDateTime NOW_LOCAL = LocalDateTime.ofInstant(NOW, ZoneOffset.UTC);
     private static final String ACTOR = "dispatch";
@@ -90,6 +94,9 @@ class ServicePositionServiceImplTest {
 
     @Mock
     private ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
+
+    @Mock
+    private ExtVehicleReplicaRepository extVehicleReplicaRepository;
 
     @Mock
     private WorkorderFactPublisher workorderFactPublisher;
@@ -116,6 +123,7 @@ class ServicePositionServiceImplTest {
                 technicianAssignmentRepository,
                 extBayReplicaRepository,
                 extMobileUnitReplicaRepository,
+                extVehicleReplicaRepository,
                 workorderFactPublisher);
         service.setStateMachine(stateMachine);
 
@@ -153,22 +161,46 @@ class ServicePositionServiceImplTest {
     }
 
     private void givenBay(UUID bayId, UUID locationId) {
+        givenBay(bayId, locationId, null, null);
+    }
+
+    /** #2269: a bay with a duty-class ceiling and, optionally, a specialty capability that never gates placement. */
+    private void givenBay(UUID bayId, UUID locationId, Integer maxDutyClass, List<String> serviceCapabilityCodes) {
         when(extBayReplicaRepository.findById(bayId))
                 .thenReturn(Optional.of(ExtBayReplica.builder()
                         .bayId(bayId)
                         .locationId(locationId)
                         .active(true)
+                        .maxDutyClass(maxDutyClass)
+                        .serviceCapabilityCodes(serviceCapabilityCodes)
                         .aggregateVersion(1L)
                         .updatedAt(NOW)
                         .build()));
     }
 
     private void givenMobileUnit(UUID unitId, UUID baseLocationId) {
+        givenMobileUnit(unitId, baseLocationId, null);
+    }
+
+    /** #2269: a mobile unit with a duty-class ceiling. */
+    private void givenMobileUnit(UUID unitId, UUID baseLocationId, Integer maxDutyClass) {
         when(extMobileUnitReplicaRepository.findById(unitId))
                 .thenReturn(Optional.of(ExtMobileUnitReplica.builder()
                         .mobileUnitId(unitId)
                         .baseLocationId(baseLocationId)
                         .active(true)
+                        .maxDutyClass(maxDutyClass)
+                        .aggregateVersion(1L)
+                        .updatedAt(NOW)
+                        .build()));
+    }
+
+    /** #2269: the vehicle's replicated GVWR class, resolved through the workorder's vehicleId. */
+    private void givenVehicle(UUID vehicleId, Integer gvwrClass) {
+        when(extVehicleReplicaRepository.findById(vehicleId))
+                .thenReturn(Optional.of(ExtVehicleReplica.builder()
+                        .vehicleId(vehicleId)
+                        .gvwrClass(gvwrClass)
                         .aggregateVersion(1L)
                         .updatedAt(NOW)
                         .build()));
@@ -771,6 +803,222 @@ class ServicePositionServiceImplTest {
     }
 
     /**
+     * #2269: DECISION-SHOPMGMT-021 rule 3 — placement keeps its site and active checks and adds duty
+     * class only, never specialty capability. Checked after site and active, same ordering as the
+     * inactive check.
+     */
+    @Nested
+    @DisplayName("duty class is checked on assignPosition; specialty never is")
+    class DutyClassOnAssign {
+
+        @Test
+        @DisplayName("#2269: a class 7 vehicle on a bay with ceiling 3 is refused")
+        void refusesAClass7VehicleOnACeiling3Bay() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenBay(BAY_ID, SITE_ID, 3, null);
+            givenVehicle(VEHICLE_ID, 7);
+
+            assertThatThrownBy(
+                            () -> service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR))
+                    .isInstanceOf(ServicePositionDutyClassExceededException.class)
+                    .hasMessageContaining("7")
+                    .hasMessageContaining("3");
+
+            assertThat(workorder.getResourceType()).isNull();
+            assertThat(workorder.getResourceId()).isNull();
+            verify(positionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("#2269: a class 7 vehicle on a mobile unit with ceiling 3 is refused the same way")
+        void refusesAClass7VehicleOnACeiling3MobileUnit() {
+            givenWorkorder(WorkorderStatus.APPROVED).setVehicleId(VEHICLE_ID);
+            givenMobileUnit(MOBILE_UNIT_ID, SITE_ID, 3);
+            givenVehicle(VEHICLE_ID, 7);
+
+            assertThatThrownBy(() -> service.assignPosition(
+                            WORKORDER_ID, request(ResourceType.MOBILE_UNIT, MOBILE_UNIT_ID, null), ACTOR))
+                    .isInstanceOf(ServicePositionDutyClassExceededException.class);
+        }
+
+        @Test
+        @DisplayName("#2269: an unknown vehicle class skips the check and places normally")
+        void unknownVehicleClassSkipsTheCheck() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenBay(BAY_ID, SITE_ID, 3, null);
+            // No ext_vehicle row at all: the replica has not arrived, or the publisher never sent a
+            // GVWR class. Either way it is undetermined, not zero.
+            when(extVehicleReplicaRepository.findById(VEHICLE_ID)).thenReturn(Optional.empty());
+
+            assertThatCode(() -> service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR))
+                    .doesNotThrowAnyException();
+            assertThat(workorder.getResourceId()).isEqualTo(BAY_ID);
+        }
+
+        @Test
+        @DisplayName("#2269: a null gvwrClass on the replica row is the same as unknown")
+        void nullGvwrClassOnTheReplicaSkipsTheCheck() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenBay(BAY_ID, SITE_ID, 3, null);
+            givenVehicle(VEHICLE_ID, null);
+
+            assertThatCode(() -> service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR))
+                    .doesNotThrowAnyException();
+            assertThat(workorder.getResourceId()).isEqualTo(BAY_ID);
+        }
+
+        @Test
+        @DisplayName("#2269: a null maxDutyClass ceiling skips the check and places normally")
+        void nullCeilingSkipsTheCheck() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenBay(BAY_ID, SITE_ID, null, null);
+            givenVehicle(VEHICLE_ID, 8);
+
+            assertThatCode(() -> service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR))
+                    .doesNotThrowAnyException();
+            assertThat(workorder.getResourceId()).isEqualTo(BAY_ID);
+        }
+
+        @Test
+        @DisplayName("#2269: a vehicle class within the ceiling places normally")
+        void vehicleClassWithinCeilingPlaces() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenBay(BAY_ID, SITE_ID, 5, null);
+            givenVehicle(VEHICLE_ID, 3);
+
+            assertThatCode(() -> service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("#2269: no workorder vehicle at all skips the check")
+        void noWorkorderVehicleSkipsTheCheck() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(null);
+            givenBay(BAY_ID, SITE_ID, 3, null);
+
+            assertThatCode(() -> service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("#2269: a specialty-capability mismatch alone never refuses placement")
+        void specialtyCapabilityMismatchAloneNeverRefuses() {
+            // A WASH_DETAIL-style bay claiming a narrow specialty list, with a duty class the vehicle
+            // is well within. Nothing on this path ever asks what operation the workorder carries, so
+            // a bay claiming no general work still takes the placement.
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenBay(BAY_ID, SITE_ID, 8, List.of("WHEEL-ALIGNMENT-4-WHEEL"));
+            givenVehicle(VEHICLE_ID, 2);
+
+            assertThatCode(() -> service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR))
+                    .doesNotThrowAnyException();
+            assertThat(workorder.getResourceId()).isEqualTo(BAY_ID);
+        }
+    }
+
+    /**
+     * #2269: the override path (recordPositionChange, reached directly by
+     * overrideOperationalContext) enforces duty class even though it skips site and active — a lift's
+     * rated capacity is a physical limit an override cannot waive.
+     */
+    @Nested
+    @DisplayName("recordPositionChange refuses an over-class position (override path)")
+    class RecordPositionChangeDutyClass {
+
+        @Test
+        @DisplayName("#2269: an over-class bay is refused, giving the override the same outcome as the API")
+        void refusesAnOverClassBay() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenBay(BAY_ID, SITE_ID, 3, null);
+            givenVehicle(VEHICLE_ID, 7);
+
+            assertThatThrownBy(
+                            () -> service.recordPositionChange(workorder, ResourceType.BAY, BAY_ID, ACTOR, "Override"))
+                    .isInstanceOf(ServicePositionDutyClassExceededException.class);
+
+            verify(positionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("#2269: an over-class mobile unit is refused the same way")
+        void refusesAnOverClassMobileUnit() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenMobileUnit(MOBILE_UNIT_ID, SITE_ID, 3);
+            givenVehicle(VEHICLE_ID, 7);
+
+            assertThatThrownBy(() -> service.recordPositionChange(
+                            workorder, ResourceType.MOBILE_UNIT, MOBILE_UNIT_ID, ACTOR, "Override"))
+                    .isInstanceOf(ServicePositionDutyClassExceededException.class);
+        }
+
+        @Test
+        @DisplayName("#2269: a HOLD position is never duty-checked, even with a set vehicle")
+        void holdIsNeverDutyChecked() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenVehicle(VEHICLE_ID, 8);
+
+            assertThatCode(() -> service.recordPositionChange(workorder, ResourceType.HOLD, SITE_ID, ACTOR, "Parked"))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("#2269: within-ceiling override still applies the position")
+        void withinCeilingOverrideApplies() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenBay(BAY_ID, SITE_ID, 5, null);
+            givenVehicle(VEHICLE_ID, 3);
+
+            assertThatCode(() -> service.recordPositionChange(workorder, ResourceType.BAY, BAY_ID, ACTOR, "Override"))
+                    .doesNotThrowAnyException();
+            assertThat(savedPlacement().getResourceId()).isEqualTo(BAY_ID);
+        }
+
+        @Test
+        @DisplayName("#2280 F7: override naming the workorder's own over-class position is still refused, not"
+                + " let through by the unchanged-placement short-circuit")
+        void overrideNamingTheCurrentOverClassPositionIsRefused() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenBay(BAY_ID, SITE_ID, 3, null);
+            givenVehicle(VEHICLE_ID, 7);
+            givenCurrentPlacement(ResourceType.BAY, BAY_ID);
+
+            assertThatThrownBy(
+                            () -> service.recordPositionChange(workorder, ResourceType.BAY, BAY_ID, ACTOR, "Override"))
+                    .isInstanceOf(ServicePositionDutyClassExceededException.class);
+
+            verify(positionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("#2280 F7: naming the workorder's own within-class position is still a no-op — no history row")
+        void unchangedPlacementWithinClassStillReturnsEarlyWithNoHistoryRow() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setVehicleId(VEHICLE_ID);
+            givenBay(BAY_ID, SITE_ID, 5, null);
+            givenVehicle(VEHICLE_ID, 3);
+            givenCurrentPlacement(ResourceType.BAY, BAY_ID);
+
+            assertThatCode(() -> service.recordPositionChange(workorder, ResourceType.BAY, BAY_ID, ACTOR, "Override"))
+                    .doesNotThrowAnyException();
+
+            verify(positionRepository, never()).save(any());
+            verify(positionRepository, never()).saveAndFlush(any());
+        }
+    }
+
+    /**
      * #2001: the read-only companion to {@code resolvePosition}'s inactive check, for callers that
      * must not be unwound by an exception.
      */
@@ -822,6 +1070,95 @@ class ServicePositionServiceImplTest {
             when(extBayReplicaRepository.findById(unreplicatedBay)).thenReturn(Optional.empty());
 
             assertThat(service.isPositionActive(ResourceType.BAY, unreplicatedBay))
+                    .isTrue();
+        }
+    }
+
+    /**
+     * #2269: the read-only companion to {@code resolvePosition}'s duty-class check, used by
+     * {@code handleAssignmentUpdated} so an over-class inbound position is dropped rather than
+     * thrown, the same reasoning as {@link IsPositionActive}.
+     */
+    @Nested
+    @DisplayName("isWithinDutyClass")
+    class IsWithinDutyClass {
+
+        @Test
+        @DisplayName("a class 7 vehicle exceeds a bay with ceiling 3")
+        void class7ExceedsCeiling3Bay() {
+            givenBay(BAY_ID, SITE_ID, 3, null);
+            givenVehicle(VEHICLE_ID, 7);
+
+            assertThat(service.isWithinDutyClass(ResourceType.BAY, BAY_ID, VEHICLE_ID))
+                    .isFalse();
+        }
+
+        @Test
+        @DisplayName("a class 7 vehicle exceeds a mobile unit with ceiling 3")
+        void class7ExceedsCeiling3MobileUnit() {
+            givenMobileUnit(MOBILE_UNIT_ID, SITE_ID, 3);
+            givenVehicle(VEHICLE_ID, 7);
+
+            assertThat(service.isWithinDutyClass(ResourceType.MOBILE_UNIT, MOBILE_UNIT_ID, VEHICLE_ID))
+                    .isFalse();
+        }
+
+        @Test
+        @DisplayName("a vehicle within the ceiling is admitted")
+        void withinCeilingIsAdmitted() {
+            givenBay(BAY_ID, SITE_ID, 5, null);
+            givenVehicle(VEHICLE_ID, 3);
+
+            assertThat(service.isWithinDutyClass(ResourceType.BAY, BAY_ID, VEHICLE_ID))
+                    .isTrue();
+        }
+
+        @Test
+        @DisplayName("an unknown vehicle class is admitted")
+        void unknownVehicleClassIsAdmitted() {
+            givenBay(BAY_ID, SITE_ID, 3, null);
+            when(extVehicleReplicaRepository.findById(VEHICLE_ID)).thenReturn(Optional.empty());
+
+            assertThat(service.isWithinDutyClass(ResourceType.BAY, BAY_ID, VEHICLE_ID))
+                    .isTrue();
+        }
+
+        @Test
+        @DisplayName("a null ceiling is admitted")
+        void nullCeilingIsAdmitted() {
+            givenBay(BAY_ID, SITE_ID, null, null);
+            givenVehicle(VEHICLE_ID, 8);
+
+            assertThat(service.isWithinDutyClass(ResourceType.BAY, BAY_ID, VEHICLE_ID))
+                    .isTrue();
+        }
+
+        @Test
+        @DisplayName("a HOLD position is always within duty class: it is not exclusive")
+        void holdIsAlwaysWithinDutyClass() {
+            assertThat(service.isWithinDutyClass(ResourceType.HOLD, SITE_ID, VEHICLE_ID))
+                    .isTrue();
+        }
+
+        @Test
+        @DisplayName("a null resourceType, resourceId or vehicleId is within duty class")
+        void nullsAreWithinDutyClass() {
+            assertThat(service.isWithinDutyClass(null, BAY_ID, VEHICLE_ID)).isTrue();
+            assertThat(service.isWithinDutyClass(ResourceType.BAY, null, VEHICLE_ID))
+                    .isTrue();
+            givenBay(BAY_ID, SITE_ID, 3, null);
+            assertThat(service.isWithinDutyClass(ResourceType.BAY, BAY_ID, null))
+                    .isTrue();
+        }
+
+        @Test
+        @DisplayName("a position whose replica row has not arrived yet is within duty class")
+        void missingReplicaRowIsWithinDutyClass() {
+            UUID unreplicatedBay = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f330d");
+            when(extBayReplicaRepository.findById(unreplicatedBay)).thenReturn(Optional.empty());
+            givenVehicle(VEHICLE_ID, 8);
+
+            assertThat(service.isWithinDutyClass(ResourceType.BAY, unreplicatedBay, VEHICLE_ID))
                     .isTrue();
         }
     }

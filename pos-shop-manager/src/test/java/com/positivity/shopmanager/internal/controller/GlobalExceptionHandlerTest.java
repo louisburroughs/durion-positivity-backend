@@ -14,9 +14,11 @@ import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.OpeningSearchPolicyException;
+import com.positivity.shopmanager.internal.exception.RescheduleApprovalReasonRequiredException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
+import com.positivity.shopmanager.internal.exception.ServicePositionEligibilityException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
@@ -243,6 +245,23 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void mapsServicePositionEligibilityToUnprocessableContentWithFieldErrors() {
+        // DECISION-SHOPMGMT-021: every one of the four codes is 422, no override, with fieldErrors
+        // naming resourceId — distinct from SchedulingConflictException's 409 tier.
+        ResponseEntity<ApiError> response = handler.handleServicePositionEligibility(
+                new ServicePositionEligibilityException(
+                        ServicePositionEligibilityException.Code.SERVICE_POSITION_NOT_EQUIPPED,
+                        "Bay " + LOCATION_ID + " does not claim every specialty operation on this appointment"),
+                request());
+
+        assertEnvelope(response, HttpStatus.UNPROCESSABLE_CONTENT, "SERVICE_POSITION_NOT_EQUIPPED");
+        assertThat(response.getBody().message())
+                .isEqualTo("Bay " + LOCATION_ID + " does not claim every specialty operation on this appointment");
+        assertThat(response.getBody().fieldErrors()).hasSize(1);
+        assertThat(response.getBody().fieldErrors().getFirst().field()).isEqualTo("resourceId");
+    }
+
+    @Test
     void keepsACallerSuppliedCorrelationId() {
         ResponseEntity<ApiError> response = handler.handleAppointmentNotFound(
                 new AppointmentNotFoundException(APPOINTMENT_ID),
@@ -373,7 +392,16 @@ class GlobalExceptionHandlerTest {
                             request)),
                     Named.of("handleConflictOverrideState", (HandlerInvocation)
                             request -> sut.handleConflictOverrideState(
-                                    new ConflictOverrideStateException("already overridden"), request)));
+                                    new ConflictOverrideStateException("already overridden"), request)),
+                    Named.of("handleServicePositionEligibility", (HandlerInvocation)
+                            request -> sut.handleServicePositionEligibility(
+                                    new ServicePositionEligibilityException(
+                                            ServicePositionEligibilityException.Code.SERVICE_POSITION_INVALID,
+                                            "BAY " + LOCATION_ID + " is unknown"),
+                                    request)),
+                    Named.of("handleRescheduleApprovalReasonRequired", (HandlerInvocation)
+                            request -> sut.handleRescheduleApprovalReasonRequired(
+                                    new RescheduleApprovalReasonRequiredException(), request)));
         }
 
         @ParameterizedTest

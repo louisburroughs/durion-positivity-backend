@@ -31,6 +31,9 @@ public interface ServicePositionService {
      *     or one at another site
      * @throws com.positivity.workorder.internal.exception.ServicePositionOccupiedException an exclusive
      *     position already holds another open workorder
+     * @throws com.positivity.workorder.internal.exception.ServicePositionDutyClassExceededException the
+     *     vehicle's GVWR class is above the position's {@code maxDutyClass} (DECISION-SHOPMGMT-021 rule
+     *     3, #2269); skipped when either class is unknown
      */
     @NonNull
     ServicePositionResponse assignPosition(
@@ -91,6 +94,10 @@ public interface ServicePositionService {
      * @param reason       why, when known
      * @throws com.positivity.workorder.internal.exception.ServicePositionOccupiedException an exclusive
      *     position already holds another open workorder
+     * @throws com.positivity.workorder.internal.exception.ServicePositionDutyClassExceededException the
+     *     workorder's vehicle GVWR class is above the position's {@code maxDutyClass}
+     *     (DECISION-SHOPMGMT-021 rule 3, #2269), so the override path refuses this the same way it
+     *     already refuses an occupied position; skipped when either class is unknown
      */
     void recordPositionChange(
             @NonNull Workorder workorder,
@@ -134,6 +141,23 @@ public interface ServicePositionService {
      * replica row that positively says inactive answers {@code false}.
      */
     boolean isPositionActive(@Nullable ResourceType resourceType, @Nullable UUID resourceId);
+
+    /**
+     * Whether a bay or mobile unit's duty-class ceiling admits the given vehicle, asked without an
+     * exception (DECISION-SHOPMGMT-021 rule 3, #2269).
+     *
+     * <p>The companion to {@link #isPositionActive} for the same reason it exists: the inbound
+     * pos-shop-manager assignment fact applies a location, a position and a set of mechanics in one
+     * transaction, and a refusal thrown from inside it would cost the whole update rather than the
+     * position alone.
+     *
+     * <p>Answers {@code true} for an unset position, for {@link ResourceType#HOLD}, for a position
+     * whose replica row has not arrived yet, and whenever either the position's {@code maxDutyClass}
+     * or the vehicle's {@code gvwrClass} is unknown (spec D11) — an unknown class never refuses.
+     * Answers {@code false} only when both classes are known and the vehicle's exceeds the ceiling.
+     * Never checks specialty capability: placement enforces duty class only.
+     */
+    boolean isWithinDutyClass(@Nullable ResourceType resourceType, @Nullable UUID resourceId, @Nullable UUID vehicleId);
 
     /**
      * Persist a workorder whose position fields were just changed, turning a lost race against

@@ -33,6 +33,7 @@ import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtBaySpecialtyMapReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtCatalogServiceReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtCatalogServiceSkillReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
@@ -109,6 +110,9 @@ class OpeningSearchServiceImplTest {
     @Mock
     private ExtVehicleReplicaRepository vehicleRepository;
 
+    @Mock
+    private ExtBaySpecialtyMapReplicaRepository specialtyMapRepository;
+
     private OpeningSearchServiceImpl service;
 
     private final List<Appointment> held = new ArrayList<>();
@@ -130,7 +134,8 @@ class OpeningSearchServiceImplTest {
                         catalogServiceRepository,
                         catalogServiceSkillRepository,
                         credentialRepository,
-                        vehicleRepository));
+                        vehicleRepository),
+                new BayEligibilityService(specialtyMapRepository, catalogServiceRepository));
         lenient()
                 .when(locationRepository.findById(LOCATION))
                 .thenReturn(Optional.of(location("America/New_York", HOURS, CLOSURES, 15, 15)));
@@ -205,8 +210,10 @@ class OpeningSearchServiceImplTest {
         // Day opens 08:00; the 15-minute check-in buffer is honoured against earliestStart 09:00 → 09:00 exactly.
         assertThat(first.getStartAt()).isEqualTo(TUE_0900);
         assertThat(first.getEndAt()).isEqualTo(TUE_0900.plusSeconds(90 * 60));
-        assertThat(first.getBayId()).isEqualTo(BAY_1);
-        assertThat(first.getBayName()).isEqualTo("Bay 1");
+        // D14 rule 6: at the same start, Bay 2 (maxDutyClass 3) is the better fit for a class-2
+        // vehicle than Bay 1 (unconstrained, read as class 8) — the weak best-fit tiebreak.
+        assertThat(first.getBayId()).isEqualTo(BAY_2);
+        assertThat(first.getBayName()).isEqualTo("Bay 2");
         assertThat(first.getTechnicianId()).isEqualTo(TECH_A);
         assertThat(first.getTechnicianRosterGrain()).isEqualTo("DAY");
         assertThat(first.getSkillFulfillment()).isEqualTo(SkillFulfillment.CERTIFIED);
@@ -363,8 +370,10 @@ class OpeningSearchServiceImplTest {
         OpeningSearchResponse response = service.search(
                 new OpeningSearchQuery(LOCATION, List.of(BRAKE_JOB), 60, TUE_0900, VEHICLE, null, 1, 10));
 
-        // Tuesday, three openings at 09:00: Bay 1, Bay 2, then the rack.
-        assertThat(response.getOpenings()).extracting(Opening::getBayId).containsExactly(BAY_1, BAY_2, RACK);
+        // Tuesday, three openings at 09:00: the general bays first (D14), Bay 2 ahead of Bay 1 on
+        // the best-fit tiebreak (maxDutyClass 3 fits a class-2 vehicle tighter than Bay 1's
+        // unconstrained ceiling, read as class 8), then the rack last (specialty doing general work).
+        assertThat(response.getOpenings()).extracting(Opening::getBayId).containsExactly(BAY_2, BAY_1, RACK);
     }
 
     @Test
@@ -405,6 +414,64 @@ class OpeningSearchServiceImplTest {
             assertThat(opening.getSkillFulfillment()).isEqualTo(SkillFulfillment.CERTIFIED);
         });
         assertThat(response.getVehicleGvwrClass()).isNull();
+    }
+
+    // ── DECISION-SHOPMGMT-021: the specialty map, not active-bay claims, defines specialty ────────
+
+    @Test
+    @DisplayName("DECISION-SHOPMGMT-021 rule 4: a location with no alignment bay still refuses the map's specialty"
+            + " operation to general bays, once the map has arrived — closing the pre-story gap")
+    void specialtyMapDefinesSpecialtyEvenWithNoClaimingBayAtLocation() {
+        // Only two general bays here — no alignment rack — but the tenant's specialty map (present,
+        // count > 0) still names WHEEL-ALIGNMENT-4-WHEEL as ALIGNMENT-only, so general bays may not
+        // absorb it; before this story the empty-claimants fallback would have offered it here.
+        when(bayRepository.findActiveByLocationOrdered(LOCATION))
+                .thenReturn(List.of(bay(BAY_1, "Bay 1", List.of(), null), bay(BAY_2, "Bay 2", List.of(), null)));
+        when(specialtyMapRepository.count()).thenReturn(1L);
+        when(specialtyMapRepository.existsByOperationCode("WHEEL-ALIGNMENT-4-WHEEL"))
+                .thenReturn(true);
+
+        OpeningSearchResponse response =
+                service.search(new OpeningSearchQuery(LOCATION, List.of(ALIGNMENT), 60, TUE_0900, null, null, 1, 10));
+
+        assertThat(response.getOpenings()).isEmpty();
+        assertThat(response.getNoOpeningReason()).isEqualTo(NoOpeningReason.NO_ELIGIBLE_BAY_AT_LOCATION);
+        assertThat(response.getBayEligibility().getExcludedByCapability()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("DECISION-SHOPMGMT-021: with the map present, an operation it does not name is still general work")
+    void specialtyMapPresentLeavesUnlistedOperationsGeneral() {
+        when(specialtyMapRepository.count()).thenReturn(1L);
+        when(specialtyMapRepository.existsByOperationCode("BRAKE-PAD-REPLACE-FRONT"))
+                .thenReturn(false);
+
+        OpeningSearchResponse response = service.search(query(BRAKE_JOB, 90, TUE_0900));
+
+        assertThat(response.getBayEligibility().getEligibleBays()).isEqualTo(3);
+        assertThat(response.getBayEligibility().getExcludedByCapability()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("D14 rule 6: at equal times and specialty group, the smallest adequate maxDutyClass ranks first")
+    void bestFitTiebreakPrefersSmallestAdequateBay() {
+        UUID roomy = UUID.fromString("01960005-0000-7000-8000-0000000000b4");
+        UUID snug = UUID.fromString("01960005-0000-7000-8000-0000000000b5");
+        when(bayRepository.findActiveByLocationOrdered(LOCATION))
+                .thenReturn(List.of(bay(roomy, "Roomy", List.of(), 8), bay(snug, "Snug", List.of(), 4)));
+        when(vehicleRepository.findById(VEHICLE))
+                .thenReturn(Optional.of(ExtVehicleReplica.builder()
+                        .vehicleId(VEHICLE)
+                        .gvwrClass(3)
+                        .build()));
+        requirements.clear();
+
+        OpeningSearchResponse response = service.search(
+                new OpeningSearchQuery(LOCATION, List.of(BRAKE_JOB), 60, TUE_0900, VEHICLE, null, 1, 10));
+
+        // Both bays are eligible (class 3 <= 4 and <= 8) and free at the same 09:00 start; the
+        // snugger (maxDutyClass 4) bay is the better fit and ranks first.
+        assertThat(response.getOpenings()).extracting(Opening::getBayId).containsExactly(snug, roomy);
     }
 
     // ── AC8 / D10.2: staffing advisory alongside a non-empty list ───────────────────────────────
@@ -667,6 +734,9 @@ class OpeningSearchServiceImplTest {
                 .active(true)
                 .serviceCapabilityCodes(codes)
                 .maxDutyClass(maxDutyClass)
+                // Every seeded BayType but WASH_DETAIL takes general work (D14); the WASH_DETAIL
+                // scenario below builds its own bay explicitly and leaves this false.
+                .acceptsGeneralWork(true)
                 .build();
     }
 

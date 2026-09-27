@@ -7,9 +7,11 @@ import com.positivity.workorder.internal.dto.ServicePositionAssignmentRecord;
 import com.positivity.workorder.internal.dto.ServicePositionResponse;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
+import com.positivity.workorder.internal.entity.ExtVehicleReplica;
 import com.positivity.workorder.internal.entity.ServicePositionAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
+import com.positivity.workorder.internal.exception.ServicePositionDutyClassExceededException;
 import com.positivity.workorder.internal.exception.ServicePositionInactiveException;
 import com.positivity.workorder.internal.exception.ServicePositionInvalidException;
 import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
@@ -17,6 +19,7 @@ import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.workorder.internal.repository.ServicePositionAssignmentRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -59,6 +62,7 @@ public class ServicePositionServiceImpl implements ServicePositionService {
     private final TechnicianAssignmentRepository technicianAssignmentRepository;
     private final ExtBayReplicaRepository extBayReplicaRepository;
     private final ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
+    private final ExtVehicleReplicaRepository extVehicleReplicaRepository;
     private final WorkorderFactPublisher workorderFactPublisher;
 
     private WorkorderStateMachine stateMachine;
@@ -203,6 +207,19 @@ public class ServicePositionServiceImpl implements ServicePositionService {
             }
         }
 
+        if (effectiveType != null && effectiveType.isExclusive()) {
+            // #2269/#2280 F7: non-negotiable on every path that reaches here, override included — a
+            // lift's rated capacity is a physical limit, not an eligibility a manager's exception can
+            // waive the way the site and active checks (assignPosition-only, see resolvePosition) can
+            // be. assignPosition already refused this in resolvePosition before recordPositionChange
+            // is ever reached, so the check here is a no-op for that path and the one that matters for
+            // overrideOperationalContext, which calls straight in — including naming the placement the
+            // workorder is already on, which is exactly why this runs before the unchanged-placement
+            // short-circuit below rather than after it: an over-class position never becomes
+            // acceptable just because it is also the current one.
+            requireDutyClassWithinCeiling(workorder, effectiveType, resourceId);
+        }
+
         Optional<ServicePositionAssignment> currentPlacement =
                 positionRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
 
@@ -324,6 +341,7 @@ public class ServicePositionServiceImpl implements ServicePositionService {
                     .orElseThrow(() -> new ServicePositionInvalidException("Unknown bay " + requestedId));
             requireSameSite(resourceType, requestedId, bay.getLocationId(), siteId);
             requireActive(resourceType, requestedId, bay.isActive(), bay.getName());
+            requireDutyClass(resourceType, requestedId, bay.getMaxDutyClass(), workorder.getVehicleId(), bay.getName());
             return requestedId;
         }
 
@@ -332,6 +350,7 @@ public class ServicePositionServiceImpl implements ServicePositionService {
                 .orElseThrow(() -> new ServicePositionInvalidException("Unknown mobile unit " + requestedId));
         requireSameSite(resourceType, requestedId, unit.getBaseLocationId(), siteId);
         requireActive(resourceType, requestedId, unit.isActive(), unit.getName());
+        requireDutyClass(resourceType, requestedId, unit.getMaxDutyClass(), workorder.getVehicleId(), unit.getName());
         return requestedId;
     }
 
@@ -365,6 +384,77 @@ public class ServicePositionServiceImpl implements ServicePositionService {
         if (!active) {
             throw new ServicePositionInactiveException(resourceType, resourceId, name);
         }
+    }
+
+    /**
+     * Refuse a position whose duty-class ceiling the vehicle's GVWR class exceeds
+     * (DECISION-SHOPMGMT-021 rule 3, #2269).
+     *
+     * <p>Checked after site and active so a position at the wrong site, or one out of service, is
+     * still reported as that mistake first — the same ordering {@link #requireActive} follows.
+     * Neither an unknown vehicle class nor a null ceiling refuses (spec D11): the check answers only
+     * when both sides are known. This method never looks at specialty capability — placement adds
+     * duty class only, never the bay-type specialty checks pos-shop-manager enforces at submit.
+     */
+    private void requireDutyClass(
+            @NonNull ResourceType resourceType,
+            @NonNull UUID resourceId,
+            @Nullable Integer maxDutyClass,
+            @Nullable UUID vehicleId,
+            @Nullable String name) {
+        if (maxDutyClass == null) {
+            return;
+        }
+        Integer vehicleClass = resolveVehicleGvwrClass(vehicleId);
+        if (vehicleClass == null) {
+            return;
+        }
+        if (vehicleClass > maxDutyClass) {
+            throw new ServicePositionDutyClassExceededException(
+                    resourceType, resourceId, name, vehicleClass, maxDutyClass);
+        }
+    }
+
+    /**
+     * The {@link #requireDutyClass} check for a caller that has not already fetched the bay or
+     * mobile-unit replica — {@link #recordPositionChange}, reached directly by
+     * {@code overrideOperationalContext} without {@link #resolvePosition}'s site/active/duty-class
+     * validation (#2269). Re-queries the ceiling by id; harmless extra reads for
+     * {@code assignPosition}, whose {@link #resolvePosition} call already refused an over-class
+     * vehicle before this is ever reached.
+     */
+    private void requireDutyClassWithinCeiling(
+            @NonNull Workorder workorder, @NonNull ResourceType resourceType, @NonNull UUID resourceId) {
+        Integer maxDutyClass = resolveMaxDutyClass(resourceType, resourceId);
+        requireDutyClass(resourceType, resourceId, maxDutyClass, workorder.getVehicleId(), null);
+    }
+
+    @Nullable
+    private Integer resolveMaxDutyClass(@NonNull ResourceType resourceType, @NonNull UUID resourceId) {
+        if (resourceType == ResourceType.BAY) {
+            return extBayReplicaRepository
+                    .findById(resourceId)
+                    .map(ExtBayReplica::getMaxDutyClass)
+                    .orElse(null);
+        }
+        if (resourceType == ResourceType.MOBILE_UNIT) {
+            return extMobileUnitReplicaRepository
+                    .findById(resourceId)
+                    .map(ExtMobileUnitReplica::getMaxDutyClass)
+                    .orElse(null);
+        }
+        return null;
+    }
+
+    @Nullable
+    private Integer resolveVehicleGvwrClass(@Nullable UUID vehicleId) {
+        if (vehicleId == null) {
+            return null;
+        }
+        return extVehicleReplicaRepository
+                .findById(vehicleId)
+                .map(ExtVehicleReplica::getGvwrClass)
+                .orElse(null);
     }
 
     private void requirePositionFree(
@@ -411,6 +501,28 @@ public class ServicePositionServiceImpl implements ServicePositionService {
                 .findById(resourceId)
                 .map(ExtMobileUnitReplica::isActive)
                 .orElse(true);
+    }
+
+    /**
+     * Whether a bay or mobile unit's duty-class ceiling admits the vehicle, for the paths that must
+     * not throw (DECISION-SHOPMGMT-021 rule 3, #2269).
+     *
+     * <p>Answers {@code true} for anything that is not an exclusive position, for a position whose
+     * replica row has not arrived yet, and whenever either class is unknown — an unknown class never
+     * refuses (spec D11). Only a known vehicle class above a known ceiling answers {@code false}.
+     */
+    @Override
+    public boolean isWithinDutyClass(
+            @Nullable ResourceType resourceType, @Nullable UUID resourceId, @Nullable UUID vehicleId) {
+        if (resourceId == null || resourceType == null || !resourceType.isExclusive()) {
+            return true;
+        }
+        Integer maxDutyClass = resolveMaxDutyClass(resourceType, resourceId);
+        Integer vehicleClass = resolveVehicleGvwrClass(vehicleId);
+        if (maxDutyClass == null || vehicleClass == null) {
+            return true;
+        }
+        return vehicleClass <= maxDutyClass;
     }
 
     /**

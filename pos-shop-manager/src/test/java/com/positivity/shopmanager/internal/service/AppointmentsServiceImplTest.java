@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -36,6 +37,8 @@ import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchExce
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
@@ -46,6 +49,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -94,6 +98,9 @@ class AppointmentsServiceImplTest {
 
     private AppointmentsServiceImpl appointmentsService;
 
+    private final AffectedAppointmentEvaluator affectedAppointmentEvaluator = mock(AffectedAppointmentEvaluator.class);
+    private final RescheduleApprovalGuard rescheduleApprovalGuard = mock(RescheduleApprovalGuard.class);
+
     private final SchedulingConflictEvaluator conflictEvaluator =
             org.mockito.Mockito.mock(SchedulingConflictEvaluator.class);
     private final SchedulingConflictRecorder conflictRecorder =
@@ -118,7 +125,15 @@ class AppointmentsServiceImplTest {
                 workOrderAppointmentMappingRepository,
                 conflictEvaluator,
                 conflictRecorder,
-                new BookingHorizonPolicy(180));
+                new BookingHorizonPolicy(180),
+                mock(ExtBayReplicaRepository.class),
+                mock(ExtMobileUnitReplicaRepository.class),
+                mock(BayEligibilityService.class),
+                mock(SkillRequirementResolver.class),
+                affectedAppointmentEvaluator,
+                rescheduleApprovalGuard);
+
+        lenient().when(affectedAppointmentEvaluator.evaluate(any(), any())).thenReturn(Map.of());
     }
 
     @Test
@@ -136,7 +151,7 @@ class AppointmentsServiceImplTest {
         request.setNewEndAt(newEnd);
         request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId))
                 .thenReturn(List.<AppointmentServiceRequest>of());
@@ -168,7 +183,7 @@ class AppointmentsServiceImplTest {
         request.setNewEndAt(Instant.parse("2026-03-11T11:00:00Z"));
         request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.empty());
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.empty());
 
         assertThrows(
                 AppointmentNotFoundException.class,
@@ -188,7 +203,7 @@ class AppointmentsServiceImplTest {
         request.setNewEndAt(Instant.parse("2026-03-11T11:00:00Z"));
         request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
 
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.of(appointment));
 
         assertThrows(
                 AppointmentStateException.class,
@@ -380,7 +395,6 @@ class AppointmentsServiceImplTest {
         request.setLocationId(locationId);
         request.setCrmCustomerId(customerId);
         request.setCrmVehicleId(vehicleId);
-        request.setResourceId("tech-1");
         request.setStartAt(Instant.parse("2026-03-10T10:00:00Z"));
         request.setEndAt(Instant.parse("2026-03-10T11:00:00Z"));
         request.setServiceRequestIds(List.of(serviceRequestId));
@@ -630,7 +644,6 @@ class AppointmentsServiceImplTest {
         appointment.setAppointmentId(appointmentId);
         appointment.setStatus(status);
         appointment.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        appointment.setResourceId("resource-1");
         appointment.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
         appointment.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
         appointment.setStartAt(startAt);

@@ -32,7 +32,10 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    // 542 / 92: catalog v92 added invoice:payment:override (540) and
+    // 543 / 93: catalog v93 added appointments:reschedule:approve (542, #2270 DECISION-SHOPMGMT-004)
+    // — approving a third or later non-exempt reschedule of one appointment, enforced only via a
+    // conditional @PreAuthorize on RescheduleApprovalGuard, on top of v92 which added
+    // invoice:payment:override (540) and
     // invoice:receipt:reprint_override (541, #2226 BILL-DEC-010) — hand-assigned immediately
     // after v91, because both are enforced only via an in-body SecurityContextHelper.hasAuthority
     // check (PaymentReversalServiceImpl / ReceiptServiceImpl) and never a @PreAuthorize
@@ -53,8 +56,8 @@ class PermissionCodeTest {
     // people:employee_pii:view (519), v82's crm:fact:replay (518), v81's people:self:view (517)
     // and v80's catalog:service:ingest (516). Both numbers move together by design: the version
     // bump is what tells a running gateway its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 542;
-    private static final int EXPECTED_CATALOG_VERSION = 92;
+    private static final int EXPECTED_PERMISSION_COUNT = 543;
+    private static final int EXPECTED_CATALOG_VERSION = 93;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

@@ -4,6 +4,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
+import com.positivity.shopmanager.internal.enums.ResourceType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -48,6 +49,26 @@ public class AppointmentCreateRequest {
             example = "BAY-04",
             requiredMode = NOT_REQUIRED)
     private String resourceId;
+
+    /**
+     * DECISION-SHOPMGMT-003/-021/-011: which axis {@code resourceId} names. Submit is authoritative,
+     * so this cannot be used to skip eligibility: leaving {@code resourceId} unset is the only way
+     * to book {@code UNASSIGNED}, and naming a real {@code resourceId} without this field infers
+     * {@code BAY} or {@code MOBILE_UNIT} from whichever replica holds that id and validates it all
+     * the same — it does not bypass the check. Setting {@code UNASSIGNED} together with a
+     * {@code resourceId} is refused as contradictory (400).
+     */
+    @Schema(
+            description = "Which axis resourceId names. Leave both unset to book UNASSIGNED. When resourceId is set"
+                    + " and this is omitted, the type is inferred from the replicas (an ext_bay row -> BAY, else an"
+                    + " ext_mobile_unit row -> MOBILE_UNIT; neither is 422 SERVICE_POSITION_INVALID) and validated"
+                    + " exactly as if stated — omitting it is not a way to skip DECISION-SHOPMGMT-021 eligibility."
+                    + " BAY runs the full eligibility rule (specialty, general work, duty class); MOBILE_UNIT runs"
+                    + " existence, location and active checks only. resourceId is required for BAY/MOBILE_UNIT (400"
+                    + " otherwise), and UNASSIGNED with a resourceId set is refused as contradictory (400).",
+            example = "BAY",
+            requiredMode = NOT_REQUIRED)
+    private ResourceType resourceType;
 
     @Schema(
             description = "Appointment start instant in UTC (ISO-8601)",

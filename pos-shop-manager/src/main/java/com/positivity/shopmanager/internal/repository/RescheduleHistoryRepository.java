@@ -43,4 +43,17 @@ public interface RescheduleHistoryRepository extends JpaRepository<RescheduleHis
     @Query(
             "SELECT COUNT(history) FROM RescheduleHistory history WHERE history.appointment.appointmentId = :appointmentId")
     long countByAppointmentId(@Param("appointmentId") @NonNull UUID appointmentId);
+
+    /**
+     * DECISION-SHOPMGMT-004: the count of this appointment's reschedules that count against its
+     * 2-free-reschedules allowance — every one except a shop-caused reschedule (reason {@code
+     * EQUIPMENT_ISSUE}, or the appointment was already affected, DECISION-SHOPMGMT-022).
+     */
+    @Query("""
+            SELECT COUNT(history)
+            FROM RescheduleHistory history
+            WHERE history.appointment.appointmentId = :appointmentId
+              AND history.countsAgainstAllowance = true
+            """)
+    long countByAppointmentIdAndCountsAgainstAllowanceTrue(@Param("appointmentId") @NonNull UUID appointmentId);
 }

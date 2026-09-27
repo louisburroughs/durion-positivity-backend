@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -16,6 +17,8 @@ import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
@@ -25,6 +28,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,6 +89,9 @@ class AppointmentsServiceImplWorkorderActualsTest {
 
     private AppointmentsServiceImpl appointmentsService;
 
+    private final AffectedAppointmentEvaluator affectedAppointmentEvaluator = mock(AffectedAppointmentEvaluator.class);
+    private final RescheduleApprovalGuard rescheduleApprovalGuard = mock(RescheduleApprovalGuard.class);
+
     private final SchedulingConflictEvaluator conflictEvaluator =
             org.mockito.Mockito.mock(SchedulingConflictEvaluator.class);
     private final SchedulingConflictRecorder conflictRecorder =
@@ -109,7 +116,15 @@ class AppointmentsServiceImplWorkorderActualsTest {
                 workOrderAppointmentMappingRepository,
                 conflictEvaluator,
                 conflictRecorder,
-                new BookingHorizonPolicy(180));
+                new BookingHorizonPolicy(180),
+                mock(ExtBayReplicaRepository.class),
+                mock(ExtMobileUnitReplicaRepository.class),
+                mock(BayEligibilityService.class),
+                mock(SkillRequirementResolver.class),
+                affectedAppointmentEvaluator,
+                rescheduleApprovalGuard);
+
+        lenient().when(affectedAppointmentEvaluator.evaluate(any(), any())).thenReturn(Map.of());
 
         when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(APPOINTMENT_ID))
                 .thenReturn(List.<AppointmentServiceRequest>of());
@@ -203,7 +218,7 @@ class AppointmentsServiceImplWorkorderActualsTest {
     @DisplayName("AC2 - a reschedule moves the planned window and leaves the actuals untouched")
     void rescheduleAppointment_movesPlannedWindow_leavesActualsUnaffected() {
         Appointment appointment = buildAppointment(AppointmentStatus.SCHEDULED, PLANNED_START, PLANNED_END);
-        when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Instant actualStart = Instant.parse("2026-06-18T09:05:00Z");
@@ -236,7 +251,6 @@ class AppointmentsServiceImplWorkorderActualsTest {
         appointment.setAppointmentId(APPOINTMENT_ID);
         appointment.setStatus(status);
         appointment.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        appointment.setResourceId("BAY-01");
         appointment.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
         appointment.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
         appointment.setStartAt(startAt);

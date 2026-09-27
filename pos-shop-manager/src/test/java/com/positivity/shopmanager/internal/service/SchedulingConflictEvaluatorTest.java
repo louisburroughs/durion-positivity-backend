@@ -398,6 +398,37 @@ class SchedulingConflictEvaluatorTest {
         }
 
         @Test
+        @DisplayName("DECISION-SHOPMGMT-021: a WASH_DETAIL-style bay (accepts_general_work=false) never counts"
+                + " toward the divisor, even though it is active")
+        void baysThatTakeNoGeneralWorkAreExcludedFromTheDivisor() {
+            // Two active bays, but only one accepts general work — same shape as
+            // fillingTheLastOfTwoBaysIsNearCapacity_soft, so a divisor that still counted both
+            // would read as 1-of-2 (50%, below NEAR_CAPACITY_RATIO) instead of 1-of-1 (100%).
+            ExtBayReplica generalBay = ExtBayReplica.builder()
+                    .bayId(UUID.randomUUID())
+                    .locationId(LOCATION)
+                    .active(true)
+                    .acceptsGeneralWork(true)
+                    .build();
+            ExtBayReplica washBay = ExtBayReplica.builder()
+                    .bayId(UUID.randomUUID())
+                    .locationId(LOCATION)
+                    .active(true)
+                    .acceptsGeneralWork(false)
+                    .build();
+            when(extBayReplicaRepository.findActiveByLocationOrdered(LOCATION))
+                    .thenReturn(List.of(generalBay, washBay));
+            when(appointmentRepository.findHeldOverlappingAtLocation(eq(LOCATION), eq(TUE_10), eq(TUE_11), any()))
+                    .thenReturn(List.of(Appointment.builder()
+                            .appointmentId(UUID.randomUUID())
+                            .build()));
+
+            List<DetectedConflict> detected = evaluator.evaluate(attempt(TUE_10, TUE_11, null));
+
+            assertThat(codes(detected)).containsExactly("FACILITY_NEAR_CAPACITY");
+        }
+
+        @Test
         void noBaysReplicatedMeansNoCapacityJudgement() {
             when(extBayReplicaRepository.findActiveByLocationOrdered(LOCATION)).thenReturn(List.of());
             assertThat(evaluator.evaluate(attempt(TUE_10, TUE_11, null))).isEmpty();
@@ -737,6 +768,7 @@ class SchedulingConflictEvaluatorTest {
                         .bayId(UUID.randomUUID())
                         .locationId(LOCATION)
                         .active(true)
+                        .acceptsGeneralWork(true)
                         .build())
                 .collect(Collectors.toList());
     }

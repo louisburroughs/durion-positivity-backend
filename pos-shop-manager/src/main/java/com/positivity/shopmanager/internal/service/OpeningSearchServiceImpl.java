@@ -60,17 +60,21 @@ import org.springframework.transaction.annotation.Transactional;
  * credentials, and one appointment read spanning the whole horizon. The per-day, per-bay work is
  * then in memory.
  *
- * <p>Eligibility (CAP-325 D13/D14): a bay is eligible for an operation it claims; an operation no
- * bay at the location claims is general work — a definite answer, not an unknown — which every bay
- * but a {@code WASH_DETAIL} one may do, general bays ranked before specialty bays so the rack stays
- * free for alignment work without the shop ever reading as full. A bay whose {@code maxDutyClass}
- * is below the vehicle's GVWR class is out, and counted separately from a capability miss.
+ * <p>Eligibility (CAP-325 D13/D14, DECISION-SHOPMGMT-021) is {@link BayEligibilityService}'s, the
+ * same function appointment submit and reschedule refuse with: an operation is specialty iff the
+ * tenant's bay-type specialty map names it, and a bay must claim every specialty operation on the
+ * appointment; an operation the map does not name is general work, open to any bay whose {@code
+ * accepts_general_work} is true (false only for {@code WASH_DETAIL}). A bay whose {@code
+ * maxDutyClass} is below the vehicle's GVWR class is out, and counted separately from a capability
+ * miss.
  *
  * <p>An opening is the earliest start in a free gap of one eligible bay at which the job, with the
  * location's check-in buffer before and cleanup buffer after, fits inside the gap and inside the
  * day's operating window, and at which a technician rostered that day is not already on an
- * overlapping appointment. One opening per gap per bay; ranked earliest first, CERTIFIED before
- * AWAITING at equal starts.
+ * overlapping appointment. One opening per gap per bay; ranked earliest start first, then
+ * CERTIFIED before AWAITING, then general bays before specialty bays doing general work (D14 rule
+ * 6), then a weak best-fit tiebreak (the smallest adequate {@code maxDutyClass}, a null ceiling
+ * read as class 8), then name. Ranking never changes eligibility.
  *
  * <p>Skill (CAP-329, D10): competence never withholds an opening. A technician holding every
  * required skill on the facility-local date is preferred and the opening reads CERTIFIED; otherwise
@@ -103,6 +107,7 @@ public class OpeningSearchServiceImpl implements OpeningSearchService {
     private final AppointmentRepository appointmentRepository;
     private final LocationHoursParser locationHoursParser;
     private final SkillRequirementResolver skillRequirementResolver;
+    private final BayEligibilityService bayEligibilityService;
 
     @Override
     @Transactional(readOnly = true)
@@ -138,7 +143,19 @@ public class OpeningSearchServiceImpl implements OpeningSearchService {
         List<OpeningConstraint> constraints = constraints(!configured.isEmpty());
 
         List<ExtBayReplica> bays = bayRepository.findActiveByLocationOrdered(query.locationId());
-        Eligibility eligibility = eligibleBays(bays, services.values(), gvwrClass);
+        // loadServices already refused any serviceId with no catalog row at all (ResourceNotFoundException),
+        // so "unresolved" here means only a resolved row with a blank/null operationCode (F6, #2280) — still
+        // general work, and BookedOperations must carry that even though it drops out of the code set below.
+        List<String> normalizedCodes = services.values().stream()
+                .map(ExtCatalogServiceReplica::getOperationCode)
+                .map(SkillRequirementResolver::normalize)
+                .toList();
+        Set<String> operationCodes = normalizedCodes.stream()
+                .filter(code -> !code.isEmpty())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        boolean hasUnresolvedOperation = normalizedCodes.stream().anyMatch(String::isEmpty);
+        BayEligibilityService.Eligibility eligibility = bayEligibilityService.eligibleBays(
+                bays, new BayEligibilityService.BookedOperations(operationCodes, hasUnresolvedOperation), gvwrClass);
 
         LocalDate firstDate = query.earliestStart().atZone(zone).toLocalDate();
         Instant horizonEnd =
@@ -153,7 +170,7 @@ public class OpeningSearchServiceImpl implements OpeningSearchService {
         response.setSearchedTo(horizonEnd);
         response.setVehicleGvwrClass(gvwrClass);
         response.setRequiredSkillCodes(List.copyOf(required.keySet()));
-        response.setBayEligibility(eligibility.summary());
+        response.setBayEligibility(toBayEligibilitySummary(eligibility));
         response.setGeneratedAt(Instant.now(clock));
 
         if (eligibility.eligible().isEmpty()) {
@@ -235,13 +252,20 @@ public class OpeningSearchServiceImpl implements OpeningSearchService {
         }
 
         Set<UUID> specialtyBays = eligibility.eligible().stream()
-                .filter(bay -> !isGeneral(bay))
+                .filter(bay -> !BayEligibilityService.isGeneral(bay))
                 .map(ExtBayReplica::getBayId)
                 .collect(Collectors.toSet());
+        // D14 rule 6/spec D14: best-fit is a *weak* tiebreak — the smallest adequate maxDutyClass,
+        // a null ceiling read as class 8 — applied only within a start/skill/specialty group, never
+        // ahead of it. displayOrder is not yet a replica field on this branch, so name stands in.
+        Map<UUID, Integer> dutyClassCeilingByBay = eligibility.eligible().stream()
+                .collect(Collectors.toMap(
+                        ExtBayReplica::getBayId, bay -> Objects.requireNonNullElse(bay.getMaxDutyClass(), 8)));
         openings.sort(Comparator.comparing(Opening::getStartAt)
                 .thenComparing(opening -> opening.getSkillFulfillment() == SkillFulfillment.CERTIFIED ? 0 : 1)
                 // D14: a specialty bay doing general work ranks after the general bays at the same start.
                 .thenComparing(opening -> specialtyBays.contains(opening.getBayId()) ? 1 : 0)
+                .thenComparing(opening -> dutyClassCeilingByBay.getOrDefault(opening.getBayId(), 8))
                 .thenComparing(opening -> Objects.requireNonNullElse(opening.getBayName(), ""))
                 .thenComparing(Opening::getBayId));
         response.setOpenings(
@@ -306,63 +330,16 @@ public class OpeningSearchServiceImpl implements OpeningSearchService {
         return services;
     }
 
-    // ── bay eligibility (CAP-325 D13/D14) ───────────────────────────────────────────────────────
+    // ── bay eligibility (CAP-325 D13/D14, DECISION-SHOPMGMT-021) ───────────────────────────────────
+    // Filtering itself lives in BayEligibilityService, shared with appointment submit/reschedule.
 
-    record Eligibility(List<ExtBayReplica> eligible, int active, int byCapability, int byDutyClass) {
-        BayEligibility summary() {
-            return BayEligibility.builder()
-                    .activeBays(active)
-                    .eligibleBays(eligible.size())
-                    .excludedByCapability(byCapability)
-                    .excludedByDutyClass(byDutyClass)
-                    .build();
-        }
-    }
-
-    static Eligibility eligibleBays(
-            List<ExtBayReplica> bays, Iterable<ExtCatalogServiceReplica> services, @Nullable Integer gvwrClass) {
-        List<ExtBayReplica> eligible = new ArrayList<>(bays);
-        for (ExtCatalogServiceReplica service : services) {
-            String operation = SkillRequirementResolver.normalize(service.getOperationCode());
-            if (operation.isEmpty()) {
-                continue; // a service without an operation code is general work
-            }
-            List<ExtBayReplica> claimants =
-                    bays.stream().filter(bay -> claims(bay, operation)).toList();
-            // Somebody claims it: only they may do it. Nobody claims it: general work, which every bay
-            // but a wash bay may do — a specialty bay too, ranked last (D14).
-            eligible.retainAll(
-                    claimants.isEmpty()
-                            ? bays.stream().filter(bay -> !isWashDetail(bay)).toList()
-                            : claimants);
-        }
-        // General bays first, so a specialty bay is offered for general work only after them.
-        eligible.sort(Comparator.comparing((ExtBayReplica bay) -> isGeneral(bay) ? 0 : 1));
-        int byCapability = bays.size() - eligible.size();
-        int before = eligible.size();
-        if (gvwrClass != null) {
-            eligible.removeIf(bay -> bay.getMaxDutyClass() != null && bay.getMaxDutyClass() < gvwrClass);
-        }
-        return new Eligibility(eligible, bays.size(), byCapability, before - eligible.size());
-    }
-
-    private static boolean claims(ExtBayReplica bay, String operation) {
-        return bay.getServiceCapabilityCodes() != null
-                && bay.getServiceCapabilityCodes().stream()
-                        .map(SkillRequirementResolver::normalize)
-                        .anyMatch(operation::equals);
-    }
-
-    private static boolean isGeneral(ExtBayReplica bay) {
-        return bay.getServiceCapabilityCodes() == null
-                || bay.getServiceCapabilityCodes().isEmpty();
-    }
-
-    /** The one bay type that never absorbs general mechanical work (D14: the exception to the default). */
-    static final String WASH_DETAIL = "WASH_DETAIL";
-
-    private static boolean isWashDetail(ExtBayReplica bay) {
-        return WASH_DETAIL.equalsIgnoreCase(bay.getBayType());
+    private static BayEligibility toBayEligibilitySummary(BayEligibilityService.Eligibility eligibility) {
+        return BayEligibility.builder()
+                .activeBays(eligibility.active())
+                .eligibleBays(eligibility.eligible().size())
+                .excludedByCapability(eligibility.byCapability())
+                .excludedByDutyClass(eligibility.byDutyClass())
+                .build();
     }
 
     // ── time ────────────────────────────────────────────────────────────────────────────────────

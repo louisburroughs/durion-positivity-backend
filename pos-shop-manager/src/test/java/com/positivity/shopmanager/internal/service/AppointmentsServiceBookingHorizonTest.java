@@ -2,6 +2,7 @@ package com.positivity.shopmanager.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,6 +21,8 @@ import com.positivity.shopmanager.internal.exception.BookingHorizonExceededExcep
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
@@ -28,6 +31,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,6 +94,9 @@ class AppointmentsServiceBookingHorizonTest {
 
     private AppointmentsServiceImpl appointmentsService;
 
+    private final AffectedAppointmentEvaluator affectedAppointmentEvaluator = mock(AffectedAppointmentEvaluator.class);
+    private final RescheduleApprovalGuard rescheduleApprovalGuard = mock(RescheduleApprovalGuard.class);
+
     @BeforeEach
     void setUp() {
         appointmentsService = new AppointmentsServiceImpl(
@@ -109,7 +116,15 @@ class AppointmentsServiceBookingHorizonTest {
                 mock(WorkOrderAppointmentMappingRepository.class),
                 mock(SchedulingConflictEvaluator.class),
                 mock(SchedulingConflictRecorder.class),
-                new BookingHorizonPolicy(180));
+                new BookingHorizonPolicy(180),
+                mock(ExtBayReplicaRepository.class),
+                mock(ExtMobileUnitReplicaRepository.class),
+                mock(BayEligibilityService.class),
+                mock(SkillRequirementResolver.class),
+                affectedAppointmentEvaluator,
+                rescheduleApprovalGuard);
+
+        lenient().when(affectedAppointmentEvaluator.evaluate(any(), any())).thenReturn(Map.of());
     }
 
     @Test
@@ -143,7 +158,7 @@ class AppointmentsServiceBookingHorizonTest {
         appointment.setStatus(AppointmentStatus.SCHEDULED);
         appointment.setStartAt(previousStartAt);
         appointment.setEndAt(previousEndAt);
-        when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
 
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
         request.setNewStartAt(BEYOND_HORIZON);

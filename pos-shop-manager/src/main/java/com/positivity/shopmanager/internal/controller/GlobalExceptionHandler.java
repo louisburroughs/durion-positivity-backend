@@ -13,9 +13,11 @@ import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.OpeningSearchPolicyException;
+import com.positivity.shopmanager.internal.exception.RescheduleApprovalReasonRequiredException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
+import com.positivity.shopmanager.internal.exception.ServicePositionEligibilityException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
@@ -76,7 +78,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleAppointmentValidation(
             AppointmentValidationException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return respond(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", exception.getMessage(), correlationId);
+        if (exception.getField() == null) {
+            return respond(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", exception.getMessage(), correlationId);
+        }
+        // DECISION-SHOPMGMT-021: a contradictory resourceId/resourceType pair names its field, so
+        // the caller does not have to parse a free-text message to find which one to fix.
+        ApiError body = ApiError.withFieldErrors(
+                "VALIDATION_ERROR",
+                exception.getMessage(),
+                HttpStatus.BAD_REQUEST.value(),
+                Instant.now(clock).toString(),
+                correlationId.toString(),
+                List.of(new ApiError.FieldError(exception.getField(), exception.getMessage())));
+        return respond(HttpStatus.BAD_REQUEST, body, correlationId);
     }
 
     @ExceptionHandler(SourceNotEligibleException.class)
@@ -177,6 +191,46 @@ public class GlobalExceptionHandler {
         return alternatives.stream()
                 .map(a -> new ApiError.SuggestedAlternative(a.getStartDateTime(), a.getEndDateTime(), a.getReason()))
                 .toList();
+    }
+
+    /**
+     * DECISION-SHOPMGMT-021: a {@code BAY} or {@code MOBILE_UNIT} named on an appointment submit or
+     * reschedule that fails the shared eligibility rule. Always 422 with no override — a property
+     * of the resource itself, distinct from {@link SchedulingConflictException}'s 409 tier, which
+     * answers a time-window collision. {@code fieldErrors} names {@code resourceId}: every one of
+     * the four codes describes a defect in the chosen resource, never in the requested window.
+     */
+    @ExceptionHandler(ServicePositionEligibilityException.class)
+    public ResponseEntity<ApiError> handleServicePositionEligibility(
+            ServicePositionEligibilityException exception, HttpServletRequest request) {
+        UUID correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.withFieldErrors(
+                exception.getCode().name(),
+                exception.getMessage(),
+                HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                Instant.now(clock).toString(),
+                correlationId.toString(),
+                List.of(new ApiError.FieldError("resourceId", exception.getMessage())));
+        return respond(HttpStatus.UNPROCESSABLE_CONTENT, body, correlationId);
+    }
+
+    /**
+     * DECISION-SHOPMGMT-004: approval was required for this reschedule (the 3rd or later non-exempt
+     * one) but {@code approvalReason} was missing or blank. {@code fieldErrors} names {@code
+     * approvalReason} so the caller does not have to parse the message to find which field to fix.
+     */
+    @ExceptionHandler(RescheduleApprovalReasonRequiredException.class)
+    public ResponseEntity<ApiError> handleRescheduleApprovalReasonRequired(
+            RescheduleApprovalReasonRequiredException exception, HttpServletRequest request) {
+        UUID correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.withFieldErrors(
+                RescheduleApprovalReasonRequiredException.CODE,
+                exception.getMessage(),
+                HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                Instant.now(clock).toString(),
+                correlationId.toString(),
+                List.of(new ApiError.FieldError("approvalReason", exception.getMessage())));
+        return respond(HttpStatus.UNPROCESSABLE_CONTENT, body, correlationId);
     }
 
     /** A conflict that already carries an override cannot take a second one (CAP-326). */

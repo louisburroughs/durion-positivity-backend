@@ -119,6 +119,14 @@ class WorkorderAssignmentServiceTest {
                 .when(servicePositionService.isPositionActive(
                         org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(true);
+        // #2269: the honest default is a vehicle within duty class — the over-class path gets its own
+        // tests below rather than silently dropping every inbound position here.
+        org.mockito.Mockito.lenient()
+                .when(servicePositionService.isWithinDutyClass(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
     }
 
     @InjectMocks
@@ -262,6 +270,61 @@ class WorkorderAssignmentServiceTest {
                         isNull(),
                         eq("System:ShopManagementService"),
                         argThat(reason -> reason != null && reason.contains("was inactive")));
+        verify(servicePositionService).savePositionChange(workorder);
+    }
+
+    // -----------------------------------------------------------------------
+    // #2269: an inbound position whose duty-class ceiling the vehicle's GVWR class exceeds is
+    // refused the same way an inactive or occupied one is — location and mechanics still apply, the
+    // workorder is left unplaced, and the position-history reason says why.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2269: an inbound assignment naming an over-class bay leaves the workorder unplaced "
+            + "but still applies location and mechanics")
+    void whenHandleAssignmentUpdated_withOverClassBay_thenLeavesUnplacedButAppliesLocationAndMechanics() {
+        Workorder workorder = workorderWithStatus(WorkorderStatus.DRAFT);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+        when(servicePositionService.isWithinDutyClass(ResourceType.BAY, RESOURCE_ID, workorder.getVehicleId()))
+                .thenReturn(false);
+
+        workorderService.handleAssignmentUpdated(eventWithResourceType(ResourceType.BAY));
+
+        assertThat(workorder.getResourceId()).isNull();
+        assertThat(workorder.getResourceType()).isNull();
+        assertThat(workorder.getLocationId()).isEqualTo(LOCATION_ID);
+        assertThat(workorder.getMechanicIds()).isNotNull().contains(MECHANIC_ID_1.toString());
+        verify(servicePositionService)
+                .recordPositionChange(
+                        eq(workorder),
+                        isNull(),
+                        isNull(),
+                        eq("System:ShopManagementService"),
+                        argThat(reason -> reason != null && reason.contains("over duty class")));
+        verify(servicePositionService).savePositionChange(workorder);
+    }
+
+    @Test
+    @DisplayName("#2269: an inbound assignment naming an over-class mobile unit leaves the workorder "
+            + "unplaced but still applies location and mechanics")
+    void whenHandleAssignmentUpdated_withOverClassMobileUnit_thenLeavesUnplacedButAppliesLocationAndMechanics() {
+        Workorder workorder = workorderWithStatus(WorkorderStatus.DRAFT);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+        when(servicePositionService.isWithinDutyClass(ResourceType.MOBILE_UNIT, RESOURCE_ID, workorder.getVehicleId()))
+                .thenReturn(false);
+
+        workorderService.handleAssignmentUpdated(eventWithResourceType(ResourceType.MOBILE_UNIT));
+
+        assertThat(workorder.getResourceId()).isNull();
+        assertThat(workorder.getResourceType()).isNull();
+        assertThat(workorder.getLocationId()).isEqualTo(LOCATION_ID);
+        verify(servicePositionService)
+                .recordPositionChange(
+                        eq(workorder),
+                        isNull(),
+                        isNull(),
+                        eq("System:ShopManagementService"),
+                        argThat(reason -> reason != null && reason.contains("over duty class")));
         verify(servicePositionService).savePositionChange(workorder);
     }
 

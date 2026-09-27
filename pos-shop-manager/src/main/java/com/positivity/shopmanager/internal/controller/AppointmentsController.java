@@ -82,21 +82,32 @@ public class AppointmentsController {
                     belong to the customer; the requested window must not overlap another SCHEDULED appointment on \
                     the same resource at the location; when sourceType (ESTIMATE or WORK_ORDER) is set, sourceId is \
                     required, the source must be eligible for scheduling, and no appointment may already exist for \
-                    that source.
+                    that source; when resourceType is BAY or MOBILE_UNIT (stated or inferred, see below), resourceId \
+                    must resolve to an ACTIVE resource at locationId that is eligible for the appointment's services \
+                    and vehicle (DECISION-SHOPMGMT-021) — a BAY must claim every specialty operation on the \
+                    appointment (or take no general work, per its bay type's specialty map) and accommodate the \
+                    vehicle's GVWR class.
                     Required inputs: crmCustomerId, crmVehicleId and locationId (UUIDs), startAt and endAt (UTC \
                     instants, startAt before endAt) and at least one serviceRequestIds entry; an optional \
                     Idempotency-Key header (non-blank, max 128 characters) makes retries safe and replays the \
                     original response only when the retried request matches the stored appointment's scheduling \
-                    fields.
+                    fields. resourceType (BAY, MOBILE_UNIT or UNASSIGNED) is optional but is never a way to skip \
+                    eligibility on a real resourceId: omit both to book UNASSIGNED; name a resourceId with \
+                    resourceType omitted and it is inferred as BAY or MOBILE_UNIT from whichever replica holds that \
+                    id (400 if resourceId is set with resourceType UNASSIGNED, or unset with BAY/MOBILE_UNIT; 422 \
+                    SERVICE_POSITION_INVALID if it matches neither replica).
                     Emits a SHOPMGR_APPOINTMENT_CREATE event and persists customer and vehicle snapshots on the \
-                    appointment, which is created in SCHEDULED status.
+                    appointment, which is created in SCHEDULED status with resourceType stored verbatim.
                     A caller whose appointments:create or shop:schedule:edit grant is location-scoped must have \
                     locationId within reach (ADR-0061).
                     Returns 400 when the slot is already booked, the idempotency key was reused with a different \
                     request, or sourceId is missing for a supplied sourceType; 403 LOCATION_SCOPE_DENIED when the \
                     caller's location scope does not cover locationId; 404 when the customer or vehicle is \
                     unknown; 409 when the vehicle does not belong to the customer; and 422 when the source estimate \
-                    or work order is not eligible for scheduling or the start lies beyond the booking horizon.
+                    or work order is not eligible for scheduling, the start lies beyond the booking horizon, or the \
+                    named resource fails DECISION-SHOPMGMT-021 eligibility (SERVICE_POSITION_INVALID, \
+                    SERVICE_POSITION_INACTIVE, SERVICE_POSITION_NOT_EQUIPPED, \
+                    SERVICE_POSITION_DUTY_CLASS_EXCEEDED — none of these are overridable).
                     """)
     @ApiResponse(responseCode = "201", description = "Appointment created successfully.")
     @ApiResponse(
@@ -105,7 +116,9 @@ public class AppointmentsController {
                     + " resubmission of the same booking (CAP-326). No new appointment was created.")
     @ApiResponse(
             responseCode = "400",
-            description = "Validation error — duplicate source appointment, or request fields are invalid.",
+            description = "Validation error — duplicate source appointment, request fields are invalid, or"
+                    + " resourceId/resourceType are contradictory (fieldErrors names resourceId): resourceType BAY"
+                    + " or MOBILE_UNIT with no resourceId, or resourceId set with resourceType UNASSIGNED.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -122,9 +135,15 @@ public class AppointmentsController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "Policy failure — SOURCE_NOT_ELIGIBLE when the estimate or work order cannot be scheduled"
-                    + " (ineligible status), or BOOKING_HORIZON_EXCEEDED when startAt lies beyond the configured"
-                    + " booking horizon (DECISION-SHOPMGMT-019; 180 facility-local days by default).",
+            description = "Policy failure, never overridable. SOURCE_NOT_ELIGIBLE when the estimate or work order"
+                    + " cannot be scheduled (ineligible status); BOOKING_HORIZON_EXCEEDED when startAt lies beyond"
+                    + " the configured booking horizon (DECISION-SHOPMGMT-019; 180 facility-local days by default);"
+                    + " or, for a resourceType of BAY or MOBILE_UNIT (DECISION-SHOPMGMT-021, fieldErrors names"
+                    + " resourceId), SERVICE_POSITION_INVALID (resourceId unknown, or at another location),"
+                    + " SERVICE_POSITION_INACTIVE (not ACTIVE), SERVICE_POSITION_NOT_EQUIPPED (a BAY does not claim"
+                    + " a specialty operation on the appointment, or takes no general work) or"
+                    + " SERVICE_POSITION_DUTY_CLASS_EXCEEDED (the vehicle's GVWR class exceeds the bay's"
+                    + " maxDutyClass).",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "501",
@@ -151,7 +170,8 @@ public class AppointmentsController {
                                                                     {"crmCustomerId":"01960003-0000-7000-8000-000000000001",
                                                                      "crmVehicleId":"01960003-0000-7000-8000-000000000002",
                                                                      "locationId":"01960003-0000-7000-8000-000000000003",
-                                                                     "resourceId":"BAY-04",
+                                                                     "resourceId":"01960003-0000-7000-8000-000000000010",
+                                                                     "resourceType":"BAY",
                                                                      "startAt":"2026-06-18T08:00:00Z",
                                                                      "endAt":"2026-06-18T10:00:00Z",
                                                                      "serviceRequestIds":["01960003-0000-7000-8000-000000000004"],
@@ -197,8 +217,9 @@ public class AppointmentsController {
     }
 
     @Operation(operationId = "getAppointmentById", summary = "Get an Appointment by Its ID", description = """
-                    Returns the full appointment record, including status, time window, service request ids and the \
-                    customer and vehicle snapshots captured at booking.
+                    Returns the full appointment record, including status, time window, service request ids, the \
+                    customer and vehicle snapshots captured at booking, and the derived DECISION-SHOPMGMT-022 \
+                    affected flag.
                     Use this tool when the appointment id is already known; use viewSchedule instead to browse \
                     appointments by location and date.
                     Preconditions: the appointment must exist; appointmentId must be a UUID in canonical text form.
@@ -258,24 +279,37 @@ public class AppointmentsController {
             operationId = "rescheduleAppointment",
             summary = "Move an Appointment to a New Time Window",
             description = """
-                    Moves an existing appointment to a new time window while preserving its resource, customer and \
-                    service requests, recording the change in reschedule history and the appointment audit trail.
-                    Use this tool when a booked appointment must change times; do not use cancelAppointment, which \
-                    terminates the appointment instead of moving it, and do not use createAppointment for a visit \
-                    that is not yet booked.
+                    Moves an existing appointment to a new time window and, optionally, onto a different resource \
+                    (newResourceType/newResourceId, DECISION-SHOPMGMT-022 rule 3), recording the change in \
+                    reschedule history and the appointment audit trail.
+                    Use this tool when a booked appointment must change times or resource; do not use \
+                    cancelAppointment, which terminates the appointment instead of moving it, and do not use \
+                    createAppointment for a visit that is not yet booked.
                     Preconditions: the appointment must exist and be in SCHEDULED, CHECKED_IN or WAITING_FOR_PARTS \
-                    status; completed, cancelled and other statuses cannot be rescheduled.
+                    status; when newResourceType and newResourceId are both absent, the appointment's own \
+                    (unchanged) resource must still pass DECISION-SHOPMGMT-021 eligibility, inferring a missing or \
+                    unrecognised stored resourceType from resourceId exactly as a fresh submit would; when either \
+                    new-resource field is present, only the resource the appointment ends up on is validated and \
+                    conflict-checked, never its old one, so moving off an ineligible resource always succeeds.
                     Required inputs: newStartAt and newEndAt (UTC instants, newStartAt before newEndAt) and a reason \
-                    code; rescheduleReasonNotes (max 1000 characters) is mandatory when reason is OTHER, and \
-                    notifyCustomer defaults to true.
+                    code; rescheduleReasonNotes (max 1000 characters) is mandatory when reason is OTHER, \
+                    notifyCustomer defaults to true, and newResourceType/newResourceId are optional.
+                    DECISION-SHOPMGMT-004: the first two reschedules of an appointment need no further permission, \
+                    as does one that is shop-caused (reason EQUIPMENT_ISSUE, or the appointment was \
+                    DECISION-SHOPMGMT-022 affected); the 3rd and later non-exempt reschedule needs \
+                    appointments:reschedule:approve and a non-blank approvalReason (max 1000 characters).
                     Emits a SHOPMGR_APPOINTMENT_RESCHEDULE event; a downstream workorder reschedule notification is \
                     additionally published only when the appointment carries a workorderLinkRef.
                     A caller whose appointments:reschedule grant is location-scoped must have the appointment's \
                     location within reach (ADR-0061).
                     Returns 400 when the time window is invalid or notes are missing for reason OTHER, 404 when the \
-                    appointment does not exist, 403 LOCATION_SCOPE_DENIED when it exists but its location is outside \
-                    the caller's scope, 409 when the appointment status does not permit rescheduling, and 422 \
-                    BOOKING_HORIZON_EXCEEDED when newStartAt lies beyond the configured booking horizon.
+                    appointment does not exist, 403 LOCATION_SCOPE_DENIED (location out of reach) or FORBIDDEN \
+                    (approval required but appointments:reschedule:approve is not held), 409 when the appointment \
+                    status does not permit rescheduling, and 422 for BOOKING_HORIZON_EXCEEDED, a \
+                    SERVICE_POSITION_INVALID/INACTIVE/NOT_EQUIPPED/DUTY_CLASS_EXCEEDED failure on the resource the \
+                    appointment ends up on (DECISION-SHOPMGMT-021, none overridable), or \
+                    RESCHEDULE_APPROVAL_REASON_REQUIRED when approval is needed but approvalReason is missing or \
+                    blank.
                     """)
     @ApiResponse(responseCode = "200", description = "Appointment rescheduled successfully.")
     @ApiResponse(
@@ -285,7 +319,9 @@ public class AppointmentsController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = RESCHEDULE_SCOPE_DENIED_DESCRIPTION,
+            description = RESCHEDULE_SCOPE_DENIED_DESCRIPTION + " Or FORBIDDEN when this is the 3rd or later"
+                    + " non-exempt reschedule of the appointment (DECISION-SHOPMGMT-004) and the caller does not"
+                    + " hold appointments:reschedule:approve.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -297,9 +333,17 @@ public class AppointmentsController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "BOOKING_HORIZON_EXCEEDED — newStartAt lies beyond the configured booking horizon"
-                    + " (DECISION-SHOPMGMT-019; 180 facility-local days by default). The appointment keeps its"
-                    + " previous window and no reschedule is recorded.",
+            description = "Policy failure, never overridable; the appointment keeps its previous window and no"
+                    + " reschedule is recorded. BOOKING_HORIZON_EXCEEDED — newStartAt lies beyond the configured"
+                    + " booking horizon (DECISION-SHOPMGMT-019; 180 facility-local days by default). Or, for the"
+                    + " BAY or MOBILE_UNIT resource the appointment ends up on (DECISION-SHOPMGMT-021, fieldErrors"
+                    + " names resourceId): SERVICE_POSITION_INVALID (unknown, or at another location),"
+                    + " SERVICE_POSITION_INACTIVE (not ACTIVE), SERVICE_POSITION_NOT_EQUIPPED (a BAY no longer"
+                    + " claims a specialty operation on the appointment, or takes no general work) or"
+                    + " SERVICE_POSITION_DUTY_CLASS_EXCEEDED (the vehicle's GVWR class exceeds the bay's"
+                    + " maxDutyClass). Or RESCHEDULE_APPROVAL_REASON_REQUIRED (fieldErrors names approvalReason)"
+                    + " when the caller holds appointments:reschedule:approve for a 3rd-or-later non-exempt"
+                    + " reschedule but sent no non-blank approvalReason (DECISION-SHOPMGMT-004).",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PutMapping("/appointments/{appointmentId}/reschedule")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

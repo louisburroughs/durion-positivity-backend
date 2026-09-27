@@ -20,6 +20,7 @@ import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsist
 import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
+import com.positivity.workorder.internal.exception.ServicePositionDutyClassExceededException;
 import com.positivity.workorder.internal.exception.ServicePositionInactiveException;
 import com.positivity.workorder.internal.exception.ServicePositionInvalidException;
 import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
@@ -408,6 +409,36 @@ public class GlobalExceptionHandler {
             ServicePositionInactiveException ex, HttpServletRequest request) {
         return buildErrorResponse(
                 HttpStatus.UNPROCESSABLE_ENTITY, ServicePositionInactiveException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    /**
+     * A bay or mobile unit's duty-class ceiling is below the vehicle's GVWR class
+     * (DECISION-SHOPMGMT-021 rule 3, #2269).
+     *
+     * <p>422, the same code and status pos-shop-manager's own submit-time check uses: the position is
+     * real, at the right site and free — what fails is a physical mismatch between the vehicle and
+     * the equipment. The position rides as {@code referenceId} so a dispatch board can link straight
+     * to it, and a {@code fieldErrors} entry marks {@code resourceId} so a form can highlight the
+     * position picker.
+     */
+    @ExceptionHandler(ServicePositionDutyClassExceededException.class)
+    public ResponseEntity<ApiError> handleServicePositionDutyClassExceeded(
+            ServicePositionDutyClassExceededException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = new ApiError(
+                ServicePositionDutyClassExceededException.ERROR_CODE,
+                ex.getMessage(),
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                List.of(new ApiError.FieldError(ServicePositionDutyClassExceededException.FIELD, ex.getMessage())),
+                ex.getResourceId() == null ? null : ex.getResourceId().toString(),
+                null,
+                null);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return new ResponseEntity<>(body, headers, HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     /**

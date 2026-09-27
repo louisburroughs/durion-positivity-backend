@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,6 +21,8 @@ import com.positivity.shopmanager.internal.exception.AppointmentValidationExcept
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
@@ -27,9 +30,11 @@ import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappin
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -73,6 +78,9 @@ class AppointmentsServiceImplRescheduleTest {
 
     private AppointmentsServiceImpl appointmentsService;
 
+    private final AffectedAppointmentEvaluator affectedAppointmentEvaluator = mock(AffectedAppointmentEvaluator.class);
+    private final RescheduleApprovalGuard rescheduleApprovalGuard = mock(RescheduleApprovalGuard.class);
+
     private static final Instant FIXED_NOW = Instant.parse("2026-03-01T12:00:00Z");
     private static final UUID APPOINTMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
@@ -100,7 +108,15 @@ class AppointmentsServiceImplRescheduleTest {
                 mock(WorkOrderAppointmentMappingRepository.class),
                 conflictEvaluator,
                 conflictRecorder,
-                new BookingHorizonPolicy(180));
+                new BookingHorizonPolicy(180),
+                mock(ExtBayReplicaRepository.class),
+                mock(ExtMobileUnitReplicaRepository.class),
+                mock(BayEligibilityService.class),
+                mock(SkillRequirementResolver.class),
+                affectedAppointmentEvaluator,
+                rescheduleApprovalGuard);
+
+        lenient().when(affectedAppointmentEvaluator.evaluate(any(), any())).thenReturn(Map.of());
     }
 
     @Test
@@ -125,7 +141,7 @@ class AppointmentsServiceImplRescheduleTest {
     void rescheduleAppointment_withInvalidStatus_throwsStateException() {
         Appointment appointment = new Appointment();
         appointment.setStatus(AppointmentStatus.COMPLETED);
-        when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
 
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
         request.setNewStartAt(Instant.now(TEST_CLOCK));
@@ -140,7 +156,7 @@ class AppointmentsServiceImplRescheduleTest {
     void rescheduleAppointment_withOtherReasonAndNoNotes_throwsValidationException() {
         Appointment appointment = new Appointment();
         appointment.setStatus(AppointmentStatus.SCHEDULED);
-        when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
 
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
         request.setNewStartAt(Instant.now(TEST_CLOCK));
@@ -157,7 +173,7 @@ class AppointmentsServiceImplRescheduleTest {
     void rescheduleAppointment_withNullReason_throwsValidationException() {
         Appointment appointment = new Appointment();
         appointment.setStatus(AppointmentStatus.SCHEDULED);
-        when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
 
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
         request.setNewStartAt(Instant.now(TEST_CLOCK));
@@ -171,7 +187,7 @@ class AppointmentsServiceImplRescheduleTest {
 
     @Test
     void rescheduleAppointment_withNonExistentAppointment_throwsNotFoundException() {
-        when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.empty());
+        when(appointmentRepository.findByIdForUpdate(APPOINTMENT_ID)).thenReturn(Optional.empty());
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
         request.setNewStartAt(Instant.now(TEST_CLOCK));
         request.setNewEndAt(Instant.now(TEST_CLOCK).plusSeconds(3600));
@@ -186,7 +202,7 @@ class AppointmentsServiceImplRescheduleTest {
         appointment.setStatus(AppointmentStatus.SCHEDULED);
         appointment.setStartAt(Instant.parse("2026-03-01T10:00:00Z"));
         appointment.setEndAt(Instant.parse("2026-03-01T11:00:00Z"));
-        when(appointmentRepository.findById(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
@@ -210,5 +226,29 @@ class AppointmentsServiceImplRescheduleTest {
         assertThat(historyCaptor.getValue().getRescheduleReason()).isEqualTo(RescheduleReasonCode.CUSTOMER_REQUEST);
 
         verify(eventPublisher, never()).publishEvent(any()); // No workorderLinkRef, so no event
+    }
+
+    @Test
+    @DisplayName("#2280 F3: reschedule looks up the appointment through the locked finder, not the plain one — the"
+            + " lock is what serialises a concurrent reschedule's allowance count against this method's own"
+            + " reschedule_history insert (DECISION-SHOPMGMT-004)")
+    void rescheduleAppointment_usesTheLockedFinder() {
+        Appointment appointment = new Appointment();
+        appointment.setAppointmentId(APPOINTMENT_ID);
+        appointment.setStatus(AppointmentStatus.SCHEDULED);
+        appointment.setStartAt(Instant.parse("2026-03-01T10:00:00Z"));
+        appointment.setEndAt(Instant.parse("2026-03-01T11:00:00Z"));
+        when(appointmentRepository.findByIdForUpdate(APPOINTMENT_ID)).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
+        request.setNewStartAt(Instant.parse("2026-03-02T14:00:00Z"));
+        request.setNewEndAt(Instant.parse("2026-03-02T15:00:00Z"));
+        request.setReason(RescheduleReasonCode.CUSTOMER_REQUEST);
+
+        appointmentsService.rescheduleAppointment(APPOINTMENT_ID, request);
+
+        verify(appointmentRepository).findByIdForUpdate(APPOINTMENT_ID);
+        verify(appointmentRepository, never()).findById(any());
     }
 }

@@ -51,3 +51,6 @@ permissions:
     description: "Reschedule appointments"
   - name: "appointments:cancel"
     description: "Cancel appointments"
+  - name: "appointments:reschedule:approve"
+    description: "Approve a reschedule beyond the free allowance (DECISION-SHOPMGMT-004)"
+    grantTo: ["LOCATION_MANAGER", "GENERAL_MANAGER", "SHOP_MANAGER"]
