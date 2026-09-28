@@ -24,8 +24,17 @@ public enum BankAdjustmentType {
     NSF_FEE(RequiredSign.NEGATIVE_ONLY),
     /** Interest credited by the bank — Dr cash / Cr income. Increases cash (positive only). */
     INTEREST_EARNED(RequiredSign.POSITIVE_ONLY),
-    /** Any other reconciling adjustment the accountant chooses to book — clearing account, either sign. */
-    OTHER(RequiredSign.ANY);
+    /**
+     * The only posting escape — clearing account 2360, either sign — always linked to exactly one bank
+     * transaction, match residual or acknowledged gap, justified and threshold-checked (SPEC §3.5, §4.7, D2).
+     */
+    OTHER(RequiredSign.ANY),
+    /**
+     * Money between two of the tenant's own bank accounts that the books have not recorded (D9): the counter
+     * is {@code counterGlAccountId} itself — a reconcilable {@code BANK_CASH} account — with no mapping key.
+     * Positive brings money into the reconciled account from the counter account; negative sends it out.
+     */
+    TRANSFER(RequiredSign.ANY);
 
     /** Sign constraint on the adjustment amount for a type. */
     public enum RequiredSign {

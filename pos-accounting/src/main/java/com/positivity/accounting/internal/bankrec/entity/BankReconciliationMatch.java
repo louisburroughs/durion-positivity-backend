@@ -34,8 +34,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * (bank side). A match is never deleted (M7): unmatching moves it to {@code UNMATCHED} and clears
  * its members' {@code active} flag.
  *
- * <p>{@link #matchKind} is null for a group with more than one member on both sides, which F2 still
- * accepts until story S4 restricts the cardinality (M2).
+ * <p>Story S4 (#2303) refuses a group with more than one member on both sides (M2,
+ * {@code MATCH_CARDINALITY_NOT_ALLOWED}); {@link #matchKind} is null only on a row no longer produced.
  */
 @Getter
 @Setter
@@ -125,6 +125,10 @@ public class BankReconciliationMatch extends TenantScopedEntity {
 
     @Column(name = "broken_by_journal_entry_id", columnDefinition = "UUID")
     private UUID brokenByJournalEntryId;
+
+    /** The caller's UUIDv7 {@code requestId} of a human match; a replay finds this header (§6.3; S4, #2303). */
+    @Column(name = "request_id", columnDefinition = "UUID")
+    private UUID requestId;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

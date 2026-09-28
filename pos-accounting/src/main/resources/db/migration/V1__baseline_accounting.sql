@@ -337,6 +337,7 @@ CREATE TABLE public.bank_reconciliation (
     cancelled_by character varying(50),
     cancel_reason character varying(1000),
     version bigint DEFAULT 0 NOT NULL,
+    request_id uuid,
     CONSTRAINT bank_reconciliation_status_ck CHECK (((status)::text = ANY ((ARRAY['IN_PROGRESS'::character varying, 'SUBMITTED'::character varying, 'FINALIZED'::character varying, 'INVALIDATED'::character varying, 'SUPERSEDED'::character varying, 'CANCELLED'::character varying])::text[])))
 );
 
@@ -365,7 +366,12 @@ CREATE TABLE public.bank_reconciliation_adjustment (
     settles_match_id uuid,
     bridges_statement_id uuid,
     CONSTRAINT bank_reconciliation_adjustment_status_ck CHECK (((status)::text = ANY ((ARRAY['POSTED'::character varying, 'REVERSED'::character varying])::text[]))),
-    CONSTRAINT bank_reconciliation_adjustment_type_ck CHECK (((adjustment_type)::text = ANY ((ARRAY['BANK_FEE'::character varying, 'NSF_FEE'::character varying, 'INTEREST_EARNED'::character varying, 'OTHER'::character varying])::text[])))
+    CONSTRAINT bank_reconciliation_adjustment_type_ck CHECK (((adjustment_type)::text = ANY ((ARRAY['BANK_FEE'::character varying, 'NSF_FEE'::character varying, 'INTEREST_EARNED'::character varying, 'OTHER'::character varying, 'TRANSFER'::character varying])::text[]))),
+    -- Story S4 (#2303; SPEC-manual-bank-reconciliation §3.5, §6.4, D2, D9): the link and counter rules.
+    CONSTRAINT bank_reconciliation_adjustment_counter_ck CHECK ((((adjustment_type)::text = 'TRANSFER'::text) = (counter_gl_account_id IS NOT NULL))),
+    CONSTRAINT bank_reconciliation_adjustment_one_link_ck CHECK ((num_nonnulls(bank_transaction_id, settles_match_id, bridges_statement_id) <= 1)),
+    CONSTRAINT bank_reconciliation_adjustment_other_link_ck CHECK ((((adjustment_type)::text <> 'OTHER'::text) OR ((num_nonnulls(bank_transaction_id, settles_match_id, bridges_statement_id) = 1) AND (justification IS NOT NULL)))),
+    CONSTRAINT bank_reconciliation_adjustment_other_only_ck CHECK ((((adjustment_type)::text = 'OTHER'::text) OR ((settles_match_id IS NULL) AND (bridges_statement_id IS NULL))))
 );
 
 CREATE TABLE public.bank_reconciliation_gl_match (
@@ -2338,8 +2344,8 @@ CREATE POLICY tenant_isolation ON public.warranty_reimbursement_expectation
 -- Bank reconciliation foundation (story S1, #2300; durion SPEC-manual-bank-reconciliation §3, §6.4).
 -- Added by hand to the flattened baseline (TENANCY_SCHEMA.md, "Layout of a module's migrations").
 -- Every table is tenant-scoped per ADR-0062 §9 and none is listed in tenancy-global-tables.txt.
--- Constraints that encode a later story's rule are NOT here: bank_reconciliation_adjustment's link
--- CHECKs, its TRANSFER type value, counter CHECK and bridge partial unique are story S4's (§6.4).
+-- bank_reconciliation_adjustment's link CHECKs, its TRANSFER type value, counter CHECK and bridge
+-- partial unique are story S4's (#2303, §6.4) and sit with the table's own definition and below.
 -- ---------------------------------------------------------------------------------------------------
 
 CREATE TABLE public.bank_account_profile (
@@ -2532,6 +2538,7 @@ CREATE TABLE public.bank_reconciliation_match (
     broken_by_journal_entry_id uuid,
     created_at timestamp(6) with time zone NOT NULL,
     updated_at timestamp(6) with time zone NOT NULL,
+    request_id uuid,
     CONSTRAINT bank_reconciliation_match_kind_ck CHECK (((match_kind)::text = ANY ((ARRAY['ONE_TO_ONE'::character varying, 'ONE_TO_MANY'::character varying, 'MANY_TO_ONE'::character varying, 'ADJUSTMENT'::character varying])::text[]))),
     CONSTRAINT bank_reconciliation_match_state_ck CHECK (((state)::text = ANY ((ARRAY['PROPOSED'::character varying, 'ACCEPTED'::character varying, 'REJECTED'::character varying, 'UNMATCHED'::character varying, 'BROKEN'::character varying])::text[]))),
     CONSTRAINT bank_reconciliation_match_origin_ck CHECK (((origin)::text = ANY ((ARRAY['USER'::character varying, 'RULE'::character varying])::text[]))),
@@ -2635,6 +2642,8 @@ ALTER TABLE ONLY public.bank_reconciliation_outstanding_item
 
 ALTER TABLE ONLY public.bank_reconciliation_adjustment
     ADD CONSTRAINT bank_reconciliation_adjustment_request_uk UNIQUE (tenant_id, request_id);
+-- At most one POSTED gap bridge per statement; a reversed bridge leaves room for its replacement (S4, §4.2).
+CREATE UNIQUE INDEX bank_reconciliation_adjustment_bridge_uk ON public.bank_reconciliation_adjustment USING btree (tenant_id, bridges_statement_id) WHERE (((status)::text = 'POSTED'::text) AND (bridges_statement_id IS NOT NULL));
 
 -- U1 (§3.1): one COMMITTED statement per account and window. Created before the U2 exclusion
 -- constraint on purpose (#2301): Postgres checks a row's indexes in creation order, so when two
@@ -2663,6 +2672,9 @@ CREATE INDEX bank_import_account_status_idx ON public.bank_import USING btree (t
 CREATE INDEX bank_import_row_status_idx ON public.bank_import_row USING btree (tenant_id, import_id, row_status);
 
 CREATE UNIQUE INDEX bank_reconciliation_active_statement_uk ON public.bank_reconciliation USING btree (tenant_id, statement_id) WHERE ((status)::text = ANY ((ARRAY['IN_PROGRESS'::character varying, 'SUBMITTED'::character varying])::text[]));
+-- The caller's requestId of a create / human match command (story S4, #2303; §6.3): a replay finds its row.
+CREATE UNIQUE INDEX bank_reconciliation_request_uk ON public.bank_reconciliation USING btree (tenant_id, request_id) WHERE (request_id IS NOT NULL);
+CREATE UNIQUE INDEX bank_reconciliation_match_request_uk ON public.bank_reconciliation_match USING btree (tenant_id, request_id) WHERE (request_id IS NOT NULL);
 CREATE INDEX bank_reconciliation_account_end_status_idx ON public.bank_reconciliation USING btree (tenant_id, gl_account_id, statement_end_date, status);
 
 CREATE INDEX bank_reconciliation_match_recon_state_idx ON public.bank_reconciliation_match USING btree (tenant_id, reconciliation_id, state);
