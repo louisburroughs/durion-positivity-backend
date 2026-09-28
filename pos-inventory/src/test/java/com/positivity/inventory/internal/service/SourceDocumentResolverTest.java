@@ -21,7 +21,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -46,8 +45,13 @@ class SourceDocumentResolverTest {
     @Mock
     private ExtPurchaseOrderLineRepository purchaseOrderLineRepository;
 
-    @InjectMocks
     private SourceDocumentResolver resolver;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        resolver = new SourceDocumentResolver(
+                purchaseOrderRepository, purchaseOrderLineRepository, new ReceiptCostCurrencyPolicy("USD"));
+    }
 
     @Test
     @DisplayName("an approved order yields its open lines with SKUs and quantities")
@@ -242,6 +246,49 @@ class SourceDocumentResolverTest {
                 .isEmpty();
     }
 
+    // ─── #2314: no document cost from an order outside the functional currency ──
+
+    @Test
+    @DisplayName("receipt cost: none from an order in a currency other than the functional one, and it says why")
+    void receiptUnitCost_foreignCurrencyOrder_isEmptyWithHold() {
+        projectOrder("APPROVED", "EUR");
+        when(purchaseOrderLineRepository.findById(LINE_ID))
+                .thenReturn(Optional.of(pricedLine(LINE_ID, 12_000L, new BigDecimal("12"))));
+
+        assertThat(resolver.resolveReceiptUnitCost(SourceDocumentType.PO, PO_ID.toString(), LINE_ID, SKU_ID.toString()))
+                .isEmpty();
+        assertThat(resolver.receiptCostHold(SourceDocumentType.PO, PO_ID.toString()))
+                .hasValueSatisfying(reason -> assertThat(reason)
+                        .contains("AWAITING_COST")
+                        .contains("EUR")
+                        .contains("USD"));
+    }
+
+    @Test
+    @DisplayName("receipt cost: an order with no currency is never assumed to be in the functional one")
+    void receiptUnitCost_currencylessOrder_isEmptyWithHold() {
+        projectOrder("APPROVED", (String) null);
+        when(purchaseOrderLineRepository.findById(LINE_ID))
+                .thenReturn(Optional.of(pricedLine(LINE_ID, 12_000L, new BigDecimal("12"))));
+
+        assertThat(resolver.resolveReceiptUnitCost(SourceDocumentType.PO, PO_ID.toString(), LINE_ID, SKU_ID.toString()))
+                .isEmpty();
+        assertThat(resolver.receiptCostHold(SourceDocumentType.PO, PO_ID.toString()))
+                .isPresent();
+    }
+
+    @Test
+    @DisplayName("receipt cost: no hold on an order in the functional currency, or on what is not an order")
+    void receiptCostHold_functionalCurrencyOrUnknown_isEmpty() {
+        projectOrder("APPROVED");
+
+        assertThat(resolver.receiptCostHold(SourceDocumentType.PO, PO_ID.toString()))
+                .isEmpty();
+        assertThat(resolver.receiptCostHold(SourceDocumentType.ASN, "ASN-1")).isEmpty();
+        assertThat(resolver.receiptCostHold(SourceDocumentType.PO, "PO-FREE-TEXT"))
+                .isEmpty();
+    }
+
     private static ExtPurchaseOrderLineReplica pricedLine(UUID lineId, Long unitCostMinor, BigDecimal factor) {
         ExtPurchaseOrderLineReplica line = line(lineId, SKU_ID, 1, "12", "12");
         line.setUnitCostMinor(unitCostMinor);
@@ -250,13 +297,17 @@ class SourceDocumentResolverTest {
     }
 
     private void projectOrder(String status, ExtPurchaseOrderLineReplica... lines) {
+        projectOrder(status, "USD", lines);
+    }
+
+    private void projectOrder(String status, String currency, ExtPurchaseOrderLineReplica... lines) {
         when(purchaseOrderRepository.findById(PO_ID))
                 .thenReturn(Optional.of(ExtPurchaseOrderReplica.builder()
                         .purchaseOrderId(PO_ID)
                         .poNumber("PO-2026-00042")
                         .vendorId(UUID.fromString("01a02fd3-b675-7000-8000-00000000000f"))
                         .status(status)
-                        .currency("USD")
+                        .currency(currency)
                         .build()));
         when(purchaseOrderLineRepository.findByPurchaseOrderId(PO_ID)).thenReturn(List.of(lines));
     }

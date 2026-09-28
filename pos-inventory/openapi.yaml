@@ -4535,13 +4535,13 @@ paths:
 
         Use this tool after acceptPurchaseSuggestion to turn approved replenishment into an order; do not use createPurchaseOrder, the manual path that ignores suggestions, and note that conversion never approves spend, so approvePurchaseOrder must still run on the DRAFT order.
 
-        Preconditions: every listed suggestion must exist, be ACCEPTED, carry a vendor reference and a feed unit cost, all must share one vendor, and all must resolve to a single ship-to site.
+        Preconditions: every listed suggestion must exist, be ACCEPTED, carry a vendor reference and a feed unit cost with an ISO 4217 currency code, all must share one vendor and one currency (codes compare case-insensitively and the order carries the upper-case code), and all must resolve to a single ship-to site.
 
         Required inputs: suggestionIds (non-empty list of UUIDs); duplicates are collapsed, and the caller needs both inventory:replenishment:manage and inventory:purchase_order:create.
 
         Emits an INVENTORY_PURCHASE_SUGGESTION_CONVERT event and creates the DRAFT order through the standard purchase order path, with the latest expected date among the suggestions as the expected delivery date.
 
-        Returns 404 when a listed suggestion does not exist, 422 when a suggestion is not ACCEPTED, lacks a vendor or unit cost, or the suggestions mix vendors or ship-to sites, and 400 when suggestionIds is empty.
+        Returns 404 when a listed suggestion does not exist, 422 when a suggestion is not ACCEPTED, lacks a vendor, unit cost or currency, carries a currency that is not an ISO 4217 code, or the suggestions mix vendors, currencies or ship-to sites, and 400 when suggestionIds is empty.
 
         '
       operationId: convertPurchaseSuggestions
@@ -4557,7 +4557,7 @@ paths:
                   - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a31
             schema:
               $ref: '#/components/schemas/ConvertPurchaseSuggestionsRequest'
-        description: The ACCEPTED suggestions to fold into a single DRAFT purchase order; all must share one vendor.
+        description: The ACCEPTED suggestions to fold into a single DRAFT purchase order; all must share one vendor and be priced in one ISO 4217 currency.
         required: true
       responses:
         '201':
@@ -4589,7 +4589,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'Conversion precondition violated: a suggestion is not ACCEPTED, suggestions mix vendors or ship-to sites, or a suggestion lacks a vendor or feed price'
+          description: 'Conversion precondition violated: a suggestion is not ACCEPTED, suggestions mix vendors, currencies or ship-to sites, or a suggestion lacks a vendor, feed price or currency, or its currency is not an ISO 4217 code'
       security:
       - bearerAuth:
         - inventory:replenishment:manage

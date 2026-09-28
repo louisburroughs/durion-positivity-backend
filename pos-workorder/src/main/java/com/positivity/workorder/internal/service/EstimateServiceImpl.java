@@ -990,6 +990,18 @@ public class EstimateServiceImpl implements EstimateService {
             rate = laborRateDefaultingService
                     .lookupLaborRate(request.getServiceId(), estimate.getLocationId(), request.getRateAdjustmentCodes())
                     .orElse(null);
+            // ADR-0067 DF-12 (#2317): a rate keyed in another currency cannot price this estimate
+            // -- there is no conversion -- so it is a miss: no defaulted price and no snapshot.
+            // The line then needs an explicit unitPrice through the rate-miss rule below.
+            if (rate != null && !sameCurrency(rate.currency(), estimate.getCurrencyUomId())) {
+                log.warn(
+                        "Ignoring labor rate {} for estimate {}: rate currency {} differs from estimate currency {}",
+                        rate.rateId(),
+                        estimateId,
+                        rate.currency(),
+                        estimate.getCurrencyUomId());
+                rate = null;
+            }
             if (unitPrice == null && rate != null) {
                 unitPrice = rate.hourlyRate();
             }
@@ -1051,6 +1063,14 @@ public class EstimateServiceImpl implements EstimateService {
                 saved.getDescription());
 
         return EstimateItemResponse.fromEntity(saved);
+    }
+
+    /**
+     * Whether a labor rate's currency is the estimate's currency. An unknown currency on either
+     * side cannot be shown to match, so it does not (ADR-0067 DF-12, #2317).
+     */
+    private static boolean sameCurrency(@Nullable String rateCurrency, @Nullable String estimateCurrency) {
+        return rateCurrency != null && estimateCurrency != null && rateCurrency.equalsIgnoreCase(estimateCurrency);
     }
 
     /**

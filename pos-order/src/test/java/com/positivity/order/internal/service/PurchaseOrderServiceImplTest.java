@@ -16,6 +16,7 @@ import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
+import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
 import com.positivity.order.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
@@ -279,6 +280,45 @@ class PurchaseOrderServiceImplTest {
         when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getPurchaseOrder(PO_ID)).isInstanceOf(PurchaseOrderNotFoundException.class);
+    }
+
+    // ─── Currency (ADR-0067 DF-6, #2314) ─────────────────────────────────────
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"XYZ", "US Dollars", "usdollar", "EU"})
+    @DisplayName("a hand-keyed order whose currency is not ISO 4217 is refused with a 400 (#2314)")
+    void nonIsoCurrencyRefused(String currency) {
+        CreatePurchaseOrderRequest request = createRequest();
+        request.setCurrency(currency);
+
+        assertThatThrownBy(() -> service.createPurchaseOrder(request, "buyer-1"))
+                .isInstanceOf(PurchaseOrderRequestValidationException.class)
+                .hasMessageContaining("ISO 4217");
+        verify(purchaseOrderRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a valid currency is stored in its canonical upper-case form (#2314)")
+    void currencyStoredCanonical() {
+        CreatePurchaseOrderRequest request = createRequest();
+        request.setCurrency(" eur ");
+
+        service.createPurchaseOrder(request, "buyer-1");
+
+        ArgumentCaptor<PurchaseOrderEntity> captor = ArgumentCaptor.forClass(PurchaseOrderEntity.class);
+        verify(purchaseOrderRepository).save(captor.capture());
+        assertThat(captor.getValue().getCurrency()).isEqualTo("EUR");
+    }
+
+    @Test
+    @DisplayName("an order requested by pos-inventory goes through the same currency validation (#2314)")
+    void requestedOrderNonIsoCurrencyRefused() {
+        CreatePurchaseOrderRequest request = createRequest();
+        request.setCurrency("XYZ");
+
+        assertThatThrownBy(() -> service.createRequested(PO_ID, request, "pos-inventory"))
+                .isInstanceOf(PurchaseOrderRequestValidationException.class);
+        verify(entityManager, never()).persist(any());
     }
 
     @Test
