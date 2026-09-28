@@ -34,8 +34,10 @@ public enum AccountingEventStatus {
     SUSPENDED,
 
     /**
-     * Terminal: a Kafka-consumed posting fact that was deliberately not posted (for example an
-     * uncosted inventory fact, {@code failureReasonCode = UNCOSTED_FACT}). Not retryable — the
+     * Terminal: an event or Kafka-consumed posting fact that was deliberately not posted (for
+     * example an uncosted inventory fact, {@code failureReasonCode = UNCOSTED_FACT}, or a
+     * default-mapping event with no amount, {@code MISSING_AMOUNT} / {@code ZERO_AMOUNT}, issue
+     * #2315). Not retryable — the
      * retry scheduler and {@code retryAccountingEvent} select only {@link #FAILED} and
      * {@link #SUSPENDED} (issue #2191).
      */
@@ -61,8 +63,9 @@ public enum AccountingEventStatus {
                 "Event suspended for manual review/resolution; retryable via the "
                         + "reprocess endpoint once the underlying mapping or rule gap is fixed.";
             case SKIPPED ->
-                "Terminal: a Kafka-consumed posting fact deliberately not posted (for "
-                        + "example an uncosted inventory fact, failureReasonCode UNCOSTED_FACT). Not "
+                "Terminal: an event or Kafka-consumed posting fact deliberately not posted (for "
+                        + "example an uncosted inventory fact, failureReasonCode UNCOSTED_FACT, or a "
+                        + "default-mapping event with no amount, MISSING_AMOUNT or ZERO_AMOUNT). Not "
                         + "retryable — the retry scheduler and retryAccountingEvent select only FAILED "
                         + "and SUSPENDED (issue #2191).";
         };

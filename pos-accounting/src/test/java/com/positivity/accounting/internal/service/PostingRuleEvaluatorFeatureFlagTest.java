@@ -326,9 +326,8 @@ class PostingRuleEvaluatorFeatureFlagTest {
         }
 
         @Test
-        @DisplayName("Should succeed with fallback amount when requireAmountField=false and event has no amount")
-        void shouldSucceedWithFallbackAmountWhenNotRequired() {
-            // Arrange
+        @DisplayName("requireAmountField=false and no amount: no journal entry, MISSING_AMOUNT recorded (#2315)")
+        void shouldPostNothingWhenNotRequiredAndMissing() {
             defaultGLMappingProperties.setEnabled(true);
             defaultGLMappingProperties.setAllowGlobalDefaults(true);
             defaultGLMappingProperties.setRequireAmountField(false);
@@ -338,22 +337,15 @@ class PostingRuleEvaluatorFeatureFlagTest {
             when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", testOrganizationId))
                     .thenReturn(Optional.of(mapping));
 
-            // Event without amount
             AccountingEvent event = createEvent("billing.invoicePosted", new HashMap<>());
 
-            // Act
             PostingResult result = evaluator.evaluateEvent(event);
 
-            // Assert — should produce journal entry with fallback amount (0.01)
-            assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getJournalEntryDraft()).isNotNull();
-            assertThat(result.getJournalEntryDraft().getLines()).hasSize(2);
-
-            BigDecimal fallbackAmount = new BigDecimal("0.01");
-            assertThat(result.getJournalEntryDraft().getLines().get(0).getDebitAmount())
-                    .isEqualByComparingTo(fallbackAmount);
-            assertThat(result.getJournalEntryDraft().getLines().get(1).getCreditAmount())
-                    .isEqualByComparingTo(fallbackAmount);
+            // Never an invented amount (ADR-0067 DF-7): no draft at all.
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getJournalEntryDraft()).isNull();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.MISSING_AMOUNT);
+            assertThat(result.getFailureDetails()).contains("payload.amount");
         }
 
         @Test
