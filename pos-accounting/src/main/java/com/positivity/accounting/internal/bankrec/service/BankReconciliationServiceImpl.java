@@ -111,6 +111,9 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
     private static final BigDecimal TOLERANCE = new BigDecimal("0.01");
     private static final String SYSTEM = "SYSTEM";
 
+    /** The as-of bound of a day, 23:59:59.999999: Postgres {@code timestamp(6)} rounds a nanosecond bound up. */
+    static final LocalTime END_OF_DAY = LocalTime.of(23, 59, 59, 999_999_000);
+
     private final Clock clock;
     private final BankReconciliationRepository reconciliationRepository;
     private final BankStatementRepository statementRepository;
@@ -140,7 +143,7 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
         // statementDate is retired (§3.7): the statement end date is the as-of date.
         LocalDate statementEndDate = request.getPeriodEndDate();
         BigDecimal glEndingBalance = journalEntryLineRepository.getAccountBalanceAsOf(
-                request.getGlAccountId(), statementEndDate.atTime(LocalTime.MAX));
+                request.getGlAccountId(), statementEndDate.atTime(END_OF_DAY));
         if (glEndingBalance == null) {
             glEndingBalance = BigDecimal.ZERO;
         }

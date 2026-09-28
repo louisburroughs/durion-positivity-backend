@@ -53,14 +53,18 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
     BigDecimal getAccountBalance(UUID glAccountId);
 
     /**
-     * Signed GL balance for an account as-of a date: sum of (debit − credit) over POSTED lines whose
-     * parent entry's transaction date is on or before {@code asOf}. Used by bank reconciliation
-     * (Story F2, issue #965) to snapshot the GL ending balance at import time.
+     * Signed GL balance for an account as-of an instant: sum of (debit − credit) over the lines of
+     * every entry that was posted — {@code POSTED} or {@code REVERSED}, never {@code DRAFT} — whose
+     * transaction date is on or before {@code asOf}. A reversal is its own POSTED entry dated at the
+     * reversal, so a reversed pair counts the original from its date and the inverse from the
+     * reversal's, and nothing already reported changes (SPEC-manual-bank-reconciliation §3.7, G15;
+     * story S4, #2303 — the counterpart of #2308's report fix). The bank reconciliation is the only
+     * caller; it passes the end of a day at microsecond precision (Postgres {@code timestamp(6)}).
      */
     @Query("SELECT COALESCE(SUM(jel.debitAmount) - SUM(jel.creditAmount), 0) "
             + "FROM JournalEntryLine jel "
             + "JOIN jel.journalEntry je "
-            + "WHERE jel.glAccount.glAccountId = :glAccountId AND je.status = 'POSTED' "
+            + "WHERE jel.glAccount.glAccountId = :glAccountId AND je.status IN ('POSTED', 'REVERSED') "
             + "AND je.transactionDate <= :asOf")
     BigDecimal getAccountBalanceAsOf(@Param("glAccountId") UUID glAccountId, @Param("asOf") LocalDateTime asOf);
 
