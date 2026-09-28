@@ -43,6 +43,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -265,6 +267,27 @@ class PostingEngineOrchestratorTest {
     @Nested
     @DisplayName("Evaluation Failure Tests")
     class EvaluationFailureTests {
+
+        @ParameterizedTest(name = "{0} is recorded SKIPPED, not SUSPENDED (#2315)")
+        @EnumSource(
+                value = PostingFailureReason.class,
+                names = {"MISSING_AMOUNT", "ZERO_AMOUNT"})
+        void shouldSkipEventWhenNoAmountToPost(PostingFailureReason reason) {
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(PostingResult.failure(reason, "no amount stated"));
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
+
+            assertThat(result.isSuccess()).isFalse();
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            AccountingEvent savedEvent = eventCaptor.getValue();
+            assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.SKIPPED);
+            assertThat(savedEvent.getFailureReasonCode()).isEqualTo(reason.name());
+            verify(journalEntryService, never()).createJournalEntry(any());
+        }
 
         @Test
         @DisplayName("Should suspend event when evaluation fails")

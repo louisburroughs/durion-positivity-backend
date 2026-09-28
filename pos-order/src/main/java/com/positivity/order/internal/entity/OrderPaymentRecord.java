@@ -70,6 +70,15 @@ public class OrderPaymentRecord extends TenantScopedEntity {
     @Column(name = "amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal amount;
 
+    /**
+     * ISO 4217 code the payment settled (or was reversed) in, copied from the pos-invoice fact's
+     * {@code currencyCode} (ADR-0067 PC-3, DF-3). Never defaulted: a payment reversal states this
+     * currency. Null on an ON_ACCOUNT entry, which has no gateway leg to reverse and whose order
+     * carries no document currency yet (ADR-0067 Stage A, step A2).
+     */
+    @Column(name = "currency_code", length = 3)
+    private String currencyCode;
+
     /** Processor/gateway reference, when available. */
     @Column(name = "reference", length = 128)
     private String reference;

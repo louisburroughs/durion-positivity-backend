@@ -114,25 +114,45 @@ class PaymentEventsListenerTest {
     }
 
     private static String settledEnvelope(String eventId, String amount) {
+        return settledEnvelope(eventId, amount, "USD");
+    }
+
+    private static String settledEnvelope(String eventId, String amount, String currencyCode) {
         return """
                 {"eventId":"%s","eventType":"payment.payment.settled","schemaVersion":1,
                  "aggregateId":"%s","aggregateVersion":0,"occurredAtUtc":"2026-07-23T11:59:00Z",
                  "sourceService":"pos-invoice",
                  "payload":{"paymentIntentId":"%s","invoiceId":"%s","orderId":"%s",
-                   "methodType":"CARD","amount":%s,"currencyCode":"USD",
+                   "methodType":"CARD","amount":%s,"currencyCode":"%s",
                    "gatewayReference":"ref-1","settledAt":"2026-07-23T11:59:00Z"}}
-                """.formatted(eventId, INTENT_ID, INTENT_ID, INVOICE_ID, ORDER_ID, amount);
+                """.formatted(eventId, INTENT_ID, INTENT_ID, INVOICE_ID, ORDER_ID, amount, currencyCode);
     }
 
     private static String reversedEnvelope(String eventId, String type, String amount) {
+        return reversedEnvelope(eventId, type, amount, "USD");
+    }
+
+    private static String reversedEnvelope(String eventId, String type, String amount, String currencyCode) {
         return """
                 {"eventId":"%s","eventType":"payment.payment.reversed","schemaVersion":1,
                  "aggregateId":"%s","aggregateVersion":0,"occurredAtUtc":"2026-07-23T11:59:30Z",
                  "sourceService":"pos-invoice",
                  "payload":{"paymentIntentId":"%s","invoiceId":"%s","orderId":"%s",
-                   "reversalType":"%s","amount":%s,"currencyCode":"USD",
+                   "reversalType":"%s","amount":%s,"currencyCode":"%s",
                    "reversedAt":"2026-07-23T11:59:30Z"}}
-                """.formatted(eventId, INTENT_ID, INTENT_ID, INVOICE_ID, ORDER_ID, type, amount);
+                """.formatted(eventId, INTENT_ID, INTENT_ID, INVOICE_ID, ORDER_ID, type, amount, currencyCode);
+    }
+
+    /** A settled fact that states no currency at all (no {@code currencyCode} key). */
+    private static String settledEnvelopeWithoutCurrency(String eventId, String amount) {
+        return """
+                {"eventId":"%s","eventType":"payment.payment.settled","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":0,"occurredAtUtc":"2026-07-23T11:59:00Z",
+                 "sourceService":"pos-invoice",
+                 "payload":{"paymentIntentId":"%s","invoiceId":"%s","orderId":"%s",
+                   "methodType":"CARD","amount":%s,
+                   "gatewayReference":"ref-1","settledAt":"2026-07-23T11:59:00Z"}}
+                """.formatted(eventId, INTENT_ID, INTENT_ID, INVOICE_ID, ORDER_ID, amount);
     }
 
     @Test
@@ -179,6 +199,35 @@ class PaymentEventsListenerTest {
 
         assertThat(ledger).isEmpty();
         assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.PENDING_PAYMENT);
+    }
+
+    @Test
+    @DisplayName("PEL-011: the settled fact's currency is kept on the ledger entry (ADR-0067 DF-3)")
+    void settled_keepsCurrencyOfTheFact() {
+        listener.onPaymentEvent(settledEnvelope("evt-1", "100.00", "CAD"));
+
+        assertThat(ledger).hasSize(1);
+        assertThat(ledger.getFirst().getCurrencyCode()).isEqualTo("CAD");
+    }
+
+    @Test
+    @DisplayName("PEL-012: the reversed fact's currency is kept on its REVERSED ledger entry (ADR-0067 DF-3)")
+    void reversed_keepsCurrencyOfTheFact() {
+        listener.onPaymentEvent(settledEnvelope("evt-1", "40.00", "CAD"));
+        listener.onPaymentEvent(reversedEnvelope("evt-2", "REFUND", "15.00", "CAD"));
+
+        assertThat(ledger).hasSize(2);
+        assertThat(ledger.get(1).getRecordType()).isEqualTo(OrderPaymentRecord.RecordType.REVERSED);
+        assertThat(ledger.get(1).getCurrencyCode()).isEqualTo("CAD");
+    }
+
+    @Test
+    @DisplayName("PEL-013: a fact stating no currency is stored with none, never defaulted (ADR-0067 DF-3)")
+    void settledWithoutCurrency_storesNull() {
+        listener.onPaymentEvent(settledEnvelopeWithoutCurrency("evt-1", "100.00"));
+
+        assertThat(ledger).hasSize(1);
+        assertThat(ledger.getFirst().getCurrencyCode()).isNull();
     }
 
     @Test

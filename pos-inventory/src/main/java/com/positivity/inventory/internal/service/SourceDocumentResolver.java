@@ -73,6 +73,7 @@ public class SourceDocumentResolver {
 
     private final ExtPurchaseOrderRepository purchaseOrderRepository;
     private final ExtPurchaseOrderLineRepository purchaseOrderLineRepository;
+    private final ReceiptCostCurrencyPolicy receiptCostCurrencyPolicy;
 
     /**
      * Resolves the still-expected lines of {@code sourceDocumentId}.
@@ -151,8 +152,9 @@ public class SourceDocumentResolver {
      * link was kept, or whose linked line a revision has since replaced, falls back to the order's
      * only line for the product. Empty whenever the cost
      * cannot be known — not a purchase order, no such line (or several candidates), an unpriced
-     * line, or a line projected before pos-order published what its price is per — and the receipt
-     * then posts without a document cost, entering at the product's current average.
+     * line, a line projected before pos-order published what its price is per, or an order not in
+     * the functional currency ({@link #receiptCostHold}, ADR-0067 DF-6) — and the receipt then posts
+     * without a document cost, entering at the product's current average.
      */
     public Optional<BigDecimal> resolveReceiptUnitCost(
             @Nullable SourceDocumentType sourceDocumentType,
@@ -168,6 +170,14 @@ public class SourceDocumentResolver {
         } catch (IllegalArgumentException ex) {
             return Optional.empty();
         }
+        Optional<ExtPurchaseOrderReplica> order = purchaseOrderRepository.findById(poId);
+        if (order.isEmpty()
+                || receiptCostCurrencyPolicy
+                        .awaitingCostReason(order.get().getCurrency())
+                        .isPresent()) {
+            return Optional.empty();
+        }
+        String currency = order.get().getCurrency();
 
         // A revision rebuilds the order's lines under new ids, so a link can outlive its line; the
         // sole-line fallback then applies exactly as for a line that was never linked.
@@ -177,13 +187,30 @@ public class SourceDocumentResolver {
                 .or(() -> soleLineForProduct(poId, productId));
         return orderLine
                 .filter(line -> line.getUnitCostMinor() != null && line.getConversionFactor() != null)
-                .map(line -> ReceiptUnitCosts.perBaseUnit(
-                        line.getUnitCostMinor(),
-                        line.getConversionFactor(),
-                        purchaseOrderRepository
-                                .findById(poId)
-                                .map(ExtPurchaseOrderReplica::getCurrency)
-                                .orElse(null)));
+                .map(line ->
+                        ReceiptUnitCosts.perBaseUnit(line.getUnitCostMinor(), line.getConversionFactor(), currency));
+    }
+
+    /**
+     * Why a receipt against this source document takes no document cost, when the reason is its
+     * currency (ADR-0067 DF-6, #2314): the purchase order is priced in a currency other than the
+     * functional one, or in none. Empty for an order in the functional currency, and whenever the
+     * document is not a projected purchase order, since then there is no cost to hold back.
+     */
+    public Optional<String> receiptCostHold(
+            @Nullable SourceDocumentType sourceDocumentType, @Nullable String sourceDocumentId) {
+        if (sourceDocumentType != SourceDocumentType.PO || sourceDocumentId == null) {
+            return Optional.empty();
+        }
+        UUID poId;
+        try {
+            poId = UUID.fromString(sourceDocumentId.trim());
+        } catch (IllegalArgumentException ex) {
+            return Optional.empty();
+        }
+        return purchaseOrderRepository
+                .findById(poId)
+                .flatMap(order -> receiptCostCurrencyPolicy.awaitingCostReason(order.getCurrency()));
     }
 
     private Optional<ExtPurchaseOrderLineReplica> soleLineForProduct(UUID poId, @Nullable String productId) {

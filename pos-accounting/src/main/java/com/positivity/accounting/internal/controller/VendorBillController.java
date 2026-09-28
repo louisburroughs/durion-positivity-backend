@@ -467,7 +467,7 @@ public class VendorBillController {
                     Preconditions: none beyond the caller holding accounting:analytics:view.
                     Required inputs: dueFrom and dueTo (ISO dates, dueTo on or after dueFrom); the window \
                     cannot exceed 366 days, to bound the scan. status is an optional filter (PENDING_RECEIPT_MATCH, \
-                    MATCH_EXCEPTION, APPROVED, REJECTED, PAID, VOIDED); page/size/sort are standard, though \
+                    MATCH_EXCEPTION, CURRENCY_HOLD, APPROVED, REJECTED, PAID, VOIDED); page/size/sort are standard, though \
                     the due-date-ascending sort is server-controlled and any caller-supplied sort is ignored.
                     Emits an ACCOUNTING_VENDOR_BILL_LIST_VIEW audit event; no state changes.
                     Returns 400 when dueTo is before dueFrom, the window exceeds 366 days, or status is not \

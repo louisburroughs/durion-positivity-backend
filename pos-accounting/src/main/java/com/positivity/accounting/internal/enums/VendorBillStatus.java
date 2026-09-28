@@ -10,6 +10,7 @@ package com.positivity.accounting.internal.enums;
  * invoice</li>
  * <li>APPROVED: Three-way match successful, ready for payment</li>
  * <li>MATCH_EXCEPTION: Discrepancy detected, awaits manual resolution</li>
+ * <li>CURRENCY_HOLD: Stated in a currency other than the ledger's; held (#2309)</li>
  * <li>PAID: Payment processed</li>
  * <li>VOIDED: Cancelled/reversed</li>
  * </ol>
@@ -36,6 +37,15 @@ public enum VendorBillStatus {
      * resolution (accept, correct, or void).
      */
     MATCH_EXCEPTION,
+
+    /**
+     * Bill stated in a currency other than the ledger currency (ADR-0067 PC-9, PC-13; issue #2309).
+     * Held, never booked at par: not matched, not approvable through match resolution, not paid,
+     * and outside every ledger-currency total (Aged Payables). The reason is in
+     * {@code rejectionReason}. A later stage releases it (a booking rate from Stage B1, or manual
+     * handling).
+     */
+    CURRENCY_HOLD,
 
     /**
      * Bill has been approved for payment.

@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.client;
 
+import com.positivity.invoice.internal.config.InvoiceCurrencySource;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
@@ -23,14 +24,15 @@ public class TaxServiceClient {
 
     private static final Logger log = LoggerFactory.getLogger(TaxServiceClient.class);
 
-    private static final String DEFAULT_CURRENCY = "USD";
-
     private final RestClient restClient;
+    private final InvoiceCurrencySource currencySource;
 
     public TaxServiceClient(
             RestClient.Builder restClientBuilder,
+            InvoiceCurrencySource currencySource,
             @Value("${invoice.tax.base-url:http://pos-tax:8091/v1/tax}") String taxServiceBaseUrl) {
         this.restClient = restClientBuilder.baseUrl(taxServiceBaseUrl).build();
+        this.currencySource = currencySource;
     }
 
     /**
@@ -98,7 +100,7 @@ public class TaxServiceClient {
         TaxCalculationRequest request = TaxCalculationRequest.builder()
                 .lineItems(lineItems)
                 .destinationAddress(destination)
-                .currencyCode(DEFAULT_CURRENCY)
+                .currencyCode(currencySource.currencyCode())
                 .referenceId(referenceId)
                 .referenceType(TaxReferenceType.INVOICE)
                 .committable(committable)

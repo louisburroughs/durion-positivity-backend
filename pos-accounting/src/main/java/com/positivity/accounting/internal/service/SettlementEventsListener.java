@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ExtInvoiceDepositCreditApplication;
 import com.positivity.accounting.internal.entity.ExtInvoicePaymentReversal;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
@@ -15,6 +16,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -23,7 +25,9 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -41,7 +45,7 @@ import tools.jackson.databind.ObjectMapper;
  * payment.events.v1}. A second {@code @KafkaListener} on the same topic runs its own consumer
  * group, so Kafka delivers every record to both independently — appropriate when two listeners
  * have genuinely separate concerns, but here the added fact shares this listener's transaction
- * boundary, {@code processed_events} idempotency, and the "malformed payload is skipped-and-marked,
+ * shape, {@code processed_events} idempotency, and the "malformed payload is skipped-and-marked,
  * a business/DB error propagates unmarked for retry/DLQ" contract already proven for {@link
  * SettlementReportedV1} below (PR #977 finding 13). Splitting it out would buy nothing but a second
  * partition assignment and a second full read of the topic.
@@ -71,11 +75,23 @@ import tools.jackson.databind.ObjectMapper;
  *       com.positivity.accounting.internal.entity.ExtInvoiceDepositCreditApplication}; see {@link
  *       #onDepositCreditApplied}.
  * </ul>
+ *
+ * <p><b>Transaction shape (ADR-0044 as amended by #2146; PR #2324 review).</b> The listener method
+ * is not transactional, matching {@link OrderEventsListener}: the envelope and payload are parsed
+ * and {@code processed_events} checked before any transaction opens; each handler and its processed
+ * mark commit together in a {@code REQUIRES_NEW} transaction of their own; a skipped (malformed,
+ * unmappable, non-REFUND, already replicated) record is marked in a transaction of its own. A
+ * failure thrown through a {@code @Transactional} service therefore rolls back only that handler's
+ * work and propagates unmarked for retry/DLQ, instead of leaving a shared listener transaction
+ * rollback-only.
  */
 @Slf4j
 @Component
 @ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
 public class SettlementEventsListener {
+
+    /** The only producer of {@code payment.payment.settled} (pos-invoice PaymentEventPublisher). */
+    static final String PAYMENT_SETTLED_SOURCE_SYSTEM = "pos-invoice";
 
     private final Clock clock;
     private final ObjectMapper objectMapper;
@@ -84,8 +100,13 @@ public class SettlementEventsListener {
     private final PaymentApplicationService paymentApplicationService;
     private final ExtInvoicePaymentReversalRepository extInvoicePaymentReversalRepository;
     private final ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository;
+    private final LedgerCurrency ledgerCurrency;
+    private final InventoryFactIngestionRecorder ingestionRecorder;
     private final Counter payloadRejectedCounter;
     private final Counter paymentSettledUnmappableCounter;
+
+    /** The handler plus its processed mark, or a skip's mark alone, per transaction; see the class doc. */
+    private final TransactionTemplate handlerTransaction;
 
     public SettlementEventsListener(
             Clock clock,
@@ -95,7 +116,10 @@ public class SettlementEventsListener {
             PaymentApplicationService paymentApplicationService,
             ExtInvoicePaymentReversalRepository extInvoicePaymentReversalRepository,
             ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            LedgerCurrency ledgerCurrency,
+            InventoryFactIngestionRecorder ingestionRecorder,
+            ObjectProvider<MeterRegistry> meterRegistry,
+            PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
@@ -103,6 +127,10 @@ public class SettlementEventsListener {
         this.paymentApplicationService = paymentApplicationService;
         this.extInvoicePaymentReversalRepository = extInvoicePaymentReversalRepository;
         this.extInvoiceDepositCreditApplicationRepository = extInvoiceDepositCreditApplicationRepository;
+        this.ledgerCurrency = ledgerCurrency;
+        this.ingestionRecorder = ingestionRecorder;
+        this.handlerTransaction = new TransactionTemplate(transactionManager);
+        this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -125,7 +153,6 @@ public class SettlementEventsListener {
     @KafkaListener(
             topics = "${pos.accounting.kafka.payment-events-topic:payment.events.v1}",
             groupId = "pos-accounting-settlement-events")
-    @Transactional
     public void onPaymentEvent(@NonNull String message) {
         JsonNode envelope;
         try {
@@ -179,16 +206,18 @@ public class SettlementEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed settlement event payload eventId={}: {}", eventId, e.getMessage(), e);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         } catch (Exception e) {
             log.warn("Skipping malformed settlement event eventId={}", eventId, e);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
-        reconciliationService.ingestSettlement(payload);
-        markProcessed(eventId);
+        handlerTransaction.executeWithoutResult(_ -> {
+            reconciliationService.ingestSettlement(payload);
+            markProcessed(eventId);
+        });
     }
 
     /**
@@ -208,11 +237,11 @@ public class SettlementEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed payment.payment.settled payload eventId={}: {}", eventId, e.getMessage(), e);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         } catch (Exception e) {
             log.warn("Skipping malformed payment.payment.settled event eventId={}", eventId, e);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -224,7 +253,7 @@ public class SettlementEventsListener {
                     "Rejected payment.payment.settled payload missing required fields eventId={} paymentIntentId={}",
                     eventId,
                     payload.paymentIntentId());
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -240,7 +269,7 @@ public class SettlementEventsListener {
                     eventId,
                     payload.paymentIntentId(),
                     payload.invoiceId());
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -256,18 +285,52 @@ public class SettlementEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.warn("Skipping payment.payment.settled event with non-UUID eventId={}", eventId, e);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
-        paymentApplicationService.handlePaymentCleared(
+        // Never an AVAILABLE payment in another currency (ADR-0067 PC-9, E-5; AGENT_GUIDE D5; #2310):
+        // hold it visibly with its currency reason instead of recording it one-for-one.
+        if (ledgerCurrency.isForeign(payload.currencyCode())) {
+            handlerTransaction.executeWithoutResult(_ -> {
+                holdForeignCurrencyPayment(payload, eventId);
+                markProcessed(eventId);
+            });
+            return;
+        }
+
+        handlerTransaction.executeWithoutResult(_ -> {
+            paymentApplicationService.handlePaymentCleared(
+                    payload.paymentIntentId(),
+                    customerId,
+                    payload.currencyCode(),
+                    payload.amount(),
+                    payload.settledAt(),
+                    eventUuid);
+            markProcessed(eventId);
+        });
+    }
+
+    private void holdForeignCurrencyPayment(PaymentSettledV1 payload, String eventId) {
+        String detail = "Settled payment of " + payload.amount() + " " + payload.currencyCode()
+                + " not recorded as an available payment: the ledger books " + ledgerCurrency.code()
+                + " only and a payment in another currency is never applied at par (ADR-0067 PC-9)";
+        boolean recorded = ingestionRecorder.recordCurrencyHeld(
+                PAYMENT_SETTLED_SOURCE_SYSTEM,
+                PaymentSettledV1.EVENT_TYPE,
+                eventId,
                 payload.paymentIntentId(),
-                customerId,
+                LocalDateTime.ofInstant(payload.settledAt(), clock.getZone()),
+                payload,
+                detail);
+        log.warn(
+                "payment.payment.settled held for its currency, no ReceivablePayment | eventId={} "
+                        + "| paymentIntentId={} | currency={} | ledgerCurrency={} | newRecord={}",
+                eventId,
+                payload.paymentIntentId(),
                 payload.currencyCode(),
-                payload.amount(),
-                payload.settledAt(),
-                eventUuid);
-        markProcessed(eventId);
+                ledgerCurrency.code(),
+                recorded);
     }
 
     /**
@@ -290,11 +353,11 @@ public class SettlementEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed payment.payment.reversed payload eventId={}: {}", eventId, e.getMessage(), e);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         } catch (Exception e) {
             log.warn("Skipping malformed payment.payment.reversed event eventId={}", eventId, e);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -303,7 +366,7 @@ public class SettlementEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected payment.payment.reversed event with missing payload eventId={}", eventId);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -318,7 +381,7 @@ public class SettlementEventsListener {
                     "Rejected payment.payment.reversed payload with null reversalType eventId={} refundId={}",
                     eventId,
                     payload.refundId());
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -328,7 +391,7 @@ public class SettlementEventsListener {
                             + " releases an authorization that never captured funds)",
                     eventId,
                     payload.reversalType());
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -340,7 +403,7 @@ public class SettlementEventsListener {
                     "Rejected payment.payment.reversed payload missing required fields eventId={} refundId={}",
                     eventId,
                     payload.refundId());
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -349,7 +412,7 @@ public class SettlementEventsListener {
         // not just the outer processed_events check on eventId.
         if (extInvoicePaymentReversalRepository.existsById(payload.refundId())) {
             log.debug("Skipping already-replicated refund refundId={} eventId={}", payload.refundId(), eventId);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -361,22 +424,24 @@ public class SettlementEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.warn("Skipping payment.payment.reversed event with non-UUID eventId={}", eventId, e);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
-        extInvoicePaymentReversalRepository.save(ExtInvoicePaymentReversal.builder()
-                .refundId(payload.refundId())
-                .paymentIntentId(payload.paymentIntentId())
-                .invoiceId(payload.invoiceId())
-                .partyId(payload.partyId())
-                .amount(payload.amount())
-                .currencyCode(payload.currencyCode())
-                .reversalType(payload.reversalType())
-                .reversedAt(payload.reversedAt())
-                .sourceEventId(eventUuid)
-                .build());
-        markProcessed(eventId);
+        handlerTransaction.executeWithoutResult(_ -> {
+            extInvoicePaymentReversalRepository.save(ExtInvoicePaymentReversal.builder()
+                    .refundId(payload.refundId())
+                    .paymentIntentId(payload.paymentIntentId())
+                    .invoiceId(payload.invoiceId())
+                    .partyId(payload.partyId())
+                    .amount(payload.amount())
+                    .currencyCode(payload.currencyCode())
+                    .reversalType(payload.reversalType())
+                    .reversedAt(payload.reversedAt())
+                    .sourceEventId(eventUuid)
+                    .build());
+            markProcessed(eventId);
+        });
     }
 
     /**
@@ -412,11 +477,11 @@ public class SettlementEventsListener {
                     eventId,
                     e.getMessage(),
                     e);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         } catch (Exception e) {
             log.warn("Skipping malformed payment.deposit-credit.applied event eventId={}", eventId, e);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -425,7 +490,7 @@ public class SettlementEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected payment.deposit-credit.applied event with missing payload eventId={}", eventId);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -439,7 +504,7 @@ public class SettlementEventsListener {
                     eventId,
                     payload.depositCreditId(),
                     payload.invoiceId());
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -454,7 +519,7 @@ public class SettlementEventsListener {
                     payload.depositCreditId(),
                     payload.invoiceId(),
                     eventId);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
@@ -466,18 +531,20 @@ public class SettlementEventsListener {
                 payloadRejectedCounter.increment();
             }
             log.warn("Skipping payment.deposit-credit.applied event with non-UUID eventId={}", eventId, e);
-            markProcessed(eventId);
+            markInOwnTransaction(eventId);
             return;
         }
 
-        extInvoiceDepositCreditApplicationRepository.save(ExtInvoiceDepositCreditApplication.builder()
-                .depositCreditId(payload.depositCreditId())
-                .invoiceId(payload.invoiceId())
-                .amountApplied(payload.amountApplied())
-                .appliedAt(payload.appliedAt())
-                .sourceEventId(eventUuid)
-                .build());
-        markProcessed(eventId);
+        handlerTransaction.executeWithoutResult(_ -> {
+            extInvoiceDepositCreditApplicationRepository.save(ExtInvoiceDepositCreditApplication.builder()
+                    .depositCreditId(payload.depositCreditId())
+                    .invoiceId(payload.invoiceId())
+                    .amountApplied(payload.amountApplied())
+                    .appliedAt(payload.appliedAt())
+                    .sourceEventId(eventUuid)
+                    .build());
+            markProcessed(eventId);
+        });
     }
 
     /** Required fields for an {@link ExtInvoiceDepositCreditApplication} row (issue #1621). */
@@ -521,6 +588,10 @@ public class SettlementEventsListener {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    private void markInOwnTransaction(@NonNull String eventId) {
+        handlerTransaction.executeWithoutResult(_ -> markProcessed(eventId));
     }
 
     private void markProcessed(@NonNull String eventId) {

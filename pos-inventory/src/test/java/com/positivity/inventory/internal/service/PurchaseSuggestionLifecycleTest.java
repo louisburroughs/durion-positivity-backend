@@ -209,6 +209,122 @@ class PurchaseSuggestionLifecycleTest {
                 .isEqualTo(PurchaseSuggestionStatus.ACCEPTED);
     }
 
+    // ─── Currency (ADR-0067 DF-5, #2313) ─────────────────────────────────────
+
+    private PurchaseSuggestion withCurrency(PurchaseSuggestion suggestion, String currency) {
+        suggestion.setUnitCostCurrency(currency);
+        return suggestionRepository.save(suggestion);
+    }
+
+    @Test
+    @DisplayName("mixed currencies in one convert request are rejected with 422 CURRENCY_MISMATCH (#2313)")
+    void convert_mixedCurrenciesRejected() {
+        UUID vendorId = UUID.randomUUID();
+        UUID location = UUID.randomUUID();
+        PurchaseSuggestion usd = seedSuggestion(PurchaseSuggestionStatus.ACCEPTED, vendorId, 499L, location);
+        PurchaseSuggestion eur =
+                withCurrency(seedSuggestion(PurchaseSuggestionStatus.ACCEPTED, vendorId, 799L, location), "EUR");
+
+        ConvertPurchaseSuggestionsRequest request =
+                new ConvertPurchaseSuggestionsRequest(List.of(usd.getSuggestionId(), eur.getSuggestionId()));
+        assertThatThrownBy(() -> purchaseSuggestionService.convertPurchaseSuggestions(request, ACTOR))
+                .isInstanceOf(PurchaseSuggestionConversionException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "PURCHASE_SUGGESTION_CURRENCY_MISMATCH");
+
+        org.mockito.Mockito.verify(purchaseOrderCommandPublisher, org.mockito.Mockito.never())
+                .request(org.mockito.ArgumentMatchers.any());
+        assertThat(suggestionRepository
+                        .findById(usd.getSuggestionId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(PurchaseSuggestionStatus.ACCEPTED);
+        assertThat(suggestionRepository
+                        .findById(eur.getSuggestionId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(PurchaseSuggestionStatus.ACCEPTED);
+    }
+
+    @Test
+    @DisplayName("a priced suggestion with no currency is rejected with 422, never sent as USD (#2313)")
+    void convert_missingCurrencyRejected() {
+        UUID vendorId = UUID.randomUUID();
+        UUID location = UUID.randomUUID();
+        PurchaseSuggestion noCurrency =
+                withCurrency(seedSuggestion(PurchaseSuggestionStatus.ACCEPTED, vendorId, 499L, location), null);
+
+        ConvertPurchaseSuggestionsRequest request =
+                new ConvertPurchaseSuggestionsRequest(List.of(noCurrency.getSuggestionId()));
+        assertThatThrownBy(() -> purchaseSuggestionService.convertPurchaseSuggestions(request, ACTOR))
+                .isInstanceOf(PurchaseSuggestionConversionException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "PURCHASE_SUGGESTION_MISSING_CURRENCY");
+
+        org.mockito.Mockito.verify(purchaseOrderCommandPublisher, org.mockito.Mockito.never())
+                .request(org.mockito.ArgumentMatchers.any());
+        assertThat(suggestionRepository
+                        .findById(noCurrency.getSuggestionId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(PurchaseSuggestionStatus.ACCEPTED);
+    }
+
+    @Test
+    @DisplayName("a currency that is not an ISO 4217 code is rejected with 422, never published (#2313)")
+    void convert_invalidCurrencyRejected() {
+        UUID vendorId = UUID.randomUUID();
+        UUID location = UUID.randomUUID();
+        PurchaseSuggestion freeText =
+                withCurrency(seedSuggestion(PurchaseSuggestionStatus.ACCEPTED, vendorId, 499L, location), "US Dollars");
+
+        ConvertPurchaseSuggestionsRequest request =
+                new ConvertPurchaseSuggestionsRequest(List.of(freeText.getSuggestionId()));
+        assertThatThrownBy(() -> purchaseSuggestionService.convertPurchaseSuggestions(request, ACTOR))
+                .isInstanceOf(PurchaseSuggestionConversionException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "PURCHASE_SUGGESTION_INVALID_CURRENCY");
+
+        org.mockito.Mockito.verify(purchaseOrderCommandPublisher, org.mockito.Mockito.never())
+                .request(org.mockito.ArgumentMatchers.any());
+        assertThat(suggestionRepository
+                        .findById(freeText.getSuggestionId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(PurchaseSuggestionStatus.ACCEPTED);
+    }
+
+    @Test
+    @DisplayName("a lower-case ISO code converts and is published as the canonical upper-case code (#2313)")
+    void convert_lowerCaseCurrencyPublishedCanonical() {
+        UUID vendorId = UUID.randomUUID();
+        UUID location = UUID.randomUUID();
+        PurchaseSuggestion lower =
+                withCurrency(seedSuggestion(PurchaseSuggestionStatus.ACCEPTED, vendorId, 499L, location), "eur");
+        PurchaseSuggestion upper =
+                withCurrency(seedSuggestion(PurchaseSuggestionStatus.ACCEPTED, vendorId, 799L, location), "EUR");
+
+        purchaseSuggestionService.convertPurchaseSuggestions(
+                new ConvertPurchaseSuggestionsRequest(List.of(lower.getSuggestionId(), upper.getSuggestionId())),
+                ACTOR);
+
+        assertThat(capturedRequest().currency()).isEqualTo("EUR");
+    }
+
+    @Test
+    @DisplayName("suggestions sharing one currency convert and publish that currency (#2313)")
+    void convert_singleCurrencyPublishesIt() {
+        UUID vendorId = UUID.randomUUID();
+        UUID location = UUID.randomUUID();
+        PurchaseSuggestion first =
+                withCurrency(seedSuggestion(PurchaseSuggestionStatus.ACCEPTED, vendorId, 499L, location), "EUR");
+        PurchaseSuggestion second =
+                withCurrency(seedSuggestion(PurchaseSuggestionStatus.ACCEPTED, vendorId, 799L, location), "EUR");
+
+        purchaseSuggestionService.convertPurchaseSuggestions(
+                new ConvertPurchaseSuggestionsRequest(List.of(first.getSuggestionId(), second.getSuggestionId())),
+                ACTOR);
+
+        assertThat(capturedRequest().currency()).isEqualTo("EUR");
+    }
+
     @Test
     @DisplayName("non-ACCEPTED suggestions cannot convert (D-3: human accept precedes conversion)")
     void convert_requiresAcceptedStatus() {

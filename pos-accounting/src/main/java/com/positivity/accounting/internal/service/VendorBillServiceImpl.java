@@ -827,6 +827,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                 .billDate(bill.getBillDate())
                 .dueDate(bill.getDueDate())
                 .totalAmount(bill.getTotalAmount())
+                .currency(bill.getCurrency())
                 .status(bill.getStatus())
                 .originEventId(bill.getOriginEventId())
                 .originEventType(bill.getOriginEventType())

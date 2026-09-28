@@ -69,13 +69,14 @@ pos:
       # 
       # When require-amount-field=true:
       #   - Events MUST contain a `payload.amount` field to use default mappings
-      #   - Missing/zero amount throws IllegalArgumentException
+      #   - Missing/zero amount fails validation (EventValidationException)
       #   - Ensures generated journal entries have valid transaction amounts
       # 
       # When require-amount-field=false:
-      #   - Missing/zero amount triggers a warning log
-      #   - System generates journal entries with 0.01 fallback amount (for traceability)
-      #   - NOT RECOMMENDED for production (creates invalid accounting entries)
+      #   - Missing/zero amount triggers a warning log and posts NO journal entry
+      #   - The event is recorded SKIPPED (terminal) with failureReasonCode
+      #     ZERO_AMOUNT (stated as zero) or MISSING_AMOUNT (absent or unreadable),
+      #     so it stays traceable; no amount is ever substituted (issue #2315)
       # 
       # Use Cases:
       #   - Production: require-amount-field=true (data integrity enforcement)
@@ -128,7 +129,7 @@ pos:
 #     default-mappings:
 #       enabled: true                      # Allow default mapping fallback
 #       allow-global-defaults: true        # Allow global defaults
-#       require-amount-field: false        # Allow missing amounts (use 0.01 fallback)
+#       require-amount-field: false        # Zero/missing amounts are recorded SKIPPED, not posted
 
 # ==============================================================================
 # MONITORING & OBSERVABILITY

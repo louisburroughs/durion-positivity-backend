@@ -218,3 +218,11 @@ pos:
         initial-delay-ms: ${POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_INITIAL_DELAY_MS:60000}
   workorder:
     service-id: ${POS_WORKORDER_SERVICE_ID:workorder}
+
+# ADR-0067 DF-6 (#2314): the functional currency a receipt's document cost must be in before it
+# reaches inventory valuation. Read under pos-accounting's own key, and fed by the same
+# ACCOUNTING_LEDGER_BASE_CURRENCY variable, so both modules resolve the one configured value until
+# the shared tenant accessor (ADR-0067 PC-2, steps A1/A2) replaces it.
+accounting:
+  ledger:
+    base-currency: ${ACCOUNTING_LEDGER_BASE_CURRENCY:USD}

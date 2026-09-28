@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.DatabaseDialectSupport;
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.AccountDrilldownResponse;
 import com.positivity.accounting.internal.dto.AgedPayablesReport;
 import com.positivity.accounting.internal.dto.AgedPayablesRow;
@@ -104,7 +105,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     /**
      * Vendor-bill statuses that represent an open (unsettled) payable obligation
      * for the Aged Payables report: everything except settled ({@code PAID}),
-     * voided ({@code VOIDED}), and rejected ({@code REJECTED}) bills.
+     * voided ({@code VOIDED}), rejected ({@code REJECTED}) and currency-held
+     * ({@code CURRENCY_HOLD}, not a ledger-currency payable, #2309) bills.
      */
     private static final Set<VendorBillStatus> OPEN_PAYABLE_STATUSES =
             Set.of(VendorBillStatus.PENDING_RECEIPT_MATCH, VendorBillStatus.MATCH_EXCEPTION, VendorBillStatus.APPROVED);
@@ -132,6 +134,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final DatabaseDialectSupport databaseDialectSupport;
     private final Clock clock;
+    private final LedgerCurrency ledgerCurrency;
 
     public FinancialReportingServiceImpl(
             JournalEntryRepository journalEntryRepository,
@@ -146,7 +149,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             APPaymentAllocationRepository apPaymentAllocationRepository,
             InvoiceBalanceCalculator invoiceBalanceCalculator,
             DatabaseDialectSupport databaseDialectSupport,
-            Clock clock) {
+            Clock clock,
+            LedgerCurrency ledgerCurrency) {
         this.journalEntryRepository = journalEntryRepository;
         this.statementLineMappingRepository = statementLineMappingRepository;
         this.accountingSequenceRepository = accountingSequenceRepository;
@@ -160,6 +164,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         this.invoiceBalanceCalculator = invoiceBalanceCalculator;
         this.databaseDialectSupport = databaseDialectSupport;
         this.clock = clock;
+        this.ledgerCurrency = ledgerCurrency;
     }
 
     @Override
@@ -730,6 +735,11 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         Map<UUID, VendorAging> byVendor = new LinkedHashMap<>();
         for (VendorBill bill : bills) {
+            if (ledgerCurrency.isForeign(bill.getCurrency())) {
+                // A bill in another currency is never summed into ledger-currency totals (ADR-0067
+                // PC-9, #2309). Held bills are not loaded at all; this also keeps out any that escaped.
+                continue;
+            }
             BigDecimal allocated = nullSafe(allocatedByBill.get(bill.getVendorBillId()));
             BigDecimal openBalance = nullSafe(bill.getTotalAmount()).subtract(allocated);
             if (openBalance.signum() <= 0) {

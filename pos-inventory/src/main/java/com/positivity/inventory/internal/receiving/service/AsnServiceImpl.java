@@ -34,6 +34,7 @@ import com.positivity.inventory.internal.service.InventoryLotCaptureService;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.Quantities;
 import com.positivity.inventory.internal.service.QuantityScaleGuard;
+import com.positivity.inventory.internal.service.ReceiptCostCurrencyPolicy;
 import com.positivity.inventory.internal.service.ReceiptUnitCosts;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -47,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
@@ -55,6 +57,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AsnServiceImpl implements AsnService {
     private static final String OCCURRED_AT = "occurredAt";
 
@@ -76,6 +79,7 @@ public class AsnServiceImpl implements AsnService {
     private final DocumentQuantityConverter documentQuantityConverter;
     private final InventoryLotCaptureService lotCaptureService;
     private final QuantityScaleGuard quantityScaleGuard;
+    private final ReceiptCostCurrencyPolicy receiptCostCurrencyPolicy;
 
     @Override
     @Transactional
@@ -307,6 +311,10 @@ public class AsnServiceImpl implements AsnService {
      * carries the line's document cost per base unit (#2203, ADR-0048 IMP-002): {@code unitCostMinor}
      * prices one document unit when a document UoM was keyed, so it is divided by the conversion
      * factor, then moved from minor to major units of the order's currency.
+     *
+     * <p>Only an order in the functional currency lends its cost (ADR-0067 DF-6, #2314). Against
+     * any other the rows post their quantity with no document cost, entering at the running
+     * average, and their notes say they are awaiting cost and why.
      */
     private void postLedgerEntries(
             @NonNull CreateGoodsReceiptRequest request,
@@ -314,11 +322,22 @@ public class AsnServiceImpl implements AsnService {
             @NonNull GoodsReceiptEntity persistedReceipt,
             @Nullable String currency,
             @NonNull String actorId) {
+        String costHold = receiptCostCurrencyPolicy.awaitingCostReason(currency).orElse(null);
+        if (costHold != null) {
+            log.warn(
+                    "Goods receipt {} posted without a document cost: {}",
+                    persistedReceipt.getReceiptNumber(),
+                    costHold);
+        }
         for (ReceiptLineComputation computed : computedLines) {
-            BigDecimal unitCost = ReceiptUnitCosts.perBaseUnit(
-                    computed.request().getUnitCostMinor(),
-                    computed.conversion() == null ? null : computed.conversion().conversionFactor(),
-                    currency);
+            BigDecimal unitCost = costHold != null
+                    ? null
+                    : ReceiptUnitCosts.perBaseUnit(
+                            computed.request().getUnitCostMinor(),
+                            computed.conversion() == null
+                                    ? null
+                                    : computed.conversion().conversionFactor(),
+                            currency);
             // Ledger rows stay base-UoM only (spec B2): the converted base quantity posts here.
             // lotId is null for untracked products (E1 zero-change guarantee).
             InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
@@ -339,7 +358,10 @@ public class AsnServiceImpl implements AsnService {
                                     : computed.request().getSerialNumbers())
                     .transactionUserId(actorId)
                     .sourceTransactionId(persistedReceipt.getReceiptId().toString())
-                    .notes("Goods receipt " + persistedReceipt.getReceiptNumber())
+                    .notes(
+                            costHold == null
+                                    ? "Goods receipt " + persistedReceipt.getReceiptNumber()
+                                    : "Goods receipt " + persistedReceipt.getReceiptNumber() + " | " + costHold)
                     .build();
             ledgerPostingService.post(entry);
             inventoryFactPublisher.markEntry(entry);

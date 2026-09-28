@@ -107,6 +107,15 @@ public class PurchaseOrderProjectionTestSupport {
         return purchaseOrderId;
     }
 
+    /** Re-projects an order in another currency (ADR-0067 DF-6, #2314). */
+    @Transactional
+    public void setCurrency(UUID purchaseOrderId, String currency) {
+        extOrderRepository.findById(purchaseOrderId).ifPresent(order -> {
+            order.setCurrency(currency);
+            extOrderRepository.save(order);
+        });
+    }
+
     /** The single line projected for an order, for tests that need its id. */
     @Transactional
     public UUID lineIdOf(UUID purchaseOrderId) {

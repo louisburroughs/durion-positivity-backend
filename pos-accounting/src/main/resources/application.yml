@@ -122,3 +122,10 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
   default-produces-media-type: application/json
+
+# The ledger currency (ADR-0067). Every existing tenant books in USD (MC-1 ruling); a document or
+# fact in another currency is held or refused, never booked at par (PC-9). Step A5 replaces this
+# deployment-wide value with the tenant's functional currency. Read through LedgerCurrency.
+accounting:
+  ledger:
+    base-currency: USD

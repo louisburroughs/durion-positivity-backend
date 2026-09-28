@@ -118,6 +118,7 @@ class OrderCancellationServiceImplTest {
                 .paymentIntentId(INTENT_ID)
                 .methodType("CARD")
                 .amount(amount)
+                .currencyCode("CAD")
                 .occurredAt(Instant.now())
                 .createdAt(Instant.now())
                 .build();
@@ -183,6 +184,8 @@ class OrderCancellationServiceImplTest {
         verify(invoicingPort).reversePayment(eq(INVOICE_ID), eq(INTENT_ID), captor.capture());
         assertThat(captor.getValue().amount()).isEqualByComparingTo("80.00");
         assertThat(captor.getValue().type()).isEqualTo("REFUND");
+        // The refund states the currency the payment settled in, never a constant (ADR-0067 DF-3).
+        assertThat(captor.getValue().currency()).isEqualTo("CAD");
     }
 
     @Test
@@ -251,6 +254,42 @@ class OrderCancellationServiceImplTest {
         assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null)))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.CANCEL_FAILED_BILLING);
+    }
+
+    @Test
+    @DisplayName("CC-006c: ledger entry without a currency → no refund guessed, CANCEL_FAILED_BILLING")
+    void cancelOrder_settledPaymentWithoutCurrency_refusesToGuess() {
+        SalesOrder order = draftOrder();
+        order.setInvoiceId(INVOICE_ID);
+        when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        OrderPaymentRecord settled = settledRecord(new BigDecimal("80.00"));
+        settled.setCurrencyCode(null);
+        when(paymentRecordRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(settled));
+
+        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.CANCEL_FAILED_BILLING);
+        verify(invoicingPort, never()).reversePayment(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("CC-006d: second intent without a currency → the first is not refunded either, CANCEL_FAILED_BILLING")
+    void cancelOrder_secondIntentWithoutCurrency_sendsNoPartialRefund() {
+        SalesOrder order = draftOrder();
+        order.setInvoiceId(INVOICE_ID);
+        when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        OrderPaymentRecord noCurrency = settledRecord(new BigDecimal("20.00"));
+        noCurrency.setPaymentIntentId(UUID.randomUUID());
+        noCurrency.setCurrencyCode(null);
+        when(paymentRecordRepository.findByOrderId(ORDER_ID))
+                .thenReturn(List.of(settledRecord(new BigDecimal("80.00")), noCurrency));
+
+        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.CANCEL_FAILED_BILLING);
+        verify(invoicingPort, never()).reversePayment(any(), any(), any());
     }
 
     @Test
