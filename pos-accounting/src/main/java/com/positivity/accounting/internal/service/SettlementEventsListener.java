@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ExtInvoiceDepositCreditApplication;
 import com.positivity.accounting.internal.entity.ExtInvoicePaymentReversal;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
@@ -15,6 +16,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -77,6 +79,9 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
 public class SettlementEventsListener {
 
+    /** The only producer of {@code payment.payment.settled} (pos-invoice PaymentEventPublisher). */
+    static final String PAYMENT_SETTLED_SOURCE_SYSTEM = "pos-invoice";
+
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
@@ -84,6 +89,8 @@ public class SettlementEventsListener {
     private final PaymentApplicationService paymentApplicationService;
     private final ExtInvoicePaymentReversalRepository extInvoicePaymentReversalRepository;
     private final ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository;
+    private final LedgerCurrency ledgerCurrency;
+    private final InventoryFactIngestionRecorder ingestionRecorder;
     private final Counter payloadRejectedCounter;
     private final Counter paymentSettledUnmappableCounter;
 
@@ -95,6 +102,8 @@ public class SettlementEventsListener {
             PaymentApplicationService paymentApplicationService,
             ExtInvoicePaymentReversalRepository extInvoicePaymentReversalRepository,
             ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository,
+            LedgerCurrency ledgerCurrency,
+            InventoryFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
         this.objectMapper = objectMapper;
@@ -103,6 +112,8 @@ public class SettlementEventsListener {
         this.paymentApplicationService = paymentApplicationService;
         this.extInvoicePaymentReversalRepository = extInvoicePaymentReversalRepository;
         this.extInvoiceDepositCreditApplicationRepository = extInvoiceDepositCreditApplicationRepository;
+        this.ledgerCurrency = ledgerCurrency;
+        this.ingestionRecorder = ingestionRecorder;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -260,6 +271,14 @@ public class SettlementEventsListener {
             return;
         }
 
+        // Never an AVAILABLE payment in another currency (ADR-0067 PC-9, E-5; AGENT_GUIDE D5; #2310):
+        // hold it visibly with its currency reason instead of recording it one-for-one.
+        if (ledgerCurrency.isForeign(payload.currencyCode())) {
+            holdForeignCurrencyPayment(payload, eventId);
+            markProcessed(eventId);
+            return;
+        }
+
         paymentApplicationService.handlePaymentCleared(
                 payload.paymentIntentId(),
                 customerId,
@@ -268,6 +287,27 @@ public class SettlementEventsListener {
                 payload.settledAt(),
                 eventUuid);
         markProcessed(eventId);
+    }
+
+    private void holdForeignCurrencyPayment(PaymentSettledV1 payload, String eventId) {
+        String detail = "Settled payment of " + payload.amount() + " " + payload.currencyCode()
+                + " not recorded as an available payment: the ledger books " + ledgerCurrency.code()
+                + " only and a payment in another currency is never applied at par (ADR-0067 PC-9)";
+        boolean recorded = ingestionRecorder.recordCurrencyHeld(
+                PAYMENT_SETTLED_SOURCE_SYSTEM,
+                PaymentSettledV1.EVENT_TYPE,
+                payload.paymentIntentId(),
+                LocalDateTime.ofInstant(payload.settledAt(), clock.getZone()),
+                payload,
+                detail);
+        log.warn(
+                "payment.payment.settled held for its currency, no ReceivablePayment | eventId={} "
+                        + "| paymentIntentId={} | currency={} | ledgerCurrency={} | newRecord={}",
+                eventId,
+                payload.paymentIntentId(),
+                payload.currencyCode(),
+                ledgerCurrency.code(),
+                recorded);
     }
 
     /**

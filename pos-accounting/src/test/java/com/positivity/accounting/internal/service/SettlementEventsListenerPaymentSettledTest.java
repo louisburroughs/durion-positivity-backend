@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
@@ -72,12 +73,19 @@ class SettlementEventsListenerPaymentSettledTest {
     @Mock
     private ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository;
 
+    @Mock
+    private InventoryFactIngestionRecorder ingestionRecorder;
+
     private String envelope(String eventId, PaymentSettledV1 payload) {
         return mapper.writeValueAsString(
                 Map.of("eventType", PaymentSettledV1.EVENT_TYPE, "eventId", eventId, "payload", payload));
     }
 
     private PaymentSettledV1 settled(String partyId) {
+        return settled(partyId, "USD");
+    }
+
+    private PaymentSettledV1 settled(String partyId, String currencyCode) {
         return new PaymentSettledV1(
                 PAYMENT_INTENT_ID,
                 INVOICE_ID,
@@ -87,7 +95,7 @@ class SettlementEventsListenerPaymentSettledTest {
                 partyId,
                 "CARD",
                 new BigDecimal("150.00"),
-                "USD",
+                currencyCode,
                 "stripe",
                 "txn_abc123",
                 Instant.parse("2026-08-27T00:00:00Z"));
@@ -110,6 +118,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     paymentApplicationService,
                     extInvoicePaymentReversalRepository,
                     extInvoiceDepositCreditApplicationRepository,
+                    new LedgerCurrency("USD"),
+                    ingestionRecorder,
                     mock(ObjectProvider.class));
         }
 
@@ -138,6 +148,25 @@ class SettlementEventsListenerPaymentSettledTest {
             // BigDecimal.equals() is scale-sensitive; the JSON round-trip through the envelope is not
             // guaranteed to preserve trailing zeros, so amount equivalence is asserted by value.
             assertThat(amountCaptor.getValue()).isEqualByComparingTo("150.00");
+            verify(processedEventRepository).save(any(ProcessedEvent.class));
+        }
+
+        @Test
+        @DisplayName("a settled payment in another currency is held, never made an AVAILABLE payment (#2310)")
+        void foreignCurrencyPaymentIsHeldNotMaterialized() {
+            PaymentSettledV1 eur = settled(PARTY_UUID.toString(), "EUR");
+
+            listener().onPaymentEvent(envelope(EVENT_ID, eur));
+
+            verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+            verify(ingestionRecorder)
+                    .recordCurrencyHeld(
+                            org.mockito.ArgumentMatchers.eq("pos-invoice"),
+                            org.mockito.ArgumentMatchers.eq(PaymentSettledV1.EVENT_TYPE),
+                            org.mockito.ArgumentMatchers.eq(PAYMENT_INTENT_ID),
+                            any(),
+                            any(),
+                            org.mockito.ArgumentMatchers.contains("EUR"));
             verify(processedEventRepository).save(any(ProcessedEvent.class));
         }
 
@@ -270,6 +299,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     realService,
                     extInvoicePaymentReversalRepository,
                     extInvoiceDepositCreditApplicationRepository,
+                    new LedgerCurrency("USD"),
+                    ingestionRecorder,
                     mock(ObjectProvider.class));
         }
 
@@ -282,7 +313,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     customerCreditRepository,
                     reversalRepository,
                     invoiceBalanceCalculator,
-                    outboxService);
+                    outboxService,
+                    new LedgerCurrency("USD"));
             when(processedEventRepository.existsById(anyString())).thenReturn(false);
         }
 

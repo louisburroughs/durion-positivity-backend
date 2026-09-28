@@ -90,6 +90,8 @@ class SettlementEventsListenerPaymentReversedTest {
                 paymentApplicationService,
                 extInvoicePaymentReversalRepository,
                 extInvoiceDepositCreditApplicationRepository,
+                new com.positivity.accounting.internal.config.LedgerCurrency("USD"),
+                org.mockito.Mockito.mock(InventoryFactIngestionRecorder.class),
                 provider);
     }
 
