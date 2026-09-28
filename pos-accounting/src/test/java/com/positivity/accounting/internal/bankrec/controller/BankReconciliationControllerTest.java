@@ -20,6 +20,7 @@ import com.positivity.accounting.internal.bankrec.dto.ReconciliationApiStatus;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationCandidatesResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationCreateRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationMatchResponse;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationReviewResponse;
 import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
@@ -29,6 +30,7 @@ import com.positivity.accounting.internal.bankrec.service.ReconciliationAdjustme
 import com.positivity.accounting.internal.bankrec.service.ReconciliationListFilter;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationMatchingService;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationOutstandingItemService;
+import com.positivity.accounting.internal.bankrec.service.ReconciliationReviewService;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
 import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
@@ -64,6 +66,9 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
 
     @MockitoBean
     private ReconciliationAdjustmentService adjustmentService;
+
+    @MockitoBean
+    private ReconciliationReviewService reviewService;
 
     private static BankReconciliationResponse response() {
         return BankReconciliationResponse.builder()
@@ -527,6 +532,18 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"type\":\"BANK_FEE\",\"amount\":-15.00}"))
                     .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("the review needs view and serves the read model")
+        void review() throws Exception {
+            when(reviewService.review(RECON_ID)).thenReturn(new ReconciliationReviewResponse());
+            mockMvc.perform(withAuth(
+                            get("/v1/accounting/reconciliations/{id}/review", RECON_ID),
+                            "accounting:reconciliation:view"))
+                    .andExpect(status().isOk());
+            mockMvc.perform(withAuth(get("/v1/accounting/reconciliations/{id}/review", RECON_ID), "accounting:je:view"))
+                    .andExpect(status().isForbidden());
         }
 
         @Test

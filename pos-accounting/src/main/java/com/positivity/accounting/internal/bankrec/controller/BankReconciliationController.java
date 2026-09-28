@@ -8,9 +8,11 @@ import com.positivity.accounting.internal.bankrec.dto.ReconciliationApiStatus;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAuditResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationCreateRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationReportResponse;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationReviewResponse;
 import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.bankrec.service.BankReconciliationService;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationListFilter;
+import com.positivity.accounting.internal.bankrec.service.ReconciliationReviewService;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
@@ -75,6 +77,7 @@ public class BankReconciliationController {
     private static final Logger log = LoggerFactory.getLogger(BankReconciliationController.class);
 
     private final BankReconciliationService bankReconciliationService;
+    private final ReconciliationReviewService reviewService;
 
     @PostMapping("/import")
     @SecurityRequirement(
@@ -424,6 +427,51 @@ public class BankReconciliationController {
         return value.toString().replace('\n', '_').replace('\r', '_');
     }
 
+    @GetMapping("/{reconciliationId}/review")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:reconciliation:view"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_VIEW + "')")
+    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_REVIEW", apiVersion = "1")
+    @Operation(
+            operationId = "getReconciliationReview",
+            summary = "Get Reconciliation Review",
+            description = """
+                    Returns the review read model in one call, computed live, so a client never does arithmetic: \
+                    the header (account, window, baseline and whether this statement set it, provenance, status, \
+                    preparer, period state, version); every term of the explicit equation E3 with its \
+                    drill-down, including late adjustments with their owning reconciliation; the opening terms \
+                    and the OPENING_DIFFERENCE diagnostic, which never blocks; everything unresolved from the \
+                    baseline on (late arrivals first, unexplained bank rows with their top ledger candidate, \
+                    unexplained ledger lines with their top bank candidate, possible duplicates with their \
+                    near-duplicate candidates, aged timing items awaiting reaffirmation, proposed and broken \
+                    matches); the posted adjustments; the evidence (matches with their served residual, items, \
+                    exclusions, the adjustments to clearing, the statement); and the readiness with its reasons.
+                    Use this tool to render or audit the reconciliation workspace; use getReconciliation for the \
+                    header alone and getReconciliationReport for the printable report.
+                    Preconditions: the reconciliation must exist.
+                    Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
+                    Emits an ACCOUNTING_RECONCILIATION_REVIEW event; no state changes.
+                    Returns 404 RECONCILIATION_NOT_FOUND when the id is unknown.
+                    """,
+            tags = {"Bank Reconciliation"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Review read",
+            content = @Content(schema = @Schema(implementation = ReconciliationReviewResponse.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks the accounting:reconciliation:view permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Reconciliation not found (RECONCILIATION_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<ReconciliationReviewResponse> getReconciliationReview(
+            @Parameter(description = "Reconciliation id", required = true) @PathVariable UUID reconciliationId) {
+        return ResponseEntity.ok(reviewService.review(reconciliationId));
+    }
+
     @GetMapping("/{reconciliationId}/report")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -434,8 +482,10 @@ public class BankReconciliationController {
             operationId = "getReconciliationReport",
             summary = "Get Reconciliation Report",
             description = """
-                    Returns the reconciliation report: opening GL and closing statement balances, matched \
-                    versus outstanding lines, adjustments and the outstanding difference.
+                    Returns the reconciliation report: the statement lines matched versus outstanding, every \
+                    term of the explicit equation E3 and the opening terms, the outstanding items with their \
+                    age, the unexplained counts and sums, the adjustments and the adjustments to clearing, and \
+                    the live difference.
                     Use this tool to see how far a reconciliation is from balancing before \
                     finalizeReconciliation; use getReconciliation instead for the raw line-level detail.
                     Preconditions: the reconciliation must exist.

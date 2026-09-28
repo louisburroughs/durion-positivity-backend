@@ -74,6 +74,9 @@ class BankReconciliationGuardsAndViewsTest {
     @Mock
     private BankRecAuditRecorder auditRecorder;
 
+    @Mock
+    private ReconciliationReviewService reviewService;
+
     private BankReconciliationServiceImpl service;
 
     @BeforeEach
@@ -90,7 +93,8 @@ class BankReconciliationGuardsAndViewsTest {
                 calculator,
                 new ReconciliationSupport(reconciliationRepository, calculator, clock),
                 auditRecorder,
-                usd());
+                usd(),
+                reviewService);
     }
 
     @Test

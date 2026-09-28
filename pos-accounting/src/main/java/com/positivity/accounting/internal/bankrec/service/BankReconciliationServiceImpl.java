@@ -1,8 +1,6 @@
 package com.positivity.accounting.internal.bankrec.service;
 
-import com.positivity.accounting.internal.bankrec.dto.BankReconciliationAdjustmentResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
-import com.positivity.accounting.internal.bankrec.dto.BankReconciliationLineResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAuditResponse;
@@ -79,6 +77,7 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
     private final ReconciliationSupport support;
     private final BankRecAuditRecorder auditRecorder;
     private final FunctionalCurrency functionalCurrency;
+    private final ReconciliationReviewService reviewService;
 
     @Override
     public BankReconciliationResponse create(@NonNull ReconciliationCreateRequest request) {
@@ -306,38 +305,7 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
     @Override
     @Transactional(readOnly = true)
     public ReconciliationReportResponse report(@NonNull UUID reconciliationId) {
-        BankReconciliation recon = support.require(reconciliationId);
-        ReconciliationSnapshot snapshot = calculator.compute(recon);
-        List<BankTransaction> lines = statementTransactions(recon);
-        List<BankReconciliationAdjustment> adjustments =
-                adjustmentRepository.findByReconciliation_ReconciliationId(reconciliationId);
-
-        List<BankTransaction> matched =
-                lines.stream().filter(BankReconciliationServiceImpl::isMatched).toList();
-        List<BankTransaction> outstanding =
-                lines.stream().filter(l -> !isMatched(l)).toList();
-
-        return ReconciliationReportResponse.builder()
-                .reconciliationId(reconciliationId)
-                .accountCode(recon.getAccountCode())
-                .accountName(recon.getAccountName())
-                .currency(recon.getCurrency())
-                .statementDate(recon.getStatementEndDate())
-                .glEndingBalance(snapshot.terms().glEndingBalance())
-                .statementEndingBalance(recon.getStatementClosingBalance())
-                .totalMatched(sumBank(matched))
-                .totalAdjustments(sumAdjustments(adjustments))
-                .totalOutstanding(sumBank(outstanding))
-                .matchedLineCount(matched.size())
-                .outstandingLineCount(outstanding.size())
-                .difference(snapshot.terms().difference())
-                .adjustments(adjustments.stream()
-                        .map(BankReconciliationAdjustmentResponse::from)
-                        .toList())
-                .outstandingLines(outstanding.stream()
-                        .map(l -> BankReconciliationLineResponse.from(l, null))
-                        .toList())
-                .build();
+        return reviewService.report(reconciliationId);
     }
 
     @Override
@@ -400,28 +368,6 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
     }
 
     // ---- helpers -----------------------------------------------------------
-
-    /** The reconciliation's statement lines: its statement's bank transactions in file order. */
-    private List<BankTransaction> statementTransactions(@NonNull BankReconciliation recon) {
-        if (recon.getStatementId() == null) {
-            return List.of();
-        }
-        return transactionRepository.findByStatementIdOrderBySourceRowNumberAsc(recon.getStatementId());
-    }
-
-    private static boolean isMatched(BankTransaction transaction) {
-        return transaction.getStatus() == BankTransactionStatus.MATCHED;
-    }
-
-    private static BigDecimal sumBank(List<BankTransaction> transactions) {
-        return transactions.stream().map(BankTransaction::getSignedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private static BigDecimal sumAdjustments(List<BankReconciliationAdjustment> adjustments) {
-        return adjustments.stream()
-                .map(BankReconciliationAdjustment::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
 
     /** The header with the live terms of {@code snapshot} applied (not stored on a read). */
     private static BankReconciliationResponse toResponse(

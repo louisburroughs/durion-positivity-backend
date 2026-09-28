@@ -102,6 +102,9 @@ class BankReconciliationServiceTest {
     @Mock
     private BankRecAuditRecorder auditRecorder;
 
+    @Mock
+    private ReconciliationReviewService reviewService;
+
     private BankReconciliationServiceImpl service;
 
     @BeforeEach
@@ -118,7 +121,8 @@ class BankReconciliationServiceTest {
                 calculator,
                 new ReconciliationSupport(reconciliationRepository, calculator, clock),
                 auditRecorder,
-                usd());
+                usd(),
+                reviewService);
         lenient().when(calculator.compute(any())).thenReturn(snapshot(terms("0", "0")));
     }
 
