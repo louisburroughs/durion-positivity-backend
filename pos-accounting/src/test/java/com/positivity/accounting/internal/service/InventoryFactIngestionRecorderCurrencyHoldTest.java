@@ -38,6 +38,7 @@ class InventoryFactIngestionRecorderCurrencyHoldTest {
     private static final UUID SESSION_ID = UUID.fromString("00000000-0000-0000-0000-00000000000a");
     private static final LocalDateTime TX_DATE = LocalDateTime.of(2026, 7, 23, 18, 30);
     private static final String EVENT_TYPE = "order.session.closed";
+    private static final String ENVELOPE_EVENT_ID = "01960003-0000-7000-8000-0000000000e1";
 
     private final AccountingEventRepository accountingEventRepository = mock(AccountingEventRepository.class);
     private final AccountingSequenceRepository sequenceRepository = mock(AccountingSequenceRepository.class);
@@ -72,7 +73,13 @@ class InventoryFactIngestionRecorderCurrencyHoldTest {
         when(sequenceRepository.findByScopeKey(anyString())).thenReturn(Optional.of(sequence));
 
         boolean recorded = recorder.recordCurrencyHeld(
-                "pos-order", EVENT_TYPE, SESSION_ID, TX_DATE, Map.of("currencyCode", "EUR"), "held: EUR");
+                "pos-order",
+                EVENT_TYPE,
+                ENVELOPE_EVENT_ID,
+                SESSION_ID,
+                TX_DATE,
+                Map.of("currencyCode", "EUR"),
+                "held: EUR");
 
         assertThat(recorded).isTrue();
         ArgumentCaptor<AccountingEvent> saved = ArgumentCaptor.forClass(AccountingEvent.class);
@@ -84,6 +91,7 @@ class InventoryFactIngestionRecorderCurrencyHoldTest {
         assertThat(event.getSourceSystem()).isEqualTo("pos-order");
         assertThat(event.getDomainKeyId()).isEqualTo(SESSION_ID.toString());
         assertThat(event.getJournalEntryId()).isNull();
+        assertThat(event.getIngestionId()).isEqualTo(UUID.fromString(ENVELOPE_EVENT_ID));
     }
 
     @Test
@@ -94,7 +102,13 @@ class InventoryFactIngestionRecorderCurrencyHoldTest {
                 .thenReturn(true);
 
         boolean recorded = recorder.recordCurrencyHeld(
-                "pos-order", EVENT_TYPE, SESSION_ID, TX_DATE, Map.of("currencyCode", "EUR"), "held: EUR");
+                "pos-order",
+                EVENT_TYPE,
+                ENVELOPE_EVENT_ID,
+                SESSION_ID,
+                TX_DATE,
+                Map.of("currencyCode", "EUR"),
+                "held: EUR");
 
         assertThat(recorded).isFalse();
         verify(accountingEventRepository, never()).save(any());

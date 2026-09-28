@@ -137,12 +137,15 @@ public class InventoryFactIngestionRecorder {
      * posted. A redelivered fact already held is not recorded twice.
      *
      * @param sourceSystem the producing module, e.g. {@code pos-order}
+     * @param envelopeEventId the consumed envelope's event id, kept as the record's {@code
+     *     ingestionId} like every other consumed fact's record
      * @return whether a new held record was written
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean recordCurrencyHeld(
             @NonNull String sourceSystem,
             @NonNull String eventType,
+            @NonNull String envelopeEventId,
             @NonNull UUID domainKeyId,
             @NonNull LocalDateTime transactionDate,
             @NonNull Object fact,
@@ -156,7 +159,7 @@ public class InventoryFactIngestionRecorder {
                     domainKeyId);
             return false;
         }
-        AccountingEvent event = newEvent(eventType, null, domainKeyId, transactionDate, fact);
+        AccountingEvent event = newEvent(eventType, envelopeEventId, domainKeyId, transactionDate, fact);
         event.setSourceSystem(sourceSystem);
         event.setStatus(AccountingEventStatus.SKIPPED);
         event.setIdempotencyOutcome(IdempotencyOutcome.NEW.name());
@@ -167,18 +170,14 @@ public class InventoryFactIngestionRecorder {
     }
 
     private AccountingEvent newEvent(
-            String eventType,
-            @Nullable String envelopeEventId,
-            UUID domainKeyId,
-            LocalDateTime transactionDate,
-            Object fact) {
+            String eventType, String envelopeEventId, UUID domainKeyId, LocalDateTime transactionDate, Object fact) {
         AccountingEvent event = new AccountingEvent();
         event.setEventType(eventType);
         event.setSourceSystem(SOURCE_SYSTEM);
         event.setDomainKeyId(domainKeyId.toString());
         event.setTransactionDate(transactionDate);
         event.setPayload(objectMapper.convertValue(fact, PAYLOAD_TYPE));
-        event.setIngestionId(envelopeEventId == null ? null : parseUuid(envelopeEventId));
+        event.setIngestionId(parseUuid(envelopeEventId));
         event.setProcessedAt(Instant.now(clock));
         return event;
     }

@@ -70,9 +70,10 @@ public class RegisterOverShortPostingService {
      * zero-variance close posts nothing.
      *
      * @param fact the consumed session-closed fact
+     * @param envelopeEventId the consumed envelope's event id, kept on a currency-held record
      */
     @Transactional
-    public void postOverShort(@NonNull RegisterSessionClosedV1 fact) {
+    public void postOverShort(@NonNull RegisterSessionClosedV1 fact, @NonNull String envelopeEventId) {
         BigDecimal overShort = fact.overShort();
         if (overShort == null || overShort.signum() == 0) {
             log.debug("Zero-variance register close, nothing to post | sessionId={}", fact.sessionId());
@@ -91,7 +92,7 @@ public class RegisterOverShortPostingService {
         // Never at par (ADR-0067 PC-9, E-5; #2312): a variance counted in another currency is held
         // visibly with its currency reason, not posted into the ledger's currency.
         if (ledgerCurrency.isForeign(fact.currencyCode())) {
-            holdForeignCurrency(fact, transactionDate);
+            holdForeignCurrency(fact, envelopeEventId, transactionDate);
             return;
         }
         BigDecimal amount = overShort.abs();
@@ -137,12 +138,19 @@ public class RegisterOverShortPostingService {
                 posted);
     }
 
-    private void holdForeignCurrency(RegisterSessionClosedV1 fact, LocalDateTime transactionDate) {
+    private void holdForeignCurrency(
+            RegisterSessionClosedV1 fact, String envelopeEventId, LocalDateTime transactionDate) {
         String detail = "Register over/short of " + fact.overShort() + " " + fact.currencyCode()
                 + " not posted: the ledger books " + ledgerCurrency.code()
                 + " only and a variance in another currency is never booked at par (ADR-0067 PC-9)";
         boolean recorded = ingestionRecorder.recordCurrencyHeld(
-                SOURCE_SYSTEM, RegisterSessionClosedV1.EVENT_TYPE, fact.sessionId(), transactionDate, fact, detail);
+                SOURCE_SYSTEM,
+                RegisterSessionClosedV1.EVENT_TYPE,
+                envelopeEventId,
+                fact.sessionId(),
+                transactionDate,
+                fact,
+                detail);
         log.warn(
                 "Register over/short held for its currency, not posted | sessionId={} | currency={} "
                         + "| ledgerCurrency={} | newRecord={}",

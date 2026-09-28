@@ -120,7 +120,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     extInvoiceDepositCreditApplicationRepository,
                     new LedgerCurrency("USD"),
                     ingestionRecorder,
-                    mock(ObjectProvider.class));
+                    mock(ObjectProvider.class),
+                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
         }
 
         @BeforeEach
@@ -163,6 +164,7 @@ class SettlementEventsListenerPaymentSettledTest {
                     .recordCurrencyHeld(
                             org.mockito.ArgumentMatchers.eq("pos-invoice"),
                             org.mockito.ArgumentMatchers.eq(PaymentSettledV1.EVENT_TYPE),
+                            org.mockito.ArgumentMatchers.eq(EVENT_ID),
                             org.mockito.ArgumentMatchers.eq(PAYMENT_INTENT_ID),
                             any(),
                             any(),
@@ -301,7 +303,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     extInvoiceDepositCreditApplicationRepository,
                     new LedgerCurrency("USD"),
                     ingestionRecorder,
-                    mock(ObjectProvider.class));
+                    mock(ObjectProvider.class),
+                    org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
         }
 
         @BeforeEach

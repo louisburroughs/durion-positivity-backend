@@ -38,6 +38,8 @@ class RegisterOverShortPostingServiceTest {
     private static final Instant CLOSED_AT = Instant.parse("2026-07-23T18:30:00Z");
     private static final String KEY = "REGISTER_OVER_SHORT_GL_POSTING:" + SESSION_ID;
 
+    private static final String ENVELOPE_EVENT_ID = "01960003-0000-7000-8000-0000000000e2";
+
     private final IdempotencyService idempotencyService = mock(IdempotencyService.class);
     private final GLMappingResolver glMappingResolver = mock(GLMappingResolver.class);
     private final GLPostingService glPostingService = mock(GLPostingService.class);
@@ -96,7 +98,8 @@ class RegisterOverShortPostingServiceTest {
         when(glPostingService.postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any()))
                 .thenReturn(postedEntry());
 
-        service.postOverShort(fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")));
+        service.postOverShort(
+                fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")), ENVELOPE_EVENT_ID);
 
         verify(glPostingService)
                 .postRegisterOverShort(
@@ -123,7 +126,8 @@ class RegisterOverShortPostingServiceTest {
         when(glPostingService.postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any()))
                 .thenReturn(postedEntry());
 
-        service.postOverShort(fact(new BigDecimal("7.50"), new BigDecimal("157.50"), new BigDecimal("150.00")));
+        service.postOverShort(
+                fact(new BigDecimal("7.50"), new BigDecimal("157.50"), new BigDecimal("150.00")), ENVELOPE_EVENT_ID);
 
         verify(glPostingService)
                 .postRegisterOverShort(
@@ -141,7 +145,8 @@ class RegisterOverShortPostingServiceTest {
     @Test
     @DisplayName("Zero-variance close posts nothing")
     void zeroVariancePostsNothing() {
-        service.postOverShort(fact(BigDecimal.ZERO, new BigDecimal("150.00"), new BigDecimal("150.00")));
+        service.postOverShort(
+                fact(BigDecimal.ZERO, new BigDecimal("150.00"), new BigDecimal("150.00")), ENVELOPE_EVENT_ID);
 
         verify(glPostingService, never())
                 .postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any());
@@ -153,7 +158,8 @@ class RegisterOverShortPostingServiceTest {
     void replayedSessionIsNoOp() {
         when(idempotencyService.isKeyProcessed(KEY)).thenReturn(true);
 
-        service.postOverShort(fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")));
+        service.postOverShort(
+                fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")), ENVELOPE_EVENT_ID);
 
         verify(glPostingService, never())
                 .postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any());
@@ -167,7 +173,7 @@ class RegisterOverShortPostingServiceTest {
         RegisterSessionClosedV1 eurFact =
                 fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00"), "EUR");
 
-        service.postOverShort(eurFact);
+        service.postOverShort(eurFact, ENVELOPE_EVENT_ID);
 
         verify(glPostingService, never())
                 .postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any());
@@ -176,6 +182,7 @@ class RegisterOverShortPostingServiceTest {
                 .recordCurrencyHeld(
                         eq("pos-order"),
                         eq(RegisterSessionClosedV1.EVENT_TYPE),
+                        eq(ENVELOPE_EVENT_ID),
                         eq(SESSION_ID),
                         eq(LocalDateTime.ofInstant(CLOSED_AT, ZoneOffset.UTC)),
                         eq(eurFact),
@@ -192,8 +199,9 @@ class RegisterOverShortPostingServiceTest {
         when(glPostingService.postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any()))
                 .thenReturn(postedEntry());
 
-        service.postOverShort(fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")));
+        service.postOverShort(
+                fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")), ENVELOPE_EVENT_ID);
 
-        verify(ingestionRecorder, never()).recordCurrencyHeld(any(), any(), any(), any(), any(), any());
+        verify(ingestionRecorder, never()).recordCurrencyHeld(any(), any(), any(), any(), any(), any(), any());
     }
 }

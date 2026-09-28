@@ -85,7 +85,8 @@ class SettlementListenersReliabilityTest {
                 extInvoiceDepositCreditApplicationRepository,
                 new com.positivity.accounting.internal.config.LedgerCurrency("USD"),
                 org.mockito.Mockito.mock(InventoryFactIngestionRecorder.class),
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                org.mockito.Mockito.mock(ObjectProvider.class),
+                org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
     }
 
     private String envelope(String eventType, String eventId, Object payload) {

@@ -175,7 +175,7 @@ class OrderEventsListenerTransactionTest {
 
         @Override
         @Transactional
-        public void postOverShort(@NonNull RegisterSessionClosedV1 fact) {
+        public void postOverShort(@NonNull RegisterSessionClosedV1 fact, @NonNull String envelopeEventId) {
             sawActiveTransaction.set(TransactionSynchronizationManager.isActualTransactionActive());
             throw failure.get();
         }
