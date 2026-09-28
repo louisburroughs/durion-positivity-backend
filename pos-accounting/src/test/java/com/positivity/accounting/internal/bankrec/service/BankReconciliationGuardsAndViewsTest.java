@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAdjustmentRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAuditResponse;
@@ -18,7 +17,6 @@ import com.positivity.accounting.internal.bankrec.entity.BankReconciliationAdjus
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationBankMatch;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationGlMatch;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationMatch;
-import com.positivity.accounting.internal.bankrec.entity.BankStatement;
 import com.positivity.accounting.internal.bankrec.entity.BankTransaction;
 import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.bankrec.enums.BankTransactionStatus;
@@ -567,36 +565,6 @@ class BankReconciliationGuardsAndViewsTest {
 
             assertThatThrownBy(() -> service.finalizeReconciliation(RECON_ID))
                     .isInstanceOf(ReconciliationAlreadyFinalizedException.class);
-        }
-
-        @Test
-        @DisplayName("an account with no postings reconciles against a zero GL balance, not a crash")
-        void importWithNoPostingsReadsZeroBalance() {
-            GLAccount account = reconcilableAccount();
-            when(glAccountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(account));
-            // A freshly opened bank account: no journal lines at all, so the balance query
-            // returns null rather than zero.
-            when(journalEntryLineRepository.getAccountBalanceAsOf(any(), any())).thenReturn(null);
-            when(statementRepository.save(any(BankStatement.class))).thenAnswer(inv -> inv.getArgument(0));
-            when(reconciliationRepository.save(any())).thenAnswer(inv -> {
-                BankReconciliation saved = inv.getArgument(0);
-                saved.setReconciliationId(RECON_ID);
-                return saved;
-            });
-            when(adjustmentRepository.findByReconciliation_ReconciliationId(any()))
-                    .thenReturn(List.of());
-
-            BankReconciliationImportRequest request = BankReconciliationImportRequest.builder()
-                    .glAccountId(ACCOUNT_ID)
-                    .statementDate(LocalDate.of(2026, 6, 30))
-                    .periodStartDate(LocalDate.of(2026, 6, 1))
-                    .periodEndDate(LocalDate.of(2026, 6, 30))
-                    .currency("usd")
-                    .statementEndingBalance(new BigDecimal("0.0000"))
-                    .csv("date,description,amount\n2026-06-15,Deposit,100.00\n")
-                    .build();
-
-            assertThat(service.importStatement(request).getGlEndingBalance()).isEqualByComparingTo("0");
         }
     }
 

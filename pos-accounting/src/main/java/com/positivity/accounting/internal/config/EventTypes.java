@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 116 event types (includes +9 from statement-file imports (SPEC-manual-bank-reconciliation
+     * Total: 115 event types (includes +9 from statement-file imports (SPEC-manual-bank-reconciliation
      * story S3, Issue #2302): ACCOUNTING_BANK_IMPORT_CREATE, ACCOUNTING_BANK_IMPORT_LIST,
      * ACCOUNTING_BANK_IMPORT_GET, ACCOUNTING_BANK_IMPORT_ROWS, ACCOUNTING_BANK_IMPORT_MAPPING_SET,
      * ACCOUNTING_BANK_IMPORT_ROW_CORRECT, ACCOUNTING_BANK_IMPORT_COMMIT, ACCOUNTING_BANK_IMPORT_DISCARD,
@@ -38,8 +38,8 @@ public final class EventTypes {
      * (Issue #998 Phase-2 item 2): TAX_LIABILITY_SNAPSHOT_FREEZE,
      * TAX_LIABILITY_SNAPSHOT_LIST, TAX_LIABILITY_SNAPSHOT_GET,
      * TAX_LIABILITY_SNAPSHOT_VERIFY, +1 from the sales-tax liability report
-     * (Story T8, Issue #966): REPORT_TAX_LIABILITY_GENERATE, +10 from manual CSV bank reconciliation
-     * (Story F2, Issue #965): ACCOUNTING_RECONCILIATION_IMPORT,
+     * (Story T8, Issue #966): REPORT_TAX_LIABILITY_GENERATE, +9 from manual CSV bank reconciliation
+     * (Story F2, Issue #965; its ACCOUNTING_RECONCILIATION_IMPORT is retired, D14, #2302):
      * ACCOUNTING_RECONCILIATION_MATCH, ACCOUNTING_RECONCILIATION_UNMATCH,
      * ACCOUNTING_RECONCILIATION_ADJUSTMENT, ACCOUNTING_RECONCILIATION_FINALIZE,
      * ACCOUNTING_RECONCILIATION_LIST, ACCOUNTING_RECONCILIATION_GET,
@@ -358,11 +358,8 @@ public final class EventTypes {
                                         + " threshold-gated, mandatory reason)")
                         .build(),
 
-                // BankReconciliationController — 10 events (Story F2, Issue #965)
-                EventTypeRegistration.write(
-                                "ACCOUNTING_RECONCILIATION_IMPORT",
-                                "Import a bank statement CSV and start a reconciliation")
-                        .build(),
+                // BankReconciliationController — 9 events (Story F2, Issue #965; the F2 import,
+                // ACCOUNTING_RECONCILIATION_IMPORT, is retired with its endpoint, D14, #2302)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_RECONCILIATION_MATCH",
                                 "Match statement lines to posted GL journal-entry lines")
