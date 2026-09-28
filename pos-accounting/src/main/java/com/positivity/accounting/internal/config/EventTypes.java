@@ -16,7 +16,12 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 97 event types (includes +3 from the Wave 2 vendor-spend / vendor-bill-list /
+     * Total: 107 event types (includes +10 from bank statements, transactions and accounts
+     * (SPEC-manual-bank-reconciliation story S2, Issue #2301): ACCOUNTING_BANK_STATEMENT_CREATE,
+     * ACCOUNTING_BANK_STATEMENT_LIST, ACCOUNTING_BANK_STATEMENT_GET, ACCOUNTING_BANK_TRANSACTION_LIST,
+     * ACCOUNTING_BANK_TRANSACTION_GET, ACCOUNTING_BANK_TRANSACTION_DUPLICATE_REVIEW,
+     * ACCOUNTING_BANK_TRANSACTION_EXCLUDE, ACCOUNTING_BANK_TRANSACTION_RESTORE,
+     * ACCOUNTING_BANK_ACCOUNT_LIST, ACCOUNTING_BANK_ACCOUNT_PROFILE_SET, and +3 from the Wave 2 vendor-spend / vendor-bill-list /
      * payment-application-list endpoints (Issues #1596 E8 / #1597 E9 / #1598 E10):
      * ACCOUNTING_ANALYTICS_VENDOR_SPEND_VIEW, ACCOUNTING_VENDOR_BILL_LIST_VIEW,
      * ACCOUNTING_PAYMENT_APPLICATION_LIST_VIEW, +2 from the Wave 2 read-only analytics endpoints
@@ -387,6 +392,46 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_RECONCILIATION_ADJUSTMENT_TYPES_LIST",
                                 "List the supported reconciliation adjustment types (decision D-6)")
+                        .build(),
+
+                // Bank statements, transactions and accounts — 10 events (SPEC-manual-bank-reconciliation
+                // §3.10, story S2, issue #2301)
+                EventTypeRegistration.write(
+                                "ACCOUNTING_BANK_STATEMENT_CREATE",
+                                "Commit a bank statement entered by hand through the intake port")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_BANK_STATEMENT_LIST", "List bank statements by account and window")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_BANK_STATEMENT_GET",
+                                "Get one bank statement with its counts and reconciliation links")
+                        .build(),
+                EventTypeRegistration.search(
+                                "ACCOUNTING_BANK_TRANSACTION_LIST",
+                                "List an account's bank transactions by status, window and source")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_BANK_TRANSACTION_GET", "Get one bank transaction with its provenance")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_BANK_TRANSACTION_DUPLICATE_REVIEW",
+                                "Review a possible duplicate bank transaction (distinct or duplicate)")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_BANK_TRANSACTION_EXCLUDE",
+                                "Exclude an unmatched bank transaction, justified")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_BANK_TRANSACTION_RESTORE",
+                                "Restore an excluded bank transaction, justified")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_BANK_ACCOUNT_LIST",
+                                "List bank accounts with profile, baseline, frontiers and unexplained counts")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_BANK_ACCOUNT_PROFILE_SET", "Create or update a bank-account profile")
                         .build(),
 
                 // Customer credit lifecycle (issue #992) - 4 events

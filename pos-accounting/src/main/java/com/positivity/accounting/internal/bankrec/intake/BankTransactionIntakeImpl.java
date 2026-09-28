@@ -60,9 +60,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class BankTransactionIntakeImpl implements BankTransactionIntake {
 
-    /** Justification minimum (D15). */
-    static final int MIN_JUSTIFICATION_LENGTH = 10;
-
     /** Rows that never raise a fingerprint collision at intake (R1, §4.5). */
     private static final Set<BankTransactionStatus> NOT_COLLIDING =
             EnumSet.of(BankTransactionStatus.EXCLUDED, BankTransactionStatus.REMOVED_BY_SOURCE);
@@ -201,7 +198,7 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
                     "statement.endDate",
                     "must not be after " + today);
         }
-        String acknowledgement = requireJustificationShape(ctx.gapAcknowledgement(), "gapAcknowledgement");
+        String acknowledgement = Justification.optional(ctx.gapAcknowledgement(), "gapAcknowledgement");
 
         // U1, then U2 (a window equal to a committed one overlaps it too, so U1 answers first).
         statements
@@ -232,7 +229,7 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
                     BankRecErrorCode.STATEMENT_NOT_CONTIGUOUS,
                     previous.isEmpty()
                             ? "The account's first statement needs a gapAcknowledgement (at least "
-                                    + MIN_JUSTIFICATION_LENGTH + " characters)"
+                                    + Justification.MIN_LENGTH + " characters)"
                             : "The statement does not continue the previous statement; correct the header or"
                                     + " commit it with a gapAcknowledgement",
                     discontinuities);
@@ -300,26 +297,6 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
                     "opening + activity = " + functionalCurrency.display(expectedClosing) + ", closing = "
                             + functionalCurrency.display(header.closingBalance()));
         }
-    }
-
-    /** Validates a justification's shape: blank → VALIDATION_ERROR, 1–9 characters → JUSTIFICATION_REQUIRED (D15). */
-    static @Nullable String requireJustificationShape(@Nullable String value, String field) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            throw BankRecException.field(
-                    BankRecErrorCode.VALIDATION_ERROR, field + " must not be blank", field, "must not be blank");
-        }
-        if (trimmed.length() < MIN_JUSTIFICATION_LENGTH) {
-            throw BankRecException.field(
-                    BankRecErrorCode.JUSTIFICATION_REQUIRED,
-                    field + " must be at least " + MIN_JUSTIFICATION_LENGTH + " characters",
-                    field,
-                    "at least " + MIN_JUSTIFICATION_LENGTH + " characters");
-        }
-        return trimmed;
     }
 
     private static BankRecException overlap(String statementId, StatementHeader header) {
