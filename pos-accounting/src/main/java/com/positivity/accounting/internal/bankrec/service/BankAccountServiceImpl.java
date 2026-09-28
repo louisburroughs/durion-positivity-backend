@@ -7,12 +7,13 @@ import com.positivity.accounting.internal.bankrec.dto.BankAccountResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankFeedLinkState;
 import com.positivity.accounting.internal.bankrec.entity.BankAccountProfile;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
-import com.positivity.accounting.internal.bankrec.entity.BankStatement;
 import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
 import com.positivity.accounting.internal.bankrec.enums.OutstandingItemStatus;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
 import com.positivity.accounting.internal.bankrec.intake.BankRecException;
+import com.positivity.accounting.internal.bankrec.repository.AccountCount;
+import com.positivity.accounting.internal.bankrec.repository.AccountDate;
 import com.positivity.accounting.internal.bankrec.repository.BankAccountProfileRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationOutstandingItemRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
@@ -22,15 +23,19 @@ import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankC
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.LocalDate;
 import java.util.Currency;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,16 +63,10 @@ public class BankAccountServiceImpl implements BankAccountService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull BankAccountListResponse listBankAccounts(int page, int size) {
-        // Validates the bounds; the in-scope accounts of a tenant are few, so the page is cut in memory.
-        BankRecPaging.page(page, size, org.springframework.data.domain.Sort.unsorted());
-        List<BankCashAccount> accounts = bankCashAccounts.listActive();
-        int fromIndex = (int) Math.min((long) page * size, accounts.size());
-        int toIndex = Math.min(fromIndex + size, accounts.size());
-        List<BankAccountResponse> rows = accounts.subList(fromIndex, toIndex).stream()
-                .map(this::describe)
-                .toList();
-        int totalPages = (accounts.size() + size - 1) / size;
-        return new BankAccountListResponse(rows, (long) accounts.size(), page, size, totalPages);
+        Page<BankCashAccount> accounts = bankCashAccounts.pageActive(
+                BankRecPaging.page(page, size, org.springframework.data.domain.Sort.unsorted()));
+        List<BankAccountResponse> rows = describe(accounts.getContent());
+        return new BankAccountListResponse(rows, accounts.getTotalElements(), page, size, accounts.getTotalPages());
     }
 
     @Override
@@ -120,19 +119,56 @@ public class BankAccountServiceImpl implements BankAccountService {
 
     // ---- helpers ------------------------------------------------------------------------------
 
-    private BankAccountResponse describe(BankCashAccount account) {
+    /** One row per account, from a fixed number of grouped queries whatever the page size. */
+    private List<BankAccountResponse> describe(List<BankCashAccount> accounts) {
+        if (accounts.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = accounts.stream().map(BankCashAccount::glAccountId).toList();
+        Map<UUID, BankAccountProfile> profileById = profiles.findAllById(ids).stream()
+                .collect(Collectors.toMap(BankAccountProfile::getGlAccountId, Function.identity()));
+        Map<UUID, Long> unexplained =
+                counts(transactions.countSinceBaselineByGlAccountIdIn(ids, BankTransactionServiceImpl.UNEXPLAINED));
+        Map<UUID, Long> openItems =
+                counts(outstandingItems.countSinceBaselineByGlAccountIdIn(ids, OutstandingItemStatus.OPEN));
+        Map<UUID, LocalDate> coverage = new HashMap<>();
+        for (AccountDate row : statements.findLatestEndDateByGlAccountIdIn(ids, BankStatementStatus.COMMITTED)) {
+            coverage.put(row.glAccountId(), row.date());
+        }
+        Map<UUID, List<BankReconciliation>> finalized = reconciliations
+                .findByGlAccount_GlAccountIdInAndStatusOrderByStatementStartDateAsc(ids, ReconciliationStatus.FINALIZED)
+                .stream()
+                .collect(Collectors.groupingBy(r -> r.getGlAccount().getGlAccountId()));
+        return accounts.stream()
+                .map(account -> describe(
+                        account,
+                        profileById.get(account.glAccountId()),
+                        unexplained.getOrDefault(account.glAccountId(), 0L),
+                        openItems.getOrDefault(account.glAccountId(), 0L),
+                        coverage.get(account.glAccountId()),
+                        finalized.getOrDefault(account.glAccountId(), List.of())))
+                .toList();
+    }
+
+    private static Map<UUID, Long> counts(List<AccountCount> rows) {
+        Map<UUID, Long> byAccount = new HashMap<>();
+        for (AccountCount row : rows) {
+            byAccount.put(row.glAccountId(), row.count());
+        }
+        return byAccount;
+    }
+
+    private static BankAccountResponse describe(
+            BankCashAccount account,
+            @Nullable BankAccountProfile row,
+            long unexplained,
+            long openItems,
+            @Nullable LocalDate coverageFrontier,
+            List<BankReconciliation> finalized) {
         UUID id = account.glAccountId();
-        Optional<BankAccountProfile> profile = profiles.findById(id);
+        Optional<BankAccountProfile> profile = Optional.ofNullable(row);
         LocalDate baseline =
                 profile.map(BankAccountProfile::getReconciliationBaselineDate).orElse(null);
-        long unexplained = baseline == null
-                ? transactions.countByGlAccountIdAndStatusIn(id, BankTransactionServiceImpl.UNEXPLAINED)
-                : transactions.countByGlAccountIdAndStatusInAndTransactionDateGreaterThanEqual(
-                        id, BankTransactionServiceImpl.UNEXPLAINED, baseline);
-        long openItems = baseline == null
-                ? outstandingItems.countByGlAccountIdAndStatus(id, OutstandingItemStatus.OPEN)
-                : outstandingItems.countByGlAccountIdAndStatusAndItemDateGreaterThanEqual(
-                        id, OutstandingItemStatus.OPEN, baseline);
         return BankAccountResponse.builder()
                 .glAccountId(id)
                 .accountCode(account.accountCode())
@@ -142,11 +178,8 @@ public class BankAccountServiceImpl implements BankAccountService {
                 .currency(profile.map(BankAccountProfile::getCurrency).orElse(null))
                 .profileExists(profile.isPresent())
                 .reconciliationBaselineDate(baseline)
-                .coverageFrontier(statements
-                        .findFirstByGlAccountIdAndStatusOrderByEndDateDesc(id, BankStatementStatus.COMMITTED)
-                        .map(BankStatement::getEndDate)
-                        .orElse(null))
-                .reconciledFrontier(reconciledFrontier(id, baseline))
+                .coverageFrontier(coverageFrontier)
+                .reconciledFrontier(reconciledFrontier(finalized, baseline))
                 .unexplainedBankTransactionCount(unexplained)
                 .openOutstandingItemCount(openItems)
                 .feedLinkState(BankFeedLinkState.NONE)
@@ -157,12 +190,11 @@ public class BankAccountServiceImpl implements BankAccountService {
      * The end of the contiguous chain of FINALIZED reconciliations from the baseline (§4.1): windows
      * that end before the baseline are skipped; the chain stops at the first gap.
      */
-    private @Nullable LocalDate reconciledFrontier(UUID glAccountId, @Nullable LocalDate baseline) {
+    private static @Nullable LocalDate reconciledFrontier(
+            List<BankReconciliation> finalized, @Nullable LocalDate baseline) {
         LocalDate next = baseline;
         LocalDate frontier = null;
-        for (BankReconciliation reconciliation :
-                reconciliations.findByGlAccount_GlAccountIdAndStatusOrderByStatementStartDateAsc(
-                        glAccountId, ReconciliationStatus.FINALIZED)) {
+        for (BankReconciliation reconciliation : finalized) {
             LocalDate start = reconciliation.getStatementStartDate();
             LocalDate end = reconciliation.getStatementEndDate();
             if (start == null || end == null || (next != null && end.isBefore(next))) {

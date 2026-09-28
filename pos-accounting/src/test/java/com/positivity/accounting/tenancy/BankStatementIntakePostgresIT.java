@@ -5,6 +5,7 @@ import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.internal.bankrec.dto.BankAccountResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankStatementCreateRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankStatementResponse;
 import com.positivity.accounting.internal.bankrec.entity.BankStatement;
@@ -22,6 +23,7 @@ import com.positivity.accounting.internal.bankrec.intake.IntakeResult;
 import com.positivity.accounting.internal.bankrec.repository.BankAccountProfileRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
+import com.positivity.accounting.internal.bankrec.service.BankAccountService;
 import com.positivity.accounting.internal.bankrec.service.BankStatementService;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
@@ -71,6 +73,9 @@ class BankStatementIntakePostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private BankStatementService statementService;
+
+    @Autowired
+    private BankAccountService accountService;
 
     @Autowired
     private GLAccountRepository glAccounts;
@@ -242,6 +247,41 @@ class BankStatementIntakePostgresIT extends PostgresTenancyTestBase {
                                 .filter(s -> account.equals(s.getGlAccountId()))
                                 .count()))
                 .isEqualTo(1);
+    }
+
+    // ---- list reads ----------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("the account and statement lists answer their counts from grouped queries on Postgres")
+    void theListsAnswerTheirCountsFromGroupedQueries() {
+        commit(statement("2025-01-01", "2025-01-31", "0", "100"), ACK);
+        commit(statement("2025-02-01", "2025-02-28", "100", "250"), null);
+
+        BankAccountResponse row = asTenant(
+                TENANT_A,
+                () -> accountService.listBankAccounts(0, 200).getAccounts().stream()
+                        .filter(a -> account.equals(a.getGlAccountId()))
+                        .findFirst()
+                        .orElseThrow());
+        assertThat(row.isProfileExists()).isTrue();
+        assertThat(row.getReconciliationBaselineDate()).isEqualTo(LocalDate.parse("2025-01-01"));
+        assertThat(row.getCoverageFrontier()).isEqualTo(LocalDate.parse("2025-02-28"));
+        assertThat(row.getUnexplainedBankTransactionCount()).isEqualTo(2);
+        assertThat(row.getOpenOutstandingItemCount()).isZero();
+        assertThat(row.getReconciledFrontier()).isNull();
+
+        List<BankStatementResponse> listed = asTenant(
+                TENANT_A,
+                () -> statementService
+                        .listStatements(account, null, null, 0, 50)
+                        .getStatements());
+        assertThat(listed).hasSize(2).allSatisfy(st -> {
+            assertThat(st.getBankTransactionCount()).isEqualTo(1);
+            assertThat(st.getPossibleDuplicateCount()).isZero();
+        });
+        BankStatementResponse one = asTenant(
+                TENANT_A, () -> statementService.getStatement(listed.getFirst().getStatementId()));
+        assertThat(one.getBankTransactionCount()).isEqualTo(1);
     }
 
     // ---- request-id race ------------------------------------------------------------------------------

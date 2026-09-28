@@ -11,6 +11,8 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for {@link BankTransaction} rows (SPEC §3.2; stories S1 #2300, S2 #2301). The list
@@ -47,4 +49,28 @@ public interface BankTransactionRepository
 
     /** Unexplained rows on an account that has no baseline yet (§4.1). */
     long countByGlAccountIdAndStatusIn(@NonNull UUID glAccountId, @NonNull Collection<BankTransactionStatus> statuses);
+
+    /**
+     * Rows in {@code statuses} per account, counting only rows dated on or after the account's
+     * baseline when it has one (§4.1) — one grouped query for a page of the bank-account list.
+     */
+    @Query(
+            "SELECT new com.positivity.accounting.internal.bankrec.repository.AccountCount(t.glAccountId, COUNT(t)) FROM BankTransaction t"
+                    + " LEFT JOIN BankAccountProfile p ON p.glAccountId = t.glAccountId"
+                    + " WHERE t.glAccountId IN :ids AND t.status IN :statuses"
+                    + " AND (p.reconciliationBaselineDate IS NULL OR t.transactionDate >= p.reconciliationBaselineDate)"
+                    + " GROUP BY t.glAccountId")
+    @NonNull
+    List<AccountCount> countSinceBaselineByGlAccountIdIn(
+            @Param("ids") @NonNull Collection<UUID> glAccountIds,
+            @Param("statuses") @NonNull Collection<BankTransactionStatus> statuses);
+
+    /** Each statement's row count and {@code flagged} row count — one grouped query for a page (§6.3). */
+    @Query("SELECT new com.positivity.accounting.internal.bankrec.repository.StatementCounts(t.statementId, COUNT(t),"
+            + " SUM(CASE WHEN t.status = :flagged THEN 1L ELSE 0L END)) FROM BankTransaction t"
+            + " WHERE t.statementId IN :ids GROUP BY t.statementId")
+    @NonNull
+    List<StatementCounts> countByStatementIdIn(
+            @Param("ids") @NonNull Collection<UUID> statementIds,
+            @Param("flagged") @NonNull BankTransactionStatus flagged);
 }
