@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.bankrec.repository;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,10 +16,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
  */
 public interface BankReconciliationRepository extends JpaRepository<BankReconciliation, UUID> {
 
-    Page<BankReconciliation> findByGlAccount_GlAccountId(UUID glAccountId, Pageable pageable);
+    @NonNull
+    Page<BankReconciliation> findByGlAccount_GlAccountId(@NonNull UUID glAccountId, @NonNull Pageable pageable);
 
-    Page<BankReconciliation> findByStatus(ReconciliationStatus status, Pageable pageable);
+    @NonNull
+    Page<BankReconciliation> findByStatus(@NonNull ReconciliationStatus status, @NonNull Pageable pageable);
 
+    @NonNull
     Page<BankReconciliation> findByGlAccount_GlAccountIdAndStatus(
-            UUID glAccountId, ReconciliationStatus status, Pageable pageable);
+            @NonNull UUID glAccountId, @NonNull ReconciliationStatus status, @NonNull Pageable pageable);
 }

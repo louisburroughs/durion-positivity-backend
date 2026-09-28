@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -36,7 +37,7 @@ class BankReconciliationSchemaIT {
             AccountingPostgresContainer.ownerDataSource("bank-reconciliation-schema");
 
     /** The alpha default tenant, which the seed binds (ADR-0062). */
-    private static final String TENANT_ID = "01900000-0000-7000-8000-000000000001";
+    private static final String TENANT_ID = TenantTestSupport.TENANT_A.toString();
 
     /** Seeded {@code 1000 Cash} (R__seed_reference_accounting.sql). */
     private static final UUID CASH_ACCOUNT_ID = UUID.fromString("5eed0acc-0000-4000-8000-000000001000");
