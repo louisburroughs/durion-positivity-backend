@@ -28,6 +28,7 @@ import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankC
 import com.positivity.accounting.internal.bankrec.service.BankRecAuditRecorder;
 import com.positivity.accounting.internal.bankrec.service.BankStatementFacts;
 import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.domainevents.accounting.BankStatementCommittedV1;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.BankTransactionObserved;
@@ -97,7 +98,7 @@ class BankTransactionIntakeImplTest {
     void setUp() {
         intake = new BankTransactionIntakeImpl(
                 bankCashAccounts,
-                new FunctionalCurrency("USD"),
+                new FunctionalCurrency(new LedgerCurrency("USD")),
                 statements,
                 transactions,
                 profiles,
