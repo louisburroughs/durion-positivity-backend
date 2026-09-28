@@ -68,5 +68,35 @@ class BillingRulesServiceTest {
         assertThat(result.getPaymentTerms()).isEqualTo("Due on Receipt");
         assertThat(result.getInvoiceDeliveryMethod()).isEqualTo("EMAIL");
         assertThat(result.getCreditLimit()).isNull();
+        // The owner's defaults set no currency (ADR-0067 DF-8, #2316).
+        assertThat(result.getCurrency()).isNull();
+    }
+
+    @Test
+    @DisplayName("getBillingRules - replica row without a currency reports none, not USD (#2316)")
+    void getBillingRules_nullReplicaCurrencyStaysNull() {
+        when(repository.findById(CUSTOMER_ID))
+                .thenReturn(Optional.of(ExtCustomerBillingRules.builder()
+                        .partyId(CUSTOMER_ID)
+                        .paymentTerms("NET30")
+                        .aggregateVersion(1L)
+                        .updatedAt(Instant.parse("2026-07-08T12:00:00Z"))
+                        .build()));
+
+        assertThat(service.getBillingRules(CUSTOMER_ID).getCurrency()).isNull();
+    }
+
+    @Test
+    @DisplayName("getBillingRules - a configured currency is reported as the owner holds it (#2316)")
+    void getBillingRules_configuredCurrencyReturned() {
+        when(repository.findById(CUSTOMER_ID))
+                .thenReturn(Optional.of(ExtCustomerBillingRules.builder()
+                        .partyId(CUSTOMER_ID)
+                        .currency("EUR")
+                        .aggregateVersion(1L)
+                        .updatedAt(Instant.parse("2026-07-08T12:00:00Z"))
+                        .build()));
+
+        assertThat(service.getBillingRules(CUSTOMER_ID).getCurrency()).isEqualTo("EUR");
     }
 }

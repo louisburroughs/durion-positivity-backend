@@ -52,7 +52,11 @@ public class BillingRuleRefResponse {
             requiredMode = NOT_REQUIRED)
     private String discountPolicyRef;
 
-    @Schema(description = "ISO 4217 currency code", example = "USD", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "ISO 4217 currency code; null when the customer has no billing currency configured",
+            example = "USD",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private String currency;
 
     @Schema(description = "Additional extension attributes keyed by name", requiredMode = NOT_REQUIRED)
