@@ -42,6 +42,14 @@ public interface BankStatementRepository
     Optional<BankStatement> findFirstByGlAccountIdAndStatusAndGapAcknowledgementIsNotNullOrderByStartDateDesc(
             @NonNull UUID glAccountId, @NonNull BankStatementStatus status);
 
+    /**
+     * The baseline of a window (§3.1, §3.7; S4, #2303): the latest acknowledged statement that starts on or
+     * before the window start.
+     */
+    Optional<BankStatement>
+            findFirstByGlAccountIdAndStatusAndGapAcknowledgementIsNotNullAndStartDateLessThanEqualOrderByStartDateDesc(
+                    @NonNull UUID glAccountId, @NonNull BankStatementStatus status, @NonNull LocalDate onOrBefore);
+
     /** The coverage frontier (§4.1): the latest-ending statement. */
     Optional<BankStatement> findFirstByGlAccountIdAndStatusOrderByEndDateDesc(
             @NonNull UUID glAccountId, @NonNull BankStatementStatus status);

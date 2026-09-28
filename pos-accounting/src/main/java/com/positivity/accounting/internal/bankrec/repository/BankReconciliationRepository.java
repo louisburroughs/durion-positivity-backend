@@ -3,20 +3,22 @@ package com.positivity.accounting.internal.bankrec.repository;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 /**
- * Repository for {@link BankReconciliation} headers (Story F2, issue #965). The list
- * filters are expressed as derived queries and branched in the service, avoiding a
- * nullable-parameter JPQL filter (which is brittle for enum parameters under
- * Hibernate 6).
+ * Repository for {@link BankReconciliation} headers (Story F2, issue #965; S4, #2303). The list filters
+ * use specifications rather than a nullable-parameter JPQL query (issues #1891, #1961).
  */
-public interface BankReconciliationRepository extends JpaRepository<BankReconciliation, UUID> {
+public interface BankReconciliationRepository
+        extends JpaRepository<BankReconciliation, UUID>, JpaSpecificationExecutor<BankReconciliation> {
 
     @NonNull
     Page<BankReconciliation> findByGlAccount_GlAccountId(@NonNull UUID glAccountId, @NonNull Pageable pageable);
@@ -43,4 +45,12 @@ public interface BankReconciliationRepository extends JpaRepository<BankReconcil
     /** The reconciliations of one statement (§6.1 statement read). */
     @NonNull
     List<BankReconciliation> findByStatementIdOrderByStatementStartDateAsc(@NonNull UUID statementId);
+
+    /** The reconciliations of one statement in the given statuses (§4.1 create rule; S4, #2303). */
+    @NonNull
+    List<BankReconciliation> findByStatementIdAndStatusIn(
+            @NonNull UUID statementId, @NonNull Collection<ReconciliationStatus> statuses);
+
+    /** The reconciliation a create command made (§6.3; S4). */
+    Optional<BankReconciliation> findByRequestId(@NonNull UUID requestId);
 }

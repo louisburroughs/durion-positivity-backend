@@ -3,53 +3,44 @@ package com.positivity.accounting.internal.bankrec.service;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
-import com.positivity.accounting.internal.bankrec.dto.ReconciliationAdjustmentRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAuditResponse;
-import com.positivity.accounting.internal.bankrec.dto.ReconciliationMatchRequest;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationCreateRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationReportResponse;
-import com.positivity.accounting.internal.bankrec.dto.ReconciliationUnmatchRequest;
-import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 
 /**
- * Manual CSV bank reconciliation (Story F2, issue #965, decisions D-5/D-6).
- *
- * <p>Import a bank statement CSV for a reconcilable GL cash account, match statement
- * lines to posted GL journal-entry lines, record adjustments (which post real JEs
- * through the accounting-period gate), and finalize only when the statement and GL
- * ending balances agree (difference within ±0.01).
+ * The bank reconciliation header lifecycle (Story F2, issue #965; S4, #2303 — SPEC §3.7, §4.1, §6.1):
+ * create from a COMMITTED statement, read with the live equation, list, finalize, report, audit.
  */
 public interface BankReconciliationService {
 
-    /** Import a statement CSV and start a reconciliation (status IN_PROGRESS). */
+    /** Start a reconciliation from a COMMITTED statement (status IN_PROGRESS); a replayed requestId returns it. */
+    @NonNull
+    BankReconciliationResponse create(@NonNull ReconciliationCreateRequest request);
+
+    /** Import a statement CSV and start a reconciliation (F2; retired by story S3). */
+    @NonNull
     BankReconciliationResponse importStatement(@NonNull BankReconciliationImportRequest request);
 
-    /** Get one reconciliation with its lines and adjustments. */
+    /** One reconciliation header with its live terms. */
+    @NonNull
     BankReconciliationResponse get(@NonNull UUID reconciliationId);
 
-    /** List reconciliations with optional glAccountId/status filters, paginated. */
-    BankReconciliationListResponse list(
-            @Nullable UUID glAccountId, @Nullable ReconciliationStatus status, @NonNull Pageable pageable);
+    /** Reconciliations matching the filter, paginated. */
+    @NonNull
+    BankReconciliationListResponse list(@NonNull ReconciliationListFilter filter, @NonNull Pageable pageable);
 
-    /** Match statement lines to posted GL journal-entry lines (1-to-1 or N-to-1). */
-    BankReconciliationResponse match(@NonNull UUID reconciliationId, @NonNull ReconciliationMatchRequest request);
-
-    /** Reverse a match, returning its lines to UNMATCHED. */
-    BankReconciliationResponse unmatch(@NonNull UUID reconciliationId, @NonNull ReconciliationUnmatchRequest request);
-
-    /** Record an adjustment and post its real balanced JE. */
-    BankReconciliationResponse addAdjustment(
-            @NonNull UUID reconciliationId, @NonNull ReconciliationAdjustmentRequest request);
-
-    /** Finalize a balanced reconciliation (IN_PROGRESS to FINALIZED). */
+    /** Finalize a reconciliation whose live difference is within ±0.01 (IN_PROGRESS to FINALIZED). */
+    @NonNull
     BankReconciliationResponse finalizeReconciliation(@NonNull UUID reconciliationId);
 
-    /** Reconciliation report: balances, matched vs outstanding, adjustments, difference. */
+    /** Reconciliation report: E3 and opening terms, splits, adjustments, difference. */
+    @NonNull
     ReconciliationReportResponse report(@NonNull UUID reconciliationId);
 
-    /** Audit trail of a reconciliation's actions. */
+    /** Audit trail of a reconciliation's actions (derived until S5 stores it). */
+    @NonNull
     ReconciliationAuditResponse audit(@NonNull UUID reconciliationId);
 }

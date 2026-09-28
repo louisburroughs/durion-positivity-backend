@@ -13,16 +13,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
-import com.positivity.accounting.internal.bankrec.dto.ReconciliationAdjustmentRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationApiStatus;
-import com.positivity.accounting.internal.bankrec.dto.ReconciliationMatchRequest;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationCreateRequest;
 import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
+import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
+import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.service.BankReconciliationService;
+import com.positivity.accounting.internal.bankrec.service.ReconciliationListFilter;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
-import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
-import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
-import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
 import java.math.BigDecimal;
@@ -56,8 +55,6 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
                 .accountCode("1000")
                 .currency("USD")
                 .status(ReconciliationApiStatus.IN_PROGRESS)
-                .statementLines(List.of())
-                .adjustments(List.of())
                 .build();
     }
 
@@ -168,17 +165,27 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
             com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse listResponse =
                     new com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse(
                             List.of(response()), 1L, 0, 20, 1);
-            when(bankReconciliationService.list(eq(ACCOUNT_ID), eq(ReconciliationStatus.IN_PROGRESS), any()))
-                    .thenReturn(listResponse);
+            when(bankReconciliationService.list(any(), any())).thenReturn(listResponse);
 
             mockMvc.perform(withAuth(get("/v1/accounting/reconciliations")
                             .param("glAccountId", ACCOUNT_ID.toString())
-                            .param("status", "IN_PROGRESS")))
+                            .param("status", "IN_PROGRESS")
+                            .param("periodCode", "2026-09")
+                            .param("from", "2026-01-01")
+                            .param("to", "2026-12-31")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.totalElements").value(1))
                     .andExpect(jsonPath("$.reconciliations[0].reconciliationId").value(RECON_ID.toString()));
 
-            verify(bankReconciliationService).list(eq(ACCOUNT_ID), eq(ReconciliationStatus.IN_PROGRESS), any());
+            verify(bankReconciliationService)
+                    .list(
+                            eq(new ReconciliationListFilter(
+                                    ACCOUNT_ID,
+                                    ReconciliationStatus.IN_PROGRESS,
+                                    "2026-09",
+                                    LocalDate.of(2026, 1, 1),
+                                    LocalDate.of(2026, 12, 31))),
+                            any());
         }
 
         @Test
@@ -191,7 +198,7 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-            verify(bankReconciliationService, never()).list(any(), any(), any());
+            verify(bankReconciliationService, never()).list(any(), any());
         }
 
         @Test
@@ -232,108 +239,67 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
     }
 
     @Nested
-    @DisplayName("POST /v1/accounting/reconciliations/{id}/match")
-    class Match {
+    @DisplayName("POST /v1/accounting/reconciliations")
+    class Create {
 
-        @Test
-        @DisplayName("Should return 422 MATCH_AMOUNT_MISMATCH when sets do not net")
-        void shouldReturn422Mismatch() throws Exception {
-            when(bankReconciliationService.match(eq(RECON_ID), any()))
-                    .thenThrow(new MatchAmountMismatchException("mismatch"));
-            ReconciliationMatchRequest req = ReconciliationMatchRequest.builder()
-                    .statementLineIds(List.of(UUID.randomUUID()))
-                    .glLineIds(List.of(UUID.randomUUID()))
-                    .build();
-
-            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/match", RECON_ID))
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(req)))
-                    .andExpect(status().isUnprocessableContent())
-                    .andExpect(jsonPath("$.code").value("MATCH_AMOUNT_MISMATCH"));
+        private String body() throws Exception {
+            return objectMapper.writeValueAsString(ReconciliationCreateRequest.builder()
+                    .glAccountId(ACCOUNT_ID)
+                    .requestId(UUID.fromString("019a0000-0000-7000-8000-000000000001"))
+                    .statementId(UUID.fromString("019a0000-0000-7000-8000-000000000002"))
+                    .build());
         }
 
         @Test
-        @DisplayName("Should return 400 when statementLineIds is empty")
-        void shouldReturn400WhenEmpty() throws Exception {
-            ReconciliationMatchRequest req = ReconciliationMatchRequest.builder()
-                    .statementLineIds(List.of())
-                    .glLineIds(List.of(UUID.randomUUID()))
-                    .build();
-
-            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/match", RECON_ID))
+        @DisplayName("Should answer 201 on a create and 200 on a replay")
+        void shouldCreateAndReplay() throws Exception {
+            when(bankReconciliationService.create(any())).thenReturn(response());
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations"))
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(req)))
-                    .andExpect(status().isBadRequest());
+                            .content(body()))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.reconciliationId").value(RECON_ID.toString()))
+                    .andExpect(jsonPath("$.replayed").value(false));
 
-            verify(bankReconciliationService, never()).match(any(), any());
+            BankReconciliationResponse replayed = response();
+            replayed.setReplayed(true);
+            when(bankReconciliationService.create(any())).thenReturn(replayed);
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.replayed").value(true));
         }
 
         @Test
-        @DisplayName("Should reject match without accounting:reconciliation:adjust authority")
-        void shouldRejectWithoutPermission() throws Exception {
-            ReconciliationMatchRequest req = ReconciliationMatchRequest.builder()
-                    .statementLineIds(List.of(UUID.randomUUID()))
-                    .glLineIds(List.of(UUID.randomUUID()))
-                    .build();
-
-            mockMvc.perform(withAuth(
-                                    post("/v1/accounting/reconciliations/{id}/match", RECON_ID),
-                                    "accounting:reconciliation:view")
+        @DisplayName("Should answer 409 RECONCILIATION_WINDOW_ALREADY_RECONCILED naming the reconciliation")
+        void shouldReturn409AlreadyReconciled() throws Exception {
+            when(bankReconciliationService.create(any()))
+                    .thenThrow(BankRecException.field(
+                            BankRecErrorCode.RECONCILIATION_WINDOW_ALREADY_RECONCILED,
+                            "already",
+                            "reconciliationId",
+                            RECON_ID.toString()));
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations"))
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(req)))
-                    .andExpect(status().isForbidden());
-        }
-    }
-
-    @Nested
-    @DisplayName("POST /v1/accounting/reconciliations/{id}/adjustments")
-    class Adjustments {
-
-        @Test
-        @DisplayName("Should return 422 RECONCILIATION_ADJUSTMENT_SIGN_INVALID for a wrong-sign adjustment")
-        void shouldReturn422SignInvalid() throws Exception {
-            when(bankReconciliationService.addAdjustment(eq(RECON_ID), any()))
-                    .thenThrow(new AdjustmentSignInvalidException(BankAdjustmentType.BANK_FEE));
-            ReconciliationAdjustmentRequest req = ReconciliationAdjustmentRequest.builder()
-                    .type(BankAdjustmentType.BANK_FEE)
-                    .amount(new BigDecimal("12.5000"))
-                    .build();
-
-            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/adjustments", RECON_ID))
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(req)))
-                    .andExpect(status().isUnprocessableContent())
-                    .andExpect(jsonPath("$.code").value("RECONCILIATION_ADJUSTMENT_SIGN_INVALID"));
-        }
-
-        @Test
-        @DisplayName("Should return 409 RECONCILIATION_ALREADY_FINALIZED when finalized")
-        void shouldReturn409WhenFinalized() throws Exception {
-            when(bankReconciliationService.addAdjustment(eq(RECON_ID), any()))
-                    .thenThrow(new ReconciliationAlreadyFinalizedException("finalized"));
-            ReconciliationAdjustmentRequest req = ReconciliationAdjustmentRequest.builder()
-                    .type(BankAdjustmentType.BANK_FEE)
-                    .amount(new BigDecimal("-12.5000"))
-                    .build();
-
-            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/adjustments", RECON_ID))
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(req)))
+                            .content(body()))
                     .andExpect(status().isConflict())
-                    .andExpect(jsonPath("$.code").value("RECONCILIATION_ALREADY_FINALIZED"));
+                    .andExpect(jsonPath("$.code").value("RECONCILIATION_WINDOW_ALREADY_RECONCILED"))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("reconciliationId"));
         }
 
         @Test
-        @DisplayName("Should return 400 when type is missing")
-        void shouldReturn400WhenTypeMissing() throws Exception {
-            ReconciliationAdjustmentRequest req = ReconciliationAdjustmentRequest.builder()
-                    .amount(new BigDecimal("-12.5000"))
-                    .build();
-
-            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/adjustments", RECON_ID))
+        @DisplayName("Should answer 400 without a requestId and 403 without adjust")
+        void shouldValidateAndAuthorize() throws Exception {
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations"))
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(req)))
+                            .content("{\"glAccountId\":\"" + ACCOUNT_ID + "\"}"))
                     .andExpect(status().isBadRequest());
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations"), "accounting:reconciliation:view")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body()))
+                    .andExpect(status().isForbidden());
+            verify(bankReconciliationService, never()).create(any());
         }
     }
 

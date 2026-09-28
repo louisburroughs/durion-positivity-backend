@@ -16,7 +16,13 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 107 event types (includes +10 from bank statements, transactions and accounts
+     * Total: 118 event types (includes +11 from the reconciliation core (SPEC-manual-bank-reconciliation
+     * story S4, Issue #2303): ACCOUNTING_RECONCILIATION_CREATE, ACCOUNTING_RECONCILIATION_CANDIDATES,
+     * ACCOUNTING_RECONCILIATION_AUTO_MATCH, ACCOUNTING_RECONCILIATION_MATCH_ACCEPT,
+     * ACCOUNTING_RECONCILIATION_MATCH_REJECT, ACCOUNTING_RECONCILIATION_OUTSTANDING_REGISTER,
+     * ACCOUNTING_RECONCILIATION_OUTSTANDING_RELEASE, ACCOUNTING_RECONCILIATION_OUTSTANDING_REAFFIRM,
+     * ACCOUNTING_RECONCILIATION_OUTSTANDING_CLEAR_IN_GAP, ACCOUNTING_RECONCILIATION_ADJUSTMENT_REVERSE,
+     * ACCOUNTING_RECONCILIATION_REVIEW, +10 from bank statements, transactions and accounts
      * (SPEC-manual-bank-reconciliation story S2, Issue #2301): ACCOUNTING_BANK_STATEMENT_CREATE,
      * ACCOUNTING_BANK_STATEMENT_LIST, ACCOUNTING_BANK_STATEMENT_GET, ACCOUNTING_BANK_TRANSACTION_LIST,
      * ACCOUNTING_BANK_TRANSACTION_GET, ACCOUNTING_BANK_TRANSACTION_DUPLICATE_REVIEW,
@@ -392,6 +398,50 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_RECONCILIATION_ADJUSTMENT_TYPES_LIST",
                                 "List the supported reconciliation adjustment types (decision D-6)")
+                        .build(),
+
+                // Reconciliation core — 11 events (SPEC-manual-bank-reconciliation §3.10, story S4, issue #2303)
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_CREATE",
+                                "Start a reconciliation from a COMMITTED bank statement")
+                        .build(),
+                EventTypeRegistration.search(
+                                "ACCOUNTING_RECONCILIATION_CANDIDATES",
+                                "Rank match candidates for a bank transaction or a ledger line")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_AUTO_MATCH",
+                                "Propose one-to-one matches by rule (never accepted by the system)")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_MATCH_ACCEPT", "Accept a proposed reconciliation match")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_MATCH_REJECT", "Reject a proposed reconciliation match")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_OUTSTANDING_REGISTER",
+                                "Register a non-posting outstanding (timing) item")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_OUTSTANDING_RELEASE",
+                                "Release an outstanding item, with reason")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_OUTSTANDING_REAFFIRM",
+                                "Reaffirm an aged OTHER_LEDGER_TIMING item in this window")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_RECONCILIATION_OUTSTANDING_CLEAR_IN_GAP",
+                                "Close an outstanding item that cleared during an acknowledged gap")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_RECONCILIATION_ADJUSTMENT_REVERSE",
+                                "Reverse a reconciliation adjustment (posts the reversal JE)")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_RECONCILIATION_REVIEW",
+                                "Read the reconciliation review: equation, diagnostics, unresolved, evidence")
                         .build(),
 
                 // Bank statements, transactions and accounts — 10 events (SPEC-manual-bank-reconciliation
