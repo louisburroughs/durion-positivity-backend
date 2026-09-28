@@ -65,8 +65,11 @@ public class RestInvoicingPortAdapter implements InvoicingPort {
         String path = "/v1/invoices/{invoiceId}/payments/{paymentId}/" + (isVoid ? "void" : "refunds");
         Map<String, Object> body = isVoid
                 ? Map.of("reason", "CUSTOMER_REQUEST", "notes", reasonNotes(command))
+                // The refund states its currency (ADR-0067 PC-3 R-1). pos-invoice's refund body does not
+                // declare it until payment intents carry a currency to compare it with (PC-12).
                 : Map.of(
                         "amount", command.amount(),
+                        "currencyCode", command.currency(),
                         "reason", "CUSTOMER_RETURN",
                         "notes", reasonNotes(command),
                         "externalReference", command.idempotencyKey());

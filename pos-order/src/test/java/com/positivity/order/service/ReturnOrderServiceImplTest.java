@@ -323,6 +323,7 @@ class ReturnOrderServiceImplTest {
                 .paymentIntentId(INTENT_ID)
                 .methodType("CASH")
                 .amount(new BigDecimal(amount))
+                .currencyCode("CAD")
                 .build();
     }
 
@@ -341,7 +342,11 @@ class ReturnOrderServiceImplTest {
         ReturnOrderSummary summary = service.processReturn(id);
 
         assertThat(summary.status()).isEqualTo("COMPLETED");
-        org.mockito.Mockito.verify(invoicingPort).reversePayment(eq(INVOICE_ID), eq(INTENT_ID), any());
+        org.mockito.ArgumentCaptor<com.positivity.order.internal.client.ReversePaymentCommand> captor =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.order.internal.client.ReversePaymentCommand.class);
+        org.mockito.Mockito.verify(invoicingPort).reversePayment(eq(INVOICE_ID), eq(INTENT_ID), captor.capture());
+        // The refund states the currency the original payment settled in (ADR-0067 DF-3).
+        assertThat(captor.getValue().currency()).isEqualTo("CAD");
         org.mockito.Mockito.verify(domainEventPublisher).publishOrderReturned(ro);
         assertThat(ro.getReturnedAt()).isEqualTo(Instant.parse("2026-07-24T12:00:00Z"));
     }
@@ -362,6 +367,28 @@ class ReturnOrderServiceImplTest {
         assertThatThrownBy(() -> service.processReturn(id)).isInstanceOf(IllegalStateException.class);
 
         assertThat(ro.getStatus()).isEqualTo(ReturnOrderStatus.REFUND_FAILED);
+        org.mockito.Mockito.verify(domainEventPublisher, org.mockito.Mockito.never())
+                .publishOrderReturned(any());
+    }
+
+    @Test
+    @DisplayName("SAGA-002b: a later intent without a single currency → no refund sent at all, REFUND_FAILED")
+    void process_laterIntentWithoutCurrency_sendsNoPartialRefund() {
+        UUID id = UUID.randomUUID();
+        ReturnOrder ro = requestedReturn("ORIGINAL_TENDER", null);
+        ro.setReturnOrderId(id);
+        when(returnOrderRepository.findById(id)).thenReturn(Optional.of(ro));
+        when(returnOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        // The larger intent settles in CAD but cannot cover the 54.00 alone; the smaller one has no currency.
+        com.positivity.order.internal.entity.OrderPaymentRecord noCurrency = settledCash("20.00");
+        noCurrency.setPaymentIntentId(UUID.fromString("00000000-0000-0000-0000-0000000000d2"));
+        noCurrency.setCurrencyCode(null);
+        when(paymentRecordRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(settledCash("40.00"), noCurrency));
+
+        assertThatThrownBy(() -> service.processReturn(id)).isInstanceOf(IllegalStateException.class);
+
+        assertThat(ro.getStatus()).isEqualTo(ReturnOrderStatus.REFUND_FAILED);
+        org.mockito.Mockito.verify(invoicingPort, org.mockito.Mockito.never()).reversePayment(any(), any(), any());
         org.mockito.Mockito.verify(domainEventPublisher, org.mockito.Mockito.never())
                 .publishOrderReturned(any());
     }

@@ -6,7 +6,6 @@ import com.positivity.order.internal.client.ReversePaymentCommand;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.dto.ReturnOrderSummary;
 import com.positivity.order.internal.dto.ReturnableLineView;
-import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.RefundMethod;
 import com.positivity.order.internal.entity.ReturnCondition;
 import com.positivity.order.internal.entity.ReturnOrder;
@@ -36,9 +35,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -69,8 +68,6 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
     /** Returns in these states do not reserve quantity against the cap. */
     static final List<ReturnOrderStatus> CAP_EXCLUDED_STATUSES =
             List.of(ReturnOrderStatus.CANCELLED, ReturnOrderStatus.REJECTED);
-
-    private static final String CURRENCY = "USD";
 
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
@@ -412,25 +409,39 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
             parkRefundFailed(returnOrder, "No invoice on the original order to refund against", actor);
             throw new ReturnOrderUnprocessableException("No invoice on the original order to refund against");
         }
-        Map<UUID, BigDecimal> netByIntent = netSettledByIntent(returnOrder.getOriginalOrderId());
+        Map<UUID, NetSettledPayments.NetSettlement> netByIntent =
+                NetSettledPayments.byIntent(paymentRecordRepository.findByOrderId(returnOrder.getOriginalOrderId()));
+        // A refund states the currency the payment settled in; never a guessed one (ADR-0067 DF-3).
+        // Every intent is checked before the first refund, so a currency-less intent reached later
+        // cannot leave an external refund already sent behind a failed return.
+        for (Map.Entry<UUID, NetSettledPayments.NetSettlement> intent : netByIntent.entrySet()) {
+            if (intent.getValue().currencyCode() == null) {
+                String message = "No single settled currency on the ledger for payment intent " + intent.getKey();
+                parkRefundFailed(returnOrder, "Payment reversal failed: " + message, actor);
+                throw new IllegalStateException("Payment reversal failed: " + message);
+            }
+        }
         BigDecimal remaining = returnOrder.getTotalRefund();
-        List<Map.Entry<UUID, BigDecimal>> intents = new ArrayList<>(netByIntent.entrySet());
-        intents.sort(Map.Entry.<UUID, BigDecimal>comparingByValue().reversed());
-        for (Map.Entry<UUID, BigDecimal> intent : intents) {
+        List<Map.Entry<UUID, NetSettledPayments.NetSettlement>> intents = new ArrayList<>(netByIntent.entrySet());
+        intents.sort(Map.Entry.<UUID, NetSettledPayments.NetSettlement>comparingByValue(
+                        Comparator.comparing(NetSettledPayments.NetSettlement::amount))
+                .reversed());
+        for (Map.Entry<UUID, NetSettledPayments.NetSettlement> intent : intents) {
             if (remaining.signum() <= 0) {
                 break;
             }
-            BigDecimal amount = intent.getValue().min(remaining);
+            BigDecimal amount = intent.getValue().amount().min(remaining);
             if (amount.signum() <= 0) {
                 continue;
             }
+            String currencyCode = intent.getValue().currencyCode();
             PaymentReversalResult result = invoicingPort.reversePayment(
                     returnOrder.getOriginalInvoiceId(),
                     intent.getKey(),
                     new ReversePaymentCommand(
                             "REFUND",
                             amount,
-                            CURRENCY,
+                            currencyCode,
                             "Return " + returnOrder.getReturnOrderId(),
                             returnOrder.getOriginalOrderId(),
                             returnOrder.getReturnOrderId() + "-" + intent.getKey()));
@@ -456,22 +467,6 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
         returnOrder.setUpdatedBy(actor);
         returnOrderRepository.save(returnOrder);
         log.warn("Return {} refund failed: {}", returnOrder.getReturnOrderId(), reason);
-    }
-
-    /** Net settled amount per payment intent (Σ SETTLED − Σ REVERSED), positive entries only. */
-    private Map<UUID, BigDecimal> netSettledByIntent(UUID orderId) {
-        Map<UUID, BigDecimal> net = new LinkedHashMap<>();
-        for (OrderPaymentRecord record : paymentRecordRepository.findByOrderId(orderId)) {
-            if (record.getPaymentIntentId() == null) {
-                continue;
-            }
-            BigDecimal signed = record.getRecordType() == OrderPaymentRecord.RecordType.SETTLED
-                    ? record.getAmount()
-                    : record.getAmount().negate();
-            net.merge(record.getPaymentIntentId(), signed, BigDecimal::add);
-        }
-        net.values().removeIf(amount -> amount.signum() <= 0);
-        return net;
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
