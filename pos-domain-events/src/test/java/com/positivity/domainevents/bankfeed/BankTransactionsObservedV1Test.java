@@ -279,6 +279,50 @@ class BankTransactionsObservedV1Test {
                             null))
                     .withMessageContaining("sourceTransactionId");
         }
+
+        @Test
+        void aRemovedElementMayNotCarryASourceRowNumber() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> new BankTransactionObserved(
+                            "T1",
+                            7,
+                            Change.REMOVED,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null))
+                    .withMessageContaining("REMOVED");
+        }
+
+        @Test
+        void aRemovedElementMayNotCarryACurrency() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> new BankTransactionObserved(
+                            "T1",
+                            null,
+                            Change.REMOVED,
+                            null,
+                            null,
+                            null,
+                            null,
+                            "USD",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null))
+                    .withMessageContaining("REMOVED");
+        }
     }
 
     @Nested

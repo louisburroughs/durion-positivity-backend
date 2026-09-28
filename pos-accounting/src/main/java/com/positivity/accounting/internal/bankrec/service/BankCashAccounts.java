@@ -15,6 +15,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -74,6 +76,13 @@ public class BankCashAccounts {
         return glAccounts.findReconcilableActiveOn(AccountSubtype.BANK_CASH, LocalDateTime.now(clock)).stream()
                 .map(BankCashAccounts::toRef)
                 .toList();
+    }
+
+    /** One page of {@link #listActive()}, cut in the database. */
+    public @NonNull Page<BankCashAccount> pageActive(@NonNull Pageable pageable) {
+        return glAccounts
+                .findReconcilableActiveOn(AccountSubtype.BANK_CASH, LocalDateTime.now(clock), pageable)
+                .map(BankCashAccounts::toRef);
     }
 
     /** Display values for the given ids; ids the tenant does not hold are absent. */

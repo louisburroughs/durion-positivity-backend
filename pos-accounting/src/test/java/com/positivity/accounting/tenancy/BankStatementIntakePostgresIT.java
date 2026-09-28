@@ -5,6 +5,9 @@ import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.internal.bankrec.dto.BankAccountResponse;
+import com.positivity.accounting.internal.bankrec.dto.BankStatementCreateRequest;
+import com.positivity.accounting.internal.bankrec.dto.BankStatementResponse;
 import com.positivity.accounting.internal.bankrec.entity.BankStatement;
 import com.positivity.accounting.internal.bankrec.entity.BankTransaction;
 import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
@@ -20,6 +23,8 @@ import com.positivity.accounting.internal.bankrec.intake.IntakeResult;
 import com.positivity.accounting.internal.bankrec.repository.BankAccountProfileRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
+import com.positivity.accounting.internal.bankrec.service.BankAccountService;
+import com.positivity.accounting.internal.bankrec.service.BankStatementService;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
@@ -65,6 +70,12 @@ class BankStatementIntakePostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private BankTransactionIntake intake;
+
+    @Autowired
+    private BankStatementService statementService;
+
+    @Autowired
+    private BankAccountService accountService;
 
     @Autowired
     private GLAccountRepository glAccounts;
@@ -236,6 +247,125 @@ class BankStatementIntakePostgresIT extends PostgresTenancyTestBase {
                                 .filter(s -> account.equals(s.getGlAccountId()))
                                 .count()))
                 .isEqualTo(1);
+    }
+
+    // ---- list reads ----------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("the account and statement lists answer their counts from grouped queries on Postgres")
+    void theListsAnswerTheirCountsFromGroupedQueries() {
+        commit(statement("2025-01-01", "2025-01-31", "0", "100"), ACK);
+        commit(statement("2025-02-01", "2025-02-28", "100", "250"), null);
+
+        BankAccountResponse row = asTenant(
+                TENANT_A,
+                () -> accountService.listBankAccounts(0, 200).getAccounts().stream()
+                        .filter(a -> account.equals(a.getGlAccountId()))
+                        .findFirst()
+                        .orElseThrow());
+        assertThat(row.isProfileExists()).isTrue();
+        assertThat(row.getReconciliationBaselineDate()).isEqualTo(LocalDate.parse("2025-01-01"));
+        assertThat(row.getCoverageFrontier()).isEqualTo(LocalDate.parse("2025-02-28"));
+        assertThat(row.getUnexplainedBankTransactionCount()).isEqualTo(2);
+        assertThat(row.getOpenOutstandingItemCount()).isZero();
+        assertThat(row.getReconciledFrontier()).isNull();
+
+        List<BankStatementResponse> listed = asTenant(
+                TENANT_A,
+                () -> statementService
+                        .listStatements(account, null, null, 0, 50)
+                        .getStatements());
+        assertThat(listed).hasSize(2).allSatisfy(st -> {
+            assertThat(st.getBankTransactionCount()).isEqualTo(1);
+            assertThat(st.getPossibleDuplicateCount()).isZero();
+        });
+        BankStatementResponse one = asTenant(
+                TENANT_A, () -> statementService.getStatement(listed.getFirst().getStatementId()));
+        assertThat(one.getBankTransactionCount()).isEqualTo(1);
+    }
+
+    // ---- request-id race ------------------------------------------------------------------------------
+
+    private BankStatementCreateRequest manualRequest(UUID requestId, String description) {
+        return BankStatementCreateRequest.builder()
+                .glAccountId(account)
+                .requestId(requestId)
+                .currency("USD")
+                .gapAcknowledgement(ACK)
+                .statement(BankStatementCreateRequest.Header.builder()
+                        .startDate(LocalDate.parse("2025-01-01"))
+                        .endDate(LocalDate.parse("2025-01-31"))
+                        .openingBalance(BigDecimal.ZERO)
+                        .closingBalance(new BigDecimal("100"))
+                        .build())
+                .transactions(List.of(BankStatementCreateRequest.Transaction.builder()
+                        .date(LocalDate.parse("2025-01-01"))
+                        .signedAmount(new BigDecimal("100"))
+                        .description(description)
+                        .build()))
+                .build();
+    }
+
+    @Test
+    @DisplayName("two identical submissions racing on one requestId: the loser replays the winner")
+    void theLoserOfTwoIdenticalSubmissionsReplaysTheWinner() throws Exception {
+        UUID requestId = UUIDv7Generator.generate();
+        List<BankStatementResponse> answers =
+                raceOnRequestId(manualRequest(requestId, "DEPOSIT"), manualRequest(requestId, "DEPOSIT"));
+
+        assertThat(answers.get(0).isReplayed()).isFalse();
+        assertThat(answers.get(1).isReplayed()).isTrue();
+        assertThat(answers.get(1).getStatementId()).isEqualTo(answers.get(0).getStatementId());
+    }
+
+    @Test
+    @DisplayName("a different payload racing on one requestId still answers IDEMPOTENCY_CONFLICT")
+    void aDifferentPayloadRacingOnOneRequestIdIsAConflict() {
+        UUID requestId = UUIDv7Generator.generate();
+        assertThatThrownBy(
+                        () -> raceOnRequestId(manualRequest(requestId, "DEPOSIT"), manualRequest(requestId, "OTHER")))
+                .satisfies(thrown -> assertThat(codeOf(thrown)).isEqualTo(BankRecErrorCode.IDEMPOTENCY_CONFLICT))
+                .hasMessageContaining("different payload");
+    }
+
+    /**
+     * Holds the first submission written but uncommitted while the second passes the request-id lookup
+     * and blocks on the database; answers both results in order.
+     */
+    private List<BankStatementResponse> raceOnRequestId(
+            BankStatementCreateRequest winner, BankStatementCreateRequest loser) throws Exception {
+        CountDownLatch firstWritten = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<BankStatementResponse> first = pool.submit(() -> asTenant(
+                    TENANT_A,
+                    () -> new TransactionTemplate(transactionManager).execute(status -> {
+                        BankStatementResponse result = statementService.createManualStatement(winner);
+                        firstWritten.countDown();
+                        awaitQuietly(releaseFirst);
+                        return result;
+                    })));
+            assertThat(firstWritten.await(30, TimeUnit.SECONDS)).isTrue();
+
+            Future<BankStatementResponse> second =
+                    pool.submit(() -> asTenant(TENANT_A, () -> statementService.createManualStatement(loser)));
+            Thread.sleep(1_000);
+            releaseFirst.countDown();
+
+            BankStatementResponse won = first.get(30, TimeUnit.SECONDS);
+            BankStatementResponse lost = second.get(30, TimeUnit.SECONDS);
+            assertThat(asTenant(
+                            TENANT_A,
+                            () -> statements.findAll().stream()
+                                    .filter(st -> account.equals(st.getGlAccountId()))
+                                    .count()))
+                    .isEqualTo(1);
+            return List.of(won, lost);
+        } finally {
+            releaseFirst.countDown();
+            pool.shutdownNow();
+        }
     }
 
     private static void awaitQuietly(CountDownLatch latch) {

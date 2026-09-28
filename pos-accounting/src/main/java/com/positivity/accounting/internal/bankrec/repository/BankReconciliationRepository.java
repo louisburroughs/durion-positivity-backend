@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.bankrec.repository;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -39,6 +40,11 @@ public interface BankReconciliationRepository extends JpaRepository<BankReconcil
     @NonNull
     List<BankReconciliation> findByGlAccount_GlAccountIdAndStatusOrderByStatementStartDateAsc(
             @NonNull UUID glAccountId, @NonNull ReconciliationStatus status);
+
+    /** The accounts' reconciliations in {@code status}, oldest window first (the bank-account list, §4.1). */
+    @NonNull
+    List<BankReconciliation> findByGlAccount_GlAccountIdInAndStatusOrderByStatementStartDateAsc(
+            @NonNull Collection<UUID> glAccountIds, @NonNull ReconciliationStatus status);
 
     /** The reconciliations of one statement (§6.1 statement read). */
     @NonNull
