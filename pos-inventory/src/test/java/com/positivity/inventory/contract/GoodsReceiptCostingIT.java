@@ -162,6 +162,47 @@ class GoodsReceiptCostingIT {
                 .satisfies(cost -> assertThat(cost).isEqualByComparingTo("12.5"));
     }
 
+    @Test
+    @DisplayName("a receipt against a EUR order posts its quantity cost-less, flagged, and leaves the average (#2314)")
+    void foreignCurrencyReceipt_postsQuantityWithoutCost_andLeavesAverage() {
+        UUID productId = seedProduct();
+        UUID usdPo = projection.projectReceivable("APPROVED", UUID.randomUUID(), productId, "10", 12_500L);
+        asnService.createGoodsReceipt(receipt(usdPo, baseLine(productId, "10", 1_250L)), ACTOR);
+        assertThat(costState(productId).getAvgCost()).isEqualByComparingTo("12.5");
+
+        UUID eurPo = projection.projectReceivable("APPROVED", UUID.randomUUID(), productId, "10", 20_000L);
+        projection.setCurrency(eurPo, "EUR");
+        asnService.createGoodsReceipt(receipt(eurPo, baseLine(productId, "10", 2_000L)), ACTOR);
+
+        // No document cost is taken from the EUR order: the row enters at the SKU's running
+        // average (the engine's stamp for a cost-less receipt), never at 20.00 read as dollars.
+        InventoryLedgerEntry eurReceipt = receiptsFor(productId).stream()
+                .filter(entry -> entry.getNotes() != null && entry.getNotes().contains("AWAITING_COST"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("the EUR receipt was not flagged as awaiting cost"));
+        assertThat(eurReceipt.getNotes()).contains("EUR");
+        assertThat(eurReceipt.getChangeInQuantity()).isEqualByComparingTo("10");
+        assertThat(eurReceipt.getUnitCost()).isEqualByComparingTo("12.5");
+        SkuCostState state = costState(productId);
+        assertThat(state.getAvgCost()).isEqualByComparingTo("12.5");
+        assertThat(state.getOnHandQty()).isEqualByComparingTo("20");
+    }
+
+    @Test
+    @DisplayName("a EUR receipt of a never-costed SKU posts its quantity with no unit cost at all (#2314)")
+    void foreignCurrencyReceipt_neverCostedSku_staysUncosted() {
+        UUID productId = seedProduct();
+        UUID eurPo = projection.projectReceivable("APPROVED", UUID.randomUUID(), productId, "10", 20_000L);
+        projection.setCurrency(eurPo, "EUR");
+
+        asnService.createGoodsReceipt(receipt(eurPo, baseLine(productId, "10", 2_000L)), ACTOR);
+
+        InventoryLedgerEntry posted = receiptsFor(productId).getFirst();
+        assertThat(posted.getChangeInQuantity()).isEqualByComparingTo("10");
+        assertThat(posted.getUnitCost()).isNull();
+        assertThat(posted.getNotes()).contains("AWAITING_COST");
+    }
+
     private UUID seedProduct() {
         UUID productId = UUID.randomUUID();
         extProductReplicaRepository.save(ExtProductReplica.builder()
