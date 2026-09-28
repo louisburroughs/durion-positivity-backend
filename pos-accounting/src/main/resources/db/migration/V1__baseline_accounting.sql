@@ -2469,6 +2469,15 @@ CREATE TABLE public.bank_import (
     discarded_at timestamp(6) with time zone,
     discarded_by character varying(50),
     discard_reason character varying(1000),
+    request_hash character varying(64),
+    gap_acknowledgement character varying(1000),
+    split_at jsonb,
+    statement_ids jsonb,
+    source_columns jsonb,
+    header_row boolean,
+    save_mapping_as_default boolean DEFAULT false NOT NULL,
+    retention_until date,
+    file_purged_at timestamp(6) with time zone,
     version bigint DEFAULT 0 NOT NULL,
     CONSTRAINT bank_import_status_ck CHECK (((status)::text = ANY ((ARRAY['UPLOADED'::character varying, 'VALIDATED'::character varying, 'COMMITTED'::character varying, 'DISCARDED'::character varying])::text[])))
 );
@@ -2501,8 +2510,13 @@ CREATE TABLE public.bank_import_row (
     corrected_by character varying(50),
     corrected_at timestamp(6) with time zone,
     bank_transaction_id uuid,
+    skip_reason character varying(1000),
+    duplicate_decision character varying(16),
+    duplicate_of_bank_transaction_id uuid,
+    duplicate_of_row_number integer,
     created_at timestamp(6) with time zone NOT NULL,
     updated_at timestamp(6) with time zone NOT NULL,
+    CONSTRAINT bank_import_row_duplicate_decision_ck CHECK (((duplicate_decision)::text = ANY ((ARRAY['DISTINCT'::character varying, 'DUPLICATE'::character varying])::text[]))),
     CONSTRAINT bank_import_row_status_ck CHECK (((row_status)::text = ANY ((ARRAY['PARSED'::character varying, 'REJECTED'::character varying, 'CORRECTED'::character varying, 'SKIPPED'::character varying, 'POSSIBLE_DUPLICATE'::character varying, 'OUT_OF_WINDOW'::character varying, 'COMMITTED'::character varying])::text[])))
 );
 
@@ -2659,8 +2673,9 @@ CREATE INDEX bank_transaction_statement_idx ON public.bank_transaction USING btr
 
 CREATE UNIQUE INDEX bank_import_committed_file_uk ON public.bank_import USING btree (tenant_id, gl_account_id, file_sha256) WHERE ((status)::text = 'COMMITTED'::text);
 CREATE INDEX bank_import_account_status_idx ON public.bank_import USING btree (tenant_id, gl_account_id, status);
+CREATE INDEX bank_import_retention_idx ON public.bank_import USING btree (tenant_id, retention_until) WHERE (file_purged_at IS NULL);
 
-CREATE INDEX bank_import_row_status_idx ON public.bank_import_row USING btree (tenant_id, import_id, row_status);
+CREATE INDEX bank_import_row_status_idx ON public.bank_import_row USING btree (tenant_id, import_id, row_status, row_number);
 
 CREATE UNIQUE INDEX bank_reconciliation_active_statement_uk ON public.bank_reconciliation USING btree (tenant_id, statement_id) WHERE ((status)::text = ANY ((ARRAY['IN_PROGRESS'::character varying, 'SUBMITTED'::character varying])::text[]));
 CREATE INDEX bank_reconciliation_account_end_status_idx ON public.bank_reconciliation USING btree (tenant_id, gl_account_id, statement_end_date, status);

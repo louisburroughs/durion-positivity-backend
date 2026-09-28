@@ -59,6 +59,16 @@ public interface BankIntakeLookup {
             boolean contiguous,
             @Nullable String gapAcknowledgement) {}
 
+    /** A GL account's display values (ADR-0064: shown beside the id). */
+    record AccountDisplay(
+            @NonNull UUID glAccountId,
+            @NonNull String accountCode,
+            @NonNull String accountName) {}
+
+    /** Display values for the given ids, whatever their eligibility; ids the tenant does not hold are absent. */
+    @NonNull
+    Map<UUID, AccountDisplay> accountDisplay(@NonNull Collection<UUID> glAccountIds);
+
     /**
      * The account a statement would be written to.
      *

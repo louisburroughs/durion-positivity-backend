@@ -318,30 +318,44 @@ public class CsvStatementFileParser implements StatementFileParser {
         String sourceId = cut(trimmed(cell(cells, at.sourceTransactionId())), SOURCE_ID_LENGTH);
         description = cut(description, DESCRIPTION_LENGTH);
 
+        // Every value is read even when another fails, so a correction only has to supply the bad one;
+        // the first failure in column order names the row's rejection.
+        RejectionCode rejection = null;
+        String detail = null;
+        LocalDate date = null;
         if (dateCell == null || dateCell.isBlank()) {
-            return rejected(rowNumber, line, raw, RejectionCode.REQUIRED_COLUMN_MISSING, "Line " + line + ": no date");
+            rejection = RejectionCode.REQUIRED_COLUMN_MISSING;
+            detail = "Line " + line + ": no date";
+        } else {
+            date = StatementValues.parseDate(dateCell, options);
+            if (date == null) {
+                rejection = RejectionCode.DATE_UNPARSEABLE;
+                detail = "Line " + line + ": unparseable date '" + dateCell.trim() + "'";
+            }
         }
-        LocalDate date = StatementValues.parseDate(dateCell, options);
-        if (date == null) {
-            return rejected(
-                    rowNumber,
-                    line,
-                    raw,
-                    RejectionCode.DATE_UNPARSEABLE,
-                    "Line " + line + ": unparseable date '" + dateCell.trim() + "'");
-        }
-        if (description == null) {
-            return rejected(
-                    rowNumber, line, raw, RejectionCode.REQUIRED_COLUMN_MISSING, "Line " + line + ": no description");
+        if (description == null && rejection == null) {
+            rejection = RejectionCode.REQUIRED_COLUMN_MISSING;
+            detail = "Line " + line + ": no description";
         }
         Amount amount = options.signConvention() == SignConvention.DEBIT_CREDIT_COLUMNS
                 ? debitCredit(cell(cells, at.debit()), cell(cells, at.credit()), options, line)
                 : signed(cell(cells, at.amount()), options, line);
-        if (amount.rejection() != null) {
-            return rejected(rowNumber, line, raw, amount.rejection(), amount.detail());
+        if (amount.rejection() != null && rejection == null) {
+            rejection = amount.rejection();
+            detail = amount.detail();
         }
         return new ParsedRow(
-                rowNumber, line, raw, date, amount.value(), description, reference, checkNumber, sourceId, null, null);
+                rowNumber,
+                line,
+                raw,
+                date,
+                amount.value(),
+                description,
+                reference,
+                checkNumber,
+                sourceId,
+                rejection,
+                detail);
     }
 
     /** A parsed amount in the core convention, or why it could not be read. */
@@ -417,11 +431,6 @@ public class CsvStatementFileParser implements StatementFileParser {
                     "Line " + line + ": amount '" + cell.trim() + "' has more than " + MAX_SCALE + " decimal places");
         }
         return Amount.of(value);
-    }
-
-    private static ParsedRow rejected(
-            int rowNumber, int line, Map<String, Object> raw, RejectionCode code, String detail) {
-        return new ParsedRow(rowNumber, line, raw, null, null, null, null, null, null, code, detail);
     }
 
     private static @Nullable String cell(List<String> cells, int position) {

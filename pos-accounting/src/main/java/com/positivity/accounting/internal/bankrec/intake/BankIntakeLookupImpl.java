@@ -63,6 +63,15 @@ public class BankIntakeLookupImpl implements BankIntakeLookup {
     }
 
     @Override
+    public @NonNull Map<UUID, AccountDisplay> accountDisplay(@NonNull Collection<UUID> glAccountIds) {
+        Map<UUID, AccountDisplay> display = new HashMap<>();
+        bankCashAccounts
+                .displayValues(glAccountIds)
+                .forEach((id, a) -> display.put(id, new AccountDisplay(id, a.accountCode(), a.accountName())));
+        return display;
+    }
+
+    @Override
     public @NonNull HeaderCheck checkHeader(
             @NonNull UUID glAccountId, @NonNull StatementHeader header, @Nullable String gapAcknowledgement) {
         return StatementHeaderChecks.check(

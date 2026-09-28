@@ -16,7 +16,11 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 107 event types (includes +10 from bank statements, transactions and accounts
+     * Total: 116 event types (includes +9 from statement-file imports (SPEC-manual-bank-reconciliation
+     * story S3, Issue #2302): ACCOUNTING_BANK_IMPORT_CREATE, ACCOUNTING_BANK_IMPORT_LIST,
+     * ACCOUNTING_BANK_IMPORT_GET, ACCOUNTING_BANK_IMPORT_ROWS, ACCOUNTING_BANK_IMPORT_MAPPING_SET,
+     * ACCOUNTING_BANK_IMPORT_ROW_CORRECT, ACCOUNTING_BANK_IMPORT_COMMIT, ACCOUNTING_BANK_IMPORT_DISCARD,
+     * ACCOUNTING_BANK_IMPORT_FILE_READ, +10 from bank statements, transactions and accounts
      * (SPEC-manual-bank-reconciliation story S2, Issue #2301): ACCOUNTING_BANK_STATEMENT_CREATE,
      * ACCOUNTING_BANK_STATEMENT_LIST, ACCOUNTING_BANK_STATEMENT_GET, ACCOUNTING_BANK_TRANSACTION_LIST,
      * ACCOUNTING_BANK_TRANSACTION_GET, ACCOUNTING_BANK_TRANSACTION_DUPLICATE_REVIEW,
@@ -432,6 +436,39 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write(
                                 "ACCOUNTING_BANK_ACCOUNT_PROFILE_SET", "Create or update a bank-account profile")
+                        .build(),
+
+                // Statement-file imports — 9 events (SPEC-manual-bank-reconciliation §3.10, story S3, issue #2302)
+                EventTypeRegistration.write(
+                                "ACCOUNTING_BANK_IMPORT_CREATE",
+                                "Upload a bank statement file and stage its parsed rows for review")
+                        .build(),
+                EventTypeRegistration.fastRead("ACCOUNTING_BANK_IMPORT_LIST", "List statement-file imports")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_BANK_IMPORT_GET", "Get one statement-file import with its preview")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_BANK_IMPORT_ROWS", "List a statement-file import's rows by row number")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_BANK_IMPORT_MAPPING_SET",
+                                "Set an import's column mapping and options and re-parse every row")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_BANK_IMPORT_ROW_CORRECT",
+                                "Correct, skip or decide one row of a statement-file import")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_BANK_IMPORT_COMMIT",
+                                "Commit a statement-file import as a statement through the intake port")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_BANK_IMPORT_DISCARD", "Discard a statement-file import, with a reason")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_BANK_IMPORT_FILE_READ",
+                                "Download the retained raw file of an import (audited)")
                         .build(),
 
                 // Customer credit lifecycle (issue #992) - 4 events
