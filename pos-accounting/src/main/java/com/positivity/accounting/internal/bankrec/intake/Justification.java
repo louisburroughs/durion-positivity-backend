@@ -26,6 +26,23 @@ public final class Justification {
         return checked;
     }
 
+    /**
+     * A justification a rule requires in this case (an {@code OTHER} adjustment, a timing item, a reaffirmation;
+     * story S4, #2303): absent, blank or 1–9 characters is one condition — 400 {@code JUSTIFICATION_REQUIRED}.
+     * Returns it trimmed.
+     */
+    public static @NonNull String requiredByRule(@Nullable String value, @NonNull String field) {
+        String trimmed = value == null ? "" : value.trim();
+        if (trimmed.length() < MIN_LENGTH) {
+            throw BankRecException.field(
+                    BankRecErrorCode.JUSTIFICATION_REQUIRED,
+                    field + " of at least " + MIN_LENGTH + " characters is required",
+                    field,
+                    "at least " + MIN_LENGTH + " characters");
+        }
+        return trimmed;
+    }
+
     /** A justification that may be absent (the gap acknowledgement); a present one is checked in full. */
     public static @Nullable String optional(@Nullable String value, @NonNull String field) {
         if (value == null) {
