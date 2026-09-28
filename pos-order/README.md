@@ -115,7 +115,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_INVALID_ARGUMENT` | 400 | Sales-order request validation failure (`SalesOrderRequestValidationException`) |
 | `ORDER_PRICE_OVERRIDE_BAD_REQUEST` | 400 | Price-override request validation failure |
 | `VALIDATION_FAILED` | 400 | Bean-validation rejection of a price-override body, with `fieldErrors` |
-| `PURCHASE_ORDER_BAD_REQUEST` | 400 | Purchase-order request validation failure |
+| `PURCHASE_ORDER_BAD_REQUEST` | 400 | Purchase-order request validation failure, including a currency that is not an ISO 4217 code |
 | `REGISTER_SESSION_INVALID_ARGUMENT` | 400 | Register-session request validation failure |
 | `RETURN_INVALID_ARGUMENT` | 400 | Return request validation failure |
 | `ORDER_FORBIDDEN` | 403 | Caller lacks required order permissions (sales orders, cancellations, price overrides, register sessions) |

@@ -94,6 +94,25 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Value("${pos.order.default-tax-rate:0.10}")
     private double defaultTaxRate = 0.10d;
 
+    /**
+     * The order's currency in its canonical ISO 4217 form, as {@code CreatePurchaseOrderRequest}
+     * documents it (ADR-0067 DF-6, #2314). Anything that is not an ISO 4217 code — a typo, a
+     * free-text name — is refused rather than stored, for hand-keyed orders and those requested by
+     * pos-inventory alike, since downstream receiving reads the minor-unit digits from it.
+     */
+    static @NonNull String canonicalCurrency(@Nullable String currency) {
+        if (currency == null || currency.isBlank()) {
+            throw new PurchaseOrderRequestValidationException("currency is required and must be an ISO 4217 code");
+        }
+        try {
+            return java.util.Currency.getInstance(currency.trim().toUpperCase(java.util.Locale.ROOT))
+                    .getCurrencyCode();
+        } catch (IllegalArgumentException notIso) {
+            throw new PurchaseOrderRequestValidationException(
+                    "currency must be an ISO 4217 code, was [" + currency + "]");
+        }
+    }
+
     @Override
     @Transactional
     public @NonNull PurchaseOrderResponse createPurchaseOrder(
@@ -108,7 +127,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .poNumber(generatePoNumber())
                 .status(PurchaseOrderStatus.DRAFT)
                 .versionNumber(1)
-                .currency(request.getCurrency())
+                .currency(canonicalCurrency(request.getCurrency()))
                 .subtotalMinor(subtotalMinor)
                 .taxMinor(taxMinor)
                 .grandTotalMinor(grandTotalMinor)
@@ -160,7 +179,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .poNumber(generatePoNumber())
                 .status(PurchaseOrderStatus.DRAFT)
                 .versionNumber(1)
-                .currency(request.getCurrency())
+                .currency(canonicalCurrency(request.getCurrency()))
                 .subtotalMinor(totalsAndLines.subtotalMinor())
                 .taxMinor(totalsAndLines.taxMinor())
                 .grandTotalMinor(grandTotalMinor)

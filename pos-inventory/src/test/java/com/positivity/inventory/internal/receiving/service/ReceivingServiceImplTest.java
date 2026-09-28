@@ -706,6 +706,51 @@ class ReceivingServiceImplTest {
         assertThat(ledgerCaptor.getValue().getUnitCost()).isEqualByComparingTo("12.5000");
     }
 
+    /** #2314: a receipt against an order outside the functional currency posts cost-less, flagged. */
+    @Test
+    void receiveItemsIntoStaging_foreignCurrencyOrder_postsWithoutCostAndFlagsTheRow() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID sourceLineId = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+        String poId = "00000000-0000-0000-0000-0000000000b1";
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .sourceLineId(sourceLineId)
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId(poId)
+                .sourceDocumentType(SourceDocumentType.PO)
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(sourceDocumentResolver.resolveReceiptUnitCost(SourceDocumentType.PO, poId, sourceLineId, "PROD-001"))
+                .thenReturn(Optional.empty());
+        when(sourceDocumentResolver.receiptCostHold(SourceDocumentType.PO, poId))
+                .thenReturn(Optional.of("AWAITING_COST: document currency EUR is not the functional currency USD"));
+
+        receivingService.receiveItemsIntoStaging(
+                sessionId,
+                new ReceiveItemsRequest(
+                        List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null))),
+                "test-user");
+
+        ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService).post(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue().getChangeInQuantity()).isEqualByComparingTo("10");
+        assertThat(ledgerCaptor.getValue().getUnitCost()).isNull();
+        assertThat(ledgerCaptor.getValue().getNotes()).contains("AWAITING_COST").contains("EUR");
+    }
+
     /** #2203: without a known order-line cost the receipt posts cost-less, as before. */
     @Test
     void receiveItemsIntoStaging_unknownDocumentCost_postsWithoutUnitCost() {
