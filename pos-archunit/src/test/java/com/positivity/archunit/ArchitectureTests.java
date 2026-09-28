@@ -235,8 +235,14 @@ class ArchitectureTests {
                 // which is exactly what this rule is not about.
                 // Subdomain-split service packages (internal.{subdomain}.service, e.g.
                 // pos-supplier's internal.order.service) are legitimate homes for service
-                // interfaces beside their implementations per ADR-0026 D3 (issue #1541).
-                .resideOutsideOfPackages("..internal.service..", "..internal.*.service..", "..internal.config..")
+                // interfaces beside their implementations per ADR-0026 D3 (issue #1541). pos-accounting's
+                // bank-feed adapters carry their own layers one level deeper
+                // (internal.bankfeed.{adapter}.service; SPEC-manual-bank-reconciliation §2.1, #2302).
+                .resideOutsideOfPackages(
+                        "..internal.service..",
+                        "..internal.*.service..",
+                        "..internal.bankfeed.*.service..",
+                        "..internal.config..")
                 .should()
                 .haveSimpleNameNotEndingWith("Service")
                 .because(
