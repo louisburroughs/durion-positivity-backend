@@ -167,6 +167,7 @@ public class PaymentEventsListener {
                 .paymentIntentId(uuid(payload, "paymentIntentId"))
                 .methodType(payload.path("methodType").stringValue(OTHER))
                 .amount(money(payload, "amount"))
+                .currencyCode(payload.path("currencyCode").stringValue(null))
                 .reference(payload.path("gatewayReference").stringValue(null))
                 .occurredAt(instant(payload, "settledAt"))
                 .build());
@@ -187,6 +188,7 @@ public class PaymentEventsListener {
                 .refundId(uuid(payload, "refundId"))
                 .methodType(OTHER)
                 .amount(money(payload, "amount"))
+                .currencyCode(payload.path("currencyCode").stringValue(null))
                 .occurredAt(instant(payload, "reversedAt"))
                 .build());
         recomputeSettlement(order);

@@ -8,7 +8,6 @@ import com.positivity.order.internal.client.WorkexecPort;
 import com.positivity.order.internal.client.WorkorderCancelResult;
 import com.positivity.order.internal.client.WorkorderStatusResult;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
-import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.exception.OrderCancellationReviewRequiredException;
@@ -20,9 +19,6 @@ import com.positivity.order.internal.service.model.CancelOrderCommand;
 import com.positivity.order.internal.service.model.CancellationResult;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
-import java.math.BigDecimal;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -161,7 +157,8 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
      * the normal case for DRAFT/QUOTED cancels — is a no-op.
      */
     private void reverseSettledPayments(SalesOrder order, String reason, String idempotencyKey, String actor) {
-        Map<UUID, BigDecimal> netByIntent = netSettledByIntent(order.getOrderId());
+        Map<UUID, NetSettledPayments.NetSettlement> netByIntent =
+                NetSettledPayments.byIntent(paymentRecordRepository.findByOrderId(order.getOrderId()));
         if (netByIntent.isEmpty()) {
             return;
         }
@@ -171,16 +168,26 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
                     "Order has settled payments but no invoice reference to reverse against");
         }
 
+        // A refund states the currency the payment settled in; with none on the ledger nothing is
+        // refunded rather than guessing one (ADR-0067 PC-3, DF-3).
+        for (Map.Entry<UUID, NetSettledPayments.NetSettlement> entry : netByIntent.entrySet()) {
+            if (entry.getValue().currencyCode() == null) {
+                String message = "No single settled currency on the ledger for payment intent " + entry.getKey();
+                markBillingFailed(order, message);
+                throw new IllegalStateException("Payment reversal failed: " + message);
+            }
+        }
+
         // The transition is recorded on the CANCEL_REQUESTED path only; retries re-enter from
         // CANCEL_FAILED_BILLING and go straight back through the reversal calls.
-        for (Map.Entry<UUID, BigDecimal> entry : netByIntent.entrySet()) {
+        for (Map.Entry<UUID, NetSettledPayments.NetSettlement> entry : netByIntent.entrySet()) {
             PaymentReversalResult reversalResult = invoicingPort.reversePayment(
                     order.getInvoiceId(),
                     entry.getKey(),
                     new ReversePaymentCommand(
                             "REFUND",
-                            entry.getValue(),
-                            "USD",
+                            entry.getValue().amount(),
+                            entry.getValue().currencyCode(),
                             reason,
                             order.getOrderId(),
                             idempotencyKey + "-" + entry.getKey()));
@@ -193,23 +200,6 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
         orderStateMachine.transition(order, SalesOrderStatus.PAYMENT_REVERSED, null);
         order.setUpdatedBy(actor);
         salesOrderRepository.save(order);
-    }
-
-    /** Net settled amount per payment intent: Σ SETTLED − Σ REVERSED, positive entries only. */
-    private Map<UUID, BigDecimal> netSettledByIntent(UUID orderId) {
-        List<OrderPaymentRecord> records = paymentRecordRepository.findByOrderId(orderId);
-        Map<UUID, BigDecimal> net = new LinkedHashMap<>();
-        for (OrderPaymentRecord record : records) {
-            if (record.getPaymentIntentId() == null) {
-                continue;
-            }
-            BigDecimal signed = record.getRecordType() == OrderPaymentRecord.RecordType.SETTLED
-                    ? record.getAmount()
-                    : record.getAmount().negate();
-            net.merge(record.getPaymentIntentId(), signed, BigDecimal::add);
-        }
-        net.values().removeIf(amount -> amount.signum() <= 0);
-        return net;
     }
 
     private void failTransition(SalesOrder order, SalesOrderStatus failureStatus, String reason) {

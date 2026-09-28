@@ -323,6 +323,7 @@ class ReturnOrderServiceImplTest {
                 .paymentIntentId(INTENT_ID)
                 .methodType("CASH")
                 .amount(new BigDecimal(amount))
+                .currencyCode("CAD")
                 .build();
     }
 
@@ -341,7 +342,11 @@ class ReturnOrderServiceImplTest {
         ReturnOrderSummary summary = service.processReturn(id);
 
         assertThat(summary.status()).isEqualTo("COMPLETED");
-        org.mockito.Mockito.verify(invoicingPort).reversePayment(eq(INVOICE_ID), eq(INTENT_ID), any());
+        org.mockito.ArgumentCaptor<com.positivity.order.internal.client.ReversePaymentCommand> captor =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.order.internal.client.ReversePaymentCommand.class);
+        org.mockito.Mockito.verify(invoicingPort).reversePayment(eq(INVOICE_ID), eq(INTENT_ID), captor.capture());
+        // The refund states the currency the original payment settled in (ADR-0067 DF-3).
+        assertThat(captor.getValue().currency()).isEqualTo("CAD");
         org.mockito.Mockito.verify(domainEventPublisher).publishOrderReturned(ro);
         assertThat(ro.getReturnedAt()).isEqualTo(Instant.parse("2026-07-24T12:00:00Z"));
     }
