@@ -8,9 +8,27 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
 import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
+import com.positivity.accounting.internal.bankfeed.file.entity.BankImport;
+import com.positivity.accounting.internal.bankfeed.file.enums.BankImportStatus;
+import com.positivity.accounting.internal.bankfeed.file.repository.BankImportRepository;
+import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
+import com.positivity.accounting.internal.bankrec.entity.BankStatement;
+import com.positivity.accounting.internal.bankrec.entity.BankTransaction;
+import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
+import com.positivity.accounting.internal.bankrec.enums.BankTransactionStatus;
+import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
+import com.positivity.accounting.internal.bankrec.enums.SettlementState;
+import com.positivity.accounting.internal.bankrec.enums.SourceKind;
+import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
@@ -19,6 +37,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Proves the isolation, not just the mapping (plan R-B7): a row written as tenant A is invisible to
@@ -35,9 +55,139 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
     @Autowired
     private DataSource dataSource;
 
+    @Autowired
+    private GLAccountRepository glAccounts;
+
+    @Autowired
+    private BankStatementRepository statements;
+
+    @Autowired
+    private BankTransactionRepository transactions;
+
+    @Autowired
+    private BankReconciliationRepository reconciliations;
+
+    @Autowired
+    private BankImportRepository imports;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    /** Seeded {@code 1000 Cash} of the default tenant, which is TENANT_A. */
+    private static final UUID CASH_ACCOUNT_ID = UUID.fromString("5eed0acc-0000-4000-8000-000000001000");
+
+    private final List<UUID> bankRecRows = new ArrayList<>();
+
     @AfterEach
     void clear() {
         TenantContext.clear();
+        if (!bankRecRows.isEmpty()) {
+            // The owner bypasses RLS; remove the bank reconciliation rows so the shared database keeps no
+            // COMMITTED statement window another IT could collide with.
+            JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+            for (String table : List.of("bank_import", "bank_reconciliation", "bank_transaction", "bank_statement")) {
+                String key =
+                        switch (table) {
+                            case "bank_import" -> "import_id";
+                            case "bank_reconciliation" -> "reconciliation_id";
+                            case "bank_transaction" -> "bank_transaction_id";
+                            default -> "statement_id";
+                        };
+                bankRecRows.forEach(id -> owner.update("DELETE FROM " + table + " WHERE " + key + " = ?", id));
+            }
+            bankRecRows.clear();
+        }
+    }
+
+    /**
+     * The bank reconciliation tables of story S1 (#2300, SPEC §8.4): a second tenant sees no statement,
+     * transaction, reconciliation or import of the first — through the repository and through raw SQL.
+     */
+    @Test
+    void bankReconciliationRowsOfOneTenantAreInvisibleToAnother() {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        UUID[] ids = asTenant(
+                TENANT_A,
+                () -> tx.execute(status -> {
+                    BankStatement statement = new BankStatement();
+                    statement.setGlAccountId(CASH_ACCOUNT_ID);
+                    statement.setSourceKind(SourceKind.FILE_IMPORT);
+                    statement.setStartDate(LocalDate.of(2041, 3, 1));
+                    statement.setEndDate(LocalDate.of(2041, 3, 31));
+                    statement.setOpeningBalance(new BigDecimal("100.0000"));
+                    statement.setActivityTotal(new BigDecimal("25.0000"));
+                    statement.setClosingBalance(new BigDecimal("125.0000"));
+                    statement.setCurrency("USD");
+                    statement.setStatus(BankStatementStatus.COMMITTED);
+                    UUID statementId = statements.saveAndFlush(statement).getStatementId();
+
+                    BankTransaction transaction = new BankTransaction();
+                    transaction.setGlAccountId(CASH_ACCOUNT_ID);
+                    transaction.setStatementId(statementId);
+                    transaction.setSourceKind(SourceKind.FILE_IMPORT);
+                    transaction.setSourceRowNumber(1);
+                    transaction.setSettlementState(SettlementState.POSTED);
+                    transaction.setTransactionDate(LocalDate.of(2041, 3, 10));
+                    transaction.setSignedAmount(new BigDecimal("25.0000"));
+                    transaction.setCurrency("USD");
+                    transaction.setStatus(BankTransactionStatus.UNMATCHED);
+                    UUID transactionId = transactions.saveAndFlush(transaction).getBankTransactionId();
+
+                    BankReconciliation reconciliation = new BankReconciliation();
+                    reconciliation.setGlAccount(glAccounts.getReferenceById(CASH_ACCOUNT_ID));
+                    reconciliation.setStatementId(statementId);
+                    reconciliation.setStatementStartDate(LocalDate.of(2041, 3, 1));
+                    reconciliation.setStatementEndDate(LocalDate.of(2041, 3, 31));
+                    reconciliation.setCurrency("USD");
+                    reconciliation.setStatementClosingBalance(new BigDecimal("125.0000"));
+                    reconciliation.setGlEndingBalance(BigDecimal.ZERO);
+                    reconciliation.setDifference(new BigDecimal("125.0000"));
+                    reconciliation.setStatus(ReconciliationStatus.IN_PROGRESS);
+                    UUID reconciliationId =
+                            reconciliations.saveAndFlush(reconciliation).getReconciliationId();
+
+                    BankImport bankImport = new BankImport();
+                    bankImport.setGlAccountId(CASH_ACCOUNT_ID);
+                    bankImport.setCurrency("USD");
+                    bankImport.setFormatCode("CSV");
+                    bankImport.setFileSha256("a".repeat(64));
+                    bankImport.setStatus(BankImportStatus.UPLOADED);
+                    UUID importId = imports.saveAndFlush(bankImport).getImportId();
+                    return new UUID[] {statementId, transactionId, reconciliationId, importId};
+                }));
+        bankRecRows.addAll(List.of(ids));
+
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        asTenant(TENANT_A, () -> {
+            assertThat(statements.findById(ids[0])).isPresent();
+            assertThat(transactions.findById(ids[1])).isPresent();
+            assertThat(reconciliations.findById(ids[2])).isPresent();
+            assertThat(imports.findById(ids[3])).isPresent();
+            assertThat(countById(jdbc, "bank_statement", "statement_id", ids[0]))
+                    .isEqualTo(1);
+        });
+        asTenant(TENANT_B, () -> {
+            assertThat(statements.findById(ids[0])).as("statement").isEmpty();
+            assertThat(transactions.findById(ids[1])).as("transaction").isEmpty();
+            assertThat(reconciliations.findById(ids[2])).as("reconciliation").isEmpty();
+            assertThat(imports.findById(ids[3])).as("import").isEmpty();
+            assertThat(countById(jdbc, "bank_statement", "statement_id", ids[0]))
+                    .isZero();
+            assertThat(countById(jdbc, "bank_transaction", "bank_transaction_id", ids[1]))
+                    .isZero();
+            assertThat(countById(jdbc, "bank_reconciliation", "reconciliation_id", ids[2]))
+                    .isZero();
+            assertThat(countById(jdbc, "bank_import", "import_id", ids[3])).isZero();
+        });
+        assertThat(countById(jdbc, "bank_statement", "statement_id", ids[0]))
+                .as("unbound: nothing visible")
+                .isZero();
+    }
+
+    private static int countById(JdbcTemplate jdbc, String table, String key, UUID id) {
+        Integer count =
+                jdbc.queryForObject("SELECT count(*) FROM " + table + " WHERE " + key + " = ?", Integer.class, id);
+        return count == null ? 0 : count;
     }
 
     private static OverridePolicyThreshold policy(String role) {

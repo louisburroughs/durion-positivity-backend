@@ -1,5 +1,8 @@
 package com.positivity.accounting;
 
+import static com.tngtech.archunit.base.DescribedPredicate.not;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
@@ -24,23 +27,63 @@ public class ArchitectureTest {
                 }
             };
 
+    // Layer packages. The bank reconciliation core (internal.bankrec) and its adapters (internal.bankfeed.*)
+    // carry their own layer sub-packages (SPEC-manual-bank-reconciliation §2.1, #2300); the layering rules
+    // below bind them exactly as they bind the module's flat internal.* layers.
+    static final String[] CONTROLLER_PACKAGES = {
+        "..internal.controller..", "..internal.bankrec.controller..", "..internal.bankfeed..controller.."
+    };
+    static final String[] REPOSITORY_PACKAGES = {
+        "..internal.repository..", "..internal.bankrec.repository..", "..internal.bankfeed..repository.."
+    };
+    static final String[] ENTITY_PACKAGES = {
+        "..internal.entity..", "..internal.bankrec.entity..", "..internal.bankfeed..entity.."
+    };
+
+    /**
+     * Statement-format and provider libraries: only the file adapter ({@code ..bankfeed.file..}) may import
+     * a format library, and no class in this module may import a provider SDK (SPEC §2.1).
+     */
+    static final String[] FORMAT_AND_PROVIDER_LIBRARY_PACKAGES = {
+        "com.plaid..",
+        "org.apache.commons.csv..",
+        "com.opencsv..",
+        "de.siegmar.fastcsv..",
+        "com.univocity.parsers..",
+        "com.webcohesion.ofx4j..",
+        "net.sf.ofx4j..",
+        "com.prowidesoftware.."
+    };
+
+    /** File access and HTTP clients the reconciliation core never uses: statement bytes reach it only through the intake. */
+    static final String[] FILE_IO_AND_HTTP_CLIENT_PACKAGES = {
+        "java.nio.file..",
+        "java.net.http..",
+        "org.springframework.web.client..",
+        "org.springframework.web.reactive.function.client..",
+        "okhttp3..",
+        "org.apache.hc..",
+        "org.apache.http..",
+        "com.plaid.."
+    };
+
     @ArchTest
     static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
             .that()
-            .resideInAPackage("..internal.controller..")
+            .resideInAnyPackage(CONTROLLER_PACKAGES)
             .should()
             .dependOnClassesThat()
-            .resideInAPackage("..internal.repository..")
+            .resideInAnyPackage(REPOSITORY_PACKAGES)
             .allowEmptyShould(true)
             .because("controllers must go through service layer");
 
     @ArchTest
     static final ArchRule controllers_should_not_access_entities_directly = noClasses()
             .that()
-            .resideInAPackage("..internal.controller..")
+            .resideInAnyPackage(CONTROLLER_PACKAGES)
             .should()
             .dependOnClassesThat()
-            .resideInAPackage("..internal.entity..")
+            .resideInAnyPackage(ENTITY_PACKAGES)
             .allowEmptyShould(true)
             .because("controllers should work with DTOs, not entities");
 
@@ -50,14 +93,14 @@ public class ArchitectureTest {
             .resideInAPackage("..service..")
             .should()
             .dependOnClassesThat()
-            .resideInAPackage("..internal.controller..")
+            .resideInAnyPackage(CONTROLLER_PACKAGES)
             .allowEmptyShould(true)
             .because("services should not depend on web layer");
 
     @ArchTest
     static final ArchRule entities_should_not_depend_on_services = noClasses()
             .that()
-            .resideInAPackage("..internal.entity..")
+            .resideInAnyPackage(ENTITY_PACKAGES)
             .should()
             .dependOnClassesThat()
             .resideInAPackage("..service..")
@@ -67,10 +110,15 @@ public class ArchitectureTest {
     @ArchTest
     static final ArchRule repositories_should_only_be_accessed_from_services_or_config = noClasses()
             .that()
-            .resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..")
+            .resideOutsideOfPackages(
+                    "..service..",
+                    "..internal.repository..",
+                    "..internal.bankrec.repository..",
+                    "..internal.bankfeed..repository..",
+                    "..internal.config..")
             .should()
             .dependOnClassesThat()
-            .resideInAPackage("..internal.repository..")
+            .resideInAnyPackage(REPOSITORY_PACKAGES)
             .allowEmptyShould(true)
             .because("repositories should only be accessed from service layer");
 
@@ -175,7 +223,11 @@ public class ArchitectureTest {
     @ArchTest
     static final ArchRule entities_should_use_uuidv7_id_annotation = classes()
             .that()
-            .resideInAnyPackage("..internal.entity..", "..internal.model..")
+            .resideInAnyPackage(
+                    "..internal.entity..",
+                    "..internal.model..",
+                    "..internal.bankrec.entity..",
+                    "..internal.bankfeed..entity..")
             .and()
             .areAnnotatedWith("jakarta.persistence.Entity")
             // Replica (Ext*) and idempotency-guard entities carry externally assigned identifiers
@@ -191,17 +243,72 @@ public class ArchitectureTest {
             .orShould()
             .dependOnClassesThat()
             .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
+            // A natural key assigned by the caller (a 1:1 profile keyed by its GL account, a membership row
+            // keyed by the rows it links) says so with @AssignedIdentifier, as pos-archunit's
+            // EntityStandardsArchitectureTest accepts (#1261).
+            .orShould()
+            .dependOnClassesThat()
+            .haveFullyQualifiedName("com.positivity.shared.id.AssignedIdentifier")
             .allowEmptyShould(true)
             .because("ADR-0013 mandates UUID v7 IDs via shared generator strategy");
 
     @ArchTest
     static final ArchRule entities_should_not_call_uuid_random_uuid = noClasses()
             .that()
-            .resideInAnyPackage("..internal.entity..", "..internal.model..")
+            .resideInAnyPackage(
+                    "..internal.entity..",
+                    "..internal.model..",
+                    "..internal.bankrec.entity..",
+                    "..internal.bankfeed..entity..")
             .and()
             .areAnnotatedWith("jakarta.persistence.Entity")
             .should()
             .callMethodWhere(UUID_RANDOM_UUID_CALL)
             .allowEmptyShould(true)
             .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
+
+    // ---- Bank reconciliation core ↔ adapter walls (SPEC-manual-bank-reconciliation §2.1, §8.4; #2300) ----
+    // The core (internal.bankrec) is provider- and format-neutral; the adapters (internal.bankfeed.*) reach it
+    // only through its intake port and contract DTOs. BankrecWallsFixtureTest proves each rule catches a violation.
+
+    @ArchTest
+    static final ArchRule bankrec_must_not_access_bankfeed = noClasses()
+            .that()
+            .resideInAPackage("..bankrec..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("..bankfeed..")
+            .because("SPEC §2.1: the reconciliation core never depends on an adapter; adapters call its intake port");
+
+    @ArchTest
+    static final ArchRule bankfeed_may_only_use_intake_and_dto = noClasses()
+            .that()
+            .resideInAPackage("..bankfeed..")
+            .should()
+            .dependOnClassesThat(resideInAPackage("..bankrec..")
+                    .and(not(resideInAnyPackage("..bankrec.intake..", "..bankrec.dto.."))))
+            .allowEmptyShould(true)
+            .because("SPEC §2.1: an adapter reaches the core only through ..bankrec.intake.. and ..bankrec.dto..");
+
+    @ArchTest
+    static final ArchRule format_libraries_only_in_bankfeed_file = noClasses()
+            .that()
+            .resideInAPackage("com.positivity.accounting..")
+            .and()
+            .resideOutsideOfPackage("..bankfeed.file..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAnyPackage(FORMAT_AND_PROVIDER_LIBRARY_PACKAGES)
+            .because("SPEC §2.1: statement formats and provider SDKs stay inside the file adapter; the core sees only"
+                    + " the provider-neutral contract");
+
+    @ArchTest
+    static final ArchRule bankrec_must_not_use_file_io_or_http_clients = noClasses()
+            .that()
+            .resideInAPackage("..bankrec..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAnyPackage(FILE_IO_AND_HTTP_CLIENT_PACKAGES)
+            .because("SPEC §2.1: statement bytes reach the core only through the intake; it reads no files and calls"
+                    + " no provider");
 }

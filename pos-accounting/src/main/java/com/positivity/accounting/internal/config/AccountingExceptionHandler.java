@@ -46,12 +46,14 @@ import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -481,6 +483,21 @@ public class AccountingExceptionHandler {
                         fieldErrors),
                 headers,
                 HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    /**
+     * A stale {@code @Version} on save (SPEC-manual-bank-reconciliation §6.3, story S1 #2300; ADR-0017 §2
+     * puts a version conflict in the 409 class). Before this mapping a version conflict in this module fell
+     * through to the pos-web-common catch-all as a 500. The message names no entity or version: the
+     * caller's remedy is the same either way — reload and retry.
+     */
+    @ExceptionHandler({OptimisticLockingFailureException.class, OptimisticLockException.class})
+    public ResponseEntity<ApiError> handleOptimisticLock(Exception ex, HttpServletRequest request) {
+        return build(
+                HttpStatus.CONFLICT,
+                "OPTIMISTIC_LOCK",
+                "The record was changed by another request; reload it and retry",
+                request);
     }
 
     @ExceptionHandler(ResponseStatusException.class)

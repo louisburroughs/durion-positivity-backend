@@ -11,7 +11,7 @@ SET TIME ZONE 'UTC';
 -- reconcilable metadata. Pure upserts keyed on account_code so re-runs
 -- backfill metadata on existing rows without changing their ids.
 INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, created_at, created_by, modified_at, modified_by)
-VALUES ('5eed0acc-0000-4000-8000-000000001000'::uuid, '1000', 'Cash', 'ASSET', 'BANK_CASH', FALSE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+VALUES ('5eed0acc-0000-4000-8000-000000001000'::uuid, '1000', 'Cash', 'ASSET', 'BANK_CASH', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
 ON CONFLICT (tenant_id, account_code) DO UPDATE SET
     account_name = EXCLUDED.account_name,
     account_type = EXCLUDED.account_type,

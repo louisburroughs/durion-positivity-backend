@@ -24,7 +24,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * cannot forget the header. Previously this advice passed a hardcoded {@code null} correlation id
  * and never set the header at all.
  */
-@RestControllerAdvice(basePackages = "com.positivity.accounting.internal.controller")
+@RestControllerAdvice(
+        basePackages = {
+            "com.positivity.accounting.internal.controller",
+            "com.positivity.accounting.internal.bankrec.controller"
+        })
 @RequiredArgsConstructor
 public class GLPostingExceptionHandler {
 

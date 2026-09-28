@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
-import com.positivity.accounting.internal.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
@@ -50,6 +50,7 @@ import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedEx
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.shared.error.ApiError;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -68,6 +69,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.validation.BindingResult;
@@ -253,6 +255,8 @@ class AccountingExceptionHandlerTest {
                     Named.of("handleReconciliationNotBalanced", (HandlerInvocation)
                             request -> handler.handleReconciliationNotBalanced(
                                     new ReconciliationNotBalancedException("not balanced", BigDecimal.TEN), request)),
+                    Named.of("handleOptimisticLock", (HandlerInvocation) request -> handler.handleOptimisticLock(
+                            new ObjectOptimisticLockingFailureException(Object.class, "id"), request)),
                     Named.of("handleResponseStatus", (HandlerInvocation) request -> handler.handleResponseStatus(
                             new ResponseStatusException(HttpStatus.BAD_GATEWAY, "bad gateway"), request)));
         }
@@ -307,6 +311,37 @@ class AccountingExceptionHandlerTest {
                             + "entry in XCorrelationIdHeader#handlerInvocations() in AccountingExceptionHandlerTest "
                             + "— add one so the X-Correlation-Id header contract stays proven for every handler")
                     .isEqualTo(handlerMethodCount);
+        }
+    }
+
+    @Nested
+    @DisplayName("OPTIMISTIC_LOCK (SPEC-manual-bank-reconciliation §6.3, #2300)")
+    class OptimisticLock {
+
+        private final AccountingExceptionHandler handler = new AccountingExceptionHandler(TEST_CLOCK);
+
+        @Test
+        @DisplayName("a Spring optimistic-locking failure answers 409 OPTIMISTIC_LOCK")
+        void springOptimisticLockingFailureIs409() {
+            ResponseEntity<ApiError> response = handler.handleOptimisticLock(
+                    new ObjectOptimisticLockingFailureException(Object.class, UUID.randomUUID()),
+                    requestWithoutHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("OPTIMISTIC_LOCK");
+            assertThat(response.getBody().status()).isEqualTo(409);
+        }
+
+        @Test
+        @DisplayName("a raw JPA OptimisticLockException answers 409 OPTIMISTIC_LOCK")
+        void jpaOptimisticLockExceptionIs409() {
+            ResponseEntity<ApiError> response =
+                    handler.handleOptimisticLock(new OptimisticLockException("stale"), requestWithoutHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("OPTIMISTIC_LOCK");
         }
     }
 

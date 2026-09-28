@@ -1,6 +1,6 @@
 package com.positivity.accounting.internal.exception;
 
-import com.positivity.accounting.internal.enums.BankAdjustmentType;
+import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 
 /**
  * Thrown when a bank reconciliation adjustment amount has a sign the adjustment

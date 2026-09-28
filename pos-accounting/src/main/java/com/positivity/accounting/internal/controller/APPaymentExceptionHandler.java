@@ -56,7 +56,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * conflict; that handler answers state conflicts for every controller in this module, this one
  * included.
  */
-@RestControllerAdvice(basePackages = "com.positivity.accounting.internal.controller")
+@RestControllerAdvice(
+        basePackages = {
+            "com.positivity.accounting.internal.controller",
+            "com.positivity.accounting.internal.bankrec.controller"
+        })
 @RequiredArgsConstructor
 public class APPaymentExceptionHandler {
 
