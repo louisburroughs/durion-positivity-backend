@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -36,6 +37,11 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link com.positivity.accounting.internal.service.JournalEntryService#postJournalEntry}; a CLOSED period
  * propagates unwrapped for container retry / DLQ.
  *
+ * <p><b>Currency (ADR-0067 PC-9, E-5; #2312):</b> a session closed in a currency other than the
+ * ledger's ({@link LedgerCurrency}) is never posted at par. It is held as a {@code SKIPPED}
+ * ingestion record with {@code failureReasonCode = CURRENCY_NOT_SUPPORTED}, once per session, and
+ * nothing is posted.
+ *
  * <p>Per-order revenue postings remain authoritative — this carries only the drawer variance
  * (spec §14), never a consolidated closing entry.
  */
@@ -50,11 +56,14 @@ public class RegisterOverShortPostingService {
     static final String CASH_CLEARING_KEY = "CASH_CLEARING";
     static final String IDEMPOTENCY_KEY_PREFIX = "REGISTER_OVER_SHORT_GL_POSTING:";
     static final String SOURCE_EVENT_NAMESPACE = "REGISTER_OVER_SHORT:";
+    static final String SOURCE_SYSTEM = "pos-order";
 
     private final Clock clock;
     private final IdempotencyService idempotencyService;
     private final GLMappingResolver glMappingResolver;
     private final GLPostingService glPostingService;
+    private final LedgerCurrency ledgerCurrency;
+    private final InventoryFactIngestionRecorder ingestionRecorder;
 
     /**
      * Post the drawer over/short variance for a closed session, exactly once per sessionId. A
@@ -78,6 +87,13 @@ public class RegisterOverShortPostingService {
 
         // Business time, not processing time: redeliveries land in the same period.
         LocalDateTime transactionDate = LocalDateTime.ofInstant(fact.closedAt(), clock.getZone());
+
+        // Never at par (ADR-0067 PC-9, E-5; #2312): a variance counted in another currency is held
+        // visibly with its currency reason, not posted into the ledger's currency.
+        if (ledgerCurrency.isForeign(fact.currencyCode())) {
+            holdForeignCurrency(fact, transactionDate);
+            return;
+        }
         BigDecimal amount = overShort.abs();
 
         boolean shortage = overShort.signum() < 0;
@@ -119,6 +135,21 @@ public class RegisterOverShortPostingService {
                 shortage ? "SHORTAGE" : "OVERAGE",
                 amount,
                 posted);
+    }
+
+    private void holdForeignCurrency(RegisterSessionClosedV1 fact, LocalDateTime transactionDate) {
+        String detail = "Register over/short of " + fact.overShort() + " " + fact.currencyCode()
+                + " not posted: the ledger books " + ledgerCurrency.code()
+                + " only and a variance in another currency is never booked at par (ADR-0067 PC-9)";
+        boolean recorded = ingestionRecorder.recordCurrencyHeld(
+                SOURCE_SYSTEM, RegisterSessionClosedV1.EVENT_TYPE, fact.sessionId(), transactionDate, fact, detail);
+        log.warn(
+                "Register over/short held for its currency, not posted | sessionId={} | currency={} "
+                        + "| ledgerCurrency={} | newRecord={}",
+                fact.sessionId(),
+                fact.currencyCode(),
+                ledgerCurrency.code(),
+                recorded);
     }
 
     /**

@@ -261,6 +261,19 @@ denied for a location-scoped caller — fail closed — and ignored for a global
 This is the platform's clearest `FINANCIAL`-dimension case: an `ACCOUNTANT` assigned to a region
 sees that region's shops and no others.
 
+## Ledger currency (ADR-0067)
+
+The ledger books one currency, `accounting.ledger.base-currency` (`USD` in `application.yml`), read
+through `LedgerCurrency` so ADR-0067 step A5 can replace it with the tenant's functional currency in
+one place. A Stage A ledger never books another currency at par (ADR-0067 PC-9); an absent currency
+on an inbound fact means the ledger currency until producers stamp one (E-3).
+
+- **Register over/short** (`order.session.closed`, #2312) — a session closed in another currency posts
+  nothing. It is held as one `AccountingEvent` row, `sourceSystem = pos-order`, `status = SKIPPED`,
+  `failureReasonCode = CURRENCY_NOT_SUPPORTED`, `domainKeyId` = `sessionId`, the currency in
+  `errorMessage`; a redelivery writes no second row. Find one with
+  `GET /v1/accounting/events?eventType=order.session.closed&domainKeyId=<sessionId>`.
+
 ## Error codes
 
 Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,

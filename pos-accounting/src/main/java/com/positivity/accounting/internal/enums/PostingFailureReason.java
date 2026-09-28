@@ -73,7 +73,15 @@ public enum PostingFailureReason {
      * {@code pos.accounting.default-mappings.require-amount-field=false} (issue #2315). Nothing to
      * post; event is recorded SKIPPED — terminal, never retried.
      */
-    ZERO_AMOUNT;
+    ZERO_AMOUNT,
+
+    /**
+     * A consumed fact states an amount in a currency other than the ledger currency (ADR-0067
+     * PC-9, E-5; issue #2312). Never booked at par: the fact is held visibly with a currency
+     * reason, recorded SKIPPED — never retried by the scheduler — until a later stage can release
+     * it (a booking rate, or manual handling).
+     */
+    CURRENCY_NOT_SUPPORTED;
 
     /**
      * Whether an event failing for this reason ends in the terminal {@code SKIPPED} status: the
@@ -81,6 +89,6 @@ public enum PostingFailureReason {
      * operator fixes and reprocesses ({@code SUSPENDED}).
      */
     public boolean isTerminalSkip() {
-        return this == UNCOSTED_FACT || this == MISSING_AMOUNT || this == ZERO_AMOUNT;
+        return this == UNCOSTED_FACT || this == MISSING_AMOUNT || this == ZERO_AMOUNT || this == CURRENCY_NOT_SUPPORTED;
     }
 }

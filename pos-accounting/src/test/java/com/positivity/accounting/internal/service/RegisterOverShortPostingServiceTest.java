@@ -2,12 +2,14 @@ package com.positivity.accounting.internal.service;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -39,16 +41,27 @@ class RegisterOverShortPostingServiceTest {
     private final IdempotencyService idempotencyService = mock(IdempotencyService.class);
     private final GLMappingResolver glMappingResolver = mock(GLMappingResolver.class);
     private final GLPostingService glPostingService = mock(GLPostingService.class);
+    private final InventoryFactIngestionRecorder ingestionRecorder = mock(InventoryFactIngestionRecorder.class);
 
     private RegisterOverShortPostingService service;
 
     @BeforeEach
     void setUp() {
         service = new RegisterOverShortPostingService(
-                TEST_CLOCK, idempotencyService, glMappingResolver, glPostingService);
+                TEST_CLOCK,
+                idempotencyService,
+                glMappingResolver,
+                glPostingService,
+                new LedgerCurrency("USD"),
+                ingestionRecorder);
     }
 
     private RegisterSessionClosedV1 fact(BigDecimal overShort, BigDecimal counted, BigDecimal theoretical) {
+        return fact(overShort, counted, theoretical, "USD");
+    }
+
+    private RegisterSessionClosedV1 fact(
+            BigDecimal overShort, BigDecimal counted, BigDecimal theoretical, String currencyCode) {
         return new RegisterSessionClosedV1(
                 SESSION_ID,
                 "terminal-1",
@@ -60,7 +73,7 @@ class RegisterOverShortPostingServiceTest {
                 theoretical,
                 overShort,
                 false,
-                "USD",
+                currencyCode,
                 List.of(new RegisterSessionClosedV1.TenderTotal("CASH", new BigDecimal("50.00"))),
                 BigDecimal.ZERO,
                 Instant.parse("2026-07-23T08:00:00Z"),
@@ -145,5 +158,42 @@ class RegisterOverShortPostingServiceTest {
         verify(glPostingService, never())
                 .postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any());
         verify(idempotencyService, never()).registerKey(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("A variance in another currency is held with a currency reason, never posted at par (#2312)")
+    void foreignCurrencyVarianceIsHeldNotPosted() {
+        when(idempotencyService.isKeyProcessed(KEY)).thenReturn(false);
+        RegisterSessionClosedV1 eurFact =
+                fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00"), "EUR");
+
+        service.postOverShort(eurFact);
+
+        verify(glPostingService, never())
+                .postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any());
+        verify(idempotencyService, never()).registerKey(anyString(), any());
+        verify(ingestionRecorder)
+                .recordCurrencyHeld(
+                        eq("pos-order"),
+                        eq(RegisterSessionClosedV1.EVENT_TYPE),
+                        eq(SESSION_ID),
+                        eq(LocalDateTime.ofInstant(CLOSED_AT, ZoneOffset.UTC)),
+                        eq(eurFact),
+                        contains("EUR"));
+    }
+
+    @Test
+    @DisplayName("A USD variance is not held (#2312)")
+    void ledgerCurrencyVarianceIsNotHeld() {
+        LocalDateTime expectedDate = LocalDateTime.ofInstant(CLOSED_AT, ZoneOffset.UTC);
+        when(idempotencyService.isKeyProcessed(KEY)).thenReturn(false);
+        when(glMappingResolver.resolveGLAccount(anyString(), anyString(), eq(expectedDate)))
+                .thenReturn(CASH_SHORT, CASH_CLEARING);
+        when(glPostingService.postRegisterOverShort(any(), any(), any(), any(), any(), any(), anyString(), any()))
+                .thenReturn(postedEntry());
+
+        service.postOverShort(fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")));
+
+        verify(ingestionRecorder, never()).recordCurrencyHeld(any(), any(), any(), any(), any(), any());
     }
 }

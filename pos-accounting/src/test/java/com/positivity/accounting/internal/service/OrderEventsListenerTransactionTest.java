@@ -157,7 +157,7 @@ class OrderEventsListenerTransactionTest {
         private final AtomicReference<RuntimeException> failure = new AtomicReference<>();
 
         FailingOverShortPostingService() {
-            super(null, null, null, null);
+            super(null, null, null, null, null, null);
         }
 
         public boolean sawActiveTransaction() {

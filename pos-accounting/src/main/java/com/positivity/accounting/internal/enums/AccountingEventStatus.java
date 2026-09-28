@@ -65,7 +65,8 @@ public enum AccountingEventStatus {
             case SKIPPED ->
                 "Terminal: an event or Kafka-consumed posting fact deliberately not posted (for "
                         + "example an uncosted inventory fact, failureReasonCode UNCOSTED_FACT, or a "
-                        + "default-mapping event with no amount, MISSING_AMOUNT or ZERO_AMOUNT). Not "
+                        + "default-mapping event with no amount, MISSING_AMOUNT or ZERO_AMOUNT, or a "
+                        + "fact held for its currency, CURRENCY_NOT_SUPPORTED). Not "
                         + "retryable — the retry scheduler and retryAccountingEvent select only FAILED "
                         + "and SUSPENDED (issue #2191).";
         };
