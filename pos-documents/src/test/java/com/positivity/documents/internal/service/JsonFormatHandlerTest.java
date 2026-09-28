@@ -21,6 +21,19 @@ class JsonFormatHandlerTest {
     }
 
     @Test
+    void invoiceContentShowsCurrencyBesideTotals() {
+        // Shape pos-invoice sends for the invoice-default template (#2318).
+        String invoice = "{\"documentType\":\"INVOICE\",\"invoiceNumber\":\"INV-1\",\"currencyCode\":\"CAD\","
+                + "\"subtotal\":100.00,\"tax\":8.00,\"adjustments\":0,\"total\":108.00}";
+
+        String html = handler.processContent(invoice, new HashMap<>());
+
+        String currencyRow = "<tr><td>currencyCode</td><td>CAD</td></tr>";
+        assertTrue(html.contains(currencyRow + "<tr><td>subtotal</td><td>100.0</td></tr>"), html);
+        assertTrue(html.contains("<tr><td>total</td><td>108.0</td></tr>"), html);
+    }
+
+    @Test
     void shouldThrowOnMalformedJson() {
         assertThrows(RenderingException.class, () -> handler.processContent("{bad json}", new HashMap<>()));
     }

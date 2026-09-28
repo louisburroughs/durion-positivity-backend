@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.invoice.internal.client.DocumentRenderClient;
+import com.positivity.invoice.internal.config.InvoiceCurrencySource;
 import com.positivity.invoice.internal.dto.ArtifactDownloadTokenResponse;
 import com.positivity.invoice.internal.dto.InvoiceArtifactResponse;
 import com.positivity.invoice.internal.entity.Invoice;
@@ -37,6 +38,7 @@ public class InvoiceArtifactService {
     private final ReceiptRepository receiptRepository;
     private final DocumentRenderClient documentRenderClient;
     private final ArtifactTokenService tokenService;
+    private final InvoiceCurrencySource currencySource;
     private final ObjectMapper objectMapper;
 
     public InvoiceArtifactService(
@@ -44,11 +46,13 @@ public class InvoiceArtifactService {
             ReceiptRepository receiptRepository,
             DocumentRenderClient documentRenderClient,
             ArtifactTokenService tokenService,
+            InvoiceCurrencySource currencySource,
             ObjectMapper objectMapper) {
         this.invoiceRepository = invoiceRepository;
         this.receiptRepository = receiptRepository;
         this.documentRenderClient = documentRenderClient;
         this.tokenService = tokenService;
+        this.currencySource = currencySource;
         this.objectMapper = objectMapper;
     }
 
@@ -148,6 +152,8 @@ public class InvoiceArtifactService {
         content.put("invoiceId", invoice.getId());
         content.put("invoiceNumber", invoice.getInvoiceNumber());
         content.put("status", invoice.getStatus());
+        // The ISO 4217 code heads the amounts it governs; the document renders fields in order.
+        content.put("currencyCode", currencySource.currencyCode());
         content.put("subtotal", invoice.getSubtotal());
         content.put("tax", invoice.getTax());
         content.put("adjustments", invoice.getAdjustmentsAmount());

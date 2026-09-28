@@ -36,11 +36,11 @@ import org.springframework.stereotype.Component;
 public class PaymentEventPublisher {
 
     private static final String SOURCE_SERVICE = "pos-invoice";
-    private static final String CURRENCY = "USD";
     /** All pos-invoice payment intents settle through the card gateway today. */
     private static final String GATEWAY_METHOD_TYPE = "CARD";
 
     private final Clock clock;
+    private final InvoiceCurrencySource currencySource;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
 
     /** Emits {@code payment.payment.settled} for a just-captured intent. */
@@ -59,7 +59,7 @@ public class PaymentEventPublisher {
                 invoice.getPartyId(),
                 GATEWAY_METHOD_TYPE,
                 paymentIntent.getCapturedAmount(),
-                CURRENCY,
+                currencySource.currencyCode(),
                 paymentIntent.getGatewayProvider(),
                 paymentIntent.getGatewayReference(),
                 Instant.now(clock));
@@ -159,7 +159,7 @@ public class PaymentEventPublisher {
                 partyId,
                 reversalType,
                 amount,
-                CURRENCY,
+                currencySource.currencyCode(),
                 reasonCode,
                 Instant.now(clock));
         UUID aggregateId = paymentIntentId != null ? paymentIntentId : refundId;
