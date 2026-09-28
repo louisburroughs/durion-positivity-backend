@@ -2375,6 +2375,8 @@ CREATE TABLE public.bank_statement (
     gap_acknowledged_at timestamp(6) with time zone,
     status character varying(16) NOT NULL,
     superseded_by_statement_id uuid,
+    request_id uuid,
+    request_hash character varying(64),
     created_at timestamp(6) with time zone NOT NULL,
     created_by character varying(50) NOT NULL,
     updated_at timestamp(6) with time zone NOT NULL,
@@ -2641,6 +2643,8 @@ ALTER TABLE ONLY public.bank_statement
 
 -- Partial uniques and indexes.
 CREATE UNIQUE INDEX bank_statement_committed_window_uk ON public.bank_statement USING btree (tenant_id, gl_account_id, start_date, end_date) WHERE ((status)::text = 'COMMITTED'::text);
+-- The manual-statement command's requestId (SPEC §6.3, #2301): a replay returns the statement it created.
+CREATE UNIQUE INDEX bank_statement_request_uk ON public.bank_statement USING btree (tenant_id, request_id) WHERE (request_id IS NOT NULL);
 CREATE INDEX bank_statement_baseline_idx ON public.bank_statement USING btree (tenant_id, gl_account_id, start_date) WHERE (gap_acknowledgement IS NOT NULL);
 
 CREATE UNIQUE INDEX bank_transaction_source_id_uk ON public.bank_transaction USING btree (tenant_id, gl_account_id, source_kind, source_ref, source_transaction_id) WHERE (source_transaction_id IS NOT NULL);

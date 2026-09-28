@@ -226,8 +226,10 @@ class DomainWallsTest {
             .that()
             .resideInAPackage("..bankrec..")
             .should()
-            .dependOnClassesThat()
-            .resideInAPackage("..bankfeed..")
+            .dependOnClassesThat(JavaClass.Predicates.resideInAPackage("..bankfeed..")
+                    // The provider-neutral contract in pos-domain-events is the core's intake type (#2301).
+                    .and(DescribedPredicate.not(
+                            JavaClass.Predicates.resideInAPackage("com.positivity.domainevents.."))))
             .because("SPEC-manual-bank-reconciliation §2.1: the reconciliation core never depends on an adapter");
 
     static final ArchRule ACCOUNTING_ADAPTERS_REACH_CORE_ONLY_THROUGH_INTAKE_AND_DTO = noClasses()
