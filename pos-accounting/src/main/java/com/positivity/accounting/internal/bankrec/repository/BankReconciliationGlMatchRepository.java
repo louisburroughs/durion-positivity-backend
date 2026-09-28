@@ -10,12 +10,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
  */
 public interface BankReconciliationGlMatchRepository extends JpaRepository<BankReconciliationGlMatch, UUID> {
 
-    List<BankReconciliationGlMatch> findByReconciliationId(UUID reconciliationId);
+    /** The live ledger members of a reconciliation (unmatched history excluded). */
+    List<BankReconciliationGlMatch> findByReconciliationIdAndActiveTrue(UUID reconciliationId);
 
-    /** Global check: is this posted GL line already consumed by a match in any reconciliation? */
-    boolean existsByGlLineId(UUID glLineId);
+    /** Global check: is this posted GL line already in a live match in any reconciliation? */
+    boolean existsByGlLineIdAndActiveTrue(UUID glLineId);
 
-    List<BankReconciliationGlMatch> findByReconciliationIdAndMatchId(UUID reconciliationId, UUID matchId);
-
-    void deleteByReconciliationIdAndMatchId(UUID reconciliationId, UUID matchId);
+    List<BankReconciliationGlMatch> findByMatchIdAndActiveTrue(UUID matchId);
 }

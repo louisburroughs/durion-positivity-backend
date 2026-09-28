@@ -15,6 +15,9 @@ CREATE OR REPLACE FUNCTION public.app_current_tenant() RETURNS uuid
     LANGUAGE sql STABLE PARALLEL SAFE
     AS $$ SELECT NULLIF(current_setting('app.current_tenant', true), '')::uuid $$;
 
+-- Bank reconciliation (#2300): bank_statement's non-overlap exclusion constraint needs btree_gist.
+CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public;
+
 CREATE FUNCTION public.assert_journal_entry_balanced(p_journal_entry_id uuid) RETURNS void
     LANGUAGE plpgsql
     AS $$
@@ -294,11 +297,10 @@ CREATE TABLE public.bank_reconciliation (
     gl_account_id uuid NOT NULL,
     account_code character varying(20),
     account_name character varying(100),
-    period_start_date date NOT NULL,
-    period_end_date date NOT NULL,
-    statement_date date NOT NULL,
+    statement_start_date date NOT NULL,
+    statement_end_date date NOT NULL,
     currency character varying(3) NOT NULL,
-    statement_ending_balance numeric(19,4) NOT NULL,
+    statement_closing_balance numeric(19,4) NOT NULL,
     gl_ending_balance numeric(19,4) NOT NULL,
     difference numeric(19,4) NOT NULL,
     status character varying(20) NOT NULL,
@@ -307,7 +309,35 @@ CREATE TABLE public.bank_reconciliation (
     updated_at timestamp(6) with time zone NOT NULL,
     finalized_at timestamp(6) with time zone,
     finalized_by character varying(50),
-    CONSTRAINT bank_reconciliation_status_ck CHECK (((status)::text = ANY ((ARRAY['IN_PROGRESS'::character varying, 'FINALIZED'::character varying, 'CANCELLED'::character varying])::text[])))
+    statement_id uuid,
+    statement_opening_balance numeric(19,4),
+    gl_opening_balance numeric(19,4),
+    approved_gl_ending_balance numeric(19,4),
+    sum_outstanding_ledger_items numeric(19,4),
+    sum_outstanding_bank_items numeric(19,4),
+    sum_late_adjustments numeric(19,4),
+    sum_opening_adjustments numeric(19,4),
+    baseline_date date,
+    adjusted_bank_balance numeric(19,4),
+    adjusted_book_balance numeric(19,4),
+    sum_unexplained_bank numeric(19,4),
+    count_unexplained_bank integer,
+    sum_unexplained_ledger numeric(19,4),
+    count_unexplained_ledger integer,
+    opening_difference numeric(19,4),
+    accounting_period_code character varying(7),
+    submitted_at timestamp(6) with time zone,
+    submitted_by character varying(50),
+    invalidated_at timestamp(6) with time zone,
+    invalidation_reason character varying(1000),
+    invalidated_by_journal_entry_id uuid,
+    supersedes_reconciliation_id uuid,
+    superseded_by_reconciliation_id uuid,
+    cancelled_at timestamp(6) with time zone,
+    cancelled_by character varying(50),
+    cancel_reason character varying(1000),
+    version bigint DEFAULT 0 NOT NULL,
+    CONSTRAINT bank_reconciliation_status_ck CHECK (((status)::text = ANY ((ARRAY['IN_PROGRESS'::character varying, 'SUBMITTED'::character varying, 'FINALIZED'::character varying, 'INVALIDATED'::character varying, 'SUPERSEDED'::character varying, 'CANCELLED'::character varying])::text[])))
 );
 
 CREATE TABLE public.bank_reconciliation_adjustment (
@@ -320,6 +350,21 @@ CREATE TABLE public.bank_reconciliation_adjustment (
     journal_entry_id uuid NOT NULL,
     created_at timestamp(6) with time zone NOT NULL,
     created_by character varying(50) NOT NULL,
+    request_id uuid,
+    transaction_date date,
+    posted_period_code character varying(7),
+    bank_transaction_id uuid,
+    override_justification character varying(1000),
+    status character varying(16) DEFAULT 'POSTED'::character varying,
+    reversal_journal_entry_id uuid,
+    reversed_at timestamp(6) with time zone,
+    reversed_by character varying(50),
+    reversal_reason character varying(1000),
+    counter_gl_account_id uuid,
+    justification character varying(1000),
+    settles_match_id uuid,
+    bridges_statement_id uuid,
+    CONSTRAINT bank_reconciliation_adjustment_status_ck CHECK (((status)::text = ANY ((ARRAY['POSTED'::character varying, 'REVERSED'::character varying])::text[]))),
     CONSTRAINT bank_reconciliation_adjustment_type_ck CHECK (((adjustment_type)::text = ANY ((ARRAY['BANK_FEE'::character varying, 'NSF_FEE'::character varying, 'INTEREST_EARNED'::character varying, 'OTHER'::character varying])::text[])))
 );
 
@@ -330,23 +375,8 @@ CREATE TABLE public.bank_reconciliation_gl_match (
     match_id uuid NOT NULL,
     gl_line_id uuid NOT NULL,
     signed_amount numeric(19,4) NOT NULL,
-    created_at timestamp(6) with time zone NOT NULL
-);
-
-CREATE TABLE public.bank_reconciliation_line (
-    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
-    line_id uuid NOT NULL,
-    reconciliation_id uuid NOT NULL,
-    line_number integer NOT NULL,
-    line_date date NOT NULL,
-    description character varying(500),
-    amount numeric(19,4) NOT NULL,
-    reference character varying(255),
-    status character varying(20) NOT NULL,
-    match_id uuid,
     created_at timestamp(6) with time zone NOT NULL,
-    updated_at timestamp(6) with time zone NOT NULL,
-    CONSTRAINT bank_reconciliation_line_status_ck CHECK (((status)::text = ANY ((ARRAY['UNMATCHED'::character varying, 'MATCHED'::character varying])::text[])))
+    active boolean NOT NULL
 );
 
 CREATE TABLE public.credit_memo (
@@ -1157,19 +1187,10 @@ ALTER TABLE ONLY public.bank_reconciliation_adjustment
     ADD CONSTRAINT bank_reconciliation_adjustment_tenant_key UNIQUE (tenant_id, adjustment_id);
 
 ALTER TABLE ONLY public.bank_reconciliation_gl_match
-    ADD CONSTRAINT bank_reconciliation_gl_match_gl_line_uk UNIQUE (tenant_id, gl_line_id);
-
-ALTER TABLE ONLY public.bank_reconciliation_gl_match
     ADD CONSTRAINT bank_reconciliation_gl_match_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.bank_reconciliation_gl_match
     ADD CONSTRAINT bank_reconciliation_gl_match_tenant_key UNIQUE (tenant_id, id);
-
-ALTER TABLE ONLY public.bank_reconciliation_line
-    ADD CONSTRAINT bank_reconciliation_line_pkey PRIMARY KEY (line_id);
-
-ALTER TABLE ONLY public.bank_reconciliation_line
-    ADD CONSTRAINT bank_reconciliation_line_tenant_key UNIQUE (tenant_id, line_id);
 
 ALTER TABLE ONLY public.bank_reconciliation
     ADD CONSTRAINT bank_reconciliation_pkey PRIMARY KEY (reconciliation_id);
@@ -1571,10 +1592,6 @@ CREATE INDEX idx_bank_reconciliation_gl_match_match ON public.bank_reconciliatio
 
 CREATE INDEX idx_bank_reconciliation_gl_match_recon ON public.bank_reconciliation_gl_match USING btree (reconciliation_id);
 
-CREATE INDEX idx_bank_reconciliation_line_match ON public.bank_reconciliation_line USING btree (match_id);
-
-CREATE INDEX idx_bank_reconciliation_line_recon ON public.bank_reconciliation_line USING btree (reconciliation_id);
-
 CREATE INDEX idx_bank_reconciliation_status ON public.bank_reconciliation USING btree (status);
 
 CREATE INDEX idx_category_name ON public.posting_category USING btree (category_name);
@@ -1770,9 +1787,6 @@ ALTER TABLE ONLY public.bank_reconciliation
 ALTER TABLE ONLY public.bank_reconciliation_gl_match
     ADD CONSTRAINT bank_reconciliation_gl_match_recon_fk FOREIGN KEY (tenant_id, reconciliation_id) REFERENCES public.bank_reconciliation(tenant_id, reconciliation_id);
 
-ALTER TABLE ONLY public.bank_reconciliation_line
-    ADD CONSTRAINT bank_reconciliation_line_recon_fk FOREIGN KEY (tenant_id, reconciliation_id) REFERENCES public.bank_reconciliation(tenant_id, reconciliation_id);
-
 ALTER TABLE ONLY public.payment_application
     ADD CONSTRAINT fk13tlgsck9ordhxmucwpq1j9l4 FOREIGN KEY (tenant_id, payment_id) REFERENCES public.receivable_payment(tenant_id, payment_id);
 
@@ -1895,8 +1909,6 @@ CREATE INDEX bank_reconciliation_tenant_idx ON public.bank_reconciliation USING 
 CREATE INDEX bank_reconciliation_adjustment_tenant_idx ON public.bank_reconciliation_adjustment USING btree (tenant_id);
 
 CREATE INDEX bank_reconciliation_gl_match_tenant_idx ON public.bank_reconciliation_gl_match USING btree (tenant_id);
-
-CREATE INDEX bank_reconciliation_line_tenant_idx ON public.bank_reconciliation_line USING btree (tenant_id);
 
 CREATE INDEX credit_memo_tax_tenant_idx ON public.credit_memo_tax USING btree (tenant_id);
 
@@ -2061,12 +2073,6 @@ CREATE POLICY tenant_isolation ON public.bank_reconciliation_adjustment
 ALTER TABLE public.bank_reconciliation_gl_match ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bank_reconciliation_gl_match FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON public.bank_reconciliation_gl_match
-    USING (tenant_id = public.app_current_tenant())
-    WITH CHECK (tenant_id = public.app_current_tenant());
-
-ALTER TABLE public.bank_reconciliation_line ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.bank_reconciliation_line FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON public.bank_reconciliation_line
     USING (tenant_id = public.app_current_tenant())
     WITH CHECK (tenant_id = public.app_current_tenant());
 
@@ -2325,5 +2331,477 @@ CREATE POLICY tenant_isolation ON public.vendor_bill_match_candidate
 ALTER TABLE public.warranty_reimbursement_expectation ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.warranty_reimbursement_expectation FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON public.warranty_reimbursement_expectation
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());
+
+-- ---------------------------------------------------------------------------------------------------
+-- Bank reconciliation foundation (story S1, #2300; durion SPEC-manual-bank-reconciliation §3, §6.4).
+-- Added by hand to the flattened baseline (TENANCY_SCHEMA.md, "Layout of a module's migrations").
+-- Every table is tenant-scoped per ADR-0062 §9 and none is listed in tenancy-global-tables.txt.
+-- Constraints that encode a later story's rule are NOT here: bank_reconciliation_adjustment's link
+-- CHECKs, its TRANSFER type value, counter CHECK and bridge partial unique are story S4's (§6.4).
+-- ---------------------------------------------------------------------------------------------------
+
+CREATE TABLE public.bank_account_profile (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    gl_account_id uuid NOT NULL,
+    bank_name character varying(100),
+    account_mask character varying(8),
+    currency character varying(3) NOT NULL,
+    default_column_mapping jsonb,
+    statement_cycle_hint character varying(32),
+    reconciliation_baseline_date date,
+    created_at timestamp(6) with time zone NOT NULL,
+    created_by character varying(50) NOT NULL,
+    updated_at timestamp(6) with time zone NOT NULL
+);
+
+CREATE TABLE public.bank_statement (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    statement_id uuid NOT NULL,
+    gl_account_id uuid NOT NULL,
+    source_kind character varying(16) NOT NULL,
+    source_ref uuid,
+    connector_code character varying(64),
+    statement_ref character varying(64),
+    start_date date NOT NULL,
+    end_date date NOT NULL,
+    opening_balance numeric(19,4) NOT NULL,
+    closing_balance numeric(19,4) NOT NULL,
+    activity_total numeric(19,4) NOT NULL,
+    currency character varying(3) NOT NULL,
+    gap_acknowledgement character varying(1000),
+    gap_acknowledged_by character varying(50),
+    gap_acknowledged_at timestamp(6) with time zone,
+    status character varying(16) NOT NULL,
+    superseded_by_statement_id uuid,
+    created_at timestamp(6) with time zone NOT NULL,
+    created_by character varying(50) NOT NULL,
+    updated_at timestamp(6) with time zone NOT NULL,
+    CONSTRAINT bank_statement_dates_ck CHECK ((start_date <= end_date)),
+    CONSTRAINT bank_statement_source_kind_ck CHECK (((source_kind)::text = ANY ((ARRAY['FILE_IMPORT'::character varying, 'MANUAL_ENTRY'::character varying, 'BANK_FEED'::character varying])::text[]))),
+    CONSTRAINT bank_statement_status_ck CHECK (((status)::text = ANY ((ARRAY['COMMITTED'::character varying, 'SUPERSEDED'::character varying])::text[])))
+);
+
+CREATE TABLE public.bank_transaction (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    bank_transaction_id uuid NOT NULL,
+    gl_account_id uuid NOT NULL,
+    statement_id uuid,
+    source_kind character varying(16) NOT NULL,
+    source_ref uuid,
+    connector_code character varying(64),
+    source_transaction_id character varying(128),
+    source_row_number integer,
+    supersedes_bank_transaction_id uuid,
+    settlement_state character varying(16) NOT NULL,
+    transaction_date date NOT NULL,
+    authorized_date date,
+    signed_amount numeric(19,4) NOT NULL,
+    currency character varying(3) NOT NULL,
+    description character varying(500),
+    original_description character varying(1000),
+    normalized_description character varying(500),
+    reference character varying(255),
+    check_number character varying(32),
+    counterparty_name character varying(255),
+    category_hint character varying(64),
+    fingerprint character varying(64),
+    status character varying(24) NOT NULL,
+    duplicate_of_bank_transaction_id uuid,
+    arrived_after_approval boolean DEFAULT false NOT NULL,
+    exclusion_reason character varying(1000),
+    excluded_by character varying(50),
+    excluded_at timestamp(6) with time zone,
+    feed_change character varying(16),
+    first_observed_at timestamp(6) with time zone,
+    last_observed_at timestamp(6) with time zone,
+    removed_at timestamp(6) with time zone,
+    created_at timestamp(6) with time zone NOT NULL,
+    created_by character varying(50) NOT NULL,
+    updated_at timestamp(6) with time zone NOT NULL,
+    version bigint DEFAULT 0 NOT NULL,
+    CONSTRAINT bank_transaction_signed_amount_ck CHECK ((signed_amount <> (0)::numeric)),
+    CONSTRAINT bank_transaction_source_kind_ck CHECK (((source_kind)::text = ANY ((ARRAY['FILE_IMPORT'::character varying, 'MANUAL_ENTRY'::character varying, 'BANK_FEED'::character varying])::text[]))),
+    CONSTRAINT bank_transaction_settlement_state_ck CHECK (((settlement_state)::text = ANY ((ARRAY['PENDING'::character varying, 'POSTED'::character varying])::text[]))),
+    CONSTRAINT bank_transaction_status_ck CHECK (((status)::text = ANY ((ARRAY['UNMATCHED'::character varying, 'POSSIBLE_DUPLICATE'::character varying, 'MATCHED'::character varying, 'EXCLUDED'::character varying, 'REMOVED_BY_SOURCE'::character varying])::text[]))),
+    CONSTRAINT bank_transaction_feed_change_ck CHECK (((feed_change)::text = ANY ((ARRAY['ADDED'::character varying, 'MODIFIED'::character varying, 'REMOVED'::character varying])::text[])))
+);
+
+CREATE TABLE public.bank_import (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    import_id uuid NOT NULL,
+    request_id uuid,
+    gl_account_id uuid NOT NULL,
+    currency character varying(3) NOT NULL,
+    format_code character varying(16) NOT NULL,
+    file_name character varying(255),
+    content_type character varying(100),
+    file_size bigint,
+    file_sha256 character varying(64) NOT NULL,
+    column_mapping jsonb,
+    sign_convention character varying(32),
+    date_format character varying(32),
+    decimal_format character varying(16),
+    encoding character varying(32),
+    delimiter character varying(4),
+    statement_start_date date,
+    statement_end_date date,
+    opening_balance numeric(19,4),
+    closing_balance numeric(19,4),
+    statement_ref character varying(64),
+    row_count integer,
+    accepted_count integer,
+    rejected_count integer,
+    possible_duplicate_count integer,
+    skipped_count integer,
+    out_of_window_count integer,
+    status character varying(16) NOT NULL,
+    statement_id uuid,
+    reconciliation_id uuid,
+    created_at timestamp(6) with time zone NOT NULL,
+    created_by character varying(50) NOT NULL,
+    updated_at timestamp(6) with time zone NOT NULL,
+    committed_at timestamp(6) with time zone,
+    committed_by character varying(50),
+    discarded_at timestamp(6) with time zone,
+    discarded_by character varying(50),
+    discard_reason character varying(1000),
+    version bigint DEFAULT 0 NOT NULL,
+    CONSTRAINT bank_import_status_ck CHECK (((status)::text = ANY ((ARRAY['UPLOADED'::character varying, 'VALIDATED'::character varying, 'COMMITTED'::character varying, 'DISCARDED'::character varying])::text[])))
+);
+
+CREATE TABLE public.bank_import_file (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    import_id uuid NOT NULL,
+    file_bytes bytea NOT NULL,
+    retention_until date,
+    created_at timestamp(6) with time zone NOT NULL
+);
+
+CREATE TABLE public.bank_import_row (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    row_id uuid NOT NULL,
+    import_id uuid NOT NULL,
+    row_number integer NOT NULL,
+    raw_values jsonb NOT NULL,
+    transaction_date date,
+    signed_amount numeric(19,4),
+    description character varying(500),
+    reference character varying(255),
+    check_number character varying(32),
+    source_transaction_id character varying(128),
+    fingerprint character varying(64),
+    row_status character varying(24) NOT NULL,
+    rejection_code character varying(64),
+    rejection_detail character varying(1000),
+    corrected_values jsonb,
+    corrected_by character varying(50),
+    corrected_at timestamp(6) with time zone,
+    bank_transaction_id uuid,
+    created_at timestamp(6) with time zone NOT NULL,
+    updated_at timestamp(6) with time zone NOT NULL,
+    CONSTRAINT bank_import_row_status_ck CHECK (((row_status)::text = ANY ((ARRAY['PARSED'::character varying, 'REJECTED'::character varying, 'CORRECTED'::character varying, 'SKIPPED'::character varying, 'POSSIBLE_DUPLICATE'::character varying, 'OUT_OF_WINDOW'::character varying, 'COMMITTED'::character varying])::text[])))
+);
+
+CREATE TABLE public.bank_reconciliation_match (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    match_id uuid NOT NULL,
+    reconciliation_id uuid NOT NULL,
+    match_kind character varying(16),
+    state character varying(16) NOT NULL,
+    origin character varying(8) NOT NULL,
+    confidence_score integer,
+    reasons jsonb,
+    bank_total numeric(19,4),
+    ledger_total numeric(19,4),
+    tolerance_used numeric(19,4),
+    justification character varying(1000),
+    proposed_by character varying(50),
+    proposed_at timestamp(6) with time zone,
+    accepted_by character varying(50),
+    accepted_at timestamp(6) with time zone,
+    rejected_by character varying(50),
+    rejected_at timestamp(6) with time zone,
+    unmatched_by character varying(50),
+    unmatched_at timestamp(6) with time zone,
+    unmatch_reason character varying(1000),
+    replaces_match_id uuid,
+    broken_by_journal_entry_id uuid,
+    created_at timestamp(6) with time zone NOT NULL,
+    updated_at timestamp(6) with time zone NOT NULL,
+    CONSTRAINT bank_reconciliation_match_kind_ck CHECK (((match_kind)::text = ANY ((ARRAY['ONE_TO_ONE'::character varying, 'ONE_TO_MANY'::character varying, 'MANY_TO_ONE'::character varying, 'ADJUSTMENT'::character varying])::text[]))),
+    CONSTRAINT bank_reconciliation_match_state_ck CHECK (((state)::text = ANY ((ARRAY['PROPOSED'::character varying, 'ACCEPTED'::character varying, 'REJECTED'::character varying, 'UNMATCHED'::character varying, 'BROKEN'::character varying])::text[]))),
+    CONSTRAINT bank_reconciliation_match_origin_ck CHECK (((origin)::text = ANY ((ARRAY['USER'::character varying, 'RULE'::character varying])::text[]))),
+    CONSTRAINT bank_reconciliation_match_confidence_ck CHECK (((confidence_score >= 0) AND (confidence_score <= 100))),
+    CONSTRAINT bank_reconciliation_match_tolerance_ck CHECK ((tolerance_used >= (0)::numeric))
+);
+
+CREATE TABLE public.bank_reconciliation_bank_match (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    match_id uuid NOT NULL,
+    bank_transaction_id uuid NOT NULL,
+    active boolean NOT NULL,
+    created_at timestamp(6) with time zone NOT NULL
+);
+
+CREATE TABLE public.bank_reconciliation_outstanding_item (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    outstanding_item_id uuid NOT NULL,
+    gl_account_id uuid NOT NULL,
+    side character varying(8) NOT NULL,
+    gl_line_id uuid,
+    bank_transaction_id uuid,
+    item_kind character varying(32) NOT NULL,
+    signed_amount numeric(19,4) NOT NULL,
+    item_date date NOT NULL,
+    registered_in_reconciliation_id uuid NOT NULL,
+    registered_by character varying(50) NOT NULL,
+    registered_at timestamp(6) with time zone NOT NULL,
+    justification character varying(1000),
+    status character varying(16) NOT NULL,
+    cleared_in_reconciliation_id uuid,
+    cleared_by_match_id uuid,
+    cleared_at timestamp(6) with time zone,
+    cleared_by character varying(50),
+    clearance_justification character varying(1000),
+    voided_by_journal_entry_id uuid,
+    released_at timestamp(6) with time zone,
+    released_by character varying(50),
+    release_reason character varying(1000),
+    closed_on date,
+    last_reaffirmed_in_reconciliation_id uuid,
+    last_reaffirmed_by character varying(50),
+    last_reaffirmed_at timestamp(6) with time zone,
+    reaffirm_justification character varying(1000),
+    created_at timestamp(6) with time zone NOT NULL,
+    updated_at timestamp(6) with time zone NOT NULL,
+    CONSTRAINT bank_reconciliation_outstanding_item_side_ck CHECK (((side)::text = ANY ((ARRAY['LEDGER'::character varying, 'BANK'::character varying])::text[]))),
+    CONSTRAINT bank_reconciliation_outstanding_item_kind_ck CHECK (((item_kind)::text = ANY ((ARRAY['DEPOSIT_IN_TRANSIT'::character varying, 'OUTSTANDING_CHECK'::character varying, 'OTHER_LEDGER_TIMING'::character varying, 'BANK_ERROR_PENDING'::character varying])::text[]))),
+    CONSTRAINT bank_reconciliation_outstanding_item_status_ck CHECK (((status)::text = ANY ((ARRAY['OPEN'::character varying, 'CLEARED'::character varying, 'CLEARED_IN_GAP'::character varying, 'VOIDED'::character varying, 'RELEASED'::character varying])::text[])))
+);
+
+-- Primary keys and the (tenant_id, pk) keys every composite foreign key targets.
+ALTER TABLE ONLY public.bank_account_profile
+    ADD CONSTRAINT bank_account_profile_pkey PRIMARY KEY (gl_account_id);
+ALTER TABLE ONLY public.bank_account_profile
+    ADD CONSTRAINT bank_account_profile_tenant_key UNIQUE (tenant_id, gl_account_id);
+
+ALTER TABLE ONLY public.bank_statement
+    ADD CONSTRAINT bank_statement_pkey PRIMARY KEY (statement_id);
+ALTER TABLE ONLY public.bank_statement
+    ADD CONSTRAINT bank_statement_tenant_key UNIQUE (tenant_id, statement_id);
+
+ALTER TABLE ONLY public.bank_transaction
+    ADD CONSTRAINT bank_transaction_pkey PRIMARY KEY (bank_transaction_id);
+ALTER TABLE ONLY public.bank_transaction
+    ADD CONSTRAINT bank_transaction_tenant_key UNIQUE (tenant_id, bank_transaction_id);
+
+ALTER TABLE ONLY public.bank_import
+    ADD CONSTRAINT bank_import_pkey PRIMARY KEY (import_id);
+ALTER TABLE ONLY public.bank_import
+    ADD CONSTRAINT bank_import_tenant_key UNIQUE (tenant_id, import_id);
+ALTER TABLE ONLY public.bank_import
+    ADD CONSTRAINT bank_import_request_uk UNIQUE (tenant_id, request_id);
+
+ALTER TABLE ONLY public.bank_import_file
+    ADD CONSTRAINT bank_import_file_pkey PRIMARY KEY (import_id);
+ALTER TABLE ONLY public.bank_import_file
+    ADD CONSTRAINT bank_import_file_tenant_key UNIQUE (tenant_id, import_id);
+
+ALTER TABLE ONLY public.bank_import_row
+    ADD CONSTRAINT bank_import_row_pkey PRIMARY KEY (row_id);
+ALTER TABLE ONLY public.bank_import_row
+    ADD CONSTRAINT bank_import_row_tenant_key UNIQUE (tenant_id, row_id);
+ALTER TABLE ONLY public.bank_import_row
+    ADD CONSTRAINT bank_import_row_number_uk UNIQUE (tenant_id, import_id, row_number);
+
+ALTER TABLE ONLY public.bank_reconciliation_match
+    ADD CONSTRAINT bank_reconciliation_match_pkey PRIMARY KEY (match_id);
+ALTER TABLE ONLY public.bank_reconciliation_match
+    ADD CONSTRAINT bank_reconciliation_match_tenant_key UNIQUE (tenant_id, match_id);
+
+ALTER TABLE ONLY public.bank_reconciliation_bank_match
+    ADD CONSTRAINT bank_reconciliation_bank_match_pkey PRIMARY KEY (match_id, bank_transaction_id);
+ALTER TABLE ONLY public.bank_reconciliation_bank_match
+    ADD CONSTRAINT bank_reconciliation_bank_match_tenant_key UNIQUE (tenant_id, match_id, bank_transaction_id);
+
+ALTER TABLE ONLY public.bank_reconciliation_outstanding_item
+    ADD CONSTRAINT bank_reconciliation_outstanding_item_pkey PRIMARY KEY (outstanding_item_id);
+ALTER TABLE ONLY public.bank_reconciliation_outstanding_item
+    ADD CONSTRAINT bank_reconciliation_outstanding_item_tenant_key UNIQUE (tenant_id, outstanding_item_id);
+
+ALTER TABLE ONLY public.bank_reconciliation_adjustment
+    ADD CONSTRAINT bank_reconciliation_adjustment_request_uk UNIQUE (tenant_id, request_id);
+
+-- U2 (§3.1): COMMITTED statement windows on one account never overlap. Superseded statements are
+-- outside the constraint, so a corrected re-import can sit on the window it replaces.
+ALTER TABLE ONLY public.bank_statement
+    ADD CONSTRAINT bank_statement_no_overlap_ex EXCLUDE USING gist (tenant_id WITH =, gl_account_id WITH =, daterange(start_date, end_date, '[]'::text) WITH &&) WHERE (((status)::text = 'COMMITTED'::text));
+
+-- Partial uniques and indexes.
+CREATE UNIQUE INDEX bank_statement_committed_window_uk ON public.bank_statement USING btree (tenant_id, gl_account_id, start_date, end_date) WHERE ((status)::text = 'COMMITTED'::text);
+CREATE INDEX bank_statement_baseline_idx ON public.bank_statement USING btree (tenant_id, gl_account_id, start_date) WHERE (gap_acknowledgement IS NOT NULL);
+
+CREATE UNIQUE INDEX bank_transaction_source_id_uk ON public.bank_transaction USING btree (tenant_id, gl_account_id, source_kind, source_ref, source_transaction_id) WHERE (source_transaction_id IS NOT NULL);
+CREATE INDEX bank_transaction_fingerprint_idx ON public.bank_transaction USING btree (tenant_id, gl_account_id, fingerprint);
+CREATE INDEX bank_transaction_account_date_status_idx ON public.bank_transaction USING btree (tenant_id, gl_account_id, transaction_date, status);
+CREATE INDEX bank_transaction_statement_idx ON public.bank_transaction USING btree (tenant_id, statement_id);
+
+CREATE UNIQUE INDEX bank_import_committed_file_uk ON public.bank_import USING btree (tenant_id, gl_account_id, file_sha256) WHERE ((status)::text = 'COMMITTED'::text);
+CREATE INDEX bank_import_account_status_idx ON public.bank_import USING btree (tenant_id, gl_account_id, status);
+
+CREATE INDEX bank_import_row_status_idx ON public.bank_import_row USING btree (tenant_id, import_id, row_status);
+
+CREATE UNIQUE INDEX bank_reconciliation_active_statement_uk ON public.bank_reconciliation USING btree (tenant_id, statement_id) WHERE ((status)::text = ANY ((ARRAY['IN_PROGRESS'::character varying, 'SUBMITTED'::character varying])::text[]));
+CREATE INDEX bank_reconciliation_account_end_status_idx ON public.bank_reconciliation USING btree (tenant_id, gl_account_id, statement_end_date, status);
+
+CREATE INDEX bank_reconciliation_match_recon_state_idx ON public.bank_reconciliation_match USING btree (tenant_id, reconciliation_id, state);
+
+-- U4 (§3.4): a ledger line / bank transaction is in at most one ACTIVE match; history survives unmatch.
+CREATE UNIQUE INDEX bank_reconciliation_gl_match_active_gl_line_uk ON public.bank_reconciliation_gl_match USING btree (tenant_id, gl_line_id) WHERE active;
+CREATE UNIQUE INDEX bank_reconciliation_bank_match_active_txn_uk ON public.bank_reconciliation_bank_match USING btree (tenant_id, bank_transaction_id) WHERE active;
+
+-- O1 (§3.6): a ledger line / bank transaction is in at most one OPEN outstanding item.
+CREATE UNIQUE INDEX bank_reconciliation_outstanding_item_open_gl_line_uk ON public.bank_reconciliation_outstanding_item USING btree (tenant_id, gl_line_id) WHERE ((status)::text = 'OPEN'::text);
+CREATE UNIQUE INDEX bank_reconciliation_outstanding_item_open_txn_uk ON public.bank_reconciliation_outstanding_item USING btree (tenant_id, bank_transaction_id) WHERE ((status)::text = 'OPEN'::text);
+CREATE INDEX bank_reconciliation_outstanding_item_status_idx ON public.bank_reconciliation_outstanding_item USING btree (tenant_id, gl_account_id, status, item_date);
+CREATE INDEX bank_reconciliation_outstanding_item_open_at_idx ON public.bank_reconciliation_outstanding_item USING btree (tenant_id, gl_account_id, item_date, closed_on);
+
+CREATE INDEX idx_audit_log_tenant_entity_time ON public.accounting_audit_log USING btree (tenant_id, entity_type, entity_id, "timestamp");
+
+CREATE INDEX bank_account_profile_tenant_idx ON public.bank_account_profile USING btree (tenant_id);
+CREATE INDEX bank_statement_tenant_idx ON public.bank_statement USING btree (tenant_id);
+CREATE INDEX bank_transaction_tenant_idx ON public.bank_transaction USING btree (tenant_id);
+CREATE INDEX bank_import_tenant_idx ON public.bank_import USING btree (tenant_id);
+CREATE INDEX bank_import_file_tenant_idx ON public.bank_import_file USING btree (tenant_id);
+CREATE INDEX bank_import_row_tenant_idx ON public.bank_import_row USING btree (tenant_id);
+CREATE INDEX bank_reconciliation_match_tenant_idx ON public.bank_reconciliation_match USING btree (tenant_id);
+CREATE INDEX bank_reconciliation_bank_match_tenant_idx ON public.bank_reconciliation_bank_match USING btree (tenant_id);
+CREATE INDEX bank_reconciliation_outstanding_item_tenant_idx ON public.bank_reconciliation_outstanding_item USING btree (tenant_id);
+
+-- Composite (tenant_id, …) foreign keys.
+ALTER TABLE ONLY public.bank_account_profile
+    ADD CONSTRAINT bank_account_profile_gl_account_fk FOREIGN KEY (tenant_id, gl_account_id) REFERENCES public.gl_account(tenant_id, gl_account_id);
+
+ALTER TABLE ONLY public.bank_statement
+    ADD CONSTRAINT bank_statement_gl_account_fk FOREIGN KEY (tenant_id, gl_account_id) REFERENCES public.gl_account(tenant_id, gl_account_id);
+ALTER TABLE ONLY public.bank_statement
+    ADD CONSTRAINT bank_statement_superseded_by_fk FOREIGN KEY (tenant_id, superseded_by_statement_id) REFERENCES public.bank_statement(tenant_id, statement_id);
+
+ALTER TABLE ONLY public.bank_transaction
+    ADD CONSTRAINT bank_transaction_gl_account_fk FOREIGN KEY (tenant_id, gl_account_id) REFERENCES public.gl_account(tenant_id, gl_account_id);
+ALTER TABLE ONLY public.bank_transaction
+    ADD CONSTRAINT bank_transaction_statement_fk FOREIGN KEY (tenant_id, statement_id) REFERENCES public.bank_statement(tenant_id, statement_id);
+ALTER TABLE ONLY public.bank_transaction
+    ADD CONSTRAINT bank_transaction_supersedes_fk FOREIGN KEY (tenant_id, supersedes_bank_transaction_id) REFERENCES public.bank_transaction(tenant_id, bank_transaction_id);
+ALTER TABLE ONLY public.bank_transaction
+    ADD CONSTRAINT bank_transaction_duplicate_of_fk FOREIGN KEY (tenant_id, duplicate_of_bank_transaction_id) REFERENCES public.bank_transaction(tenant_id, bank_transaction_id);
+
+ALTER TABLE ONLY public.bank_import
+    ADD CONSTRAINT bank_import_gl_account_fk FOREIGN KEY (tenant_id, gl_account_id) REFERENCES public.gl_account(tenant_id, gl_account_id);
+ALTER TABLE ONLY public.bank_import
+    ADD CONSTRAINT bank_import_statement_fk FOREIGN KEY (tenant_id, statement_id) REFERENCES public.bank_statement(tenant_id, statement_id);
+ALTER TABLE ONLY public.bank_import
+    ADD CONSTRAINT bank_import_reconciliation_fk FOREIGN KEY (tenant_id, reconciliation_id) REFERENCES public.bank_reconciliation(tenant_id, reconciliation_id);
+
+ALTER TABLE ONLY public.bank_import_file
+    ADD CONSTRAINT bank_import_file_import_fk FOREIGN KEY (tenant_id, import_id) REFERENCES public.bank_import(tenant_id, import_id);
+
+ALTER TABLE ONLY public.bank_import_row
+    ADD CONSTRAINT bank_import_row_import_fk FOREIGN KEY (tenant_id, import_id) REFERENCES public.bank_import(tenant_id, import_id);
+ALTER TABLE ONLY public.bank_import_row
+    ADD CONSTRAINT bank_import_row_bank_transaction_fk FOREIGN KEY (tenant_id, bank_transaction_id) REFERENCES public.bank_transaction(tenant_id, bank_transaction_id);
+
+ALTER TABLE ONLY public.bank_reconciliation
+    ADD CONSTRAINT bank_reconciliation_statement_fk FOREIGN KEY (tenant_id, statement_id) REFERENCES public.bank_statement(tenant_id, statement_id);
+
+ALTER TABLE ONLY public.bank_reconciliation_match
+    ADD CONSTRAINT bank_reconciliation_match_recon_fk FOREIGN KEY (tenant_id, reconciliation_id) REFERENCES public.bank_reconciliation(tenant_id, reconciliation_id);
+ALTER TABLE ONLY public.bank_reconciliation_match
+    ADD CONSTRAINT bank_reconciliation_match_replaces_fk FOREIGN KEY (tenant_id, replaces_match_id) REFERENCES public.bank_reconciliation_match(tenant_id, match_id);
+
+ALTER TABLE ONLY public.bank_reconciliation_gl_match
+    ADD CONSTRAINT bank_reconciliation_gl_match_match_fk FOREIGN KEY (tenant_id, match_id) REFERENCES public.bank_reconciliation_match(tenant_id, match_id);
+
+ALTER TABLE ONLY public.bank_reconciliation_bank_match
+    ADD CONSTRAINT bank_reconciliation_bank_match_match_fk FOREIGN KEY (tenant_id, match_id) REFERENCES public.bank_reconciliation_match(tenant_id, match_id);
+ALTER TABLE ONLY public.bank_reconciliation_bank_match
+    ADD CONSTRAINT bank_reconciliation_bank_match_txn_fk FOREIGN KEY (tenant_id, bank_transaction_id) REFERENCES public.bank_transaction(tenant_id, bank_transaction_id);
+
+ALTER TABLE ONLY public.bank_reconciliation_adjustment
+    ADD CONSTRAINT bank_reconciliation_adjustment_txn_fk FOREIGN KEY (tenant_id, bank_transaction_id) REFERENCES public.bank_transaction(tenant_id, bank_transaction_id);
+ALTER TABLE ONLY public.bank_reconciliation_adjustment
+    ADD CONSTRAINT bank_reconciliation_adjustment_counter_account_fk FOREIGN KEY (tenant_id, counter_gl_account_id) REFERENCES public.gl_account(tenant_id, gl_account_id);
+ALTER TABLE ONLY public.bank_reconciliation_adjustment
+    ADD CONSTRAINT bank_reconciliation_adjustment_settles_match_fk FOREIGN KEY (tenant_id, settles_match_id) REFERENCES public.bank_reconciliation_match(tenant_id, match_id);
+ALTER TABLE ONLY public.bank_reconciliation_adjustment
+    ADD CONSTRAINT bank_reconciliation_adjustment_bridges_statement_fk FOREIGN KEY (tenant_id, bridges_statement_id) REFERENCES public.bank_statement(tenant_id, statement_id);
+
+ALTER TABLE ONLY public.bank_reconciliation_outstanding_item
+    ADD CONSTRAINT bank_reconciliation_outstanding_item_gl_account_fk FOREIGN KEY (tenant_id, gl_account_id) REFERENCES public.gl_account(tenant_id, gl_account_id);
+ALTER TABLE ONLY public.bank_reconciliation_outstanding_item
+    ADD CONSTRAINT bank_reconciliation_outstanding_item_txn_fk FOREIGN KEY (tenant_id, bank_transaction_id) REFERENCES public.bank_transaction(tenant_id, bank_transaction_id);
+ALTER TABLE ONLY public.bank_reconciliation_outstanding_item
+    ADD CONSTRAINT bank_reconciliation_outstanding_item_registered_fk FOREIGN KEY (tenant_id, registered_in_reconciliation_id) REFERENCES public.bank_reconciliation(tenant_id, reconciliation_id);
+ALTER TABLE ONLY public.bank_reconciliation_outstanding_item
+    ADD CONSTRAINT bank_reconciliation_outstanding_item_cleared_in_fk FOREIGN KEY (tenant_id, cleared_in_reconciliation_id) REFERENCES public.bank_reconciliation(tenant_id, reconciliation_id);
+ALTER TABLE ONLY public.bank_reconciliation_outstanding_item
+    ADD CONSTRAINT bank_reconciliation_outstanding_item_cleared_by_match_fk FOREIGN KEY (tenant_id, cleared_by_match_id) REFERENCES public.bank_reconciliation_match(tenant_id, match_id);
+ALTER TABLE ONLY public.bank_reconciliation_outstanding_item
+    ADD CONSTRAINT bank_reconciliation_outstanding_item_reaffirmed_in_fk FOREIGN KEY (tenant_id, last_reaffirmed_in_reconciliation_id) REFERENCES public.bank_reconciliation(tenant_id, reconciliation_id);
+
+-- Row-level security (ADR-0062 §2).
+ALTER TABLE public.bank_account_profile ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bank_account_profile FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.bank_account_profile
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());
+
+ALTER TABLE public.bank_statement ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bank_statement FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.bank_statement
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());
+
+ALTER TABLE public.bank_transaction ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bank_transaction FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.bank_transaction
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());
+
+ALTER TABLE public.bank_import ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bank_import FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.bank_import
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());
+
+ALTER TABLE public.bank_import_file ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bank_import_file FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.bank_import_file
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());
+
+ALTER TABLE public.bank_import_row ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bank_import_row FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.bank_import_row
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());
+
+ALTER TABLE public.bank_reconciliation_match ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bank_reconciliation_match FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.bank_reconciliation_match
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());
+
+ALTER TABLE public.bank_reconciliation_bank_match ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bank_reconciliation_bank_match FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.bank_reconciliation_bank_match
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());
+
+ALTER TABLE public.bank_reconciliation_outstanding_item ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bank_reconciliation_outstanding_item FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.bank_reconciliation_outstanding_item
     USING (tenant_id = public.app_current_tenant())
     WITH CHECK (tenant_id = public.app_current_tenant());

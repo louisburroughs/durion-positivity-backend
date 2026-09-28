@@ -22,6 +22,7 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -38,25 +39,28 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * Manual CSV bank reconciliation header (Story F2, issue #965, decisions D-5/D-6).
+ * Bank reconciliation header (Story F2, issue #965; extended by story S1, #2300 —
+ * SPEC-manual-bank-reconciliation §3.7).
  *
- * <p>One row per statement import for one reconcilable GL cash account. Single
+ * <p>One row per reconciled statement window of one reconcilable GL cash account. Single
  * currency per reconciliation (hard invariant; {@link #currency} governs). The
- * reconciliation is created {@link ReconciliationStatus#IN_PROGRESS} with its
- * imported statement lines; {@link #glEndingBalance} is snapshotted at import from
- * posted journal-entry lines on the account as-of {@link #statementDate}. Finalizing
- * requires the balance gate to net to zero (difference within ±0.01) and flips the
- * status to {@link ReconciliationStatus#FINALIZED}.
+ * reconciliation rests on a {@code bank_statement} ({@link #statementId}) and selects that
+ * statement's bank transactions; it no longer owns statement lines. {@link #glEndingBalance}
+ * is snapshotted at import from posted journal-entry lines on the account as-of
+ * {@link #statementEndDate} (F2's {@code statementDate} is retired: it equals the statement
+ * end date). Finalizing requires the balance gate to net to zero (difference within ±0.01)
+ * and flips the status to {@link ReconciliationStatus#FINALIZED}.
  *
- * <p>Replaces the dead baseline {@code reconciliation} entity, which modelled its
- * children as untyped jsonb; here lines and adjustments are proper relational
- * children ({@code @OneToMany}, FK per ADR-0013 UUIDv7 ids).
+ * <p>The columns of the explicit equation (E3), the opening terms, the unexplained counts and
+ * the approval/invalidation/supersession/cancellation actors are carried here from story S1 on,
+ * nullable, and are filled by stories S4–S5. {@link #version} guards concurrent edits
+ * (§6.3; a stale version answers 409 {@code OPTIMISTIC_LOCK}).
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = {"glAccount", "statementLines", "adjustments"})
+@ToString(exclude = {"glAccount", "adjustments"})
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(
@@ -86,20 +90,24 @@ public class BankReconciliation extends TenantScopedEntity {
     @Column(name = "account_name", length = 100)
     private String accountName;
 
-    @Column(name = "period_start_date", nullable = false)
-    private LocalDate periodStartDate;
+    /** The bank statement this reconciliation rests on (nullable only for a phase-2 interim reconciliation). */
+    @Column(name = "statement_id", columnDefinition = "UUID")
+    private UUID statementId;
 
-    @Column(name = "period_end_date", nullable = false)
-    private LocalDate periodEndDate;
+    @Column(name = "statement_start_date", nullable = false)
+    private LocalDate statementStartDate;
 
-    @Column(name = "statement_date", nullable = false)
-    private LocalDate statementDate;
+    @Column(name = "statement_end_date", nullable = false)
+    private LocalDate statementEndDate;
 
     @Column(name = "currency", length = 3, nullable = false)
     private String currency;
 
-    @Column(name = "statement_ending_balance", precision = 19, scale = 4, nullable = false)
-    private BigDecimal statementEndingBalance;
+    @Column(name = "statement_opening_balance", precision = 19, scale = 4)
+    private BigDecimal statementOpeningBalance;
+
+    @Column(name = "statement_closing_balance", precision = 19, scale = 4, nullable = false)
+    private BigDecimal statementClosingBalance;
 
     @Column(name = "gl_ending_balance", precision = 19, scale = 4, nullable = false)
     private BigDecimal glEndingBalance;
@@ -110,10 +118,6 @@ public class BankReconciliation extends TenantScopedEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20, nullable = false)
     private ReconciliationStatus status = ReconciliationStatus.IN_PROGRESS;
-
-    @OneToMany(mappedBy = "reconciliation", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    @OrderBy("lineNumber ASC")
-    private List<BankReconciliationLine> statementLines = new ArrayList<>();
 
     @OneToMany(mappedBy = "reconciliation", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @OrderBy("createdAt ASC")
@@ -136,6 +140,91 @@ public class BankReconciliation extends TenantScopedEntity {
     @Column(name = "finalized_by", length = 50)
     private String finalizedBy;
 
+    // ---- explicit equation (E3), opening terms and unexplained counts (§3.7; filled by S4) ----
+
+    @Column(name = "gl_opening_balance", precision = 19, scale = 4)
+    private BigDecimal glOpeningBalance;
+
+    @Column(name = "approved_gl_ending_balance", precision = 19, scale = 4)
+    private BigDecimal approvedGlEndingBalance;
+
+    @Column(name = "sum_outstanding_ledger_items", precision = 19, scale = 4)
+    private BigDecimal sumOutstandingLedgerItems;
+
+    @Column(name = "sum_outstanding_bank_items", precision = 19, scale = 4)
+    private BigDecimal sumOutstandingBankItems;
+
+    @Column(name = "sum_late_adjustments", precision = 19, scale = 4)
+    private BigDecimal sumLateAdjustments;
+
+    @Column(name = "sum_opening_adjustments", precision = 19, scale = 4)
+    private BigDecimal sumOpeningAdjustments;
+
+    /** The account baseline that applies to this window (§3.1). */
+    @Column(name = "baseline_date")
+    private LocalDate baselineDate;
+
+    @Column(name = "adjusted_bank_balance", precision = 19, scale = 4)
+    private BigDecimal adjustedBankBalance;
+
+    @Column(name = "adjusted_book_balance", precision = 19, scale = 4)
+    private BigDecimal adjustedBookBalance;
+
+    @Column(name = "sum_unexplained_bank", precision = 19, scale = 4)
+    private BigDecimal sumUnexplainedBank;
+
+    @Column(name = "count_unexplained_bank")
+    private Integer countUnexplainedBank;
+
+    @Column(name = "sum_unexplained_ledger", precision = 19, scale = 4)
+    private BigDecimal sumUnexplainedLedger;
+
+    @Column(name = "count_unexplained_ledger")
+    private Integer countUnexplainedLedger;
+
+    @Column(name = "opening_difference", precision = 19, scale = 4)
+    private BigDecimal openingDifference;
+
+    /** {@code YearMonth.from(statementEndDate)} for attribution and readiness; not a window constraint. */
+    @Column(name = "accounting_period_code", length = 7)
+    private String accountingPeriodCode;
+
+    // ---- lifecycle actors (§3.7, §3.8; filled by S5) ----
+
+    @Column(name = "submitted_at")
+    private Instant submittedAt;
+
+    @Column(name = "submitted_by", length = 50)
+    private String submittedBy;
+
+    @Column(name = "invalidated_at")
+    private Instant invalidatedAt;
+
+    @Column(name = "invalidation_reason", length = 1000)
+    private String invalidationReason;
+
+    @Column(name = "invalidated_by_journal_entry_id", columnDefinition = "UUID")
+    private UUID invalidatedByJournalEntryId;
+
+    @Column(name = "supersedes_reconciliation_id", columnDefinition = "UUID")
+    private UUID supersedesReconciliationId;
+
+    @Column(name = "superseded_by_reconciliation_id", columnDefinition = "UUID")
+    private UUID supersededByReconciliationId;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Column(name = "cancelled_by", length = 50)
+    private String cancelledBy;
+
+    @Column(name = "cancel_reason", length = 1000)
+    private String cancelReason;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     @PrePersist
     void onPrePersist() {
         if (createdBy == null) {
@@ -150,12 +239,6 @@ public class BankReconciliation extends TenantScopedEntity {
 
     public BankReconciliation(UUID reconciliationId) {
         this.reconciliationId = reconciliationId;
-    }
-
-    /** Add a statement line and wire its parent back-reference. */
-    public void addStatementLine(BankReconciliationLine line) {
-        line.setReconciliation(this);
-        statementLines.add(line);
     }
 
     /** Add an adjustment and wire its parent back-reference. */

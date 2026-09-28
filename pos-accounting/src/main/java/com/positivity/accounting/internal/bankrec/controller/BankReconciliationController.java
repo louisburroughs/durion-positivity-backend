@@ -5,12 +5,12 @@ import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRe
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAdjustmentRequest;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationApiStatus;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAuditResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationMatchRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationReportResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationUnmatchRequest;
 import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
-import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.bankrec.service.BankReconciliationService;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.events.EmitEvent;
@@ -212,11 +212,12 @@ public class BankReconciliationController {
             @Parameter(description = "Filter by reconciled GL account id") @RequestParam(required = false)
                     UUID glAccountId,
             @Parameter(description = "Filter by reconciliation status") @RequestParam(required = false)
-                    ReconciliationStatus status,
+                    ReconciliationApiStatus status,
             @Parameter(description = "Zero-based page index", example = "0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size", example = "20") @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return ResponseEntity.ok(bankReconciliationService.list(glAccountId, status, pageable));
+        return ResponseEntity.ok(
+                bankReconciliationService.list(glAccountId, status != null ? status.toDomain() : null, pageable));
     }
 
     @GetMapping("/{reconciliationId}")

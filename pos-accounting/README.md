@@ -307,6 +307,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `SETTLEMENT_NOT_POSTED` | 409 | The operation needs a POSTED settlement |
 | `RECONCILIATION_ALREADY_FINALIZED` | 409 | The bank reconciliation is finalized and no longer editable |
 | `RECONCILIATION_LINE_INELIGIBLE` | 409 | The reconciliation line's state does not allow the requested match or adjustment |
+| `OPTIMISTIC_LOCK` | 409 | The record was changed by another request since it was read (stale `@Version`); reload and retry |
 | `CONFLICT` | 409 | An `IllegalStateException` reporting an item that is `already PROCESSED` |
 | `ILLEGAL_STATE` | 409 | Any other `IllegalStateException` raised by this module's services |
 | `UNBALANCED_ENTRY` | 422 | Journal entry debits and credits do not balance (or has no lines) |

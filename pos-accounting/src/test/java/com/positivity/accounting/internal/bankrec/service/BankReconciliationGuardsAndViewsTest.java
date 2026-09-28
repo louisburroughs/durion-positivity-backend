@@ -15,15 +15,22 @@ import com.positivity.accounting.internal.bankrec.dto.ReconciliationReportRespon
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationUnmatchRequest;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationAdjustment;
+import com.positivity.accounting.internal.bankrec.entity.BankReconciliationBankMatch;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationGlMatch;
-import com.positivity.accounting.internal.bankrec.entity.BankReconciliationLine;
+import com.positivity.accounting.internal.bankrec.entity.BankReconciliationMatch;
+import com.positivity.accounting.internal.bankrec.entity.BankStatement;
+import com.positivity.accounting.internal.bankrec.entity.BankTransaction;
 import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
-import com.positivity.accounting.internal.bankrec.enums.BankReconciliationLineStatus;
+import com.positivity.accounting.internal.bankrec.enums.BankTransactionStatus;
+import com.positivity.accounting.internal.bankrec.enums.MatchState;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationAdjustmentRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankReconciliationBankMatchRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationGlMatchRepository;
-import com.positivity.accounting.internal.bankrec.repository.BankReconciliationLineRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankReconciliationMatchRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.entity.GLAccount;
@@ -78,6 +85,7 @@ class BankReconciliationGuardsAndViewsTest {
 
     private static final UUID ACCOUNT_ID = UUID.fromString("5eed0acc-0000-4000-8000-000000001000");
     private static final UUID RECON_ID = UUID.fromString("01936e5e-7890-7a3d-8b6e-4d5678900001");
+    private static final UUID STATEMENT_ID = UUID.fromString("01936e5e-7890-7a3d-8b6e-4d5678900002");
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-19T00:00:00Z"), ZoneOffset.UTC);
 
@@ -85,7 +93,16 @@ class BankReconciliationGuardsAndViewsTest {
     private BankReconciliationRepository reconciliationRepository;
 
     @Mock
-    private BankReconciliationLineRepository lineRepository;
+    private BankStatementRepository statementRepository;
+
+    @Mock
+    private BankTransactionRepository transactionRepository;
+
+    @Mock
+    private BankReconciliationMatchRepository matchRepository;
+
+    @Mock
+    private BankReconciliationBankMatchRepository bankMatchRepository;
 
     @Mock
     private BankReconciliationAdjustmentRepository adjustmentRepository;
@@ -112,9 +129,12 @@ class BankReconciliationGuardsAndViewsTest {
         service = new BankReconciliationServiceImpl(
                 clock,
                 reconciliationRepository,
-                lineRepository,
-                adjustmentRepository,
+                statementRepository,
+                transactionRepository,
+                matchRepository,
                 glMatchRepository,
+                bankMatchRepository,
+                adjustmentRepository,
                 glAccountRepository,
                 journalEntryLineRepository,
                 glMappingResolver,
@@ -177,7 +197,8 @@ class BankReconciliationGuardsAndViewsTest {
         }
 
         private void stubLinesForResponse() {
-            when(lineRepository.findByReconciliation_ReconciliationId(RECON_ID)).thenReturn(List.of());
+            when(transactionRepository.findByStatementIdOrderBySourceRowNumberAsc(STATEMENT_ID))
+                    .thenReturn(List.of());
             when(adjustmentRepository.findByReconciliation_ReconciliationId(RECON_ID))
                     .thenReturn(List.of());
         }
@@ -197,7 +218,7 @@ class BankReconciliationGuardsAndViewsTest {
         void missingStatementLine() {
             UUID s1 = UUID.randomUUID();
             UUID ghost = UUID.randomUUID();
-            when(lineRepository.findAllById(List.of(s1, ghost)))
+            when(transactionRepository.findAllById(List.of(s1, ghost)))
                     .thenReturn(List.of(statementLine(s1, new BigDecimal("100.0000"))));
 
             // Matching only the lines that were found would report success for a selection the
@@ -214,12 +235,18 @@ class BankReconciliationGuardsAndViewsTest {
             when(reconciliationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             UUID s1 = UUID.randomUUID();
             UUID g1 = UUID.randomUUID();
-            BankReconciliationLine line = statementLine(s1, new BigDecimal("100.0000"));
-            when(lineRepository.findAllById(List.of(s1, s1))).thenReturn(List.of(line));
+            BankTransaction line = statementLine(s1, new BigDecimal("100.0000"));
+            when(transactionRepository.findAllById(List.of(s1, s1))).thenReturn(List.of(line));
             when(journalEntryLineRepository.findAllById(List.of(g1)))
                     .thenReturn(List.of(postedGlLine(g1, new BigDecimal("100.0000"), BigDecimal.ZERO)));
-            when(glMatchRepository.existsByGlLineId(g1)).thenReturn(false);
-            when(lineRepository.findByReconciliation_ReconciliationId(RECON_ID)).thenReturn(List.of(line));
+            when(glMatchRepository.existsByGlLineIdAndActiveTrue(g1)).thenReturn(false);
+            when(matchRepository.save(any(BankReconciliationMatch.class))).thenAnswer(inv -> {
+                BankReconciliationMatch header = inv.getArgument(0);
+                header.setMatchId(UUID.randomUUID());
+                return header;
+            });
+            when(transactionRepository.findByStatementIdOrderBySourceRowNumberAsc(STATEMENT_ID))
+                    .thenReturn(List.of(line));
             when(adjustmentRepository.findByReconciliation_ReconciliationId(RECON_ID))
                     .thenReturn(List.of());
 
@@ -227,16 +254,16 @@ class BankReconciliationGuardsAndViewsTest {
             // it per requested id would demand 200.00 of GL for 100.00 of statement.
             service.match(RECON_ID, matchRequest(List.of(s1, s1), List.of(g1)));
 
-            assertThat(line.getStatus()).isEqualTo(BankReconciliationLineStatus.MATCHED);
+            assertThat(line.getStatus()).isEqualTo(BankTransactionStatus.MATCHED);
         }
 
         @Test
         @DisplayName("a statement line already in a match group cannot be matched again")
         void alreadyMatchedStatementLine() {
             UUID s1 = UUID.randomUUID();
-            BankReconciliationLine line = statementLine(s1, new BigDecimal("100.0000"));
-            line.setStatus(BankReconciliationLineStatus.MATCHED);
-            when(lineRepository.findAllById(List.of(s1))).thenReturn(List.of(line));
+            BankTransaction line = statementLine(s1, new BigDecimal("100.0000"));
+            line.setStatus(BankTransactionStatus.MATCHED);
+            when(transactionRepository.findAllById(List.of(s1))).thenReturn(List.of(line));
 
             assertThatThrownBy(() -> service.match(RECON_ID, matchRequest(List.of(s1), List.of(UUID.randomUUID()))))
                     .isInstanceOf(ReconciliationLineIneligibleException.class);
@@ -248,7 +275,7 @@ class BankReconciliationGuardsAndViewsTest {
             UUID s1 = UUID.randomUUID();
             UUID g1 = UUID.randomUUID();
             UUID ghost = UUID.randomUUID();
-            when(lineRepository.findAllById(List.of(s1)))
+            when(transactionRepository.findAllById(List.of(s1)))
                     .thenReturn(List.of(statementLine(s1, new BigDecimal("100.0000"))));
             when(journalEntryLineRepository.findAllById(List.of(g1, ghost)))
                     .thenReturn(List.of(postedGlLine(g1, new BigDecimal("100.0000"), BigDecimal.ZERO)));
@@ -262,7 +289,7 @@ class BankReconciliationGuardsAndViewsTest {
         void glLineOnAnotherAccount() {
             UUID s1 = UUID.randomUUID();
             UUID g1 = UUID.randomUUID();
-            when(lineRepository.findAllById(List.of(s1)))
+            when(transactionRepository.findAllById(List.of(s1)))
                     .thenReturn(List.of(statementLine(s1, new BigDecimal("100.0000"))));
             JournalEntryLine foreign = postedGlLine(g1, new BigDecimal("100.0000"), BigDecimal.ZERO);
             foreign.setGlAccountId(UUID.randomUUID());
@@ -279,7 +306,7 @@ class BankReconciliationGuardsAndViewsTest {
         void glLineWithoutAJournalEntry() {
             UUID s1 = UUID.randomUUID();
             UUID g1 = UUID.randomUUID();
-            when(lineRepository.findAllById(List.of(s1)))
+            when(transactionRepository.findAllById(List.of(s1)))
                     .thenReturn(List.of(statementLine(s1, new BigDecimal("100.0000"))));
             JournalEntryLine orphan = postedGlLine(g1, new BigDecimal("100.0000"), BigDecimal.ZERO);
             orphan.setJournalEntry(null);
@@ -313,12 +340,18 @@ class BankReconciliationGuardsAndViewsTest {
             UUID matchId = UUID.randomUUID();
             UUID s1 = UUID.randomUUID();
             UUID s2 = UUID.randomUUID();
-            BankReconciliationLine line1 = matchedLine(s1, matchId);
-            BankReconciliationLine line2 = matchedLine(s2, matchId);
-            when(lineRepository.findAllById(List.of(s1, s2))).thenReturn(List.of(line1, line2));
-            when(lineRepository.findByReconciliation_ReconciliationIdAndMatchId(RECON_ID, matchId))
+            BankTransaction line1 = matchedLine(s1);
+            BankTransaction line2 = matchedLine(s2);
+            when(transactionRepository.findAllById(List.of(s1, s2))).thenReturn(List.of(line1, line2));
+            List<BankReconciliationBankMatch> members =
+                    List.of(new BankReconciliationBankMatch(matchId, s1), new BankReconciliationBankMatch(matchId, s2));
+            when(bankMatchRepository.findByBankTransactionIdInAndActiveTrue(List.of(s1, s2)))
+                    .thenReturn(members);
+            when(matchRepository.findByMatchIdAndReconciliationId(matchId, RECON_ID))
+                    .thenReturn(Optional.of(acceptedHeader(matchId)));
+            when(bankMatchRepository.findByMatchIdAndActiveTrue(matchId)).thenReturn(members);
+            when(transactionRepository.findByStatementIdOrderBySourceRowNumberAsc(STATEMENT_ID))
                     .thenReturn(List.of(line1, line2));
-            when(lineRepository.findByReconciliation_ReconciliationId(RECON_ID)).thenReturn(List.of(line1, line2));
             when(adjustmentRepository.findByReconciliation_ReconciliationId(RECON_ID))
                     .thenReturn(List.of());
 
@@ -328,9 +361,10 @@ class BankReconciliationGuardsAndViewsTest {
                             .statementLineIds(List.of(s1, s2))
                             .build());
 
-            assertThat(line1.getStatus()).isEqualTo(BankReconciliationLineStatus.UNMATCHED);
-            assertThat(line1.getMatchId()).isNull();
-            verify(glMatchRepository).deleteByReconciliationIdAndMatchId(RECON_ID, matchId);
+            assertThat(line1.getStatus()).isEqualTo(BankTransactionStatus.UNMATCHED);
+            assertThat(line2.getStatus()).isEqualTo(BankTransactionStatus.UNMATCHED);
+            // M7: the group is released by deactivating its members, never by deleting them.
+            assertThat(members).noneMatch(BankReconciliationBankMatch::isActive);
         }
 
         @Test
@@ -338,8 +372,12 @@ class BankReconciliationGuardsAndViewsTest {
         void linesSpanningTwoGroups() {
             UUID s1 = UUID.randomUUID();
             UUID s2 = UUID.randomUUID();
-            when(lineRepository.findAllById(List.of(s1, s2)))
-                    .thenReturn(List.of(matchedLine(s1, UUID.randomUUID()), matchedLine(s2, UUID.randomUUID())));
+            when(transactionRepository.findAllById(List.of(s1, s2)))
+                    .thenReturn(List.of(matchedLine(s1), matchedLine(s2)));
+            when(bankMatchRepository.findByBankTransactionIdInAndActiveTrue(List.of(s1, s2)))
+                    .thenReturn(List.of(
+                            new BankReconciliationBankMatch(UUID.randomUUID(), s1),
+                            new BankReconciliationBankMatch(UUID.randomUUID(), s2)));
 
             // Ambiguous on purpose: releasing two groups because the operator selected lines
             // sloppily would undo a match they meant to keep.
@@ -356,7 +394,7 @@ class BankReconciliationGuardsAndViewsTest {
         @DisplayName("lines that are not matched at all resolve to no group")
         void unmatchedLinesResolveToNothing() {
             UUID s1 = UUID.randomUUID();
-            when(lineRepository.findAllById(List.of(s1)))
+            when(transactionRepository.findAllById(List.of(s1)))
                     .thenReturn(List.of(statementLine(s1, new BigDecimal("100.0000"))));
 
             assertThatThrownBy(() -> service.unmatch(
@@ -380,8 +418,7 @@ class BankReconciliationGuardsAndViewsTest {
         @DisplayName("a matchId with no lines in this reconciliation is not found")
         void matchIdWithNoLines() {
             UUID matchId = UUID.randomUUID();
-            when(lineRepository.findByReconciliation_ReconciliationIdAndMatchId(RECON_ID, matchId))
-                    .thenReturn(List.of());
+            // No header of that id in this reconciliation (the repository answers Optional.empty()).
 
             assertThatThrownBy(() -> service.unmatch(
                             RECON_ID,
@@ -391,11 +428,18 @@ class BankReconciliationGuardsAndViewsTest {
                     .isInstanceOf(ReconciliationNotFoundException.class);
         }
 
-        private BankReconciliationLine matchedLine(UUID id, UUID matchId) {
-            BankReconciliationLine line = statementLine(id, new BigDecimal("100.0000"));
-            line.setStatus(BankReconciliationLineStatus.MATCHED);
-            line.setMatchId(matchId);
+        private BankTransaction matchedLine(UUID id) {
+            BankTransaction line = statementLine(id, new BigDecimal("100.0000"));
+            line.setStatus(BankTransactionStatus.MATCHED);
             return line;
+        }
+
+        private BankReconciliationMatch acceptedHeader(UUID matchId) {
+            BankReconciliationMatch header = new BankReconciliationMatch();
+            header.setMatchId(matchId);
+            header.setReconciliationId(RECON_ID);
+            header.setState(MatchState.ACCEPTED);
+            return header;
         }
     }
 
@@ -408,11 +452,10 @@ class BankReconciliationGuardsAndViewsTest {
         void reportTotalsBothSides() {
             BankReconciliation recon = openReconciliation();
             when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(recon));
-            BankReconciliationLine matched = statementLine(UUID.randomUUID(), new BigDecimal("600.0000"));
-            matched.setStatus(BankReconciliationLineStatus.MATCHED);
-            matched.setMatchId(UUID.randomUUID());
-            BankReconciliationLine outstanding = statementLine(UUID.randomUUID(), new BigDecimal("150.0000"));
-            when(lineRepository.findByReconciliation_ReconciliationId(RECON_ID))
+            BankTransaction matched = statementLine(UUID.randomUUID(), new BigDecimal("600.0000"));
+            matched.setStatus(BankTransactionStatus.MATCHED);
+            BankTransaction outstanding = statementLine(UUID.randomUUID(), new BigDecimal("150.0000"));
+            when(transactionRepository.findByStatementIdOrderBySourceRowNumberAsc(STATEMENT_ID))
                     .thenReturn(List.of(matched, outstanding));
             BankReconciliationAdjustment adjustment = new BankReconciliationAdjustment();
             adjustment.setAmount(new BigDecimal("-12.0000"));
@@ -451,7 +494,8 @@ class BankReconciliationGuardsAndViewsTest {
             match.setMatchId(UUID.randomUUID());
             match.setGlLineId(UUID.randomUUID());
             match.setCreatedAt(Instant.parse("2026-07-01T09:00:00Z"));
-            when(glMatchRepository.findByReconciliationId(RECON_ID)).thenReturn(List.of(match));
+            when(glMatchRepository.findByReconciliationIdAndActiveTrue(RECON_ID))
+                    .thenReturn(List.of(match));
 
             ReconciliationAuditResponse audit = service.audit(RECON_ID);
 
@@ -487,7 +531,8 @@ class BankReconciliationGuardsAndViewsTest {
                     .thenReturn(JournalEntryResponse.builder()
                             .journalEntryId(UUID.randomUUID())
                             .build());
-            when(lineRepository.findByReconciliation_ReconciliationId(RECON_ID)).thenReturn(List.of());
+            when(transactionRepository.findByStatementIdOrderBySourceRowNumberAsc(STATEMENT_ID))
+                    .thenReturn(List.of());
             when(adjustmentRepository.findByReconciliation_ReconciliationId(RECON_ID))
                     .thenReturn(List.of());
 
@@ -532,12 +577,12 @@ class BankReconciliationGuardsAndViewsTest {
             // A freshly opened bank account: no journal lines at all, so the balance query
             // returns null rather than zero.
             when(journalEntryLineRepository.getAccountBalanceAsOf(any(), any())).thenReturn(null);
+            when(statementRepository.save(any(BankStatement.class))).thenAnswer(inv -> inv.getArgument(0));
             when(reconciliationRepository.save(any())).thenAnswer(inv -> {
                 BankReconciliation saved = inv.getArgument(0);
                 saved.setReconciliationId(RECON_ID);
                 return saved;
             });
-            when(lineRepository.findByReconciliation_ReconciliationId(any())).thenReturn(List.of());
             when(adjustmentRepository.findByReconciliation_ReconciliationId(any()))
                     .thenReturn(List.of());
 
@@ -570,24 +615,27 @@ class BankReconciliationGuardsAndViewsTest {
         recon.setGlAccountId(ACCOUNT_ID);
         recon.setAccountCode("1000");
         recon.setAccountName("Cash");
-        recon.setStatementDate(LocalDate.of(2026, 6, 30));
-        recon.setPeriodStartDate(LocalDate.of(2026, 6, 1));
-        recon.setPeriodEndDate(LocalDate.of(2026, 6, 30));
+        recon.setStatementId(STATEMENT_ID);
+        recon.setStatementStartDate(LocalDate.of(2026, 6, 1));
+        recon.setStatementEndDate(LocalDate.of(2026, 6, 30));
         recon.setCurrency("USD");
-        recon.setStatementEndingBalance(new BigDecimal("1000.0000"));
+        recon.setStatementClosingBalance(new BigDecimal("1000.0000"));
         recon.setGlEndingBalance(new BigDecimal("1000.0000"));
         recon.setStatus(ReconciliationStatus.IN_PROGRESS);
         return recon;
     }
 
-    private static BankReconciliationLine statementLine(UUID id, BigDecimal amount) {
-        BankReconciliationLine line = new BankReconciliationLine();
-        line.setLineId(id);
-        line.setReconciliation(new BankReconciliation(RECON_ID));
-        line.setLineNumber(1);
-        line.setLineDate(LocalDate.of(2026, 6, 15));
-        line.setAmount(amount);
-        line.setStatus(BankReconciliationLineStatus.UNMATCHED);
+    /** A statement line: a bank transaction of the reconciliation's statement (story S1, #2300). */
+    private static BankTransaction statementLine(UUID id, BigDecimal amount) {
+        BankTransaction line = new BankTransaction();
+        line.setBankTransactionId(id);
+        line.setGlAccountId(ACCOUNT_ID);
+        line.setStatementId(STATEMENT_ID);
+        line.setSourceRowNumber(1);
+        line.setTransactionDate(LocalDate.of(2026, 6, 15));
+        line.setSignedAmount(amount);
+        line.setCurrency("USD");
+        line.setStatus(BankTransactionStatus.UNMATCHED);
         return line;
     }
 

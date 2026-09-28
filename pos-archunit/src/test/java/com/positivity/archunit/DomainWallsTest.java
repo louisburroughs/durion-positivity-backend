@@ -1,7 +1,15 @@
 package com.positivity.archunit;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.lang.ArchRule;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,7 +29,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
- * ADR-0044 domain-wall check: {@code internal.client} (and client-config)
+ * ADR-0044 domain-wall check (plus pos-accounting's bank reconciliation core/adapter wall, #2300): {@code internal.client} (and client-config)
  * sources must not target
  * other <em>domain</em> modules — synchronous REST is allowed only toward the
  * utility whitelist.
@@ -205,6 +213,60 @@ class DomainWallsTest {
         assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-order", Set.of())).doesNotContain("pos-supplier");
         assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-workorder", Set.of()))
                 .doesNotContain("pos-catalog", "pos-price");
+    }
+
+    /**
+     * pos-accounting's bank reconciliation core/adapter wall (SPEC-manual-bank-reconciliation §2.1, §8.4 [M];
+     * #2300). The core ({@code ..bankrec..}) never depends on an adapter ({@code ..bankfeed..}), and an
+     * adapter reaches the core only through its intake port and contract DTOs — so no later story can leak a
+     * file format or a provider into the reconciliation core. The module's own {@code ArchitectureTest}
+     * carries the same rules; this is the cross-module backstop.
+     */
+    static final ArchRule ACCOUNTING_CORE_MUST_NOT_REACH_ADAPTERS = noClasses()
+            .that()
+            .resideInAPackage("..bankrec..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("..bankfeed..")
+            .because("SPEC-manual-bank-reconciliation §2.1: the reconciliation core never depends on an adapter");
+
+    static final ArchRule ACCOUNTING_ADAPTERS_REACH_CORE_ONLY_THROUGH_INTAKE_AND_DTO = noClasses()
+            .that()
+            .resideInAPackage("..bankfeed..")
+            .should()
+            .dependOnClassesThat(JavaClass.Predicates.resideInAPackage("..bankrec..")
+                    .and(DescribedPredicate.not(
+                            JavaClass.Predicates.resideInAnyPackage("..bankrec.intake..", "..bankrec.dto.."))))
+            .allowEmptyShould(true)
+            .because(
+                    "SPEC-manual-bank-reconciliation §2.1: an adapter uses only ..bankrec.intake.. and ..bankrec.dto..");
+
+    @Test
+    void accountingBankReconciliationCoreAndAdaptersAreWalledOff() {
+        JavaClasses accounting = new ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages("com.positivity.accounting");
+        assertThat(accounting.stream().anyMatch(c -> c.getPackageName().contains(".bankrec.")))
+                .as("pos-accounting's bank reconciliation core is on the classpath, so the wall is not vacuous")
+                .isTrue();
+
+        ACCOUNTING_CORE_MUST_NOT_REACH_ADAPTERS.check(accounting);
+        ACCOUNTING_ADAPTERS_REACH_CORE_ONLY_THROUGH_INTAKE_AND_DTO.check(accounting);
+    }
+
+    /**
+     * The wall catches a real violation: {@code fixture.accountingwall.bankrec.service.FixtureCoreService}
+     * imports a {@code ..bankfeed.file..} type. A widened or mistyped package pattern lets it through and this
+     * test fails.
+     */
+    @Test
+    void accountingWallRejectsACoreClassImportingAnAdapterType() {
+        JavaClasses fixture = new ClassFileImporter().importPackages("com.positivity.archunit.fixture.accountingwall");
+
+        assertThatThrownBy(() -> ACCOUNTING_CORE_MUST_NOT_REACH_ADAPTERS.check(fixture))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("FixtureCoreService")
+                .hasMessageContaining("FixtureFileParser");
     }
 
     @Test

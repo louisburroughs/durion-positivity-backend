@@ -14,6 +14,7 @@ import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAdjustmentRequest;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationApiStatus;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationMatchRequest;
 import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
@@ -53,7 +55,7 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
                 .glAccountId(ACCOUNT_ID)
                 .accountCode("1000")
                 .currency("USD")
-                .status(ReconciliationStatus.IN_PROGRESS)
+                .status(ReconciliationApiStatus.IN_PROGRESS)
                 .statementLines(List.of())
                 .adjustments(List.of())
                 .build();
@@ -177,6 +179,19 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
                     .andExpect(jsonPath("$.reconciliations[0].reconciliationId").value(RECON_ID.toString()));
 
             verify(bankReconciliationService).list(eq(ACCOUNT_ID), eq(ReconciliationStatus.IN_PROGRESS), any());
+        }
+
+        @Test
+        @DisplayName("Should refuse a status the F2 API does not serve yet (story S1 keeps the contract, #2300)")
+        void shouldRejectStatusNotServedYet() throws Exception {
+            // SUBMITTED exists in the stored value set from story S1 but no transition reaches it and the
+            // API does not serve it until story S5, so the published enum (IN_PROGRESS, FINALIZED,
+            // CANCELLED) is unchanged.
+            mockMvc.perform(withAuth(get("/v1/accounting/reconciliations").param("status", "SUBMITTED")))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+            verify(bankReconciliationService, never()).list(any(), any(), any());
         }
 
         @Test
@@ -339,10 +354,22 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
         }
 
         @Test
+        @DisplayName("Should answer 409 OPTIMISTIC_LOCK when the reconciliation changed concurrently (§6.3, #2300)")
+        void shouldMapStaleVersionTo409() throws Exception {
+            when(bankReconciliationService.finalizeReconciliation(RECON_ID))
+                    .thenThrow(new ObjectOptimisticLockingFailureException(Object.class, RECON_ID));
+
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/finalize", RECON_ID)))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("OPTIMISTIC_LOCK"))
+                    .andExpect(jsonPath("$.status").value(409));
+        }
+
+        @Test
         @DisplayName("Should finalize a balanced reconciliation")
         void shouldFinalize() throws Exception {
             BankReconciliationResponse finalized = response();
-            finalized.setStatus(ReconciliationStatus.FINALIZED);
+            finalized.setStatus(ReconciliationApiStatus.FINALIZED);
             when(bankReconciliationService.finalizeReconciliation(RECON_ID)).thenReturn(finalized);
 
             mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/finalize", RECON_ID)))

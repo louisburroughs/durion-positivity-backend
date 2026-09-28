@@ -2,8 +2,6 @@ package com.positivity.accounting.internal.bankrec.dto;
 
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationAdjustment;
-import com.positivity.accounting.internal.bankrec.entity.BankReconciliationLine;
-import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -62,7 +60,7 @@ public class BankReconciliationResponse {
     private BigDecimal difference;
 
     @Schema(description = "Reconciliation status", example = "IN_PROGRESS")
-    private ReconciliationStatus status;
+    private ReconciliationApiStatus status;
 
     @Schema(description = "When the reconciliation was created")
     private Instant createdAt;
@@ -82,28 +80,33 @@ public class BankReconciliationResponse {
     @Schema(description = "Recorded adjustments")
     private List<BankReconciliationAdjustmentResponse> adjustments;
 
-    /** Map a reconciliation aggregate to its API response. */
+    /**
+     * Map a reconciliation aggregate to its API response. The F2 field names are kept: the period
+     * dates are the statement window, {@code statementDate} is the statement end date (§3.7) and
+     * {@code statementEndingBalance} the statement closing balance.
+     */
     public static BankReconciliationResponse from(
-            BankReconciliation r, List<BankReconciliationLine> lines, List<BankReconciliationAdjustment> adjustments) {
+            BankReconciliation r,
+            List<BankReconciliationLineResponse> lines,
+            List<BankReconciliationAdjustment> adjustments) {
         return BankReconciliationResponse.builder()
                 .reconciliationId(r.getReconciliationId())
                 .glAccountId(r.getGlAccountId())
                 .accountCode(r.getAccountCode())
                 .accountName(r.getAccountName())
-                .periodStartDate(r.getPeriodStartDate())
-                .periodEndDate(r.getPeriodEndDate())
-                .statementDate(r.getStatementDate())
+                .periodStartDate(r.getStatementStartDate())
+                .periodEndDate(r.getStatementEndDate())
+                .statementDate(r.getStatementEndDate())
                 .currency(r.getCurrency())
-                .statementEndingBalance(r.getStatementEndingBalance())
+                .statementEndingBalance(r.getStatementClosingBalance())
                 .glEndingBalance(r.getGlEndingBalance())
                 .difference(r.getDifference())
-                .status(r.getStatus())
+                .status(ReconciliationApiStatus.from(r.getStatus()))
                 .createdAt(r.getCreatedAt())
                 .createdBy(r.getCreatedBy())
                 .finalizedAt(r.getFinalizedAt())
                 .finalizedBy(r.getFinalizedBy())
-                .statementLines(
-                        lines.stream().map(BankReconciliationLineResponse::from).toList())
+                .statementLines(lines)
                 .adjustments(adjustments.stream()
                         .map(BankReconciliationAdjustmentResponse::from)
                         .toList())

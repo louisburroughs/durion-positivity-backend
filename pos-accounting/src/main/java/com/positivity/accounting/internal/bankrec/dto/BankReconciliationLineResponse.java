@@ -1,7 +1,6 @@
 package com.positivity.accounting.internal.bankrec.dto;
 
-import com.positivity.accounting.internal.bankrec.entity.BankReconciliationLine;
-import com.positivity.accounting.internal.bankrec.enums.BankReconciliationLineStatus;
+import com.positivity.accounting.internal.bankrec.entity.BankTransaction;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -11,7 +10,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** An imported bank statement line in a reconciliation (Story F2, issue #965). */
+/**
+ * An imported bank statement line in a reconciliation (Story F2, issue #965). From story S1 (#2300)
+ * a statement line is a {@code bank_transaction} of the reconciliation's statement.
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -38,21 +40,27 @@ public class BankReconciliationLineResponse {
     private String reference;
 
     @Schema(description = "Match status", example = "UNMATCHED")
-    private BankReconciliationLineStatus status;
+    private StatementLineApiStatus status;
 
     @Schema(description = "Match group id when MATCHED; null while UNMATCHED")
     private UUID matchId;
 
-    public static BankReconciliationLineResponse from(BankReconciliationLine line) {
+    /**
+     * Map a statement's bank transaction to the F2 statement-line shape: the line id is the bank
+     * transaction id and the line number its row in the source file.
+     *
+     * @param matchId the transaction's live match, or null while it is unmatched
+     */
+    public static BankReconciliationLineResponse from(BankTransaction transaction, UUID matchId) {
         return BankReconciliationLineResponse.builder()
-                .lineId(line.getLineId())
-                .lineNumber(line.getLineNumber())
-                .lineDate(line.getLineDate())
-                .description(line.getDescription())
-                .amount(line.getAmount())
-                .reference(line.getReference())
-                .status(line.getStatus())
-                .matchId(line.getMatchId())
+                .lineId(transaction.getBankTransactionId())
+                .lineNumber(transaction.getSourceRowNumber())
+                .lineDate(transaction.getTransactionDate())
+                .description(transaction.getDescription())
+                .amount(transaction.getSignedAmount())
+                .reference(transaction.getReference())
+                .status(StatementLineApiStatus.from(transaction.getStatus()))
+                .matchId(matchId)
                 .build();
     }
 }

@@ -21,10 +21,11 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * A posted GL journal-entry line consumed by a match set (Story F2, issue #965).
- * Records which {@code journal_entry_line} rows a match (grouped by {@link #matchId})
- * linked to its statement lines, with the line's signed amount (debit − credit on
- * the reconciled account), so a match can be reversed and the GL lines released.
+ * Ledger-side member of a reconciliation match (Story F2, issue #965; story S1, #2300).
+ * Records which {@code journal_entry_line} rows a match ({@link #matchId}, the
+ * {@code bank_reconciliation_match} header) linked to its bank transactions, with the line's
+ * signed amount (debit − credit on the reconciled account). Unmatching clears {@link #active}
+ * instead of deleting the row, which releases the GL line for another match.
  */
 @Getter
 @Setter
@@ -63,4 +64,12 @@ public class BankReconciliationGlMatch extends TenantScopedEntity {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    /**
+     * Denormalized "the header is PROPOSED or ACCEPTED" flag (SPEC §3.4, §6.4). The partial unique
+     * {@code (tenant_id, gl_line_id) WHERE active} keeps a ledger line in at most one live match while
+     * unmatched history survives (M7: matches are never deleted).
+     */
+    @Column(name = "active", nullable = false)
+    private boolean active = true;
 }

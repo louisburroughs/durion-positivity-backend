@@ -38,6 +38,9 @@ public class BankReconciliationImportRequest {
     @Schema(description = "Statement period end date", example = "2026-06-30", requiredMode = REQUIRED)
     private LocalDate periodEndDate;
 
+    // Story S1 (#2300, SPEC §3.7): statementDate is retired — it equals the statement end date. It is
+    // still accepted (the contract does not change until story S3 retires this endpoint) but ignored:
+    // the GL snapshot and adjustment dating use periodEndDate.
     @NotNull(message = "statementDate is required")
     @Schema(
             description = "Statement date; GL ending balance is computed as-of this date",
