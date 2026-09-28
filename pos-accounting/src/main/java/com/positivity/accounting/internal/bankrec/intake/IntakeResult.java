@@ -12,7 +12,7 @@ import org.jspecify.annotations.Nullable;
  * @param statementId the committed statement, when the batch carried a header
  * @param bankTransactionIds every row the batch created or updated, in batch order
  * @param bankTransactionCount rows created or updated (a {@code REMOVED} notice is not counted)
- * @param possibleDuplicateCount rows that entered as {@code POSSIBLE_DUPLICATE} (R1)
+ * @param possibleDuplicateCount rows this batch created or updated left as {@code POSSIBLE_DUPLICATE} (R1)
  * @param modifiedCount rows updated through their source id (U3)
  * @param reconciliationBaselineDate the account's baseline after the commit; null when it has none
  * @param baselineChanged whether this commit moved the baseline

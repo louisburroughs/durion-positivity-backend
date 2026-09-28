@@ -591,6 +591,91 @@ class BankTransactionIntakeImplTest {
             assertThat(result.bankTransactionIds()).containsExactly(existing.getBankTransactionId());
         }
 
+        private BankTransaction upsertTarget(UUID importId, BankTransactionStatus status, UUID duplicateOf) {
+            BankTransaction existing = new BankTransaction();
+            existing.setBankTransactionId(UUID.fromString("01980000-0000-7000-8000-0000000000bb"));
+            existing.setGlAccountId(ACCOUNT);
+            existing.setSourceKind(SourceKind.FILE_IMPORT);
+            existing.setSourceRef(importId);
+            existing.setSourceTransactionId("T1");
+            existing.setDescription("ACH DEPOSIT");
+            existing.setFeedChange(FeedChange.ADDED);
+            existing.setStatus(status);
+            existing.setDuplicateOfBankTransactionId(duplicateOf);
+            when(transactions.findFirstByGlAccountIdAndSourceKindAndSourceRefAndSourceTransactionId(
+                            ACCOUNT, SourceKind.FILE_IMPORT, importId, "T1"))
+                    .thenReturn(Optional.of(existing));
+            return existing;
+        }
+
+        @Test
+        void anUpsertThatNowCollidesBecomesAPossibleDuplicateOfTheOtherRowNotOfItself() {
+            existingProfile(LocalDate.of(2026, 9, 1));
+            UUID importId = UUID.fromString("01980000-0000-7000-8000-0000000000aa");
+            BankTransaction existing = upsertTarget(importId, BankTransactionStatus.UNMATCHED, null);
+            BankTransaction other = new BankTransaction();
+            other.setBankTransactionId(UUID.fromString("01980000-0000-7000-8000-0000000000cc"));
+            other.setSourceKind(SourceKind.MANUAL_ENTRY);
+            when(transactions
+                            .findByGlAccountIdAndFingerprintAndStatusNotInOrderByFirstObservedAtAscBankTransactionIdAsc(
+                                    eq(ACCOUNT), anyString(), any()))
+                    .thenReturn(List.of(existing, other));
+
+            IntakeResult result = intake.accept(
+                    feed(List.of(row("T1", LocalDate.of(2026, 12, 2), "10", "ACH DEPOSIT", null))),
+                    IntakeContext.of(ACCOUNT, ACTOR, null, importId));
+
+            assertThat(existing.getStatus()).isEqualTo(BankTransactionStatus.POSSIBLE_DUPLICATE);
+            assertThat(existing.getDuplicateOfBankTransactionId()).isEqualTo(other.getBankTransactionId());
+            assertThat(result.possibleDuplicateCount()).isEqualTo(1);
+            assertThat(result.modifiedCount()).isEqualTo(1);
+        }
+
+        @Test
+        void anUpsertThatNoLongerCollidesIsUnmatchedAgainWithNoDuplicatePointer() {
+            existingProfile(LocalDate.of(2026, 9, 1));
+            UUID importId = UUID.fromString("01980000-0000-7000-8000-0000000000aa");
+            BankTransaction existing = upsertTarget(
+                    importId,
+                    BankTransactionStatus.POSSIBLE_DUPLICATE,
+                    UUID.fromString("01980000-0000-7000-8000-0000000000cc"));
+            when(transactions
+                            .findByGlAccountIdAndFingerprintAndStatusNotInOrderByFirstObservedAtAscBankTransactionIdAsc(
+                                    eq(ACCOUNT), anyString(), any()))
+                    .thenReturn(List.of(existing));
+
+            IntakeResult result = intake.accept(
+                    feed(List.of(row("T1", LocalDate.of(2026, 12, 2), "10", "ACH DEPOSIT CORRECTED", null))),
+                    IntakeContext.of(ACCOUNT, ACTOR, null, importId));
+
+            assertThat(existing.getStatus()).isEqualTo(BankTransactionStatus.UNMATCHED);
+            assertThat(existing.getDuplicateOfBankTransactionId()).isNull();
+            assertThat(result.possibleDuplicateCount()).isZero();
+        }
+
+        @Test
+        void anUpsertOfAMatchedRowKeepsItsStatus() {
+            existingProfile(LocalDate.of(2026, 9, 1));
+            UUID importId = UUID.fromString("01980000-0000-7000-8000-0000000000aa");
+            BankTransaction existing = upsertTarget(importId, BankTransactionStatus.MATCHED, null);
+            BankTransaction other = new BankTransaction();
+            other.setBankTransactionId(UUID.fromString("01980000-0000-7000-8000-0000000000cc"));
+            other.setSourceKind(SourceKind.MANUAL_ENTRY);
+            lenient()
+                    .when(
+                            transactions
+                                    .findByGlAccountIdAndFingerprintAndStatusNotInOrderByFirstObservedAtAscBankTransactionIdAsc(
+                                            eq(ACCOUNT), anyString(), any()))
+                    .thenReturn(List.of(existing, other));
+
+            intake.accept(
+                    feed(List.of(row("T1", LocalDate.of(2026, 12, 2), "10", "ACH DEPOSIT", null))),
+                    IntakeContext.of(ACCOUNT, ACTOR, null, importId));
+
+            assertThat(existing.getStatus()).isEqualTo(BankTransactionStatus.MATCHED);
+            assertThat(existing.getDuplicateOfBankTransactionId()).isNull();
+        }
+
         @Test
         void twoIdenticalRowsOfOneBatchAreBothPossibleDuplicatesAndTheSecondPointsAtTheFirst() {
             existingProfile(LocalDate.of(2026, 9, 1));
