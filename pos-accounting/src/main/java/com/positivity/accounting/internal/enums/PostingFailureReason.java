@@ -58,5 +58,37 @@ public enum PostingFailureReason {
      * Event is recorded SKIPPED — terminal, never retried: the fact carries the
      * cost at posting time and a later cost is a different fact.
      */
-    UNCOSTED_FACT
+    UNCOSTED_FACT,
+
+    /**
+     * A default-GL-mapping event whose {@code payload.amount} is absent or unreadable, with
+     * {@code pos.accounting.default-mappings.require-amount-field=false} (issue #2315). No journal
+     * entry is posted — the ledger never holds an amount no source stated (ADR-0067 DF-7). Event
+     * is recorded SKIPPED — terminal, never retried.
+     */
+    MISSING_AMOUNT,
+
+    /**
+     * A default-GL-mapping event whose {@code payload.amount} is stated as zero, with
+     * {@code pos.accounting.default-mappings.require-amount-field=false} (issue #2315). Nothing to
+     * post; event is recorded SKIPPED — terminal, never retried.
+     */
+    ZERO_AMOUNT,
+
+    /**
+     * A consumed fact states an amount in a currency other than the ledger currency (ADR-0067
+     * PC-9, E-5; issue #2312). Never booked at par: the fact is held visibly with a currency
+     * reason, recorded SKIPPED — never retried by the scheduler — until a later stage can release
+     * it (a booking rate, or manual handling).
+     */
+    CURRENCY_NOT_SUPPORTED;
+
+    /**
+     * Whether an event failing for this reason ends in the terminal {@code SKIPPED} status: the
+     * event deliberately posts nothing and a retry cannot change that, as opposed to a gap an
+     * operator fixes and reprocesses ({@code SUSPENDED}).
+     */
+    public boolean isTerminalSkip() {
+        return this == UNCOSTED_FACT || this == MISSING_AMOUNT || this == ZERO_AMOUNT || this == CURRENCY_NOT_SUPPORTED;
+    }
 }

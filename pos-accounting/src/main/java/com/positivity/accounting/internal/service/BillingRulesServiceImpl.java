@@ -47,9 +47,8 @@ public class BillingRulesServiceImpl implements BillingRulesService {
             response.setPaymentTerms(replica.getPaymentTerms());
         }
         response.setCreditLimit(replica.getCreditLimit());
-        if (replica.getCurrency() != null) {
-            response.setCurrency(replica.getCurrency());
-        }
+        // Null when the owner holds none: the replica never invents a currency (ADR-0067 DF-8, #2316).
+        response.setCurrency(replica.getCurrency());
         if (replica.getInvoiceDeliveryMethod() != null) {
             response.setInvoiceDeliveryMethod(replica.getInvoiceDeliveryMethod());
         }
@@ -58,7 +57,10 @@ public class BillingRulesServiceImpl implements BillingRulesService {
         return response;
     }
 
-    /** Mirrors pos-customer's BillingRuleRef.defaults(). */
+    /**
+     * Mirrors pos-customer's BillingRuleRef.defaults(), which sets no currency: an unconfigured
+     * billing currency is reported as null, never defaulted (ADR-0067 DF-8, ADR-0044 R3/R6).
+     */
     private BillingRuleRefResponse defaults() {
         BillingRuleRefResponse response = new BillingRuleRefResponse();
         response.setPoRequired(false);
@@ -67,7 +69,6 @@ public class BillingRulesServiceImpl implements BillingRulesService {
         response.setAutoPayEnabled(false);
         response.setPaymentTerms("Due on Receipt");
         response.setInvoiceDeliveryMethod("EMAIL");
-        response.setCurrency("USD");
         return response;
     }
 }

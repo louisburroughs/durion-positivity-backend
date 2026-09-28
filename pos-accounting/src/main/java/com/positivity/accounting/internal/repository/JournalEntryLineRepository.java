@@ -43,12 +43,13 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
     BigDecimal sumCreditsByJournalEntry(UUID journalEntryId);
 
     /**
-     * Get current balance for a GL account (sum of all posted debits - credits).
+     * Get current balance for a GL account: debits − credits over ledger entries, POSTED and
+     * REVERSED, never DRAFT (issue #2308). A reversed original and its POSTED reversal net to zero.
      */
     @Query("SELECT COALESCE(SUM(CASE WHEN jel.debitAmount > 0 THEN jel.debitAmount ELSE -jel.creditAmount END), 0) "
             + "FROM JournalEntryLine jel "
             + "JOIN jel.journalEntry je "
-            + "WHERE jel.glAccount.glAccountId = :glAccountId AND je.status = 'POSTED'")
+            + "WHERE jel.glAccount.glAccountId = :glAccountId AND je.status IN ('POSTED', 'REVERSED')")
     BigDecimal getAccountBalance(UUID glAccountId);
 
     /**
@@ -75,11 +76,12 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
      * @param accountIds GL account ids to include (caller skips the query when empty)
      * @param start inclusive lower bound on the entry transaction date
      * @param end inclusive upper bound on the entry transaction date
-     * @return posted lines for those accounts in the date range
+     * @return ledger lines (POSTED and REVERSED entries, never DRAFT; issue #2308) for those
+     *     accounts in the date range
      */
     @Query("SELECT jel FROM JournalEntryLine jel "
             + "JOIN FETCH jel.journalEntry je "
-            + "WHERE je.status = 'POSTED' "
+            + "WHERE je.status IN ('POSTED', 'REVERSED') "
             + "AND jel.glAccount.glAccountId IN :accountIds "
             + "AND je.transactionDate >= :start "
             + "AND je.transactionDate <= :end")

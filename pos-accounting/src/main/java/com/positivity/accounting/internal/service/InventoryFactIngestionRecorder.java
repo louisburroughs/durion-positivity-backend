@@ -45,6 +45,10 @@ import tools.jackson.databind.ObjectMapper;
  * EventIngestionServiceImpl#assignEventReference}. The fact's own id goes in {@code domainKeyId}:
  * the column is 20 characters and unique per tenant, so it cannot hold a UUID, and a re-emitted
  * fact writes a second row for the same id.
+ *
+ * <p>It also holds a fact from another producer whose amount is in a currency other than the
+ * ledger's ({@link #recordCurrencyHeld}, ADR-0067 PC-9, issue #2312): {@code SKIPPED} with
+ * {@code failureReasonCode = CURRENCY_NOT_SUPPORTED}, under that producer's source system.
  */
 @Slf4j
 @Component
@@ -124,6 +128,45 @@ public class InventoryFactIngestionRecorder {
         event.setFailureReasonCode(PostingFailureReason.UNCOSTED_FACT.name());
         event.setErrorMessage(detail);
         save(event);
+    }
+
+    /**
+     * Hold a consumed fact whose amount is in a currency other than the ledger's (ADR-0067 PC-9,
+     * E-5, issue #2312): {@code SKIPPED / CURRENCY_NOT_SUPPORTED}, with the currency in the error
+     * message, findable through {@code listAccountingEvents?eventType=…&domainKeyId=…}. Nothing is
+     * posted. A redelivered fact already held is not recorded twice.
+     *
+     * @param sourceSystem the producing module, e.g. {@code pos-order}
+     * @param envelopeEventId the consumed envelope's event id, kept as the record's {@code
+     *     ingestionId} like every other consumed fact's record
+     * @return whether a new held record was written
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean recordCurrencyHeld(
+            @NonNull String sourceSystem,
+            @NonNull String eventType,
+            @NonNull String envelopeEventId,
+            @NonNull UUID domainKeyId,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull Object fact,
+            @NonNull String detail) {
+        String reason = PostingFailureReason.CURRENCY_NOT_SUPPORTED.name();
+        if (accountingEventRepository.existsByEventTypeAndDomainKeyIdAndFailureReasonCode(
+                eventType, domainKeyId.toString(), reason)) {
+            log.info(
+                    "Fact already held for its currency, not recorded again | eventType={} | domainKeyId={}",
+                    eventType,
+                    domainKeyId);
+            return false;
+        }
+        AccountingEvent event = newEvent(eventType, envelopeEventId, domainKeyId, transactionDate, fact);
+        event.setSourceSystem(sourceSystem);
+        event.setStatus(AccountingEventStatus.SKIPPED);
+        event.setIdempotencyOutcome(IdempotencyOutcome.NEW.name());
+        event.setFailureReasonCode(reason);
+        event.setErrorMessage(detail);
+        save(event);
+        return true;
     }
 
     private AccountingEvent newEvent(

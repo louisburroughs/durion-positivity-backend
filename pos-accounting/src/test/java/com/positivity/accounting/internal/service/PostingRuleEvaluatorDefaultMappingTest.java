@@ -468,8 +468,8 @@ class PostingRuleEvaluatorDefaultMappingTest {
         }
 
         @Test
-        @DisplayName("Should use 0.01 fallback when amount is missing and requireAmountField=false")
-        void shouldUseFallbackAmountWhenMissing() {
+        @DisplayName("Missing amount with requireAmountField=false posts nothing and records MISSING_AMOUNT (#2315)")
+        void shouldPostNothingWhenAmountMissing() {
             defaultGLMappingProperties.setRequireAmountField(false);
             stubNoPostingRules();
             DefaultGLMapping mapping = createDefaultMapping("billing.invoicePosted", "Test");
@@ -479,11 +479,45 @@ class PostingRuleEvaluatorDefaultMappingTest {
 
             PostingResult result = evaluator.evaluateEvent(event);
 
-            assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getJournalEntryDraft().getLines().get(0).getDebitAmount())
-                    .isEqualByComparingTo(new BigDecimal("0.01"));
-            assertThat(result.getJournalEntryDraft().getLines().get(1).getCreditAmount())
-                    .isEqualByComparingTo(new BigDecimal("0.01"));
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getJournalEntryDraft()).isNull();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.MISSING_AMOUNT);
+        }
+
+        @Test
+        @DisplayName("Unreadable amount counts as missing, not as zero (#2315)")
+        void shouldTreatUnreadableAmountAsMissing() {
+            defaultGLMappingProperties.setRequireAmountField(false);
+            stubNoPostingRules();
+            DefaultGLMapping mapping = createDefaultMapping("billing.invoicePosted", "Test");
+            stubDefaultMapping("billing.invoicePosted", mapping);
+
+            AccountingEvent event = createEventWithAmount("billing.invoicePosted", "not-a-number");
+
+            PostingResult result = evaluator.evaluateEvent(event);
+
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getJournalEntryDraft()).isNull();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.MISSING_AMOUNT);
+        }
+
+        @Test
+        @DisplayName("Zero amount with requireAmountField=false posts nothing and records ZERO_AMOUNT (#2315)")
+        void shouldPostNothingWhenAmountZero() {
+            defaultGLMappingProperties.setRequireAmountField(false);
+            stubNoPostingRules();
+            DefaultGLMapping mapping = createDefaultMapping("billing.invoicePosted", "Test");
+            stubDefaultMapping("billing.invoicePosted", mapping);
+
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("amount", 0);
+            AccountingEvent event = createEvent("billing.invoicePosted", payload);
+
+            PostingResult result = evaluator.evaluateEvent(event);
+
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getJournalEntryDraft()).isNull();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.ZERO_AMOUNT);
         }
     }
 

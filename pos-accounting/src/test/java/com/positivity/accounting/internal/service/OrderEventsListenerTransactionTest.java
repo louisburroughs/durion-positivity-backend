@@ -157,7 +157,7 @@ class OrderEventsListenerTransactionTest {
         private final AtomicReference<RuntimeException> failure = new AtomicReference<>();
 
         FailingOverShortPostingService() {
-            super(null, null, null, null);
+            super(null, null, null, null, null, null);
         }
 
         public boolean sawActiveTransaction() {
@@ -175,7 +175,7 @@ class OrderEventsListenerTransactionTest {
 
         @Override
         @Transactional
-        public void postOverShort(@NonNull RegisterSessionClosedV1 fact) {
+        public void postOverShort(@NonNull RegisterSessionClosedV1 fact, @NonNull String envelopeEventId) {
             sawActiveTransaction.set(TransactionSynchronizationManager.isActualTransactionActive());
             throw failure.get();
         }

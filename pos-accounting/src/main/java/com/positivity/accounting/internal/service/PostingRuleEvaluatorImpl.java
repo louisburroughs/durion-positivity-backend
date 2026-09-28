@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -101,6 +102,9 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
+    /** The payload field a default GL mapping posts (never substituted when absent, #2315). */
+    private static final String DEFAULT_MAPPING_AMOUNT_FIELD = "payload.amount";
+
     private static final String FAILURE_STEP = "failureStep";
 
     private final Clock clock;
@@ -235,7 +239,12 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             AccountingEvent event, DefaultGLMapping defaultMapping, Map<String, Object> evaluationDetails) {
         log.debug(
                 "Using default GL mapping {} for eventType '{}'", defaultMapping.getMappingId(), event.getEventType());
-        JournalEntry journalEntry = generateJournalEntryFromDefault(event, defaultMapping);
+        Optional<BigDecimal> statedAmount = readAmount(DEFAULT_MAPPING_AMOUNT_FIELD, event);
+        BigDecimal amount = statedAmount.orElse(BigDecimal.ZERO);
+        if (amount.signum() == 0) {
+            return noAmountToPost(event, statedAmount.isPresent(), evaluationDetails);
+        }
+        JournalEntry journalEntry = generateJournalEntryFromDefault(event, defaultMapping, amount);
 
         // Defensive: generateJournalEntryFromDefault builds one debit and one credit from the same
         // resolved amount, so this cannot currently fail. Kept so a future change to that builder
@@ -255,6 +264,30 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                 event.getEventId(),
                 defaultMapping.getMappingId());
         return PostingResult.success(journalEntry, null, evaluationDetails);
+    }
+
+    /**
+     * A default-mapping event with a zero, absent or unreadable {@code payload.amount}. With
+     * {@code require-amount-field=true} it fails validation; otherwise nothing is posted and the
+     * outcome records why — MISSING_AMOUNT (absent or unreadable) or ZERO_AMOUNT (stated as zero) —
+     * so the event stays traceable without the ledger holding an amount no source stated
+     * (ADR-0067 §5.6, DF-7, issue #2315).
+     */
+    private PostingResult noAmountToPost(
+            AccountingEvent event, boolean amountStated, Map<String, Object> evaluationDetails) {
+        if (defaultGLMappingProperties.isRequireAmountField()) {
+            throw new EventValidationException("Event " + event.getEventId()
+                    + " has zero or missing payload.amount field, which is required when using default GL"
+                    + " mappings (pos.accounting.default-mappings.require-amount-field=true)");
+        }
+        PostingFailureReason reason =
+                amountStated ? PostingFailureReason.ZERO_AMOUNT : PostingFailureReason.MISSING_AMOUNT;
+        String message = amountStated
+                ? "Event payload.amount is zero; nothing posted"
+                : "Event payload.amount is missing or unreadable; nothing posted";
+        log.warn("Event {} not posted through the default GL mapping: {}", event.getEventId(), message);
+        evaluationDetails.put(FAILURE_STEP, "amountResolution");
+        return PostingResult.failure(reason, message, evaluationDetails);
     }
 
     /** Records both sides of the imbalance, so the failure says by how much and not merely that. */
@@ -337,14 +370,16 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
     }
 
     /**
-     * Generates a simple balanced journal entry from a default GL mapping.
-     * Uses the event's payload.amount field for the transaction amount.
+     * Generates a simple balanced journal entry from a default GL mapping for the event's stated,
+     * non-zero {@code payload.amount}.
      *
      * @param event          the accounting event
      * @param defaultMapping the default GL mapping
+     * @param amount         the amount the event states (never zero, never substituted)
      * @return generated journal entry with two lines (debit + credit)
      */
-    private JournalEntry generateJournalEntryFromDefault(AccountingEvent event, DefaultGLMapping defaultMapping) {
+    private JournalEntry generateJournalEntryFromDefault(
+            AccountingEvent event, DefaultGLMapping defaultMapping, BigDecimal amount) {
         JournalEntry entry = new JournalEntry();
         entry.setJournalEntryId(UUIDv7Generator.generate());
         entry.setSourceEventId(event.getEventId());
@@ -357,18 +392,6 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         entry.setDescription("Auto-generated from default GL mapping for " + event.getEventType());
         entry.setCreatedAt(Instant.now(clock));
         entry.setUpdatedAt(Instant.now(clock));
-
-        // Resolve amount from event payload
-        BigDecimal amount = resolveAmount("payload.amount", event);
-        if (amount.compareTo(BigDecimal.ZERO) == 0) {
-            if (defaultGLMappingProperties.isRequireAmountField()) {
-                throw new EventValidationException(
-                        "Event " + event.getEventId() + " has zero or missing payload.amount field, "
-                                + "which is required when using default GL mappings (pos.accounting.default-mappings.require-amount-field=true)");
-            }
-            log.warn("Event {} has zero or missing amount - using 0.01 for traceability", event.getEventId());
-            amount = new BigDecimal("0.01");
-        }
 
         // Create debit line
         JournalEntryLine debitLine = new JournalEntryLine();
@@ -851,8 +874,19 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
      * @return resolved amount, or BigDecimal.ZERO if unresolvable
      */
     private BigDecimal resolveAmount(String amountField, AccountingEvent event) {
+        return readAmount(amountField, event).orElse(BigDecimal.ZERO);
+    }
+
+    /**
+     * Reads an amount from the event payload, keeping "not stated" apart from "stated as zero".
+     *
+     * @param amountField dot-path into event, e.g. "payload.amount" or "amount"
+     * @param event       the accounting event
+     * @return the stated amount, or empty when the field is absent, not numeric or unparsable
+     */
+    private Optional<BigDecimal> readAmount(String amountField, AccountingEvent event) {
         if (amountField == null || amountField.isBlank()) {
-            return BigDecimal.ZERO;
+            return Optional.empty();
         }
 
         try {
@@ -872,20 +906,20 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                 if (current instanceof Map<?, ?> map) {
                     current = map.get(part);
                 } else {
-                    return BigDecimal.ZERO;
+                    return Optional.empty();
                 }
             }
 
             if (current instanceof Number number) {
-                return new BigDecimal(number.toString());
+                return Optional.of(new BigDecimal(number.toString()));
             } else if (current instanceof String str) {
-                return new BigDecimal(str);
+                return Optional.of(new BigDecimal(str));
             }
         } catch (Exception e) {
             log.warn("Failed to resolve amount from field '{}': {}", amountField, e.getMessage());
         }
 
-        return BigDecimal.ZERO;
+        return Optional.empty();
     }
 
     /**

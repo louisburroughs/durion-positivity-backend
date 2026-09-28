@@ -23,7 +23,9 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.LocationFxRateRepository;
 import com.positivity.accounting.internal.repository.LocationProfileRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
+import com.positivity.accounting.internal.service.JournalEntryService;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -45,6 +47,9 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
 
     @Autowired
     private GLAccountRepository glAccountRepository;
+
+    @Autowired
+    private JournalEntryService journalEntryService;
 
     @Autowired
     private StatementLineMappingRepository statementLineMappingRepository;
@@ -96,7 +101,7 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
     }
 
     @Test
-    @DisplayName("Only POSTED entries contribute: DRAFT and REVERSED on the same account/period are excluded")
+    @DisplayName("DRAFT entries are excluded; a reversed entry and its reversal net to zero (#2308)")
     void excludesNonPostedEntries() throws Exception {
         // Distinct location: line-code mappings are global, so each test scopes its postings by
         // location to stay independent of seeded or sibling-test data.
@@ -105,7 +110,11 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
         seedMapping("1.1.1", account);
         seedPostedExpense(account, 3, location, new BigDecimal("1000.00"));
         seedExpense(account, 3, location, new BigDecimal("500.00"), JournalEntryStatus.DRAFT);
-        seedExpense(account, 3, location, new BigDecimal("700.00"), JournalEntryStatus.REVERSED);
+        // A real reversal pair: the original becomes REVERSED, its reversal (same location dimension)
+        // POSTED, and the two net to zero in the month.
+        JournalEntry reversed = seedExpense(account, 3, location, new BigDecimal("700.00"), JournalEntryStatus.POSTED);
+        journalEntryService.reverseJournalEntry(
+                reversed.getJournalEntryId(), "keyed twice", LocalDate.of(FISCAL_YEAR, 3, 20));
 
         String json = mockMvc.perform(withAuth(get(PATH)
                         .param("locationId", location)
@@ -117,7 +126,8 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
                 .getContentAsString();
 
         LaborOverheadReportLine wages = line(objectMapper.readValue(json, LaborOverheadCostReport.class), "1.1.1");
-        assertThat(wages.getMonthly().get(2)).isEqualByComparingTo("1000.00"); // draft + reversed not counted
+        assertThat(wages.getMonthly().get(2))
+                .isEqualByComparingTo("1000.00"); // draft excluded; reversed pair nets to zero
         assertThat(wages.getYtd()).isEqualByComparingTo("1000.00");
     }
 
@@ -215,7 +225,7 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
         seedExpense(account, month, location, amount, JournalEntryStatus.POSTED);
     }
 
-    private void seedExpense(
+    private JournalEntry seedExpense(
             GLAccount account, int month, String location, BigDecimal amount, JournalEntryStatus status) {
         JournalEntry entry = new JournalEntry();
         entry.setStatus(status);
@@ -232,7 +242,7 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
         line.setDimensions(Map.of("locationId", location));
         entry.addLine(line);
 
-        journalEntryRepository.save(entry);
+        return journalEntryRepository.save(entry);
     }
 
     private static LaborOverheadReportLine line(LaborOverheadCostReport report, String code) {

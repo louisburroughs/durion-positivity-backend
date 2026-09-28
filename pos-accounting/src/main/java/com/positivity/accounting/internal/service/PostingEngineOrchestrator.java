@@ -237,6 +237,7 @@ public class PostingEngineOrchestrator {
      * Evaluation failure handling (step 3): the posting rules rejected the event (e.g. an
      * unbalanced journal or an unresolvable mapping) — suspend it with the evaluator's own failure
      * reason rather than a generic error, so the reprocessing UI shows what actually needs fixing.
+     * A terminal reason ({@link PostingFailureReason#isTerminalSkip()}) records SKIPPED instead.
      */
     @NonNull
     private PostingResult handleEvaluationFailure(
@@ -249,7 +250,12 @@ public class PostingEngineOrchestrator {
                 evaluationResult.getFailureReason(),
                 evaluationResult.getFailureDetails());
 
-        event.setStatus(AccountingEventStatus.SUSPENDED);
+        // A reason that posts nothing by design (for example no amount stated, #2315) is terminal:
+        // SKIPPED, never retried. Anything else is a gap an operator fixes, then reprocesses.
+        event.setStatus(
+                evaluationResult.getFailureReason().isTerminalSkip()
+                        ? AccountingEventStatus.SKIPPED
+                        : AccountingEventStatus.SUSPENDED);
         event.setFailureReasonCode(evaluationResult.getFailureReason().name());
         event.setFailureDetails(evaluationResult.getFailureDetails());
 

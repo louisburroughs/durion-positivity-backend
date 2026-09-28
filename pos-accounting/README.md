@@ -261,6 +261,32 @@ denied for a location-scoped caller — fail closed — and ignored for a global
 This is the platform's clearest `FINANCIAL`-dimension case: an `ACCOUNTANT` assigned to a region
 sees that region's shops and no others.
 
+## Ledger currency (ADR-0067)
+
+The ledger books one currency, `accounting.ledger.base-currency` (`USD` in `application.yml`), read
+through `LedgerCurrency` so ADR-0067 step A5 can replace it with the tenant's functional currency in
+one place. A Stage A ledger never books another currency at par (ADR-0067 PC-9); an absent currency
+on an inbound fact means the ledger currency until producers stamp one (E-3).
+
+- **Register over/short** (`order.session.closed`, #2312) — a session closed in another currency posts
+  nothing. It is held as one `AccountingEvent` row, `sourceSystem = pos-order`, `status = SKIPPED`,
+  `failureReasonCode = CURRENCY_NOT_SUPPORTED`, `domainKeyId` = `sessionId`, the currency in
+  `errorMessage`; a redelivery writes no second row. Find one with
+  `GET /v1/accounting/events?eventType=order.session.closed&domainKeyId=<sessionId>`.
+- **Settled payments** (`payment.payment.settled`, #2310) — one in another currency never becomes an
+  `AVAILABLE` `ReceivablePayment`. It is held the same way: `sourceSystem = pos-invoice`, `SKIPPED`,
+  `CURRENCY_NOT_SUPPORTED`, `domainKeyId` = `paymentIntentId`.
+- **Vendor bills from supplier invoices** (`supplier.invoice.received`, #2309) — the bill records the
+  invoice's `currency` (V5 column, on `VendorBillResponse`). A bill in another currency gets status
+  `CURRENCY_HOLD` with the reason in `rejectionReason`: it is not matched, cannot be approved through
+  match resolution, is never paid (AP payment takes `APPROVED` bills only) and is left out of Aged
+  Payables. A re-issue under the same number in a different currency is flagged `MATCH_EXCEPTION`, like a
+  different amount; a re-issue of a held bill keeps it held.
+- **Payment application** (`POST /v1/accounting/payments/{paymentId}/applications`, #2310) — a payment
+  applies only to invoices in its own currency. The invoice replica carries no currency, so an invoice is
+  in the ledger currency; a payment in another currency is refused with 409 `CURRENCY_MISMATCH` before
+  any application, credit or journal entry is written.
+
 ## Error codes
 
 Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
@@ -297,6 +323,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ACCOUNT_NOT_ZERO_BALANCE` | 409 | GL account cannot be deactivated because its posted balance is not zero |
 | `ACCOUNT_NOT_INACTIVE` | 409 | GL account cannot be archived because it is not currently INACTIVE |
 | `ENTRY_ALREADY_POSTED` | 409 | Posting a journal entry that is already POSTED or REVERSED |
+| `CURRENCY_MISMATCH` | 409 | Applying a payment to invoices in another currency; refused before anything is written (#2310) |
 | `JE_ALREADY_REVERSED` | 409 | Reversing a journal entry that is already REVERSED |
 | `JE_NOT_POSTED` | 409 | Reversing a journal entry that was never POSTED |
 | `PERIOD_ALREADY_CLOSED` | 409 | Closing an accounting period that is already closed |

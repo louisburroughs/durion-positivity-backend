@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.CustomerCreditIssuanceGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
@@ -14,6 +15,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
+import com.positivity.accounting.internal.exception.CurrencyMismatchException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
@@ -72,6 +74,7 @@ public class PaymentApplicationServiceImpl
     private final PaymentApplicationReversalRepository reversalRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final OutboxService outboxService;
+    private final LedgerCurrency ledgerCurrency;
 
     /**
      * Handle PaymentCleared event from Payment domain.
@@ -175,8 +178,9 @@ public class PaymentApplicationServiceImpl
      * @throws ResponseStatusException with NOT_FOUND if payment not found
      * @throws ResponseStatusException with BAD_REQUEST if validation fails or
      *                                 insufficient funds
-     * @throws ResponseStatusException with CONFLICT if currency mismatch or invoice
-     *                                 not applicable
+     * @throws CurrencyMismatchException (409 CURRENCY_MISMATCH) if the payment's currency is not
+     *                                 the invoices' currency; nothing is written
+     * @throws ResponseStatusException with CONFLICT if an invoice is not applicable
      * @throws ResponseStatusException with SERVICE_UNAVAILABLE if invoice service
      *                                 call fails (after compensating reversals)
      */
@@ -192,6 +196,7 @@ public class PaymentApplicationServiceImpl
         }
 
         ReceivablePayment payment = getAvailablePayment(paymentId);
+        validateSameCurrency(payment);
         BigDecimal totalApplicationAmount = calculateTotalApplicationAmount(request);
         validateSufficientFunds(payment, totalApplicationAmount);
         InvoiceApplicationValidation validation = validateAndCapApplications(request);
@@ -662,9 +667,8 @@ public class PaymentApplicationServiceImpl
     /**
      * Validate an invoice application against the {@code ext_invoice} replica and accounting's
      * derived balance (ADR-0044, #842). The invoice must exist in the replica, be in an
-     * AR-eligible lifecycle state (FINALIZED/POSTED), and still carry a positive balance. No
-     * currency check: the replica carries none (pos-invoice is single-currency); payments and
-     * credits are recorded in the payment's currency.
+     * AR-eligible lifecycle state (FINALIZED/POSTED), and still carry a positive balance. The
+     * currency check runs once per request, before any invoice, in {@link #validateSameCurrency}.
      */
     private InvoiceSnapshot validateInvoiceApplication(PaymentApplicationRequest.InvoiceApplication invoiceApp) {
 
@@ -703,6 +707,22 @@ public class PaymentApplicationServiceImpl
                 balanceDue);
 
         return new InvoiceSnapshot(invoice, balanceDue);
+    }
+
+    /**
+     * A payment applies one-for-one only to invoices in its own currency (issue #2310, ADR-0067
+     * DF-2, story #114). The {@code ext_invoice} replica carries no currency: pos-invoice bills in
+     * a single currency, so an invoice's currency is the ledger currency ({@link LedgerCurrency})
+     * until invoice facts carry one (ADR-0067 PC-3, PC-8). Refused before any amount moves, so no
+     * partial application or compensating reversal is ever needed. A payment recorded without a
+     * currency is in the ledger currency (ADR-0067 E-3).
+     */
+    private void validateSameCurrency(ReceivablePayment payment) {
+        if (ledgerCurrency.isForeign(payment.getCurrency())) {
+            throw new CurrencyMismatchException("Payment " + payment.getPaymentId() + " is in "
+                    + payment.getCurrency() + " but the invoices are in " + ledgerCurrency.code()
+                    + "; a payment applies only to invoices in its own currency");
+        }
     }
 
     private ReceivablePayment getAvailablePayment(UUID paymentId) {

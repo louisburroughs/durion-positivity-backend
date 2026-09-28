@@ -19,4 +19,11 @@ public interface AccountingEventRepository
      * Uses indexed column for efficient querying.
      */
     Page<AccountingEvent> findBySourceSystem(String sourceSystem, Pageable pageable);
+
+    /**
+     * Whether an ingestion record already holds this fact for this reason, so a redelivered fact
+     * held for its currency does not write a second record (issue #2312).
+     */
+    boolean existsByEventTypeAndDomainKeyIdAndFailureReasonCode(
+            String eventType, String domainKeyId, String failureReasonCode);
 }

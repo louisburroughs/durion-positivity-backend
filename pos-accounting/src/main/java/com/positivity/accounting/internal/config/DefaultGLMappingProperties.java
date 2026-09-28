@@ -101,9 +101,11 @@ public class DefaultGLMappingProperties {
      * </p>
      *
      * <p>
-     * When disabled, the system will attempt to generate journal entries with zero
-     * amounts if {@code payload.amount} is missing (not recommended for
-     * production).
+     * When disabled, an event whose {@code payload.amount} is zero, absent or
+     * unreadable posts no journal entry: it is recorded {@code SKIPPED} with
+     * {@code failureReasonCode} {@code ZERO_AMOUNT} (stated as zero) or
+     * {@code MISSING_AMOUNT} (absent or unreadable), so it stays traceable. No
+     * amount is ever substituted (ADR-0067 DF-7, issue #2315).
      * </p>
      *
      * <p>

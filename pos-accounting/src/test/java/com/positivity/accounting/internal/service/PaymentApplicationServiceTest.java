@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.CustomerCreditIssuanceGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
@@ -24,6 +25,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
+import com.positivity.accounting.internal.exception.CurrencyMismatchException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
@@ -87,6 +89,9 @@ class PaymentApplicationServiceTest {
 
     @Mock
     private OutboxService outboxService;
+
+    @Spy
+    private LedgerCurrency ledgerCurrency = new LedgerCurrency("USD");
 
     @InjectMocks
     private PaymentApplicationServiceImpl service;
@@ -221,6 +226,28 @@ class PaymentApplicationServiceTest {
         assertThat(savedApp.getInvoiceBalanceBefore()).isEqualByComparingTo("1000.00");
         assertThat(savedApp.getInvoiceBalanceAfter()).isEqualByComparingTo("500.00");
         assertThat(savedApp.getInvoiceStatus()).isEqualTo(InvoiceStatus.PARTIALLY_PAID);
+    }
+
+    @Test
+    @DisplayName("A payment in another currency than the invoice is refused 409 before anything is written (#2310)")
+    void testApplyPaymentToInvoices_CurrencyMismatch_Refused() {
+        testPayment.setCurrency("EUR");
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "500.00")));
+        when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(false);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+        assertThatThrownBy(() -> service.applyPaymentToInvoices(testPaymentId, request))
+                .isInstanceOf(CurrencyMismatchException.class)
+                .hasMessageContaining("EUR")
+                .hasMessageContaining("USD");
+
+        verify(paymentApplicationRepository, never()).save(any());
+        verify(receivablePaymentRepository, never()).save(any());
+        verify(customerCreditRepository, never()).save(any());
+        verifyNoInteractions(outboxService);
+        assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("1000.00");
     }
 
     @Test

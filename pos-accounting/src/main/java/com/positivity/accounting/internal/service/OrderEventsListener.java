@@ -129,7 +129,7 @@ public class OrderEventsListener {
 
         try {
             handlerTransaction.executeWithoutResult(_ -> {
-                registerOverShortPostingService.postOverShort(fact);
+                registerOverShortPostingService.postOverShort(fact, eventId);
                 markProcessed(eventId);
             });
         } catch (DatabindException e) {

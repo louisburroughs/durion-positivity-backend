@@ -76,7 +76,7 @@ class OrderEventsListenerTest {
         listener.onOrderEvent(sessionClosed("e-1"));
 
         ArgumentCaptor<RegisterSessionClosedV1> fact = ArgumentCaptor.forClass(RegisterSessionClosedV1.class);
-        verify(postingService).postOverShort(fact.capture());
+        verify(postingService).postOverShort(fact.capture(), org.mockito.ArgumentMatchers.eq("e-1"));
         assertThat(fact.getValue().sessionId()).isEqualTo(SESSION_ID);
         assertThat(fact.getValue().terminalId()).isEqualTo("terminal-1");
         assertThat(fact.getValue().overShort()).isEqualByComparingTo(new BigDecimal("-10.00"));
@@ -120,7 +120,7 @@ class OrderEventsListenerTest {
 
         listener.onOrderEvent(message);
 
-        verify(postingService, never()).postOverShort(any());
+        verify(postingService, never()).postOverShort(any(), any());
         verify(processedEvents).save(any());
     }
 
@@ -137,7 +137,7 @@ class OrderEventsListenerTest {
     @DisplayName("Posting failures propagate unwrapped for container retry / DLQ; nothing marked processed")
     void postingFailurePropagates() {
         when(processedEvents.existsById("e-5")).thenReturn(false);
-        doThrow(new QueryTimeoutException("db down")).when(postingService).postOverShort(any());
+        doThrow(new QueryTimeoutException("db down")).when(postingService).postOverShort(any(), any());
 
         assertThatExceptionOfType(QueryTimeoutException.class)
                 .isThrownBy(() -> listener.onOrderEvent(sessionClosed("e-5")));
