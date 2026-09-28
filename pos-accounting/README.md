@@ -276,6 +276,12 @@ on an inbound fact means the ledger currency until producers stamp one (E-3).
 - **Settled payments** (`payment.payment.settled`, #2310) — one in another currency never becomes an
   `AVAILABLE` `ReceivablePayment`. It is held the same way: `sourceSystem = pos-invoice`, `SKIPPED`,
   `CURRENCY_NOT_SUPPORTED`, `domainKeyId` = `paymentIntentId`.
+- **Vendor bills from supplier invoices** (`supplier.invoice.received`, #2309) — the bill records the
+  invoice's `currency` (V5 column, on `VendorBillResponse`). A bill in another currency gets status
+  `CURRENCY_HOLD` with the reason in `rejectionReason`: it is not matched, cannot be approved through
+  match resolution, is never paid (AP payment takes `APPROVED` bills only) and is left out of Aged
+  Payables. A re-issue under the same number in a different currency is flagged `MATCH_EXCEPTION`, like a
+  different amount; a re-issue of a held bill keeps it held.
 - **Payment application** (`POST /v1/accounting/payments/{paymentId}/applications`, #2310) — a payment
   applies only to invoices in its own currency. The invoice replica carries no currency, so an invoice is
   in the ledger currency; a payment in another currency is refused with 409 `CURRENCY_MISMATCH` before

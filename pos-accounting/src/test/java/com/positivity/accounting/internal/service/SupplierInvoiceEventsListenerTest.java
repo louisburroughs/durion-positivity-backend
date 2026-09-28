@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
@@ -22,6 +23,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -77,6 +79,7 @@ class SupplierInvoiceEventsListenerTest {
                 processedEventRepository,
                 vendorBillRepository,
                 vendorRepository,
+                new LedgerCurrency("USD"),
                 mock(PlatformTransactionManager.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(vendorBillRepository.findByVendorIdAndBillNumber(any(), any())).thenReturn(Optional.empty());
@@ -84,14 +87,20 @@ class SupplierInvoiceEventsListenerTest {
     }
 
     private static String event(String eventId, String number, String type, String total) {
+        return event(eventId, number, type, total, "USD");
+    }
+
+    private static String event(String eventId, String number, String type, String total, String currency) {
         return """
             {"eventId":"%s","eventType":"supplier.invoice.received","payload":{
               "vendorProfileId":"%s","supplierRef":"michelin-de","vendorInvoiceNumber":"%s",
-              "invoiceDate":"2026-08-14","type":"%s","currency":"EUR",
+              "invoiceDate":"2026-08-14","type":"%s","currency":"%s",
               "totalNetAmount":240.00,"totalTaxAmount":48.00,"totalGrossAmount":%s,
               "vendorOrderReference":"PO-778","occurredAt":"2026-08-16T08:00:00Z","lines":[]}}
-            """.formatted(eventId, PROFILE, number, type, total);
+            """.formatted(eventId, PROFILE, number, type, currency, total);
     }
+
+    private static final String EVENT_9 = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f7b09";
 
     private VendorBill captured() {
         ArgumentCaptor<VendorBill> captor = ArgumentCaptor.forClass(VendorBill.class);
@@ -214,7 +223,7 @@ class SupplierInvoiceEventsListenerTest {
         String noTotal = """
             {"eventId":"%s","eventType":"supplier.invoice.received","payload":{
               "vendorProfileId":"%s","supplierRef":"michelin-de","vendorInvoiceNumber":"INV-X",
-              "invoiceDate":"2026-08-14","type":"INVOICE","currency":"EUR",
+              "invoiceDate":"2026-08-14","type":"INVOICE","currency":"USD",
               "totalNetAmount":null,"totalTaxAmount":null,"totalGrossAmount":null,
               "vendorOrderReference":null,"occurredAt":"2026-08-16T08:00:00Z","lines":[]}}
             """.formatted(EVENT_1, PROFILE);
@@ -240,5 +249,67 @@ class SupplierInvoiceEventsListenerTest {
         // vendor debt permanently: the supplier side has already published this invoice and will
         // not publish it again.
         verify(processedEventRepository, never()).save(any());
+    }
+
+    @Nested
+    @DisplayName("the invoice's currency (ADR-0067 DF-1, #2309)")
+    class Currency {
+
+        @Test
+        @DisplayName("a ledger-currency invoice records its currency and waits for its receipt as before")
+        void ledgerCurrencyInvoiceIsPending() {
+            listener.onSupplierEvent(event(EVENT_1, "INV-1", "INVOICE", "288.00", "USD"));
+
+            VendorBill bill = captured();
+            assertThat(bill.getCurrency()).isEqualTo("USD");
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        }
+
+        @Test
+        @DisplayName("an invoice in another currency is held with a currency reason, never booked at par")
+        void foreignCurrencyInvoiceIsHeld() {
+            listener.onSupplierEvent(event(EVENT_9, "INV-9", "INVOICE", "288.00", "EUR"));
+
+            VendorBill bill = captured();
+            assertThat(bill.getCurrency()).isEqualTo("EUR");
+            assertThat(bill.getStatus())
+                    .isEqualTo(VendorBillStatus.CURRENCY_HOLD)
+                    .isNotEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
+            assertThat(bill.getRejectionReason()).contains("EUR").contains("USD");
+            assertThat(bill.getTotalAmount()).isEqualByComparingTo("288.00");
+        }
+
+        @Test
+        @DisplayName("a re-issue under the same number in a different currency is flagged")
+        void reissueInADifferentCurrencyIsFlagged() {
+            VendorBill existing = new VendorBill();
+            existing.setTotalAmount(new BigDecimal("288.00"));
+            existing.setCurrency("USD");
+            existing.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
+            when(vendorBillRepository.findByVendorIdAndBillNumber(PROFILE, "INV-1"))
+                    .thenReturn(Optional.of(existing));
+
+            listener.onSupplierEvent(event(EVENT_7, "INV-1", "INVOICE", "288.00", "CAD"));
+
+            assertThat(existing.getStatus()).isEqualTo(VendorBillStatus.MATCH_EXCEPTION);
+            assertThat(existing.getCurrency()).isEqualTo("USD");
+            assertThat(existing.getRejectionReason()).contains("CAD");
+        }
+
+        @Test
+        @DisplayName("a re-issue of a held bill keeps it held, never releasing it to the exception queue")
+        void reissueOfAHeldBillStaysHeld() {
+            VendorBill existing = new VendorBill();
+            existing.setTotalAmount(new BigDecimal("288.00"));
+            existing.setCurrency("EUR");
+            existing.setStatus(VendorBillStatus.CURRENCY_HOLD);
+            when(vendorBillRepository.findByVendorIdAndBillNumber(PROFILE, "INV-1"))
+                    .thenReturn(Optional.of(existing));
+
+            listener.onSupplierEvent(event(EVENT_7, "INV-1", "INVOICE", "412.00", "EUR"));
+
+            assertThat(existing.getStatus()).isEqualTo(VendorBillStatus.CURRENCY_HOLD);
+            assertThat(existing.getTotalAmount()).isEqualByComparingTo("288.00");
+        }
     }
 }

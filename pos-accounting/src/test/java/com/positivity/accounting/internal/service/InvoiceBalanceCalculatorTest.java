@@ -263,7 +263,8 @@ class InvoiceBalanceCalculatorTest {
                     apPaymentAllocationRepository,
                     realCalculator,
                     databaseDialectSupport,
-                    Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
+                    Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
+                    new com.positivity.accounting.internal.config.LedgerCurrency("USD"));
         }
 
         @Test

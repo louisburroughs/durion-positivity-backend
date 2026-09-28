@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.entity.VendorBill;
@@ -86,6 +87,7 @@ public class SupplierInvoiceEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final VendorBillRepository vendorBillRepository;
     private final VendorRepository vendorRepository;
+    private final LedgerCurrency ledgerCurrency;
 
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
     private final TransactionTemplate handlerTransaction;
@@ -96,12 +98,14 @@ public class SupplierInvoiceEventsListener {
             ProcessedEventRepository processedEventRepository,
             VendorBillRepository vendorBillRepository,
             VendorRepository vendorRepository,
+            LedgerCurrency ledgerCurrency,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.vendorBillRepository = vendorBillRepository;
         this.vendorRepository = vendorRepository;
+        this.ledgerCurrency = ledgerCurrency;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -167,22 +171,7 @@ public class SupplierInvoiceEventsListener {
 
         Optional<VendorBill> existing = vendorBillRepository.findByVendorIdAndBillNumber(vendorId, billNumber);
         if (existing.isPresent()) {
-            VendorBill bill = existing.get();
-            BigDecimal incoming = signedTotal(fact);
-            if (bill.getTotalAmount() != null && incoming.compareTo(bill.getTotalAmount()) != 0) {
-                // Re-issued under the same identity for a different amount. Not overwritten: the
-                // first version is what somebody may already have approved or paid against, and
-                // replacing it would erase the disagreement rather than raise it.
-                bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
-                vendorBillRepository.save(bill);
-                log.warn(
-                        "Vendor invoice {} re-issued at {} against a bill of {}; flagged for review",
-                        billNumber,
-                        incoming,
-                        bill.getTotalAmount());
-            } else {
-                log.debug("Vendor invoice {} already held; nothing to do", billNumber);
-            }
+            flagReissue(existing.get(), fact, billNumber);
             return;
         }
 
@@ -196,14 +185,25 @@ public class SupplierInvoiceEventsListener {
         bill.setBillNumber(billNumber);
         bill.setBillDate(fact.invoiceDate().atStartOfDay());
         bill.setTotalAmount(signedTotal(fact));
-        // An invoice whose amount could not be read is not a nil invoice. The codec deliberately
-        // records an unreadable figure as absent rather than zero so the two stay distinguishable,
-        // and collapsing them here would undo that: a bill for nothing looks settled, sits at the
-        // bottom of every ageing report, and is noticed when the vendor chases payment.
-        bill.setStatus(
-                fact.totalGrossAmount() == null
-                        ? VendorBillStatus.MATCH_EXCEPTION
-                        : VendorBillStatus.PENDING_RECEIPT_MATCH);
+        // The figure is only a sum of money with its currency, so the bill keeps the one the vendor
+        // stated (ADR-0067 DF-1).
+        bill.setCurrency(fact.currency());
+        if (ledgerCurrency.isForeign(fact.currency())) {
+            // Never booked at par (ADR-0067 PC-9, PC-13): a bill in another currency is held where an
+            // operator sees why, out of matching, approval, payment and ledger-currency totals.
+            bill.setStatus(VendorBillStatus.CURRENCY_HOLD);
+            bill.setRejectionReason(currencyHoldReason(fact.currency()));
+        } else {
+            // An invoice whose amount could not be read is not a nil invoice. The codec deliberately
+            // records an unreadable figure as absent rather than zero so the two stay
+            // distinguishable, and collapsing them here would undo that: a bill for nothing looks
+            // settled, sits at the bottom of every ageing report, and is noticed when the vendor
+            // chases payment.
+            bill.setStatus(
+                    fact.totalGrossAmount() == null
+                            ? VendorBillStatus.MATCH_EXCEPTION
+                            : VendorBillStatus.PENDING_RECEIPT_MATCH);
+        }
         bill.setOriginEventId(UUID.fromString(eventId));
         bill.setOriginEventType(ORIGIN_EVENT_TYPE);
         bill.setPurchaseOrderNumber(fact.vendorOrderReference());
@@ -217,6 +217,50 @@ public class SupplierInvoiceEventsListener {
                 fact.totalGrossAmount(),
                 fact.currency(),
                 fact.supplierRef());
+    }
+
+    /**
+     * A second invoice under a number we already hold. Not overwritten: the first version is what
+     * somebody may already have approved or paid against, and replacing it would erase the
+     * disagreement rather than raise it. A different amount or a different currency is flagged for
+     * review; a bill held for its currency stays held, so a re-issue never releases it into a queue
+     * where it could be approved at par (#2309).
+     */
+    private void flagReissue(VendorBill bill, SupplierInvoiceReceivedV1 fact, String billNumber) {
+        BigDecimal incoming = signedTotal(fact);
+        boolean amountChanged = bill.getTotalAmount() != null && incoming.compareTo(bill.getTotalAmount()) != 0;
+        boolean currencyChanged =
+                !effectiveCurrency(bill.getCurrency()).equalsIgnoreCase(effectiveCurrency(fact.currency()));
+        if (!amountChanged && !currencyChanged) {
+            log.debug("Vendor invoice {} already held; nothing to do", billNumber);
+            return;
+        }
+        String change = "Re-issued under the same number at " + incoming + " " + fact.currency() + " against a bill of "
+                + bill.getTotalAmount() + " " + effectiveCurrency(bill.getCurrency());
+        if (bill.getStatus() == VendorBillStatus.CURRENCY_HOLD) {
+            bill.setRejectionReason(currencyHoldReason(effectiveCurrency(bill.getCurrency())) + ". " + change);
+        } else {
+            bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
+            bill.setRejectionReason(change);
+        }
+        vendorBillRepository.save(bill);
+        log.warn(
+                "Vendor invoice {} re-issued at {} {} against a bill of {} {}; flagged for review",
+                billNumber,
+                incoming,
+                fact.currency(),
+                bill.getTotalAmount(),
+                effectiveCurrency(bill.getCurrency()));
+    }
+
+    /** An absent currency is the ledger currency (ADR-0067 E-3). */
+    private String effectiveCurrency(String currency) {
+        return currency == null || currency.isBlank() ? ledgerCurrency.code() : currency.trim();
+    }
+
+    private String currencyHoldReason(String currency) {
+        return "Currency " + currency + " is not the ledger currency " + ledgerCurrency.code()
+                + "; held, never booked at par (ADR-0067 PC-9)";
     }
 
     /**

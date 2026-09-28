@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -307,6 +308,21 @@ class VendorBillServiceTest {
                             vendorBillService.resolveMatchException(testBillId, "ACCEPT", "Valid reason", "operator-1"))
                     .isInstanceOf(VendorBillOperatorActionException.class)
                     .hasMessageContaining("not in MATCH_EXCEPTION status");
+        }
+
+        @Test
+        @DisplayName("a bill held for its currency cannot be approved through match resolution (#2309)")
+        void currencyHeldBill_CannotBeAccepted() {
+            VendorBill bill =
+                    buildBill(testBillId, VendorBillStatus.CURRENCY_HOLD, new BigDecimal("1000.00"), BILL_DATE_CLOSE);
+            bill.setCurrency("EUR");
+            when(billRepository.findById(testBillId)).thenReturn(Optional.of(bill));
+
+            assertThatThrownBy(() ->
+                            vendorBillService.resolveMatchException(testBillId, "ACCEPT", "Valid reason", "operator-1"))
+                    .isInstanceOf(VendorBillOperatorActionException.class);
+            assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.CURRENCY_HOLD);
+            verify(billRepository, never()).save(any());
         }
 
         @Test

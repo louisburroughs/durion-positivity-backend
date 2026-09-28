@@ -85,6 +85,14 @@ public class VendorBill extends TenantScopedEntity {
     @Column(name = "total_amount", precision = 19, scale = 4, nullable = false)
     private BigDecimal totalAmount;
 
+    /**
+     * ISO 4217 currency the bill is stated in, as the vendor's document states it (ADR-0067 DF-1,
+     * #2309). Null on bills that predate the column or come from a source that states none, which
+     * means the ledger currency (ADR-0067 E-3).
+     */
+    @Column(name = "currency", length = 3)
+    private String currency;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
     private VendorBillStatus status = VendorBillStatus.PENDING_RECEIPT_MATCH;
