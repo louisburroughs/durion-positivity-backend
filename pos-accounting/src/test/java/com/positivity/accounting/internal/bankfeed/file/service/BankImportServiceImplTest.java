@@ -371,6 +371,35 @@ class BankImportServiceImplTest {
         }
     }
 
+    @Test
+    @DisplayName("the request hash is length-prefixed: a delimiter inside free text cannot collide two payloads")
+    void theRequestHashCannotBeShiftedByADelimiterInFreeText() {
+        com.positivity.accounting.internal.bankfeed.file.parser.ParserOptions options =
+                com.positivity.accounting.internal.bankfeed.file.parser.ParserOptions.defaults();
+        BankImportCreateRequest a = upload(CSV, "0", "0", "moved banks|in August");
+        a.getStatement().setStatementRef("R");
+        BankImportCreateRequest b = upload(CSV, "0", "0", "in August");
+        b.setRequestId(a.getRequestId());
+        b.getStatement().setStatementRef("R|moved banks");
+
+        assertThat(BankImportServiceImpl.requestHash(a, "sha", options, null, List.of()))
+                .isNotEqualTo(BankImportServiceImpl.requestHash(b, "sha", options, null, List.of()));
+        assertThat(BankImportServiceImpl.requestHash(
+                        a,
+                        "sha",
+                        options,
+                        com.positivity.accounting.internal.bankfeed.file.parser.ColumnMapping.fromJson(
+                                Map.of("date", 0), "m"),
+                        List.of()))
+                .isNotEqualTo(BankImportServiceImpl.requestHash(
+                        a,
+                        "sha",
+                        options,
+                        com.positivity.accounting.internal.bankfeed.file.parser.ColumnMapping.fromJson(
+                                Map.of("date", "0"), "m"),
+                        List.of()));
+    }
+
     @Nested
     @DisplayName("state machine (§3.8)")
     class StateMachine {

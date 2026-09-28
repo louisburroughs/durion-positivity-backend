@@ -36,6 +36,7 @@ import com.positivity.accounting.internal.bankrec.intake.BankIntakeLookup.BankAc
 import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
 import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.intake.BankTransactionIntake;
+import com.positivity.accounting.internal.bankrec.intake.ConcurrentCommitException;
 import com.positivity.accounting.internal.bankrec.intake.IntakeContext;
 import com.positivity.accounting.internal.bankrec.intake.IntakeResult;
 import com.positivity.accounting.internal.bankrec.intake.Justification;
@@ -217,7 +218,8 @@ public class BankImportServiceImpl implements BankImportService {
             saved = imports.saveAndFlush(created);
         } catch (DataIntegrityViolationException refused) {
             if (constraintDetail(refused).contains(REQUEST_CONSTRAINT)) {
-                throw new BankRecException(
+                // Retried once in a fresh transaction by RetryingBankImportService: replay or conflict.
+                throw new ConcurrentCommitException(
                         BankRecErrorCode.IDEMPOTENCY_CONFLICT, "The requestId was used by a concurrent request");
             }
             throw refused;
@@ -701,7 +703,8 @@ public class BankImportServiceImpl implements BankImportService {
             saved = imports.saveAndFlush(found);
         } catch (DataIntegrityViolationException refused) {
             if (constraintDetail(refused).contains(COMMITTED_FILE_CONSTRAINT)) {
-                throw new BankRecException(
+                // Retried once by RetryingBankImportService, where the service check names the winner.
+                throw new ConcurrentCommitException(
                         BankRecErrorCode.IMPORT_FILE_ALREADY_COMMITTED,
                         "The same file was committed for this account by a concurrent import");
             }
@@ -1326,47 +1329,69 @@ public class BankImportServiceImpl implements BankImportService {
 
     // ---- small helpers -------------------------------------------------------------------------
 
-    private static String requestHash(
+    /**
+     * SHA-256 of the create command's payload, to tell a replay from a reuse (§6.3). Every field is
+     * length-prefixed ({@code <length>:<text>}, {@code ~} for absent), so free text that contains a
+     * delimiter — a gap acknowledgement, a statement reference, a header name in the column mapping —
+     * can never shift a field boundary and collide with a different payload (as #2301's manual hash).
+     */
+    static String requestHash(
             BankImportCreateRequest request,
             String sha256,
             ParserOptions options,
             @Nullable ColumnMapping mapping,
             List<SplitPoint> split) {
         BankImportStatementHeader header = request.getStatement();
-        StringBuilder canonical = new StringBuilder()
-                .append(request.getGlAccountId())
-                .append('|')
-                .append(request.getFormatCode().trim().toUpperCase(Locale.ROOT))
-                .append('|')
-                .append(sha256)
-                .append('|')
-                .append(
-                        request.getCurrency() == null
-                                ? ""
-                                : request.getCurrency().trim().toUpperCase(Locale.ROOT))
-                .append('|')
-                .append(header.getStartDate())
-                .append('|')
-                .append(header.getEndDate())
-                .append('|')
-                .append(plain(header.getOpeningBalance()))
-                .append('|')
-                .append(plain(header.getClosingBalance()))
-                .append('|')
-                .append(blankToNull(header.getStatementRef()))
-                .append('|')
-                .append(mapping == null ? "" : new TreeMap<>(mapping.toJson()))
-                .append('|')
-                .append(options)
-                .append('|')
-                .append(
-                        request.getGapAcknowledgement() == null
-                                ? ""
-                                : request.getGapAcknowledgement().trim());
+        StringBuilder canonical = new StringBuilder();
+        field(canonical, request.getGlAccountId());
+        field(canonical, request.getFormatCode().trim().toUpperCase(Locale.ROOT));
+        field(canonical, sha256);
+        field(
+                canonical,
+                request.getCurrency() == null
+                        ? null
+                        : request.getCurrency().trim().toUpperCase(Locale.ROOT));
+        field(canonical, header.getStartDate());
+        field(canonical, header.getEndDate());
+        field(canonical, plain(header.getOpeningBalance()));
+        field(canonical, plain(header.getClosingBalance()));
+        field(canonical, blankToNull(header.getStatementRef()));
+        if (mapping == null) {
+            field(canonical, null);
+        } else {
+            Map<String, Object> sorted = new TreeMap<>(mapping.toJson());
+            field(canonical, sorted.size());
+            sorted.forEach((key, value) -> {
+                field(canonical, key);
+                // A position and a header name that reads the same are different mappings.
+                field(canonical, (value instanceof Number ? "#" : "$") + value);
+            });
+        }
+        field(canonical, options.charset().name());
+        field(canonical, options.delimiterCode());
+        field(canonical, options.datePattern());
+        field(canonical, options.decimalFormat().name());
+        field(canonical, options.signConvention().name());
+        field(
+                canonical,
+                request.getGapAcknowledgement() == null
+                        ? null
+                        : request.getGapAcknowledgement().trim());
+        field(canonical, split.size());
         for (SplitPoint point : split) {
-            canonical.append('|').append(point.date()).append('=').append(plain(point.closingBalance()));
+            field(canonical, point.date());
+            field(canonical, plain(point.closingBalance()));
         }
         return sha256(canonical.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static void field(StringBuilder canonical, @Nullable Object value) {
+        if (value == null) {
+            canonical.append('~');
+            return;
+        }
+        String text = value.toString();
+        canonical.append(text.length()).append(':').append(text);
     }
 
     private static String plain(BigDecimal value) {
