@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,21 +18,29 @@ import org.springframework.data.jpa.repository.JpaRepository;
  */
 public interface BankReconciliationRepository extends JpaRepository<BankReconciliation, UUID> {
 
-    Page<BankReconciliation> findByGlAccount_GlAccountId(UUID glAccountId, Pageable pageable);
+    @NonNull
+    Page<BankReconciliation> findByGlAccount_GlAccountId(@NonNull UUID glAccountId, @NonNull Pageable pageable);
 
-    Page<BankReconciliation> findByStatus(ReconciliationStatus status, Pageable pageable);
+    @NonNull
+    Page<BankReconciliation> findByStatus(@NonNull ReconciliationStatus status, @NonNull Pageable pageable);
 
+    @NonNull
     Page<BankReconciliation> findByGlAccount_GlAccountIdAndStatus(
-            UUID glAccountId, ReconciliationStatus status, Pageable pageable);
+            @NonNull UUID glAccountId, @NonNull ReconciliationStatus status, @NonNull Pageable pageable);
 
     /** Whether a reconciliation in {@code status} on the account covers {@code date} (§3.8, D10; #2301). */
     boolean existsByGlAccount_GlAccountIdAndStatusAndStatementStartDateLessThanEqualAndStatementEndDateGreaterThanEqual(
-            UUID glAccountId, ReconciliationStatus status, LocalDate onOrAfterStart, LocalDate onOrBeforeEnd);
+            @NonNull UUID glAccountId,
+            @NonNull ReconciliationStatus status,
+            @NonNull LocalDate onOrAfterStart,
+            @NonNull LocalDate onOrBeforeEnd);
 
     /** The account's reconciliations in {@code status}, oldest window first (reconciled frontier, §4.1). */
+    @NonNull
     List<BankReconciliation> findByGlAccount_GlAccountIdAndStatusOrderByStatementStartDateAsc(
-            UUID glAccountId, ReconciliationStatus status);
+            @NonNull UUID glAccountId, @NonNull ReconciliationStatus status);
 
     /** The reconciliations of one statement (§6.1 statement read). */
-    List<BankReconciliation> findByStatementIdOrderByStatementStartDateAsc(UUID statementId);
+    @NonNull
+    List<BankReconciliation> findByStatementIdOrderByStatementStartDateAsc(@NonNull UUID statementId);
 }

@@ -115,7 +115,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_INVALID_ARGUMENT` | 400 | Sales-order request validation failure (`SalesOrderRequestValidationException`) |
 | `ORDER_PRICE_OVERRIDE_BAD_REQUEST` | 400 | Price-override request validation failure |
 | `VALIDATION_FAILED` | 400 | Bean-validation rejection of a price-override body, with `fieldErrors` |
-| `PURCHASE_ORDER_BAD_REQUEST` | 400 | Purchase-order request validation failure |
+| `PURCHASE_ORDER_BAD_REQUEST` | 400 | Purchase-order request validation failure, including a currency that is not an ISO 4217 code |
 | `REGISTER_SESSION_INVALID_ARGUMENT` | 400 | Register-session request validation failure |
 | `RETURN_INVALID_ARGUMENT` | 400 | Return request validation failure |
 | `ORDER_FORBIDDEN` | 403 | Caller lacks required order permissions (sales orders, cancellations, price overrides, register sessions) |
@@ -197,8 +197,11 @@ non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_i
 ## Database
 
 Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`: `V1__baseline_order.sql` (the 2026-09-09
-flattened baseline with the tenancy schema on every scoped table) and `V2__event_outbox_tenant_id.sql`
-(`tenant_id` as data on the global outbox table, see Multitenancy above).
+flattened baseline with the tenancy schema on every scoped table), `V2__event_outbox_tenant_id.sql`
+(`tenant_id` as data on the global outbox table, see Multitenancy above) and
+`V3__order_payment_record_currency.sql` (nullable `order_payment_record.currency_code`, the ISO 4217 currency of the
+settled or reversed payment as stamped on the pos-invoice fact, ADR-0067 DF-3; event-sourced rows are backfilled with
+`USD`, the only currency those facts have carried so far, and ON_ACCOUNT rows stay null).
 
 ## Development
 

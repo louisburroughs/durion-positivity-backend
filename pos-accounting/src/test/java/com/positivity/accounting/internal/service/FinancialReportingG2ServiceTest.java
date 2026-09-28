@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.DatabaseDialectSupport;
@@ -130,7 +131,8 @@ class FinancialReportingG2ServiceTest {
                 apPaymentAllocationRepository,
                 invoiceBalanceCalculator,
                 databaseDialectSupport,
-                Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
+                Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
+                new com.positivity.accounting.internal.config.LedgerCurrency("USD"));
     }
 
     // ================= General Ledger =================
@@ -533,6 +535,37 @@ class FinancialReportingG2ServiceTest {
         AgedPayablesReport report = service.generateAgedPayables(AS_OF);
 
         assertThat(report.getTotals().getDays61To90()).isEqualByComparingTo("250.00");
+    }
+
+    @Test
+    @DisplayName("Aged AP: a bill in another currency is kept out of the ledger-currency totals (#2309)")
+    void agedPayablesExcludesForeignCurrencyBill() {
+        UUID vendorId = UUID.fromString("b1000000-0000-7000-8000-000000000009");
+        LocalDate billDate = AS_OF.minusDays(10);
+        VendorBill usd = apBill(vendorId, "Acme", new BigDecimal("100.00"), billDate, AS_OF.minusDays(5));
+        usd.setCurrency("USD");
+        VendorBill eur = apBill(vendorId, "Acme", new BigDecimal("500.00"), billDate, AS_OF.minusDays(5));
+        eur.setCurrency("EUR");
+        when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(usd, eur));
+        when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillIdIn(any()))
+                .thenReturn(List.of());
+
+        AgedPayablesReport report = service.generateAgedPayables(AS_OF);
+
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    @DisplayName("Aged AP: bills held for their currency are not open payables (#2309)")
+    void agedPayablesDoesNotLoadCurrencyHeldBills() {
+        when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of());
+
+        service.generateAgedPayables(AS_OF);
+
+        org.mockito.ArgumentCaptor<java.util.Collection<VendorBillStatus>> statuses =
+                org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(vendorBillRepository).findByStatusIn(statuses.capture());
+        assertThat(statuses.getValue()).doesNotContain(VendorBillStatus.CURRENCY_HOLD);
     }
 
     @Test

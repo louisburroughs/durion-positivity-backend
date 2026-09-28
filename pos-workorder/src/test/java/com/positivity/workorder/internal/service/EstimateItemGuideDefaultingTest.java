@@ -76,6 +76,14 @@ class EstimateItemGuideDefaultingTest {
             UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc07"),
             "CORROSION");
 
+    private static final LaborRateDefaultingService.RateDefault CAD_RATE = new LaborRateDefaultingService.RateDefault(
+            new BigDecimal("150.0000"),
+            new BigDecimal("150.0000"),
+            "CAD",
+            "LOCATION",
+            UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc08"),
+            null);
+
     @Mock
     private EstimateRepository estimateRepository;
 
@@ -161,6 +169,7 @@ class EstimateItemGuideDefaultingTest {
         estimate.setCustomerId(CUSTOMER_ID);
         estimate.setVehicleId(VEHICLE_ID);
         estimate.setLocationId(LOCATION_ID);
+        estimate.setCurrencyUomId("USD");
         when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(estimate));
         when(estimateItemRepository.save(any(EstimateItem.class))).thenAnswer(i -> i.getArgument(0));
         when(laborTimeDefaultingService.lookupGuideTime(any(), any(), any(), any()))
@@ -341,6 +350,42 @@ class EstimateItemGuideDefaultingTest {
                         () -> service.addEstimateItem(ESTIMATE_ID, request, "jane.smith"))
                 .isInstanceOf(com.positivity.workorder.internal.exception.WorkorderRequestValidationException.class)
                 .hasMessageContaining("unitPrice is required");
+    }
+
+    @Test
+    @DisplayName("a rate in another currency is a miss: no defaulted price and no rate snapshot (#2317)")
+    void rateInAnotherCurrencyIsAMissForExplicitPrice() {
+        when(laborRateDefaultingService.lookupLaborRate(SERVICE_ID, LOCATION_ID, null))
+                .thenReturn(Optional.of(CAD_RATE));
+
+        service.addEstimateItem(ESTIMATE_ID, laborRequest(new BigDecimal("2.0")), "jane.smith");
+
+        EstimateItem saved = savedItem();
+        assertThat(saved.getUnitPrice()).isEqualByComparingTo("120.00");
+        assertThat(saved.getRateHourly()).isNull();
+        assertThat(saved.getRateBaseHourly()).isNull();
+        assertThat(saved.getRateCurrency()).isNull();
+        assertThat(saved.getRateScope()).isNull();
+        assertThat(saved.getRateId()).isNull();
+        assertThat(saved.getRateAdjustmentCodes()).isNull();
+    }
+
+    @Test
+    @DisplayName("a rate in another currency never prices the line: no unitPrice is rejected as a rate miss (#2317)")
+    void rateInAnotherCurrencyWithNoUnitPriceIsRejected() {
+        when(laborRateDefaultingService.lookupLaborRate(SERVICE_ID, LOCATION_ID, null))
+                .thenReturn(Optional.of(CAD_RATE));
+        AddEstimateItemRequest request = AddEstimateItemRequest.builder()
+                .itemType(EstimateItemType.LABOR)
+                .quantity(new BigDecimal("2.0"))
+                .serviceId(SERVICE_ID)
+                .build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.addEstimateItem(ESTIMATE_ID, request, "jane.smith"))
+                .isInstanceOf(com.positivity.workorder.internal.exception.WorkorderRequestValidationException.class)
+                .hasMessageContaining("unitPrice is required");
+        verify(estimateItemRepository, never()).save(any(EstimateItem.class));
     }
 
     @Test

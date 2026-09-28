@@ -114,8 +114,9 @@ class AsnServiceImplTest {
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryLotCaptureService.class),
                 // The guard reads the product's declared precision_scale; a mocked conversion
                 // service declares none, which is the whole-units default every SKU has today.
-                new com.positivity.inventory.internal.service.QuantityScaleGuard(org.mockito.Mockito.mock(
-                        com.positivity.inventory.internal.service.UomConversionService.class)));
+                new com.positivity.inventory.internal.service.QuantityScaleGuard(
+                        org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
+                new com.positivity.inventory.internal.service.ReceiptCostCurrencyPolicy("USD"));
         authenticateAs("asn-test-user");
     }
 

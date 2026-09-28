@@ -75,7 +75,7 @@ class RestInvoicingPortAdapterTest {
 
     private static ReversePaymentCommand command(String type, String amount) {
         return new ReversePaymentCommand(
-                type, amount == null ? null : new BigDecimal(amount), "USD", "CUSTOMER_REQUEST", ORDER_ID, "idem-1");
+                type, amount == null ? null : new BigDecimal(amount), "CAD", "CUSTOMER_REQUEST", ORDER_ID, "idem-1");
     }
 
     @Test
@@ -151,6 +151,8 @@ class RestInvoicingPortAdapterTest {
                         "http://invoice/v1/invoices/%s/payments/%s/refunds".formatted(INVOICE_ID, PAYMENT_INTENT_ID)))
                 .andExpect(header("X-Authorities", "invoice:manage,invoice:payment:refund"))
                 .andExpect(jsonPath("$.amount").value(40.00))
+                // The refund states the currency of the payment it returns (ADR-0067 PC-3 R-1, DF-3).
+                .andExpect(jsonPath("$.currencyCode").value("CAD"))
                 .andExpect(jsonPath("$.reason").value("CUSTOMER_RETURN"))
                 // The key is what stops a saga retry refunding twice.
                 .andExpect(jsonPath("$.externalReference").value("idem-1"))

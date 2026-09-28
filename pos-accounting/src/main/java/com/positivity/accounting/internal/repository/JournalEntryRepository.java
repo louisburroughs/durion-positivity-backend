@@ -108,8 +108,10 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
     Page<JournalEntry> findDraftEntries(Pageable pageable);
 
     /**
-     * Sum net balance (debits - credits) for a GL account within date range (POSTED
-     * entries only).
+     * Sum net balance (debits - credits) for a GL account within date range over
+     * ledger entries: POSTED and REVERSED, each at its own transaction date, never
+     * DRAFT (issue #2308). A reversed original and its POSTED reversal net to zero
+     * from the reversal's date onward, and earlier periods keep their figures.
      * Used for financial reporting.
      *
      * @param glAccountId GL account ID (UUID)
@@ -125,7 +127,7 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 )
                 FROM JournalEntry je
                 JOIN je.lines jel
-                WHERE je.status = 'POSTED'
+                WHERE je.status IN ('POSTED', 'REVERSED')
                   AND jel.glAccount.glAccountId = :glAccountId
                   AND je.transactionDate >= :startDate
                   AND je.transactionDate <= :endDate
@@ -133,8 +135,8 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
     java.math.BigDecimal sumPostedBalanceForAccount(UUID glAccountId, LocalDateTime startDate, LocalDateTime endDate);
 
     /**
-     * Sum net balance for a GL account as of a specific date (POSTED entries only).
-     * Used for balance sheet generation.
+     * Sum net balance for a GL account as of a specific date over POSTED and
+     * REVERSED entries, never DRAFT (issue #2308). Used for balance sheet generation.
      *
      * @param glAccountId GL account ID (UUID)
      * @param asOfDate    reporting date (inclusive)
@@ -148,14 +150,15 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 )
                 FROM JournalEntry je
                 JOIN je.lines jel
-                WHERE je.status = 'POSTED'
+                WHERE je.status IN ('POSTED', 'REVERSED')
                   AND jel.glAccount.glAccountId = :glAccountId
                   AND je.transactionDate <= :asOfDate
             """)
     java.math.BigDecimal sumPostedBalanceAsOf(UUID glAccountId, LocalDateTime asOfDate);
 
     /**
-     * Aggregate POSTED journal lines up to and including the as-of instant into
+     * Aggregate ledger journal lines (POSTED and REVERSED entries, never DRAFT;
+     * issue #2308) up to and including the as-of instant into
      * per-account debit/credit totals, ordered by chart-of-accounts code.
      * Used for Trial Balance generation (story G1, issue #956); aggregation is
      * done in the database so the full line set is never loaded into memory.
@@ -173,7 +176,7 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                     COALESCE(SUM(CASE WHEN jel.creditAmount IS NOT NULL THEN jel.creditAmount ELSE 0 END), 0))
                 FROM JournalEntry je
                 JOIN je.lines jel
-                WHERE je.status = 'POSTED'
+                WHERE je.status IN ('POSTED', 'REVERSED')
                   AND je.transactionDate <= :asOfDate
                 GROUP BY jel.glAccount.glAccountId, jel.glAccount.accountCode, jel.glAccount.accountName
                 ORDER BY jel.glAccount.accountCode
@@ -182,8 +185,9 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
             LocalDateTime asOfDate);
 
     /**
-     * Find all POSTED journal lines for a GL account within date range.
-     * Used for drilldown reporting.
+     * Find all ledger journal entries (POSTED and REVERSED, never DRAFT; issue
+     * #2308) with lines for a GL account within date range, so a reversed original
+     * stays visible beside its reversal. Used for drilldown reporting.
      *
      * @param glAccountId GL account ID (UUID)
      * @param startDate   period start date
@@ -194,7 +198,7 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 SELECT DISTINCT je
                 FROM JournalEntry je
                 JOIN FETCH je.lines jel
-                WHERE je.status = 'POSTED'
+                WHERE je.status IN ('POSTED', 'REVERSED')
                   AND jel.glAccount.glAccountId = :glAccountId
                   AND je.transactionDate >= :startDate
                   AND je.transactionDate <= :endDate
@@ -208,10 +212,11 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
      * Used as the General Ledger opening balance (story G2, issue #960): the net
      * of all POSTED activity that precedes the report's start date.
      *
-     * <p>Only POSTED lines participate — an A3-REVERSED original (status
-     * {@code REVERSED}) is excluded while its POSTED reversing entry is included,
-     * so reversed/reversing pairs net to zero here with no reversal-linkage
-     * special-casing.
+     * <p>POSTED and REVERSED lines participate, each at its own transaction date,
+     * never DRAFT (issue #2308): a REVERSED original and its POSTED reversal net to
+     * zero once both precede the start, with no reversal-linkage special-casing.
+     * Counting only POSTED would keep the reversal but drop the original and move
+     * the balance by the reversed amount.
      *
      * @param glAccountId    GL account ID (UUID)
      * @param startExclusive start-of-day of the report start date; entries dated
@@ -226,7 +231,7 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 )
                 FROM JournalEntry je
                 JOIN je.lines jel
-                WHERE je.status = 'POSTED'
+                WHERE je.status IN ('POSTED', 'REVERSED')
                   AND jel.glAccount.glAccountId = :glAccountId
                   AND je.transactionDate < :startExclusive
             """)
@@ -237,18 +242,18 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
      * falls in the inclusive range, across every account. Used by the
      * all-accounts General Ledger report (story G2, issue #960) to build one
      * section per account with activity; grouping by account is done in-service.
-     * Only POSTED entries are returned, so REVERSED originals are excluded while
-     * POSTED reversing entries are included (net-zero pairs).
+     * POSTED and REVERSED entries are returned, never DRAFT (issue #2308), so a
+     * REVERSED original and its POSTED reversal both appear and net to zero.
      *
      * @param startDate period start (inclusive; pass start-of-day)
      * @param endDate   period end (inclusive; pass end-of-day)
-     * @return POSTED entries with fetched lines, ordered by transaction date
+     * @return POSTED and REVERSED entries with fetched lines, ordered by transaction date
      */
     @Query("""
                 SELECT DISTINCT je
                 FROM JournalEntry je
                 JOIN FETCH je.lines jel
-                WHERE je.status = 'POSTED'
+                WHERE je.status IN ('POSTED', 'REVERSED')
                   AND je.transactionDate >= :startDate
                   AND je.transactionDate <= :endDate
                 ORDER BY je.transactionDate ASC

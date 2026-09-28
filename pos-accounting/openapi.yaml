@@ -8490,7 +8490,7 @@ paths:
 
         Preconditions: none beyond the caller holding accounting:analytics:view.
 
-        Required inputs: dueFrom and dueTo (ISO dates, dueTo on or after dueFrom); the window cannot exceed 366 days, to bound the scan. status is an optional filter (PENDING_RECEIPT_MATCH, MATCH_EXCEPTION, APPROVED, REJECTED, PAID, VOIDED); page/size/sort are standard, though the due-date-ascending sort is server-controlled and any caller-supplied sort is ignored.
+        Required inputs: dueFrom and dueTo (ISO dates, dueTo on or after dueFrom); the window cannot exceed 366 days, to bound the scan. status is an optional filter (PENDING_RECEIPT_MATCH, MATCH_EXCEPTION, CURRENCY_HOLD, APPROVED, REJECTED, PAID, VOIDED); page/size/sort are standard, though the due-date-ascending sort is server-controlled and any caller-supplied sort is ignored.
 
         Emits an ACCOUNTING_VENDOR_BILL_LIST_VIEW audit event; no state changes.
 
@@ -8524,6 +8524,7 @@ paths:
           enum:
           - PENDING_RECEIPT_MATCH
           - MATCH_EXCEPTION
+          - CURRENCY_HOLD
           - APPROVED
           - REJECTED
           - PAID
@@ -10833,9 +10834,11 @@ components:
           example: 50000.0
           type: number
         currency:
-          description: ISO 4217 currency code
+          description: ISO 4217 currency code; null when the customer has no billing currency configured
           example: USD
-          type: string
+          type:
+          - string
+          - 'null'
         discountPolicyRef:
           description: Reference to the applicable discount policy
           example: STD-2026
@@ -15508,6 +15511,7 @@ components:
           enum:
           - PENDING_RECEIPT_MATCH
           - MATCH_EXCEPTION
+          - CURRENCY_HOLD
           - APPROVED
           - REJECTED
           - PAID
@@ -15615,6 +15619,12 @@ components:
           description: Created by user
           example: system
           type: string
+        currency:
+          description: ISO 4217 currency the bill is stated in; null means the ledger currency (a bill recorded before currencies were kept). A bill in another currency is held in CURRENCY_HOLD
+          example: USD
+          type:
+          - string
+          - 'null'
         dueDate:
           description: Due date
           example: '2026-02-14T00:00:00'
@@ -15640,7 +15650,7 @@ components:
           format: uuid
           type: string
         rejectionReason:
-          description: Rejection reason (if status = REJECTED)
+          description: Rejection or exception reason (status REJECTED, MATCH_EXCEPTION or CURRENCY_HOLD)
           example: Incorrect invoice amount
           type: string
         status:
@@ -15648,6 +15658,7 @@ components:
           enum:
           - PENDING_RECEIPT_MATCH
           - MATCH_EXCEPTION
+          - CURRENCY_HOLD
           - APPROVED
           - REJECTED
           - PAID
@@ -15706,6 +15717,7 @@ components:
           enum:
           - PENDING_RECEIPT_MATCH
           - MATCH_EXCEPTION
+          - CURRENCY_HOLD
           - APPROVED
           - REJECTED
           - PAID

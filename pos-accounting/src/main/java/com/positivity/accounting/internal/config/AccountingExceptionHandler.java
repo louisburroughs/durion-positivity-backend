@@ -14,6 +14,7 @@ import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundExce
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.BankStatementParseException;
+import com.positivity.accounting.internal.exception.CurrencyMismatchException;
 import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
 import com.positivity.accounting.internal.exception.EventValidationException;
@@ -409,6 +410,15 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleMultiApplicationReversal(
             MultiApplicationReversalException ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "WHOLE_REQUEST_REVERSAL_REQUIRED", ex.getMessage(), request);
+    }
+
+    /**
+     * A payment applied to an invoice in another currency (issue #2310, ADR-0067 DF-2): refused
+     * before any amount moves.
+     */
+    @ExceptionHandler(CurrencyMismatchException.class)
+    public ResponseEntity<ApiError> handleCurrencyMismatch(CurrencyMismatchException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "CURRENCY_MISMATCH", ex.getMessage(), request);
     }
 
     /**

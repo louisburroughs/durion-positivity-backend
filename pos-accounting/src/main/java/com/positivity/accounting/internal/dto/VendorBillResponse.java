@@ -62,6 +62,16 @@ public class VendorBillResponse {
     @JsonProperty("totalAmount")
     private BigDecimal totalAmount;
 
+    @Nullable
+    @Schema(
+            description = "ISO 4217 currency the bill is stated in; null means the ledger currency (a bill "
+                    + "recorded before currencies were kept). A bill in another currency is held in CURRENCY_HOLD",
+            example = "USD",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    @JsonProperty("currency")
+    private String currency;
+
     @Schema(description = "Bill status", example = "PENDING_RECEIPT_MATCH", requiredMode = REQUIRED)
     @NotNull
     @JsonProperty("status")
@@ -115,7 +125,7 @@ public class VendorBillResponse {
 
     @Nullable
     @Schema(
-            description = "Rejection reason (if status = REJECTED)",
+            description = "Rejection or exception reason (status REJECTED, MATCH_EXCEPTION or CURRENCY_HOLD)",
             example = "Incorrect invoice amount",
             requiredMode = NOT_REQUIRED)
     @JsonProperty("rejectionReason")

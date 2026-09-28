@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.bankrec.repository;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationAdjustment;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -10,5 +11,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
  */
 public interface BankReconciliationAdjustmentRepository extends JpaRepository<BankReconciliationAdjustment, UUID> {
 
-    List<BankReconciliationAdjustment> findByReconciliation_ReconciliationId(UUID reconciliationId);
+    @NonNull
+    List<BankReconciliationAdjustment> findByReconciliation_ReconciliationId(@NonNull UUID reconciliationId);
 }

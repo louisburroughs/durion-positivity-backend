@@ -211,6 +211,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 line.getProductId(),
                 receivedQty,
                 receiptUnitCost(session, line),
+                receiptCostHold(session),
                 lotId,
                 lineReq.getSerialNumbers(),
                 actorUserId);
@@ -293,6 +294,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 crossDockLocationId,
                 quantities.quantityDelta(),
                 receiptUnitCost(session, line),
+                receiptCostHold(session),
                 lot.lotId(),
                 actorUserId);
 
@@ -434,6 +436,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             @NonNull UUID crossDockLocationId,
             @NonNull BigDecimal quantityDelta,
             @Nullable BigDecimal receiptUnitCost,
+            @Nullable String receiptCostHold,
             UUID lotId,
             @NonNull String actorUserId) {
         // #2206: both paired entries carry the workorder (and, when the request's
@@ -455,7 +458,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .workorderLineId(workorderLineUuid)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId.toString())
-                .notes("Cross-dock GOODS_RECEIPT for workorder " + workorderId)
+                .notes(withCostHold("Cross-dock GOODS_RECEIPT for workorder " + workorderId, receiptCostHold))
                 .build();
         InventoryLedgerEntry savedReceiptEntry = ledgerPostingService.post(receiptEntry);
         inventoryFactPublisher.markEntry(savedReceiptEntry);
@@ -525,6 +528,28 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .orElse(null);
     }
 
+    /**
+     * Why the receipt takes no document cost from its order because of the order's currency
+     * (ADR-0067 DF-6, #2314); null when there is no such reason.
+     */
+    private @Nullable String receiptCostHold(@NonNull ReceivingSession session) {
+        return sourceDocumentResolver
+                .receiptCostHold(session.getSourceDocumentType(), session.getSourceDocumentId())
+                .orElse(null);
+    }
+
+    /**
+     * Appends a currency cost hold to a GOODS_RECEIPT row's notes, so the row is visibly awaiting
+     * cost and says why, rather than silently entering at the running average (#2314).
+     */
+    private static String withCostHold(String notes, @Nullable String receiptCostHold) {
+        if (receiptCostHold != null) {
+            log.warn("GOODS_RECEIPT posted without a document cost: {} [{}]", receiptCostHold, notes);
+            return notes + " | " + receiptCostHold;
+        }
+        return notes;
+    }
+
     private static @Nullable UUID parseSourceLineId(@Nullable String sourceLineId) {
         if (sourceLineId == null || sourceLineId.isBlank()) {
             return null;
@@ -562,6 +587,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             String productId,
             BigDecimal quantity,
             @Nullable BigDecimal unitCost,
+            @Nullable String receiptCostHold,
             UUID lotId,
             java.util.List<String> serialNumbers,
             String actorUserId) {
@@ -580,7 +606,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .serialNumbers(serialNumbers == null ? java.util.List.of() : serialNumbers)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId + ":" + lineId)
-                .notes("Receiving session " + sessionId + " line " + lineId)
+                .notes(withCostHold("Receiving session " + sessionId + " line " + lineId, receiptCostHold))
                 .build();
 
         ledgerPostingService.post(entry);

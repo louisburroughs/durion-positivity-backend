@@ -421,6 +421,7 @@ class ReturnOrderReadModelAndGuardsTest {
                     .recordType(type)
                     .paymentIntentId(intentId)
                     .amount(new BigDecimal(amount))
+                    .currencyCode("USD")
                     .build();
         }
     }
