@@ -164,7 +164,9 @@ class TopicInventoryTest {
     private static final Map<String, String> DOMAIN_TOPICS_CONSTANTS = Map.of(
             "WORKORDER_EVENTS_V1", "workorder.events.v1",
             "WORKORDER_COMMANDS_V1", "workorder.commands.v1",
-            "WORKORDER_MANIFEST_V1", "workorder.manifest.v1");
+            "WORKORDER_MANIFEST_V1", "workorder.manifest.v1",
+            "BANKFEED_EVENTS_V1", "bankfeed.events.v1",
+            "BANKFEED_COMMANDS_V1", "bankfeed.commands.v1");
 
     /** Marks the start of a (possibly multi-line) {@code @KafkaListener(...)} argument list. */
     private static final String KAFKA_LISTENER_OPEN = "@KafkaListener(";

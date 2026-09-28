@@ -28,6 +28,17 @@ public final class DomainTopics {
      */
     public static final String TENANT_EVENTS_V1 = "tenant.events.v1";
 
+    /**
+     * Provider-neutral bank-feed facts (SPEC-manual-bank-reconciliation §2.2, §6.5): transactions,
+     * discovered accounts, connection status and observed balances, published by a bank-feed
+     * connector (phase 2) and consumed by pos-accounting. In phase 1 the transactions batch reaches
+     * accounting's intake port in-process, so nothing publishes here yet.
+     */
+    public static final String BANKFEED_EVENTS_V1 = "bankfeed.events.v1";
+
+    /** Commands accounting sends a bank-feed connector — sync and replay requests (phase 2). */
+    public static final String BANKFEED_COMMANDS_V1 = "bankfeed.commands.v1";
+
     private DomainTopics() {}
 
     /** Fact topic for the given domain, version 1: {@code {domain}.events.v1}. */
