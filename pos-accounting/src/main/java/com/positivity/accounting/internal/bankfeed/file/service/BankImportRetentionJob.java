@@ -64,7 +64,7 @@ public class BankImportRetentionJob {
      *
      * @return how many files were deleted
      */
-    int purgeForBoundTenant() {
+    public int purgeForBoundTenant() {
         LocalDate today = LocalDate.now(clock);
         Instant now = Instant.now(clock);
         List<BankImport> expired = imports.findByRetentionUntilBeforeAndFilePurgedAtIsNull(today);

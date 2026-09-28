@@ -9,8 +9,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
 import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
 import com.positivity.accounting.internal.bankfeed.file.entity.BankImport;
+import com.positivity.accounting.internal.bankfeed.file.entity.BankImportFile;
+import com.positivity.accounting.internal.bankfeed.file.entity.BankImportRow;
+import com.positivity.accounting.internal.bankfeed.file.enums.BankImportRowStatus;
 import com.positivity.accounting.internal.bankfeed.file.enums.BankImportStatus;
+import com.positivity.accounting.internal.bankfeed.file.repository.BankImportFileRepository;
 import com.positivity.accounting.internal.bankfeed.file.repository.BankImportRepository;
+import com.positivity.accounting.internal.bankfeed.file.repository.BankImportRowRepository;
 import com.positivity.accounting.internal.bankrec.entity.BankAccountProfile;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
 import com.positivity.accounting.internal.bankrec.entity.BankStatement;
@@ -76,6 +81,12 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
     private BankAccountProfileRepository profiles;
 
     @Autowired
+    private BankImportRowRepository importRows;
+
+    @Autowired
+    private BankImportFileRepository importFiles;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     /** Seeded {@code 1000 Cash} of the default tenant, which is TENANT_A. */
@@ -91,6 +102,8 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
             // COMMITTED statement window another IT could collide with.
             JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
             for (String table : List.of(
+                    "bank_import_row",
+                    "bank_import_file",
                     "bank_import",
                     "bank_reconciliation",
                     "bank_transaction",
@@ -98,7 +111,7 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                     "bank_account_profile")) {
                 String key =
                         switch (table) {
-                            case "bank_import" -> "import_id";
+                            case "bank_import", "bank_import_row", "bank_import_file" -> "import_id";
                             case "bank_account_profile" -> "gl_account_id";
                             case "bank_reconciliation" -> "reconciliation_id";
                             case "bank_transaction" -> "bank_transaction_id";
@@ -165,6 +178,17 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                     bankImport.setStatus(BankImportStatus.UPLOADED);
                     UUID importId = imports.saveAndFlush(bankImport).getImportId();
 
+                    // #2302: an import's staged rows and retained raw file are the tenant's too.
+                    BankImportRow row = new BankImportRow();
+                    row.setImportId(importId);
+                    row.setRowNumber(1);
+                    row.setRawValues(java.util.Map.of("date", "2041-03-10"));
+                    row.setRowStatus(BankImportRowStatus.PARSED);
+                    importRows.saveAndFlush(row);
+                    BankImportFile file = new BankImportFile(importId);
+                    file.setFileBytes("date,description,amount".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    importFiles.saveAndFlush(file);
+
                     // #2301: the bank-account profile carries the account's reconciliation baseline.
                     BankAccountProfile profile = new BankAccountProfile(CASH_ACCOUNT_ID);
                     profile.setCurrency("USD");
@@ -180,6 +204,8 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
             assertThat(transactions.findById(ids[1])).isPresent();
             assertThat(reconciliations.findById(ids[2])).isPresent();
             assertThat(imports.findById(ids[3])).isPresent();
+            assertThat(importFiles.findById(ids[3])).isPresent();
+            assertThat(countById(jdbc, "bank_import_row", "import_id", ids[3])).isEqualTo(1);
             assertThat(profiles.findById(ids[4])).isPresent();
             assertThat(countById(jdbc, "bank_statement", "statement_id", ids[0]))
                     .isEqualTo(1);
@@ -189,6 +215,13 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
             assertThat(transactions.findById(ids[1])).as("transaction").isEmpty();
             assertThat(reconciliations.findById(ids[2])).as("reconciliation").isEmpty();
             assertThat(imports.findById(ids[3])).as("import").isEmpty();
+            assertThat(importFiles.findById(ids[3])).as("import file").isEmpty();
+            assertThat(countById(jdbc, "bank_import_row", "import_id", ids[3]))
+                    .as("import rows")
+                    .isZero();
+            assertThat(countById(jdbc, "bank_import_file", "import_id", ids[3]))
+                    .as("import file")
+                    .isZero();
             assertThat(profiles.findById(ids[4])).as("bank-account profile").isEmpty();
             assertThat(countById(jdbc, "bank_account_profile", "gl_account_id", ids[4]))
                     .isZero();
