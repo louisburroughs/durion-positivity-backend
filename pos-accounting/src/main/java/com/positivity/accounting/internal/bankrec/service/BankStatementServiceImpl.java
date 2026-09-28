@@ -358,44 +358,37 @@ public class BankStatementServiceImpl implements BankStatementService {
         return value == null || value.isBlank() ? null : value;
     }
 
-    /** SHA-256 of the command's payload, scale-independent for amounts, to tell a replay from a reuse. */
+    /**
+     * SHA-256 of the command's payload, scale-independent for amounts, to tell a replay from a reuse.
+     * Every field is length-prefixed ({@code <length>:<text>}, {@code ~} for absent), so free text that
+     * contains a delimiter can never shift a field boundary and collide with a different payload.
+     */
     static @NonNull String hash(@NonNull BankStatementCreateRequest request) {
         StringBuilder canonical = new StringBuilder();
         BankStatementCreateRequest.Header header = request.getStatement();
-        canonical
-                .append(request.getGlAccountId())
-                .append('|')
-                .append(
-                        request.getCurrency() == null
-                                ? ""
-                                : request.getCurrency().trim().toUpperCase(Locale.ROOT))
-                .append('|')
-                .append(
-                        request.getGapAcknowledgement() == null
-                                ? ""
-                                : request.getGapAcknowledgement().trim())
-                .append('|')
-                .append(header.getStatementRef())
-                .append('|')
-                .append(header.getStartDate())
-                .append('|')
-                .append(header.getEndDate())
-                .append('|')
-                .append(plain(header.getOpeningBalance()))
-                .append('|')
-                .append(plain(header.getClosingBalance()));
+        field(canonical, request.getGlAccountId());
+        field(
+                canonical,
+                request.getCurrency() == null
+                        ? null
+                        : request.getCurrency().trim().toUpperCase(Locale.ROOT));
+        field(
+                canonical,
+                request.getGapAcknowledgement() == null
+                        ? null
+                        : request.getGapAcknowledgement().trim());
+        field(canonical, header.getStatementRef());
+        field(canonical, header.getStartDate());
+        field(canonical, header.getEndDate());
+        field(canonical, plain(header.getOpeningBalance()));
+        field(canonical, plain(header.getClosingBalance()));
+        field(canonical, request.getTransactions().size());
         for (BankStatementCreateRequest.Transaction row : request.getTransactions()) {
-            canonical
-                    .append("\n")
-                    .append(row.getDate())
-                    .append('|')
-                    .append(plain(signedAmount(row)))
-                    .append('|')
-                    .append(row.getDescription())
-                    .append('|')
-                    .append(row.getReference())
-                    .append('|')
-                    .append(row.getCheckNumber());
+            field(canonical, row.getDate());
+            field(canonical, plain(signedAmount(row)));
+            field(canonical, row.getDescription());
+            field(canonical, row.getReference());
+            field(canonical, row.getCheckNumber());
         }
         try {
             return HexFormat.of()
@@ -404,6 +397,15 @@ public class BankStatementServiceImpl implements BankStatementService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is required by every Java platform", e);
         }
+    }
+
+    private static void field(StringBuilder canonical, @Nullable Object value) {
+        if (value == null) {
+            canonical.append('~');
+            return;
+        }
+        String text = value.toString();
+        canonical.append(text.length()).append(':').append(text);
     }
 
     private static String plain(BigDecimal value) {
