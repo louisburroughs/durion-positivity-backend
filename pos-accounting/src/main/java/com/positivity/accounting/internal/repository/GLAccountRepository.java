@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -50,7 +51,9 @@ public interface GLAccountRepository extends JpaRepository<GLAccount, UUID> {
             + "AND (g.activationDate IS NULL OR g.activationDate <= :at) "
             + "AND (g.deactivationDate IS NULL OR g.deactivationDate > :at) "
             + "ORDER BY g.accountCode")
-    List<GLAccount> findReconcilableActiveOn(@Param("subtype") AccountSubtype subtype, @Param("at") LocalDateTime at);
+    @NonNull
+    List<GLAccount> findReconcilableActiveOn(
+            @Param("subtype") @NonNull AccountSubtype subtype, @Param("at") @NonNull LocalDateTime at);
 
     /**
      * Check if an account code already exists.

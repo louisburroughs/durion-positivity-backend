@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
@@ -17,7 +18,10 @@ public interface BankStatementRepository
 
     /** U1: the statement already holding exactly this window on the account. */
     Optional<BankStatement> findFirstByGlAccountIdAndStatusAndStartDateAndEndDate(
-            UUID glAccountId, BankStatementStatus status, LocalDate startDate, LocalDate endDate);
+            @NonNull UUID glAccountId,
+            @NonNull BankStatementStatus status,
+            @NonNull LocalDate startDate,
+            @NonNull LocalDate endDate);
 
     /**
      * U2: the earliest statement whose window overlaps {@code [startDate, endDate]} — one that starts
@@ -25,20 +29,23 @@ public interface BankStatementRepository
      */
     Optional<BankStatement>
             findFirstByGlAccountIdAndStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByStartDateAsc(
-                    UUID glAccountId, BankStatementStatus status, LocalDate endDate, LocalDate startDate);
+                    @NonNull UUID glAccountId,
+                    @NonNull BankStatementStatus status,
+                    @NonNull LocalDate endDate,
+                    @NonNull LocalDate startDate);
 
     /** E2: the statement a new window starting at {@code startDate} would continue. */
     Optional<BankStatement> findFirstByGlAccountIdAndStatusAndEndDateLessThanOrderByEndDateDesc(
-            UUID glAccountId, BankStatementStatus status, LocalDate startDate);
+            @NonNull UUID glAccountId, @NonNull BankStatementStatus status, @NonNull LocalDate startDate);
 
     /** The baseline (§3.1): the latest-starting statement that carries a gap acknowledgement. */
     Optional<BankStatement> findFirstByGlAccountIdAndStatusAndGapAcknowledgementIsNotNullOrderByStartDateDesc(
-            UUID glAccountId, BankStatementStatus status);
+            @NonNull UUID glAccountId, @NonNull BankStatementStatus status);
 
     /** The coverage frontier (§4.1): the latest-ending statement. */
     Optional<BankStatement> findFirstByGlAccountIdAndStatusOrderByEndDateDesc(
-            UUID glAccountId, BankStatementStatus status);
+            @NonNull UUID glAccountId, @NonNull BankStatementStatus status);
 
     /** The statement a manual-statement command created (§6.3). */
-    Optional<BankStatement> findByRequestId(UUID requestId);
+    Optional<BankStatement> findByRequestId(@NonNull UUID requestId);
 }
