@@ -53,6 +53,8 @@ Discovery locator is disabled; only explicitly configured routes are exposed. `p
 | `pos.gateway.security.revocation-check.enabled`     | `true`                      | Consult the revocation key space on every authenticated request |
 | `pos.gateway.security.revocation-check.timeout`     | `150ms`                     | Ceiling on one lookup; on timeout the request is forwarded unchecked |
 | `spring.data.redis.host` / `.port`                  | `localhost` / `6379`        | Redis holding the revocation keys (`SPRING_DATA_REDIS_HOST`/`_PORT`) |
+| `spring.cloud.gateway.server.webflux.httpclient.pool.max-idle-time` | `20s`       | Idle upstream connections are retired after this; must stay below the upstream Tomcat keep-alive timeout (60s default) or a reused connection can be closed under a request (`PrematureCloseException` → 500, #2306) |
+| `spring.cloud.gateway.server.webflux.httpclient.pool.eviction-interval` | `10s`   | Background sweep for idle connections, so eviction does not wait for the next acquire |
 
 ## Location-scope passthrough (ADR-0061 §3, #1869)
 
