@@ -411,6 +411,16 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
         }
         Map<UUID, NetSettledPayments.NetSettlement> netByIntent =
                 NetSettledPayments.byIntent(paymentRecordRepository.findByOrderId(returnOrder.getOriginalOrderId()));
+        // A refund states the currency the payment settled in; never a guessed one (ADR-0067 DF-3).
+        // Every intent is checked before the first refund, so a currency-less intent reached later
+        // cannot leave an external refund already sent behind a failed return.
+        for (Map.Entry<UUID, NetSettledPayments.NetSettlement> intent : netByIntent.entrySet()) {
+            if (intent.getValue().currencyCode() == null) {
+                String message = "No single settled currency on the ledger for payment intent " + intent.getKey();
+                parkRefundFailed(returnOrder, "Payment reversal failed: " + message, actor);
+                throw new IllegalStateException("Payment reversal failed: " + message);
+            }
+        }
         BigDecimal remaining = returnOrder.getTotalRefund();
         List<Map.Entry<UUID, NetSettledPayments.NetSettlement>> intents = new ArrayList<>(netByIntent.entrySet());
         intents.sort(Map.Entry.<UUID, NetSettledPayments.NetSettlement>comparingByValue(
@@ -424,13 +434,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
             if (amount.signum() <= 0) {
                 continue;
             }
-            // A refund states the currency the payment settled in; never a guessed one (ADR-0067 DF-3).
             String currencyCode = intent.getValue().currencyCode();
-            if (currencyCode == null) {
-                String message = "No single settled currency on the ledger for payment intent " + intent.getKey();
-                parkRefundFailed(returnOrder, "Payment reversal failed: " + message, actor);
-                throw new IllegalStateException("Payment reversal failed: " + message);
-            }
             PaymentReversalResult result = invoicingPort.reversePayment(
                     returnOrder.getOriginalInvoiceId(),
                     intent.getKey(),

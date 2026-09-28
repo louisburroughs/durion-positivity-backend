@@ -372,6 +372,28 @@ class ReturnOrderServiceImplTest {
     }
 
     @Test
+    @DisplayName("SAGA-002b: a later intent without a single currency → no refund sent at all, REFUND_FAILED")
+    void process_laterIntentWithoutCurrency_sendsNoPartialRefund() {
+        UUID id = UUID.randomUUID();
+        ReturnOrder ro = requestedReturn("ORIGINAL_TENDER", null);
+        ro.setReturnOrderId(id);
+        when(returnOrderRepository.findById(id)).thenReturn(Optional.of(ro));
+        when(returnOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        // The larger intent settles in CAD but cannot cover the 54.00 alone; the smaller one has no currency.
+        com.positivity.order.internal.entity.OrderPaymentRecord noCurrency = settledCash("20.00");
+        noCurrency.setPaymentIntentId(UUID.fromString("00000000-0000-0000-0000-0000000000d2"));
+        noCurrency.setCurrencyCode(null);
+        when(paymentRecordRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(settledCash("40.00"), noCurrency));
+
+        assertThatThrownBy(() -> service.processReturn(id)).isInstanceOf(IllegalStateException.class);
+
+        assertThat(ro.getStatus()).isEqualTo(ReturnOrderStatus.REFUND_FAILED);
+        org.mockito.Mockito.verify(invoicingPort, org.mockito.Mockito.never()).reversePayment(any(), any(), any());
+        org.mockito.Mockito.verify(domainEventPublisher, org.mockito.Mockito.never())
+                .publishOrderReturned(any());
+    }
+
+    @Test
     @DisplayName("SAGA-003: retry from REFUND_FAILED re-runs the refund and completes")
     void retry_fromRefundFailed() {
         UUID id = UUID.randomUUID();
