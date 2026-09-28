@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
-import com.positivity.accounting.internal.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
