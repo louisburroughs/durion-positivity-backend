@@ -311,5 +311,28 @@ class SupplierInvoiceEventsListenerTest {
             assertThat(existing.getStatus()).isEqualTo(VendorBillStatus.CURRENCY_HOLD);
             assertThat(existing.getTotalAmount()).isEqualByComparingTo("288.00");
         }
+
+        /**
+         * The held bill keeps its original currency and amount, and MATCH_EXCEPTION resolves by
+         * ACCEPT straight to APPROVED with no currency check (VendorBillServiceImpl
+         * #resolveMatchException). Moving it there on a currency change would let a EUR bill be
+         * approved as a ledger payable at par, so it stays held, with the change in its reason.
+         */
+        @Test
+        @DisplayName("a held bill re-issued in yet another currency stays held and names both currencies")
+        void reissueOfAHeldBillInAnotherCurrencyStaysHeld() {
+            VendorBill existing = new VendorBill();
+            existing.setTotalAmount(new BigDecimal("288.00"));
+            existing.setCurrency("EUR");
+            existing.setStatus(VendorBillStatus.CURRENCY_HOLD);
+            when(vendorBillRepository.findByVendorIdAndBillNumber(PROFILE, "INV-1"))
+                    .thenReturn(Optional.of(existing));
+
+            listener.onSupplierEvent(event(EVENT_7, "INV-1", "INVOICE", "288.00", "CAD"));
+
+            assertThat(existing.getStatus()).isEqualTo(VendorBillStatus.CURRENCY_HOLD);
+            assertThat(existing.getCurrency()).isEqualTo("EUR");
+            assertThat(existing.getRejectionReason()).contains("EUR").contains("CAD");
+        }
     }
 }
