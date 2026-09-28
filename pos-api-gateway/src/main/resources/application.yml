@@ -25,6 +25,20 @@ spring:
           # logging: identity always comes from the JWT, and inbound identity headers are
           # stripped independently (auth.strip-inbound-identity-headers).
           trusted-proxies: '127\.0\.0\.1|::1|0:0:0:0:0:0:0:1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}'
+          httpclient:
+            pool:
+              # #2306: retire idle upstream connections before the upstream does. Every routed
+              # service runs embedded Tomcat, which closes an idle keep-alive connection after
+              # server.tomcat.keep-alive-timeout (unset everywhere, so it falls back to
+              # connection-timeout: Tomcat's 60s default). Reactor Netty's pool otherwise never
+              # evicts idle connections, so a request could pick one up just as Tomcat closed it
+              # and fail with PrematureCloseException BEFORE response -> 500. The request never
+              # reached the service, and a non-idempotent POST is not retried, so the caller got
+              # a 500 for work that was never done. max-idle-time must stay well below the
+              # upstream keep-alive timeout; eviction-interval sweeps in the background rather
+              # than only on acquire.
+              max-idle-time: 20s
+              eviction-interval: 10s
           discovery:
             locator:
               # Discovery locator disabled - only explicitly configured routes are exposed
