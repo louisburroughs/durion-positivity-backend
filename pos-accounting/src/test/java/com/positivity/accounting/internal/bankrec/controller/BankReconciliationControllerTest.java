@@ -12,8 +12,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.bankrec.dto.AutoMatchResponse;
+import com.positivity.accounting.internal.bankrec.dto.BankReconciliationAdjustmentResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
+import com.positivity.accounting.internal.bankrec.dto.OutstandingItemResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationApiStatus;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationCandidatesResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationCreateRequest;
@@ -23,8 +25,10 @@ import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
 import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.service.BankReconciliationService;
+import com.positivity.accounting.internal.bankrec.service.ReconciliationAdjustmentService;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationListFilter;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationMatchingService;
+import com.positivity.accounting.internal.bankrec.service.ReconciliationOutstandingItemService;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
 import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
@@ -54,6 +58,12 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
 
     @MockitoBean
     private ReconciliationMatchingService matchingService;
+
+    @MockitoBean
+    private ReconciliationOutstandingItemService itemService;
+
+    @MockitoBean
+    private ReconciliationAdjustmentService adjustmentService;
 
     private static BankReconciliationResponse response() {
         return BankReconciliationResponse.builder()
@@ -429,6 +439,102 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
             mockMvc.perform(withAuth(
                             get("/v1/accounting/reconciliations/{id}/candidates", RECON_ID), "accounting:je:view"))
                     .andExpect(status().isForbidden());
+        }
+    }
+
+    @Nested
+    @DisplayName("outstanding items and adjustments (#2303)")
+    class ItemsAndAdjustments {
+
+        private static final String ADJUST_ONLY = "accounting:reconciliation:view,accounting:reconciliation:adjust";
+
+        @Test
+        @DisplayName("register answers 201; OUTSTANDING_ITEM_NOT_ELIGIBLE is 422")
+        void register() throws Exception {
+            String body = "{\"glLineId\":\"" + UUID.randomUUID() + "\",\"itemKind\":\"DEPOSIT_IN_TRANSIT\"}";
+            when(itemService.register(eq(RECON_ID), any())).thenReturn(new OutstandingItemResponse());
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/outstanding-items", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isCreated());
+            when(itemService.register(eq(RECON_ID), any()))
+                    .thenThrow(new BankRecException(BankRecErrorCode.OUTSTANDING_ITEM_NOT_ELIGIBLE, "matched"));
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/outstanding-items", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.code").value("OUTSTANDING_ITEM_NOT_ELIGIBLE"));
+        }
+
+        @Test
+        @DisplayName("clear-in-gap and reverse need accounting:reconciliation:approve")
+        void approveOnly() throws Exception {
+            UUID id = UUID.randomUUID();
+            mockMvc.perform(withAuth(
+                                    post(
+                                            "/v1/accounting/reconciliations/{id}/outstanding-items/{i}/clear-in-gap",
+                                            RECON_ID,
+                                            id),
+                                    ADJUST_ONLY)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"justification\":\"Cleared while we changed banks\"}"))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(withAuth(
+                                    post("/v1/accounting/reconciliations/{id}/adjustments/{a}/reverse", RECON_ID, id),
+                                    ADJUST_ONLY)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"reason\":\"Bank refunded the fee\"}"))
+                    .andExpect(status().isForbidden());
+            verify(itemService, never()).clearInGap(any(), any(), any());
+            verify(adjustmentService, never()).reverse(any(), any(), any());
+
+            when(adjustmentService.reverse(eq(RECON_ID), eq(id), any()))
+                    .thenThrow(new BankRecException(BankRecErrorCode.ADJUSTMENT_ALREADY_REVERSED, "twice"));
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/adjustments/{a}/reverse", RECON_ID, id))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"reason\":\"Bank refunded the fee\"}"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("ADJUSTMENT_ALREADY_REVERSED"));
+        }
+
+        @Test
+        @DisplayName("adjustments answer 201, 200 on replay, 403 APPROVAL_REQUIRED, and need a requestId")
+        void adjustments() throws Exception {
+            String body = "{\"type\":\"BANK_FEE\",\"amount\":-15.00,\"requestId\":\"" + UUID.randomUUID() + "\"}";
+            when(adjustmentService.addAdjustment(eq(RECON_ID), any()))
+                    .thenReturn(new BankReconciliationAdjustmentResponse());
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/adjustments", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isCreated());
+            BankReconciliationAdjustmentResponse replayed = new BankReconciliationAdjustmentResponse();
+            replayed.setReplayed(true);
+            when(adjustmentService.addAdjustment(eq(RECON_ID), any())).thenReturn(replayed);
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/adjustments", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.replayed").value(true));
+            when(adjustmentService.addAdjustment(eq(RECON_ID), any()))
+                    .thenThrow(new BankRecException(
+                            BankRecErrorCode.RECONCILIATION_ADJUSTMENT_APPROVAL_REQUIRED, "approve needed"));
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/adjustments", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("RECONCILIATION_ADJUSTMENT_APPROVAL_REQUIRED"));
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/adjustments", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"type\":\"BANK_FEE\",\"amount\":-15.00}"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("the served adjustment types include TRANSFER")
+        void transferIsServed() throws Exception {
+            mockMvc.perform(withAuth(get("/v1/accounting/reconciliations/adjustment-types")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[?(@.code == 'TRANSFER')]").isNotEmpty());
         }
     }
 
