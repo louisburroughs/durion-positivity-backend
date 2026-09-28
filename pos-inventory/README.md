@@ -659,6 +659,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `PURCHASE_SUGGESTION_SITE_MISMATCH` | 422 | The suggestions being converted belong to different sites |
 | `PURCHASE_SUGGESTION_CURRENCY_MISMATCH` | 422 | The suggestions being converted are priced in different currencies |
 | `PURCHASE_SUGGESTION_MISSING_CURRENCY` | 422 | The suggestion has a unit cost but no currency |
+| `PURCHASE_SUGGESTION_INVALID_CURRENCY` | 422 | The suggestion's currency is not an ISO 4217 code (feed value stored verbatim); codes are compared and published upper-case |
 | `SHORTAGE_RESOLVE_MISSING_FIELD` | 422 | The shortage resolution omits a field its strategy requires |
 | `SHORTAGE_RESOLVE_SUBSTITUTE_UNAVAILABLE` | 422 | The substitute named for the shortage is not available |
 | `SHORTAGE_RESOLVE_INVALID_IDENTIFIER` | 422 | The shortage resolution names an identifier that does not resolve |

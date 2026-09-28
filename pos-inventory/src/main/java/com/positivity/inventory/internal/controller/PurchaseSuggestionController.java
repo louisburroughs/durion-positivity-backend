@@ -280,7 +280,8 @@ public class PurchaseSuggestionController {
                     not use createPurchaseOrder, the manual path that ignores suggestions, and note that \
                     conversion never approves spend, so approvePurchaseOrder must still run on the DRAFT order.
                     Preconditions: every listed suggestion must exist, be ACCEPTED, carry a vendor reference and \
-                    a feed unit cost with its currency, all must share one vendor and one currency, and all must \
+                    a feed unit cost with an ISO 4217 currency code, all must share one vendor and one currency \
+                    (codes compare case-insensitively and the order carries the upper-case code), and all must \
                     resolve to a single ship-to site.
                     Required inputs: suggestionIds (non-empty list of UUIDs); duplicates are collapsed, and the \
                     caller needs both inventory:replenishment:manage and inventory:purchase_order:create.
@@ -288,8 +289,8 @@ public class PurchaseSuggestionController {
                     standard purchase order path, with the latest expected date among the suggestions as the \
                     expected delivery date.
                     Returns 404 when a listed suggestion does not exist, 422 when a suggestion is not ACCEPTED, \
-                    lacks a vendor, unit cost or currency, or the suggestions mix vendors, currencies or ship-to \
-                    sites, and 400 when suggestionIds is empty.
+                    lacks a vendor, unit cost or currency, carries a currency that is not an ISO 4217 code, or the \
+                    suggestions mix vendors, currencies or ship-to sites, and 400 when suggestionIds is empty.
                     """,
             tags = {"Purchase Suggestions"})
     @ApiResponse(
@@ -314,13 +315,14 @@ public class PurchaseSuggestionController {
     @ApiResponse(
             responseCode = "422",
             description = "Conversion precondition violated: a suggestion is not ACCEPTED, suggestions mix"
-                    + " vendors or ship-to sites, or a suggestion lacks a vendor or feed price",
+                    + " vendors, currencies or ship-to sites, or a suggestion lacks a vendor, feed price or"
+                    + " currency, or its currency is not an ISO 4217 code",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ConvertPurchaseSuggestionsResponse> convertPurchaseSuggestions(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
                                     "The ACCEPTED suggestions to fold into a single DRAFT purchase order; all must"
-                                            + " share one vendor.",
+                                            + " share one vendor and be priced in one ISO 4217 currency.",
                             required = true,
                             content =
                                     @Content(

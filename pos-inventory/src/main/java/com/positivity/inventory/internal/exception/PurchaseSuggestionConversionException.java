@@ -55,6 +55,17 @@ public class PurchaseSuggestionConversionException extends RuntimeException {
                         + " manually");
     }
 
+    /**
+     * A listed suggestion's currency is not an ISO 4217 code (feed currency is stored verbatim);
+     * pos-order would refuse the order, so the conversion is refused before any command is sent.
+     */
+    public static PurchaseSuggestionConversionException invalidCurrency(UUID suggestionId, String currency) {
+        return new PurchaseSuggestionConversionException(
+                "PURCHASE_SUGGESTION_INVALID_CURRENCY",
+                SUGGESTION_PREFIX + suggestionId + " is priced in '" + currency + "', which is not an ISO 4217"
+                        + " currency code; create the purchase order manually");
+    }
+
     /** A listed suggestion has no selectable vendor and cannot be placed on a purchase order. */
     public static PurchaseSuggestionConversionException missingVendor(UUID suggestionId) {
         return new PurchaseSuggestionConversionException(

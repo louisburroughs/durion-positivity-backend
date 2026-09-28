@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Currency;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -170,8 +171,9 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
 
         UUID vendorId = suggestions.getFirst().getVendorRefId();
         UUID shipToSite = resolveSingleShipToSite(suggestions);
-        // validateConvertible has proven every suggestion carries this same currency (ADR-0067 DF-5).
-        String currency = suggestions.getFirst().getUnitCostCurrency();
+        // validateConvertible has proven every suggestion carries this same ISO 4217 currency
+        // (ADR-0067 DF-5); the canonical upper-case code is what pos-order accepts.
+        String currency = canonicalCurrency(suggestions.getFirst().getUnitCostCurrency());
         LocalDate expectedDeliveryDate = suggestions.stream()
                 .map(PurchaseSuggestion::getEarliestExpectedDate)
                 .filter(Objects::nonNull)
@@ -241,11 +243,25 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
     }
 
     /**
-     * Conversion preconditions: every suggestion ACCEPTED, priced in a stated currency, on the
-     * same single vendor, and in the same single currency. A purchase order has one currency and
-     * its lines carry none of their own, so suggestions quoted in different currencies can never
-     * share an order, and a price with no currency is refused rather than assumed to be in any
-     * one (ADR-0067 DF-5, #2313).
+     * The upper-case ISO 4217 code for {@code currency}, or {@code null} when it names none.
+     */
+    private static @Nullable String canonicalCurrency(@NonNull String currency) {
+        String code = currency.trim().toUpperCase(Locale.ROOT);
+        try {
+            return Currency.getInstance(code).getCurrencyCode();
+        } catch (IllegalArgumentException notIso) {
+            return null;
+        }
+    }
+
+    /**
+     * Conversion preconditions: every suggestion ACCEPTED, priced in a stated ISO 4217 currency,
+     * on the same single vendor, and in the same single currency. A purchase order has one
+     * currency and its lines carry none of their own, so suggestions quoted in different
+     * currencies can never share an order, and a price with no currency is refused rather than
+     * assumed to be in any one (ADR-0067 DF-5, #2313). Feed currency is stored verbatim, so a
+     * value that is not an ISO code is refused here: pos-order would reject the order after the
+     * suggestions had already been marked CONVERTED, leaving no purchase order behind.
      */
     private void validateConvertible(List<PurchaseSuggestion> suggestions) {
         for (PurchaseSuggestion suggestion : suggestions) {
@@ -264,6 +280,10 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                     || suggestion.getUnitCostCurrency().isBlank()) {
                 throw PurchaseSuggestionConversionException.missingCurrency(suggestion.getSuggestionId());
             }
+            if (canonicalCurrency(suggestion.getUnitCostCurrency()) == null) {
+                throw PurchaseSuggestionConversionException.invalidCurrency(
+                        suggestion.getSuggestionId(), suggestion.getUnitCostCurrency());
+            }
         }
         long distinctVendors = suggestions.stream()
                 .map(suggestion -> suggestion.getSuggestedVendorType() + ":" + suggestion.getVendorRefId())
@@ -273,7 +293,7 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
             throw PurchaseSuggestionConversionException.vendorMismatch();
         }
         long distinctCurrencies = suggestions.stream()
-                .map(PurchaseSuggestion::getUnitCostCurrency)
+                .map(suggestion -> canonicalCurrency(suggestion.getUnitCostCurrency()))
                 .distinct()
                 .count();
         if (distinctCurrencies > 1) {
