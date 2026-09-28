@@ -609,6 +609,47 @@ class BankTransactionIntakeImplTest {
         }
 
         @Test
+        void rowsAHumanConfirmedDistinctEnterUnmatchedDespiteTheCollision() {
+            // Story S3 (#2302): the file adapter's duplicateDecisions DISTINCT (§4.4, §8.2).
+            existingProfile(LocalDate.of(2026, 9, 1));
+            BankTransactionObserved first = numbered(1, row(null, LocalDate.of(2026, 12, 2), "-5.00", "Fee", "F1"));
+            BankTransactionObserved second = numbered(2, row(null, LocalDate.of(2026, 12, 2), "-5.00", "Fee", "F1"));
+            BankTransactionObserved third = numbered(3, row(null, LocalDate.of(2026, 12, 2), "-5.00", "Fee", "F1"));
+
+            IntakeResult result = intake.accept(
+                    feed(List.of(first, second, third)),
+                    new IntakeContext(ACCOUNT, ACTOR, null, null, null, null, null, java.util.Set.of(1, 2)));
+
+            assertThat(saved)
+                    .extracting(BankTransaction::getStatus)
+                    .containsExactly(
+                            BankTransactionStatus.UNMATCHED,
+                            BankTransactionStatus.UNMATCHED,
+                            BankTransactionStatus.POSSIBLE_DUPLICATE);
+            assertThat(saved.get(0).getDuplicateOfBankTransactionId()).isNull();
+            assertThat(result.possibleDuplicateCount()).isEqualTo(1);
+        }
+
+        private BankTransactionObserved numbered(int rowNumber, BankTransactionObserved r) {
+            return new BankTransactionObserved(
+                    r.sourceTransactionId(),
+                    rowNumber,
+                    r.change(),
+                    r.settlementState(),
+                    r.transactionDate(),
+                    r.authorizedDate(),
+                    r.signedAmount(),
+                    r.currency(),
+                    r.description(),
+                    r.originalDescription(),
+                    r.reference(),
+                    r.checkNumber(),
+                    r.counterpartyName(),
+                    r.categoryHint(),
+                    r.supersedesSourceTransactionId());
+        }
+
+        @Test
         void aCollisionWithAnExistingRowFlagsOnlyTheNewRowAndIgnoresExcludedAndRemovedRows() {
             existingProfile(LocalDate.of(2026, 9, 1));
             BankTransaction original = new BankTransaction();

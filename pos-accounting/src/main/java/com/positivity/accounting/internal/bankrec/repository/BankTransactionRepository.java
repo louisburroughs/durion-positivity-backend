@@ -37,6 +37,13 @@ public interface BankTransactionRepository
             @NonNull String fingerprint,
             @NonNull Collection<BankTransactionStatus> excluded);
 
+    /** R1 for a whole file at once: rows on the account with any of these fingerprints (story S3, #2302). */
+    @NonNull
+    List<BankTransaction> findByGlAccountIdAndFingerprintInAndStatusNotIn(
+            @NonNull UUID glAccountId,
+            @NonNull Collection<String> fingerprints,
+            @NonNull Collection<BankTransactionStatus> excluded);
+
     long countByStatementId(@NonNull UUID statementId);
 
     long countByStatementIdAndStatus(@NonNull UUID statementId, @NonNull BankTransactionStatus status);

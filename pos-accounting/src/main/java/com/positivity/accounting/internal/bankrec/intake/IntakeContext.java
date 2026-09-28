@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.bankrec.intake;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -20,6 +21,10 @@ import org.jspecify.annotations.Nullable;
  * @param requestHash the SHA-256 of that command's payload; else null
  * @param defaultColumnMapping the column mapping a newly created profile takes when the import asked
  *     to save it as the account default (story S3); else null
+ * @param confirmedDistinctRows the {@code sourceRowNumber}s a human confirmed distinct before the
+ *     commit (the file adapter's duplicate decisions, §4.4; story S3): such a row enters {@code
+ *     UNMATCHED} even when its fingerprint collides (R1 asks a human, and the human has answered);
+ *     empty otherwise
  */
 public record IntakeContext(
         @NonNull UUID glAccountId,
@@ -28,7 +33,8 @@ public record IntakeContext(
         @Nullable UUID sourceRef,
         @Nullable UUID requestId,
         @Nullable String requestHash,
-        @Nullable Map<String, Object> defaultColumnMapping) {
+        @Nullable Map<String, Object> defaultColumnMapping,
+        @NonNull Set<Integer> confirmedDistinctRows) {
 
     public IntakeContext {
         if (glAccountId == null) {
@@ -38,6 +44,19 @@ public record IntakeContext(
             throw new IllegalArgumentException("actor must not be blank");
         }
         defaultColumnMapping = defaultColumnMapping == null ? null : Map.copyOf(defaultColumnMapping);
+        confirmedDistinctRows = confirmedDistinctRows == null ? Set.of() : Set.copyOf(confirmedDistinctRows);
+    }
+
+    /** A context without confirmed-distinct rows (manual entry, feeds, a file without decisions). */
+    public IntakeContext(
+            @NonNull UUID glAccountId,
+            @NonNull String actor,
+            @Nullable String gapAcknowledgement,
+            @Nullable UUID sourceRef,
+            @Nullable UUID requestId,
+            @Nullable String requestHash,
+            @Nullable Map<String, Object> defaultColumnMapping) {
+        this(glAccountId, actor, gapAcknowledgement, sourceRef, requestId, requestHash, defaultColumnMapping, Set.of());
     }
 
     /** A context for a manual statement or a file without saved mapping. */
