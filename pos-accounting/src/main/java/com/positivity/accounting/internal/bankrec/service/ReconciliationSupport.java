@@ -6,6 +6,9 @@ import com.positivity.accounting.internal.bankrec.repository.BankReconciliationR
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
 import com.positivity.security.common.SecurityContextHelper;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -24,6 +27,7 @@ public class ReconciliationSupport {
 
     private final BankReconciliationRepository reconciliations;
     private final ReconciliationCalculator calculator;
+    private final Clock clock;
 
     /** The reconciliation, or 404 {@code RECONCILIATION_NOT_FOUND}. */
     public @NonNull BankReconciliation require(@NonNull UUID reconciliationId) {
@@ -60,6 +64,16 @@ public class ReconciliationSupport {
         return SecurityContextHelper.isAuthenticated()
                 ? SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM)
                 : SYSTEM;
+    }
+
+    /** Now, on the shared clock (ADR-0024). */
+    public @NonNull Instant now() {
+        return Instant.now(clock);
+    }
+
+    /** Today, on the shared clock. */
+    public @NonNull LocalDate today() {
+        return LocalDate.now(clock);
     }
 
     /** Whether the caller holds {@code authority}. */

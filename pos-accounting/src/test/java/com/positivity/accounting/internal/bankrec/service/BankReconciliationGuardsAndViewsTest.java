@@ -88,7 +88,7 @@ class BankReconciliationGuardsAndViewsTest {
                 glAccountRepository,
                 new BankCashAccounts(glAccountRepository, clock),
                 calculator,
-                new ReconciliationSupport(reconciliationRepository, calculator),
+                new ReconciliationSupport(reconciliationRepository, calculator, clock),
                 auditRecorder,
                 usd());
     }

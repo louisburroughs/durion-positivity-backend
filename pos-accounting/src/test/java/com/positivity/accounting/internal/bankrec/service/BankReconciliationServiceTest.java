@@ -116,7 +116,7 @@ class BankReconciliationServiceTest {
                 glAccountRepository,
                 new BankCashAccounts(glAccountRepository, clock),
                 calculator,
-                new ReconciliationSupport(reconciliationRepository, calculator),
+                new ReconciliationSupport(reconciliationRepository, calculator, clock),
                 auditRecorder,
                 usd());
         lenient().when(calculator.compute(any())).thenReturn(snapshot(terms("0", "0")));

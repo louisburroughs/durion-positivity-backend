@@ -11,16 +11,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.internal.bankrec.dto.AutoMatchResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationApiStatus;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationCandidatesResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationCreateRequest;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationMatchResponse;
 import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
 import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.service.BankReconciliationService;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationListFilter;
+import com.positivity.accounting.internal.bankrec.service.ReconciliationMatchingService;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
 import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
@@ -47,6 +51,9 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
 
     @MockitoBean
     private BankReconciliationService bankReconciliationService;
+
+    @MockitoBean
+    private ReconciliationMatchingService matchingService;
 
     private static BankReconciliationResponse response() {
         return BankReconciliationResponse.builder()
@@ -300,6 +307,128 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
                             .content(body()))
                     .andExpect(status().isForbidden());
             verify(bankReconciliationService, never()).create(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("matching (#2303)")
+    class Matching {
+
+        private final UUID matchId = UUID.fromString("019a0000-0000-7000-8000-0000000000aa");
+
+        @Test
+        @DisplayName("the replaced F2 routes /match and /unmatch are gone (404)")
+        void replacedRoutesAreGone() throws Exception {
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/match", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isNotFound());
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/unmatch", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("POST /matches answers 201, maps MATCH_REQUIRES_REVIEW with the reasons, and needs adjust")
+        void createMatch() throws Exception {
+            String body = "{\"bankTransactionIds\":[\"" + UUID.randomUUID() + "\"],\"glLineIds\":[\""
+                    + UUID.randomUUID() + "\"],\"requestId\":\"" + UUID.randomUUID() + "\"}";
+            when(matchingService.createMatch(eq(RECON_ID), any())).thenReturn(new ReconciliationMatchResponse());
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/matches", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isCreated());
+
+            when(matchingService.createMatch(eq(RECON_ID), any()))
+                    .thenThrow(BankRecException.field(
+                            BankRecErrorCode.MATCH_REQUIRES_REVIEW,
+                            "needs review",
+                            "justification",
+                            "CARDINALITY_NOT_ONE_TO_ONE"));
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/matches", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.code").value("MATCH_REQUIRES_REVIEW"))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("justification"))
+                    .andExpect(jsonPath("$.fieldErrors[0].message").value("CARDINALITY_NOT_ONE_TO_ONE"));
+
+            mockMvc.perform(withAuth(
+                                    post("/v1/accounting/reconciliations/{id}/matches", RECON_ID),
+                                    "accounting:reconciliation:view")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("an empty side is 400 before the service is called")
+        void emptySideIs400() throws Exception {
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/matches", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"bankTransactionIds\":[],\"glLineIds\":[],\"requestId\":\"" + UUID.randomUUID()
+                                    + "\"}"))
+                    .andExpect(status().isBadRequest());
+            verify(matchingService, never()).createMatch(any(), any());
+        }
+
+        @Test
+        @DisplayName("accept, reject and unmatch map MATCH_STATE_INVALID to 409 and need adjust")
+        void decisions() throws Exception {
+            when(matchingService.accept(eq(RECON_ID), eq(matchId), any()))
+                    .thenThrow(new BankRecException(BankRecErrorCode.MATCH_STATE_INVALID, "not proposed"));
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/matches/{m}/accept", RECON_ID, matchId)))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("MATCH_STATE_INVALID"));
+            when(matchingService.reject(eq(RECON_ID), eq(matchId), any()))
+                    .thenReturn(new ReconciliationMatchResponse());
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/matches/{m}/reject", RECON_ID, matchId))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+            when(matchingService.unmatch(eq(RECON_ID), eq(matchId), any()))
+                    .thenReturn(new ReconciliationMatchResponse());
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/matches/{m}/unmatch", RECON_ID, matchId))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"reason\":\"Paired the wrong deposit\"}"))
+                    .andExpect(status().isOk());
+            for (String action : List.of("accept", "reject", "unmatch")) {
+                mockMvc.perform(withAuth(
+                                        post(
+                                                "/v1/accounting/reconciliations/{id}/matches/{m}/" + action,
+                                                RECON_ID,
+                                                matchId),
+                                        "accounting:reconciliation:view")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"reason\":\"Paired the wrong deposit\"}"))
+                        .andExpect(status().isForbidden());
+            }
+        }
+
+        @Test
+        @DisplayName("candidates need view; auto-match needs adjust")
+        void candidatesAndAutoMatch() throws Exception {
+            when(matchingService.candidates(eq(RECON_ID), any(), any(), any()))
+                    .thenReturn(new ReconciliationCandidatesResponse());
+            mockMvc.perform(withAuth(
+                            get("/v1/accounting/reconciliations/{id}/candidates", RECON_ID)
+                                    .param(
+                                            "bankTransactionId",
+                                            UUID.randomUUID().toString()),
+                            "accounting:reconciliation:view"))
+                    .andExpect(status().isOk());
+            when(matchingService.autoMatch(RECON_ID)).thenReturn(new AutoMatchResponse(1, 0));
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/auto-match", RECON_ID)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.proposedCount").value(1));
+            mockMvc.perform(withAuth(
+                            post("/v1/accounting/reconciliations/{id}/auto-match", RECON_ID),
+                            "accounting:reconciliation:view"))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(withAuth(
+                            get("/v1/accounting/reconciliations/{id}/candidates", RECON_ID), "accounting:je:view"))
+                    .andExpect(status().isForbidden());
         }
     }
 
