@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 115 event types (includes +9 from statement-file imports (SPEC-manual-bank-reconciliation
+     * Total: 116 event types (includes +9 from statement-file imports (SPEC-manual-bank-reconciliation
      * story S3, Issue #2302): ACCOUNTING_BANK_IMPORT_CREATE, ACCOUNTING_BANK_IMPORT_LIST,
      * ACCOUNTING_BANK_IMPORT_GET, ACCOUNTING_BANK_IMPORT_ROWS, ACCOUNTING_BANK_IMPORT_MAPPING_SET,
      * ACCOUNTING_BANK_IMPORT_ROW_CORRECT, ACCOUNTING_BANK_IMPORT_COMMIT, ACCOUNTING_BANK_IMPORT_DISCARD,
