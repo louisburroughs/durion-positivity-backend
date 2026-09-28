@@ -39,8 +39,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Resolves each leaf line to its mapped GL accounts (persisted {@code StatementLineMapping},
  * {@link StatementType#LABOR_OVERHEAD}), aggregates posted journal-entry-line net amounts
  * (debit − credit) by month for the requested {@code locationId} dimension, computes subtotal rows
- * column-wise from the taxonomy, and derives YTD over the elapsed months. Mirrors the posted-state
- * semantic ({@code je.status = 'POSTED'}) used by the existing financial reporting.
+ * column-wise from the taxonomy, and derives YTD over the elapsed months. Uses the ledger semantic of
+ * the financial reports: POSTED and REVERSED entries, never DRAFT, so a reversed pair nets to zero
+ * (issue #2308).
  *
  * <p>Issue #731 enrichment: mappings are per-location-overridable (location rows replace global
  * rows per line code); the report header resolves {@code locationLabel}/{@code currency} from the

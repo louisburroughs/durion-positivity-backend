@@ -447,6 +447,11 @@ public class JournalEntryServiceImpl implements JournalEntryService {
             reversalLine.setDebitAmount(line.getCreditAmount()); // Swap
             reversalLine.setCreditAmount(line.getDebitAmount()); // Swap
             reversalLine.setDescription("Reversal of line " + line.getLineId());
+            // Same dimensions as the line it reverses, so a dimension-filtered report (the labor
+            // and overhead report filters by location) nets the pair to zero too (#2308).
+            if (line.getDimensions() != null) {
+                reversalLine.setDimensions(new java.util.HashMap<>(line.getDimensions()));
+            }
             reversalLines.add(reversalLine);
         }
         reversal.setLines(reversalLines);

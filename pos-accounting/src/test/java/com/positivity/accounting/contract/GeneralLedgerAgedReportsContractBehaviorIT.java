@@ -18,6 +18,7 @@ import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.internal.service.JournalEntryService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -51,6 +52,9 @@ class GeneralLedgerAgedReportsContractBehaviorIT extends BaseContractIntegration
     @Autowired
     private VendorBillRepository vendorBillRepository;
 
+    @Autowired
+    private JournalEntryService journalEntryService;
+
     private static final UUID CASH_ACCOUNT_ID = UUID.fromString("20000000-0000-7000-8000-000000000001");
     private static final UUID CUSTOMER_ID = UUID.fromString("30000000-0000-7000-8000-000000000001");
     private static final UUID VENDOR_ID = UUID.fromString("40000000-0000-7000-8000-000000000001");
@@ -60,22 +64,19 @@ class GeneralLedgerAgedReportsContractBehaviorIT extends BaseContractIntegration
     private static final LocalDate AS_OF = LocalDate.of(2026, 6, 30);
 
     @Test
-    @DisplayName("General Ledger reconciles opening/running/closing and excludes REVERSED originals")
+    @DisplayName("General Ledger reconciles opening/running/closing and nets a reversed pair to zero (#2308)")
     void generalLedgerReconciles() throws Exception {
         GLAccount cash = saveAccount(CASH_ACCOUNT_ID, "1000", "Cash - Operating");
         // Opening: POSTED activity strictly before the period.
-        savePostedEntry("JE-202605-1", LocalDateTime.of(2026, 5, 15, 0, 0), cash, new BigDecimal("50000.00"), null);
+        savePostedEntry("FIX-202605-1", LocalDateTime.of(2026, 5, 15, 0, 0), cash, new BigDecimal("50000.00"), null);
         // In-period POSTED lines.
-        savePostedEntry("JE-202606-1", LocalDateTime.of(2026, 6, 5, 0, 0), cash, new BigDecimal("30000.00"), null);
-        savePostedEntry("JE-202606-2", LocalDateTime.of(2026, 6, 20, 0, 0), cash, null, new BigDecimal("5000.00"));
-        // A REVERSED original in-period must be excluded (strict POSTED filter).
-        saveEntry(
-                "JE-202606-3",
-                LocalDateTime.of(2026, 6, 10, 0, 0),
-                cash,
-                new BigDecimal("999.00"),
-                null,
-                JournalEntryStatus.REVERSED);
+        savePostedEntry("FIX-202606-1", LocalDateTime.of(2026, 6, 5, 0, 0), cash, new BigDecimal("30000.00"), null);
+        savePostedEntry("FIX-202606-2", LocalDateTime.of(2026, 6, 20, 0, 0), cash, null, new BigDecimal("5000.00"));
+        // A real reversal pair in-period: the original becomes REVERSED, its reversal POSTED. Both
+        // are ledger history and appear; together they net to zero (#2308).
+        JournalEntry reversed = savePostedEntry(
+                "FIX-202606-3", LocalDateTime.of(2026, 6, 10, 0, 0), cash, new BigDecimal("999.00"), null);
+        journalEntryService.reverseJournalEntry(reversed.getJournalEntryId(), "keyed twice", LocalDate.of(2026, 6, 12));
 
         mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/general-ledger"))
                         .param("accountId", CASH_ACCOUNT_ID.toString())
@@ -87,15 +88,17 @@ class GeneralLedgerAgedReportsContractBehaviorIT extends BaseContractIntegration
                 .andExpect(jsonPath("$.accounts.length()").value(1))
                 .andExpect(jsonPath("$.accounts[0].accountNumber").value("1000"))
                 .andExpect(jsonPath("$.accounts[0].openingBalance").value(50000.00))
-                // Only the two POSTED lines appear; the REVERSED 999 debit is excluded.
-                .andExpect(jsonPath("$.accounts[0].lines.length()").value(2))
+                // The two POSTED lines plus the reversed original's 999 debit and its reversal's credit.
+                .andExpect(jsonPath("$.accounts[0].lines.length()").value(4))
                 .andExpect(jsonPath("$.accounts[0].lines[0].runningBalance").value(80000.00))
-                .andExpect(jsonPath("$.accounts[0].lines[1].runningBalance").value(75000.00))
-                .andExpect(jsonPath("$.accounts[0].totalDebit").value(30000.00))
-                .andExpect(jsonPath("$.accounts[0].totalCredit").value(5000.00))
+                .andExpect(jsonPath("$.accounts[0].lines[1].runningBalance").value(80999.00))
+                .andExpect(jsonPath("$.accounts[0].lines[2].runningBalance").value(80000.00))
+                .andExpect(jsonPath("$.accounts[0].lines[3].runningBalance").value(75000.00))
+                .andExpect(jsonPath("$.accounts[0].totalDebit").value(30999.00))
+                .andExpect(jsonPath("$.accounts[0].totalCredit").value(5999.00))
                 .andExpect(jsonPath("$.accounts[0].closingBalance").value(75000.00))
-                .andExpect(jsonPath("$.totalDebit").value(30000.00))
-                .andExpect(jsonPath("$.totalCredit").value(5000.00));
+                .andExpect(jsonPath("$.totalDebit").value(30999.00))
+                .andExpect(jsonPath("$.totalCredit").value(5999.00));
     }
 
     @Test
@@ -209,12 +212,12 @@ class GeneralLedgerAgedReportsContractBehaviorIT extends BaseContractIntegration
         return glAccountRepository.save(account);
     }
 
-    private void savePostedEntry(
+    private JournalEntry savePostedEntry(
             String entryNumber, LocalDateTime transactionDate, GLAccount account, BigDecimal debit, BigDecimal credit) {
-        saveEntry(entryNumber, transactionDate, account, debit, credit, JournalEntryStatus.POSTED);
+        return saveEntry(entryNumber, transactionDate, account, debit, credit, JournalEntryStatus.POSTED);
     }
 
-    private void saveEntry(
+    private JournalEntry saveEntry(
             String entryNumber,
             LocalDateTime transactionDate,
             GLAccount account,
@@ -240,7 +243,7 @@ class GeneralLedgerAgedReportsContractBehaviorIT extends BaseContractIntegration
         entry.setTotalCredits(line.getCreditAmount());
         entry.setIsBalanced(true);
 
-        journalEntryRepository.save(entry);
+        return journalEntryRepository.save(entry);
     }
 
     private void saveInvoice(String invoiceNumber, String status, BigDecimal total, LocalDate invoiceDate) {
