@@ -6,7 +6,9 @@ package com.positivity.accounting.internal.bankrec.intake;
  * lifecycle, duplicate key and version, 422 for every other refusal. One condition, one code.
  *
  * <p>It lives beside the intake port because the port's refusals are part of its contract: an
- * adapter that calls {@link BankTransactionIntake#accept} sees these codes and nothing else.
+ * adapter that calls {@link BankTransactionIntake#accept} sees these codes and nothing else. The
+ * file adapter's own lifecycle codes (story S3) are catalogued here too, so every bank reconciliation
+ * refusal is answered by one exception type and one handler.
  */
 public enum BankRecErrorCode {
     /** Request shape: a missing or malformed field, a blank justification (400). */
@@ -38,7 +40,26 @@ public enum BankRecErrorCode {
     /** A manual-entry transaction dated outside the header window (422, §4.3). */
     STATEMENT_TRANSACTION_OUT_OF_WINDOW(422),
     /** {@code openingBalance + activity ≠ closingBalance} beyond one minor unit (422, E1). */
-    STATEMENT_ACTIVITY_MISMATCH(422);
+    STATEMENT_ACTIVITY_MISMATCH(422),
+
+    // ---- answered by the statement-file adapter (§4.3, §4.4, §4.10; story S3, #2302) ----
+
+    /** An import id the tenant does not hold (404). */
+    BANK_IMPORT_NOT_FOUND(404),
+    /** A row id that is not a row of the import (404). */
+    BANK_IMPORT_ROW_NOT_FOUND(404),
+    /** The import's raw file is no longer retained (404; the import itself carries {@code retentionUntil}). */
+    BANK_IMPORT_FILE_NOT_FOUND(404),
+    /** The same file ({@code fileSha256}) is already COMMITTED for the account (409). */
+    IMPORT_FILE_ALREADY_COMMITTED(409),
+    /** A mapping, row or discard change on a {@code COMMITTED} import (409). */
+    IMPORT_ALREADY_COMMITTED(409),
+    /** A commit, mapping, row or discard change on a {@code DISCARDED} import (409). */
+    IMPORT_DISCARDED(409),
+    /** The file cannot be read at all: wrong encoding, binary, or no data row (422, G10). */
+    STATEMENT_IMPORT_FAILED(422),
+    /** Rejected or out-of-window rows remain, the mapping is unresolved, or E1 fails (422). */
+    IMPORT_NOT_COMMITTABLE(422);
 
     private final int httpStatus;
 
