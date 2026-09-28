@@ -53,6 +53,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * Unit tests of the intake port (SPEC-manual-bank-reconciliation §3.1, §3.2, §4.2–§4.5, §8.1–§8.2;
@@ -442,6 +443,36 @@ class BankTransactionIntakeImplTest {
                                 header("2026-09-01", "2026-09-30", "0", "10"),
                                 List.of(row(LocalDate.of(2026, 9, 2), "10", "DEP"))),
                         ctx(ACK)))
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo(BankRecErrorCode.STATEMENT_ALREADY_IMPORTED));
+    }
+
+    @Test
+    void aRacingRequestIdIsAConcurrentCommitTheCallerMayRetry() {
+        when(profiles.findById(ACCOUNT)).thenReturn(Optional.empty());
+        when(statements.saveAndFlush(any(BankStatement.class)))
+                .thenThrow(new DataIntegrityViolationException(
+                        "duplicate key value violates unique constraint \"bank_statement_request_uk\""));
+        assertThatThrownBy(() -> intake.accept(
+                        manual(
+                                header("2026-09-01", "2026-09-30", "0", "10"),
+                                List.of(row(LocalDate.of(2026, 9, 2), "10", "DEP"))),
+                        ctx(ACK)))
+                .isInstanceOf(ConcurrentCommitException.class)
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo(BankRecErrorCode.IDEMPOTENCY_CONFLICT));
+    }
+
+    @Test
+    void aRacingWindowIsAConcurrentCommitWithItsOwnCode() {
+        when(profiles.findById(ACCOUNT)).thenReturn(Optional.empty());
+        when(statements.saveAndFlush(any(BankStatement.class)))
+                .thenThrow(new DataIntegrityViolationException(
+                        "duplicate key value violates unique constraint \"bank_statement_committed_window_uk\""));
+        assertThatThrownBy(() -> intake.accept(
+                        manual(
+                                header("2026-09-01", "2026-09-30", "0", "10"),
+                                List.of(row(LocalDate.of(2026, 9, 2), "10", "DEP"))),
+                        ctx(ACK)))
+                .isInstanceOf(ConcurrentCommitException.class)
                 .satisfies(t -> assertThat(codeOf(t)).isEqualTo(BankRecErrorCode.STATEMENT_ALREADY_IMPORTED));
     }
 

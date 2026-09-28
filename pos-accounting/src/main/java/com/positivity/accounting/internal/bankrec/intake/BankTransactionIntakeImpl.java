@@ -361,21 +361,20 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
     private static RuntimeException translate(DataIntegrityViolationException refused, StatementHeader header) {
         String detail = constraintDetail(refused);
         if (detail.contains(WINDOW_CONSTRAINT)) {
-            return new BankRecException(
+            return new ConcurrentCommitException(
                     BankRecErrorCode.STATEMENT_ALREADY_IMPORTED,
                     "A statement for " + header.startDate() + ".." + header.endDate()
                             + " is already committed on this account");
         }
         if (detail.contains(OVERLAP_CONSTRAINT)) {
-            return BankRecException.field(
+            return new ConcurrentCommitException(
                     BankRecErrorCode.STATEMENT_PERIOD_OVERLAP,
                     "The window " + header.startDate() + ".." + header.endDate()
                             + " overlaps a committed statement on this account",
-                    "statementId",
-                    "a concurrently committed statement");
+                    Map.of("statementId", "a concurrently committed statement"));
         }
         if (detail.contains(REQUEST_CONSTRAINT)) {
-            return new BankRecException(
+            return new ConcurrentCommitException(
                     BankRecErrorCode.IDEMPOTENCY_CONFLICT, "The requestId was used by a concurrent request");
         }
         return refused;
