@@ -10,6 +10,7 @@ import com.positivity.accounting.internal.bankfeed.file.dto.BankImportResponse;
 import com.positivity.accounting.internal.bankfeed.file.dto.BankImportRowListResponse;
 import com.positivity.accounting.internal.bankfeed.file.dto.BankImportRowResponse;
 import com.positivity.accounting.internal.bankfeed.file.dto.BankImportRowUpdateRequest;
+import com.positivity.accounting.internal.bankfeed.file.dto.BankImportUploadForm;
 import com.positivity.accounting.internal.bankfeed.file.enums.BankImportRowStatus;
 import com.positivity.accounting.internal.bankfeed.file.enums.BankImportStatus;
 import com.positivity.accounting.internal.bankfeed.file.service.BankImportService;
@@ -118,8 +119,18 @@ public class BankImportController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankImportResponse> createBankImport(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "The file as base64 content, its statement header and parse options.",
-                            required = true)
+                            description = "The file as base64 content with its statement header and parse options"
+                                    + " (application/json), or the file and that request as parts"
+                                    + " (multipart/form-data: file, meta).",
+                            required = true,
+                            content = {
+                                @Content(
+                                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                        schema = @Schema(implementation = BankImportCreateRequest.class)),
+                                @Content(
+                                        mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                                        schema = @Schema(implementation = BankImportUploadForm.class))
+                            })
                     @RequestBody
                     @NonNull
                     BankImportCreateRequest request) {
@@ -134,6 +145,7 @@ public class BankImportController {
     @EmitEvent(id = "ACCOUNTING_BANK_IMPORT_CREATE", apiVersion = "1")
     @Operation(
             operationId = "uploadBankImportFile",
+            hidden = true,
             summary = "Upload Bank Statement File (Multipart)",
             description = UPLOAD_DESCRIPTION
                     + "This form takes the bytes in a multipart part named file and the request in a JSON part"
