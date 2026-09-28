@@ -280,15 +280,16 @@ public class PurchaseSuggestionController {
                     not use createPurchaseOrder, the manual path that ignores suggestions, and note that \
                     conversion never approves spend, so approvePurchaseOrder must still run on the DRAFT order.
                     Preconditions: every listed suggestion must exist, be ACCEPTED, carry a vendor reference and \
-                    a feed unit cost, all must share one vendor, and all must resolve to a single ship-to site.
+                    a feed unit cost with its currency, all must share one vendor and one currency, and all must \
+                    resolve to a single ship-to site.
                     Required inputs: suggestionIds (non-empty list of UUIDs); duplicates are collapsed, and the \
                     caller needs both inventory:replenishment:manage and inventory:purchase_order:create.
                     Emits an INVENTORY_PURCHASE_SUGGESTION_CONVERT event and creates the DRAFT order through the \
                     standard purchase order path, with the latest expected date among the suggestions as the \
                     expected delivery date.
                     Returns 404 when a listed suggestion does not exist, 422 when a suggestion is not ACCEPTED, \
-                    lacks a vendor or unit cost, or the suggestions mix vendors or ship-to sites, and 400 when \
-                    suggestionIds is empty.
+                    lacks a vendor, unit cost or currency, or the suggestions mix vendors, currencies or ship-to \
+                    sites, and 400 when suggestionIds is empty.
                     """,
             tags = {"Purchase Suggestions"})
     @ApiResponse(

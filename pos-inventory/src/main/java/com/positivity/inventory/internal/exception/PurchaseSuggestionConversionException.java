@@ -36,6 +36,25 @@ public class PurchaseSuggestionConversionException extends RuntimeException {
                         + " separate requests");
     }
 
+    /**
+     * The listed suggestions are priced in different currencies. A purchase order has one
+     * currency and its lines none of their own, so they cannot share an order (ADR-0067 DF-5).
+     */
+    public static PurchaseSuggestionConversionException currencyMismatch() {
+        return new PurchaseSuggestionConversionException(
+                "PURCHASE_SUGGESTION_CURRENCY_MISMATCH",
+                "All suggestions in one convert request must be priced in a single currency; convert each currency"
+                        + " in a separate request");
+    }
+
+    /** A listed suggestion has a unit cost but no currency; it is never assumed to be in any one. */
+    public static PurchaseSuggestionConversionException missingCurrency(UUID suggestionId) {
+        return new PurchaseSuggestionConversionException(
+                "PURCHASE_SUGGESTION_MISSING_CURRENCY",
+                SUGGESTION_PREFIX + suggestionId + " carries a unit cost with no currency; create the purchase order"
+                        + " manually");
+    }
+
     /** A listed suggestion has no selectable vendor and cannot be placed on a purchase order. */
     public static PurchaseSuggestionConversionException missingVendor(UUID suggestionId) {
         return new PurchaseSuggestionConversionException(

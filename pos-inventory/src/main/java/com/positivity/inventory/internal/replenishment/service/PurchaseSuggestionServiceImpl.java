@@ -65,7 +65,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService {
 
     private static final String PACK_UOM_TYPE = "PACK";
-    private static final String DEFAULT_CURRENCY = "USD";
     private static final String RESOURCE_NAME = "PurchaseSuggestion";
 
     private final PurchaseSuggestionRepository purchaseSuggestionRepository;
@@ -171,11 +170,8 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
 
         UUID vendorId = suggestions.getFirst().getVendorRefId();
         UUID shipToSite = resolveSingleShipToSite(suggestions);
-        String currency = suggestions.stream()
-                .map(PurchaseSuggestion::getUnitCostCurrency)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(DEFAULT_CURRENCY);
+        // validateConvertible has proven every suggestion carries this same currency (ADR-0067 DF-5).
+        String currency = suggestions.getFirst().getUnitCostCurrency();
         LocalDate expectedDeliveryDate = suggestions.stream()
                 .map(PurchaseSuggestion::getEarliestExpectedDate)
                 .filter(Objects::nonNull)
@@ -244,7 +240,13 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
         return suggestions;
     }
 
-    /** Conversion preconditions: every suggestion ACCEPTED, priced, and on the same single vendor. */
+    /**
+     * Conversion preconditions: every suggestion ACCEPTED, priced in a stated currency, on the
+     * same single vendor, and in the same single currency. A purchase order has one currency and
+     * its lines carry none of their own, so suggestions quoted in different currencies can never
+     * share an order, and a price with no currency is refused rather than assumed to be in any
+     * one (ADR-0067 DF-5, #2313).
+     */
     private void validateConvertible(List<PurchaseSuggestion> suggestions) {
         for (PurchaseSuggestion suggestion : suggestions) {
             if (suggestion.getStatus() != PurchaseSuggestionStatus.ACCEPTED) {
@@ -258,6 +260,10 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
             if (suggestion.getUnitCostMinor() == null) {
                 throw PurchaseSuggestionConversionException.missingUnitCost(suggestion.getSuggestionId());
             }
+            if (suggestion.getUnitCostCurrency() == null
+                    || suggestion.getUnitCostCurrency().isBlank()) {
+                throw PurchaseSuggestionConversionException.missingCurrency(suggestion.getSuggestionId());
+            }
         }
         long distinctVendors = suggestions.stream()
                 .map(suggestion -> suggestion.getSuggestedVendorType() + ":" + suggestion.getVendorRefId())
@@ -265,6 +271,13 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                 .count();
         if (distinctVendors > 1) {
             throw PurchaseSuggestionConversionException.vendorMismatch();
+        }
+        long distinctCurrencies = suggestions.stream()
+                .map(PurchaseSuggestion::getUnitCostCurrency)
+                .distinct()
+                .count();
+        if (distinctCurrencies > 1) {
+            throw PurchaseSuggestionConversionException.currencyMismatch();
         }
     }
 
