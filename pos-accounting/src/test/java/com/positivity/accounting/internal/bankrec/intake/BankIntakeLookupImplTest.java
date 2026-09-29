@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -28,6 +29,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -198,5 +201,29 @@ class BankIntakeLookupImplTest {
         t.setFingerprint(fingerprint);
         t.setFirstObservedAt(Instant.parse(firstObserved));
         return t;
+    }
+
+    @Test
+    void collidingFingerprintsAreLookedUpInBoundedChunksAndMergedAcrossThem() {
+        List<String> fingerprints = new ArrayList<>();
+        for (int i = 0; i < BankIntakeLookupImpl.FINGERPRINT_QUERY_CHUNK * 2 + 1; i++) {
+            fingerprints.add("fp-" + i);
+        }
+        String last = fingerprints.getLast();
+        BankTransaction later = transaction("01980000-0000-7000-8000-000000000002", last, "2026-12-02T00:00:00Z");
+        BankTransaction earlier = transaction("01980000-0000-7000-8000-000000000003", last, "2026-12-01T00:00:00Z");
+        when(transactions.findByGlAccountIdAndFingerprintInAndStatusNotIn(
+                        eq(ACCOUNT), anyCollection(), anyCollection()))
+                .thenAnswer(inv -> {
+                    Collection<String> chunk = inv.getArgument(1);
+                    assertThat(chunk).hasSizeLessThanOrEqualTo(BankIntakeLookupImpl.FINGERPRINT_QUERY_CHUNK);
+                    return chunk.contains(last) ? List.of(later, earlier) : List.of();
+                });
+
+        Map<String, UUID> colliding = lookup.collidingFingerprints(ACCOUNT, fingerprints);
+
+        assertThat(colliding).containsExactly(Map.entry(last, earlier.getBankTransactionId()));
+        verify(transactions, times(3))
+                .findByGlAccountIdAndFingerprintInAndStatusNotIn(eq(ACCOUNT), anyCollection(), anyCollection());
     }
 }

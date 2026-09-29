@@ -11805,6 +11805,10 @@ components:
           description: Character set; defaults to the import's current option
           example: UTF-8
           type: string
+        gapAcknowledgement:
+          description: 'The gap acknowledgement the corrected header is checked with (at least 10 characters): absent keeps the stored one, blank clears it'
+          example: First statement on this account; earlier history is reconciled outside the system
+          type: string
         saveAsAccountDefault:
           description: Store the mapping as the account's default for the next import
           type: boolean

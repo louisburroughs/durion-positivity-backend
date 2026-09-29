@@ -339,10 +339,24 @@ public class BankImportServiceImpl implements BankImportService {
         List<SplitPoint> split = request.getSplitAt() != null
                 ? splitPoints(request.getSplitAt(), header)
                 : splitPoints(fromJson(found.getSplitAt()), header);
-        if (request.getStatement() != null) {
-            // A corrected or widened header re-runs the header checks (§4.5: a widening may overlap).
-            lookup.checkHeader(found.getGlAccountId(), statementHeader(header), found.getGapAcknowledgement());
+        // The acknowledgement travels with the header: absent keeps the stored one, blank clears it, so a
+        // correction that closes the gap can drop it and one that opens a gap can supply it.
+        String gapAcknowledgement = request.getGapAcknowledgement() == null
+                ? found.getGapAcknowledgement()
+                : blankToNull(request.getGapAcknowledgement().trim());
+        if (gapAcknowledgement != null && gapAcknowledgement.length() > 1000) {
+            throw BankRecException.field(
+                    BankRecErrorCode.VALIDATION_ERROR,
+                    "gapAcknowledgement is too long",
+                    "gapAcknowledgement",
+                    "at most 1000 characters");
+        }
+        if (request.getStatement() != null || request.getGapAcknowledgement() != null) {
+            // A corrected or widened header, or a changed acknowledgement, re-runs the header checks (§4.5:
+            // a widening may overlap) with the acknowledgement that is then stored.
+            lookup.checkHeader(found.getGlAccountId(), statementHeader(header), gapAcknowledgement);
             applyHeader(found, header);
+            found.setGapAcknowledgement(gapAcknowledgement);
         }
         found.setSplitAt(toJson(split));
 
@@ -362,8 +376,11 @@ public class BankImportServiceImpl implements BankImportService {
         String actor = currentActor();
         Map<String, Object> previousMapping = found.getColumnMapping();
         applyOptions(found, options, parsed);
-        if (Boolean.TRUE.equals(request.getSaveAsAccountDefault())) {
-            found.setSaveMappingAsDefault(true);
+        // Each mapping request states its own intent; an earlier opt-in does not outlive it, so commit
+        // saves the mapping on a new profile only when the latest request asked for that.
+        boolean saveAsAccountDefault = Boolean.TRUE.equals(request.getSaveAsAccountDefault());
+        found.setSaveMappingAsDefault(saveAsAccountDefault);
+        if (saveAsAccountDefault) {
             lookup.saveDefaultColumnMapping(found.getGlAccountId(), mapping.toJson(), actor);
         }
         found.setStatus(parsed.mappingResolved() ? BankImportStatus.VALIDATED : BankImportStatus.UPLOADED);
@@ -375,11 +392,11 @@ public class BankImportServiceImpl implements BankImportService {
                 importId,
                 BankImportAuditRecorder.BANK_IMPORT_MAPPING_SET,
                 actor,
-                null,
+                request.getGapAcknowledgement() == null ? null : saved.getGapAcknowledgement(),
                 previousMapping == null ? null : "columnMapping=" + previousMapping,
                 "columnMapping=" + mapping.toJson() + ", signConvention=" + options.signConvention()
                         + ", window=" + saved.getStatementStartDate() + ".." + saved.getStatementEndDate()
-                        + ", saveAsAccountDefault=" + Boolean.TRUE.equals(request.getSaveAsAccountDefault())
+                        + ", saveAsAccountDefault=" + saveAsAccountDefault
                         + ", status=" + saved.getStatus());
         return view(saved, rows, true).build();
     }
@@ -551,6 +568,9 @@ public class BankImportServiceImpl implements BankImportService {
         row.setCorrectedValues(merged);
         row.setCorrectedBy(actor);
         row.setCorrectedAt(now);
+        // The corrected values are a new row as far as R1 is concerned: a duplicate decision taken on
+        // the old values no longer stands, so evaluate() flags a collision of the new ones again.
+        row.setDuplicateDecision(null);
         if (row.getTransactionDate() == null || row.getSignedAmount() == null || row.getDescription() == null) {
             ImportEvaluator.reject(
                     row,
