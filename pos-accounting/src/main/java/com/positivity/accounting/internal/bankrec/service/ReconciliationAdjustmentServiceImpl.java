@@ -35,7 +35,6 @@ import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
-import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
@@ -119,10 +118,7 @@ public class ReconciliationAdjustmentServiceImpl implements ReconciliationAdjust
         if (replay != null) {
             return replay(replay, reconciliationId, request);
         }
-        if (recon.getStatus() == ReconciliationStatus.FINALIZED) {
-            throw new ReconciliationAlreadyFinalizedException(
-                    "Reconciliation " + reconciliationId + " is already FINALIZED");
-        }
+        ReconciliationSupport.requireStatus(recon, ReconciliationStatus.IN_PROGRESS);
         BankAdjustmentType type = request.getType();
         Links links = new Links(
                 request.getBankTransactionId(),
@@ -286,7 +282,14 @@ public class ReconciliationAdjustmentServiceImpl implements ReconciliationAdjust
     @Override
     public @NonNull BankReconciliationAdjustmentResponse reverse(
             @NonNull UUID reconciliationId, @NonNull UUID adjustmentId, @NonNull AdjustmentReverseRequest request) {
-        BankReconciliation recon = support.requireOpen(reconciliationId);
+        BankReconciliation recon = support.require(reconciliationId);
+        // A correction path (§4.9 path 2): the approver may reverse while the reconciliation is prepared, awaits
+        // approval, or is FINALIZED — then the ledger-change hook invalidates it (§5.5; S5, #2304).
+        ReconciliationSupport.requireStatus(
+                recon,
+                ReconciliationStatus.IN_PROGRESS,
+                ReconciliationStatus.SUBMITTED,
+                ReconciliationStatus.FINALIZED);
         String reason = Justification.required(request.getReason(), "reason");
         BankReconciliationAdjustment adjustment = adjustments
                 .findByAdjustmentIdAndReconciliation_ReconciliationId(adjustmentId, reconciliationId)
@@ -297,21 +300,27 @@ public class ReconciliationAdjustmentServiceImpl implements ReconciliationAdjust
                     BankRecErrorCode.ADJUSTMENT_ALREADY_REVERSED,
                     "Adjustment " + adjustmentId + " is already reversed");
         }
+
+        // The ADJUSTMENT match is unmatched and its bank transaction returns to UNMATCHED (§3.8, §4.9 path 2),
+        // before the reversal posts, so the ledger-change hook finds only what it must break: a residual's
+        // replacement match. A FINALIZED reconciliation's matches are sealed (M7), so there the hook breaks the
+        // ADJUSTMENT match too and invalidates the reconciliation (§5.5).
+        String actor = support.currentUser();
+        LedgerMember cashLine = cashLine(recon, adjustment.getJournalEntryId());
+        if (recon.getStatus() != ReconciliationStatus.FINALIZED) {
+            for (BankReconciliationGlMatch member :
+                    glMatches.findByGlLineIdInAndActiveTrue(List.of(cashLine.glLineId()))) {
+                matches.findById(member.getMatchId())
+                        .filter(m -> m.getMatchKind() == MatchKind.ADJUSTMENT && m.getState() == MatchState.ACCEPTED)
+                        .ifPresent(m -> writer.end(m, MatchState.UNMATCHED, "Adjustment reversed: " + reason, actor));
+            }
+        }
         JournalEntryResponse reversal = journalEntryService.reverseJournalEntry(
                 adjustment.getJournalEntryId(),
                 reason,
                 request.getReversalDate(),
                 blankToNull(request.getOverrideJustification()));
 
-        // The ADJUSTMENT match returns its bank transaction to UNMATCHED (§4.9 path 2). A residual's replacement
-        // match is broken by the ledger-change hook of story S5.
-        String actor = support.currentUser();
-        LedgerMember cashLine = cashLine(recon, adjustment.getJournalEntryId());
-        for (BankReconciliationGlMatch member : glMatches.findByGlLineIdInAndActiveTrue(List.of(cashLine.glLineId()))) {
-            matches.findById(member.getMatchId())
-                    .filter(m -> m.getMatchKind() == MatchKind.ADJUSTMENT && m.getState() == MatchState.ACCEPTED)
-                    .ifPresent(m -> writer.end(m, MatchState.UNMATCHED, "Adjustment reversed: " + reason, actor));
-        }
         adjustment.setStatus(AdjustmentStatus.REVERSED);
         adjustment.setReversalJournalEntryId(reversal.getJournalEntryId());
         adjustment.setReversedAt(support.now());
@@ -326,7 +335,11 @@ public class ReconciliationAdjustmentServiceImpl implements ReconciliationAdjust
                 reason,
                 "adjustmentId=" + adjustmentId + ";status=" + AdjustmentStatus.POSTED,
                 "status=" + AdjustmentStatus.REVERSED + ";reversalJournalEntryId=" + reversal.getJournalEntryId());
-        support.refresh(recon);
+        if (recon.getStatus() == ReconciliationStatus.IN_PROGRESS
+                || recon.getStatus() == ReconciliationStatus.SUBMITTED) {
+            // An approved (now INVALIDATED) reconciliation keeps the terms it was approved on.
+            support.refresh(recon);
+        }
         BankReconciliationAdjustmentResponse response = BankReconciliationAdjustmentResponse.from(adjustment);
         response.setEntryNumber(null);
         return response;

@@ -16,7 +16,10 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 127 event types (includes +11 from the reconciliation core (SPEC-manual-bank-reconciliation
+     * Total: 131 event types (includes +4 from the reconciliation approval workflow
+     * (SPEC-manual-bank-reconciliation story S5, Issue #2304): ACCOUNTING_RECONCILIATION_SUBMIT,
+     * ACCOUNTING_RECONCILIATION_RETURN, ACCOUNTING_RECONCILIATION_SUPERSEDE, ACCOUNTING_RECONCILIATION_CANCEL,
+     * +11 from the reconciliation core (SPEC-manual-bank-reconciliation
      * story S4, Issue #2303): ACCOUNTING_RECONCILIATION_CREATE, ACCOUNTING_RECONCILIATION_CANDIDATES,
      * ACCOUNTING_RECONCILIATION_AUTO_MATCH, ACCOUNTING_RECONCILIATION_MATCH_ACCEPT,
      * ACCOUNTING_RECONCILIATION_MATCH_REJECT, ACCOUNTING_RECONCILIATION_OUTSTANDING_REGISTER,
@@ -379,7 +382,7 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.approval(
                                 "ACCOUNTING_RECONCILIATION_FINALIZE",
-                                "Finalize a balanced reconciliation (IN_PROGRESS to FINALIZED)")
+                                "Approve a submitted reconciliation behind the gate E4 (SUBMITTED to FINALIZED)")
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_RECONCILIATION_LIST",
@@ -443,6 +446,25 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_RECONCILIATION_REVIEW",
                                 "Read the reconciliation review: equation, diagnostics, unresolved, evidence")
+                        .build(),
+
+                // Reconciliation approval workflow — 4 events (SPEC-manual-bank-reconciliation §3.10, story S5,
+                // issue #2304); ACCOUNTING_RECONCILIATION_FINALIZE is now the approve step
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_SUBMIT",
+                                "Submit a reconciliation for approval behind the gate E4")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_RECONCILIATION_RETURN",
+                                "Return a submitted reconciliation to its preparer, with a reason")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_RECONCILIATION_SUPERSEDE",
+                                "Start a reconciliation superseding a FINALIZED or INVALIDATED one")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_RECONCILIATION_CANCEL",
+                                "Cancel an IN_PROGRESS or SUBMITTED reconciliation, with a justification")
                         .build(),
 
                 // Bank statements, transactions and accounts — 10 events (SPEC-manual-bank-reconciliation

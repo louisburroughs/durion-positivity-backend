@@ -18,8 +18,6 @@ import com.positivity.accounting.internal.bankrec.repository.BankReconciliationG
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankCashAccount;
-import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.YearMonth;
@@ -143,7 +141,8 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
 
     /**
      * §4.1, §6.4: a statement has at most one IN_PROGRESS or SUBMITTED reconciliation (partial unique), and a
-     * FINALIZED one without a successor already reconciles it — the correction path is supersede (S5).
+     * FINALIZED or INVALIDATED one without a successor already reconciles it — the correction path is
+     * {@code POST /{id}/supersede}, which carries its matches over (§4.9 path 1; S5, #2304).
      */
     private void requireWindowNotReconciled(BankStatement statement) {
         List<BankReconciliation> existing = reconciliationRepository.findByStatementIdAndStatusIn(
@@ -151,10 +150,10 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
                 List.of(
                         ReconciliationStatus.IN_PROGRESS,
                         ReconciliationStatus.SUBMITTED,
-                        ReconciliationStatus.FINALIZED));
+                        ReconciliationStatus.FINALIZED,
+                        ReconciliationStatus.INVALIDATED));
         existing.stream()
-                .filter(r ->
-                        r.getStatus() != ReconciliationStatus.FINALIZED || r.getSupersededByReconciliationId() == null)
+                .filter(r -> r.getSupersededByReconciliationId() == null)
                 .findFirst()
                 .ifPresent(r -> {
                     throw BankRecException.field(
@@ -188,24 +187,6 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
         response.setPageSize(page.getSize());
         response.setTotalPages(page.getTotalPages());
         return response;
-    }
-
-    @Override
-    public BankReconciliationResponse finalizeReconciliation(@NonNull UUID reconciliationId) {
-        BankReconciliation recon = support.requireOpen(reconciliationId);
-        // Balance-only gate over the live difference until S5 adds SUBMITTED, E4 and the approver.
-        ReconciliationSnapshot snapshot = support.refresh(recon);
-        BigDecimal difference = snapshot.terms().difference();
-        if (!ReconciliationEquation.withinTolerance(difference, functionalCurrency.tolerance())) {
-            throw new ReconciliationNotBalancedException(
-                    "Reconciliation " + reconciliationId + " does not balance; difference " + difference, difference);
-        }
-        recon.setStatus(ReconciliationStatus.FINALIZED);
-        recon.setFinalizedAt(Instant.now(clock));
-        recon.setFinalizedBy(support.currentUser());
-        reconciliationRepository.save(recon);
-        log.info("Finalized reconciliation {} (difference={})", reconciliationId, difference);
-        return toResponse(recon, snapshot);
     }
 
     @Override
@@ -275,10 +256,19 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
 
     // ---- helpers -----------------------------------------------------------
 
-    /** The header with the live terms of {@code snapshot} applied (not stored on a read). */
+    /**
+     * The header with the live terms of {@code snapshot} applied (not stored on a read). An approved
+     * reconciliation keeps the {@code baselineDate} snapshotted at its approval (§3.7; S5, #2304).
+     */
     private static BankReconciliationResponse toResponse(
             @NonNull BankReconciliation recon, @NonNull ReconciliationSnapshot snapshot) {
+        java.time.LocalDate approvedBaseline = recon.getBaselineDate();
+        boolean approved = recon.getFinalizedAt() != null;
         ReconciliationCalculator.apply(recon, snapshot);
-        return BankReconciliationResponse.from(recon);
+        BankReconciliationResponse response = BankReconciliationResponse.from(recon);
+        if (approved) {
+            response.setBaselineDate(approvedBaseline);
+        }
+        return response;
     }
 }

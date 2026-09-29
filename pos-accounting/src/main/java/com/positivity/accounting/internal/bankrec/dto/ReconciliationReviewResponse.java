@@ -310,10 +310,15 @@ public class ReconciliationReviewResponse {
     @AllArgsConstructor
     @Schema(description = "Readiness (E4)")
     public static class Readiness {
+        @Schema(description = "IN_PROGRESS and the gate E4 holds")
         private boolean canSubmit;
+
+        @Schema(description = "SUBMITTED, the gate E4 holds and the caller may approve (not SELF_APPROVAL)")
         private boolean canApprove;
 
-        @Schema(description = "Blocking reasons: NOT_BALANCED, UNEXPLAINED_BANK, UNEXPLAINED_LEDGER")
+        @Schema(
+                description = "Blocking reasons: NOT_BALANCED, UNEXPLAINED_BANK, UNEXPLAINED_LEDGER, and SELF_APPROVAL"
+                        + " (canApprove only: the caller submitted it and the tenant does not allow self-approval)")
         private List<ReadinessReason> reasons;
 
         @Schema(description = "PROPOSED matches await acceptance (their rows are already unexplained)")

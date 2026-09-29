@@ -36,8 +36,6 @@ import com.positivity.accounting.internal.bankrec.repository.BankReconciliationR
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
-import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
-import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import java.math.BigDecimal;
@@ -313,45 +311,6 @@ class BankReconciliationServiceTest {
         void getNotFound() {
             when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.empty());
             assertThatThrownBy(() -> service.get(RECON_ID)).isInstanceOf(ReconciliationNotFoundException.class);
-        }
-
-        @Test
-        @DisplayName("finalize passes at a live difference of exactly one minor unit")
-        void finalizeWithinTolerance() {
-            BankReconciliation recon = reconciliation();
-            when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(recon));
-            when(calculator.compute(recon)).thenReturn(snapshot(terms("0.01", null)));
-
-            BankReconciliationResponse response = service.finalizeReconciliation(RECON_ID);
-
-            assertThat(response.getStatus()).isEqualTo(ReconciliationApiStatus.FINALIZED);
-            assertThat(recon.getFinalizedAt()).isEqualTo(Instant.now(clock));
-            assertThat(recon.getDifference()).isEqualByComparingTo("0.01");
-        }
-
-        @Test
-        @DisplayName("finalize refuses a live difference beyond tolerance with the difference as a field")
-        void finalizeRefusesUnbalanced() {
-            BankReconciliation recon = reconciliation();
-            when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(recon));
-            when(calculator.compute(recon)).thenReturn(snapshot(terms("0.02", null)));
-
-            assertThatThrownBy(() -> service.finalizeReconciliation(RECON_ID))
-                    .isInstanceOfSatisfying(
-                            ReconciliationNotBalancedException.class,
-                            e -> assertThat(e.getDifference()).isEqualByComparingTo("0.02"));
-            assertThat(recon.getStatus()).isEqualTo(ReconciliationStatus.IN_PROGRESS);
-        }
-
-        @Test
-        @DisplayName("finalizing twice is refused, not repeated")
-        void finalizeTwiceRefused() {
-            BankReconciliation recon = reconciliation();
-            recon.setStatus(ReconciliationStatus.FINALIZED);
-            when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(recon));
-
-            assertThatThrownBy(() -> service.finalizeReconciliation(RECON_ID))
-                    .isInstanceOf(ReconciliationAlreadyFinalizedException.class);
         }
     }
 }

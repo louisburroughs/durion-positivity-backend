@@ -80,6 +80,7 @@ public class ReconciliationReviewServiceImpl implements ReconciliationReviewServ
     private final AccountingPeriodService periodService;
     private final BankRecSettings settings;
     private final FunctionalCurrency currency;
+    private final BankRecPolicy policy;
 
     @Override
     public @NonNull ReconciliationReviewResponse review(@NonNull UUID reconciliationId) {
@@ -321,10 +322,18 @@ public class ReconciliationReviewServiceImpl implements ReconciliationReviewServ
         if (snapshot.countUnexplainedLedger() > 0) {
             reasons.add(ReadinessReason.UNEXPLAINED_LEDGER);
         }
-        boolean open = recon.getStatus() == ReconciliationStatus.IN_PROGRESS;
+        boolean gateHolds = reasons.isEmpty();
+        boolean submitted = recon.getStatus() == ReconciliationStatus.SUBMITTED;
+        // D3: the caller who submitted it approves only when the tenant allows self-approval (§4.8).
+        boolean selfApprovalBlocked = submitted
+                && java.util.Objects.equals(recon.getSubmittedBy(), support.currentUser())
+                && !policy.allowSelfApproval();
+        if (selfApprovalBlocked) {
+            reasons.add(ReadinessReason.SELF_APPROVAL);
+        }
         return ReconciliationReviewResponse.Readiness.builder()
-                .canSubmit(open && reasons.isEmpty())
-                .canApprove(open && reasons.isEmpty())
+                .canSubmit(recon.getStatus() == ReconciliationStatus.IN_PROGRESS && gateHolds)
+                .canApprove(submitted && gateHolds && !selfApprovalBlocked)
                 .reasons(List.copyOf(reasons))
                 .proposalsPending(!inState(ownMatches, MatchState.PROPOSED).isEmpty())
                 .countUnexplainedBank(snapshot.countUnexplainedBank())

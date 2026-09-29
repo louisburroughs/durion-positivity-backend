@@ -68,4 +68,8 @@ public interface BankStatementRepository
     @NonNull
     List<AccountDate> findLatestEndDateByGlAccountIdIn(
             @Param("ids") @NonNull Collection<UUID> glAccountIds, @Param("status") @NonNull BankStatementStatus status);
+
+    /** The statements a corrected statement superseded (§4.9 path 3; S5, #2304). */
+    @NonNull
+    List<BankStatement> findBySupersededByStatementId(@NonNull UUID supersededByStatementId);
 }

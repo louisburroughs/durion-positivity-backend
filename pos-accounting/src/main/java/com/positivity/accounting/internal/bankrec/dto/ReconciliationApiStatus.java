@@ -3,15 +3,15 @@ package com.positivity.accounting.internal.bankrec.dto;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 
 /**
- * The reconciliation status values the F2 API serves (story S1, #2300).
- *
- * <p>{@link ReconciliationStatus} carries the full SPEC §3.8 value set from story S1 on, but no
- * transition reaches the new values until story S5, which also opens them on the API. Until then the
- * served set stays exactly F2's, so the published contract and the SDK do not change.
+ * The reconciliation status values the API serves (stories S1 #2300, S5 #2304): the full SPEC §3.8 set,
+ * which story S5 makes reachable (submit, approve, invalidation, supersession, cancel).
  */
 public enum ReconciliationApiStatus {
     IN_PROGRESS(ReconciliationStatus.IN_PROGRESS),
+    SUBMITTED(ReconciliationStatus.SUBMITTED),
     FINALIZED(ReconciliationStatus.FINALIZED),
+    INVALIDATED(ReconciliationStatus.INVALIDATED),
+    SUPERSEDED(ReconciliationStatus.SUPERSEDED),
     CANCELLED(ReconciliationStatus.CANCELLED);
 
     private final ReconciliationStatus domain;
@@ -28,7 +28,7 @@ public enum ReconciliationApiStatus {
     /**
      * The API value of a stored status.
      *
-     * @throws IllegalStateException for a status no story-S1 transition can produce
+     * @throws IllegalStateException for a status the API does not serve
      */
     public static ReconciliationApiStatus from(ReconciliationStatus status) {
         if (status == null) {
@@ -39,7 +39,6 @@ public enum ReconciliationApiStatus {
                 return value;
             }
         }
-        throw new IllegalStateException(
-                "Reconciliation status " + status + " is not served by the API before story S5");
+        throw new IllegalStateException("Reconciliation status " + status + " is not served by the API");
     }
 }

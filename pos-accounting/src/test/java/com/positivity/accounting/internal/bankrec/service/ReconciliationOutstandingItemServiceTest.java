@@ -102,6 +102,7 @@ class ReconciliationOutstandingItemServiceTest {
                 settings);
         recon = reconciliation();
         lenient().when(support.requireOpen(RECON_ID)).thenReturn(recon);
+        lenient().when(support.require(RECON_ID)).thenReturn(recon);
         lenient().when(support.currentUser()).thenReturn("preparer");
         lenient().when(support.now()).thenReturn(Instant.parse("2026-10-05T12:00:00Z"));
         lenient().when(support.today()).thenReturn(LocalDate.of(2026, 10, 5));

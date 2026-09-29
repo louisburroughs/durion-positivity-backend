@@ -236,6 +236,19 @@ class BankReconciliationContractBehaviorIT extends BaseContractIntegrationTest {
         return body;
     }
 
+    /** A second user holding every reconciliation permission: the approver of D3. */
+    static final String APPROVER = "approver-user";
+
+    private ResultActions asApprover(MockHttpServletRequestBuilder request, String body) throws Exception {
+        return mockMvc.perform(request.header("X-User", APPROVER)
+                .header(
+                        "X-Authorities",
+                        "accounting:reconciliation:view,accounting:reconciliation:adjust,"
+                                + "accounting:reconciliation:approve")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+    }
+
     private JsonNode json(ResultActions result) throws Exception {
         return objectMapper.readTree(result.andReturn().getResponse().getContentAsString());
     }
@@ -690,10 +703,14 @@ class BankReconciliationContractBehaviorIT extends BaseContractIntegrationTest {
         void finalizeGatesOnTheLiveDifferenceAndSealsTheReconciliation() throws Exception {
             UUID reconId = reconcile(cash, statement(cash, "0", "250.00", "250.00"));
             expectError(
-                            postJson(RECONCILIATIONS + "/" + reconId + "/finalize", Map.of()),
+                            postJson(RECONCILIATIONS + "/" + reconId + "/submit", Map.of()),
                             422,
                             "RECONCILIATION_NOT_BALANCED")
                     .andExpect(jsonPath("$.fieldErrors[0].field").value("difference"));
+            expectError(
+                    postJson(RECONCILIATIONS + "/" + reconId + "/finalize", Map.of()),
+                    409,
+                    "RECONCILIATION_NOT_SUBMITTED");
             mockMvc.perform(withAuth(get(RECONCILIATIONS + "/" + reconId + "/review")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.header.baselineSetByThisStatement").value(true))
@@ -712,11 +729,21 @@ class BankReconciliationContractBehaviorIT extends BaseContractIntegrationTest {
                     .andExpect(jsonPath("$.equation.adjustedBankBalance").value(250.0))
                     .andExpect(jsonPath("$.countUnexplainedBank").value(0))
                     .andExpect(jsonPath("$.matchedLineCount").value(1));
-            postJson(RECONCILIATIONS + "/" + reconId + "/finalize", Map.of())
+            postJson(RECONCILIATIONS + "/" + reconId + "/submit", Map.of())
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.status").value("FINALIZED"));
+                    .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                    .andExpect(jsonPath("$.submittedBy").value(TEST_USER));
+            asApprover(post(RECONCILIATIONS + "/" + reconId + "/finalize"), "{}")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("FINALIZED"))
+                    .andExpect(jsonPath("$.finalizedBy").value(APPROVER))
+                    .andExpect(jsonPath("$.approvedGlEndingBalance").value(250.0));
             expectError(
                     postJson(RECONCILIATIONS + "/" + reconId + "/auto-match", Map.of()),
+                    409,
+                    "RECONCILIATION_ALREADY_FINALIZED");
+            expectError(
+                    asApprover(post(RECONCILIATIONS + "/" + reconId + "/finalize"), "{}"),
                     409,
                     "RECONCILIATION_ALREADY_FINALIZED");
         }
@@ -756,14 +783,23 @@ class BankReconciliationContractBehaviorIT extends BaseContractIntegrationTest {
                             .content(endpoint.getValue()))
                     .andExpect(status().isForbidden());
         }
+        mockMvc.perform(withAuth(post(base + "/submit"), VIEW_ONLY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
         for (String approveOnly : List.of(
-                base + "/outstanding-items/" + id + "/clear-in-gap", base + "/adjustments/" + id + "/reverse")) {
+                base + "/outstanding-items/" + id + "/clear-in-gap",
+                base + "/adjustments/" + id + "/reverse",
+                base + "/finalize",
+                base + "/return",
+                base + "/cancel",
+                base + "/supersede")) {
             mockMvc.perform(withAuth(post(approveOnly), ADJUST_ONLY)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
                     .andExpect(status().isForbidden());
         }
-        for (String read : List.of(base + "/review", base + "/candidates")) {
+        for (String read : List.of(base + "/review", base + "/candidates", base + "/audit")) {
             mockMvc.perform(withAuth(get(read), "accounting:je:view")).andExpect(status().isForbidden());
         }
     }

@@ -42,6 +42,18 @@ public interface BankReconciliationOutstandingItemRepository
     List<BankReconciliationOutstandingItem> findByClearedByMatchIdAndStatus(
             @NonNull UUID clearedByMatchId, @NonNull OutstandingItemStatus status);
 
+    /** Items a reconciliation registered, in {@code status} (cancel releases its OPEN ones; S5, #2304). */
+    @NonNull
+    List<BankReconciliationOutstandingItem> findByRegisteredInReconciliationIdAndStatus(
+            @NonNull UUID registeredInReconciliationId, @NonNull OutstandingItemStatus status);
+
+    /** Ids of the items a reconciliation registered, cleared or reaffirmed (its audit trail; S5, #2304). */
+    @Query(
+            "SELECT i.outstandingItemId FROM BankReconciliationOutstandingItem i WHERE i.registeredInReconciliationId = :id"
+                    + " OR i.clearedInReconciliationId = :id OR i.lastReaffirmedInReconciliationId = :id")
+    @NonNull
+    List<UUID> findIdsTouchedBy(@Param("id") @NonNull UUID reconciliationId);
+
     Optional<BankReconciliationOutstandingItem> findByOutstandingItemIdAndGlAccountId(
             @NonNull UUID outstandingItemId, @NonNull UUID glAccountId);
 
