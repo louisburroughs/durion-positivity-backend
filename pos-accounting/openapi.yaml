@@ -1386,7 +1386,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: STATEMENT_IMPORT_FAILED, ACCOUNT_NOT_RECONCILABLE, CURRENCY_NOT_SUPPORTED, STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS or STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE
+          description: STATEMENT_IMPORT_FAILED, ACCOUNT_NOT_RECONCILABLE, CURRENCY_NOT_SUPPORTED, STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS, STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE or AMOUNT_PRECISION_EXCEEDS_CURRENCY
       security:
       - bearerAuth:
         - accounting:reconciliation:adjust
@@ -1511,7 +1511,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: IMPORT_NOT_COMMITTABLE, CURRENCY_NOT_SUPPORTED, STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS or STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE
+          description: IMPORT_NOT_COMMITTABLE, CURRENCY_NOT_SUPPORTED, STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS, STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE or AMOUNT_PRECISION_EXCEEDS_CURRENCY
       security:
       - bearerAuth:
         - accounting:reconciliation:adjust
@@ -1707,7 +1707,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS or STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE after a header change
+          description: STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS or STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE after a header change; AMOUNT_PRECISION_EXCEEDS_CURRENCY for a header or split balance finer than the currency
       security:
       - bearerAuth:
         - accounting:reconciliation:adjust
@@ -1873,6 +1873,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: IMPORT_ALREADY_COMMITTED, IMPORT_DISCARDED or OPTIMISTIC_LOCK
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A corrected signedAmount has more decimal places than the import's currency allows (AMOUNT_PRECISION_EXCEEDS_CURRENCY, fieldErrors[correctedValues.signedAmount])
       security:
       - bearerAuth:
         - accounting:reconciliation:adjust
@@ -2038,7 +2044,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: ACCOUNT_NOT_RECONCILABLE, CURRENCY_NOT_SUPPORTED, STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS, STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE, STATEMENT_TRANSACTION_OUT_OF_WINDOW or STATEMENT_ACTIVITY_MISMATCH
+          description: ACCOUNT_NOT_RECONCILABLE, CURRENCY_NOT_SUPPORTED, STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS, STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE, STATEMENT_TRANSACTION_OUT_OF_WINDOW, STATEMENT_ACTIVITY_MISMATCH or AMOUNT_PRECISION_EXCEEDS_CURRENCY
       security:
       - bearerAuth:
         - accounting:reconciliation:adjust
@@ -6133,7 +6139,7 @@ paths:
 
         Emits an ACCOUNTING_PERIOD_BANK_REC_POLICY_SET event and writes one BANK_REC_POLICY_SET audit row per setting whose value changes (old and new value, justification); an unchanged setting writes nothing.
 
-        Returns 400 VALIDATION_ERROR for a missing field, an unknown value, a negative number, too many decimals or a blank justification, and 400 JUSTIFICATION_REQUIRED for a justification of 1 to 9 characters.
+        Returns 400 VALIDATION_ERROR for a missing field, an unknown value, a negative number or a blank justification, 400 JUSTIFICATION_REQUIRED for a justification of 1 to 9 characters, and 422 AMOUNT_PRECISION_EXCEEDS_CURRENCY when otherApprovalThreshold has more decimal places than the functional currency''s minor unit (it is refused, never rounded).
 
         '
       operationId: setBankReconciliationPolicy
@@ -6173,6 +6179,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Caller lacks the accounting:period:hard_lock permission
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: otherApprovalThreshold has more decimal places than the functional currency allows (AMOUNT_PRECISION_EXCEEDS_CURRENCY, fieldErrors[otherApprovalThreshold])
       security:
       - bearerAuth:
         - accounting:period:hard_lock
@@ -7595,7 +7607,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: RECONCILIATION_ADJUSTMENT_SIGN_INVALID, ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE, GL_ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_RECONCILABLE, MATCH_AMOUNT_MISMATCH, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED
+          description: RECONCILIATION_ADJUSTMENT_SIGN_INVALID, ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE, GL_ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_RECONCILABLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED or AMOUNT_PRECISION_EXCEEDS_CURRENCY
       security:
       - bearerAuth:
         - accounting:reconciliation:adjust
