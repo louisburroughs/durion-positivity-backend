@@ -26,21 +26,21 @@ import org.junit.jupiter.api.Test;
  * and then got a bare {@code 403} on {@code GET /v1/shop-manager/{locationId}/technicians}: the page is
  * gated on {@code shop:schedule:view}, the roster endpoint enforces {@code shop:technician:view}, and
  * ADMIN held the first and not the second. The calendar degrades rather than failing, so the symptom
- * was an empty roster and capacity counted with no technicians. LOCATION_MANAGER, which edits the
- * same schedule and assigns bays on it, was in the same state.
+ * was an empty roster and capacity counted with no technicians. LOCATION_MANAGER, SERVICE_ADVISOR and
+ * TECHNICIAN, which all open the same schedule, were in the same state.
  *
- * <p>The load-bearing assertion states the invariant rather than a list: a role that builds the
- * schedule (edits it, assigns bays on it, or watches the shop dashboard) must be able to see who is
- * on it, so a role added later with half of scheduling fails here instead of on alpha. Both grant
+ * <p>The load-bearing assertion states the invariant rather than a list: a role that can see the
+ * schedule (view or edit it, assign bays on it, or watch the shop dashboard) must be able to see who
+ * is on it, so a role added later with half of scheduling fails here instead of on alpha. Both grant
  * sources are read, as in {@link DispatchPlacementGrantsTest}: the Flyway seed provisions the floor
- * roles on every deploy, and the bulk-load baseline CSV is the only source for LOCATION_MANAGER.
+ * roles on every deploy, and the bulk-load baseline CSV is the only source for the other roles.
  */
 @DisplayName("technician roster grants for schedulers")
 class ShopRosterGrantsTest {
 
     private static final String ROSTER = "shop:technician:view";
     private static final Set<String> SCHEDULING =
-            Set.of("shop:schedule:edit", "shop:bay:assign", "shop:dashboard:view");
+            Set.of("shop:schedule:view", "shop:schedule:edit", "shop:bay:assign", "shop:dashboard:view");
 
     private static final Path FIXTURES = Path.of("..", "scripts", "fixtures", "seed", "alpha", "security");
     private static final Path MIGRATIONS = Path.of("src", "main", "resources", "db", "migration");
@@ -61,7 +61,7 @@ class ShopRosterGrantsTest {
     }
 
     @Test
-    @DisplayName("every role that builds the schedule may read the technician roster, in each source")
+    @DisplayName("every role that sees the schedule may read the technician roster, in each source")
     void schedulersHoldTheRoster() {
         // Asserted per source, not on the union: a tenant's rows come from one of the two.
         for (Map.Entry<String, Map<String, Set<String>>> source :
@@ -72,19 +72,18 @@ class ShopRosterGrantsTest {
                     .isNotEmpty();
             assertThat(schedulers)
                     .allSatisfy(role -> assertThat(source.getValue().get(role))
-                            .as("%s: %s builds the schedule but cannot read who is on it", source.getKey(), role)
+                            .as("%s: %s sees the schedule but cannot read who is on it", source.getKey(), role)
                             .contains(ROSTER));
         }
     }
 
     @Test
-    @DisplayName("ADMIN and LOCATION_MANAGER may read the roster")
-    void adminAndLocationManagerHoldTheRoster() {
+    @DisplayName("the roles refused on alpha may read the roster")
+    void refusedRolesHoldTheRoster() {
         assertThat(sql.get("ADMIN")).as("Flyway floor: ADMIN").contains(ROSTER);
-        assertThat(csv.get("ADMIN")).as("bulk-load baseline: ADMIN").contains(ROSTER);
-        assertThat(csv.get("LOCATION_MANAGER"))
-                .as("bulk-load baseline: LOCATION_MANAGER")
-                .contains(ROSTER);
+        for (String role : List.of("ADMIN", "LOCATION_MANAGER", "SERVICE_ADVISOR", "TECHNICIAN")) {
+            assertThat(csv.get(role)).as("bulk-load baseline: %s", role).contains(ROSTER);
+        }
     }
 
     private static Set<String> rolesHoldingAny(Map<String, Set<String>> grants, Set<String> permissions) {
