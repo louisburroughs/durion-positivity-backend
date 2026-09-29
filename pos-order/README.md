@@ -196,12 +196,12 @@ non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_i
 
 ## Database
 
-Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`: `V1__baseline_order.sql` (the 2026-09-09
-flattened baseline with the tenancy schema on every scoped table), `V2__event_outbox_tenant_id.sql`
-(`tenant_id` as data on the global outbox table, see Multitenancy above) and
-`V3__order_payment_record_currency.sql` (nullable `order_payment_record.currency_code`, the ISO 4217 currency of the
-settled or reversed payment as stamped on the pos-invoice fact, ADR-0067 DF-3; event-sourced rows are backfilled with
-`USD`, the only currency those facts have carried so far, and ON_ACCOUNT rows stay null).
+Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`: `V1__baseline_order.sql`, the whole schema
+(the 2026-09-09 flattened baseline, edited in place while in alpha): the tenancy schema on every scoped table,
+`tenant_id` as data on the global outbox table (see Multitenancy above), and the nullable
+`order_payment_record.currency_code` (the ISO 4217 currency of the settled or reversed payment as stamped on the
+pos-invoice fact, ADR-0067 DF-3; ON_ACCOUNT rows stay null). Alpha databases are recreated rather than migrated
+(`docs/runbooks/flyway-baseline-reset.md`, "Alpha Cutover").
 
 ## Development
 

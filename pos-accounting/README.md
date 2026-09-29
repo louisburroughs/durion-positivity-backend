@@ -303,7 +303,7 @@ on an inbound fact means the ledger currency until producers stamp one (E-3).
   `AVAILABLE` `ReceivablePayment`. It is held the same way: `sourceSystem = pos-invoice`, `SKIPPED`,
   `CURRENCY_NOT_SUPPORTED`, `domainKeyId` = `paymentIntentId`.
 - **Vendor bills from supplier invoices** (`supplier.invoice.received`, #2309) — the bill records the
-  invoice's `currency` (V5 column, on `VendorBillResponse`). A bill in another currency gets status
+  invoice's `currency` (`vendor_bill.currency`, on `VendorBillResponse`). A bill in another currency gets status
   `CURRENCY_HOLD` with the reason in `rejectionReason`: it is not matched, cannot be approved through
   match resolution, is never paid (AP payment takes `APPROVED` bills only) and is left out of Aged
   Payables. A re-issue under the same number in a different currency is flagged `MATCH_EXCEPTION`, like a
@@ -523,13 +523,11 @@ ignored without recording its eventId.
 Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration` (the pre-2026-09-09 chain was
 flattened into the baseline for ADR-0062; see `../durion/docs/architecture/deployment/TENANCY_SCHEMA.md`):
 
-- `V1__baseline_accounting.sql` — full schema baseline with the tenancy schema (`tenant_id`, row-level security,
-  tenant-scoped keys) on every scoped table
+- `V1__baseline_accounting.sql` — the whole schema, with the tenancy schema (`tenant_id`, row-level security,
+  tenant-scoped keys) on every scoped table and `tenant_id` as data on the two global outbox tables
+  (`event_outbox`, `kafka_event_outbox`, see Multitenancy below); edited in place while in alpha, with `V2` retained only
+  for seed data (alpha databases are recreated; see `docs/runbooks/flyway-baseline-reset.md`, "Alpha Cutover")
 - `V2__seed_accounting.sql` — versioned seed data
-- `V3__outbox_tenant_id.sql` — `tenant_id` as data on the two global outbox tables (`event_outbox`,
-  `kafka_event_outbox`), see Multitenancy below
-- `V4__accounting_event_status_skipped.sql` — adds the terminal `SKIPPED` status to the `accounting_event`
-  status check (#2191)
 - `R__seed_reference_accounting.sql` — repeatable seed for reference data, including the 9-account COA; also the
   `INVOICE_REVENUE` posting category / mapping keys (#1843), the `INVENTORY_ADJUSTMENT` posting category /
   mapping keys (#2191), and the `INVENTORY_REVALUATION` posting category / mapping keys (#2193)

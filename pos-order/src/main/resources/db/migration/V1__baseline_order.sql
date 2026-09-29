@@ -43,6 +43,7 @@ CREATE TABLE public.cash_movement (
 
 CREATE TABLE public.event_outbox (
     id uuid NOT NULL,
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
     topic character varying(255) NOT NULL,
     record_key character varying(255) NOT NULL,
     payload text NOT NULL,
@@ -51,6 +52,8 @@ CREATE TABLE public.event_outbox (
     attempts integer DEFAULT 0 NOT NULL,
     last_error text
 );
+
+COMMENT ON COLUMN public.event_outbox.tenant_id IS 'ADR-0062: producing tenant, carried as data (global table, no policy); stamped on the Kafka record header.';
 
 CREATE TABLE public.ext_billing_rules (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
@@ -241,8 +244,11 @@ CREATE TABLE public.order_payment_record (
     amount numeric(19,4) NOT NULL,
     reference character varying(128),
     occurred_at timestamp without time zone NOT NULL,
-    created_at timestamp without time zone NOT NULL
+    created_at timestamp without time zone NOT NULL,
+    currency_code character varying(3)
 );
+
+COMMENT ON COLUMN public.order_payment_record.currency_code IS 'ADR-0067 DF-3: ISO 4217 currency of the settled/reversed payment, from the pos-invoice fact; null for ON_ACCOUNT entries.';
 
 CREATE TABLE public.order_status_history (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,

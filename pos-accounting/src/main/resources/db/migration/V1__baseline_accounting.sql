@@ -126,7 +126,7 @@ CREATE TABLE public.accounting_event (
     domain_key_id character varying(255),
     invoice_id uuid,
     event_reference character varying(20),
-    CONSTRAINT accounting_event_status_check CHECK (((status)::text = ANY (ARRAY[('RECEIVED'::character varying)::text, ('PROCESSING'::character varying)::text, ('PROCESSED'::character varying)::text, ('FAILED'::character varying)::text, ('SUSPENDED'::character varying)::text])))
+    CONSTRAINT accounting_event_status_check CHECK (((status)::text = ANY (ARRAY[('RECEIVED'::character varying)::text, ('PROCESSING'::character varying)::text, ('PROCESSED'::character varying)::text, ('FAILED'::character varying)::text, ('SUSPENDED'::character varying)::text, ('SKIPPED'::character varying)::text])))
 );
 
 CREATE TABLE public.accounting_location_fx_rate (
@@ -474,6 +474,7 @@ CREATE TABLE public.default_gl_mapping (
 );
 
 CREATE TABLE public.event_outbox (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
     retry_count integer NOT NULL,
     created_at timestamp(6) with time zone NOT NULL,
     last_attempt_at timestamp(6) with time zone,
@@ -488,6 +489,8 @@ CREATE TABLE public.event_outbox (
     payload text NOT NULL,
     CONSTRAINT event_outbox_status_check CHECK (((status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('PUBLISHED'::character varying)::text, ('FAILED'::character varying)::text])))
 );
+
+COMMENT ON COLUMN public.event_outbox.tenant_id IS 'ADR-0062: producing tenant, carried as data (global table, no policy); bound before the event is dispatched.';
 
 CREATE TABLE public.ext_customer_billing_rules (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
@@ -753,6 +756,7 @@ CREATE TABLE public.journal_entry_line (
 
 CREATE TABLE public.kafka_event_outbox (
     id uuid NOT NULL,
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
     topic character varying(255) NOT NULL,
     record_key character varying(255) NOT NULL,
     payload text NOT NULL,
@@ -761,6 +765,8 @@ CREATE TABLE public.kafka_event_outbox (
     attempts integer DEFAULT 0 NOT NULL,
     last_error text
 );
+
+COMMENT ON COLUMN public.kafka_event_outbox.tenant_id IS 'ADR-0062: producing tenant, carried as data (global table, no policy); stamped on the Kafka record header.';
 
 CREATE TABLE public.mapping_key (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
@@ -1061,7 +1067,8 @@ CREATE TABLE public.vendor_bill (
     vendor_name character varying(200),
     approval_justification character varying(1000),
     rejection_reason character varying(1000),
-    CONSTRAINT vendor_bill_status_check CHECK (((status)::text = ANY (ARRAY[('PENDING_RECEIPT_MATCH'::character varying)::text, ('MATCH_EXCEPTION'::character varying)::text, ('APPROVED'::character varying)::text, ('REJECTED'::character varying)::text, ('PAID'::character varying)::text, ('VOIDED'::character varying)::text])))
+    currency character varying(3),
+    CONSTRAINT vendor_bill_status_check CHECK (((status)::text = ANY (ARRAY[('PENDING_RECEIPT_MATCH'::character varying)::text, ('MATCH_EXCEPTION'::character varying)::text, ('CURRENCY_HOLD'::character varying)::text, ('APPROVED'::character varying)::text, ('REJECTED'::character varying)::text, ('PAID'::character varying)::text, ('VOIDED'::character varying)::text])))
 );
 
 CREATE TABLE public.vendor_bill_line (
