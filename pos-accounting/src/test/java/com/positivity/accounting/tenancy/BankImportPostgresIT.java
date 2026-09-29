@@ -100,6 +100,9 @@ class BankImportPostgresIT extends PostgresTenancyTestBase {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @Autowired
+    private com.positivity.accounting.internal.bankrec.intake.BankIntakeLookup lookup;
+
     private UUID account;
     private UUID otherTenantAccount;
 
@@ -344,6 +347,25 @@ class BankImportPostgresIT extends PostgresTenancyTestBase {
     }
 
     // ---- duplicates, split, whole-file (§4.3, §4.5, §5.7, §8.2) ---------------------------------
+
+    @Test
+    @DisplayName("a collision query over more fingerprints than Postgres takes bind parameters still answers")
+    void aCollisionQueryBeyondTheBindParameterLimitAnswers() {
+        BankImportResponse uploaded = create(
+                upload("date,description,amount\n2025-09-02,FEE,-5.00", "2025-09-01", "2025-09-30", "100", "95"));
+        inTenantA(() -> service.commit(uploaded.getImportId(), null));
+        BankTransaction stored = transactionsOfAccount().getFirst();
+
+        // 70,000 fingerprints: one IN list would exceed the 65,535 bind parameters of a Postgres statement.
+        List<String> fingerprints = new ArrayList<>(java.util.stream.IntStream.range(0, 70_000)
+                .mapToObj(i -> String.format("%064d", i))
+                .toList());
+        fingerprints.add(stored.getFingerprint());
+
+        Map<String, UUID> colliding = inTenantA(() -> lookup.collidingFingerprints(account, fingerprints));
+
+        assertThat(colliding).containsExactly(Map.entry(stored.getFingerprint(), stored.getBankTransactionId()));
+    }
 
     @Test
     @DisplayName("two identical $5.00 rows confirmed DISTINCT become two UNMATCHED transactions")

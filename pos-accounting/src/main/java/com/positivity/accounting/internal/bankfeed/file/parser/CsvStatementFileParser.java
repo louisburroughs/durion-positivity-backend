@@ -202,7 +202,7 @@ public class CsvStatementFileParser implements StatementFileParser {
             }
         }
         if (inQuotes) {
-            // Every later physical row would otherwise fold into this one cell.
+            // Accepting it would fold every later row into one cell of this record.
             throw unreadable("Line " + recordLine + ": a quoted field is not closed before the end of the file");
         }
         cells.add(cell.toString());

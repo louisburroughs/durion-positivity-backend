@@ -208,10 +208,7 @@ public class BankImportServiceImpl implements BankImportService {
         created.setFileSha256(sha256);
         applyHeader(created, header);
         created.setSplitAt(toJson(split));
-        created.setGapAcknowledgement(
-                request.getGapAcknowledgement() == null
-                        ? null
-                        : request.getGapAcknowledgement().trim());
+        created.setGapAcknowledgement(trimmed(request.getGapAcknowledgement()));
         applyOptions(created, options, parsed);
         created.setCreatedBy(actor);
         created.setRetentionUntil(LocalDate.now(clock).plusDays(retentionDays));
@@ -331,32 +328,25 @@ public class BankImportServiceImpl implements BankImportService {
                 firstNonNull(request.getSignConvention(), found.getSignConvention()));
 
         BankImportStatementHeader header = request.getStatement() != null ? request.getStatement() : headerOf(found);
-        if (request.getStatement() != null) {
+        // A sent header or acknowledgement restates the acknowledgement: a corrected header may now continue
+        // the previous statement (the stored one would be NOT_APPLICABLE) or open a gap (it needs one).
+        boolean headerChecked = request.getStatement() != null || request.getGapAcknowledgement() != null;
+        if (headerChecked) {
             Map<String, String> errors = new LinkedHashMap<>();
-            validateHeader(errors, header);
+            if (request.getStatement() != null) {
+                validateHeader(errors, header);
+            }
+            validateGapAcknowledgement(errors, request.getGapAcknowledgement());
             throwIfAny(errors, "The statement header is invalid");
         }
         List<SplitPoint> split = request.getSplitAt() != null
                 ? splitPoints(request.getSplitAt(), header)
                 : splitPoints(fromJson(found.getSplitAt()), header);
-        // The acknowledgement travels with the header: absent keeps the stored one, blank clears it, so a
-        // correction that closes the gap can drop it and one that opens a gap can supply it.
-        String gapAcknowledgement = request.getGapAcknowledgement() == null
-                ? found.getGapAcknowledgement()
-                : blankToNull(request.getGapAcknowledgement().trim());
-        if (gapAcknowledgement != null && gapAcknowledgement.length() > 1000) {
-            throw BankRecException.field(
-                    BankRecErrorCode.VALIDATION_ERROR,
-                    "gapAcknowledgement is too long",
-                    "gapAcknowledgement",
-                    "at most 1000 characters");
-        }
-        if (request.getStatement() != null || request.getGapAcknowledgement() != null) {
-            // A corrected or widened header, or a changed acknowledgement, re-runs the header checks (§4.5:
-            // a widening may overlap) with the acknowledgement that is then stored.
-            lookup.checkHeader(found.getGlAccountId(), statementHeader(header), gapAcknowledgement);
+        if (headerChecked) {
+            // A corrected or widened header re-runs the header checks (§4.5: a widening may overlap).
+            lookup.checkHeader(found.getGlAccountId(), statementHeader(header), request.getGapAcknowledgement());
             applyHeader(found, header);
-            found.setGapAcknowledgement(gapAcknowledgement);
+            found.setGapAcknowledgement(trimmed(request.getGapAcknowledgement()));
         }
         found.setSplitAt(toJson(split));
 
@@ -376,11 +366,9 @@ public class BankImportServiceImpl implements BankImportService {
         String actor = currentActor();
         Map<String, Object> previousMapping = found.getColumnMapping();
         applyOptions(found, options, parsed);
-        // Each mapping request states its own intent; an earlier opt-in does not outlive it, so commit
-        // saves the mapping on a new profile only when the latest request asked for that.
-        boolean saveAsAccountDefault = Boolean.TRUE.equals(request.getSaveAsAccountDefault());
-        found.setSaveMappingAsDefault(saveAsAccountDefault);
-        if (saveAsAccountDefault) {
+        // Each mapping restates the opt-in: the commit saves the default only if the last mapping asked.
+        found.setSaveMappingAsDefault(Boolean.TRUE.equals(request.getSaveAsAccountDefault()));
+        if (found.isSaveMappingAsDefault()) {
             lookup.saveDefaultColumnMapping(found.getGlAccountId(), mapping.toJson(), actor);
         }
         found.setStatus(parsed.mappingResolved() ? BankImportStatus.VALIDATED : BankImportStatus.UPLOADED);
@@ -392,11 +380,11 @@ public class BankImportServiceImpl implements BankImportService {
                 importId,
                 BankImportAuditRecorder.BANK_IMPORT_MAPPING_SET,
                 actor,
-                request.getGapAcknowledgement() == null ? null : saved.getGapAcknowledgement(),
+                headerChecked ? saved.getGapAcknowledgement() : null,
                 previousMapping == null ? null : "columnMapping=" + previousMapping,
                 "columnMapping=" + mapping.toJson() + ", signConvention=" + options.signConvention()
                         + ", window=" + saved.getStatementStartDate() + ".." + saved.getStatementEndDate()
-                        + ", saveAsAccountDefault=" + saveAsAccountDefault
+                        + ", saveAsAccountDefault=" + saved.isSaveMappingAsDefault()
                         + ", status=" + saved.getStatus());
         return view(saved, rows, true).build();
     }
@@ -1097,11 +1085,19 @@ public class BankImportServiceImpl implements BankImportService {
         } else {
             validateHeader(errors, request.getStatement());
         }
-        if (request.getGapAcknowledgement() != null
-                && request.getGapAcknowledgement().length() > 1000) {
+        validateGapAcknowledgement(errors, request.getGapAcknowledgement());
+        throwIfAny(errors, "The import request is invalid");
+    }
+
+    /** The column's bound; its justification rules (§4.2) run in the header checks. */
+    private static void validateGapAcknowledgement(Map<String, String> errors, @Nullable String acknowledgement) {
+        if (acknowledgement != null && acknowledgement.length() > 1000) {
             errors.put("gapAcknowledgement", "at most 1000 characters");
         }
-        throwIfAny(errors, "The import request is invalid");
+    }
+
+    private static @Nullable String trimmed(@Nullable String value) {
+        return value == null ? null : value.trim();
     }
 
     private static void validateHeader(Map<String, String> errors, BankImportStatementHeader header) {

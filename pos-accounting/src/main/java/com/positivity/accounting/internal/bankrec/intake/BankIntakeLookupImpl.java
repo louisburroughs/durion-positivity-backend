@@ -35,10 +35,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class BankIntakeLookupImpl implements BankIntakeLookup {
 
-    /** Rows that never raise a fingerprint collision at intake (R1, §4.5), as in the intake. */
-    /** Fingerprints per collision query: well inside the database's bind-parameter limit. */
+    /**
+     * Fingerprints per collision query: a 10 MiB file can hold more rows than Postgres accepts bind
+     * parameters (65,535) in one {@code IN} list.
+     */
     static final int FINGERPRINT_QUERY_CHUNK = 500;
 
+    /** Rows that never raise a fingerprint collision at intake (R1, §4.5), as in the intake. */
     private static final Set<BankTransactionStatus> NOT_COLLIDING =
             EnumSet.of(BankTransactionStatus.EXCLUDED, BankTransactionStatus.REMOVED_BY_SOURCE);
 

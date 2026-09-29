@@ -152,6 +152,16 @@ class CsvStatementFileParserTest {
         }
 
         @Test
+        void anUnterminatedQuotedFieldRatherThanOneRecordSwallowingTheRest() {
+            // A stray quote must not fold every later row into one cell of row 2.
+            assertFailed(
+                    ("date,description,amount\n2026-06-15,\"ACME, INC,100.00\n2026-06-16,FEE,-1.00\n"
+                                    + "2026-06-17,DEP,5.00\n")
+                            .getBytes(StandardCharsets.UTF_8),
+                    "Line 2: a quoted field is not closed");
+        }
+
+        @Test
         void aQuotedFieldLeftOpenAtTheEndOfTheFileIsUnreadableNotOneLongRow() {
             String csv = "2026-06-15,\"ACME, INC,100.00,REF-1\n2026-06-16,FEE,-1.00,REF-2\n";
             assertFailed(csv.getBytes(StandardCharsets.UTF_8), "quoted field is not closed");
