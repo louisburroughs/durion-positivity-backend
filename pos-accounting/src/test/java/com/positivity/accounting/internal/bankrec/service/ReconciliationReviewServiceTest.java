@@ -92,6 +92,9 @@ class ReconciliationReviewServiceTest {
     @Mock
     private AccountingPeriodService periodService;
 
+    @Mock
+    private BankRecPolicy policy;
+
     private ReconciliationReviewServiceImpl service;
     private BankReconciliation recon;
     private BankStatement acknowledged;
@@ -113,7 +116,8 @@ class ReconciliationReviewServiceTest {
                 periodGate,
                 periodService,
                 BankRecSettings.defaults(),
-                usd());
+                usd(),
+                policy);
         recon = reconciliation();
         acknowledged = statement(STATEMENT_ID, START, END, "Changed banks in August");
         lenient().when(support.require(RECON_ID)).thenReturn(recon);

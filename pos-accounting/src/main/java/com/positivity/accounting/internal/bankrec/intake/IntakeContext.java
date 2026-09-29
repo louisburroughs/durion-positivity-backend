@@ -25,6 +25,9 @@ import org.jspecify.annotations.Nullable;
  *     commit (the file adapter's duplicate decisions, §4.4; story S3): such a row enters {@code
  *     UNMATCHED} even when its fingerprint collides (R1 asks a human, and the human has answered);
  *     empty otherwise
+ * @param supersedesStatementId the COMMITTED statement of the same account this corrected statement supersedes
+ *     (§4.9 path 3; story S5); else null
+ * @param supersessionJustification why it supersedes it (at least 10 characters, D15); else null
  */
 public record IntakeContext(
         @NonNull UUID glAccountId,
@@ -34,7 +37,9 @@ public record IntakeContext(
         @Nullable UUID requestId,
         @Nullable String requestHash,
         @Nullable Map<String, Object> defaultColumnMapping,
-        @NonNull Set<Integer> confirmedDistinctRows) {
+        @NonNull Set<Integer> confirmedDistinctRows,
+        @Nullable UUID supersedesStatementId,
+        @Nullable String supersessionJustification) {
 
     public IntakeContext {
         if (glAccountId == null) {
@@ -45,6 +50,29 @@ public record IntakeContext(
         }
         defaultColumnMapping = defaultColumnMapping == null ? null : Map.copyOf(defaultColumnMapping);
         confirmedDistinctRows = confirmedDistinctRows == null ? Set.of() : Set.copyOf(confirmedDistinctRows);
+    }
+
+    /** A context that supersedes no statement. */
+    public IntakeContext(
+            @NonNull UUID glAccountId,
+            @NonNull String actor,
+            @Nullable String gapAcknowledgement,
+            @Nullable UUID sourceRef,
+            @Nullable UUID requestId,
+            @Nullable String requestHash,
+            @Nullable Map<String, Object> defaultColumnMapping,
+            @NonNull Set<Integer> confirmedDistinctRows) {
+        this(
+                glAccountId,
+                actor,
+                gapAcknowledgement,
+                sourceRef,
+                requestId,
+                requestHash,
+                defaultColumnMapping,
+                confirmedDistinctRows,
+                null,
+                null);
     }
 
     /** A context without confirmed-distinct rows (manual entry, feeds, a file without decisions). */

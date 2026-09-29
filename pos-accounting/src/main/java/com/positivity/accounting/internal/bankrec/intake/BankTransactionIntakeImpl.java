@@ -17,6 +17,7 @@ import com.positivity.accounting.internal.bankrec.service.BankCashAccounts;
 import com.positivity.accounting.internal.bankrec.service.BankRecAuditRecorder;
 import com.positivity.accounting.internal.bankrec.service.BankStatementFacts;
 import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
+import com.positivity.accounting.internal.bankrec.service.StatementSupersession;
 import com.positivity.domainevents.accounting.BankStatementCommittedV1;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.BankTransactionObserved;
@@ -76,6 +77,7 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
     private final BankReconciliationRepository reconciliations;
     private final BankRecAuditRecorder audit;
     private final BankStatementFacts facts;
+    private final StatementSupersession supersession;
     private final Clock clock;
 
     @Override
@@ -90,19 +92,40 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
                 existingProfile.map(BankAccountProfile::getCurrency).orElseGet(functionalCurrency::code);
         requireCurrency(batch, accountCurrency);
 
-        // (c) statement header, (e) E1 — all before anything is written.
+        // (c) statement header, (e) E1 — all before anything is written. A corrected statement names the one it
+        // supersedes and is checked with that one left out (§4.9 path 3; S5, #2304).
         StatementHeader header = batch.statement();
+        StatementSupersession.@Nullable Request supersede = null;
+        if (ctx.supersedesStatementId() != null || ctx.supersessionJustification() != null) {
+            if (header == null) {
+                throw BankRecException.field(
+                        BankRecErrorCode.VALIDATION_ERROR,
+                        "A supersession needs a statement header",
+                        "supersedesStatementId",
+                        "only a statement supersedes a statement");
+            }
+            supersede = supersession.lockEligible(
+                    glAccountId, ctx.supersedesStatementId(), ctx.supersessionJustification());
+        }
+        UUID superseded = supersede == null ? null : supersede.superseded().getStatementId();
         @Nullable String acknowledgement = null;
         BigDecimal activityTotal = activityTotal(batch);
         if (header != null) {
-            acknowledgement = checkHeader(batch, header, ctx, glAccountId, sourceKind);
+            acknowledgement = checkHeader(batch, header, ctx, glAccountId, sourceKind, superseded);
             requireActivityTies(header, activityTotal);
         }
 
         Instant now = Instant.now(clock);
+        if (supersede != null) {
+            // Before the corrected statement is written: U1, U2 and R1 must no longer see the old one.
+            supersession.retire(supersede, ctx.actor());
+        }
         BankStatement statement = null;
         if (header != null) {
             statement = commitStatement(batch, header, ctx, sourceKind, activityTotal, acknowledgement, now);
+        }
+        if (supersede != null && statement != null) {
+            supersession.link(supersede, statement.getStatementId(), ctx.actor());
         }
 
         // (d) transactions.
@@ -111,7 +134,11 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
         // (g) profile and baseline.
         BankAccountProfile profile = existingProfile.orElseGet(() -> createProfile(ctx, accountCurrency));
         boolean baselineChanged = false;
-        if (acknowledgement != null) {
+        if (supersede != null) {
+            // §3.1: recomputed from the COMMITTED statements, audited only when it changes.
+            baselineChanged =
+                    setBaseline(profile, latestAcknowledgedStart(glAccountId), ctx.actor(), supersede.justification());
+        } else if (acknowledgement != null) {
             baselineChanged = applyBaseline(profile, ctx.actor(), acknowledgement);
         }
 
@@ -189,9 +216,16 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
             StatementHeader header,
             IntakeContext ctx,
             UUID glAccountId,
-            SourceKind sourceKind) {
+            SourceKind sourceKind,
+            @Nullable UUID superseded) {
         String acknowledgement = StatementHeaderChecks.check(
-                        statements, functionalCurrency, clock, glAccountId, header, ctx.gapAcknowledgement())
+                        statements,
+                        functionalCurrency,
+                        clock,
+                        glAccountId,
+                        header,
+                        ctx.gapAcknowledgement(),
+                        superseded)
                 .gapAcknowledgement();
 
         // §4.3: every row of a file or manual statement lies inside its own window. Feed batches carry

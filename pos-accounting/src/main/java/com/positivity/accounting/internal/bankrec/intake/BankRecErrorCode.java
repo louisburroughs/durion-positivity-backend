@@ -27,6 +27,16 @@ public enum BankRecErrorCode {
     IDEMPOTENCY_CONFLICT(409),
     /** A stale {@code version} (409, §6.3). */
     OPTIMISTIC_LOCK(409),
+    /**
+     * A preparer's mutation on a reconciliation that is not {@code IN_PROGRESS} and not {@code FINALIZED}:
+     * {@code SUBMITTED} (return it first), {@code INVALIDATED}, {@code SUPERSEDED} or {@code CANCELLED} (409,
+     * §4.9; S5).
+     */
+    RECONCILIATION_NOT_EDITABLE(409),
+    /** Approve or return on a reconciliation that is not {@code SUBMITTED} (409, §4.9; S5). */
+    RECONCILIATION_NOT_SUBMITTED(409),
+    /** The approver is the submitter and the tenant does not allow self-approval (403, D3; S5). */
+    RECONCILIATION_SELF_APPROVAL(403),
     /** A statement that already has an active, or a FINALIZED unsuperseded, reconciliation (409, §4.1; S4). */
     RECONCILIATION_WINDOW_ALREADY_RECONCILED(409),
     /** Accept, reject or unmatch on a match not in the state the action needs (409, §3.4; S4). */
@@ -47,6 +57,17 @@ public enum BankRecErrorCode {
     ADJUSTMENT_LINK_REQUIRED(422),
     /** A named match, statement, amount or counter account that fails its link rule (422, §3.5; S4). */
     ADJUSTMENT_LINK_NOT_ELIGIBLE(422),
+    /**
+     * At submit or approve with {@code |difference| ≤ 0.01}: unexplained bank transactions or ledger lines
+     * from the baseline to the window end; both counts and the first 50 ids per side in {@code fieldErrors}
+     * (422, E4, D2; S5).
+     */
+    RECONCILIATION_HAS_UNEXPLAINED_ITEMS(422),
+    /**
+     * {@code supersedesStatementId} names a statement unknown in the tenant, of another account, or not
+     * {@code COMMITTED} (422, §4.9 path 3; S5).
+     */
+    STATEMENT_SUPERSESSION_NOT_ELIGIBLE(422),
     /** A statementless reconciliation on an account without a feed link — every account in phase 1 (422; S4). */
     BANK_ACCOUNT_FEED_NOT_LINKED(422),
     /** The account is not a reconcilable {@code BANK_CASH} account (422, D5). */

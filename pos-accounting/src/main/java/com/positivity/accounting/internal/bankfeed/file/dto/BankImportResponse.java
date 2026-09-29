@@ -102,6 +102,12 @@ public class BankImportResponse {
     @Schema(description = "The gap acknowledgement the commit hands to the intake")
     private String gapAcknowledgement;
 
+    @Schema(description = "The COMMITTED statement this corrected file supersedes at commit (§4.9 path 3)")
+    private UUID supersedesStatementId;
+
+    @Schema(description = "Why it supersedes it")
+    private String supersessionJustification;
+
     @Schema(description = "Rows in the file", example = "240", requiredMode = REQUIRED)
     private Integer rowCount;
 

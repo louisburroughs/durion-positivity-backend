@@ -130,11 +130,50 @@ public class BankReconciliationResponse {
     @Schema(description = "Who created the reconciliation (the preparer)")
     private String createdBy;
 
-    @Schema(description = "When the reconciliation was finalized; null while IN_PROGRESS")
+    @Schema(description = "When the reconciliation was approved (finalized); null until then")
     private Instant finalizedAt;
 
-    @Schema(description = "Who finalized the reconciliation")
+    @Schema(description = "Who approved (finalized) the reconciliation")
     private String finalizedBy;
+
+    @Schema(description = "When the preparer submitted it for approval; null while it is not submitted")
+    private Instant submittedAt;
+
+    @Schema(description = "Who submitted it for approval (the preparer)")
+    private String submittedBy;
+
+    @Schema(
+            description = "The ledger balance as-of the statement end date that the approver saw, snapshotted at"
+                    + " approval; compare with glEndingBalance (live) to see whether the ledger changed since",
+            example = "12840.12")
+    private BigDecimal approvedGlEndingBalance;
+
+    @Schema(description = "When an approved reconciliation was invalidated")
+    private Instant invalidatedAt;
+
+    @Schema(
+            description = "Why it was invalidated: LEDGER_LINE_REVERSED, LEDGER_LINE_POSTED, SOURCE_REMOVED or"
+                    + " STATEMENT_SUPERSEDED",
+            example = "LEDGER_LINE_REVERSED")
+    private String invalidationReason;
+
+    @Schema(description = "The journal entry whose posting or reversal invalidated it")
+    private UUID invalidatedByJournalEntryId;
+
+    @Schema(description = "The reconciliation this one supersedes (a correction of an approved window)")
+    private UUID supersedesReconciliationId;
+
+    @Schema(description = "The approved reconciliation that superseded this one")
+    private UUID supersededByReconciliationId;
+
+    @Schema(description = "When the reconciliation was cancelled")
+    private Instant cancelledAt;
+
+    @Schema(description = "Who cancelled it (the approver)")
+    private String cancelledBy;
+
+    @Schema(description = "Why it was cancelled")
+    private String cancelReason;
 
     @Schema(description = "True when this answers a replayed create command (same requestId and payload)")
     private boolean replayed;
@@ -174,6 +213,17 @@ public class BankReconciliationResponse {
                 .createdBy(r.getCreatedBy())
                 .finalizedAt(r.getFinalizedAt())
                 .finalizedBy(r.getFinalizedBy())
+                .submittedAt(r.getSubmittedAt())
+                .submittedBy(r.getSubmittedBy())
+                .approvedGlEndingBalance(r.getApprovedGlEndingBalance())
+                .invalidatedAt(r.getInvalidatedAt())
+                .invalidationReason(r.getInvalidationReason())
+                .invalidatedByJournalEntryId(r.getInvalidatedByJournalEntryId())
+                .supersedesReconciliationId(r.getSupersedesReconciliationId())
+                .supersededByReconciliationId(r.getSupersededByReconciliationId())
+                .cancelledAt(r.getCancelledAt())
+                .cancelledBy(r.getCancelledBy())
+                .cancelReason(r.getCancelReason())
                 .build();
     }
 }

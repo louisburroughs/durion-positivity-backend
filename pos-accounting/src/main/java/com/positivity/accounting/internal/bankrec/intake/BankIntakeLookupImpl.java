@@ -10,6 +10,7 @@ import com.positivity.accounting.internal.bankrec.service.BankCashAccounts;
 import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankCashAccount;
 import com.positivity.accounting.internal.bankrec.service.BankRecAuditRecorder;
 import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
+import com.positivity.accounting.internal.bankrec.service.StatementSupersession;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.StatementHeader;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -51,6 +52,7 @@ public class BankIntakeLookupImpl implements BankIntakeLookup {
     private final BankTransactionRepository transactions;
     private final BankAccountProfileRepository profiles;
     private final BankRecAuditRecorder audit;
+    private final StatementSupersession supersession;
     private final Clock clock;
 
     @Override
@@ -87,8 +89,32 @@ public class BankIntakeLookupImpl implements BankIntakeLookup {
     }
 
     @Override
+    public @NonNull HeaderCheck checkHeader(
+            @NonNull UUID glAccountId,
+            @NonNull StatementHeader header,
+            @Nullable String gapAcknowledgement,
+            @Nullable UUID supersededStatementId) {
+        return StatementHeaderChecks.check(
+                statements, functionalCurrency, clock, glAccountId, header, gapAcknowledgement, supersededStatementId);
+    }
+
+    @Override
+    public @Nullable String checkSupersession(
+            @NonNull UUID glAccountId, @Nullable UUID supersedesStatementId, @Nullable String justification) {
+        StatementSupersession.Request request =
+                supersession.requireEligible(glAccountId, supersedesStatementId, justification);
+        return request == null ? null : request.justification();
+    }
+
+    @Override
     public @NonNull Map<String, UUID> collidingFingerprints(
             @NonNull UUID glAccountId, @NonNull Collection<String> fingerprints) {
+        return collidingFingerprints(glAccountId, fingerprints, null);
+    }
+
+    @Override
+    public @NonNull Map<String, UUID> collidingFingerprints(
+            @NonNull UUID glAccountId, @NonNull Collection<String> fingerprints, @Nullable UUID supersededStatementId) {
         Map<String, UUID> earliest = new HashMap<>();
         if (fingerprints.isEmpty()) {
             return earliest;
@@ -104,6 +130,7 @@ public class BankIntakeLookupImpl implements BankIntakeLookup {
                     glAccountId, Set.copyOf(chunk), NOT_COLLIDING));
         }
         colliding.stream()
+                .filter(t -> supersededStatementId == null || !supersededStatementId.equals(t.getStatementId()))
                 .sorted(Comparator.comparing(
                                 BankTransaction::getFirstObservedAt, Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(BankTransaction::getBankTransactionId))

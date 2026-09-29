@@ -33,6 +33,21 @@ final class StatementHeaderChecks {
             @NonNull UUID glAccountId,
             @NonNull StatementHeader header,
             @Nullable String gapAcknowledgement) {
+        return check(statements, functionalCurrency, clock, glAccountId, header, gapAcknowledgement, null);
+    }
+
+    /**
+     * Runs the checks leaving {@code superseded} out: a corrected statement passes E1, U1–U2 and E2 against its
+     * neighbours as if the statement it supersedes were no longer COMMITTED (§4.9 path 3; story S5, #2304).
+     */
+    static BankIntakeLookup.@NonNull HeaderCheck check(
+            @NonNull BankStatementRepository statements,
+            @NonNull FunctionalCurrency functionalCurrency,
+            @NonNull Clock clock,
+            @NonNull UUID glAccountId,
+            @NonNull StatementHeader header,
+            @Nullable String gapAcknowledgement,
+            @Nullable UUID superseded) {
         LocalDate today = LocalDate.now(clock);
         if (header.endDate().isAfter(today)) {
             throw BankRecException.field(
@@ -47,6 +62,7 @@ final class StatementHeaderChecks {
         statements
                 .findFirstByGlAccountIdAndStatusAndStartDateAndEndDate(
                         glAccountId, BankStatementStatus.COMMITTED, header.startDate(), header.endDate())
+                .filter(same -> !same.getStatementId().equals(superseded))
                 .ifPresent(same -> {
                     throw BankRecException.field(
                             BankRecErrorCode.STATEMENT_ALREADY_IMPORTED,
@@ -55,22 +71,25 @@ final class StatementHeaderChecks {
                             "statementId",
                             same.getStatementId().toString());
                 });
-        statements
-                .findFirstByGlAccountIdAndStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByStartDateAsc(
-                        glAccountId, BankStatementStatus.COMMITTED, header.endDate(), header.startDate())
-                .ifPresent(overlapping -> {
-                    throw BankRecException.field(
-                            BankRecErrorCode.STATEMENT_PERIOD_OVERLAP,
-                            "The window " + header.startDate() + ".." + header.endDate()
-                                    + " overlaps a committed statement on this account",
-                            "statementId",
-                            overlapping.getStatementId().toString());
-                });
+        overlapping(statements, glAccountId, header, superseded).ifPresent(overlapping -> {
+            throw BankRecException.field(
+                    BankRecErrorCode.STATEMENT_PERIOD_OVERLAP,
+                    "The window " + header.startDate() + ".." + header.endDate()
+                            + " overlaps a committed statement on this account",
+                    "statementId",
+                    overlapping.getStatementId().toString());
+        });
 
         // E2 against the previous COMMITTED statement, with the acknowledgement (§4.2 steps 2–3).
-        Optional<BankStatement> previous =
-                statements.findFirstByGlAccountIdAndStatusAndEndDateLessThanOrderByEndDateDesc(
-                        glAccountId, BankStatementStatus.COMMITTED, header.startDate());
+        Optional<BankStatement> previous = superseded == null
+                ? statements.findFirstByGlAccountIdAndStatusAndEndDateLessThanOrderByEndDateDesc(
+                        glAccountId, BankStatementStatus.COMMITTED, header.startDate())
+                : statements
+                        .findTop2ByGlAccountIdAndStatusAndEndDateLessThanOrderByEndDateDesc(
+                                glAccountId, BankStatementStatus.COMMITTED, header.startDate())
+                        .stream()
+                        .filter(s -> !s.getStatementId().equals(superseded))
+                        .findFirst();
         Map<String, String> discontinuities = discontinuities(previous, header, functionalCurrency);
         if (!discontinuities.isEmpty() && acknowledgement == null) {
             throw new BankRecException(
@@ -91,6 +110,21 @@ final class StatementHeaderChecks {
         }
         return new BankIntakeLookup.HeaderCheck(
                 previous.map(BankStatement::getStatementId).orElse(null), discontinuities.isEmpty(), acknowledgement);
+    }
+
+    private static Optional<BankStatement> overlapping(
+            BankStatementRepository statements, UUID glAccountId, StatementHeader header, @Nullable UUID superseded) {
+        if (superseded == null) {
+            return statements
+                    .findFirstByGlAccountIdAndStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByStartDateAsc(
+                            glAccountId, BankStatementStatus.COMMITTED, header.endDate(), header.startDate());
+        }
+        return statements
+                .findByGlAccountIdAndStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByStartDateAsc(
+                        glAccountId, BankStatementStatus.COMMITTED, header.endDate(), header.startDate())
+                .stream()
+                .filter(s -> !s.getStatementId().equals(superseded))
+                .findFirst();
     }
 
     private static Map<String, String> discontinuities(

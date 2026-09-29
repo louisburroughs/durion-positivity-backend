@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.bankrec.dto.AutoMatchResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationAdjustmentResponse;
+import com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
 import com.positivity.accounting.internal.bankrec.dto.OutstandingItemResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationApiStatus;
@@ -26,6 +27,7 @@ import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
 import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.service.BankReconciliationService;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationAdjustmentService;
+import com.positivity.accounting.internal.bankrec.service.ReconciliationApprovalService;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationListFilter;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationMatchingService;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationOutstandingItemService;
@@ -67,6 +69,9 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
 
     @MockitoBean
     private ReconciliationReviewService reviewService;
+
+    @MockitoBean
+    private ReconciliationApprovalService approvalService;
 
     private static BankReconciliationResponse response() {
         return BankReconciliationResponse.builder()
@@ -158,16 +163,14 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
         }
 
         @Test
-        @DisplayName("Should refuse a status the F2 API does not serve yet (story S1 keeps the contract, #2300)")
-        void shouldRejectStatusNotServedYet() throws Exception {
-            // SUBMITTED exists in the stored value set from story S1 but no transition reaches it and the
-            // API does not serve it until story S5, so the published enum (IN_PROGRESS, FINALIZED,
-            // CANCELLED) is unchanged.
+        @DisplayName("Should filter by every stored status, SUBMITTED included (#2304), and refuse an unknown one")
+        void shouldServeEveryStatus() throws Exception {
+            when(bankReconciliationService.list(any(), any())).thenReturn(new BankReconciliationListResponse());
             mockMvc.perform(withAuth(get("/v1/accounting/reconciliations").param("status", "SUBMITTED")))
+                    .andExpect(status().isOk());
+            mockMvc.perform(withAuth(get("/v1/accounting/reconciliations").param("status", "REOPENED")))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-
-            verify(bankReconciliationService, never()).list(any(), any());
         }
 
         @Test
@@ -503,13 +506,13 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
     }
 
     @Nested
-    @DisplayName("POST /v1/accounting/reconciliations/{id}/finalize")
+    @DisplayName("POST /v1/accounting/reconciliations/{id}/finalize (approve, #2304)")
     class Finalize {
 
         @Test
         @DisplayName("Should return 422 RECONCILIATION_NOT_BALANCED with the difference")
         void shouldReturn422NotBalanced() throws Exception {
-            when(bankReconciliationService.finalizeReconciliation(RECON_ID))
+            when(approvalService.approve(eq(RECON_ID), any()))
                     .thenThrow(new ReconciliationNotBalancedException("not balanced", new BigDecimal("500.0000")));
 
             mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/finalize", RECON_ID)))
@@ -521,7 +524,7 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
         @Test
         @DisplayName("Should answer 409 OPTIMISTIC_LOCK when the reconciliation changed concurrently (§6.3, #2300)")
         void shouldMapStaleVersionTo409() throws Exception {
-            when(bankReconciliationService.finalizeReconciliation(RECON_ID))
+            when(approvalService.approve(eq(RECON_ID), any()))
                     .thenThrow(new ObjectOptimisticLockingFailureException(Object.class, RECON_ID));
 
             mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/finalize", RECON_ID)))
@@ -531,24 +534,126 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
         }
 
         @Test
-        @DisplayName("Should finalize a balanced reconciliation")
+        @DisplayName("Should approve a submitted reconciliation, with or without a body")
         void shouldFinalize() throws Exception {
             BankReconciliationResponse finalized = response();
             finalized.setStatus(ReconciliationApiStatus.FINALIZED);
-            when(bankReconciliationService.finalizeReconciliation(RECON_ID)).thenReturn(finalized);
+            when(approvalService.approve(eq(RECON_ID), any())).thenReturn(finalized);
 
             mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/finalize", RECON_ID)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("FINALIZED"));
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/finalize", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"version\":3}"))
+                    .andExpect(status().isOk());
         }
 
         @Test
-        @DisplayName("Should reject finalize without accounting:reconciliation:adjust authority")
+        @DisplayName("Should answer 403 RECONCILIATION_SELF_APPROVAL as a 403 envelope")
+        void selfApprovalIs403() throws Exception {
+            when(approvalService.approve(eq(RECON_ID), any()))
+                    .thenThrow(new BankRecException(BankRecErrorCode.RECONCILIATION_SELF_APPROVAL, "self"));
+
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/finalize", RECON_ID)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("RECONCILIATION_SELF_APPROVAL"));
+        }
+
+        @Test
+        @DisplayName("Should reject finalize without accounting:reconciliation:approve (adjust no longer suffices)")
         void shouldRejectWithoutPermission() throws Exception {
             mockMvc.perform(withAuth(
                             post("/v1/accounting/reconciliations/{id}/finalize", RECON_ID),
+                            "accounting:reconciliation:view,accounting:reconciliation:adjust"))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Nested
+    @DisplayName("submit, return, cancel, supersede (#2304)")
+    class Workflow {
+
+        @Test
+        @DisplayName("submit needs adjust; return, cancel and supersede need approve")
+        void permissions() throws Exception {
+            mockMvc.perform(withAuth(
+                            post("/v1/accounting/reconciliations/{id}/submit", RECON_ID),
                             "accounting:reconciliation:view"))
                     .andExpect(status().isForbidden());
+            for (String action : List.of("return", "cancel", "supersede")) {
+                mockMvc.perform(withAuth(
+                                        post("/v1/accounting/reconciliations/{id}/" + action, RECON_ID),
+                                        "accounting:reconciliation:view,accounting:reconciliation:adjust")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"reason\":\"a long enough reason\",\"justification\":\"long enough\"}"))
+                        .andExpect(status().isForbidden());
+            }
+        }
+
+        @Test
+        @DisplayName("submit answers 200, and 422 RECONCILIATION_HAS_UNEXPLAINED_ITEMS with its field errors")
+        void submit() throws Exception {
+            BankReconciliationResponse submitted = response();
+            submitted.setStatus(ReconciliationApiStatus.SUBMITTED);
+            when(approvalService.submit(eq(RECON_ID), any())).thenReturn(submitted);
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/submit", RECON_ID)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("SUBMITTED"));
+
+            when(approvalService.submit(eq(RECON_ID), any()))
+                    .thenThrow(new BankRecException(
+                            BankRecErrorCode.RECONCILIATION_HAS_UNEXPLAINED_ITEMS,
+                            "unexplained",
+                            java.util.Map.of("countUnexplainedLedger", "3")));
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/submit", RECON_ID)))
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.code").value("RECONCILIATION_HAS_UNEXPLAINED_ITEMS"))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("countUnexplainedLedger"));
+        }
+
+        @Test
+        @DisplayName("return and cancel answer 200; supersede answers 201, or 200 on a replay")
+        void transitions() throws Exception {
+            when(approvalService.returnToPreparer(eq(RECON_ID), any())).thenReturn(response());
+            BankReconciliationResponse cancelled = response();
+            cancelled.setStatus(ReconciliationApiStatus.CANCELLED);
+            when(approvalService.cancel(eq(RECON_ID), any())).thenReturn(cancelled);
+            BankReconciliationResponse successor = response();
+            when(approvalService.supersede(eq(RECON_ID), any())).thenReturn(successor);
+            String body =
+                    "{\"reason\":\"Match the card deposits\",\"justification\":\"Ledger changed after approval\"}";
+
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/return", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk());
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/cancel", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("CANCELLED"));
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/supersede", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isCreated());
+            successor.setReplayed(true);
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/supersede", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("return on a reconciliation not submitted is 409 RECONCILIATION_NOT_SUBMITTED")
+        void notSubmitted() throws Exception {
+            when(approvalService.returnToPreparer(eq(RECON_ID), any()))
+                    .thenThrow(new BankRecException(BankRecErrorCode.RECONCILIATION_NOT_SUBMITTED, "no"));
+            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/{id}/return", RECON_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"reason\":\"Match the card deposits\"}"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("RECONCILIATION_NOT_SUBMITTED"));
         }
     }
 }

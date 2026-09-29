@@ -29,6 +29,8 @@ import com.positivity.accounting.internal.bankrec.repository.BankAccountProfileR
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
+import com.positivity.accounting.internal.entity.AccountingAuditLog;
+import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.tenancy.TenantContext;
 import java.math.BigDecimal;
@@ -88,6 +90,9 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private AccountingAuditLogRepository auditLogs;
 
     /** Seeded {@code 1000 Cash} of the default tenant, which is TENANT_A. */
     private static final UUID CASH_ACCOUNT_ID = UUID.fromString("5eed0acc-0000-4000-8000-000000001000");
@@ -236,6 +241,60 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
         assertThat(countById(jdbc, "bank_statement", "statement_id", ids[0]))
                 .as("unbound: nothing visible")
                 .isZero();
+    }
+
+    /**
+     * The stored reconciliation trail (story S5, #2304; SPEC §8.4): a second tenant reads none of the first
+     * tenant's audit rows through the trail query.
+     */
+    @Test
+    void reconciliationAuditRowsOfOneTenantAreInvisibleToAnother() {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        UUID reconciliationId = com.positivity.shared.id.UUIDv7Generator.generate();
+        UUID auditLogId = asTenant(
+                TENANT_A,
+                () -> tx.execute(status -> {
+                    AccountingAuditLog row = new AccountingAuditLog();
+                    row.setEntityType("BANK_RECONCILIATION");
+                    row.setEntityId(reconciliationId);
+                    row.setOperation("RECONCILIATION_SUBMIT");
+                    row.setUserId("preparer");
+                    return auditLogs.saveAndFlush(row).getAuditLogId();
+                }));
+        try {
+            List<UUID> none = List.of(new UUID(0L, 0L));
+            org.springframework.data.domain.Pageable page = org.springframework.data.domain.PageRequest.of(0, 50);
+            asTenant(
+                    TENANT_A,
+                    () -> assertThat(auditLogs
+                                    .findReconciliationTrail(
+                                            "BANK_RECONCILIATION",
+                                            reconciliationId,
+                                            "RECONCILIATION_MATCH",
+                                            none,
+                                            "OUTSTANDING_ITEM",
+                                            none,
+                                            page)
+                                    .getTotalElements())
+                            .isEqualTo(1));
+            asTenant(
+                    TENANT_B,
+                    () -> assertThat(auditLogs
+                                    .findReconciliationTrail(
+                                            "BANK_RECONCILIATION",
+                                            reconciliationId,
+                                            "RECONCILIATION_MATCH",
+                                            none,
+                                            "OUTSTANDING_ITEM",
+                                            none,
+                                            page)
+                                    .getTotalElements())
+                            .as("another tenant's trail")
+                            .isZero());
+        } finally {
+            new JdbcTemplate(ownerDataSource())
+                    .update("DELETE FROM accounting_audit_log WHERE audit_log_id = ?", auditLogId);
+        }
     }
 
     private static int countById(JdbcTemplate jdbc, String table, String key, UUID id) {

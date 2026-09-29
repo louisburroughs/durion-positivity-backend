@@ -52,6 +52,9 @@ class BankIntakeLookupImplTest {
     private static final String ACK = "switched banks in August";
 
     @Mock
+    private com.positivity.accounting.internal.bankrec.service.StatementSupersession supersession;
+
+    @Mock
     private BankCashAccounts bankCashAccounts;
 
     @Mock
@@ -77,6 +80,7 @@ class BankIntakeLookupImplTest {
                 transactions,
                 profiles,
                 audit,
+                supersession,
                 CLOCK);
     }
 

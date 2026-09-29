@@ -57,6 +57,20 @@ public class BankStatementCreateRequest {
             example = "true")
     private Boolean startReconciliation;
 
+    @Schema(
+            description = "A COMMITTED statement of the same account this corrected statement supersedes (§4.9 path"
+                    + " 3): it becomes SUPERSEDED, its rows EXCLUDED (STATEMENT_SUPERSEDED), and a FINALIZED"
+                    + " reconciliation of it INVALIDATED; refused while it has an IN_PROGRESS or SUBMITTED"
+                    + " reconciliation",
+            example = "019a0000-0000-7000-8000-000000000002")
+    private UUID supersedesStatementId;
+
+    @Schema(
+            description = "Why the statement is superseded (at least 10 characters); required with"
+                    + " supersedesStatementId and refused without it",
+            example = "The bank reissued September with the missing wire of 2026-09-14")
+    private String supersessionJustification;
+
     /** The statement header. */
     @Data
     @Builder

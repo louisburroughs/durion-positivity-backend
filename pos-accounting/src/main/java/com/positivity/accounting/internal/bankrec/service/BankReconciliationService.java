@@ -11,7 +11,8 @@ import org.springframework.data.domain.Pageable;
 
 /**
  * The bank reconciliation header lifecycle (Story F2, issue #965; S4, #2303 — SPEC §3.7, §4.1, §6.1):
- * create from a COMMITTED statement, read with the live equation, list, finalize, report, audit.
+ * create from a COMMITTED statement, read with the live equation, list, report, and the stored audit trail.
+ * The approval workflow is {@link ReconciliationApprovalService} (S5, #2304).
  */
 public interface BankReconciliationService {
 
@@ -27,15 +28,14 @@ public interface BankReconciliationService {
     @NonNull
     BankReconciliationListResponse list(@NonNull ReconciliationListFilter filter, @NonNull Pageable pageable);
 
-    /** Finalize a reconciliation whose live difference is within ±0.01 (IN_PROGRESS to FINALIZED). */
-    @NonNull
-    BankReconciliationResponse finalizeReconciliation(@NonNull UUID reconciliationId);
-
     /** Reconciliation report: E3 and opening terms, splits, adjustments, difference. */
     @NonNull
     ReconciliationReportResponse report(@NonNull UUID reconciliationId);
 
-    /** Audit trail of a reconciliation's actions (derived until S5 stores it). */
+    /**
+     * The stored audit trail (§4.9, G3; S5, #2304): the {@code AccountingAuditLog} rows of the reconciliation, its
+     * matches and the outstanding items it registered, cleared or reaffirmed, a page at a time.
+     */
     @NonNull
-    ReconciliationAuditResponse audit(@NonNull UUID reconciliationId);
+    ReconciliationAuditResponse audit(@NonNull UUID reconciliationId, @NonNull Pageable pageable);
 }

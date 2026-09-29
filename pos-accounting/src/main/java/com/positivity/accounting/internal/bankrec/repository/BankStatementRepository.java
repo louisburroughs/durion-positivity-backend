@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.bankrec.repository;
 
 import com.positivity.accounting.internal.bankrec.entity.BankStatement;
 import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -37,6 +39,20 @@ public interface BankStatementRepository
                     @NonNull BankStatementStatus status,
                     @NonNull LocalDate endDate,
                     @NonNull LocalDate startDate);
+
+    /** U2 for a corrected statement (§4.9 path 3; S5): every statement overlapping the window, earliest first. */
+    @NonNull
+    List<BankStatement>
+            findByGlAccountIdAndStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByStartDateAsc(
+                    @NonNull UUID glAccountId,
+                    @NonNull BankStatementStatus status,
+                    @NonNull LocalDate endDate,
+                    @NonNull LocalDate startDate);
+
+    /** E2 for a corrected statement (§4.9 path 3; S5): the two latest statements ending before the window. */
+    @NonNull
+    List<BankStatement> findTop2ByGlAccountIdAndStatusAndEndDateLessThanOrderByEndDateDesc(
+            @NonNull UUID glAccountId, @NonNull BankStatementStatus status, @NonNull LocalDate startDate);
 
     /** E2: the statement a new window starting at {@code startDate} would continue. */
     Optional<BankStatement> findFirstByGlAccountIdAndStatusAndEndDateLessThanOrderByEndDateDesc(
@@ -68,4 +84,18 @@ public interface BankStatementRepository
     @NonNull
     List<AccountDate> findLatestEndDateByGlAccountIdIn(
             @Param("ids") @NonNull Collection<UUID> glAccountIds, @Param("status") @NonNull BankStatementStatus status);
+
+    /** The statements a corrected statement superseded (§4.9 path 3; S5, #2304). */
+    @NonNull
+    List<BankStatement> findBySupersededByStatementId(@NonNull UUID supersededByStatementId);
+
+    /**
+     * The statement, row-locked ({@code FOR UPDATE}) for the rest of the transaction. A supersession and a
+     * reconciliation create (or supersede) of the same statement both take this lock before they check, so one
+     * sees the other's committed result: a create never starts on a statement being superseded, and a
+     * supersession never retires a statement a create just started on (§4.9 path 3; S5, #2304).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM BankStatement s WHERE s.statementId = :id")
+    Optional<BankStatement> lockById(@Param("id") @NonNull UUID statementId);
 }

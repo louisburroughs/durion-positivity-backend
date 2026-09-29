@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.bankrec.dto.BankTransactionResponse;
 import com.positivity.accounting.internal.bankrec.dto.DuplicateReviewDecision;
 import com.positivity.accounting.internal.bankrec.dto.DuplicateReviewRequest;
 import com.positivity.accounting.internal.bankrec.entity.BankTransaction;
+import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
 import com.positivity.accounting.internal.bankrec.enums.BankTransactionStatus;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.bankrec.enums.SourceKind;
@@ -14,6 +15,7 @@ import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
 import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.intake.Justification;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
 import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankCashAccount;
 import com.positivity.security.common.SecurityContextHelper;
@@ -59,6 +61,7 @@ public class BankTransactionServiceImpl implements BankTransactionService {
     private final BankReconciliationRepository reconciliations;
     private final BankCashAccounts bankCashAccounts;
     private final BankRecAuditRecorder audit;
+    private final BankStatementRepository statements;
     private final Clock clock;
 
     @Override
@@ -172,6 +175,15 @@ public class BankTransactionServiceImpl implements BankTransactionService {
         requireVersion(row, request.getVersion());
         if (row.getStatus() != BankTransactionStatus.EXCLUDED) {
             throw ineligible(row, "only an EXCLUDED row can be restored");
+        }
+        if (StatementSupersession.STATEMENT_SUPERSEDED.equals(row.getExclusionReason())
+                || (row.getStatementId() != null
+                        && statements
+                                .findById(row.getStatementId())
+                                .filter(s -> s.getStatus() == BankStatementStatus.SUPERSEDED)
+                                .isPresent())) {
+            // §3.8: a row of a superseded statement was replaced by the corrected statement's row (S5, #2304).
+            throw ineligible(row, "it belongs to a superseded statement; its corrected statement replaced it");
         }
         if (reconciliations
                 .existsByGlAccount_GlAccountIdAndStatusAndStatementStartDateLessThanEqualAndStatementEndDateGreaterThanEqual(

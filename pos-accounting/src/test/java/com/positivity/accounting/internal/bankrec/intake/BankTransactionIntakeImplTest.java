@@ -71,6 +71,9 @@ class BankTransactionIntakeImplTest {
     private static final String ACK = "switched banks in August";
 
     @Mock
+    private com.positivity.accounting.internal.bankrec.service.StatementSupersession supersession;
+
+    @Mock
     private BankCashAccounts bankCashAccounts;
 
     @Mock
@@ -106,6 +109,7 @@ class BankTransactionIntakeImplTest {
                 reconciliations,
                 audit,
                 facts,
+                supersession,
                 CLOCK);
         lenient()
                 .when(bankCashAccounts.requireForIntake(ACCOUNT))

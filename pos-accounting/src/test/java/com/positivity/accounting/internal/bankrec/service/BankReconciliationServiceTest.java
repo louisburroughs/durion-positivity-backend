@@ -9,7 +9,6 @@ import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures
 import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures.snapshot;
 import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures.statement;
 import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures.terms;
-import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures.usd;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,15 +29,14 @@ import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
 import com.positivity.accounting.internal.bankrec.intake.BankRecException;
-import com.positivity.accounting.internal.bankrec.repository.BankReconciliationAdjustmentRepository;
-import com.positivity.accounting.internal.bankrec.repository.BankReconciliationGlMatchRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankReconciliationMatchRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankReconciliationOutstandingItemRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
-import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
-import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
+import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -75,10 +73,13 @@ class BankReconciliationServiceTest {
     private BankStatementRepository statementRepository;
 
     @Mock
-    private BankReconciliationGlMatchRepository glMatchRepository;
+    private BankReconciliationMatchRepository matchRepository;
 
     @Mock
-    private BankReconciliationAdjustmentRepository adjustmentRepository;
+    private BankReconciliationOutstandingItemRepository itemRepository;
+
+    @Mock
+    private AccountingAuditLogRepository auditLogRepository;
 
     @Mock
     private GLAccountRepository glAccountRepository;
@@ -97,16 +98,15 @@ class BankReconciliationServiceTest {
     @BeforeEach
     void setUp() {
         service = new BankReconciliationServiceImpl(
-                clock,
                 reconciliationRepository,
                 statementRepository,
-                glMatchRepository,
-                adjustmentRepository,
+                matchRepository,
+                itemRepository,
+                auditLogRepository,
                 new BankCashAccounts(glAccountRepository, clock),
                 calculator,
                 new ReconciliationSupport(reconciliationRepository, calculator, clock),
                 auditRecorder,
-                usd(),
                 reviewService);
         lenient().when(calculator.compute(any())).thenReturn(snapshot(terms("0", "0")));
     }
@@ -144,7 +144,7 @@ class BankReconciliationServiceTest {
         void createsFromACommittedStatement() {
             BankStatement statement = statement(STATEMENT_ID, START, END, "Opened the account this month");
             when(reconciliationRepository.findByRequestId(requestId)).thenReturn(Optional.empty());
-            when(statementRepository.findById(STATEMENT_ID)).thenReturn(Optional.of(statement));
+            when(statementRepository.lockById(STATEMENT_ID)).thenReturn(Optional.of(statement));
             when(reconciliationRepository.findByStatementIdAndStatusIn(eq(STATEMENT_ID), anyCollection()))
                     .thenReturn(List.of());
             when(reconciliationRepository.saveAndFlush(any())).thenAnswer(inv -> {
@@ -201,7 +201,7 @@ class BankReconciliationServiceTest {
         void activeReconciliationRefuses() {
             BankReconciliation existing = reconciliation();
             when(reconciliationRepository.findByRequestId(requestId)).thenReturn(Optional.empty());
-            when(statementRepository.findById(STATEMENT_ID))
+            when(statementRepository.lockById(STATEMENT_ID))
                     .thenReturn(Optional.of(statement(STATEMENT_ID, START, END, null)));
             when(reconciliationRepository.findByStatementIdAndStatusIn(eq(STATEMENT_ID), anyCollection()))
                     .thenReturn(List.of(existing));
@@ -220,7 +220,7 @@ class BankReconciliationServiceTest {
             BankReconciliation finalized = reconciliation();
             finalized.setStatus(ReconciliationStatus.FINALIZED);
             when(reconciliationRepository.findByRequestId(requestId)).thenReturn(Optional.empty());
-            when(statementRepository.findById(STATEMENT_ID))
+            when(statementRepository.lockById(STATEMENT_ID))
                     .thenReturn(Optional.of(statement(STATEMENT_ID, START, END, null)));
             when(reconciliationRepository.findByStatementIdAndStatusIn(eq(STATEMENT_ID), anyCollection()))
                     .thenReturn(List.of(finalized));
@@ -241,7 +241,7 @@ class BankReconciliationServiceTest {
         @DisplayName("a concurrent create losing the partial unique race answers the same 409")
         void concurrentCreateRefused() {
             when(reconciliationRepository.findByRequestId(requestId)).thenReturn(Optional.empty());
-            when(statementRepository.findById(STATEMENT_ID))
+            when(statementRepository.lockById(STATEMENT_ID))
                     .thenReturn(Optional.of(statement(STATEMENT_ID, START, END, null)));
             when(reconciliationRepository.findByStatementIdAndStatusIn(eq(STATEMENT_ID), anyCollection()))
                     .thenReturn(List.of());
@@ -261,7 +261,7 @@ class BankReconciliationServiceTest {
             BankStatement superseded = statement(STATEMENT_ID, START, END, null);
             superseded.setStatus(BankStatementStatus.SUPERSEDED);
             when(reconciliationRepository.findByRequestId(requestId)).thenReturn(Optional.empty());
-            when(statementRepository.findById(STATEMENT_ID)).thenReturn(Optional.of(superseded));
+            when(statementRepository.lockById(STATEMENT_ID)).thenReturn(Optional.of(superseded));
 
             assertThatThrownBy(() -> service.create(createRequest(requestId)))
                     .isInstanceOfSatisfying(
@@ -313,45 +313,6 @@ class BankReconciliationServiceTest {
         void getNotFound() {
             when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.empty());
             assertThatThrownBy(() -> service.get(RECON_ID)).isInstanceOf(ReconciliationNotFoundException.class);
-        }
-
-        @Test
-        @DisplayName("finalize passes at a live difference of exactly one minor unit")
-        void finalizeWithinTolerance() {
-            BankReconciliation recon = reconciliation();
-            when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(recon));
-            when(calculator.compute(recon)).thenReturn(snapshot(terms("0.01", null)));
-
-            BankReconciliationResponse response = service.finalizeReconciliation(RECON_ID);
-
-            assertThat(response.getStatus()).isEqualTo(ReconciliationApiStatus.FINALIZED);
-            assertThat(recon.getFinalizedAt()).isEqualTo(Instant.now(clock));
-            assertThat(recon.getDifference()).isEqualByComparingTo("0.01");
-        }
-
-        @Test
-        @DisplayName("finalize refuses a live difference beyond tolerance with the difference as a field")
-        void finalizeRefusesUnbalanced() {
-            BankReconciliation recon = reconciliation();
-            when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(recon));
-            when(calculator.compute(recon)).thenReturn(snapshot(terms("0.02", null)));
-
-            assertThatThrownBy(() -> service.finalizeReconciliation(RECON_ID))
-                    .isInstanceOfSatisfying(
-                            ReconciliationNotBalancedException.class,
-                            e -> assertThat(e.getDifference()).isEqualByComparingTo("0.02"));
-            assertThat(recon.getStatus()).isEqualTo(ReconciliationStatus.IN_PROGRESS);
-        }
-
-        @Test
-        @DisplayName("finalizing twice is refused, not repeated")
-        void finalizeTwiceRefused() {
-            BankReconciliation recon = reconciliation();
-            recon.setStatus(ReconciliationStatus.FINALIZED);
-            when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(recon));
-
-            assertThatThrownBy(() -> service.finalizeReconciliation(RECON_ID))
-                    .isInstanceOf(ReconciliationAlreadyFinalizedException.class);
         }
     }
 }

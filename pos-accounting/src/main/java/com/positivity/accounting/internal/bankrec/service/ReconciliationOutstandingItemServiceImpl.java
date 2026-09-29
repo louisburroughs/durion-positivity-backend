@@ -194,7 +194,9 @@ public class ReconciliationOutstandingItemServiceImpl implements ReconciliationO
             @NonNull UUID reconciliationId,
             @NonNull UUID itemId,
             @NonNull OutstandingItemJustificationRequest request) {
-        BankReconciliation recon = support.requireOpen(reconciliationId);
+        BankReconciliation recon = support.require(reconciliationId);
+        // The approver may clear in gap while the reconciliation is being prepared or awaits approval (§3.6).
+        ReconciliationSupport.requireStatus(recon, ReconciliationStatus.IN_PROGRESS, ReconciliationStatus.SUBMITTED);
         String justification = Justification.requiredByRule(request.getJustification(), JUSTIFICATION);
         BankStatement statement = recon.getStatementId() == null
                 ? null

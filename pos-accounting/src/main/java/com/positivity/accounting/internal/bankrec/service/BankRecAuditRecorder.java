@@ -8,8 +8,11 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Writes the bank reconciliation core's {@code AccountingAuditLog} rows (SPEC §4 preamble, §3.1;
@@ -57,7 +60,18 @@ public class BankRecAuditRecorder {
     public static final String RECONCILIATION_ADJUSTMENT = "RECONCILIATION_ADJUSTMENT";
     public static final String RECONCILIATION_ADJUSTMENT_REVERSE = "RECONCILIATION_ADJUSTMENT_REVERSE";
 
+    /** Operations written by story S5 (§4.9, #2304). */
+    public static final String RECONCILIATION_SUBMIT = "RECONCILIATION_SUBMIT";
+
+    public static final String RECONCILIATION_APPROVE = "RECONCILIATION_APPROVE";
+    public static final String RECONCILIATION_RETURN = "RECONCILIATION_RETURN";
+    public static final String RECONCILIATION_CANCEL = "RECONCILIATION_CANCEL";
+    public static final String RECONCILIATION_SUPERSEDE = "RECONCILIATION_SUPERSEDE";
+    public static final String RECONCILIATION_INVALIDATE = "RECONCILIATION_INVALIDATE";
+    public static final String BANK_STATEMENT_SUPERSEDE = "BANK_STATEMENT_SUPERSEDE";
+
     private final AccountingAuditLogRepository auditLogs;
+    private final PlatformTransactionManager transactionManager;
 
     /** Records one audit row in the caller's transaction. */
     @Transactional(propagation = Propagation.MANDATORY)
@@ -79,5 +93,24 @@ public class BankRecAuditRecorder {
         row.setNewValue(newValue);
         row.setTraceId(MDC.get("traceId"));
         auditLogs.save(row);
+    }
+
+    /**
+     * Records one audit row in a transaction of its own, committed whatever the caller's transaction does
+     * next: the refusal of a self-approval is audited although the request answers 403 and rolls back
+     * (§4.9, D3; S5, #2304).
+     */
+    public void recordIndependently(
+            @NonNull String entityType,
+            @NonNull UUID entityId,
+            @NonNull String operation,
+            @NonNull String actor,
+            @Nullable String justification,
+            @Nullable String oldValue,
+            @Nullable String newValue) {
+        TransactionTemplate independent = new TransactionTemplate(transactionManager);
+        independent.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        independent.executeWithoutResult(
+                status -> record(entityType, entityId, operation, actor, justification, oldValue, newValue));
     }
 }

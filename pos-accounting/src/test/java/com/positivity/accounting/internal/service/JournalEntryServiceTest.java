@@ -24,6 +24,8 @@ import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.event.JournalEntryReversed;
+import com.positivity.accounting.internal.event.LedgerPostingApplied;
+import com.positivity.accounting.internal.event.LedgerReversalApplied;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.JournalEntryNotFoundException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
@@ -50,6 +52,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -99,6 +102,9 @@ class JournalEntryServiceTest {
     @Mock
     private OutboxService outboxService;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private JournalEntryServiceImpl service;
 
     private UUID testJournalEntryId;
@@ -127,7 +133,8 @@ class JournalEntryServiceTest {
                 accountingPeriodService,
                 accountingPeriodGate,
                 auditLogRepository,
-                outboxService);
+                outboxService,
+                eventPublisher);
 
         testJournalEntryId = UUID.randomUUID();
         testGLAccountId1 = UUID.randomUUID();
@@ -473,6 +480,13 @@ class JournalEntryServiceTest {
         // would return the entity before @PreUpdate (modifiedBy) has run.
         verify(journalEntryRepository).saveAndFlush(any(JournalEntry.class));
         verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+        // The bank reconciliation's ledger-change hook hears of the posting in-process (§5.5, #2304).
+        ArgumentCaptor<LedgerPostingApplied> posted = ArgumentCaptor.forClass(LedgerPostingApplied.class);
+        verify(eventPublisher).publishEvent(posted.capture());
+        assertThat(posted.getValue().journalEntryId()).isEqualTo(testJournalEntryId);
+        assertThat(posted.getValue().transactionDate())
+                .isEqualTo(entry.getTransactionDate().toLocalDate());
+        assertThat(posted.getValue().glAccountIds()).containsExactlyInAnyOrder(testGLAccountId1, testGLAccountId2);
     }
 
     @Test
@@ -616,6 +630,17 @@ class JournalEntryServiceTest {
         assertThat(event.reversalDate()).isEqualTo(testTransactionDate.toLocalDate());
         assertThat(event.reason()).isEqualTo("CORRECTION");
         assertThat(event.actor()).isEqualTo("SYSTEM");
+
+        // The bank reconciliation's ledger-change hook hears of the reversal in-process (§5.5, #2304).
+        ArgumentCaptor<LedgerReversalApplied> reversed = ArgumentCaptor.forClass(LedgerReversalApplied.class);
+        verify(eventPublisher).publishEvent(reversed.capture());
+        assertThat(reversed.getValue().originalJournalEntryId()).isEqualTo(testJournalEntryId);
+        assertThat(reversed.getValue().reversalJournalEntryId()).isEqualTo(reversal.getJournalEntryId());
+        assertThat(reversed.getValue().reversalDate()).isEqualTo(testTransactionDate.toLocalDate());
+        assertThat(reversed.getValue().originalLineIds())
+                .containsExactlyElementsOf(original.getLines().stream()
+                        .map(JournalEntryLine::getLineId)
+                        .toList());
     }
 
     @Test

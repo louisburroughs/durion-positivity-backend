@@ -6,10 +6,14 @@ import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationApiStatus;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAuditResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationCreateRequest;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationJustificationRequest;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationReasonRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationReportResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationReviewResponse;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationTransitionRequest;
 import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.bankrec.service.BankReconciliationService;
+import com.positivity.accounting.internal.bankrec.service.ReconciliationApprovalService;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationListFilter;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationReviewService;
 import com.positivity.accounting.internal.security.AccountingPermissions;
@@ -50,18 +54,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * REST controller for the manual bank reconciliation workflow (Story F2,
- * issue
- * #965, decisions D-5/D-6): match the statement lines of a reconcilable GL
- * cash
- * account to posted GL journal-entry lines, record
- * adjustments (which post real balanced journal entries through the
- * accounting-period
- * gate), and finalize only when the statement and GL ending balances agree.
+ * REST controller for the bank reconciliation header and its approval workflow (Story F2 #965; S4 #2303; S5
+ * #2304): create from a committed statement, read, list, review, report and audit; submit (preparer), approve
+ * through the kept {@code /finalize} path, return, cancel and supersede (approver).
  *
- * <p>
- * Reads require {@code accounting:reconciliation:view}; mutations require
- * {@code accounting:reconciliation:adjust}.
+ * <p>Reads require {@code accounting:reconciliation:view}; create and submit {@code
+ * accounting:reconciliation:adjust}; approve, return, cancel and supersede {@code
+ * accounting:reconciliation:approve} — the separation-of-duties key (D3).
  */
 @RestController
 @RequestMapping("/v1/accounting/reconciliations")
@@ -75,7 +74,11 @@ public class BankReconciliationController {
 
     private static final Logger log = LoggerFactory.getLogger(BankReconciliationController.class);
 
+    /** The largest audit page served (§4.9). */
+    private static final int MAX_AUDIT_PAGE = 200;
+
     private final BankReconciliationService bankReconciliationService;
+    private final ReconciliationApprovalService approvalService;
     private final ReconciliationReviewService reviewService;
 
     @PostMapping
@@ -216,10 +219,11 @@ public class BankReconciliationController {
                     Lists bank reconciliation headers most recent first as a paginated projection, optionally \
                     filtered by GL account, status, attribution period (periodCode, YYYY-MM) and a from/to \
                     window on the statement end date; each row carries the terms its last mutation stored.
-                    Use this tool to find in-progress or finalized reconciliations; do not use \
+                    Use this tool to find reconciliations by account, status or period; do not use \
                     getReconciliation, which fetches one reconciliation with its lines by id.
                     Preconditions: none beyond the caller holding accounting:reconciliation:view.
-                    Required inputs: none; glAccountId, status (IN_PROGRESS, FINALIZED), periodCode, from and \
+                    Required inputs: none; glAccountId, status (IN_PROGRESS, SUBMITTED, FINALIZED, INVALIDATED, \
+                    SUPERSEDED, CANCELLED), periodCode, from and \
                     to are optional filters, page defaults to 0 and size to 20.
                     Emits an ACCOUNTING_RECONCILIATION_LIST audit event; no state changes.
                     Returns 200 with an empty page when nothing matches the filters.
@@ -299,33 +303,38 @@ public class BankReconciliationController {
         return ResponseEntity.ok(bankReconciliationService.get(reconciliationId));
     }
 
-    @PostMapping("/{reconciliationId}/finalize")
+    @PostMapping("/{reconciliationId}/submit")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:adjust"})
     @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
-    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_FINALIZE", apiVersion = "1")
+    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_SUBMIT", apiVersion = "1")
     @Operation(
-            operationId = "finalizeReconciliation",
-            summary = "Finalize Reconciliation",
+            operationId = "submitReconciliation",
+            summary = "Submit Reconciliation For Approval",
             description = """
-                    Finalizes a reconciliation (IN_PROGRESS to FINALIZED), locking it against further \
-                    matching, unmatching or adjustments.
-                    Use this tool once the live difference is cleared; do not use it while a difference \
-                    remains, which outstanding items, matches or addReconciliationAdjustment must explain first.
-                    Preconditions: the live difference (adjustedBankBalance − adjustedBookBalance, E3) must be \
-                    within 0.01; the approval gate on unexplained items arrives with the submit/approve story.
-                    Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
-                    Emits an ACCOUNTING_RECONCILIATION_FINALIZE event; FINALIZED is terminal for the \
-                    reconciliation.
-                    Returns 404 RECONCILIATION_NOT_FOUND when missing, 409 RECONCILIATION_ALREADY_FINALIZED \
-                    when already finalized, and 422 RECONCILIATION_NOT_BALANCED carrying the outstanding \
-                    difference as a field error when it does not balance.
+                    Submits an IN_PROGRESS reconciliation for approval (IN_PROGRESS to SUBMITTED) after the \
+                    approval gate E4 holds on the live figures: the difference within 0.01, then no unexplained \
+                    bank transaction and no unexplained ledger line from the window's baseline to its end. The \
+                    opening difference is never a condition.
+                    Use this tool when the preparer has explained every item; use finalizeReconciliation for the \
+                    approver's step, and getReconciliationReview to see what still blocks (readiness.canSubmit).
+                    Preconditions: the reconciliation must be IN_PROGRESS; while SUBMITTED it no longer changes \
+                    until the approver returns it.
+                    Required inputs: reconciliationId (UUID) as a path parameter; the body is optional and may \
+                    carry the version the caller read.
+                    Emits an ACCOUNTING_RECONCILIATION_SUBMIT event, writes a RECONCILIATION_SUBMIT audit row and \
+                    queues the accounting.bankreconciliation.submitted fact; no journal entry is posted.
+                    Returns 200 with the header; 404 RECONCILIATION_NOT_FOUND; 409 \
+                    RECONCILIATION_ALREADY_FINALIZED, RECONCILIATION_NOT_EDITABLE (SUBMITTED, INVALIDATED, \
+                    SUPERSEDED, CANCELLED) or OPTIMISTIC_LOCK; 422 RECONCILIATION_NOT_BALANCED \
+                    (fieldErrors[difference]) or, when it balances, RECONCILIATION_HAS_UNEXPLAINED_ITEMS \
+                    (fieldErrors countUnexplainedBank, countUnexplainedLedger and the first 50 ids per side).
                     """,
             tags = {"Bank Reconciliation"})
     @ApiResponse(
             responseCode = "200",
-            description = "Reconciliation finalized",
+            description = "Reconciliation submitted",
             content = @Content(schema = @Schema(implementation = BankReconciliationResponse.class)))
     @ApiResponse(
             responseCode = "403",
@@ -337,19 +346,256 @@ public class BankReconciliationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)",
+            description = "RECONCILIATION_ALREADY_FINALIZED, RECONCILIATION_NOT_EDITABLE or OPTIMISTIC_LOCK",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "Reconciliation does not balance (RECONCILIATION_NOT_BALANCED)",
+            description = "RECONCILIATION_NOT_BALANCED or RECONCILIATION_HAS_UNEXPLAINED_ITEMS",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<BankReconciliationResponse> submitReconciliation(
+            @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
+            @RequestBody(required = false) @Nullable ReconciliationTransitionRequest request) {
+        if (log.isInfoEnabled()) {
+            log.info("Submit reconciliation {}", sanitizeForLog(reconciliationId));
+        }
+        return ResponseEntity.ok(approvalService.submit(reconciliationId, request));
+    }
+
+    @PostMapping("/{reconciliationId}/finalize")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:reconciliation:approve"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_APPROVE + "')")
+    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_FINALIZE", apiVersion = "1")
+    @Operation(
+            operationId = "finalizeReconciliation",
+            summary = "Approve Reconciliation",
+            description = """
+                    Approves a SUBMITTED reconciliation (SUBMITTED to FINALIZED): the row is locked, the live \
+                    ledger balance, every term of E3, the baseline and both unexplained counts are recomputed \
+                    and the gate E4 is evaluated again, so nothing is approved on a stale figure. On success the \
+                    approvedGlEndingBalance and baselineDate are snapshotted, the matches are sealed, and a \
+                    reconciliation it corrects becomes SUPERSEDED.
+                    Use this tool as the approver once the preparer has submitted; use submitReconciliation for \
+                    the preparer's step and returnReconciliation to send it back instead.
+                    Preconditions: the reconciliation must be SUBMITTED, and the approver must not be the \
+                    submitter unless the tenant's BANK_REC_ALLOW_SELF_APPROVAL is true (every approval under \
+                    that switch is audited as a self-approval).
+                    Required inputs: reconciliationId (UUID) as a path parameter; the body is optional and may \
+                    carry the version the caller read.
+                    Emits an ACCOUNTING_RECONCILIATION_FINALIZE event, writes a RECONCILIATION_APPROVE audit row \
+                    and queues accounting.bankreconciliation.approved (and .superseded for a corrected \
+                    predecessor); FINALIZED is terminal for the reconciliation.
+                    Returns 200 with the header; 403 RECONCILIATION_SELF_APPROVAL (audited) when the submitter \
+                    approves without the switch; 404 RECONCILIATION_NOT_FOUND; 409 RECONCILIATION_NOT_SUBMITTED, \
+                    RECONCILIATION_ALREADY_FINALIZED or OPTIMISTIC_LOCK; 422 RECONCILIATION_NOT_BALANCED \
+                    (fieldErrors[difference]) or RECONCILIATION_HAS_UNEXPLAINED_ITEMS.
+                    """,
+            tags = {"Bank Reconciliation"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Reconciliation approved (FINALIZED)",
+            content = @Content(schema = @Schema(implementation = BankReconciliationResponse.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks the accounting:reconciliation:approve permission, or submitted it"
+                    + " (RECONCILIATION_SELF_APPROVAL)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Reconciliation not found (RECONCILIATION_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "RECONCILIATION_NOT_SUBMITTED, RECONCILIATION_ALREADY_FINALIZED or OPTIMISTIC_LOCK",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "RECONCILIATION_NOT_BALANCED or RECONCILIATION_HAS_UNEXPLAINED_ITEMS",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankReconciliationResponse> finalizeReconciliation(
-            @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull
-                    UUID reconciliationId) {
+            @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
+            @RequestBody(required = false) @Nullable ReconciliationTransitionRequest request) {
         if (log.isInfoEnabled()) {
-            log.info("Finalize reconciliation {}", sanitizeForLog(reconciliationId));
+            log.info("Approve reconciliation {}", sanitizeForLog(reconciliationId));
         }
-        return ResponseEntity.ok(bankReconciliationService.finalizeReconciliation(reconciliationId));
+        return ResponseEntity.ok(approvalService.approve(reconciliationId, request));
+    }
+
+    @PostMapping("/{reconciliationId}/return")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:reconciliation:approve"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_APPROVE + "')")
+    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_RETURN", apiVersion = "1")
+    @Operation(
+            operationId = "returnReconciliation",
+            summary = "Return Reconciliation To Preparer",
+            description = """
+                    Returns a SUBMITTED reconciliation to its preparer (SUBMITTED to IN_PROGRESS) with the \
+                    approver's reason, so it can change again.
+                    Use this tool when the approver will not approve as submitted; use cancelReconciliation to \
+                    abandon it and finalizeReconciliation to approve it.
+                    Preconditions: the reconciliation must be SUBMITTED.
+                    Required inputs: reconciliationId (UUID) as a path parameter and reason (at least 10 \
+                    characters) in the body; version is optional.
+                    Emits an ACCOUNTING_RECONCILIATION_RETURN event and writes a RECONCILIATION_RETURN audit row \
+                    with the reason; no fact is published.
+                    Returns 200 with the header; 400 VALIDATION_ERROR (blank reason) or JUSTIFICATION_REQUIRED \
+                    (shorter than 10); 404 RECONCILIATION_NOT_FOUND; 409 RECONCILIATION_NOT_SUBMITTED or \
+                    OPTIMISTIC_LOCK.
+                    """,
+            tags = {"Bank Reconciliation"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Reconciliation returned (IN_PROGRESS)",
+            content = @Content(schema = @Schema(implementation = BankReconciliationResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR or JUSTIFICATION_REQUIRED",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks the accounting:reconciliation:approve permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Reconciliation not found (RECONCILIATION_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "RECONCILIATION_NOT_SUBMITTED or OPTIMISTIC_LOCK",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<BankReconciliationResponse> returnReconciliation(
+            @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
+            @Valid @RequestBody @NonNull ReconciliationReasonRequest request) {
+        if (log.isInfoEnabled()) {
+            log.info("Return reconciliation {}", sanitizeForLog(reconciliationId));
+        }
+        return ResponseEntity.ok(approvalService.returnToPreparer(reconciliationId, request));
+    }
+
+    @PostMapping("/{reconciliationId}/cancel")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:reconciliation:approve"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_APPROVE + "')")
+    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_CANCEL", apiVersion = "1")
+    @Operation(
+            operationId = "cancelReconciliation",
+            summary = "Cancel Reconciliation",
+            description = """
+                    Cancels an IN_PROGRESS or SUBMITTED reconciliation (to CANCELLED): its proposed and accepted \
+                    matches become UNMATCHED with unmatchReason RECONCILIATION_CANCELLED (bank rows back to \
+                    UNMATCHED), the OPEN outstanding items it registered are RELEASED, and posted adjustments \
+                    stay posted — they are real journal entries, reversed explicitly if wrong.
+                    Use this tool to abandon a reconciliation; use returnReconciliation to send a submitted one \
+                    back, and supersedeReconciliation to correct an approved one.
+                    Preconditions: the reconciliation must be IN_PROGRESS or SUBMITTED.
+                    Required inputs: reconciliationId (UUID) as a path parameter and justification (at least \
+                    10 characters) in the body; version is optional.
+                    Emits an ACCOUNTING_RECONCILIATION_CANCEL event, writes a RECONCILIATION_CANCEL audit row \
+                    and queues accounting.bankreconciliation.cancelled; CANCELLED is terminal.
+                    Returns 200 with the header; 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED; 404 \
+                    RECONCILIATION_NOT_FOUND; 409 RECONCILIATION_ALREADY_FINALIZED, RECONCILIATION_NOT_EDITABLE \
+                    or OPTIMISTIC_LOCK.
+                    """,
+            tags = {"Bank Reconciliation"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Reconciliation cancelled",
+            content = @Content(schema = @Schema(implementation = BankReconciliationResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR or JUSTIFICATION_REQUIRED",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks the accounting:reconciliation:approve permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Reconciliation not found (RECONCILIATION_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "RECONCILIATION_ALREADY_FINALIZED, RECONCILIATION_NOT_EDITABLE or OPTIMISTIC_LOCK",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<BankReconciliationResponse> cancelReconciliation(
+            @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
+            @Valid @RequestBody @NonNull ReconciliationJustificationRequest request) {
+        if (log.isInfoEnabled()) {
+            log.info("Cancel reconciliation {}", sanitizeForLog(reconciliationId));
+        }
+        return ResponseEntity.ok(approvalService.cancel(reconciliationId, request));
+    }
+
+    @PostMapping("/{reconciliationId}/supersede")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:reconciliation:approve"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_APPROVE + "')")
+    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_SUPERSEDE", apiVersion = "1")
+    @Operation(
+            operationId = "supersedeReconciliation",
+            summary = "Supersede Reconciliation",
+            description = """
+                    Starts a new IN_PROGRESS reconciliation of the same statement that supersedes a FINALIZED or \
+                    INVALIDATED one: the predecessor's match members are released (its matches keep their state \
+                    as sealed history) and re-proposed in the successor as PROPOSED matches for the preparer to \
+                    re-confirm; OPEN outstanding items carry over unchanged. The successor uses the baseline \
+                    that governed the window. When the successor is approved the predecessor becomes SUPERSEDED.
+                    Use this tool to correct an approved window (there is no reopen); use createReconciliation \
+                    for a statement never reconciled, and a corrected re-import (supersedesStatementId) when the \
+                    bank's statement itself was wrong.
+                    Preconditions: the reconciliation must be FINALIZED or INVALIDATED, not already superseded, \
+                    and its statement still COMMITTED.
+                    Required inputs: reconciliationId (UUID) as a path parameter and justification (at least \
+                    10 characters) in the body; requestId (UUIDv7) makes a retry return the same successor; \
+                    version is optional.
+                    Emits an ACCOUNTING_RECONCILIATION_SUPERSEDE event and writes a RECONCILIATION_SUPERSEDE \
+                    audit row on the predecessor and a RECONCILIATION_CREATE row on the successor.
+                    Returns 201 with the successor's header (200 with replayed true on a replay); 400 \
+                    VALIDATION_ERROR or JUSTIFICATION_REQUIRED; 404 RECONCILIATION_NOT_FOUND; 409 \
+                    RECONCILIATION_WINDOW_ALREADY_RECONCILED (it is IN_PROGRESS or SUBMITTED, or the statement \
+                    has another active one), RECONCILIATION_NOT_EDITABLE (SUPERSEDED, CANCELLED, already \
+                    superseded, or its statement superseded), IDEMPOTENCY_CONFLICT or OPTIMISTIC_LOCK.
+                    """,
+            tags = {"Bank Reconciliation"})
+    @ApiResponse(
+            responseCode = "201",
+            description = "Superseding reconciliation started",
+            content = @Content(schema = @Schema(implementation = BankReconciliationResponse.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Replay of an earlier supersede with the same requestId (replayed = true)",
+            content = @Content(schema = @Schema(implementation = BankReconciliationResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR or JUSTIFICATION_REQUIRED",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks the accounting:reconciliation:approve permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Reconciliation not found (RECONCILIATION_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "RECONCILIATION_WINDOW_ALREADY_RECONCILED, RECONCILIATION_NOT_EDITABLE,"
+                    + " IDEMPOTENCY_CONFLICT or OPTIMISTIC_LOCK",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<BankReconciliationResponse> supersedeReconciliation(
+            @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
+            @Valid @RequestBody @NonNull ReconciliationJustificationRequest request) {
+        if (log.isInfoEnabled()) {
+            log.info("Supersede reconciliation {}", sanitizeForLog(reconciliationId));
+        }
+        BankReconciliationResponse response = approvalService.supersede(reconciliationId, request);
+        return ResponseEntity.status(response.isReplayed() ? HttpStatus.OK : HttpStatus.CREATED)
+                .body(response);
     }
 
     private static String sanitizeForLog(@Nullable Object value) {
@@ -453,19 +699,24 @@ public class BankReconciliationController {
             operationId = "getReconciliationAudit",
             summary = "Get Reconciliation Audit Trail",
             description = """
-                    Returns the time-ordered audit trail of a reconciliation's actions: import, matches, \
-                    unmatches, adjustments and finalize, each with the acting user.
+                    Returns the stored audit trail, oldest first and a page at a time: every AccountingAuditLog row \
+                    of the reconciliation (create, adjustments and their reversals, auto-match, submit, approve \
+                    including a refused or allowed self-approval, return, cancel, supersede, invalidation), of its \
+                    matches (match, accept, reject, unmatch) and of the outstanding items it registered, cleared \
+                    or reaffirmed — each with operation, actor, timestamp, trace id, justification and the old and \
+                    new value.
                     Use this tool when reviewing who did what during a reconciliation; use \
                     getReconciliationReport instead for the balance summary.
                     Preconditions: the reconciliation must exist.
-                    Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
+                    Required inputs: reconciliationId (UUID) as a path parameter; page (default 0) and size \
+                    (default 50, at most 200) are optional; there is no request body.
                     Emits an ACCOUNTING_RECONCILIATION_AUDIT audit event; no state changes.
                     Returns 404 RECONCILIATION_NOT_FOUND when the id is unknown.
                     """,
             tags = {"Bank Reconciliation"})
     @ApiResponse(
             responseCode = "200",
-            description = "Audit trail generated",
+            description = "Audit trail page read",
             content = @Content(schema = @Schema(implementation = ReconciliationAuditResponse.class)))
     @ApiResponse(
             responseCode = "403",
@@ -476,7 +727,14 @@ public class BankReconciliationController {
             description = "Reconciliation not found (RECONCILIATION_NOT_FOUND)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReconciliationAuditResponse> getReconciliationAudit(
-            @Parameter(description = "Reconciliation id", required = true) @PathVariable UUID reconciliationId) {
-        return ResponseEntity.ok(bankReconciliationService.audit(reconciliationId));
+            @Parameter(description = "Reconciliation id", required = true) @PathVariable UUID reconciliationId,
+            @Parameter(description = "Zero-based page index", example = "0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size (at most 200)", example = "50") @RequestParam(defaultValue = "50")
+                    int size) {
+        Pageable pageable = PageRequest.of(
+                Math.max(page, 0),
+                Math.clamp(size, 1, MAX_AUDIT_PAGE),
+                Sort.by(Sort.Direction.ASC, "timestamp").and(Sort.by(Sort.Direction.ASC, "auditLogId")));
+        return ResponseEntity.ok(bankReconciliationService.audit(reconciliationId, pageable));
     }
 }

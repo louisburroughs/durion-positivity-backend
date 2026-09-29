@@ -229,6 +229,13 @@ public class BankReconciliation extends TenantScopedEntity {
     @Column(name = "request_id", columnDefinition = "UUID")
     private UUID requestId;
 
+    /**
+     * The SHA-256 of the command that created this row under {@code requestId}, when it has one (a supersede; S5,
+     * #2304): a reused {@code requestId} with another payload is {@code IDEMPOTENCY_CONFLICT}, not a replay.
+     */
+    @Column(name = "request_hash", length = 64)
+    private String requestHash;
+
     @PrePersist
     void onPrePersist() {
         if (createdBy == null) {
