@@ -219,10 +219,11 @@ public class BankReconciliationController {
                     Lists bank reconciliation headers most recent first as a paginated projection, optionally \
                     filtered by GL account, status, attribution period (periodCode, YYYY-MM) and a from/to \
                     window on the statement end date; each row carries the terms its last mutation stored.
-                    Use this tool to find in-progress or finalized reconciliations; do not use \
+                    Use this tool to find reconciliations by account, status or period; do not use \
                     getReconciliation, which fetches one reconciliation with its lines by id.
                     Preconditions: none beyond the caller holding accounting:reconciliation:view.
-                    Required inputs: none; glAccountId, status (IN_PROGRESS, FINALIZED), periodCode, from and \
+                    Required inputs: none; glAccountId, status (IN_PROGRESS, SUBMITTED, FINALIZED, INVALIDATED, \
+                    SUPERSEDED, CANCELLED), periodCode, from and \
                     to are optional filters, page defaults to 0 and size to 20.
                     Emits an ACCOUNTING_RECONCILIATION_LIST audit event; no state changes.
                     Returns 200 with an empty page when nothing matches the filters.
