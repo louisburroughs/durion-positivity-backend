@@ -190,7 +190,7 @@ added, and an enumeration copied elsewhere goes stale.
 
 The real-Postgres tests (the `pg` profile: schema conformance, tenant isolation, the committing ledger
 ITs) start one `postgres:16-alpine` Testcontainers container per test JVM. Thirteen of pos-accounting's
-are plain `*Test` classes, so even `./mvnw test` needs Docker there. On a machine or a remote session
+Postgres-backed classes are plain `*Test` classes, so even `./mvnw test` needs Docker there. On a machine or a remote session
 without Docker, point them at a Postgres that is already running instead:
 
 ```bash
