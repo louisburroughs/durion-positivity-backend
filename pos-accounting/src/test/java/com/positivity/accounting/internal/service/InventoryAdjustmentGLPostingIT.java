@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.BankRecCloseTestPolicy;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.AccountingEventFilter;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
@@ -12,6 +13,7 @@ import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
@@ -76,6 +78,10 @@ class InventoryAdjustmentGLPostingIT {
     }
 
     private static final String EVENT_TYPE = InventoryAdjustedV1.EVENT_TYPE;
+
+    /** The seeded 1000 Cash is in close scope; these closes are not about bank reconciliation (#2305). */
+    @Autowired
+    private AccountingConfigurationRepository bankRecCloseConfiguration;
 
     @Autowired
     private Clock clock;
@@ -296,6 +302,7 @@ class InventoryAdjustmentGLPostingIT {
     @Test
     @DisplayName("PERIOD_CLOSED propagates and leaves no processed_events row, record or entry")
     void closedPeriodPropagatesUnmarked() {
+        BankRecCloseTestPolicy.advisory(bankRecCloseConfiguration);
         accountingPeriodService.closePeriod("2024-03");
         UUID adjustmentId = UUID.randomUUID();
         String eventId = UUID.randomUUID().toString();

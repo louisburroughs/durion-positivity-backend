@@ -115,6 +115,9 @@ public class ArchitectureTest {
                     // The intake port's implementation is the core's write service for bank lines
                     // (SPEC §2.1: normalization, upsert, duplicate flagging, statement creation; #2301).
                     "..internal.bankrec.intake..",
+                    // The close-readiness read model reads the core's and the ledger's rows directly
+                    // (SPEC §2.1 lists readmodel among the core's sub-packages; story S6, #2305).
+                    "..internal.bankrec.readmodel..",
                     "..internal.repository..",
                     "..internal.bankrec.repository..",
                     "..internal.bankfeed..repository..",
@@ -284,6 +287,22 @@ public class ArchitectureTest {
                     // core is meant to depend on (SPEC §2.1, #2301); only the module's adapters are walled off.
                     .and(not(resideInAPackage("com.positivity.domainevents.."))))
             .because("SPEC §2.1: the reconciliation core never depends on an adapter; adapters call its intake port");
+
+    /**
+     * The period close reaches the reconciliation core only through its close-readiness read model and the
+     * read model's DTOs — the one {@code PERIOD --> CORE} edge of SPEC §2 (story S6, #2305).
+     */
+    @ArchTest
+    static final ArchRule period_close_reaches_bankrec_only_through_readmodel = noClasses()
+            .that()
+            .resideInAPackage("..internal.service..")
+            .and()
+            .haveSimpleNameStartingWith("AccountingPeriod")
+            .should()
+            .dependOnClassesThat(resideInAPackage("..bankrec..")
+                    .and(not(resideInAnyPackage("..bankrec.readmodel..", "..bankrec.dto.."))))
+            .allowEmptyShould(true)
+            .because("SPEC §2: PERIOD --> CORE goes through ..bankrec.readmodel.. only");
 
     @ArchTest
     static final ArchRule bankfeed_may_only_use_intake_and_dto = noClasses()

@@ -127,4 +127,14 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
             @Param("accountIds") Collection<UUID> accountIds,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
+
+    /**
+     * The distinct accounts each of the given entries posted a line to, whatever the entry's status (bank
+     * reconciliation close readiness — the clearing accounts of {@code OTHER} adjustments are read from their
+     * entries, never from the mapping, SPEC §5.3; story S6, #2305).
+     */
+    @Query("SELECT DISTINCT new com.positivity.accounting.internal.repository.EntryAccount("
+            + "je.journalEntryId, g.glAccountId) FROM JournalEntryLine jel JOIN jel.journalEntry je JOIN jel.glAccount g"
+            + " WHERE je.journalEntryId IN :entryIds")
+    List<EntryAccount> findEntryAccounts(@Param("entryIds") Collection<UUID> entryIds);
 }

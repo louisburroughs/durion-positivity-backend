@@ -1,6 +1,10 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.bankrec.dto.CloseReadinessResponse;
+import com.positivity.accounting.internal.bankrec.readmodel.BankReconciliationCloseReadiness;
+import com.positivity.accounting.internal.bankrec.readmodel.BankReconciliationCloseReadiness.CloseDecision;
 import com.positivity.accounting.internal.dto.AccountingPeriodResponse;
+import com.positivity.accounting.internal.dto.PeriodCloseRequest;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
 import com.positivity.accounting.internal.entity.JournalEntry;
@@ -9,6 +13,7 @@ import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
+import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
@@ -25,6 +30,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +65,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     private final AccountingPeriodProvisioner periodProvisioner;
     private final JournalEntryRepository journalEntryRepository;
     private final AccountingAuditLogRepository auditLogRepository;
+    private final BankReconciliationCloseReadiness closeReadiness;
 
     @Override
     @NonNull
@@ -128,11 +135,21 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     @NonNull
     @Transactional
     public AccountingPeriodResponse closePeriod(@NonNull String periodCode) {
+        // Declared here, not only as the interface default, so a call through the proxy opens the transaction.
+        return closePeriod(periodCode, null);
+    }
+
+    @Override
+    @NonNull
+    @Transactional
+    public AccountingPeriodResponse closePeriod(@NonNull String periodCode, @Nullable PeriodCloseRequest request) {
         YearMonth yearMonth = parsePeriodCode(periodCode);
         String canonicalCode = yearMonth.toString();
 
+        // Locked read (FOR UPDATE): the close serializes against an in-flight gated posting (AccountingPeriodGate)
+        // and re-reads the live balances below under the lock (SPEC-manual-bank-reconciliation I3).
         AccountingPeriod period =
-                periodRepository.findByPeriodCode(canonicalCode).orElseGet(() -> provisionForClose(yearMonth));
+                periodRepository.findWithLockByPeriodCode(canonicalCode).orElseGet(() -> lockAfterProvision(yearMonth));
 
         if (period.getStatus() == AccountingPeriodStatus.CLOSED) {
             throw new AccountingPeriodStateException(
@@ -145,15 +162,63 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
             throw new PeriodCloseBlockedException(canonicalCode, draftEntryIds);
         }
 
+        CloseReadinessResponse readiness = closeReadiness.evaluate(period, true);
+        CloseDecision decision;
+        try {
+            decision =
+                    closeReadiness.decide(readiness, request != null ? request.getBankReconciliationException() : null);
+        } catch (PeriodBankReconciliationIncompleteException e) {
+            log.info(
+                    "Close of period {} refused by bank reconciliation policy {}: {}",
+                    canonicalCode,
+                    readiness.policy(),
+                    BankReconciliationCloseReadiness.summary(readiness));
+            throw e;
+        }
+
         String actor = currentActor();
+        String summary = BankReconciliationCloseReadiness.summary(readiness);
+        if (decision.exceptionGranted()) {
+            AccountingAuditLog exceptionRow = auditRow(period, "PERIOD_CLOSE_BANKREC_EXCEPTION", actor);
+            exceptionRow.setJustification(decision.justification());
+            exceptionRow.setOldValue(BankReconciliationCloseReadiness.snapshot(readiness));
+            exceptionRow.setNewValue(AccountingPeriodStatus.CLOSED.name());
+            auditLogRepository.save(exceptionRow);
+            log.info("Period {} closes on a bank reconciliation exception by {}: {}", canonicalCode, actor, summary);
+        }
+
         period.setStatus(AccountingPeriodStatus.CLOSED);
         period.setClosedAt(clock.instant());
         period.setClosedBy(actor);
         AccountingPeriod saved = periodRepository.save(period);
 
-        writeAuditRow(saved, "PERIOD_CLOSE", actor, AccountingPeriodStatus.OPEN, AccountingPeriodStatus.CLOSED, null);
+        AccountingAuditLog closeRow = auditRow(saved, "PERIOD_CLOSE", actor);
+        closeRow.setOldValue(AccountingPeriodStatus.OPEN.name());
+        closeRow.setNewValue(AccountingPeriodStatus.CLOSED.name() + ";" + summary);
+        auditLogRepository.save(closeRow);
         log.info("Period {} closed by {}", canonicalCode, actor);
-        return toResponse(saved);
+        AccountingPeriodResponse response = toResponse(saved);
+        response.setBankReconciliationReady(decision.bankReconciliationReady());
+        response.setBankReconciliationException(decision.exceptionGranted());
+        return response;
+    }
+
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public CloseReadinessResponse getCloseReadiness(@NonNull String periodCode) {
+        YearMonth yearMonth = parsePeriodCode(periodCode);
+        AccountingPeriod period = periodRepository
+                .findByPeriodCode(yearMonth.toString())
+                .orElseGet(() -> {
+                    AccountingPeriod transientPeriod = new AccountingPeriod();
+                    transientPeriod.setPeriodCode(yearMonth.toString());
+                    transientPeriod.setStartDate(yearMonth.atDay(1));
+                    transientPeriod.setEndDate(yearMonth.atEndOfMonth());
+                    transientPeriod.setStatus(AccountingPeriodStatus.OPEN);
+                    return transientPeriod;
+                });
+        return closeReadiness.evaluate(period);
     }
 
     @Override
@@ -234,6 +299,14 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
         return findOrProvision(yearMonth);
     }
 
+    /** Provisions the period for a close and re-reads it under the row lock. */
+    private AccountingPeriod lockAfterProvision(YearMonth yearMonth) {
+        AccountingPeriod provisioned = provisionForClose(yearMonth);
+        return periodRepository
+                .findWithLockByPeriodCode(provisioned.getPeriodCode())
+                .orElse(provisioned);
+    }
+
     private List<UUID> findDraftEntryIdsInside(AccountingPeriod period) {
         return journalEntryRepository
                 .findByStatusAndTransactionDateInRange(
@@ -252,15 +325,20 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
             AccountingPeriodStatus oldStatus,
             AccountingPeriodStatus newStatus,
             String justification) {
+        AccountingAuditLog auditLog = auditRow(period, operation, actor);
+        auditLog.setJustification(justification);
+        auditLog.setOldValue(oldStatus.name());
+        auditLog.setNewValue(newStatus.name());
+        auditLogRepository.save(auditLog);
+    }
+
+    private static AccountingAuditLog auditRow(AccountingPeriod period, String operation, String actor) {
         AccountingAuditLog auditLog = new AccountingAuditLog();
         auditLog.setEntityType(AUDIT_ENTITY_TYPE);
         auditLog.setEntityId(period.getPeriodId());
         auditLog.setOperation(operation);
         auditLog.setUserId(actor);
-        auditLog.setJustification(justification);
-        auditLog.setOldValue(oldStatus.name());
-        auditLog.setNewValue(newStatus.name());
-        auditLogRepository.save(auditLog);
+        return auditLog;
     }
 
     private static String currentActor() {

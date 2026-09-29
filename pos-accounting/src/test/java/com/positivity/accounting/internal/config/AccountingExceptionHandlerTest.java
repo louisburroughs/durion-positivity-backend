@@ -33,7 +33,9 @@ import com.positivity.accounting.internal.exception.JournalEntryNotFoundExceptio
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
+import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
+import com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException;
 import com.positivity.accounting.internal.exception.PostingRulePublishValidationException;
 import com.positivity.accounting.internal.exception.PostingRuleSetNotFoundException;
 import com.positivity.accounting.internal.exception.ReceivablePaymentNotFoundException;
@@ -209,6 +211,17 @@ class AccountingExceptionHandlerTest {
                     Named.of("handlePeriodCloseBlocked", (HandlerInvocation)
                             request -> handler.handlePeriodCloseBlocked(
                                     new PeriodCloseBlockedException("2024-01", List.of(UUID.randomUUID())), request)),
+                    Named.of("handlePeriodBankReconciliationIncomplete", (HandlerInvocation) request ->
+                            handler.handlePeriodBankReconciliationIncomplete(
+                                    new PeriodBankReconciliationIncompleteException(
+                                            "2024-01",
+                                            List.of(new PeriodBankReconciliationIncompleteException.UnreconciledAccount(
+                                                    UUID.randomUUID(), "1000", List.of("STATEMENT_COVERAGE"))),
+                                            null),
+                                    request)),
+                    Named.of("handlePeriodCloseExceptionNotPermitted", (HandlerInvocation)
+                            request -> handler.handlePeriodCloseExceptionNotPermitted(
+                                    new PeriodCloseExceptionNotPermittedException("needs override"), request)),
                     Named.of("handleUnbalancedRules", (HandlerInvocation) request -> handler.handleUnbalancedRules(
                             new UnbalancedRulesException(
                                     List.of(new UnbalancedRulesException.RuleViolation("field", "message"))),
@@ -324,6 +337,43 @@ class AccountingExceptionHandlerTest {
     class BankRecRefusals {
 
         private final AccountingExceptionHandler handler = new AccountingExceptionHandler(TEST_CLOCK);
+
+        @Test
+        @DisplayName(
+                "PERIOD_BANK_RECONCILIATION_INCOMPLETE: 422, one unreconciledGlAccountIds entry per account (#2305)")
+        void periodBankReconciliationIncomplete() {
+            UUID account = UUID.randomUUID();
+            ResponseEntity<ApiError> response = handler.handlePeriodBankReconciliationIncomplete(
+                    new PeriodBankReconciliationIncompleteException(
+                            "2026-08",
+                            List.of(new PeriodBankReconciliationIncompleteException.UnreconciledAccount(
+                                    account, "1000", List.of("RECONCILIATION_IN_FLIGHT", "RECONCILIATION_APPROVED"))),
+                            "not permitted by policy REQUIRED"),
+                    requestWithoutHeader());
+
+            assertThat(response.getStatusCode().value()).isEqualTo(422);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("PERIOD_BANK_RECONCILIATION_INCOMPLETE");
+            assertThat(response.getBody().fieldErrors())
+                    .extracting(ApiError.FieldError::field, ApiError.FieldError::message)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(
+                                    "unreconciledGlAccountIds",
+                                    account + " 1000: RECONCILIATION_IN_FLIGHT, RECONCILIATION_APPROVED"),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    "bankReconciliationException", "not permitted by policy REQUIRED"));
+        }
+
+        @Test
+        @DisplayName("PERIOD_CLOSE_EXCEPTION_NOT_PERMITTED: 403 (#2305)")
+        void periodCloseExceptionNotPermitted() {
+            ResponseEntity<ApiError> response = handler.handlePeriodCloseExceptionNotPermitted(
+                    new PeriodCloseExceptionNotPermittedException("needs override"), requestWithoutHeader());
+
+            assertThat(response.getStatusCode().value()).isEqualTo(403);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("PERIOD_CLOSE_EXCEPTION_NOT_PERMITTED");
+        }
 
         @Test
         @DisplayName("every code answers its ADR-0017 status with its own name")

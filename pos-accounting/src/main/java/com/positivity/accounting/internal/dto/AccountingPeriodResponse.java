@@ -53,4 +53,16 @@ public class AccountingPeriodResponse {
 
     @Schema(description = "Justification recorded for the last reopen")
     private String reopenJustification;
+
+    @Schema(
+            description = "Close response only: whether no BLOCKING bank reconciliation check remained at close"
+                    + " (null on other responses)",
+            nullable = true)
+    private Boolean bankReconciliationReady;
+
+    @Schema(
+            description = "Close response only: whether the period closed on a bank reconciliation exception"
+                    + " (null on other responses)",
+            nullable = true)
+    private Boolean bankReconciliationException;
 }

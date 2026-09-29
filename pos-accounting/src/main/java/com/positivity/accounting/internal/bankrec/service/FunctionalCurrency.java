@@ -1,10 +1,13 @@
 package com.positivity.accounting.internal.bankrec.service;
 
+import com.positivity.accounting.internal.bankrec.intake.MinorUnit;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Currency;
+import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -40,6 +43,17 @@ public class FunctionalCurrency {
     /** Decimal places of the ledger currency's minor unit (2 for USD, 0 for JPY). */
     public int fractionDigits() {
         return Math.max(0, Currency.getInstance(code()).getDefaultFractionDigits());
+    }
+
+    /**
+     * Refuses an amount finer than the ledger currency's minor unit with 422 {@code
+     * AMOUNT_PRECISION_EXCEEDS_CURRENCY} naming {@code field} (ADR-0067 PC-6, {@link MinorUnit}); never rounds. A
+     * null amount passes.
+     */
+    public void requireMinorUnit(@Nullable BigDecimal amount, @NonNull String field) {
+        if (amount != null && !MinorUnit.fits(amount, code())) {
+            throw MinorUnit.exceeded(Map.of(field, MinorUnit.detail(code())));
+        }
     }
 
     /** One minor unit of the ledger currency: the E1 tolerance. */

@@ -98,6 +98,30 @@ public interface BankReconciliationRepository
             @NonNull Collection<UUID> statementIds, @NonNull Collection<ReconciliationStatus> statuses);
 
     /**
+     * The account's reconciliations in the given states ending on/before {@code end} — close readiness's {@code
+     * RECONCILIATION_IN_FLIGHT} (SPEC §5.3; story S6, #2305).
+     */
+    @NonNull
+    List<BankReconciliation>
+            findByGlAccount_GlAccountIdAndStatusInAndStatementEndDateLessThanEqualOrderByStatementStartDateAsc(
+                    @NonNull UUID glAccountId,
+                    @NonNull Collection<ReconciliationStatus> statuses,
+                    @NonNull LocalDate end);
+
+    /**
+     * The account's reconciliations in one state whose window intersects {@code [start, end]} — close readiness's
+     * {@code RECONCILIATION_INVALIDATED} (SPEC §5.3; story S6, #2305).
+     */
+    @Query("SELECT r FROM BankReconciliation r WHERE r.glAccount.glAccountId = :account AND r.status = :status"
+            + " AND r.statementStartDate <= :end AND r.statementEndDate >= :start ORDER BY r.statementStartDate")
+    @NonNull
+    List<BankReconciliation> findIntersecting(
+            @Param("account") @NonNull UUID glAccountId,
+            @Param("status") @NonNull ReconciliationStatus status,
+            @Param("start") @NonNull LocalDate start,
+            @Param("end") @NonNull LocalDate end);
+
+    /**
      * The statement a reconciliation is of, read without loading (or locking) the reconciliation: supersede
      * locks the statement before the reconciliation, in the order statement supersession takes them (S5, #2304).
      */

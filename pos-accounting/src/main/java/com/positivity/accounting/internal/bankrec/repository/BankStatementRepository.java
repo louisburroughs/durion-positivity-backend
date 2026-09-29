@@ -85,6 +85,21 @@ public interface BankStatementRepository
     List<AccountDate> findLatestEndDateByGlAccountIdIn(
             @Param("ids") @NonNull Collection<UUID> glAccountIds, @Param("status") @NonNull BankStatementStatus status);
 
+    /**
+     * {@link #findLatestEndDateByGlAccountIdIn} over the statements starting on or before {@code startOnOrBefore}:
+     * the coverage that applies at a period end, where a statement starting after the period covers none of it
+     * (SPEC §5.3; story S6, #2305).
+     */
+    @Query(
+            "SELECT new com.positivity.accounting.internal.bankrec.repository.AccountDate(s.glAccountId, MAX(s.endDate)) FROM BankStatement s"
+                    + " WHERE s.glAccountId IN :ids AND s.status = :status AND s.startDate <= :startOnOrBefore"
+                    + " GROUP BY s.glAccountId")
+    @NonNull
+    List<AccountDate> findLatestEndDateByGlAccountIdInStartingOnOrBefore(
+            @Param("ids") @NonNull Collection<UUID> glAccountIds,
+            @Param("status") @NonNull BankStatementStatus status,
+            @Param("startOnOrBefore") @NonNull LocalDate startOnOrBefore);
+
     /** The statements a corrected statement superseded (§4.9 path 3; S5, #2304). */
     @NonNull
     List<BankStatement> findBySupersededByStatementId(@NonNull UUID supersededByStatementId);

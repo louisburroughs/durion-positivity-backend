@@ -403,6 +403,22 @@ class ReconciliationAdjustmentServiceTest {
         }
 
         @Test
+        @DisplayName("an amount finer than the currency's minor unit is 422 AMOUNT_PRECISION_EXCEEDS_CURRENCY [M]")
+        void amountFinerThanTheMinorUnit() {
+            BankTransaction bank = transaction("-12.00", LocalDate.of(2026, 9, 10));
+            assertThatThrownBy(() -> service.addAdjustment(
+                            RECON_ID,
+                            request(BankAdjustmentType.BANK_FEE, "-12.005")
+                                    .bankTransactionId(bank.getBankTransactionId())
+                                    .build()))
+                    .isInstanceOfSatisfying(BankRecException.class, e -> {
+                        assertThat(e.code()).isEqualTo(BankRecErrorCode.AMOUNT_PRECISION_EXCEEDS_CURRENCY);
+                        assertThat(e.fieldErrors()).containsOnlyKeys("amount");
+                    });
+            verify(journalEntryService, never()).createJournalEntry(any());
+        }
+
+        @Test
         @DisplayName("a linked adjustment differing from its bank transaction, even by one cent, is"
                 + " ADJUSTMENT_LINK_NOT_ELIGIBLE on amount and posts nothing (M5)")
         void linkedAmountMustEqualExactly() {

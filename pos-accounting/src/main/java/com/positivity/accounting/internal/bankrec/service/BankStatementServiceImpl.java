@@ -316,9 +316,9 @@ public class BankStatementServiceImpl implements BankStatementService {
         } else if ((row.getDebit() != null && row.getDebit().signum() < 0)
                 || (row.getCredit() != null && row.getCredit().signum() < 0)) {
             errors.put(field, "debit and credit are positive numbers");
-        } else if (amount.stripTrailingZeros().scale() > 4) {
-            errors.put(field, "at most 4 decimal places");
         }
+        // Precision is not shape: the intake refuses an amount finer than the currency's minor unit with 422
+        // AMOUNT_PRECISION_EXCEEDS_CURRENCY (ADR-0067 PC-6).
     }
 
     private static void requireNonNull(Map<String, String> errors, String field, @Nullable Object value) {

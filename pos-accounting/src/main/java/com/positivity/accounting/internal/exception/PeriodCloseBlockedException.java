@@ -21,6 +21,13 @@ public class PeriodCloseBlockedException extends RuntimeException {
         this.draftJournalEntryIds = List.copyOf(draftJournalEntryIds);
     }
 
+    /** For a subtype that blocks the close for another reason (bank reconciliation, story S6 #2305). */
+    protected PeriodCloseBlockedException(String periodCode, String message) {
+        super(message);
+        this.periodCode = periodCode;
+        this.draftJournalEntryIds = List.of();
+    }
+
     public String getPeriodCode() {
         return periodCode;
     }

@@ -1,5 +1,12 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
+import com.positivity.accounting.internal.bankrec.intake.BankRecException;
+import com.positivity.accounting.internal.bankrec.intake.Justification;
+import com.positivity.accounting.internal.bankrec.service.BankRecPolicy;
+import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
+import com.positivity.accounting.internal.dto.BankReconciliationPolicyRequest;
+import com.positivity.accounting.internal.dto.BankReconciliationPolicyResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingConfiguration;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
@@ -7,11 +14,18 @@ import com.positivity.accounting.internal.exception.InvalidRequestParameterExcep
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.security.common.SecurityContextHelper;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,8 +49,15 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
     private static final String AUDIT_ENTITY_TYPE = "ACCOUNTING_CONFIGURATION";
     private static final String AUDIT_OPERATION_HARD_LOCK_SET = "HARD_LOCK_SET";
 
+    static final String AUDIT_OPERATION_BANK_REC_POLICY_SET = "BANK_REC_POLICY_SET";
+
+    /** The longest policy justification kept (the request's documented maximum). */
+    private static final int MAX_JUSTIFICATION = 1000;
+
     private final AccountingConfigurationRepository configurationRepository;
     private final AccountingAuditLogRepository auditLogRepository;
+    private final BankRecPolicy bankRecPolicy;
+    private final FunctionalCurrency functionalCurrency;
 
     @Override
     @Transactional(readOnly = true)
@@ -90,6 +111,157 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
 
         log.info("Hard-lock date set to {} by {} (previous: {})", hardLockDate, actor, currentDate);
         return hardLockDate;
+    }
+
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public BankReconciliationPolicyResponse getBankReconciliationPolicy() {
+        BankRecPolicy.Settings settings = bankRecPolicy.settings();
+        Optional<AccountingAuditLog> latest =
+                auditLogRepository.findFirstByOperationOrderByTimestampDesc(AUDIT_OPERATION_BANK_REC_POLICY_SET);
+        return BankReconciliationPolicyResponse.builder()
+                .closePolicy(settings.closePolicy())
+                .closeScope(settings.closeScope())
+                .closeCoverageLagDays(settings.closeCoverageLagDays())
+                .allowSelfApproval(settings.allowSelfApproval())
+                .otherApprovalThreshold(settings.otherApprovalThreshold())
+                .currency(functionalCurrency.code())
+                .updatedAt(latest.map(AccountingAuditLog::getTimestamp).orElse(null))
+                .updatedBy(latest.map(AccountingAuditLog::getUserId).orElse(null))
+                .build();
+    }
+
+    @Override
+    @NonNull
+    @Transactional
+    public BankReconciliationPolicyResponse setBankReconciliationPolicy(
+            @NonNull BankReconciliationPolicyRequest request) {
+        String justification = Justification.required(request.getJustification(), "justification");
+        if (justification.length() > MAX_JUSTIFICATION) {
+            throw BankRecException.field(
+                    BankRecErrorCode.VALIDATION_ERROR,
+                    "justification must not exceed " + MAX_JUSTIFICATION + " characters",
+                    "justification",
+                    "at most " + MAX_JUSTIFICATION + " characters");
+        }
+        if (!request.isOtherApprovalThresholdPresent()) {
+            throw BankRecException.field(
+                    BankRecErrorCode.VALIDATION_ERROR,
+                    "otherApprovalThreshold is required; send null to clear it",
+                    "otherApprovalThreshold",
+                    "is required");
+        }
+        Map<String, @Nullable String> requested = new LinkedHashMap<>();
+        requested.put(
+                BankRecPolicy.CLOSE_POLICY,
+                required(request.getClosePolicy(), "closePolicy").name());
+        requested.put(
+                BankRecPolicy.CLOSE_SCOPE,
+                required(request.getCloseScope(), "closeScope").name());
+        int lag = required(request.getCloseCoverageLagDays(), "closeCoverageLagDays");
+        if (lag < 0) {
+            throw BankRecException.field(
+                    BankRecErrorCode.VALIDATION_ERROR,
+                    "closeCoverageLagDays must not be negative",
+                    "closeCoverageLagDays",
+                    "must not be negative");
+        }
+        requested.put(BankRecPolicy.CLOSE_COVERAGE_LAG_DAYS, Integer.toString(lag));
+        requested.put(
+                BankRecPolicy.ALLOW_SELF_APPROVAL,
+                required(request.getAllowSelfApproval(), "allowSelfApproval").toString());
+        requested.put(BankRecPolicy.OTHER_APPROVAL_THRESHOLD, threshold(request.getOtherApprovalThreshold()));
+
+        String actor = currentActor();
+        int changed = 0;
+        for (Map.Entry<String, @Nullable String> setting : requested.entrySet()) {
+            if (applySetting(setting.getKey(), setting.getValue(), justification, actor)) {
+                changed++;
+            }
+        }
+        log.info("Bank reconciliation policy set by {}: {} setting(s) changed", actor, changed);
+        return getBankReconciliationPolicy();
+    }
+
+    /** Writes and audits one setting when its effective value changes; returns whether it did. */
+    private boolean applySetting(String key, @Nullable String newValue, String justification, String actor) {
+        AccountingConfiguration row =
+                configurationRepository.findWithLockByConfigKey(key).orElse(null);
+        String oldValue = effective(key, row != null ? row.getConfigValue() : null);
+        if (Objects.equals(oldValue, newValue)) {
+            return false;
+        }
+        UUID entityId;
+        if (newValue == null) {
+            // Only the threshold is nullable: clearing it removes the row (no row = unset, §4.7).
+            entityId = row.getConfigId();
+            configurationRepository.delete(row);
+        } else {
+            if (row == null) {
+                row = new AccountingConfiguration();
+                row.setConfigKey(key);
+            }
+            row.setConfigValue(newValue);
+            entityId = configurationRepository.save(row).getConfigId();
+        }
+        AccountingAuditLog auditLog = new AccountingAuditLog();
+        auditLog.setEntityType(AUDIT_ENTITY_TYPE);
+        auditLog.setEntityId(entityId);
+        auditLog.setOperation(AUDIT_OPERATION_BANK_REC_POLICY_SET);
+        auditLog.setUserId(actor);
+        auditLog.setJustification(justification);
+        auditLog.setOldValue(oldValue);
+        auditLog.setNewValue(newValue);
+        auditLogRepository.save(auditLog);
+        return true;
+    }
+
+    /** The canonical effective value of a stored setting (its default when absent), as the PUT would write it. */
+    private @Nullable String effective(String key, @Nullable String stored) {
+        return switch (key) {
+            case BankRecPolicy.CLOSE_POLICY ->
+                BankRecPolicy.parseClosePolicy(stored).name();
+            case BankRecPolicy.CLOSE_SCOPE ->
+                BankRecPolicy.parseCloseScope(stored).name();
+            case BankRecPolicy.CLOSE_COVERAGE_LAG_DAYS -> Integer.toString(BankRecPolicy.parseLagDays(stored));
+            case BankRecPolicy.ALLOW_SELF_APPROVAL -> Boolean.toString(BankRecPolicy.parseAllowSelfApproval(stored));
+            case BankRecPolicy.OTHER_APPROVAL_THRESHOLD ->
+                BankRecPolicy.parseThreshold(stored).map(this::scaled).orElse(null);
+            default -> throw new IllegalStateException("Not a bank reconciliation policy key: " + key);
+        };
+    }
+
+    /**
+     * The threshold as stored: in the functional currency's minor unit; finer precision is refused with 422
+     * {@code AMOUNT_PRECISION_EXCEEDS_CURRENCY} rather than rounded (ADR-0067 PC-6).
+     */
+    private @Nullable String threshold(@Nullable BigDecimal amount) {
+        if (amount == null) {
+            return null;
+        }
+        if (amount.signum() < 0) {
+            throw BankRecException.field(
+                    BankRecErrorCode.VALIDATION_ERROR,
+                    "otherApprovalThreshold must not be negative",
+                    "otherApprovalThreshold",
+                    "must not be negative");
+        }
+        functionalCurrency.requireMinorUnit(amount, "otherApprovalThreshold");
+        return scaled(amount);
+    }
+
+    private String scaled(BigDecimal amount) {
+        return amount.setScale(functionalCurrency.fractionDigits(), RoundingMode.HALF_UP)
+                .toPlainString();
+    }
+
+    private static <T> T required(@Nullable T value, String field) {
+        if (value == null) {
+            throw BankRecException.field(
+                    BankRecErrorCode.VALIDATION_ERROR, field + " is required", field, "is required");
+        }
+        return value;
     }
 
     private static String currentActor() {

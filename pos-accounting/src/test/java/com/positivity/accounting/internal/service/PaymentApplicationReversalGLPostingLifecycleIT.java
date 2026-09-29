@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.BankRecCloseTestPolicy;
 import com.positivity.accounting.PostgresCommittingTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
@@ -14,6 +15,7 @@ import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.handler.PaymentApplicationReversalGLPostingEventHandler;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
@@ -63,6 +65,10 @@ class PaymentApplicationReversalGLPostingLifecycleIT extends PostgresCommittingT
         AccountingPostgresContainer.registerIsolatedDatabase(registry, "payment-application-reversal");
         registerCommonProperties(registry);
     }
+
+    /** The seeded 1000 Cash is in close scope; these closes are not about bank reconciliation (#2305). */
+    @Autowired
+    private AccountingConfigurationRepository bankRecCloseConfiguration;
 
     @Autowired
     private PaymentApplicationReversalGLPostingEventHandler handler;
@@ -204,6 +210,7 @@ class PaymentApplicationReversalGLPostingLifecycleIT extends PostgresCommittingT
 
         // Close the original's period; the B2 reversal-date default must fall to
         // the current open period rather than failing.
+        BankRecCloseTestPolicy.advisory(bankRecCloseConfiguration);
         accountingPeriodService.closePeriod("2019-05");
 
         handler.onPaymentApplicationReversalGLPosting(reversalEvent(applicationRequestId, "Late reversal"));

@@ -254,6 +254,36 @@ class BankTransactionIntakeImplTest {
         assertNothingWritten();
     }
 
+    @Test
+    void amountsFinerThanTheCurrencyMinorUnitAre422NamingEveryField() {
+        when(profiles.findById(ACCOUNT)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> intake.accept(
+                        manual(
+                                header("2026-09-01", "2026-09-30", "0.001", "10.0050"),
+                                List.of(
+                                        row(LocalDate.of(2026, 9, 2), "10.00", "DEP"),
+                                        row(LocalDate.of(2026, 9, 3), "0.005", "INT"))),
+                        ctx(ACK)))
+                .satisfies(t -> {
+                    assertThat(codeOf(t)).isEqualTo(BankRecErrorCode.AMOUNT_PRECISION_EXCEEDS_CURRENCY);
+                    assertThat(((BankRecException) t).fieldErrors())
+                            .containsOnlyKeys("openingBalance", "closingBalance", "transactions[1].signedAmount");
+                });
+        assertNothingWritten();
+    }
+
+    @Test
+    void anAmountBeyondTheStorageScaleIsTheSame422() {
+        when(profiles.findById(ACCOUNT)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> intake.accept(
+                        manual(
+                                header("2026-09-01", "2026-09-30", "0", "10"),
+                                List.of(row(LocalDate.of(2026, 9, 2), "10.00001", "DEP"))),
+                        ctx(ACK)))
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo(BankRecErrorCode.AMOUNT_PRECISION_EXCEEDS_CURRENCY));
+        assertNothingWritten();
+    }
+
     // ---- first statement, profile and baseline --------------------------------------------------
 
     @Nested

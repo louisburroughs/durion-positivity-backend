@@ -374,6 +374,20 @@ class BankImportServiceImplTest {
                             BankRecException.class,
                             e -> assertThat(e.fieldErrors()).containsKey("splitAt[0].date"));
         }
+
+        @Test
+        void headerAndSplitBalancesFinerThanTheCurrencyMinorUnitAre422() {
+            BankImportCreateRequest request = upload(CSV, "1000.001", "1485.00", ACK);
+            request.setSplitAt(
+                    List.of(new BankImportSplitPoint(LocalDate.of(2026, 9, 15), new BigDecimal("1100.005"))));
+            assertThatThrownBy(() -> service.create(request, null, null, null))
+                    .isInstanceOfSatisfying(BankRecException.class, e -> {
+                        assertThat(e.code()).isEqualTo(BankRecErrorCode.AMOUNT_PRECISION_EXCEEDS_CURRENCY);
+                        assertThat(e.fieldErrors())
+                                .containsOnlyKeys("statement.openingBalance", "splitAt[0].closingBalance");
+                    });
+            assertThat(importStore).isEmpty();
+        }
     }
 
     @Test
@@ -662,6 +676,45 @@ class BankImportServiceImplTest {
             assertThat(corrected.getCorrectedValues()).containsEntry("date", "2026-09-14");
             assertThat(corrected.getRejectionCode()).isNull();
             assertThat(importStore.get(id).getRejectedCount()).isZero();
+        }
+
+        @Test
+        void aCorrectedAmountFinerThanTheCurrencyMinorUnitIs422AndChangesNothing() {
+            UUID id = service.create(
+                            upload("date,description,amount\n2026-13-45,DEP,500.00", "0", "500", ACK), null, null, null)
+                    .getImportId();
+            BankImportRow rejected = rowStore.getFirst();
+
+            assertThatThrownBy(() -> service.updateRow(
+                            id,
+                            rejected.getRowId(),
+                            BankImportRowUpdateRequest.builder()
+                                    .correctedValues(Map.of("date", "2026-09-14", "signedAmount", "500.005"))
+                                    .build()))
+                    .isInstanceOfSatisfying(BankRecException.class, e -> {
+                        assertThat(e.code()).isEqualTo(BankRecErrorCode.AMOUNT_PRECISION_EXCEEDS_CURRENCY);
+                        assertThat(e.fieldErrors()).containsOnlyKeys("correctedValues.signedAmount");
+                    });
+            assertThat(rejected.getRowStatus()).isEqualTo(BankImportRowStatus.REJECTED);
+            assertThat(rejected.getCorrectedValues()).isNull();
+        }
+
+        @Test
+        void aShapeErrorBesideAnOverPreciseAmountIsStill400() {
+            UUID id = service.create(
+                            upload("date,description,amount\n2026-13-45,DEP,500.00", "0", "500", ACK), null, null, null)
+                    .getImportId();
+            BankImportRow rejected = rowStore.getFirst();
+
+            assertThatThrownBy(() -> service.updateRow(
+                            id,
+                            rejected.getRowId(),
+                            BankImportRowUpdateRequest.builder()
+                                    .correctedValues(Map.of("date", "not a date", "signedAmount", "500.005"))
+                                    .build()))
+                    .isInstanceOfSatisfying(
+                            BankRecException.class,
+                            e -> assertThat(e.code()).isEqualTo(BankRecErrorCode.VALIDATION_ERROR));
         }
 
         @Test

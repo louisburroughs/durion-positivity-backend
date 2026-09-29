@@ -17,7 +17,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
@@ -43,6 +45,7 @@ import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -53,6 +56,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -300,6 +304,39 @@ class ReconciliationCalculatorTest {
 
         assertThat(snapshot.unexplainedBank()).containsExactlyInAnyOrder(unmatched, duplicate);
         assertThat(snapshot.sumUnexplainedBank()).isEqualByComparingTo("80");
+    }
+
+    @Test
+    @DisplayName("the shared E4/readiness predicate counts POSTED bank rows only; PENDING never counts [M]")
+    void sharedPredicateCountsPostedOnly() {
+        BankTransaction posted = transaction("40", LocalDate.of(2026, 9, 3));
+        BankTransaction pending = transaction("12", LocalDate.of(2026, 9, 4));
+        pending.setSettlementState(SettlementState.PENDING);
+        BankTransaction pendingDuplicate = transaction("7", LocalDate.of(2026, 9, 5));
+        pendingDuplicate.setStatus(BankTransactionStatus.POSSIBLE_DUPLICATE);
+        pendingDuplicate.setSettlementState(SettlementState.PENDING);
+        bankRows.addAll(List.of(posted, pending, pendingDuplicate));
+
+        ReconciliationCalculator.Unexplained withBaseline = calculator.unexplained(ACCOUNT_ID, START, END, null);
+        ReconciliationCalculator.Unexplained withoutBaseline = calculator.unexplained(ACCOUNT_ID, null, END, null);
+
+        assertThat(withBaseline.bank()).containsExactly(posted);
+        assertThat(withBaseline.sumBank()).isEqualByComparingTo("40");
+        assertThat(withoutBaseline.bank()).containsExactly(posted);
+    }
+
+    @Test
+    @DisplayName(
+            "glEndingBalance is read at END 23:59:59.999999, the bound close readiness re-reads (BALANCE_AGREEMENT)")
+    void glEndingBalanceUsesTheSharedEndOfDay() {
+        calculator.compute(recon);
+
+        ArgumentCaptor<LocalDateTime> asOf = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(lineRepository, atLeastOnce()).getAccountBalanceAsOf(eq(ACCOUNT_ID), asOf.capture());
+        assertThat(asOf.getAllValues())
+                .contains(END.atTime(23, 59, 59, 999_999_000))
+                .contains(START.minusDays(1).atTime(23, 59, 59, 999_999_000));
+        assertThat(ReconciliationLedger.endOfDay(END)).isEqualTo(END.atTime(23, 59, 59, 999_999_000));
     }
 
     @Test
