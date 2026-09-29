@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.config;
 
+import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
@@ -452,6 +453,35 @@ public class AccountingExceptionHandler {
             AdjustmentSignInvalidException ex, HttpServletRequest request) {
         return build(
                 HttpStatus.UNPROCESSABLE_CONTENT, "RECONCILIATION_ADJUSTMENT_SIGN_INVALID", ex.getMessage(), request);
+    }
+
+    /**
+     * A refusal of the bank reconciliation core (SPEC-manual-bank-reconciliation §4.10; story S2,
+     * #2301): the exception carries its code and ADR-0017 status, and any field errors — for example
+     * {@code fieldErrors[openingBalance] = "expected 12345.67"} on {@code STATEMENT_NOT_CONTIGUOUS}.
+     */
+    @ExceptionHandler(BankRecException.class)
+    public ResponseEntity<ApiError> handleBankRec(BankRecException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.valueOf(ex.code().httpStatus());
+        if (ex.fieldErrors().isEmpty()) {
+            return build(status, ex.code().name(), ex.getMessage(), request);
+        }
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        List<ApiError.FieldError> fieldErrors = ex.fieldErrors().entrySet().stream()
+                .map(entry -> new ApiError.FieldError(entry.getKey(), entry.getValue()))
+                .toList();
+        return new ResponseEntity<>(
+                ApiError.withFieldErrors(
+                        ex.code().name(),
+                        ex.getMessage(),
+                        status.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors),
+                headers,
+                status);
     }
 
     @ExceptionHandler(ReconciliationLineIneligibleException.class)

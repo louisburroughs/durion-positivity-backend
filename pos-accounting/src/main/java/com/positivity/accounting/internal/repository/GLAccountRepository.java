@@ -1,13 +1,18 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.GLAccount;
+import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for GL Account entity.
@@ -39,6 +44,33 @@ public interface GLAccountRepository extends JpaRepository<GLAccount, UUID> {
             + "AND (g.deactivationDate IS NULL OR g.deactivationDate > :transactionDate) "
             + "ORDER BY g.accountCode")
     List<GLAccount> findActiveAccountsOn(LocalDateTime transactionDate);
+
+    /**
+     * Reconcilable accounts of one subtype that are active at {@code at} — a null activation date
+     * counts as active from the start, as the seeded chart has none (bank reconciliation D5, #2301).
+     */
+    @Query("SELECT g FROM GLAccount g WHERE g.reconcilable = true AND g.accountSubtype = :subtype "
+            + "AND (g.activationDate IS NULL OR g.activationDate <= :at) "
+            + "AND (g.deactivationDate IS NULL OR g.deactivationDate > :at) "
+            + "ORDER BY g.accountCode")
+    @NonNull
+    List<GLAccount> findReconcilableActiveOn(
+            @Param("subtype") @NonNull AccountSubtype subtype, @Param("at") @NonNull LocalDateTime at);
+
+    /** One page of {@link #findReconcilableActiveOn(AccountSubtype, LocalDateTime)}, cut in the database. */
+    @Query(
+            value = "SELECT g FROM GLAccount g WHERE g.reconcilable = true AND g.accountSubtype = :subtype "
+                    + "AND (g.activationDate IS NULL OR g.activationDate <= :at) "
+                    + "AND (g.deactivationDate IS NULL OR g.deactivationDate > :at) "
+                    + "ORDER BY g.accountCode",
+            countQuery = "SELECT COUNT(g) FROM GLAccount g WHERE g.reconcilable = true AND g.accountSubtype = :subtype "
+                    + "AND (g.activationDate IS NULL OR g.activationDate <= :at) "
+                    + "AND (g.deactivationDate IS NULL OR g.deactivationDate > :at)")
+    @NonNull
+    Page<GLAccount> findReconcilableActiveOn(
+            @Param("subtype") @NonNull AccountSubtype subtype,
+            @Param("at") @NonNull LocalDateTime at,
+            @NonNull Pageable pageable);
 
     /**
      * Check if an account code already exists.

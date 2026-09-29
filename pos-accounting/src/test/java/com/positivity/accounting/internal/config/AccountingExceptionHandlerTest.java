@@ -5,6 +5,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
+import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
+import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
@@ -255,6 +257,13 @@ class AccountingExceptionHandlerTest {
                     Named.of("handleReconciliationNotBalanced", (HandlerInvocation)
                             request -> handler.handleReconciliationNotBalanced(
                                     new ReconciliationNotBalancedException("not balanced", BigDecimal.TEN), request)),
+                    Named.of("handleBankRec", (HandlerInvocation) request -> handler.handleBankRec(
+                            BankRecException.field(
+                                    BankRecErrorCode.STATEMENT_NOT_CONTIGUOUS,
+                                    "gap",
+                                    "openingBalance",
+                                    "expected 1.00"),
+                            request)),
                     Named.of("handleOptimisticLock", (HandlerInvocation) request -> handler.handleOptimisticLock(
                             new ObjectOptimisticLockingFailureException(Object.class, "id"), request)),
                     Named.of("handleResponseStatus", (HandlerInvocation) request -> handler.handleResponseStatus(
@@ -311,6 +320,40 @@ class AccountingExceptionHandlerTest {
                             + "entry in XCorrelationIdHeader#handlerInvocations() in AccountingExceptionHandlerTest "
                             + "— add one so the X-Correlation-Id header contract stays proven for every handler")
                     .isEqualTo(handlerMethodCount);
+        }
+    }
+
+    @Nested
+    @DisplayName("bank reconciliation refusals (SPEC-manual-bank-reconciliation §4.10, #2301)")
+    class BankRecRefusals {
+
+        private final AccountingExceptionHandler handler = new AccountingExceptionHandler(TEST_CLOCK);
+
+        @Test
+        @DisplayName("every code answers its ADR-0017 status with its own name")
+        void everyCodeAnswersItsStatus() {
+            for (BankRecErrorCode code : BankRecErrorCode.values()) {
+                ResponseEntity<ApiError> response =
+                        handler.handleBankRec(new BankRecException(code, "refused"), requestWithoutHeader());
+                assertThat(response.getStatusCode().value()).as(code.name()).isEqualTo(code.httpStatus());
+                assertThat(response.getBody()).isNotNull();
+                assertThat(response.getBody().code()).isEqualTo(code.name());
+            }
+        }
+
+        @Test
+        @DisplayName("field errors travel in the envelope in order")
+        void fieldErrorsTravelInTheEnvelope() {
+            ResponseEntity<ApiError> response = handler.handleBankRec(
+                    BankRecException.field(
+                            BankRecErrorCode.STATEMENT_NOT_CONTIGUOUS, "gap", "openingBalance", "expected 12345.67"),
+                    requestWithoutHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().fieldErrors())
+                    .extracting(ApiError.FieldError::field, ApiError.FieldError::message)
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple("openingBalance", "expected 12345.67"));
         }
     }
 

@@ -112,6 +112,9 @@ public class ArchitectureTest {
             .that()
             .resideOutsideOfPackages(
                     "..service..",
+                    // The intake port's implementation is the core's write service for bank lines
+                    // (SPEC §2.1: normalization, upsert, duplicate flagging, statement creation; #2301).
+                    "..internal.bankrec.intake..",
                     "..internal.repository..",
                     "..internal.bankrec.repository..",
                     "..internal.bankfeed..repository..",
@@ -276,8 +279,10 @@ public class ArchitectureTest {
             .that()
             .resideInAPackage("..bankrec..")
             .should()
-            .dependOnClassesThat()
-            .resideInAPackage("..bankfeed..")
+            .dependOnClassesThat(resideInAPackage("..bankfeed..")
+                    // The provider-neutral contract (pos-domain-events ..bankfeed..) is the intake type the
+                    // core is meant to depend on (SPEC §2.1, #2301); only the module's adapters are walled off.
+                    .and(not(resideInAPackage("com.positivity.domainevents.."))))
             .because("SPEC §2.1: the reconciliation core never depends on an adapter; adapters call its intake port");
 
     @ArchTest
@@ -289,6 +294,32 @@ public class ArchitectureTest {
                     .and(not(resideInAnyPackage("..bankrec.intake..", "..bankrec.dto.."))))
             .allowEmptyShould(true)
             .because("SPEC §2.1: an adapter reaches the core only through ..bankrec.intake.. and ..bankrec.dto..");
+
+    /**
+     * The intake port depends only on the rest of the core, the bank-feed contract, the tenancy runtime and
+     * the platform libraries (#2301): it never reaches the ledger, the outbox or the audit log directly —
+     * those go through {@code ..bankrec.service..} — so the port an adapter calls carries no module-wide
+     * coupling.
+     */
+    @ArchTest
+    static final ArchRule bankrec_intake_depends_only_on_core_contract_and_platform = classes()
+            .that()
+            .resideInAPackage("..bankrec.intake..")
+            .should()
+            .onlyDependOnClassesThat()
+            .resideInAnyPackage(
+                    "..bankrec..",
+                    "com.positivity.domainevents..",
+                    "com.positivity.tenancy..",
+                    "java..",
+                    "javax..",
+                    "jakarta..",
+                    "org.springframework..",
+                    "org.jspecify..",
+                    "org.slf4j..",
+                    "lombok..")
+            .because("SPEC §2.1, #2301: the intake port is part of the core; it depends on ..bankrec.., the"
+                    + " pos-domain-events contract and pos-tenancy-common only");
 
     @ArchTest
     static final ArchRule format_libraries_only_in_bankfeed_file = noClasses()

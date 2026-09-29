@@ -16,6 +16,8 @@ class DomainTopicsTest {
         assertThat(DomainTopics.events("workorder")).isEqualTo(DomainTopics.WORKORDER_EVENTS_V1);
         assertThat(DomainTopics.manifest("workorder")).isEqualTo(DomainTopics.WORKORDER_MANIFEST_V1);
         assertThat(DomainTopics.manifest("people-contact")).isEqualTo("people-contact.manifest.v1");
+        assertThat(DomainTopics.events("bankfeed")).isEqualTo(DomainTopics.BANKFEED_EVENTS_V1);
+        assertThat(DomainTopics.commands("bankfeed")).isEqualTo(DomainTopics.BANKFEED_COMMANDS_V1);
     }
 
     @Test

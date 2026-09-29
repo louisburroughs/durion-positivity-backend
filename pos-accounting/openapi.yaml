@@ -34,6 +34,8 @@ tags:
   name: Location Cost Reporting
 - description: Accounts Payable vendor payment operations
   name: AP Payments
+- description: 'Bank transactions as the bank reported them: reads, duplicate review, exclude and restore.'
+  name: Bank Transactions
 - description: Endpoints for vendor bill creation, matching, retrieval, and exception resolution
   name: Vendor Bill API
 - description: Ingest and manage accounting events for journal processing.
@@ -50,12 +52,16 @@ tags:
   name: Mapping Keys
 - description: Manage posting categories for GL mapping taxonomy
   name: Posting Categories
+- description: Reconcilable bank accounts and their bank-account profiles.
+  name: Bank Accounts
 - description: Manage chart of accounts including lifecycle actions.
   name: GL Accounts
 - description: 'Manual CSV bank reconciliation: import a statement, match lines to posted GL entries, record adjustments, and finalize when balanced.'
   name: Bank Reconciliation
 - description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period, and manage the org-level hard-lock date.'
   name: Accounting Periods
+- description: Bank statement headers and manual statement entry for bank reconciliation.
+  name: Bank Statements
 - description: Income Statement and Balance Sheet generation with drilldown
   name: Financial Reporting
 - description: Manage default GL account mappings for event types without explicit posting rules
@@ -1103,6 +1109,828 @@ paths:
       - Audit Trail
       x-required-permissions:
       - accounting:events:view
+  /v1/accounting/bank-accounts:
+    get:
+      description: 'Lists every active reconcilable BANK_CASH GL account with its bank-account profile, reconciliation baseline date, coverage and reconciled frontiers, and the counts of unexplained bank transactions and open outstanding items from the baseline on.
+
+        Use this tool to choose the account to reconcile and see how far it is covered; do not use it for the chart of accounts, use the GL account endpoints instead.
+
+        Preconditions: none beyond the view permission.
+
+        Inputs: optional page and size (at most 200).
+
+        No events are emitted beyond the ACCOUNTING_BANK_ACCOUNT_LIST audit event.
+
+        Returns 400 when the page bounds are invalid, and 403 without accounting:reconciliation:view.
+
+        '
+      operationId: listBankAccounts
+      parameters:
+      - description: Zero-based page index
+        example: 0
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          format: int32
+          type: integer
+      - description: Page size (1-200)
+        example: 20
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankAccountListResponse'
+          description: Bank accounts
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid page (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:view
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      summary: List Bank Accounts
+      tags:
+      - Bank Accounts
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/bank-accounts/{glAccountId}/profile:
+    put:
+      description: 'Creates or updates the bank-account profile of a reconcilable BANK_CASH GL account: bank name, account mask, currency, default column mapping and statement cycle hint.
+
+        Use this tool to name the bank behind an account after its first statement created the profile; do not use it to move the reconciliation baseline, which only an acknowledged statement moves (the profile has no baseline field).
+
+        Preconditions: the account must be a reconcilable BANK_CASH account and the currency must be the ledger currency.
+
+        Required inputs: glAccountId in the path and currency; bankName (at most 100 characters), accountMask (at most 8), defaultColumnMapping and statementCycleHint are optional.
+
+        Emits an ACCOUNTING_BANK_ACCOUNT_PROFILE_SET event and writes an audit row.
+
+        Returns 422 when the account is not reconcilable or the currency is not the ledger currency, 404 when the account does not exist, and 400 when a field is missing or too long.
+
+        '
+      operationId: setBankAccountProfile
+      parameters:
+      - description: GL bank account id
+        in: path
+        name: glAccountId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Profile:
+                description: Profile
+                value:
+                  accountMask: '4321'
+                  bankName: First National
+                  currency: USD
+                  statementCycleHint: MONTHLY_EOM
+            schema:
+              $ref: '#/components/schemas/BankAccountProfileRequest'
+        description: The profile values; the reconciliation baseline is not among them.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankAccountProfileResponse'
+          description: Profile created or updated
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: GL_ACCOUNT_NOT_FOUND
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ACCOUNT_NOT_RECONCILABLE or CURRENCY_NOT_SUPPORTED
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Set Bank Account Profile
+      tags:
+      - Bank Accounts
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/bank-statements:
+    get:
+      description: 'Lists bank statement headers, optionally for one GL bank account and for windows that meet a date range, sorted by start date and paginated.
+
+        Use this tool to see which periods an account''s statements cover and which were acknowledged as gaps; do not use it for the transactions themselves, use listBankTransactions instead.
+
+        Preconditions: none beyond the view permission.
+
+        Inputs: optional glAccountId, from and to (ISO dates), page and size (at most 200).
+
+        No events are emitted beyond the ACCOUNTING_BANK_STATEMENT_LIST audit event.
+
+        Returns 400 when from is after to or the page bounds are invalid, and 403 without accounting:reconciliation:view.
+
+        '
+      operationId: listBankStatements
+      parameters:
+      - description: GL bank account id
+        in: query
+        name: glAccountId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Windows ending on or after this date
+        example: '2026-01-01'
+        in: query
+        name: from
+        required: false
+        schema:
+          format: date
+          type: string
+      - description: Windows starting on or before this date
+        example: '2026-12-31'
+        in: query
+        name: to
+        required: false
+        schema:
+          format: date
+          type: string
+      - description: Zero-based page index
+        example: 0
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          format: int32
+          type: integer
+      - description: Page size (1-200)
+        example: 20
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankStatementListResponse'
+          description: Statements
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid filter or page (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:view
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      summary: List Bank Statements
+      tags:
+      - Bank Statements
+      x-required-permissions:
+      - accounting:reconciliation:view
+    post:
+      description: 'Commits a bank statement keyed by hand — header, transactions and, when needed, a gap acknowledgement — for a reconcilable BANK_CASH account, through the same intake as a file.
+
+        Use this tool when the bank offers no statement download or to reconcile to a date; do not use it to correct a committed statement, which is an explicit supersede instead.
+
+        Preconditions: the statement must continue the account''s previous statement (opening balance equals its closing balance, start date the day after its end) unless a gapAcknowledgement of at least 10 characters is given, which is required for the account''s first statement, refused on a contiguous one and moves the account''s reconciliation baseline.
+
+        Required inputs: glAccountId, a UUIDv7 requestId, statement {startDate, endDate, openingBalance, closingBalance} and transactions[] each with a date, a description and either signedAmount or one of debit/credit.
+
+        Emits an ACCOUNTING_BANK_STATEMENT_CREATE event and queues the accounting.bankstatement.committed fact; a replay of the same requestId and payload returns the original statement with replayed=true.
+
+        Returns 422 when the account is not reconcilable, the currency is not the account''s, the window overlaps a committed statement, contiguity or the acknowledgement rule fails, a transaction lies outside the window or opening + activity differs from closing; 409 when the window is already committed or the requestId was used with another payload; and 400 when the request is malformed or a justification is shorter than 10 characters.
+
+        '
+      operationId: createBankStatement
+      requestBody:
+        content:
+          application/json:
+            examples:
+              September statement:
+                description: September statement
+                value:
+                  gapAcknowledgement: First statement reconciled on this account
+                  glAccountId: 5eed0acc-0000-4000-8000-000000001000
+                  requestId: 01992b3c-4d5e-7f60-8a1b-2c3d4e5f6a7b
+                  statement:
+                    closingBalance: 12830.67
+                    endDate: '2026-09-30'
+                    openingBalance: 12345.67
+                    startDate: '2026-09-01'
+                  transactions:
+                  - credit: 500.0
+                    date: '2026-09-02'
+                    description: ACH DEPOSIT ACME
+                    reference: DEP-1
+                  - date: '2026-09-15'
+                    debit: 15.0
+                    description: MONTHLY FEE
+            schema:
+              $ref: '#/components/schemas/BankStatementCreateRequest'
+        description: The statement header, its transactions and an optional gap acknowledgement.
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankStatementResponse'
+          description: Statement committed (or replayed)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Malformed request (VALIDATION_ERROR) or short acknowledgement (JUSTIFICATION_REQUIRED)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: STATEMENT_ALREADY_IMPORTED or IDEMPOTENCY_CONFLICT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ACCOUNT_NOT_RECONCILABLE, CURRENCY_NOT_SUPPORTED, STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS, STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE, STATEMENT_TRANSACTION_OUT_OF_WINDOW or STATEMENT_ACTIVITY_MISMATCH
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Enter Bank Statement
+      tags:
+      - Bank Statements
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/bank-statements/{statementId}:
+    get:
+      description: 'Returns one bank statement header with its gap acknowledgement, transaction counts and the reconciliations that were started from it.
+
+        Use this tool when you hold a statementId; do not use it to browse an account''s statements, use listBankStatements instead.
+
+        Preconditions: the statement must belong to the caller''s tenant.
+
+        Required inputs: statementId (UUID) in the path.
+
+        No events are emitted beyond the ACCOUNTING_BANK_STATEMENT_GET audit event.
+
+        Returns 404 when the statement does not exist in the tenant, and 403 without accounting:reconciliation:view.
+
+        '
+      operationId: getBankStatement
+      parameters:
+      - description: Statement id
+        in: path
+        name: statementId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankStatementResponse'
+          description: Statement
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:view
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_STATEMENT_NOT_FOUND
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      summary: Get Bank Statement
+      tags:
+      - Bank Statements
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/bank-transactions:
+    get:
+      description: 'Lists one GL bank account''s bank transactions, filtered by status, date window and source, sorted by transaction date then id and paginated.
+
+        Use this tool to find the rows still to explain (unexplainedOnly=true returns UNMATCHED and POSSIBLE_DUPLICATE rows); do not use it for statement headers, use listBankStatements instead.
+
+        Preconditions: none beyond the view permission.
+
+        Required inputs: glAccountId; optional status, from, to, sourceKind, unexplainedOnly, page and size (at most 200).
+
+        No events are emitted beyond the ACCOUNTING_BANK_TRANSACTION_LIST audit event.
+
+        Returns 400 when glAccountId is missing, from is after to or the page bounds are invalid, and 403 without accounting:reconciliation:view.
+
+        '
+      operationId: listBankTransactions
+      parameters:
+      - description: GL bank account id (required)
+        in: query
+        name: glAccountId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Row status
+        in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - UNMATCHED
+          - POSSIBLE_DUPLICATE
+          - MATCHED
+          - EXCLUDED
+          - REMOVED_BY_SOURCE
+          type: string
+      - description: Transactions dated on or after
+        example: '2026-09-01'
+        in: query
+        name: from
+        required: false
+        schema:
+          format: date
+          type: string
+      - description: Transactions dated on or before
+        example: '2026-09-30'
+        in: query
+        name: to
+        required: false
+        schema:
+          format: date
+          type: string
+      - description: Source of the rows
+        in: query
+        name: sourceKind
+        required: false
+        schema:
+          enum:
+          - FILE_IMPORT
+          - MANUAL_ENTRY
+          - BANK_FEED
+          type: string
+      - description: Only UNMATCHED and POSSIBLE_DUPLICATE rows
+        in: query
+        name: unexplainedOnly
+        required: false
+        schema:
+          default: false
+          type: boolean
+      - description: Zero-based page index
+        example: 0
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          format: int32
+          type: integer
+      - description: Page size (1-200)
+        example: 50
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 50
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankTransactionListResponse'
+          description: Transactions
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing account, invalid filter or page (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:view
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      summary: List Bank Transactions
+      tags:
+      - Bank Transactions
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/bank-transactions/duplicate-review:
+    post:
+      description: 'Applies one duplicate-review decision to several POSSIBLE_DUPLICATE bank transactions at once, all or nothing.
+
+        Use this tool after an import flagged many rows the same way; do not use it for a single row, use reviewBankTransactionDuplicate instead.
+
+        Preconditions: every listed row must be POSSIBLE_DUPLICATE; for DUPLICATE each row uses the original it was flagged against unless duplicateOfBankTransactionId names one.
+
+        Required inputs: ids, decision and a justification of at least 10 characters.
+
+        Emits an ACCOUNTING_BANK_TRANSACTION_DUPLICATE_REVIEW event and writes one audit row per row.
+
+        Returns 409 when any row is not POSSIBLE_DUPLICATE, 404 when any id does not exist, and 400 when ids, the decision or the justification is missing or too short.
+
+        '
+      operationId: reviewBankTransactionDuplicates
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Bulk distinct:
+                description: Bulk distinct
+                value:
+                  decision: DISTINCT
+                  ids:
+                  - 01992b3c-4d5e-7f60-8a1b-2c3d4e5f6a01
+                  - 01992b3c-4d5e-7f60-8a1b-2c3d4e5f6a02
+                  justification: Separate card payments of the same amount
+            schema:
+              $ref: '#/components/schemas/DuplicateReviewRequest'
+        description: The rows, the decision and its justification.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankTransactionBatchResponse'
+          description: Reviewed rows
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR or JUSTIFICATION_REQUIRED
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_TRANSACTION_NOT_FOUND
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: RECONCILIATION_LINE_INELIGIBLE
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Review Possible Duplicates In Bulk
+      tags:
+      - Bank Transactions
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/bank-transactions/{bankTransactionId}:
+    get:
+      description: 'Returns one bank transaction with everything the source delivered — provenance, retained descriptions, dedupe fingerprint, status and exclusion details.
+
+        Use this tool when you hold a bankTransactionId; do not use it to browse an account, use listBankTransactions instead.
+
+        Preconditions: the row must belong to the caller''s tenant.
+
+        Required inputs: bankTransactionId (UUID) in the path.
+
+        No events are emitted beyond the ACCOUNTING_BANK_TRANSACTION_GET audit event.
+
+        Returns 404 when the row does not exist in the tenant, and 403 without accounting:reconciliation:view.
+
+        '
+      operationId: getBankTransaction
+      parameters:
+      - description: Bank transaction id
+        in: path
+        name: bankTransactionId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankTransactionResponse'
+          description: Transaction
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:view
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_TRANSACTION_NOT_FOUND
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      summary: Get Bank Transaction
+      tags:
+      - Bank Transactions
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/bank-transactions/{bankTransactionId}/duplicate-review:
+    post:
+      description: 'Decides whether a POSSIBLE_DUPLICATE bank transaction is a real duplicate: DISTINCT returns it to UNMATCHED, DUPLICATE excludes it and records its original.
+
+        Use this tool for a row the intake flagged because its fingerprint matched another row; do not use it to exclude an ordinary row, use excludeBankTransaction instead.
+
+        Preconditions: the row must be POSSIBLE_DUPLICATE and, for DUPLICATE, name or have been flagged against another row on the same account.
+
+        Required inputs: decision (DISTINCT or DUPLICATE) and a justification of at least 10 characters; optional duplicateOfBankTransactionId and the version read.
+
+        Emits an ACCOUNTING_BANK_TRANSACTION_DUPLICATE_REVIEW event and writes an audit row.
+
+        Returns 409 when the row is not POSSIBLE_DUPLICATE or the version is stale, 404 when it does not exist, and 400 when the decision or justification is missing or too short.
+
+        '
+      operationId: reviewBankTransactionDuplicate
+      parameters:
+      - description: Bank transaction id
+        in: path
+        name: bankTransactionId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Distinct fees:
+                description: Distinct fees
+                value:
+                  decision: DISTINCT
+                  justification: Two separate monthly fees charged on the same day
+                  version: 0
+            schema:
+              $ref: '#/components/schemas/DuplicateReviewRequest'
+        description: The decision and its justification.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankTransactionResponse'
+          description: Reviewed row
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR or JUSTIFICATION_REQUIRED
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_TRANSACTION_NOT_FOUND
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: RECONCILIATION_LINE_INELIGIBLE or OPTIMISTIC_LOCK
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Review Possible Duplicate
+      tags:
+      - Bank Transactions
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/bank-transactions/{bankTransactionId}/exclude:
+    post:
+      description: 'Excludes an UNMATCHED bank transaction from reconciliation with a justification, so it leaves every sum and count; the row itself is kept as evidence.
+
+        Use this tool for a row the bank reported that should never be explained, such as a line the bank later reversed on the same statement; do not use it for a flagged possible duplicate, use reviewBankTransactionDuplicate instead.
+
+        Preconditions: the row must be UNMATCHED.
+
+        Required inputs: bankTransactionId in the path and a justification of at least 10 characters; optional version.
+
+        Emits an ACCOUNTING_BANK_TRANSACTION_EXCLUDE event and writes an audit row.
+
+        Returns 409 when the row is not UNMATCHED or the version is stale, 404 when it does not exist, 403 without accounting:reconciliation:approve, and 400 when the justification is missing or too short.
+
+        '
+      operationId: excludeBankTransaction
+      parameters:
+      - description: Bank transaction id
+        in: path
+        name: bankTransactionId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Exclude:
+                description: Exclude
+                value:
+                  justification: Internal transfer recorded twice by the bank
+                  version: 0
+            schema:
+              $ref: '#/components/schemas/BankTransactionJustificationRequest'
+        description: The justification and, optionally, the version read.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankTransactionResponse'
+          description: Excluded row
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR or JUSTIFICATION_REQUIRED
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:approve
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_TRANSACTION_NOT_FOUND
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: RECONCILIATION_LINE_INELIGIBLE or OPTIMISTIC_LOCK
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:approve
+      summary: Exclude Bank Transaction
+      tags:
+      - Bank Transactions
+      x-required-permissions:
+      - accounting:reconciliation:approve
+  /v1/accounting/bank-transactions/{bankTransactionId}/restore:
+    post:
+      description: 'Returns an EXCLUDED bank transaction to UNMATCHED with a justification, so it counts as unexplained again.
+
+        Use this tool to undo an exclusion or a duplicate decision made in error; do not use it on a row a FINALIZED reconciliation covered, which is corrected by superseding that reconciliation instead.
+
+        Preconditions: the row must be EXCLUDED and no FINALIZED reconciliation on the account may cover its transaction date.
+
+        Required inputs: bankTransactionId in the path and a justification of at least 10 characters; optional version.
+
+        Emits an ACCOUNTING_BANK_TRANSACTION_RESTORE event and writes an audit row.
+
+        Returns 409 when the row is not EXCLUDED, a FINALIZED reconciliation covers it or the version is stale, 404 when it does not exist, 403 without accounting:reconciliation:approve, and 400 when the justification is missing or too short.
+
+        '
+      operationId: restoreBankTransaction
+      parameters:
+      - description: Bank transaction id
+        in: path
+        name: bankTransactionId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Restore:
+                description: Restore
+                value:
+                  justification: Internal transfer recorded twice by the bank
+                  version: 0
+            schema:
+              $ref: '#/components/schemas/BankTransactionJustificationRequest'
+        description: The justification and, optionally, the version read.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankTransactionResponse'
+          description: Restored row
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR or JUSTIFICATION_REQUIRED
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:approve
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_TRANSACTION_NOT_FOUND
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: RECONCILIATION_LINE_INELIGIBLE or OPTIMISTIC_LOCK
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:approve
+      summary: Restore Bank Transaction
+      tags:
+      - Bank Transactions
+      x-required-permissions:
+      - accounting:reconciliation:approve
   /v1/accounting/credit-memos:
     get:
       description: 'Lists credit memos as a paginated projection, optionally filtered by customer, original invoice or lifecycle status.
@@ -9093,6 +9921,172 @@ components:
       - totalEquity
       - totalLiabilities
       type: object
+    BankAccountListResponse:
+      description: Paginated list of bank accounts in reconciliation scope, sorted by account code
+      properties:
+        accounts:
+          description: Accounts on the current page
+          items:
+            $ref: '#/components/schemas/BankAccountResponse'
+          type: array
+        pageNumber:
+          description: Zero-based page index
+          example: 0
+          format: int32
+          type: integer
+        pageSize:
+          description: Page size
+          example: 20
+          format: int32
+          type: integer
+        totalElements:
+          description: Total number of accounts
+          example: 2
+          format: int64
+          type: integer
+        totalPages:
+          description: Total number of pages
+          example: 1
+          format: int32
+          type: integer
+      required:
+      - accounts
+      - pageNumber
+      - pageSize
+      - totalElements
+      - totalPages
+      type: object
+    BankAccountProfileRequest:
+      description: 'Bank-account profile: bank name, mask, currency, default column mapping and cycle hint'
+      properties:
+        accountMask:
+          description: Last digits of the account number (at most 8 characters)
+          example: '4321'
+          type: string
+        bankName:
+          description: Bank name (at most 100 characters)
+          example: First National
+          type: string
+        currency:
+          description: ISO 4217 code; must be the ledger currency
+          example: USD
+          type: string
+        defaultColumnMapping:
+          description: The column mapping the account's next file import defaults to
+          type: object
+        statementCycleHint:
+          description: How the bank cycles statements (at most 32 characters)
+          example: MONTHLY_EOM
+          type: string
+      required:
+      - currency
+      type: object
+    BankAccountProfileResponse:
+      description: Bank-account profile of a reconcilable BANK_CASH GL account
+      properties:
+        accountCode:
+          description: GL account code
+          example: '1000'
+          type: string
+        accountMask:
+          description: Last digits of the account number
+          example: '4321'
+          type: string
+        accountName:
+          description: GL account name
+          example: Cash
+          type: string
+        bankName:
+          description: Bank name
+          example: First National
+          type: string
+        currency:
+          description: ISO 4217 code
+          example: USD
+          type: string
+        defaultColumnMapping:
+          description: Default column mapping for file imports
+          type: object
+        glAccountId:
+          description: GL account id
+          format: uuid
+          type: string
+        reconciliationBaselineDate:
+          description: Reconciliation baseline (read-only; moved only by an acknowledged statement)
+          format: date
+          type: string
+        statementCycleHint:
+          description: Statement cycle hint
+          example: MONTHLY_EOM
+          type: string
+        updatedAt:
+          description: When the profile was last changed
+          format: date-time
+          type: string
+      type: object
+    BankAccountResponse:
+      description: A reconcilable BANK_CASH account with its profile, baseline, frontiers and open counts
+      properties:
+        accountCode:
+          description: GL account code
+          example: '1000'
+          type: string
+        accountMask:
+          description: Last digits of the bank account number, display only
+          example: '4321'
+          type: string
+        accountName:
+          description: GL account name
+          example: Cash
+          type: string
+        bankName:
+          description: Bank name from the profile; null until set
+          example: First National
+          type: string
+        coverageFrontier:
+          description: End date of the latest COMMITTED statement
+          example: '2026-09-30'
+          format: date
+          type: string
+        currency:
+          description: Profile currency; null while the account has no profile
+          example: USD
+          type: string
+        feedLinkState:
+          description: Bank-feed link state; NONE in phase 1
+          enum:
+          - NONE
+          - LINKED
+          example: NONE
+          type: string
+        glAccountId:
+          description: GL account id
+          format: uuid
+          type: string
+        openOutstandingItemCount:
+          description: OPEN outstanding items dated from the baseline on
+          example: 0
+          format: int64
+          type: integer
+        profileExists:
+          description: Whether the account has a bank-account profile
+          type: boolean
+        reconciledFrontier:
+          description: End of the contiguous chain of FINALIZED reconciliations from the baseline
+          example: '2026-08-31'
+          format: date
+          type: string
+        reconciliationBaselineDate:
+          description: First day from which bank transactions and ledger lines must be explained; set only by committing an acknowledged statement; null before the first one
+          example: '2026-09-01'
+          format: date
+          type: string
+        unexplainedBankTransactionCount:
+          description: UNMATCHED and POSSIBLE_DUPLICATE rows dated from the baseline on
+          example: 3
+          format: int64
+          type: integer
+      type: object
     BankReconciliationAdjustmentResponse:
       description: Reconciliation adjustment with its posted journal entry
       properties:
@@ -9331,6 +10325,493 @@ components:
           - CANCELLED
           example: IN_PROGRESS
           type: string
+      type: object
+    BankStatementCreateRequest:
+      description: 'A bank statement entered by hand: header, transactions and, when the statement does not continue the previous one, a gap acknowledgement'
+      properties:
+        currency:
+          description: ISO 4217 code of the amounts; defaults to the account profile's currency, and must equal it
+          example: USD
+          type: string
+        gapAcknowledgement:
+          description: Justification (at least 10 characters) required when the statement does not continue the previous one — always for the account's first statement — and refused when it does
+          example: Account opened at the new bank on 2026-09-01; earlier history is on the old statements
+          type: string
+        glAccountId:
+          description: Reconcilable BANK_CASH GL account the statement belongs to
+          format: uuid
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7; a replay with the same payload returns the original statement
+          format: uuid
+          type: string
+        statement:
+          $ref: '#/components/schemas/BankStatementHeaderRequest'
+        transactions:
+          description: Transactions of the statement, in the order the bank lists them
+          items:
+            $ref: '#/components/schemas/BankStatementTransactionRequest'
+          type: array
+      required:
+      - glAccountId
+      - requestId
+      - statement
+      - transactions
+      type: object
+    BankStatementHeaderRequest:
+      description: Statement header as printed by the bank
+      properties:
+        closingBalance:
+          description: Closing balance as printed
+          example: 12840.12
+          type: number
+        endDate:
+          description: Last day of the statement window
+          example: '2026-09-30'
+          format: date
+          type: string
+        openingBalance:
+          description: Opening balance as printed
+          example: 12345.67
+          type: number
+        startDate:
+          description: First day of the statement window
+          example: '2026-09-01'
+          format: date
+          type: string
+        statementRef:
+          description: The bank's own statement number
+          example: 2026-09
+          type: string
+      required:
+      - closingBalance
+      - endDate
+      - openingBalance
+      - startDate
+      type: object
+    BankStatementListResponse:
+      description: Paginated list of bank statements, sorted by startDate
+      properties:
+        pageNumber:
+          description: Zero-based page index
+          example: 0
+          format: int32
+          type: integer
+        pageSize:
+          description: Page size
+          example: 20
+          format: int32
+          type: integer
+        statements:
+          description: Statements on the current page
+          items:
+            $ref: '#/components/schemas/BankStatementResponse'
+          type: array
+        totalElements:
+          description: Total number of matching statements
+          example: 12
+          format: int64
+          type: integer
+        totalPages:
+          description: Total number of pages
+          example: 1
+          format: int32
+          type: integer
+      required:
+      - pageNumber
+      - pageSize
+      - statements
+      - totalElements
+      - totalPages
+      type: object
+    BankStatementReconciliationLink:
+      description: A reconciliation of the statement
+      properties:
+        reconciliationId:
+          description: Reconciliation id
+          format: uuid
+          type: string
+        status:
+          description: Reconciliation status
+          example: IN_PROGRESS
+          type: string
+      type: object
+    BankStatementResponse:
+      description: 'A committed bank statement: header, gap acknowledgement, counts and reconciliation links'
+      properties:
+        accountCode:
+          description: GL account code
+          example: '1000'
+          type: string
+        accountName:
+          description: GL account name
+          example: Cash
+          type: string
+        activityTotal:
+          description: Sum of the statement's signed amounts at commit
+          example: 494.45
+          type: number
+        bankTransactionCount:
+          description: Bank transactions the statement carries
+          example: 12
+          format: int64
+          type: integer
+        closingBalance:
+          description: Closing balance as printed
+          example: 12840.12
+          type: number
+        connectorCode:
+          description: Provenance label of the source
+          example: csv-v1
+          type: string
+        createdAt:
+          description: When the statement was committed
+          format: date-time
+          type: string
+        createdBy:
+          description: Who committed the statement
+          type: string
+        currency:
+          description: ISO 4217 code of the amounts
+          example: USD
+          type: string
+        endDate:
+          description: Last day of the window
+          example: '2026-09-30'
+          format: date
+          type: string
+        gapAcknowledgedAt:
+          description: When the gap was acknowledged
+          format: date-time
+          type: string
+        gapAcknowledgedBy:
+          description: Who acknowledged the gap
+          type: string
+        gapAcknowledgement:
+          description: The justification that acknowledged a discontinuity and moved the account baseline
+          type: string
+        glAccountId:
+          description: GL bank account id
+          format: uuid
+          type: string
+        modifiedCount:
+          description: Rows the commit updated through their source id rather than created
+          example: 0
+          format: int64
+          type: integer
+        openingBalance:
+          description: Opening balance as printed
+          example: 12345.67
+          type: number
+        possibleDuplicateCount:
+          description: Of those, rows still flagged POSSIBLE_DUPLICATE
+          example: 0
+          format: int64
+          type: integer
+        reconciliations:
+          description: Reconciliations of this statement
+          items:
+            $ref: '#/components/schemas/BankStatementReconciliationLink'
+          type: array
+        replayed:
+          description: True when this response replays an earlier request with the same requestId
+          type: boolean
+        sourceKind:
+          description: Where the statement came from
+          enum:
+          - FILE_IMPORT
+          - MANUAL_ENTRY
+          - BANK_FEED
+          example: MANUAL_ENTRY
+          type: string
+        sourceRef:
+          description: 'Provenance reference: the import id for a file; null for manual entry'
+          format: uuid
+          type: string
+        startDate:
+          description: First day of the window
+          example: '2026-09-01'
+          format: date
+          type: string
+        statementId:
+          description: Statement id
+          format: uuid
+          type: string
+        statementRef:
+          description: The bank's own statement number
+          example: 2026-09
+          type: string
+        status:
+          description: Statement status
+          enum:
+          - COMMITTED
+          - SUPERSEDED
+          example: COMMITTED
+          type: string
+        supersededByStatementId:
+          description: The statement that superseded this one, when SUPERSEDED
+          format: uuid
+          type: string
+      type: object
+    BankStatementTransactionRequest:
+      description: 'One statement transaction: signedAmount (positive = money into the account), or exactly one of debit (money out) and credit (money in)'
+      properties:
+        checkNumber:
+          description: Check number
+          example: '1042'
+          type: string
+        credit:
+          description: Money into the account, as a positive number
+          example: 500.0
+          type: number
+        date:
+          description: Posting date; must lie inside the header window
+          example: '2026-09-02'
+          format: date
+          type: string
+        debit:
+          description: Money out of the account, as a positive number
+          example: 15.0
+          type: number
+        description:
+          description: Description as printed
+          example: ACH DEPOSIT ACME
+          type: string
+        reference:
+          description: The bank's reference
+          example: DEP-1
+          type: string
+        signedAmount:
+          description: Signed amount, positive = money into the account; never zero
+          example: 500.0
+          type: number
+      required:
+      - date
+      - description
+      type: object
+    BankTransactionBatchResponse:
+      description: The reviewed bank transactions, in request order
+      properties:
+        transactions:
+          description: The reviewed rows
+          items:
+            $ref: '#/components/schemas/BankTransactionResponse'
+          type: array
+      required:
+      - transactions
+      type: object
+    BankTransactionJustificationRequest:
+      description: A justification (at least 10 characters) and, optionally, the row version the caller read
+      properties:
+        justification:
+          description: Why (at least 10 characters)
+          example: Internal transfer recorded twice by the bank
+          type: string
+        version:
+          description: The row version the caller read; a stale one answers 409 OPTIMISTIC_LOCK
+          format: int64
+          type: integer
+      required:
+      - justification
+      type: object
+    BankTransactionListResponse:
+      description: Paginated list of bank transactions, sorted by transactionDate then bankTransactionId
+      properties:
+        pageNumber:
+          description: Zero-based page index
+          example: 0
+          format: int32
+          type: integer
+        pageSize:
+          description: Page size
+          example: 50
+          format: int32
+          type: integer
+        totalElements:
+          description: Total number of matching transactions
+          example: 240
+          format: int64
+          type: integer
+        totalPages:
+          description: Total number of pages
+          example: 5
+          format: int32
+          type: integer
+        transactions:
+          description: Transactions on the current page
+          items:
+            $ref: '#/components/schemas/BankTransactionResponse'
+          type: array
+      required:
+      - pageNumber
+      - pageSize
+      - totalElements
+      - totalPages
+      - transactions
+      type: object
+    BankTransactionResponse:
+      description: 'A bank transaction: what the bank reported, its provenance, dedupe state and links'
+      properties:
+        accountCode:
+          description: GL account code
+          example: '1000'
+          type: string
+        accountName:
+          description: GL account name
+          example: Cash
+          type: string
+        arrivedAfterApproval:
+          description: True when a feed delivered the row inside a FINALIZED reconciliation window (phase 2)
+          type: boolean
+        authorizedDate:
+          description: Authorization date, when the source knows it
+          format: date
+          type: string
+        bankTransactionId:
+          description: Bank transaction id
+          format: uuid
+          type: string
+        categoryHint:
+          description: The source's category, informational only
+          type: string
+        checkNumber:
+          description: Check number
+          example: '1042'
+          type: string
+        connectorCode:
+          description: Provenance label of the source
+          example: csv-v1
+          type: string
+        counterpartyName:
+          description: Counterparty, when the source names one
+          type: string
+        currency:
+          description: ISO 4217 code
+          example: USD
+          type: string
+        description:
+          description: Description as delivered
+          example: ACH DEPOSIT ACME
+          type: string
+        duplicateOfBankTransactionId:
+          description: The earlier row this one may duplicate, or was confirmed to duplicate
+          format: uuid
+          type: string
+        excludedAt:
+          description: When the row was excluded
+          format: date-time
+          type: string
+        excludedBy:
+          description: Who excluded the row
+          type: string
+        exclusionReason:
+          description: Why the row was excluded
+          type: string
+        feedChange:
+          description: The last change the source reported
+          enum:
+          - ADDED
+          - MODIFIED
+          - REMOVED
+          example: ADDED
+          type: string
+        fingerprint:
+          description: SHA-256 dedupe fingerprint
+          type: string
+        firstObservedAt:
+          description: When the source first reported the row
+          format: date-time
+          type: string
+        glAccountId:
+          description: GL bank account id
+          format: uuid
+          type: string
+        lastObservedAt:
+          description: When the source last reported the row
+          format: date-time
+          type: string
+        matchId:
+          description: The active reconciliation match holding the row; null until matching exists (S4)
+          format: uuid
+          type: string
+        normalizedDescription:
+          description: Upper-cased, punctuation-stripped copy used only for dedupe
+          example: ACH DEPOSIT ACME
+          type: string
+        originalDescription:
+          description: The first description the source delivered, when it later changed
+          type: string
+        outstandingItemId:
+          description: The open outstanding item holding the row; null until outstanding items exist (S4)
+          format: uuid
+          type: string
+        reference:
+          description: The bank's reference
+          example: DEP-1
+          type: string
+        removedAt:
+          description: When the source removed the row (phase 2)
+          format: date-time
+          type: string
+        settlementState:
+          description: PENDING rows are visible but never matchable
+          enum:
+          - PENDING
+          - POSTED
+          example: POSTED
+          type: string
+        signedAmount:
+          description: Signed amount, positive = money into the account
+          example: 500.0
+          type: number
+        sourceKind:
+          description: Where the row came from
+          enum:
+          - FILE_IMPORT
+          - MANUAL_ENTRY
+          - BANK_FEED
+          example: MANUAL_ENTRY
+          type: string
+        sourceRef:
+          description: 'Provenance reference: the import id for a file; null for manual entry'
+          format: uuid
+          type: string
+        sourceRowNumber:
+          description: 1-based position in the source
+          example: 3
+          format: int32
+          type: integer
+        sourceTransactionId:
+          description: The source's id for the transaction, when it has one
+          type: string
+        statementId:
+          description: The statement that carried the row; null for a feed row
+          format: uuid
+          type: string
+        status:
+          description: Row status
+          enum:
+          - UNMATCHED
+          - POSSIBLE_DUPLICATE
+          - MATCHED
+          - EXCLUDED
+          - REMOVED_BY_SOURCE
+          example: UNMATCHED
+          type: string
+        supersedesBankTransactionId:
+          description: The pending row this posted row replaced
+          format: uuid
+          type: string
+        transactionDate:
+          description: The bank's posting date
+          example: '2026-09-02'
+          format: date
+          type: string
+        version:
+          description: Optimistic-lock version; send it back on a review, exclude or restore
+          example: 0
+          format: int64
+          type: integer
       type: object
     BillingRuleRefResponse:
       description: Billing rules snapshot returned by pos-customer for a customer account
@@ -10042,6 +11523,38 @@ components:
       - debitAccountId
       - eventType
       - mappingId
+      type: object
+    DuplicateReviewRequest:
+      description: 'Duplicate review: DISTINCT returns the row to UNMATCHED, DUPLICATE excludes it'
+      properties:
+        decision:
+          description: The decision
+          enum:
+          - DISTINCT
+          - DUPLICATE
+          example: DISTINCT
+          type: string
+        duplicateOfBankTransactionId:
+          description: 'For DUPLICATE: the original; defaults to the row the intake flagged it against'
+          format: uuid
+          type: string
+        ids:
+          description: Rows to review (bulk path only)
+          items:
+            format: uuid
+            type: string
+          type: array
+        justification:
+          description: Why (at least 10 characters)
+          example: Two separate monthly fees charged on the same day
+          type: string
+        version:
+          description: The row version the caller read (single-row path); a stale one answers 409 OPTIMISTIC_LOCK
+          format: int64
+          type: integer
+      required:
+      - decision
+      - justification
       type: object
     Entry:
       description: One reconciliation audit entry

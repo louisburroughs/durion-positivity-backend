@@ -117,7 +117,8 @@ public abstract class BaseIntegrationTest {
             "accounting:mapping-key:edit",
             "accounting:mapping-key:deactivate",
             "accounting:reconciliation:view",
-            "accounting:reconciliation:adjust");
+            "accounting:reconciliation:adjust",
+            "accounting:reconciliation:approve");
 
     /**
      * Initialize MockMvc with Spring Security integration before each test.

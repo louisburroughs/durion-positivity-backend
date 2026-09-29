@@ -1613,13 +1613,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 93")
+    @DisplayName("CATALOG_VERSION is 94")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(93);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(94);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 542")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 543")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1949,8 +1949,11 @@ class SecurityGatewayConfigTest {
         // catalog v93 (#2270, DECISION-SHOPMGMT-004): approving a third or later non-exempt
         // reschedule of one appointment (bit 542)
         assertThat(GatewayPermissionCatalog.authorityForBit(542)).isEqualTo("PERM_appointments:reschedule:approve");
+        // catalog v94 (#2301, SPEC-manual-bank-reconciliation D3): approving bank reconciliation work,
+        // excluding and restoring bank transactions, separated from preparing them (bit 543)
+        assertThat(GatewayPermissionCatalog.authorityForBit(543)).isEqualTo("PERM_accounting:reconciliation:approve");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(543)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(544)).isNull();
     }
 
     @Test

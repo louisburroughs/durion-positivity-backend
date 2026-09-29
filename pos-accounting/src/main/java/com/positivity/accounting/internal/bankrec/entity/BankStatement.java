@@ -33,8 +33,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * It is the bank's assertion, never a ledger fact, and is immutable once {@code COMMITTED}.
  *
  * <p>The database holds U1 (one COMMITTED statement per account and window) and U2 (COMMITTED
- * windows on one account never overlap). The service checks that answer them with error codes,
- * contiguity (E2), the gap acknowledgement and the account baseline arrive with story S2.
+ * windows on one account never overlap). The intake ({@code bankrec.intake}, story S2 #2301)
+ * answers both with error codes, checks contiguity (E2) and the gap acknowledgement, and moves the
+ * account baseline.
  */
 @Getter
 @Setter
@@ -108,6 +109,14 @@ public class BankStatement extends TenantScopedEntity {
 
     @Column(name = "superseded_by_statement_id", columnDefinition = "UUID")
     private UUID supersededByStatementId;
+
+    /** The manual-statement command's caller-generated id (§6.3); null for other sources. */
+    @Column(name = "request_id", columnDefinition = "UUID")
+    private UUID requestId;
+
+    /** SHA-256 of the manual-statement command's payload, to tell a replay from a conflicting reuse (§6.3). */
+    @Column(name = "request_hash", length = 64)
+    private String requestHash;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

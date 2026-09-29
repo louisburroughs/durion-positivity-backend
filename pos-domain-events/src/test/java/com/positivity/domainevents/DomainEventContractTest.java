@@ -92,7 +92,10 @@ class DomainEventContractTest {
             // same-UUID-for-every-field sample generator cannot satisfy.
             "com.positivity.domainevents.inventory.BackorderCreatedV1",
             "com.positivity.domainevents.inventory.BackorderResolvedV1",
-            "com.positivity.domainevents.inventory.ReservationOutcomeV1");
+            "com.positivity.domainevents.inventory.ReservationOutcomeV1",
+            // #2301: a batch must carry at least one transaction, which the empty-list sample cannot
+            // satisfy; BankTransactionsObservedV1Test covers it.
+            "com.positivity.domainevents.bankfeed.BankTransactionsObservedV1");
 
     static List<Class<?>> constructibleEventRecords() {
         return eventRecords().stream()
