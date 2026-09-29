@@ -39,3 +39,9 @@ pos.price:
   default-customer-tier-id: 00000000-0000-0000-0000-000000000099
 pos.inventory:
   base-url: http://localhost:9999/mock-inventory
+
+# Test contexts never reach pos-security-service or pos-event-receiver. Skip permission registration
+# (its startup retry loop otherwise sleeps ~8 s in every Spring test context) and point the event-type
+# initializer at a loopback port that refuses instantly. Same arrangement as pos-mcp-server's test profile.
+pos.security.permission-registration.enabled: false
+pos.events.base-url: http://127.0.0.1:1
