@@ -6085,6 +6085,102 @@ paths:
       - Accounting Periods
       x-required-permissions:
       - accounting:period:view
+  /v1/accounting/periods/bank-reconciliation-policy:
+    get:
+      description: 'Returns the tenant''s effective bank reconciliation policy: closePolicy, closeScope, closeCoverageLagDays, allowSelfApproval and otherApprovalThreshold (null while unset), with the functional currency of the threshold and who changed a setting last.
+
+        Use this tool to see how period close treats unreconciled bank accounts; use setBankReconciliationPolicy to change it.
+
+        Preconditions: none; a setting never written reads as its default (REQUIRED_WITH_EXCEPTION, BANK_CASH_SUBTYPE, 0, false, unset).
+
+        Required inputs: none; there are no parameters and no request body.
+
+        Emits an ACCOUNTING_PERIOD_BANK_REC_POLICY_VIEW audit event; nothing is changed.
+
+        Returns 200 with the five effective values; updatedAt and updatedBy are null until the policy is first changed.
+
+        '
+      operationId: getBankReconciliationPolicy
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationPolicyResponse'
+          description: Effective bank reconciliation policy
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks the accounting:period:view permission
+      security:
+      - bearerAuth:
+        - accounting:period:view
+      summary: Get Bank Reconciliation Policy
+      tags:
+      - Accounting Periods
+      x-required-permissions:
+      - accounting:period:view
+    put:
+      description: 'Replaces the tenant''s bank reconciliation policy: closePolicy (ADVISORY, REQUIRED_WITH_EXCEPTION or REQUIRED), closeScope (BANK_CASH_SUBTYPE or ALL_RECONCILABLE), closeCoverageLagDays (integer >= 0), allowSelfApproval (boolean) and otherApprovalThreshold (amount >= 0 in the functional currency, or null to unset it).
+
+        Use this tool when Finance changes how period close treats unreconciled bank accounts, whether preparers may approve their own reconciliations, or the OTHER adjustment approval threshold; use getBankReconciliationPolicy to read the current values first.
+
+        Preconditions: the caller holds accounting:period:hard_lock, the governance level of the hard lock.
+
+        Required inputs: all six body fields, including otherApprovalThreshold (null clears it) and a justification of at least 10 characters.
+
+        Emits an ACCOUNTING_PERIOD_BANK_REC_POLICY_SET event and writes one BANK_REC_POLICY_SET audit row per setting whose value changes (old and new value, justification); an unchanged setting writes nothing.
+
+        Returns 400 VALIDATION_ERROR for a missing field, an unknown value, a negative number, too many decimals or a blank justification, and 400 JUSTIFICATION_REQUIRED for a justification of 1 to 9 characters.
+
+        '
+      operationId: setBankReconciliationPolicy
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Mid-month cycles:
+                description: Mid-month cycles
+                value:
+                  allowSelfApproval: false
+                  closeCoverageLagDays: 31
+                  closePolicy: REQUIRED_WITH_EXCEPTION
+                  closeScope: BANK_CASH_SUBTYPE
+                  justification: Bank statements end mid-month
+                  otherApprovalThreshold: 250.0
+            schema:
+              $ref: '#/components/schemas/BankReconciliationPolicyRequest'
+        description: The five settings with the audit justification.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationPolicyResponse'
+          description: Policy stored; the effective policy is returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A field is missing or invalid (VALIDATION_ERROR), or the justification is shorter than 10 characters (JUSTIFICATION_REQUIRED)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks the accounting:period:hard_lock permission
+      security:
+      - bearerAuth:
+        - accounting:period:hard_lock
+      summary: Set Bank Reconciliation Policy
+      tags:
+      - Accounting Periods
+      x-required-permissions:
+      - accounting:period:hard_lock
   /v1/accounting/periods/hard-lock:
     get:
       description: 'Returns the org-level hard-lock date; journal entries dated strictly before this date are permanently rejected with PERIOD_HARD_LOCKED and no override path, unlike a CLOSED period which accounting:period:override plus a justification can bypass.
@@ -6187,15 +6283,15 @@ paths:
     post:
       description: 'Closes an OPEN accounting period (OPEN to CLOSED), after which posting paths reject entries dated inside it with PERIOD_CLOSED unless a permissioned override is supplied.
 
-        Use this tool during month-end close after all journal entries for the month are posted; do not use reopenAccountingPeriod, which reverses this transition for late adjustments.
+        Use this tool during month-end close after all journal entries for the month are posted and getAccountingPeriodCloseReadiness shows the bank accounts reconciled; do not use reopenAccountingPeriod, which reverses this transition for late adjustments.
 
-        Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may be dated inside the period; a valid YYYY-MM code with no row whose month has already started is auto-provisioned and then closed.
+        Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may be dated inside the period; a valid YYYY-MM code with no row whose month has already started is auto-provisioned and then closed. Then bank reconciliation readiness is evaluated under the tenant''s close policy: under REQUIRED or REQUIRED_WITH_EXCEPTION any BLOCKING check refuses the close; ADVISORY never refuses.
 
-        Required inputs: periodCode (YYYY-MM) as a path parameter; there is no request body.
+        Required inputs: periodCode (YYYY-MM) as a path parameter. The body is optional: bankReconciliationException.justification (at least 10 characters) closes despite BLOCKING checks under REQUIRED_WITH_EXCEPTION when the caller also holds accounting:period:override.
 
-        Emits an ACCOUNTING_PERIOD_CLOSE event and audit-logs the close with the acting user.
+        Emits an ACCOUNTING_PERIOD_CLOSE event and audit-logs the close (with a readiness summary) with the acting user; a granted exception adds a PERIOD_CLOSE_BANKREC_EXCEPTION audit row holding the readiness snapshot. The response carries bankReconciliationReady and bankReconciliationException.
 
-        Returns 409 PERIOD_ALREADY_CLOSED when the period is already closed, 404 PERIOD_NOT_FOUND when no row exists and the month has not started, and 422 PERIOD_HAS_DRAFT_ENTRIES listing the blocking draftJournalEntryIds in fieldErrors; post or delete those entries before retrying.
+        Returns 409 PERIOD_ALREADY_CLOSED when the period is already closed, 404 PERIOD_NOT_FOUND when no row exists and the month has not started, 422 PERIOD_HAS_DRAFT_ENTRIES listing the blocking draftJournalEntryIds in fieldErrors, 422 PERIOD_BANK_RECONCILIATION_INCOMPLETE listing unreconciledGlAccountIds in fieldErrors, 403 PERIOD_CLOSE_EXCEPTION_NOT_PERMITTED for an exception without the override authority, and 400 JUSTIFICATION_REQUIRED for a justification shorter than 10 characters.
 
         '
       operationId: closeAccountingPeriod
@@ -6207,25 +6303,37 @@ paths:
         required: true
         schema:
           type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Close on an exception:
+                description: Close on an exception
+                value:
+                  bankReconciliationException:
+                    justification: September statement delayed by the bank; controller approved
+            schema:
+              $ref: '#/components/schemas/PeriodCloseRequest'
+        description: 'Optional: a bank reconciliation exception with its justification.'
       responses:
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AccountingPeriodResponse'
-          description: Period closed; the updated period is returned
+          description: Period closed; the updated period is returned with bankReconciliationReady and bankReconciliationException
         '400':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: periodCode is not a valid YYYY-MM period code
+          description: periodCode is not a valid YYYY-MM period code (VALIDATION_ERROR), the exception justification is blank (VALIDATION_ERROR) or shorter than 10 characters (JUSTIFICATION_REQUIRED)
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks the accounting:period:close permission
+          description: Caller lacks the accounting:period:close permission (FORBIDDEN), or asks for a bank reconciliation exception without accounting:period:override (PERIOD_CLOSE_EXCEPTION_NOT_PERMITTED)
         '404':
           content:
             application/json:
@@ -6243,7 +6351,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: DRAFT journal entries are dated inside the period (PERIOD_HAS_DRAFT_ENTRIES); fieldErrors lists the blocking draftJournalEntryIds
+          description: 'DRAFT journal entries are dated inside the period (PERIOD_HAS_DRAFT_ENTRIES; fieldErrors lists draftJournalEntryIds), or in-scope bank accounts are not reconciled under the close policy (PERIOD_BANK_RECONCILIATION_INCOMPLETE; fieldErrors lists unreconciledGlAccountIds as "<glAccountId> <accountCode>: <check codes>" and, under REQUIRED, bankReconciliationException as not permitted by policy)'
       security:
       - bearerAuth:
         - accounting:period:close
@@ -6252,6 +6360,57 @@ paths:
       - Accounting Periods
       x-required-permissions:
       - accounting:period:close
+  /v1/accounting/periods/{periodCode}/close-readiness:
+    get:
+      description: 'Reads the bank reconciliation close readiness of a period: per in-scope bank account the baseline that applies at the period end, the coverage and reconciled frontiers, the OPEN outstanding items with their sum, and the checks that fired (STATEMENT_COVERAGE, RECONCILIATION_APPROVED, RECONCILIATION_IN_FLIGHT, RECONCILIATION_INVALIDATED, BALANCE_AGREEMENT, UNEXPLAINED_BANK_TRANSACTIONS, UNEXPLAINED_LEDGER_LINES, UNPOSTED_ADJUSTMENTS, COVERAGE_LAG_APPLIED, INCOMPLETE_IMPORTS, OUTSTANDING_ITEMS_AGING, LATE_BANK_TRANSACTIONS, RECONCILED_AFTER_CLOSE), plus tenant-wide checks (DRAFT_JOURNAL_ENTRIES, CLEARING_BALANCE_AGING) in the top-level checks list.
+
+        Use this tool before closeAccountingPeriod to see whether the close will pass and what blocks it; do not use listAccountingPeriods, which only reports OPEN or CLOSED.
+
+        Preconditions: none; a month with no period row is evaluated as OPEN without creating it.
+
+        Required inputs: periodCode (YYYY-MM) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_PERIOD_CLOSE_READINESS audit event; nothing is created or changed.
+
+        Returns ready = true when no BLOCKING check remains under the tenant''s close policy (under ADVISORY only DRAFT journal entries count), and 400 VALIDATION_ERROR for a malformed periodCode.
+
+        '
+      operationId: getAccountingPeriodCloseReadiness
+      parameters:
+      - description: Period code in YYYY-MM format
+        example: 2026-08
+        in: path
+        name: periodCode
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloseReadinessResponse'
+          description: Readiness of the period
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: periodCode is not a valid YYYY-MM period code (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks the accounting:period:view permission
+      security:
+      - bearerAuth:
+        - accounting:period:view
+      summary: Get Accounting Period Close Readiness
+      tags:
+      - Accounting Periods
+      x-required-permissions:
+      - accounting:period:view
   /v1/accounting/periods/{periodCode}/reopen:
     post:
       description: 'Reopens a CLOSED accounting period (CLOSED to OPEN), allowing entries to be posted into that month again.
@@ -11103,6 +11262,16 @@ components:
     AccountingPeriodResponse:
       description: Accounting period response payload
       properties:
+        bankReconciliationException:
+          description: 'Close response only: whether the period closed on a bank reconciliation exception (null on other responses)'
+          type:
+          - boolean
+          - 'null'
+        bankReconciliationReady:
+          description: 'Close response only: whether no BLOCKING bank reconciliation check remained at close (null on other responses)'
+          type:
+          - boolean
+          - 'null'
         closedAt:
           description: When the period was closed (null while OPEN)
           format: date-time
@@ -12814,6 +12983,18 @@ components:
           example: BANK_FEE
           type: string
       type: object
+    BankReconciliationExceptionRequest:
+      description: Exception to close a period whose bank accounts are not reconciled
+      properties:
+        justification:
+          description: Why the period closes without bank reconciliation readiness; at least 10 characters (400 JUSTIFICATION_REQUIRED otherwise); recorded with the readiness snapshot in the PERIOD_CLOSE_BANKREC_EXCEPTION audit row
+          example: September bank statement delayed by the bank; controller approved close
+          maxLength: 1000
+          minLength: 0
+          type: string
+      required:
+      - justification
+      type: object
     BankReconciliationLineResponse:
       description: Imported bank statement line
       properties:
@@ -12889,6 +13070,104 @@ components:
       - reconciliations
       - totalElements
       - totalPages
+      type: object
+    BankReconciliationPolicyRequest:
+      description: Replaces the tenant's bank reconciliation policy; all six fields are required
+      properties:
+        allowSelfApproval:
+          description: Whether a submitter may approve their own reconciliation
+          example: false
+          type: boolean
+        closeCoverageLagDays:
+          description: Days the reconciled and coverage frontiers may fall short of the period end
+          example: 0
+          format: int32
+          minimum: 0
+          type: integer
+        closePolicy:
+          description: ADVISORY, REQUIRED_WITH_EXCEPTION or REQUIRED
+          enum:
+          - ADVISORY
+          - REQUIRED_WITH_EXCEPTION
+          - REQUIRED
+          example: REQUIRED_WITH_EXCEPTION
+          type: string
+        closeScope:
+          description: BANK_CASH_SUBTYPE or ALL_RECONCILABLE
+          enum:
+          - BANK_CASH_SUBTYPE
+          - ALL_RECONCILABLE
+          example: BANK_CASH_SUBTYPE
+          type: string
+        justification:
+          description: Why the policy changes; at least 10 characters (400 JUSTIFICATION_REQUIRED otherwise); recorded on every BANK_REC_POLICY_SET audit row
+          example: Finance sets the OTHER threshold after the Q3 review
+          maxLength: 1000
+          minLength: 0
+          type: string
+        otherApprovalThreshold:
+          description: OTHER adjustment amount in the functional currency above which accounting:reconciliation:approve is needed; required, null clears it (unset)
+          example: 250.0
+          minimum: 0
+          type:
+          - number
+          - 'null'
+      required:
+      - allowSelfApproval
+      - closeCoverageLagDays
+      - closePolicy
+      - closeScope
+      - justification
+      - otherApprovalThreshold
+      type: object
+    BankReconciliationPolicyResponse:
+      description: Effective bank reconciliation policy of the tenant
+      properties:
+        allowSelfApproval:
+          description: BANK_REC_ALLOW_SELF_APPROVAL (default false)
+          example: false
+          type: boolean
+        closeCoverageLagDays:
+          description: BANK_REC_CLOSE_COVERAGE_LAG_DAYS (default 0)
+          example: 0
+          format: int32
+          type: integer
+        closePolicy:
+          description: BANK_REC_CLOSE_POLICY (default REQUIRED_WITH_EXCEPTION)
+          enum:
+          - ADVISORY
+          - REQUIRED_WITH_EXCEPTION
+          - REQUIRED
+          example: REQUIRED_WITH_EXCEPTION
+          type: string
+        closeScope:
+          description: BANK_REC_CLOSE_SCOPE (default BANK_CASH_SUBTYPE)
+          enum:
+          - BANK_CASH_SUBTYPE
+          - ALL_RECONCILABLE
+          example: BANK_CASH_SUBTYPE
+          type: string
+        currency:
+          description: ISO 4217 functional currency the threshold is expressed in
+          example: USD
+          type: string
+        otherApprovalThreshold:
+          description: BANK_REC_OTHER_APPROVAL_THRESHOLD in the functional currency; null while unset (every non-residual OTHER adjustment then needs accounting:reconciliation:approve)
+          example: 250.0
+          type:
+          - number
+          - 'null'
+        updatedAt:
+          description: When a setting last changed; null while every setting is at its default
+          format: date-time
+          type:
+          - string
+          - 'null'
+        updatedBy:
+          description: Who last changed a setting; null while every setting is at its default
+          type:
+          - string
+          - 'null'
       type: object
     BankReconciliationResponse:
       description: Bank reconciliation header with the live equation (E3), opening terms and unexplained counts
@@ -13802,6 +14081,200 @@ components:
         transactionDate:
           format: date
           type: string
+      type: object
+    CloseReadinessAccount:
+      description: 'Close readiness of one in-scope account: frontiers, OPEN outstanding items and checks'
+      properties:
+        accountCode:
+          description: GL account code
+          example: '1000'
+          type: string
+        accountName:
+          description: GL account name
+          example: Cash
+          type: string
+        baselineDate:
+          description: Baseline that applies at the period end; the lower bound of the UNEXPLAINED_* checks; null when the account has no acknowledged statement
+          example: '2026-06-01'
+          format: date
+          type:
+          - string
+          - 'null'
+        checks:
+          description: The account's checks that fired
+          items:
+            $ref: '#/components/schemas/CloseReadinessCheck'
+          type: array
+        coverageFrontier:
+          description: End date of the latest COMMITTED statement
+          example: '2026-08-31'
+          format: date
+          type:
+          - string
+          - 'null'
+        glAccountId:
+          description: GL account id
+          format: uuid
+          type: string
+        openOutstandingItemSum:
+          description: Sum of the OPEN outstanding items' signed amounts
+          example: -120.0
+          type: number
+        openOutstandingItems:
+          description: OPEN outstanding items dated on or before the period end (the explained differences)
+          items:
+            $ref: '#/components/schemas/CloseReadinessOutstandingItem'
+          type: array
+        reconciledFrontier:
+          description: End of the contiguous FINALIZED chain from the baseline that applies at the period end
+          example: '2026-08-31'
+          format: date
+          type:
+          - string
+          - 'null'
+      type: object
+    CloseReadinessCheck:
+      description: A close-readiness check that fired, with its severity and references
+      properties:
+        code:
+          description: Check code
+          enum:
+          - DRAFT_JOURNAL_ENTRIES
+          - STATEMENT_COVERAGE
+          - RECONCILIATION_APPROVED
+          - RECONCILIATION_IN_FLIGHT
+          - RECONCILIATION_INVALIDATED
+          - BALANCE_AGREEMENT
+          - UNEXPLAINED_BANK_TRANSACTIONS
+          - UNEXPLAINED_LEDGER_LINES
+          - UNPOSTED_ADJUSTMENTS
+          - COVERAGE_LAG_APPLIED
+          - INCOMPLETE_IMPORTS
+          - OUTSTANDING_ITEMS_AGING
+          - CLEARING_BALANCE_AGING
+          - LATE_BANK_TRANSACTIONS
+          - RECONCILED_AFTER_CLOSE
+          example: RECONCILIATION_IN_FLIGHT
+          type: string
+        detail:
+          description: Human-readable explanation
+          example: 1 IN_PROGRESS or SUBMITTED reconciliation ends on or before 2026-08-31
+          type: string
+        references:
+          description: References named by the check (ids, frontier dates, balances, counts, sums)
+          type: object
+        severity:
+          description: 'Severity under a REQUIRED* policy: BLOCKING, WARNING or INFO'
+          enum:
+          - BLOCKING
+          - WARNING
+          - INFO
+          example: BLOCKING
+          type: string
+      required:
+      - code
+      - detail
+      - references
+      - severity
+      type: object
+    CloseReadinessOutstandingItem:
+      description: An OPEN outstanding item, an explained book-to-bank difference
+      properties:
+        ageDays:
+          description: Age in days at the readiness reference date
+          example: 3
+          format: int64
+          type: integer
+        itemDate:
+          description: Item date
+          example: '2026-08-28'
+          format: date
+          type: string
+        itemKind:
+          description: Item kind
+          enum:
+          - DEPOSIT_IN_TRANSIT
+          - OUTSTANDING_CHECK
+          - OTHER_LEDGER_TIMING
+          - BANK_ERROR_PENDING
+          example: OUTSTANDING_CHECK
+          type: string
+        outstandingItemId:
+          description: Outstanding item id
+          format: uuid
+          type: string
+        side:
+          description: LEDGER or BANK
+          enum:
+          - LEDGER
+          - BANK
+          example: LEDGER
+          type: string
+        signedAmount:
+          description: Signed amount in the functional currency
+          example: -120.0
+          type: number
+      type: object
+    CloseReadinessResponse:
+      description: Bank reconciliation close readiness of an accounting period
+      properties:
+        accounts:
+          description: One entry per in-scope account, by account code
+          items:
+            $ref: '#/components/schemas/CloseReadinessAccount'
+          type: array
+        blockingCount:
+          description: BLOCKING checks reported, tenant-wide and per account
+          example: 1
+          format: int32
+          type: integer
+        checks:
+          description: Tenant-wide checks (DRAFT_JOURNAL_ENTRIES, CLEARING_BALANCE_AGING)
+          items:
+            $ref: '#/components/schemas/CloseReadinessCheck'
+          type: array
+        coverageLagDays:
+          description: Effective BANK_REC_CLOSE_COVERAGE_LAG_DAYS
+          example: 0
+          format: int32
+          type: integer
+        periodCode:
+          description: Period code (YYYY-MM)
+          example: 2026-08
+          type: string
+        periodEndDate:
+          description: Last day of the period
+          example: '2026-08-31'
+          format: date
+          type: string
+        periodStartDate:
+          description: First day of the period
+          example: '2026-08-01'
+          format: date
+          type: string
+        periodStatus:
+          description: Period status; OPEN when the period has no row yet
+          enum:
+          - OPEN
+          - CLOSED
+          example: OPEN
+          type: string
+        policy:
+          description: Effective BANK_REC_CLOSE_POLICY
+          enum:
+          - ADVISORY
+          - REQUIRED_WITH_EXCEPTION
+          - REQUIRED
+          example: REQUIRED_WITH_EXCEPTION
+          type: string
+        ready:
+          description: Whether the period may close under the policy without an exception
+          type: boolean
+        warningCount:
+          description: WARNING checks reported, tenant-wide and per account
+          example: 0
+          format: int32
+          type: integer
       type: object
     CollectionsAnalyticsReport:
       description: 'Invoiced-vs-collected analytics for one date window. invoiced and collected are different invoice cohorts (see field descriptions) — do not present collectionRatePct as a cohort collection rate. collected is applied-to-A/R net of reversals recorded in the window, not cash received: it excludes deposit-credit and customer-credit settlement. refunded is gross completed refunds (cash out); netCashCollected = collected - refunded but mixes bases and under-counts when a refund also reversed an application, so prefer received - refunded for a clean cash-in-vs-cash-out pair. received is cash actually taken in (cash basis), independent of application. nonCashSettled is invoice settlement without new cash (deposit/customer credit draw-downs); settled = collected + nonCashSettled and settlementRatePct = settled/invoiced is the "billed vs settled by any means" pair, distinct from the cash-only collectionRatePct.'
@@ -17235,6 +17708,12 @@ components:
       - issuedFrom
       - issuedTo
       - truncated
+      type: object
+    PeriodCloseRequest:
+      description: Optional close request carrying a bank reconciliation exception
+      properties:
+        bankReconciliationException:
+          $ref: '#/components/schemas/BankReconciliationExceptionRequest'
       type: object
     Posting:
       description: An adjustment posting (the entry's or its reversal's cash line)
