@@ -119,7 +119,7 @@ public class ReconciliationAdjustmentController {
             responseCode = "422",
             description =
                     "RECONCILIATION_ADJUSTMENT_SIGN_INVALID, ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE,"
-                            + " GL_ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_RECONCILABLE, MATCH_AMOUNT_MISMATCH, PERIOD_CLOSED,"
+                            + " GL_ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_RECONCILABLE, PERIOD_CLOSED,"
                             + " PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED or AMOUNT_PRECISION_EXCEEDS_CURRENCY",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankReconciliationAdjustmentResponse> addReconciliationAdjustment(

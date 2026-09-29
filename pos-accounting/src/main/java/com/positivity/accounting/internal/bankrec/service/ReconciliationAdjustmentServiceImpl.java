@@ -34,7 +34,6 @@ import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
-import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
@@ -176,9 +175,14 @@ public class ReconciliationAdjustmentServiceImpl implements ReconciliationAdjust
             bankRow = eligibility
                     .lockBankForMatch(recon, List.of(links.bankTransactionId()), null)
                     .get(0);
-            if (bankRow.getSignedAmount().subtract(amount).abs().compareTo(currency.tolerance()) > 0) {
-                throw new MatchAmountMismatchException("The adjustment of " + amount + " does not explain bank"
-                        + " transaction " + bankRow.getBankTransactionId() + " of " + bankRow.getSignedAmount());
+            // §3.5: a linked adjustment explains its bank transaction exactly — no tolerance (domain review, S6).
+            if (bankRow.getSignedAmount().compareTo(amount) != 0) {
+                throw BankRecException.field(
+                        BankRecErrorCode.ADJUSTMENT_LINK_NOT_ELIGIBLE,
+                        "The adjustment of " + currency.display(amount) + " does not equal bank transaction "
+                                + bankRow.getBankTransactionId() + " of " + currency.display(bankRow.getSignedAmount()),
+                        "amount",
+                        "expected " + currency.display(bankRow.getSignedAmount()));
             }
             explainingDate = bankRow.getTransactionDate();
         }

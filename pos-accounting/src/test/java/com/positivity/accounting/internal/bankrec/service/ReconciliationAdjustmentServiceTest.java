@@ -53,7 +53,6 @@ import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
-import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.service.AccountingPeriodGate;
 import com.positivity.accounting.internal.service.GLMappingResolver;
@@ -420,17 +419,24 @@ class ReconciliationAdjustmentServiceTest {
         }
 
         @Test
-        @DisplayName("a linked adjustment must explain its bank transaction within one cent")
+        @DisplayName("a linked adjustment must equal its bank transaction exactly: ADJUSTMENT_LINK_NOT_ELIGIBLE [M]")
         void linkedAmountMustAgree() {
             BankTransaction bank = transaction("-15.00", LocalDate.of(2026, 9, 10));
             when(eligibility.lockBankForMatch(eq(recon), anyCollection(), isNull()))
                     .thenReturn(List.of(bank));
-            assertThatThrownBy(() -> service.addAdjustment(
-                            RECON_ID,
-                            request(BankAdjustmentType.BANK_FEE, "-12.00")
-                                    .bankTransactionId(bank.getBankTransactionId())
-                                    .build()))
-                    .isInstanceOf(MatchAmountMismatchException.class);
+            for (String amount : List.of("-12.00", "-14.99")) {
+                assertThatThrownBy(() -> service.addAdjustment(
+                                RECON_ID,
+                                request(BankAdjustmentType.BANK_FEE, amount)
+                                        .bankTransactionId(bank.getBankTransactionId())
+                                        .build()))
+                        .as(amount)
+                        .isInstanceOfSatisfying(BankRecException.class, e -> {
+                            assertThat(e.code()).isEqualTo(BankRecErrorCode.ADJUSTMENT_LINK_NOT_ELIGIBLE);
+                            assertThat(e.fieldErrors()).containsEntry("amount", "expected -15.00");
+                        });
+            }
+            verify(journalEntryService, never()).createJournalEntry(any());
         }
     }
 
