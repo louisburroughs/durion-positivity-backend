@@ -38,6 +38,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -93,7 +94,7 @@ public class ReconciliationMatchingServiceImpl implements ReconciliationMatching
         BankReconciliationMatch replay =
                 matches.findByRequestId(request.getRequestId()).orElse(null);
         if (replay != null) {
-            return replay(replay, reconciliationId, bankIds, glIds);
+            return replay(replay, reconciliationId, bankIds, glIds, request.getJustification());
         }
 
         MatchKind kind = MatchRules.kind(bankIds.size(), glIds.size());
@@ -394,11 +395,17 @@ public class ReconciliationMatchingServiceImpl implements ReconciliationMatching
     }
 
     private ReconciliationMatchResponse replay(
-            BankReconciliationMatch replay, UUID reconciliationId, Set<UUID> bankIds, Set<UUID> glIds) {
+            BankReconciliationMatch replay,
+            UUID reconciliationId,
+            Set<UUID> bankIds,
+            Set<UUID> glIds,
+            @Nullable String justification) {
         ReconciliationMatchResponse response = responses.of(replay);
+        // The whole command: members and the justification as stored (trimmed), so a changed reason is a reuse.
         boolean same = replay.getReconciliationId().equals(reconciliationId)
                 && new HashSet<>(response.getBankTransactionIds()).equals(bankIds)
-                && new HashSet<>(response.getGlLineIds()).equals(glIds);
+                && new HashSet<>(response.getGlLineIds()).equals(glIds)
+                && Objects.equals(replay.getJustification(), justification == null ? null : justification.trim());
         if (!same) {
             throw new BankRecException(
                     BankRecErrorCode.IDEMPOTENCY_CONFLICT,
