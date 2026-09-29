@@ -476,8 +476,8 @@ flattened into the baseline for ADR-0062; see `../durion/docs/architecture/deplo
 
 - `V1__baseline_accounting.sql` — the whole schema, with the tenancy schema (`tenant_id`, row-level security,
   tenant-scoped keys) on every scoped table and `tenant_id` as data on the two global outbox tables
-  (`event_outbox`, `kafka_event_outbox`, see Multitenancy below); edited in place while in alpha, no further
-  `V` files (alpha databases are recreated, `docs/runbooks/flyway-baseline-reset.md` "Alpha Cutover")
+  (`event_outbox`, `kafka_event_outbox`, see Multitenancy below); edited in place while in alpha, with `V2` retained only
+  for seed data (alpha databases are recreated; see `docs/runbooks/flyway-baseline-reset.md`, "Alpha Cutover")
 - `V2__seed_accounting.sql` — versioned seed data
 - `R__seed_reference_accounting.sql` — repeatable seed for reference data, including the 9-account COA; also the
   `INVOICE_REVENUE` posting category / mapping keys (#1843), the `INVENTORY_ADJUSTMENT` posting category /
