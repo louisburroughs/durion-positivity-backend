@@ -1,9 +1,9 @@
-generatedAt: "2026-09-27T02:58:41.129130+00:00"
+generatedAt: "2026-09-29T01:25:53.512043+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 507
-  uniquePermissionCount: 507
+  permissionCount: 508
+  uniquePermissionCount: 508
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,7 +12,7 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 54
+    permissionCount: 55
     permissions:
       - name: "accounting:analytics:view"
         description: "View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts)"
@@ -113,9 +113,11 @@ manifests:
       - name: "accounting:posting_rules:view"
         description: "View posting rules"
       - name: "accounting:reconciliation:adjust"
-        description: "Manually match or write off settlement lines"
+        description: "Prepare reconciliations: match or write off settlement lines, enter bank statements, review possible duplicates and maintain bank-account profiles"
+      - name: "accounting:reconciliation:approve"
+        description: "Approve bank reconciliation work: exclude and restore bank transactions (separation of duties)"
       - name: "accounting:reconciliation:view"
-        description: "View processor settlements and reconciliation lines"
+        description: "View processor settlements, bank statements, bank transactions and reconciliations"
       - name: "accounting:report:export"
         description: "Export report"
       - name: "accounting:tax-snapshot:freeze"
@@ -1485,13 +1487,19 @@ permissions:
     module: "pos-accounting"
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:reconciliation:adjust"
-    description: "Manually match or write off settlement lines"
+    description: "Prepare reconciliations: match or write off settlement lines, enter bank statements, review possible duplicates and maintain bank-account profiles"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:reconciliation:approve"
+    description: "Approve bank reconciliation work: exclude and restore bank transactions (separation of duties)"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:reconciliation:view"
-    description: "View processor settlements and reconciliation lines"
+    description: "View processor settlements, bank statements, bank transactions and reconciliations"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"
