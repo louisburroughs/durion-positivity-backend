@@ -34,7 +34,6 @@ import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
-import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
@@ -173,9 +172,13 @@ public class ReconciliationAdjustmentServiceImpl implements ReconciliationAdjust
             bankRow = eligibility
                     .lockBankForMatch(recon, List.of(links.bankTransactionId()), null)
                     .get(0);
-            if (bankRow.getSignedAmount().subtract(amount).abs().compareTo(currency.tolerance()) > 0) {
-                throw new MatchAmountMismatchException("The adjustment of " + amount + " does not explain bank"
-                        + " transaction " + bankRow.getBankTransactionId() + " of " + bankRow.getSignedAmount());
+            // M5 (§3.4): the ADJUSTMENT match is exact (toleranceUsed = 0), so no difference is accepted — not even
+            // one minor unit. Compared by value, scale-insensitive.
+            if (bankRow.getSignedAmount().compareTo(amount) != 0) {
+                throw notEligible(
+                        "The adjustment of " + amount + " must equal bank transaction " + bankRow.getBankTransactionId()
+                                + " of " + bankRow.getSignedAmount() + " exactly",
+                        "amount");
             }
             explainingDate = bankRow.getTransactionDate();
         }

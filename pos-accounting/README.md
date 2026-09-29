@@ -368,7 +368,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `MATCH_REQUIRES_REVIEW` | 422 | A non-1:1 match, tolerance use, out-of-window dates or a former possible duplicate without a justification; `fieldErrors[justification]` lists the reasons (#2303) |
 | `OUTSTANDING_ITEM_NOT_ELIGIBLE` | 422 | The line, sign, window or state does not allow the outstanding item, reaffirmation, release or clear-in-gap (#2303) |
 | `ADJUSTMENT_LINK_REQUIRED` | 422 | An OTHER without exactly one link, a residual/bridge link on another type, or a TRANSFER counter missing or misplaced (#2303) |
-| `ADJUSTMENT_LINK_NOT_ELIGIBLE` | 422 | The named match, statement, amount or TRANSFER counter fails its rule (#2303) |
+| `ADJUSTMENT_LINK_NOT_ELIGIBLE` | 422 | The named match, statement, amount or TRANSFER counter fails its rule; an adjustment linked to a bank transaction must equal its amount exactly, else `fieldErrors[amount]` (#2303) |
 | `BANK_ACCOUNT_FEED_NOT_LINKED` | 422 | A statementless (feed-backed) reconciliation on an account without a feed link — every account in phase 1 (#2303) |
 | `PAYMENT_GATEWAY_FAILURE` | 500 | The AP payment gateway call failed |
 | `INTERNAL_ERROR` | 500 | Audit-trail event creation failed unexpectedly |
