@@ -355,6 +355,17 @@ class BankReconciliationCloseReadinessTest {
     }
 
     @Test
+    @DisplayName("[M] BALANCE_AGREEMENT is exact: 0.0001 apart disagrees, a different scale of the same value agrees")
+    void balanceAgreementIsExact() {
+        when(ledger.balanceAsOf(CASH, END)).thenReturn(new BigDecimal("500.0001"));
+        assertThat(codes(cash(service.evaluate(period)).checks()))
+                .containsExactly(ReadinessCheckCode.BALANCE_AGREEMENT);
+
+        when(ledger.balanceAsOf(CASH, END)).thenReturn(new BigDecimal("500.0000"));
+        assertThat(cash(service.evaluate(period)).checks()).isEmpty();
+    }
+
+    @Test
     @DisplayName("[M] AC10: UNEXPLAINED_* run from the baseline that applies at the period end, with the covering id")
     void unexplainedFromApplyingBaseline() {
         BankTransaction row = new BankTransaction();

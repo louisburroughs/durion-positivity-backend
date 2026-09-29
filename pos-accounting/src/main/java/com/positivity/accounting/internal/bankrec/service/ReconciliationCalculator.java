@@ -47,7 +47,8 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li>bank — rows on the account dated from the baseline to the window end, {@code UNMATCHED} or
- *       {@code POSSIBLE_DUPLICATE}, settled, in no {@code OPEN} bank-side item (a row in a {@code PROPOSED}
+ *       {@code POSSIBLE_DUPLICATE}, {@code settlementState = POSTED} (a {@code PENDING} row never counts), in
+ *       no {@code OPEN} bank-side item (a row in a {@code PROPOSED}
  *       match is still {@code UNMATCHED}); rows carried in from earlier windows count;
  *   <li>ledger — lines on the account of POSTED entries dated from the baseline to the window end, in no
  *       {@code ACCEPTED} match, not a gap bridge's cash line, in no {@code OPEN} item — except an aged
@@ -294,7 +295,8 @@ public class ReconciliationCalculator {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         return rows.stream()
-                .filter(t -> t.getSettlementState() != SettlementState.PENDING)
+                // E4 and close readiness count settled rows only: settlementState = POSTED, never PENDING.
+                .filter(t -> t.getSettlementState() == SettlementState.POSTED)
                 .filter(t -> !inOpenItems.contains(t.getBankTransactionId()))
                 .sorted(BankRecOrdering.BANK_TRANSACTIONS)
                 .toList();

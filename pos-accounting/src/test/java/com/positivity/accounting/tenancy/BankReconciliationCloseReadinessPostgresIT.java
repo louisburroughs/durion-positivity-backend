@@ -19,6 +19,7 @@ import com.positivity.accounting.internal.bankrec.enums.BankRecClosePolicy;
 import com.positivity.accounting.internal.bankrec.enums.ReadinessCheckCode;
 import com.positivity.accounting.internal.bankrec.enums.ReadinessSeverity;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
+import com.positivity.accounting.internal.bankrec.enums.SettlementState;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
 import com.positivity.accounting.internal.bankrec.service.BankReconciliationService;
@@ -345,6 +346,62 @@ class BankReconciliationCloseReadinessPostgresIT extends PostgresTenancyTestBase
                 .doesNotContain(before);
     }
 
+    @Test
+    @DisplayName("[M] UNEXPLAINED_BANK_TRANSACTIONS counts settlementState = POSTED rows only; PENDING is left out")
+    void pendingBankRowsAreNotUnexplained() {
+        UUID cash = bankAccount();
+        UUID statementId = statement(
+                cash, "2018-10-01", "2018-10-31", "0", "13.00", List.of("9.00", "4.00"), LocalDate.of(2018, 10, 5));
+        periodCodes.add("2018-10");
+        List<UUID> rows = bankRows(statementId);
+        inTx(() -> {
+            BankTransaction pending = bankTransactions.findById(rows.get(1)).orElseThrow();
+            pending.setSettlementState(SettlementState.PENDING);
+            return bankTransactions.save(pending);
+        });
+
+        CloseReadinessCheck bank = account(readiness("2018-10"), cash).checks().stream()
+                .filter(c -> c.code() == ReadinessCheckCode.UNEXPLAINED_BANK_TRANSACTIONS)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(bank.references()).containsEntry("count", 1);
+        assertThat((List<Object>) bank.references().get("bankTransactionIds")).containsExactly(rows.get(0));
+    }
+
+    @Test
+    @DisplayName(
+            "[M] BALANCE_AGREEMENT: approval and readiness read one as-of (POSTED + REVERSED, end 23:59:59.999999)")
+    void balanceAgreementSharesTheAsOf() {
+        UUID cash = bankAccount();
+        UUID revenue = otherAccount();
+        LocalDate last = LocalDate.of(2018, 11, 30);
+        // A deposit at the last microsecond of the window, and a reversed pair inside it.
+        UUID deposit = cashLine(post(cash, revenue, "100.00", last.atTime(23, 59, 59, 999_999_000)), cash);
+        UUID mistake = post(cash, revenue, "25.00", LocalDate.of(2018, 11, 10).atTime(12, 0));
+        inTx(() -> journalEntries.reverseJournalEntry(
+                mistake, "Posted to the wrong bank account", LocalDate.of(2018, 11, 12)));
+        UUID statementId = statement(cash, "2018-11-01", "2018-11-30", "0", "100.00", List.of("100.00"), last);
+        as(PREPARER);
+        UUID reconId = create(cash, statementId);
+        inTx(() -> matching.createMatch(
+                reconId,
+                ReconciliationMatchCreateRequest.builder()
+                        .bankTransactionIds(bankRows(statementId))
+                        .glLineIds(List.of(deposit))
+                        .requestId(UUIDv7Generator.generate())
+                        .build()));
+        inTx(() -> approval.submit(reconId, null));
+        as(APPROVER);
+        inTx(() -> approval.approve(reconId, null));
+        SecurityContextHolder.clearContext();
+
+        CloseReadinessAccount account = account(readiness("2018-11"), cash);
+
+        assertThat(codes(account.checks())).doesNotContain(ReadinessCheckCode.BALANCE_AGREEMENT);
+        assertThat(account.checks()).isEmpty();
+    }
+
     // ---- AC 11 --------------------------------------------------------------------------------------
 
     @Test
@@ -589,6 +646,12 @@ class BankReconciliationCloseReadinessPostgresIT extends PostgresTenancyTestBase
 
     /** Posts Dr {@code debit} / Cr {@code credit} of {@code amount} on {@code day}; returns the entry id. */
     private UUID post(UUID debit, UUID credit, String amount, LocalDate day) {
+        return post(debit, credit, amount, day.atTime(12, 0));
+    }
+
+    /** Posts Dr {@code debit} / Cr {@code credit} of {@code amount} at {@code at}; returns the entry id. */
+    private UUID post(UUID debit, UUID credit, String amount, LocalDateTime at) {
+        LocalDate day = at.toLocalDate();
         String month = YearMonth.from(day).toString();
         if (!periodCodes.contains(month)) {
             periodCodes.add(month);
@@ -596,7 +659,7 @@ class BankReconciliationCloseReadinessPostgresIT extends PostgresTenancyTestBase
         return inTx(() -> {
             UUID created = journalEntries
                     .createJournalEntry(JournalEntryCreateRequest.builder()
-                            .transactionDate(day.atTime(12, 0))
+                            .transactionDate(at)
                             .sourceEventId(UUIDv7Generator.generate())
                             .description("Readiness IT")
                             .lines(List.of(line(debit, amount, "0"), line(credit, "0", amount)))
