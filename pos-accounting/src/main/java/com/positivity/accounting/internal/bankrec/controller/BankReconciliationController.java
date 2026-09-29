@@ -74,6 +74,9 @@ public class BankReconciliationController {
 
     private static final Logger log = LoggerFactory.getLogger(BankReconciliationController.class);
 
+    /** The largest audit page served (§4.9). */
+    private static final int MAX_AUDIT_PAGE = 200;
+
     private final BankReconciliationService bankReconciliationService;
     private final ReconciliationApprovalService approvalService;
     private final ReconciliationReviewService reviewService;
@@ -695,19 +698,24 @@ public class BankReconciliationController {
             operationId = "getReconciliationAudit",
             summary = "Get Reconciliation Audit Trail",
             description = """
-                    Returns the time-ordered audit trail of a reconciliation's actions: import, matches, \
-                    unmatches, adjustments and finalize, each with the acting user.
+                    Returns the stored audit trail, oldest first and a page at a time: every AccountingAuditLog row \
+                    of the reconciliation (create, adjustments and their reversals, auto-match, submit, approve \
+                    including a refused or allowed self-approval, return, cancel, supersede, invalidation), of its \
+                    matches (match, accept, reject, unmatch) and of the outstanding items it registered, cleared \
+                    or reaffirmed — each with operation, actor, timestamp, trace id, justification and the old and \
+                    new value.
                     Use this tool when reviewing who did what during a reconciliation; use \
                     getReconciliationReport instead for the balance summary.
                     Preconditions: the reconciliation must exist.
-                    Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
+                    Required inputs: reconciliationId (UUID) as a path parameter; page (default 0) and size \
+                    (default 50, at most 200) are optional; there is no request body.
                     Emits an ACCOUNTING_RECONCILIATION_AUDIT audit event; no state changes.
                     Returns 404 RECONCILIATION_NOT_FOUND when the id is unknown.
                     """,
             tags = {"Bank Reconciliation"})
     @ApiResponse(
             responseCode = "200",
-            description = "Audit trail generated",
+            description = "Audit trail page read",
             content = @Content(schema = @Schema(implementation = ReconciliationAuditResponse.class)))
     @ApiResponse(
             responseCode = "403",
@@ -718,7 +726,14 @@ public class BankReconciliationController {
             description = "Reconciliation not found (RECONCILIATION_NOT_FOUND)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReconciliationAuditResponse> getReconciliationAudit(
-            @Parameter(description = "Reconciliation id", required = true) @PathVariable UUID reconciliationId) {
-        return ResponseEntity.ok(bankReconciliationService.audit(reconciliationId));
+            @Parameter(description = "Reconciliation id", required = true) @PathVariable UUID reconciliationId,
+            @Parameter(description = "Zero-based page index", example = "0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size (at most 200)", example = "50") @RequestParam(defaultValue = "50")
+                    int size) {
+        Pageable pageable = PageRequest.of(
+                Math.max(page, 0),
+                Math.clamp(size, 1, MAX_AUDIT_PAGE),
+                Sort.by(Sort.Direction.ASC, "timestamp").and(Sort.by(Sort.Direction.ASC, "auditLogId")));
+        return ResponseEntity.ok(bankReconciliationService.audit(reconciliationId, pageable));
     }
 }

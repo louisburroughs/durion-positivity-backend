@@ -32,7 +32,10 @@ public interface BankReconciliationService {
     @NonNull
     ReconciliationReportResponse report(@NonNull UUID reconciliationId);
 
-    /** Audit trail of a reconciliation's actions (derived until S5 stores it). */
+    /**
+     * The stored audit trail (§4.9, G3; S5, #2304): the {@code AccountingAuditLog} rows of the reconciliation, its
+     * matches and the outstanding items it registered, cleared or reaffirmed, a page at a time.
+     */
     @NonNull
-    ReconciliationAuditResponse audit(@NonNull UUID reconciliationId);
+    ReconciliationAuditResponse audit(@NonNull UUID reconciliationId, @NonNull Pageable pageable);
 }

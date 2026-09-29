@@ -9,7 +9,6 @@ import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures
 import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures.snapshot;
 import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures.statement;
 import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures.terms;
-import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures.usd;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,13 +29,14 @@ import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
 import com.positivity.accounting.internal.bankrec.intake.BankRecException;
-import com.positivity.accounting.internal.bankrec.repository.BankReconciliationAdjustmentRepository;
-import com.positivity.accounting.internal.bankrec.repository.BankReconciliationGlMatchRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankReconciliationMatchRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankReconciliationOutstandingItemRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
+import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -73,10 +73,13 @@ class BankReconciliationServiceTest {
     private BankStatementRepository statementRepository;
 
     @Mock
-    private BankReconciliationGlMatchRepository glMatchRepository;
+    private BankReconciliationMatchRepository matchRepository;
 
     @Mock
-    private BankReconciliationAdjustmentRepository adjustmentRepository;
+    private BankReconciliationOutstandingItemRepository itemRepository;
+
+    @Mock
+    private AccountingAuditLogRepository auditLogRepository;
 
     @Mock
     private GLAccountRepository glAccountRepository;
@@ -95,16 +98,15 @@ class BankReconciliationServiceTest {
     @BeforeEach
     void setUp() {
         service = new BankReconciliationServiceImpl(
-                clock,
                 reconciliationRepository,
                 statementRepository,
-                glMatchRepository,
-                adjustmentRepository,
+                matchRepository,
+                itemRepository,
+                auditLogRepository,
                 new BankCashAccounts(glAccountRepository, clock),
                 calculator,
                 new ReconciliationSupport(reconciliationRepository, calculator, clock),
                 auditRecorder,
-                usd(),
                 reviewService);
         lenient().when(calculator.compute(any())).thenReturn(snapshot(terms("0", "0")));
     }

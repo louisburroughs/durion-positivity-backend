@@ -2,7 +2,6 @@ package com.positivity.accounting.internal.bankrec.service;
 
 import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures.RECON_ID;
 import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures.reconciliation;
-import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures.usd;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -12,14 +11,14 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAuditResponse;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
-import com.positivity.accounting.internal.bankrec.entity.BankReconciliationAdjustment;
-import com.positivity.accounting.internal.bankrec.entity.BankReconciliationGlMatch;
-import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
+import com.positivity.accounting.internal.bankrec.entity.BankReconciliationMatch;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
-import com.positivity.accounting.internal.bankrec.repository.BankReconciliationAdjustmentRepository;
-import com.positivity.accounting.internal.bankrec.repository.BankReconciliationGlMatchRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankReconciliationMatchRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankReconciliationOutstandingItemRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
+import com.positivity.accounting.internal.entity.AccountingAuditLog;
+import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -41,7 +40,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 /**
  * The read views of {@link BankReconciliationServiceImpl} that need no ledger: the list (stored terms, a
- * specification over every filter) and the derived audit trail (§6.1; stories F2 #965, S4 #2303).
+ * specification over every filter) and the stored audit trail (§4.9, §6.1; stories S4 #2303, S5 #2304).
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("BankReconciliationServiceImpl — list and audit views")
@@ -56,10 +55,13 @@ class BankReconciliationGuardsAndViewsTest {
     private BankStatementRepository statementRepository;
 
     @Mock
-    private BankReconciliationGlMatchRepository glMatchRepository;
+    private BankReconciliationMatchRepository matchRepository;
 
     @Mock
-    private BankReconciliationAdjustmentRepository adjustmentRepository;
+    private BankReconciliationOutstandingItemRepository itemRepository;
+
+    @Mock
+    private AccountingAuditLogRepository auditLogRepository;
 
     @Mock
     private GLAccountRepository glAccountRepository;
@@ -78,16 +80,15 @@ class BankReconciliationGuardsAndViewsTest {
     @BeforeEach
     void setUp() {
         service = new BankReconciliationServiceImpl(
-                clock,
                 reconciliationRepository,
                 statementRepository,
-                glMatchRepository,
-                adjustmentRepository,
+                matchRepository,
+                itemRepository,
+                auditLogRepository,
                 new BankCashAccounts(glAccountRepository, clock),
                 calculator,
                 new ReconciliationSupport(reconciliationRepository, calculator, clock),
                 auditRecorder,
-                usd(),
                 reviewService);
     }
 
@@ -114,32 +115,41 @@ class BankReconciliationGuardsAndViewsTest {
     }
 
     @Test
-    @DisplayName("the audit trail lists create, each match group, each adjustment and the finalize in time order")
-    void auditListsTheWholeTrail() {
-        BankReconciliation recon = reconciliation();
-        recon.setCreatedAt(Instant.parse("2026-07-01T08:00:00Z"));
-        recon.setStatus(ReconciliationStatus.FINALIZED);
-        recon.setDifference(BigDecimal.ZERO);
-        recon.setFinalizedAt(Instant.parse("2026-07-01T11:00:00Z"));
-        recon.setFinalizedBy("controller");
-        when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(recon));
-        BankReconciliationAdjustment adjustment = new BankReconciliationAdjustment();
-        adjustment.setAmount(new BigDecimal("-12.0000"));
-        adjustment.setAdjustmentType(BankAdjustmentType.BANK_FEE);
-        adjustment.setJournalEntryId(UUID.randomUUID());
-        adjustment.setCreatedAt(Instant.parse("2026-07-01T10:00:00Z"));
-        when(adjustmentRepository.findByReconciliation_ReconciliationId(RECON_ID))
-                .thenReturn(List.of(adjustment));
-        BankReconciliationGlMatch match = new BankReconciliationGlMatch();
+    @DisplayName("the audit trail pages the stored rows of the reconciliation, its matches and its items (G3)")
+    void auditReadsTheStoredTrail() {
+        when(reconciliationRepository.findById(RECON_ID)).thenReturn(Optional.of(reconciliation()));
+        BankReconciliationMatch match = new BankReconciliationMatch();
         match.setMatchId(UUID.randomUUID());
-        match.setGlLineId(UUID.randomUUID());
-        match.setCreatedAt(Instant.parse("2026-07-01T09:00:00Z"));
-        when(glMatchRepository.findByReconciliationIdAndActiveTrue(RECON_ID)).thenReturn(List.of(match));
+        when(matchRepository.findByReconciliationIdOrderByCreatedAtAsc(RECON_ID))
+                .thenReturn(List.of(match));
+        when(itemRepository.findIdsTouchedBy(RECON_ID)).thenReturn(List.of());
+        AccountingAuditLog row = new AccountingAuditLog();
+        row.setAuditLogId(UUID.randomUUID());
+        row.setEntityType(BankRecAuditRecorder.RECONCILIATION_MATCH);
+        row.setEntityId(match.getMatchId());
+        row.setOperation(BankRecAuditRecorder.RECONCILIATION_UNMATCH);
+        row.setUserId("preparer");
+        row.setJustification("Wrong deposit matched");
+        row.setTraceId("trace-1");
+        Pageable page = PageRequest.of(0, 50);
+        when(auditLogRepository.findReconciliationTrail(
+                        eq(BankRecAuditRecorder.BANK_RECONCILIATION),
+                        eq(RECON_ID),
+                        eq(BankRecAuditRecorder.RECONCILIATION_MATCH),
+                        eq(List.of(match.getMatchId())),
+                        eq(BankRecAuditRecorder.OUTSTANDING_ITEM),
+                        eq(List.of(new UUID(0L, 0L))),
+                        eq(page)))
+                .thenReturn(new PageImpl<>(List.of(row), page, 1));
 
-        ReconciliationAuditResponse audit = service.audit(RECON_ID);
+        ReconciliationAuditResponse audit = service.audit(RECON_ID, page);
 
-        assertThat(audit.getEntries())
-                .extracting(ReconciliationAuditResponse.Entry::getAction)
-                .containsExactly("IMPORT", "MATCH", "ADJUSTMENT", "FINALIZE");
+        assertThat(audit.getTotalElements()).isEqualTo(1);
+        assertThat(audit.getEntries()).singleElement().satisfies(e -> {
+            assertThat(e.getOperation()).isEqualTo("RECONCILIATION_UNMATCH");
+            assertThat(e.getUserId()).isEqualTo("preparer");
+            assertThat(e.getTraceId()).isEqualTo("trace-1");
+            assertThat(e.getJustification()).isEqualTo("Wrong deposit matched");
+        });
     }
 }
