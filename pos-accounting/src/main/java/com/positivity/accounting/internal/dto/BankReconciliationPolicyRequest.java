@@ -73,7 +73,7 @@ public class BankReconciliationPolicyRequest {
     private boolean otherApprovalThresholdPresent;
 
     @NotBlank(message = "justification is required")
-    @Size(max = 1000, message = "justification must not exceed 1000 characters")
+    @Size(min = 10, max = 1000, message = "justification must be between 10 and 1000 characters")
     @Schema(
             description = "Why the policy changes; at least 10 characters (400 JUSTIFICATION_REQUIRED otherwise);"
                     + " recorded on every BANK_REC_POLICY_SET audit row",

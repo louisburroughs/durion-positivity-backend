@@ -217,7 +217,8 @@ class BankReconciliationCloseReadinessTest {
     }
 
     private void coverage(LocalDate frontier) {
-        when(statements.findLatestEndDateByGlAccountIdIn(any(), eq(BankStatementStatus.COMMITTED)))
+        when(statements.findLatestEndDateByGlAccountIdInStartingOnOrBefore(
+                        any(), eq(BankStatementStatus.COMMITTED), eq(END)))
                 .thenReturn(frontier == null ? List.of() : List.of(new AccountDate(CASH, frontier)));
     }
 
@@ -506,6 +507,21 @@ class BankReconciliationCloseReadinessTest {
 
     // ---- tenant-wide ------------------------------------------------------------------------------------
 
+    @Test
+    @DisplayName("[M] a FINALIZED window starting after the period is no frontier: the period stays unreconciled")
+    void laterWindowDoesNotReconcileAnEarlierPeriod() {
+        noBaseline();
+        coverage(END);
+        finalized(recon(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), "500.00"));
+
+        CloseReadinessResponse readiness = service.evaluate(period);
+
+        CloseReadinessAccount cash = cash(readiness);
+        assertThat(cash.reconciledFrontier()).isNull();
+        assertThat(codes(cash.checks())).containsExactly(ReadinessCheckCode.RECONCILIATION_APPROVED);
+        assertThat(readiness.ready()).isFalse();
+    }
+
     @Nested
     @DisplayName("CLEARING_BALANCE_AGING (AC11)")
     class ClearingBalanceAging {
@@ -564,6 +580,17 @@ class BankReconciliationCloseReadinessTest {
             when(ledger.balanceAsOf(CLEARING, END.minusDays(90))).thenReturn(new BigDecimal("-45.67"));
 
             assertThat(service.evaluate(period).checks()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("[M] a REVERSED OTHER adjustment nominates no clearing account")
+        void reversedAdjustmentNominatesNothing() {
+            other.setStatus(AdjustmentStatus.REVERSED);
+            when(ledger.balanceAsOf(CLEARING, END)).thenReturn(new BigDecimal("-45.67"));
+            when(ledger.balanceAsOf(CLEARING, END.minusDays(90))).thenReturn(new BigDecimal("-45.67"));
+
+            assertThat(service.evaluate(period).checks()).isEmpty();
+            verify(ledgerEntries, never()).accountsOf(any());
         }
 
         @Test

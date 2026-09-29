@@ -85,9 +85,10 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>the <b>baseline that applies at {@code E}</b> is the start of the latest COMMITTED acknowledged statement
  *       starting on/before {@code E} (§3.1) — the lower bound of the {@code UNEXPLAINED_*} checks, which are not
  *       evaluated without one;
- *   <li>{@code coverageFrontier} is the latest COMMITTED statement end, {@code reconciledFrontier} the end of the
- *       contiguous FINALIZED chain from that baseline (§4.1); the <b>covering</b> reconciliation is the last chain
- *       member starting on/before {@code E}.
+ *   <li>{@code coverageFrontier} is the latest end of a COMMITTED statement starting on/before {@code E}, {@code
+ *       reconciledFrontier} the end of the contiguous FINALIZED chain from that baseline over the windows starting
+ *       on/before {@code E} (§4.1) — a statement or window that starts after the period covers none of it; the
+ *       <b>covering</b> reconciliation is the chain's last member.
  * </ul>
  *
  * <p>Outstanding-item age is measured at the earlier of {@code E} and today (the shared {@link Clock}, ADR-0024),
@@ -165,8 +166,9 @@ public class BankReconciliationCloseReadiness {
         List<BankCashAccount> inScope = bankCashAccounts.listInScope(effective.closeScope());
         Map<UUID, LocalDate> coverage = new HashMap<>();
         if (!inScope.isEmpty()) {
-            for (AccountDate row : statements.findLatestEndDateByGlAccountIdIn(
-                    inScope.stream().map(BankCashAccount::glAccountId).toList(), BankStatementStatus.COMMITTED)) {
+            // The coverage that applies at the period end: a statement starting after it covers none of it.
+            for (AccountDate row : statements.findLatestEndDateByGlAccountIdInStartingOnOrBefore(
+                    inScope.stream().map(BankCashAccount::glAccountId).toList(), BankStatementStatus.COMMITTED, end)) {
                 coverage.put(row.glAccountId(), row.date());
             }
         }
@@ -292,15 +294,19 @@ public class BankReconciliationCloseReadiness {
                         id, BankStatementStatus.COMMITTED, end)
                 .map(BankStatement::getStartDate)
                 .orElse(null);
+        // Only the windows starting on or before the period end can cover it: a FINALIZED window that starts
+        // later neither reaches the period nor is its covering reconciliation, so its end is no frontier.
         List<BankReconciliation> chain = ReconciliationChain.members(
-                reconciliations.findByGlAccount_GlAccountIdAndStatusOrderByStatementStartDateAsc(
-                        id, ReconciliationStatus.FINALIZED),
+                reconciliations
+                        .findByGlAccount_GlAccountIdAndStatusOrderByStatementStartDateAsc(
+                                id, ReconciliationStatus.FINALIZED)
+                        .stream()
+                        .filter(r -> r.getStatementStartDate() != null
+                                && !r.getStatementStartDate().isAfter(end))
+                        .toList(),
                 baselineDate);
         LocalDate reconciledFrontier = chain.isEmpty() ? null : chain.getLast().getStatementEndDate();
-        BankReconciliation covering = chain.stream()
-                .filter(r -> !r.getStatementStartDate().isAfter(end))
-                .reduce((first, second) -> second)
-                .orElse(null);
+        BankReconciliation covering = chain.isEmpty() ? null : chain.getLast();
         if (covering != null && lockCovering) {
             covering = reconciliations.lockById(covering.getReconciliationId()).orElse(covering);
         }
@@ -588,10 +594,12 @@ public class BankReconciliationCloseReadiness {
      * §5.3 {@code CLEARING_BALANCE_AGING} (D2, §4.7): each distinct counter account a POSTED {@code OTHER}
      * adjustment's entry posted to — read from the entries, never from the mapping — whose as-of balance is
      * outside one minor unit of zero both at the period end and {@code clearing.aging-warning-days} before it.
-     * Not evaluated when no {@code OTHER} adjustment was ever posted; never blocks.
+     * A REVERSED adjustment nominates nothing: its entry and the reversal net to zero on the counter account.
+     * Not evaluated when no POSTED {@code OTHER} adjustment exists; never blocks.
      */
     private List<CloseReadinessCheck> clearingBalanceAging(LocalDate end) {
         List<BankReconciliationAdjustment> others = adjustments.findAllOfType(BankAdjustmentType.OTHER).stream()
+                .filter(a -> a.getStatus() == AdjustmentStatus.POSTED)
                 .filter(a -> a.getJournalEntryId() != null)
                 .toList();
         if (others.isEmpty()) {
@@ -631,7 +639,6 @@ public class BankReconciliationCloseReadiness {
                         return;
                     }
                     List<UUID> aged = entry.getValue().stream()
-                            .filter(a -> a.getStatus() == AdjustmentStatus.POSTED)
                             .filter(a -> a.getTransactionDate() != null
                                     && !a.getTransactionDate().isAfter(agingDate))
                             .map(BankReconciliationAdjustment::getAdjustmentId)

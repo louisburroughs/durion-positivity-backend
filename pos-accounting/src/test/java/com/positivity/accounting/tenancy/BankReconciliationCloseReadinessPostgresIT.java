@@ -347,6 +347,22 @@ class BankReconciliationCloseReadinessPostgresIT extends PostgresTenancyTestBase
     }
 
     @Test
+    @DisplayName("[M] an account whose first statement and reconciliation are dated after the period covers none of it")
+    void laterWindowDoesNotCoverAnEarlierPeriod() {
+        UUID cash = bankAccount();
+        reconciledMonth(cash, "2018-05");
+
+        CloseReadinessResponse readiness = readiness("2018-04");
+
+        CloseReadinessAccount account = account(readiness, cash);
+        assertThat(account.coverageFrontier()).isNull();
+        assertThat(account.reconciledFrontier()).isNull();
+        assertThat(codes(account.checks())).containsExactly(ReadinessCheckCode.STATEMENT_COVERAGE);
+        assertThat(readiness.ready()).isFalse();
+        assertThat(account(readiness("2018-05"), cash).checks()).isEmpty();
+    }
+
+    @Test
     @DisplayName("[M] UNEXPLAINED_BANK_TRANSACTIONS counts settlementState = POSTED rows only; PENDING is left out")
     void pendingBankRowsAreNotUnexplained() {
         UUID cash = bankAccount();

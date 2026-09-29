@@ -21,7 +21,7 @@ import lombok.NoArgsConstructor;
 public class BankReconciliationExceptionRequest {
 
     @NotBlank(message = "justification is required")
-    @Size(max = 1000, message = "justification must not exceed 1000 characters")
+    @Size(min = 10, max = 1000, message = "justification must be between 10 and 1000 characters")
     @Schema(
             description = "Why the period closes without bank reconciliation readiness; at least 10 characters"
                     + " (400 JUSTIFICATION_REQUIRED otherwise); recorded with the readiness snapshot in the"

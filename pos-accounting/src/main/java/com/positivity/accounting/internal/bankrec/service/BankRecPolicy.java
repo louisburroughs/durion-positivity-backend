@@ -5,8 +5,10 @@ import com.positivity.accounting.internal.bankrec.enums.BankRecCloseScope;
 import com.positivity.accounting.internal.entity.AccountingConfiguration;
 import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,14 +63,22 @@ public class BankRecPolicy {
             boolean allowSelfApproval,
             @Nullable BigDecimal otherApprovalThreshold) {}
 
-    /** The tenant's effective policy (§5.2). */
+    /**
+     * The tenant's effective policy (§5.2), read as one snapshot: the five keys come from a single query, so a
+     * concurrent PUT — which replaces them together — is seen whole or not at all, never as a mix of old and new
+     * values.
+     */
     public @NonNull Settings settings() {
+        Map<String, String> stored = new HashMap<>();
+        for (AccountingConfiguration row : configuration.findByConfigKeyIn(KEYS)) {
+            stored.put(row.getConfigKey(), row.getConfigValue());
+        }
         return new Settings(
-                closePolicy(),
-                closeScope(),
-                coverageLagDays(),
-                allowSelfApproval(),
-                otherApprovalThreshold().orElse(null));
+                parseClosePolicy(stored.get(CLOSE_POLICY)),
+                parseCloseScope(stored.get(CLOSE_SCOPE)),
+                parseLagDays(stored.get(CLOSE_COVERAGE_LAG_DAYS)),
+                parseAllowSelfApproval(stored.get(ALLOW_SELF_APPROVAL)),
+                parseThreshold(stored.get(OTHER_APPROVAL_THRESHOLD)).orElse(null));
     }
 
     /** The tenant's {@code BANK_REC_CLOSE_POLICY} (§5.2, D4). */
