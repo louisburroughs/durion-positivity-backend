@@ -60,4 +60,22 @@ class BankStatementRequestHashTest {
         BankStatementCreateRequest literal = request("Deposit", "null", null, "S1");
         assertThat(BankStatementServiceImpl.hash(absent)).isNotEqualTo(BankStatementServiceImpl.hash(literal));
     }
+
+    @Test
+    void theStartReconciliationFlagIsPartOfThePayloadInBothDirections() {
+        BankStatementCreateRequest off = request("Deposit", "R1", null, "S1");
+        off.setStartReconciliation(false);
+        BankStatementCreateRequest on = request("Deposit", "R1", null, "S1");
+        on.setStartReconciliation(true);
+        assertThat(BankStatementServiceImpl.hash(off)).isNotEqualTo(BankStatementServiceImpl.hash(on));
+        assertThat(BankStatementServiceImpl.hash(on)).isNotEqualTo(BankStatementServiceImpl.hash(off));
+    }
+
+    @Test
+    void anAbsentStartReconciliationFlagMeansFalse() {
+        BankStatementCreateRequest absent = request("Deposit", "R1", null, "S1");
+        BankStatementCreateRequest off = request("Deposit", "R1", null, "S1");
+        off.setStartReconciliation(false);
+        assertThat(BankStatementServiceImpl.hash(absent)).isEqualTo(BankStatementServiceImpl.hash(off));
+    }
 }

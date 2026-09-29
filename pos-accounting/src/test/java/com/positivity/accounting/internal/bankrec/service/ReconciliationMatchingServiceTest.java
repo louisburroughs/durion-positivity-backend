@@ -246,6 +246,37 @@ class ReconciliationMatchingServiceTest {
     }
 
     @Test
+    @DisplayName("a replayed requestId with another justification is IDEMPOTENCY_CONFLICT; padding is not a change")
+    void replayComparesTheJustification() {
+        UUID requestId = UUID.randomUUID();
+        BankReconciliationMatch original = new BankReconciliationMatch();
+        original.setReconciliationId(RECON_ID);
+        original.setRequestId(requestId);
+        original.setJustification("Batch deposit of two receipts");
+        when(matches.findByRequestId(requestId)).thenReturn(Optional.of(original));
+        ReconciliationMatchResponse served = new ReconciliationMatchResponse();
+        served.setBankTransactionIds(List.of(UUID.randomUUID()));
+        served.setGlLineIds(List.of(UUID.randomUUID(), UUID.randomUUID()));
+        when(responses.of(original)).thenReturn(served);
+
+        ReconciliationMatchCreateRequest same =
+                request(served.getBankTransactionIds(), served.getGlLineIds(), "  Batch deposit of two receipts ");
+        same.setRequestId(requestId);
+        assertThat(service.createMatch(RECON_ID, same).isReplayed()).isTrue();
+
+        for (String justification : java.util.Arrays.asList("Another reason for the match", null)) {
+            ReconciliationMatchCreateRequest other =
+                    request(served.getBankTransactionIds(), served.getGlLineIds(), justification);
+            other.setRequestId(requestId);
+            assertThatThrownBy(() -> service.createMatch(RECON_ID, other))
+                    .as("justification %s", justification)
+                    .isInstanceOfSatisfying(
+                            BankRecException.class,
+                            e -> assertThat(e.code()).isEqualTo(BankRecErrorCode.IDEMPOTENCY_CONFLICT));
+        }
+    }
+
+    @Test
     @DisplayName("unmatch needs a reason and an ACCEPTED match; the header is kept UNMATCHED (criterion 8)")
     void unmatchRules() {
         UUID matchId = UUID.randomUUID();

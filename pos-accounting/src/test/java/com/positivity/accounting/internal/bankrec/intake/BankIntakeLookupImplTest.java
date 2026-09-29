@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -28,6 +29,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -172,6 +175,39 @@ class BankIntakeLookupImplTest {
     }
 
     @Test
+    void collidingFingerprintsAreQueriedInBoundedChunksAndMerged() {
+        // A 10 MiB file can carry far more fingerprints than Postgres accepts as bind parameters.
+        List<String> fingerprints = java.util.stream.IntStream.range(
+                        0, 2 * BankIntakeLookupImpl.FINGERPRINT_QUERY_CHUNK + 5)
+                .mapToObj(i -> "fp-" + i)
+                .toList();
+        BankTransaction first = transaction("01980000-0000-7000-8000-000000000011", "fp-3", "2026-12-01T00:00:00Z");
+        BankTransaction last = transaction(
+                "01980000-0000-7000-8000-000000000012", "fp-" + (fingerprints.size() - 1), "2026-12-02T00:00:00Z");
+        List<java.util.Collection<String>> chunks = new java.util.ArrayList<>();
+        when(transactions.findByGlAccountIdAndFingerprintInAndStatusNotIn(
+                        eq(ACCOUNT), anyCollection(), anyCollection()))
+                .thenAnswer(inv -> {
+                    java.util.Collection<String> chunk = List.copyOf(inv.<java.util.Collection<String>>getArgument(1));
+                    chunks.add(chunk);
+                    return java.util.stream.Stream.of(first, last)
+                            .filter(t -> chunk.contains(t.getFingerprint()))
+                            .toList();
+                });
+
+        Map<String, UUID> colliding = lookup.collidingFingerprints(ACCOUNT, fingerprints);
+
+        assertThat(chunks)
+                .hasSize(3)
+                .allSatisfy(c -> assertThat(c).hasSizeLessThanOrEqualTo(BankIntakeLookupImpl.FINGERPRINT_QUERY_CHUNK));
+        assertThat(chunks.stream().mapToInt(java.util.Collection::size).sum()).isEqualTo(fingerprints.size());
+        assertThat(colliding)
+                .containsOnly(
+                        Map.entry("fp-3", first.getBankTransactionId()),
+                        Map.entry(last.getFingerprint(), last.getBankTransactionId()));
+    }
+
+    @Test
     void aDefaultMappingIsSavedAndAuditedOnlyOnAnExistingProfile() {
         when(profiles.findById(ACCOUNT)).thenReturn(Optional.empty());
         assertThat(lookup.saveDefaultColumnMapping(ACCOUNT, Map.of("date", 0), "preparer"))
@@ -202,5 +238,29 @@ class BankIntakeLookupImplTest {
         t.setFingerprint(fingerprint);
         t.setFirstObservedAt(Instant.parse(firstObserved));
         return t;
+    }
+
+    @Test
+    void collidingFingerprintsAreLookedUpInBoundedChunksAndMergedAcrossThem() {
+        List<String> fingerprints = new ArrayList<>();
+        for (int i = 0; i < BankIntakeLookupImpl.FINGERPRINT_QUERY_CHUNK * 2 + 1; i++) {
+            fingerprints.add("fp-" + i);
+        }
+        String last = fingerprints.getLast();
+        BankTransaction later = transaction("01980000-0000-7000-8000-000000000002", last, "2026-12-02T00:00:00Z");
+        BankTransaction earlier = transaction("01980000-0000-7000-8000-000000000003", last, "2026-12-01T00:00:00Z");
+        when(transactions.findByGlAccountIdAndFingerprintInAndStatusNotIn(
+                        eq(ACCOUNT), anyCollection(), anyCollection()))
+                .thenAnswer(inv -> {
+                    Collection<String> chunk = inv.getArgument(1);
+                    assertThat(chunk).hasSizeLessThanOrEqualTo(BankIntakeLookupImpl.FINGERPRINT_QUERY_CHUNK);
+                    return chunk.contains(last) ? List.of(later, earlier) : List.of();
+                });
+
+        Map<String, UUID> colliding = lookup.collidingFingerprints(ACCOUNT, fingerprints);
+
+        assertThat(colliding).containsExactly(Map.entry(last, earlier.getBankTransactionId()));
+        verify(transactions, times(3))
+                .findByGlAccountIdAndFingerprintInAndStatusNotIn(eq(ACCOUNT), anyCollection(), anyCollection());
     }
 }

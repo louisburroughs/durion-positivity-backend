@@ -18,6 +18,9 @@ import tools.jackson.databind.ObjectMapper;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
             "spring.profiles.active=dev",
+            // dev has no test profile file; never wait on pos-security-service or pos-event-receiver (AGENTS.md)
+            "pos.security.permission-registration.enabled=false",
+            "pos.events.base-url=http://127.0.0.1:1",
             "spring.jpa.hibernate.ddl-auto=update",
             "spring.datasource.url=jdbc:h2:mem:invoice-openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
             "spring.datasource.driver-class-name=org.h2.Driver",

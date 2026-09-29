@@ -13,10 +13,12 @@ import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
 import com.positivity.accounting.internal.bankrec.service.StatementSupersession;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.StatementHeader;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,6 +35,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class BankIntakeLookupImpl implements BankIntakeLookup {
+
+    /**
+     * Fingerprints per collision query: a 10 MiB file can hold more rows than Postgres accepts bind
+     * parameters (65,535) in one {@code IN} list.
+     */
+    static final int FINGERPRINT_QUERY_CHUNK = 500;
 
     /** Rows that never raise a fingerprint collision at intake (R1, §4.5), as in the intake. */
     private static final Set<BankTransactionStatus> NOT_COLLIDING =
@@ -111,8 +119,16 @@ public class BankIntakeLookupImpl implements BankIntakeLookup {
         if (fingerprints.isEmpty()) {
             return earliest;
         }
-        List<BankTransaction> colliding = transactions.findByGlAccountIdAndFingerprintInAndStatusNotIn(
-                glAccountId, Set.copyOf(fingerprints), NOT_COLLIDING);
+        // A file may carry far more fingerprints than one IN list should hold (Postgres binds at most
+        // 65,535 parameters), so the lookup runs in bounded chunks and the earliest collision per
+        // fingerprint is merged across them.
+        List<String> distinct = List.copyOf(new LinkedHashSet<>(fingerprints));
+        List<BankTransaction> colliding = new ArrayList<>();
+        for (int from = 0; from < distinct.size(); from += FINGERPRINT_QUERY_CHUNK) {
+            List<String> chunk = distinct.subList(from, Math.min(from + FINGERPRINT_QUERY_CHUNK, distinct.size()));
+            colliding.addAll(transactions.findByGlAccountIdAndFingerprintInAndStatusNotIn(
+                    glAccountId, Set.copyOf(chunk), NOT_COLLIDING));
+        }
         colliding.stream()
                 .filter(t -> supersededStatementId == null || !supersededStatementId.equals(t.getStatementId()))
                 .sorted(Comparator.comparing(
