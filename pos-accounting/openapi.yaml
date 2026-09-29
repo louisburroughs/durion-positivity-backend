@@ -1450,11 +1450,11 @@ paths:
     post:
       description: 'Commits a validated import in one transaction: its rows become bank transactions of one statement (one per split segment) through the same intake as a manual statement, the gap acknowledgement moves the account''s reconciliation baseline, and the accounting.bankstatement.committed fact is queued.
 
-        Use this tool once the preview ties and every rejected or out-of-window row is corrected or skipped; do not use it to start a reconciliation, which is created from the statement.
+        Use this tool once the preview ties and every rejected or out-of-window row is corrected or skipped; set startReconciliation to start the reconciliation of the committed statement (the first segment''s) in the same transaction instead of calling createReconciliation after.
 
         Preconditions: status VALIDATED; no REJECTED rows; OUT_OF_WINDOW rows skipped; opening + activity equal to closing within one minor unit; POSSIBLE_DUPLICATE rows either decided in duplicateDecisions or committed as possible duplicates for later review.
 
-        Required inputs: importId in the path; optional duplicateDecisions [{rowNumber, decision}].
+        Required inputs: importId in the path; optional duplicateDecisions [{rowNumber, decision}] and startReconciliation (its id is returned as reconciliationId).
 
         Emits an ACCOUNTING_BANK_IMPORT_COMMIT event; a second commit returns the same result.
 
@@ -1973,7 +1973,7 @@ paths:
 
         Preconditions: the statement must continue the account''s previous statement (opening balance equals its closing balance, start date the day after its end) unless a gapAcknowledgement of at least 10 characters is given, which is required for the account''s first statement, refused on a contiguous one and moves the account''s reconciliation baseline.
 
-        Required inputs: glAccountId, a UUIDv7 requestId, statement {startDate, endDate, openingBalance, closingBalance} and transactions[] each with a date, a description and either signedAmount or one of debit/credit.
+        Required inputs: glAccountId, a UUIDv7 requestId, statement {startDate, endDate, openingBalance, closingBalance} and transactions[] each with a date, a description and either signedAmount or one of debit/credit; startReconciliation optionally starts the statement''s reconciliation in the same transaction (listed under reconciliations).
 
         Emits an ACCOUNTING_BANK_STATEMENT_CREATE event and queues the accounting.bankstatement.committed fact; a replay of the same requestId and payload returns the original statement with replayed=true.
 
@@ -7184,7 +7184,7 @@ paths:
     post:
       description: 'Starts an IN_PROGRESS reconciliation of a COMMITTED bank statement: the window, opening and closing balances are copied from the statement, and the explicit equation (E3), the opening terms, the account baseline and the unexplained counts are computed live from the ledger.
 
-        Use this tool to begin reconciling a statement committed through bank-statements or a file import; do not use importReconciliation, the retiring CSV path, or createBankStatement, which commits the statement itself.
+        Use this tool to begin reconciling a statement committed through bank-statements or a file import; do not use createBankStatement or the bank-import commit, which commit the statement itself.
 
         Preconditions: the account must be a reconcilable BANK_CASH account; the statement must be COMMITTED on that account and have no IN_PROGRESS reconciliation and no FINALIZED one without a successor. An interim reconciliation to a date is a manual-entry statement in phase 1.
 
@@ -11583,6 +11583,10 @@ components:
           items:
             $ref: '#/components/schemas/BankImportDuplicateDecision'
           type: array
+        startReconciliation:
+          description: Start an IN_PROGRESS reconciliation of the committed statement (the first segment's when the file was split); its id is returned as reconciliationId
+          example: true
+          type: boolean
         version:
           description: The import version the commit was made against
           example: 3
@@ -11607,7 +11611,7 @@ components:
           format: int32
           type: integer
         reconciliationId:
-          description: The reconciliation started with the commit; null until story S4 wires it
+          description: The reconciliation started with the commit (startReconciliation); null when none was asked for
           format: uuid
           type: string
         statementId:
@@ -12005,7 +12009,7 @@ components:
         preview:
           $ref: '#/components/schemas/BankImportPreview'
         reconciliationId:
-          description: The reconciliation started with the commit (story S4)
+          description: The reconciliation started with the commit (startReconciliation), if any
           format: uuid
           type: string
         rejectedCount:
@@ -12746,6 +12750,10 @@ components:
           description: Caller-generated UUIDv7; a replay with the same payload returns the original statement
           format: uuid
           type: string
+        startReconciliation:
+          description: Start an IN_PROGRESS reconciliation of the committed statement in the same transaction; it appears in reconciliations (story S4)
+          example: true
+          type: boolean
         statement:
           $ref: '#/components/schemas/BankStatementHeaderRequest'
         transactions:
