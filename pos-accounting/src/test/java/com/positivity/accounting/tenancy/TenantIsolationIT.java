@@ -16,10 +16,13 @@ import com.positivity.accounting.internal.bankfeed.file.enums.BankImportStatus;
 import com.positivity.accounting.internal.bankfeed.file.repository.BankImportFileRepository;
 import com.positivity.accounting.internal.bankfeed.file.repository.BankImportRepository;
 import com.positivity.accounting.internal.bankfeed.file.repository.BankImportRowRepository;
+import com.positivity.accounting.internal.bankrec.dto.CloseReadinessResponse;
 import com.positivity.accounting.internal.bankrec.entity.BankAccountProfile;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
 import com.positivity.accounting.internal.bankrec.entity.BankStatement;
 import com.positivity.accounting.internal.bankrec.entity.BankTransaction;
+import com.positivity.accounting.internal.bankrec.enums.BankRecClosePolicy;
+import com.positivity.accounting.internal.bankrec.enums.BankRecCloseScope;
 import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
 import com.positivity.accounting.internal.bankrec.enums.BankTransactionStatus;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
@@ -29,9 +32,13 @@ import com.positivity.accounting.internal.bankrec.repository.BankAccountProfileR
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
+import com.positivity.accounting.internal.dto.BankReconciliationPolicyRequest;
+import com.positivity.accounting.internal.dto.BankReconciliationPolicyResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.service.AccountingConfigurationService;
+import com.positivity.accounting.internal.service.AccountingPeriodService;
 import com.positivity.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -93,6 +100,12 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Autowired
     private AccountingAuditLogRepository auditLogs;
+
+    @Autowired
+    private AccountingConfigurationService configurationService;
+
+    @Autowired
+    private AccountingPeriodService periodService;
 
     /** Seeded {@code 1000 Cash} of the default tenant, which is TENANT_A. */
     private static final UUID CASH_ACCOUNT_ID = UUID.fromString("5eed0acc-0000-4000-8000-000000001000");
@@ -312,6 +325,52 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                 .effectiveDate(Instant.now())
                 .active(true)
                 .build();
+    }
+
+    /**
+     * The bank reconciliation close policy and close readiness (story S6, #2305; ADR-0062 §12): a policy one tenant
+     * sets is not the other's, and readiness lists only the reading tenant's bank accounts.
+     */
+    @Test
+    void bankReconciliationPolicyAndReadinessAreTenantScoped() {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        BankReconciliationPolicyRequest request = new BankReconciliationPolicyRequest();
+        request.setClosePolicy(BankRecClosePolicy.ADVISORY);
+        request.setCloseScope(BankRecCloseScope.ALL_RECONCILABLE);
+        request.setCloseCoverageLagDays(7);
+        request.setAllowSelfApproval(true);
+        request.setOtherApprovalThreshold(new BigDecimal("100"));
+        request.setJustification("Tenant isolation of the bank reconciliation policy");
+        try {
+            asTenant(TENANT_A, () -> tx.execute(status -> configurationService.setBankReconciliationPolicy(request)));
+
+            asTenant(TENANT_B, () -> {
+                BankReconciliationPolicyResponse other =
+                        tx.execute(status -> configurationService.getBankReconciliationPolicy());
+                assertThat(other.getClosePolicy()).isEqualTo(BankRecClosePolicy.REQUIRED_WITH_EXCEPTION);
+                assertThat(other.getOtherApprovalThreshold()).isNull();
+                assertThat(other.getUpdatedAt()).isNull();
+                CloseReadinessResponse readiness = tx.execute(status -> periodService.getCloseReadiness("2026-08"));
+                assertThat(readiness.policy()).isEqualTo(BankRecClosePolicy.REQUIRED_WITH_EXCEPTION);
+                assertThat(readiness.accounts())
+                        .as("tenant A's seeded 1000 Cash is not in tenant B's readiness")
+                        .noneMatch(a -> a.glAccountId().equals(CASH_ACCOUNT_ID));
+            });
+
+            asTenant(TENANT_A, () -> {
+                CloseReadinessResponse readiness = tx.execute(status -> periodService.getCloseReadiness("2026-08"));
+                assertThat(readiness.policy()).isEqualTo(BankRecClosePolicy.ADVISORY);
+                assertThat(readiness.accounts()).anyMatch(a -> a.glAccountId().equals(CASH_ACCOUNT_ID));
+            });
+        } finally {
+            JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+            owner.update(
+                    "DELETE FROM accounting_configuration WHERE tenant_id = ? AND config_key LIKE 'BANK_REC_%'",
+                    TENANT_A);
+            owner.update(
+                    "DELETE FROM accounting_audit_log WHERE tenant_id = ? AND operation = 'BANK_REC_POLICY_SET'",
+                    TENANT_A);
+        }
     }
 
     @Test

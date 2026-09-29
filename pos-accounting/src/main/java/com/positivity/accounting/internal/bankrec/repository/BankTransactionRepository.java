@@ -110,4 +110,15 @@ public interface BankTransactionRepository
     List<StatementCounts> countByStatementIdIn(
             @Param("ids") @NonNull Collection<UUID> statementIds,
             @Param("flagged") @NonNull BankTransactionStatus flagged);
+
+    /**
+     * Rows that arrived after their window was approved, dated in {@code [from, to]} and still in one of the given
+     * states — close readiness's {@code LATE_BANK_TRANSACTIONS} (SPEC §5.3, D10; story S6, #2305).
+     */
+    @NonNull
+    List<BankTransaction> findByGlAccountIdAndArrivedAfterApprovalTrueAndTransactionDateBetweenAndStatusIn(
+            @NonNull UUID glAccountId,
+            @NonNull LocalDate from,
+            @NonNull LocalDate to,
+            @NonNull Collection<BankTransactionStatus> statuses);
 }

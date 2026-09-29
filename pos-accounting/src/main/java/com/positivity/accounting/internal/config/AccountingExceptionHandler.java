@@ -27,7 +27,9 @@ import com.positivity.accounting.internal.exception.JournalEntryNotFoundExceptio
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
+import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
+import com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException;
 import com.positivity.accounting.internal.exception.PostingRulePublishValidationException;
 import com.positivity.accounting.internal.exception.PostingRuleSetNotFoundException;
 import com.positivity.accounting.internal.exception.ReceivablePaymentNotFoundException;
@@ -50,6 +52,7 @@ import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -306,6 +309,46 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleTaxSnapshotConflict(
             TaxSnapshotConflictException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "TAX_SNAPSHOT_ALREADY_EXISTS", ex.getMessage(), request);
+    }
+
+    /**
+     * A close refused by the bank reconciliation close policy (SPEC-manual-bank-reconciliation §5.2, §5.9; story
+     * S6, #2305): the {@code PERIOD_HAS_DRAFT_ENTRIES} shape — one {@code fieldErrors[unreconciledGlAccountIds]}
+     * entry per blocked account whose message is {@code "<glAccountId> <accountCode>: <check codes>"} — plus
+     * {@code fieldErrors[bankReconciliationException]} when the policy refused an exception.
+     */
+    @ExceptionHandler(PeriodBankReconciliationIncompleteException.class)
+    public ResponseEntity<ApiError> handlePeriodBankReconciliationIncomplete(
+            PeriodBankReconciliationIncompleteException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        List<ApiError.FieldError> fieldErrors = new ArrayList<>();
+        for (PeriodBankReconciliationIncompleteException.UnreconciledAccount account : ex.getUnreconciledAccounts()) {
+            fieldErrors.add(new ApiError.FieldError(
+                    "unreconciledGlAccountIds",
+                    account.glAccountId() + " " + account.accountCode() + ": "
+                            + String.join(", ", account.checkCodes())));
+        }
+        if (ex.getRefusedExceptionReason() != null) {
+            fieldErrors.add(new ApiError.FieldError("bankReconciliationException", ex.getRefusedExceptionReason()));
+        }
+        return new ResponseEntity<>(
+                ApiError.withFieldErrors(
+                        "PERIOD_BANK_RECONCILIATION_INCOMPLETE",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors),
+                headers,
+                HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    @ExceptionHandler(PeriodCloseExceptionNotPermittedException.class)
+    public ResponseEntity<ApiError> handlePeriodCloseExceptionNotPermitted(
+            PeriodCloseExceptionNotPermittedException ex, HttpServletRequest request) {
+        return build(HttpStatus.FORBIDDEN, "PERIOD_CLOSE_EXCEPTION_NOT_PERMITTED", ex.getMessage(), request);
     }
 
     @ExceptionHandler(PeriodCloseBlockedException.class)

@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.bankrec.repository;
 
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationAdjustment;
 import com.positivity.accounting.internal.bankrec.enums.AdjustmentStatus;
+import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,4 +36,13 @@ public interface BankReconciliationAdjustmentRepository extends JpaRepository<Ba
 
     Optional<BankReconciliationAdjustment> findByAdjustmentIdAndReconciliation_ReconciliationId(
             @NonNull UUID adjustmentId, @NonNull UUID reconciliationId);
+
+    /**
+     * Every adjustment of one type in the tenant with its reconciliation — close readiness reads the clearing
+     * accounts from the {@code OTHER} adjustments' journal entries (SPEC §5.3 {@code CLEARING_BALANCE_AGING};
+     * story S6, #2305).
+     */
+    @Query("SELECT a FROM BankReconciliationAdjustment a JOIN FETCH a.reconciliation r WHERE a.adjustmentType = :type")
+    @NonNull
+    List<BankReconciliationAdjustment> findAllOfType(@Param("type") @NonNull BankAdjustmentType type);
 }

@@ -53,6 +53,15 @@ class BankrecWallsFixtureTest {
         assertViolation(ArchitectureTest.bankrec_must_not_use_file_io_or_http_clients, "CoreServiceReadingFiles");
     }
 
+    @Test
+    @DisplayName("an ..internal.service.AccountingPeriod* class using a core service fails"
+            + " period_close_reaches_bankrec_only_through_readmodel")
+    void periodCloseReachingPastTheReadModelIsCaught() {
+        assertViolation(
+                ArchitectureTest.period_close_reaches_bankrec_only_through_readmodel,
+                "AccountingPeriodCloseReachingIntoCore");
+    }
+
     private static void assertViolation(ArchRule rule, String offendingClass) {
         assertThatThrownBy(() -> rule.check(fixtures))
                 .isInstanceOf(AssertionError.class)

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.BankRecCloseTestPolicy;
 import com.positivity.accounting.PostgresCommittingTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
@@ -118,6 +119,7 @@ class PeriodEnforcementGateTest extends PostgresCommittingTestBase {
 
     @BeforeEach
     void setUp() {
+        BankRecCloseTestPolicy.advisory(configurationRepository);
         GLAccount account = new GLAccount();
         account.setAccountCode("B2-" + UUID.randomUUID().toString().substring(0, 8));
         account.setAccountName("B2 period gate test account");

@@ -5,6 +5,7 @@ import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.BankRecCloseTestPolicy;
 import com.positivity.accounting.internal.bankrec.dto.AdjustmentReverseRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationAdjustmentResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
@@ -54,6 +55,7 @@ import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.accounting.internal.service.AccountingPeriodService;
@@ -105,6 +107,10 @@ class BankReconciliationApprovalPostgresIT extends PostgresTenancyTestBase {
     private static final String[] ALL = {
         "accounting:reconciliation:view", "accounting:reconciliation:adjust", "accounting:reconciliation:approve"
     };
+
+    /** The seeded 1000 Cash is in close scope; these closes are not about bank reconciliation (#2305). */
+    @Autowired
+    private AccountingConfigurationRepository bankRecCloseConfiguration;
 
     @Autowired
     private GLAccountRepository glAccounts;
@@ -173,6 +179,9 @@ class BankReconciliationApprovalPostgresIT extends PostgresTenancyTestBase {
         SecurityContextHolder.clearContext();
         TenantContext.clear();
         JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        // The re-close test switches the close policy to ADVISORY (story S6, #2305); keep it from leaking.
+        owner.update(
+                "DELETE FROM accounting_configuration WHERE tenant_id = ? AND config_key LIKE 'BANK_REC_%'", TENANT_A);
         for (UUID account : accounts) {
             String recons = "SELECT reconciliation_id FROM bank_reconciliation WHERE gl_account_id = '" + account + "'";
             owner.update("DELETE FROM bank_reconciliation_adjustment WHERE reconciliation_id IN (" + recons + ")");
@@ -423,6 +432,10 @@ class BankReconciliationApprovalPostgresIT extends PostgresTenancyTestBase {
         approve(reconId);
 
         as("accounting:period:close", "accounting:period:reopen", "accounting:period:view");
+        inTx(() -> {
+            BankRecCloseTestPolicy.advisory(bankRecCloseConfiguration);
+            return null;
+        });
         inTx(() -> periods.closePeriod("2019-08"));
         inTx(() -> periods.reopenPeriod("2019-08", "Late supplier refund to book in August"));
         assertThat(status(reconId))

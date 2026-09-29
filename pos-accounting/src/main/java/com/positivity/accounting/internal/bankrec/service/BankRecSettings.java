@@ -10,7 +10,9 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>{@code pos.accounting.bankrec.match.date-window-days} (7) — W, the candidate date window;
  *   <li>{@code pos.accounting.bankrec.duplicate.date-window-days} (3) — the near-duplicate window;
- *   <li>{@code pos.accounting.bankrec.outstanding.aging-warning-days} (90) — when an item is aged.
+ *   <li>{@code pos.accounting.bankrec.outstanding.aging-warning-days} (90) — when an item is aged;
+ *   <li>{@code pos.accounting.bankrec.clearing.aging-warning-days} (90) — how long a clearing account may stay
+ *       away from zero before close readiness warns ({@code CLEARING_BALANCE_AGING}, §5.3; story S6, #2305).
  * </ul>
  */
 @Component
@@ -19,24 +21,30 @@ public class BankRecSettings {
     private final int matchDateWindowDays;
     private final int duplicateDateWindowDays;
     private final int agingWarningDays;
+    private final int clearingAgingWarningDays;
 
     public BankRecSettings(
             @Value("${pos.accounting.bankrec.match.date-window-days:7}") int matchDateWindowDays,
             @Value("${pos.accounting.bankrec.duplicate.date-window-days:3}") int duplicateDateWindowDays,
-            @Value("${pos.accounting.bankrec.outstanding.aging-warning-days:90}") int agingWarningDays) {
-        if (matchDateWindowDays < 1 || duplicateDateWindowDays < 0 || agingWarningDays < 0) {
+            @Value("${pos.accounting.bankrec.outstanding.aging-warning-days:90}") int agingWarningDays,
+            @Value("${pos.accounting.bankrec.clearing.aging-warning-days:90}") int clearingAgingWarningDays) {
+        if (matchDateWindowDays < 1
+                || duplicateDateWindowDays < 0
+                || agingWarningDays < 0
+                || clearingAgingWarningDays < 0) {
             throw new IllegalStateException("pos.accounting.bankrec windows must be positive; match window was "
                     + matchDateWindowDays + ", duplicate window " + duplicateDateWindowDays + ", aging "
-                    + agingWarningDays);
+                    + agingWarningDays + ", clearing aging " + clearingAgingWarningDays);
         }
+        this.clearingAgingWarningDays = clearingAgingWarningDays;
         this.matchDateWindowDays = matchDateWindowDays;
         this.duplicateDateWindowDays = duplicateDateWindowDays;
         this.agingWarningDays = agingWarningDays;
     }
 
-    /** The spec defaults (7, 3, 90). */
+    /** The spec defaults (7, 3, 90, 90). */
     public static BankRecSettings defaults() {
-        return new BankRecSettings(7, 3, 90);
+        return new BankRecSettings(7, 3, 90, 90);
     }
 
     /** W: a ledger line within W days of a bank transaction is a candidate (§4.6). */
@@ -52,5 +60,10 @@ public class BankRecSettings {
     /** An item dated more than this many days before a date is aged at that date (§3.6). */
     public int agingWarningDays() {
         return agingWarningDays;
+    }
+
+    /** A clearing account away from zero at both the period end and this many days before it is aged (§5.3). */
+    public int clearingAgingWarningDays() {
+        return clearingAgingWarningDays;
     }
 }

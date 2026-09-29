@@ -1,10 +1,13 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.bankrec.dto.CloseReadinessResponse;
 import com.positivity.accounting.internal.dto.AccountingPeriodResponse;
+import com.positivity.accounting.internal.dto.PeriodCloseRequest;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Accounting period lifecycle service (AD-012: posting only in open periods).
@@ -85,25 +88,57 @@ public interface AccountingPeriodService {
     List<AccountingPeriodResponse> listPeriods();
 
     /**
+     * Close a period (OPEN -> CLOSED) with no close body.
+     *
+     * @see #closePeriod(String, PeriodCloseRequest)
+     */
+    @NonNull
+    default AccountingPeriodResponse closePeriod(@NonNull String periodCode) {
+        return closePeriod(periodCode, null);
+    }
+
+    /**
      * Close a period (OPEN -> CLOSED).
      *
      * A valid YYYY-MM period with no row whose month has already started is
      * auto-provisioned and then closed. Closing fails when the period is
      * already CLOSED, or when DRAFT journal entries are dated inside the
-     * period (the blocking entry IDs are reported).
+     * period (the blocking entry IDs are reported). Then bank reconciliation
+     * readiness is evaluated under the period row lock (SPEC-manual-bank-reconciliation
+     * §5.9; story S6, #2305) and the tenant's close policy decides: under
+     * {@code REQUIRED*} BLOCKING checks refuse the close unless a valid
+     * exception is granted ({@code REQUIRED_WITH_EXCEPTION} only). The
+     * {@code PERIOD_CLOSE} audit row carries the readiness summary; a granted
+     * exception adds a {@code PERIOD_CLOSE_BANKREC_EXCEPTION} row.
      *
      * @param periodCode Period code (YYYY-MM) to close
-     * @return the closed period
+     * @param request optional body carrying a bank reconciliation exception
+     * @return the closed period with {@code bankReconciliationReady} and
+     *         {@code bankReconciliationException}
      * @throws IllegalArgumentException if periodCode is not a valid YYYY-MM code
      * @throws com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException
      *         if the period does not exist and its month has not started
      * @throws com.positivity.accounting.internal.exception.AccountingPeriodStateException
      *         if the period is already CLOSED
      * @throws com.positivity.accounting.internal.exception.PeriodCloseBlockedException
-     *         if DRAFT journal entries are dated inside the period
+     *         if DRAFT journal entries are dated inside the period, or (its
+     *         subtype {@code PeriodBankReconciliationIncompleteException})
+     *         when the bank reconciliation policy refuses the close
+     * @throws com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException
+     *         if an exception is asked for without both close and override authority
      */
     @NonNull
-    AccountingPeriodResponse closePeriod(@NonNull String periodCode);
+    AccountingPeriodResponse closePeriod(@NonNull String periodCode, @Nullable PeriodCloseRequest request);
+
+    /**
+     * Bank reconciliation close readiness of a period (SPEC-manual-bank-reconciliation §5.3; story S6, #2305):
+     * derived, never persisted; a month with no period row is evaluated as OPEN without provisioning it.
+     *
+     * @param periodCode Period code (YYYY-MM)
+     * @throws IllegalArgumentException if periodCode is not a valid YYYY-MM code
+     */
+    @NonNull
+    CloseReadinessResponse getCloseReadiness(@NonNull String periodCode);
 
     /**
      * Reopen a CLOSED period (CLOSED -> OPEN) with a mandatory justification.

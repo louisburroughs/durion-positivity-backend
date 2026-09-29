@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.BankRecCloseTestPolicy;
 import com.positivity.accounting.PostgresIntegrationTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.AccountingPeriodResponse;
@@ -16,6 +17,7 @@ import com.positivity.accounting.internal.exception.AccountingPeriodStateExcepti
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import java.time.YearMonth;
@@ -61,12 +63,16 @@ class AccountingPeriodLifecycleTest extends PostgresIntegrationTestBase {
     @Autowired
     private AccountingAuditLogRepository auditLogRepository;
 
+    @Autowired
+    private AccountingConfigurationRepository configurationRepository;
+
     /** A past month guaranteed to have started. */
     private YearMonth pastMonth;
 
     @BeforeEach
     void setUp() {
         pastMonth = YearMonth.now().minusMonths(3);
+        BankRecCloseTestPolicy.advisory(configurationRepository);
 
         TestingAuthenticationToken authentication = new TestingAuthenticationToken(ACTOR, null);
         authentication.setAuthenticated(true);
@@ -151,7 +157,8 @@ class AccountingPeriodLifecycleTest extends PostgresIntegrationTestBase {
         assertThat(auditRow.getOperation()).isEqualTo("PERIOD_CLOSE");
         assertThat(auditRow.getUserId()).isEqualTo(ACTOR);
         assertThat(auditRow.getOldValue()).isEqualTo("OPEN");
-        assertThat(auditRow.getNewValue()).isEqualTo("CLOSED");
+        // The close row carries the bank reconciliation readiness summary (story S6, #2305).
+        assertThat(auditRow.getNewValue()).startsWith("CLOSED;policy=ADVISORY;");
         assertThat(auditRow.getTimestamp()).isNotNull();
 
         assertThat(periodService.isPeriodOpen(pastMonth.toString())).isFalse();

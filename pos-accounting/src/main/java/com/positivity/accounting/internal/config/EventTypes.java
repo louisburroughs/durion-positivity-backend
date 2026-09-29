@@ -352,6 +352,21 @@ public final class EventTypes {
                                         + " mandatory justification)")
                         .build(),
 
+                // AccountingPeriodController bank reconciliation close readiness + policy — 3 events
+                // (SPEC-manual-bank-reconciliation §5.9, story S6, Issue #2305)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_PERIOD_CLOSE_READINESS",
+                                "Read the bank reconciliation close readiness of an accounting period")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_PERIOD_BANK_REC_POLICY_VIEW",
+                                "View the tenant's bank reconciliation close policy")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_PERIOD_BANK_REC_POLICY_SET",
+                                "Replace the tenant's bank reconciliation close policy (mandatory justification)")
+                        .build(),
+
                 // SettlementReconciliationController — 3 events (Story F1c, Issue #963)
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_SETTLEMENT_LINES_LIST",

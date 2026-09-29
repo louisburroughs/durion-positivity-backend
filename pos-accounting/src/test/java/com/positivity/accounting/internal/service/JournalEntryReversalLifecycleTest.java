@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.BankRecCloseTestPolicy;
 import com.positivity.accounting.PostgresCommittingTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
@@ -17,6 +18,7 @@ import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
+import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
@@ -97,10 +99,14 @@ class JournalEntryReversalLifecycleTest extends PostgresCommittingTestBase {
     @Autowired
     private GLAccountRepository glAccountRepository;
 
+    @Autowired
+    private AccountingConfigurationRepository configurationRepository;
+
     private UUID glAccountId;
 
     @BeforeEach
     void setUpAccount() {
+        BankRecCloseTestPolicy.advisory(configurationRepository);
         GLAccount account = new GLAccount();
         account.setAccountCode("A3-" + UUID.randomUUID().toString().substring(0, 8));
         account.setAccountName("A3 reversal test account");

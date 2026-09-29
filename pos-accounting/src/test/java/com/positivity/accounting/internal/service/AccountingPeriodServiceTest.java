@@ -7,11 +7,18 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.bankrec.dto.CloseReadinessResponse;
+import com.positivity.accounting.internal.bankrec.enums.BankRecClosePolicy;
+import com.positivity.accounting.internal.bankrec.readmodel.BankReconciliationCloseReadinessService;
 import com.positivity.accounting.internal.dto.AccountingPeriodResponse;
+import com.positivity.accounting.internal.dto.BankReconciliationExceptionRequest;
+import com.positivity.accounting.internal.dto.PeriodCloseRequest;
+import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
+import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
@@ -21,12 +28,14 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -61,6 +70,9 @@ class AccountingPeriodServiceTest {
 
     @Mock
     private AccountingAuditLogRepository auditLogRepository;
+
+    @Mock
+    private BankReconciliationCloseReadinessService closeReadiness;
 
     @InjectMocks
     private AccountingPeriodServiceImpl service;
@@ -342,7 +354,7 @@ class AccountingPeriodServiceTest {
     @DisplayName("closePeriod - future month with no row cannot be closed (404)")
     void closePeriod_futureMonth_notFound() {
         // Arrange: clock is fixed at 2024-01-15
-        when(periodRepository.findByPeriodCode("2024-02")).thenReturn(Optional.empty());
+        when(periodRepository.findWithLockByPeriodCode("2024-02")).thenReturn(Optional.empty());
 
         // Act + Assert
         assertThatThrownBy(() -> service.closePeriod("2024-02"))
@@ -367,5 +379,102 @@ class AccountingPeriodServiceTest {
                 .isInstanceOf(InvalidRequestParameterException.class)
                 .hasMessageContaining("justification");
         verify(periodRepository, never()).save(any());
+    }
+
+    // ===== BANK RECONCILIATION CLOSE (story S6, #2305) =====
+
+    private static CloseReadinessResponse readiness(boolean ready, int blocking) {
+        return new CloseReadinessResponse(
+                "2023-12",
+                LocalDate.of(2023, 12, 1),
+                LocalDate.of(2023, 12, 31),
+                AccountingPeriodStatus.OPEN,
+                BankRecClosePolicy.REQUIRED_WITH_EXCEPTION,
+                0,
+                ready,
+                blocking,
+                0,
+                List.of(),
+                List.of());
+    }
+
+    private static PeriodCloseRequest exception(String justification) {
+        return PeriodCloseRequest.builder()
+                .bankReconciliationException(BankReconciliationExceptionRequest.builder()
+                        .justification(justification)
+                        .build())
+                .build();
+    }
+
+    @Test
+    @DisplayName("closePeriod - evaluates readiness under the lock and stamps the summary on PERIOD_CLOSE")
+    void closePeriod_readyStampsSummary() {
+        AccountingPeriod open = period("2023-12", AccountingPeriodStatus.OPEN);
+        when(periodRepository.findWithLockByPeriodCode("2023-12")).thenReturn(Optional.of(open));
+        when(journalEntryRepository.findByStatusAndTransactionDateInRange(any(), any(), any()))
+                .thenReturn(List.of());
+        CloseReadinessResponse ready = readiness(true, 0);
+        when(closeReadiness.evaluate(open, true)).thenReturn(ready);
+        when(closeReadiness.decide(ready, null))
+                .thenReturn(new BankReconciliationCloseReadinessService.CloseDecision(true, false));
+        when(periodRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        AccountingPeriodResponse response = service.closePeriod("2023-12", null);
+
+        assertThat(response.getStatus()).isEqualTo(AccountingPeriodStatus.CLOSED);
+        assertThat(response.getBankReconciliationReady()).isTrue();
+        assertThat(response.getBankReconciliationException()).isFalse();
+        ArgumentCaptor<AccountingAuditLog> rows = ArgumentCaptor.forClass(AccountingAuditLog.class);
+        verify(auditLogRepository).save(rows.capture());
+        assertThat(rows.getValue().getOperation()).isEqualTo("PERIOD_CLOSE");
+        assertThat(rows.getValue().getNewValue()).startsWith("CLOSED;policy=REQUIRED_WITH_EXCEPTION;ready=true");
+    }
+
+    @Test
+    @DisplayName("closePeriod - a granted exception writes PERIOD_CLOSE_BANKREC_EXCEPTION with the snapshot (I5)")
+    void closePeriod_exceptionAudited() {
+        AccountingPeriod open = period("2023-12", AccountingPeriodStatus.OPEN);
+        when(periodRepository.findWithLockByPeriodCode("2023-12")).thenReturn(Optional.of(open));
+        when(journalEntryRepository.findByStatusAndTransactionDateInRange(any(), any(), any()))
+                .thenReturn(List.of());
+        CloseReadinessResponse blocked = readiness(false, 1);
+        when(closeReadiness.evaluate(open, true)).thenReturn(blocked);
+        PeriodCloseRequest request = exception("Statement delayed by the bank");
+        when(closeReadiness.decide(blocked, request.getBankReconciliationException()))
+                .thenReturn(new BankReconciliationCloseReadinessService.CloseDecision(
+                        false, true, "Statement delayed by the bank"));
+        when(periodRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        AccountingPeriodResponse response = service.closePeriod("2023-12", request);
+
+        assertThat(response.getBankReconciliationException()).isTrue();
+        assertThat(response.getBankReconciliationReady()).isFalse();
+        ArgumentCaptor<AccountingAuditLog> rows = ArgumentCaptor.forClass(AccountingAuditLog.class);
+        verify(auditLogRepository, org.mockito.Mockito.times(2)).save(rows.capture());
+        AccountingAuditLog exceptionRow = rows.getAllValues().getFirst();
+        assertThat(exceptionRow.getOperation()).isEqualTo("PERIOD_CLOSE_BANKREC_EXCEPTION");
+        assertThat(exceptionRow.getEntityType()).isEqualTo("ACCOUNTING_PERIOD");
+        assertThat(exceptionRow.getJustification()).isEqualTo("Statement delayed by the bank");
+        assertThat(exceptionRow.getOldValue()).contains("\"periodCode\":\"2023-12\"");
+        assertThat(rows.getAllValues().get(1).getOperation()).isEqualTo("PERIOD_CLOSE");
+    }
+
+    @Test
+    @DisplayName("closePeriod - a policy refusal closes nothing and writes no audit row")
+    void closePeriod_refusedLeavesPeriodOpen() {
+        AccountingPeriod open = period("2023-12", AccountingPeriodStatus.OPEN);
+        when(periodRepository.findWithLockByPeriodCode("2023-12")).thenReturn(Optional.of(open));
+        when(journalEntryRepository.findByStatusAndTransactionDateInRange(any(), any(), any()))
+                .thenReturn(List.of());
+        CloseReadinessResponse blocked = readiness(false, 1);
+        when(closeReadiness.evaluate(open, true)).thenReturn(blocked);
+        when(closeReadiness.decide(blocked, null))
+                .thenThrow(new PeriodBankReconciliationIncompleteException("2023-12", List.of(), null));
+
+        assertThatThrownBy(() -> service.closePeriod("2023-12", null))
+                .isInstanceOf(PeriodBankReconciliationIncompleteException.class);
+        assertThat(open.getStatus()).isEqualTo(AccountingPeriodStatus.OPEN);
+        verify(periodRepository, never()).save(any());
+        verify(auditLogRepository, never()).save(any());
     }
 }

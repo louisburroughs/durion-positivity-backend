@@ -57,6 +57,17 @@ public interface GLAccountRepository extends JpaRepository<GLAccount, UUID> {
     List<GLAccount> findReconcilableActiveOn(
             @Param("subtype") @NonNull AccountSubtype subtype, @Param("at") @NonNull LocalDateTime at);
 
+    /**
+     * Every reconcilable account active at {@code at}, whatever its subtype — close readiness under {@code
+     * BANK_REC_CLOSE_SCOPE = ALL_RECONCILABLE} (bank reconciliation §5.2, D5; story S6, #2305).
+     */
+    @Query("SELECT g FROM GLAccount g WHERE g.reconcilable = true "
+            + "AND (g.activationDate IS NULL OR g.activationDate <= :at) "
+            + "AND (g.deactivationDate IS NULL OR g.deactivationDate > :at) "
+            + "ORDER BY g.accountCode")
+    @NonNull
+    List<GLAccount> findAllReconcilableActiveOn(@Param("at") @NonNull LocalDateTime at);
+
     /** One page of {@link #findReconcilableActiveOn(AccountSubtype, LocalDateTime)}, cut in the database. */
     @Query(
             value = "SELECT g FROM GLAccount g WHERE g.reconcilable = true AND g.accountSubtype = :subtype "

@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.bankrec.service;
 
+import com.positivity.accounting.internal.bankrec.enums.BankRecCloseScope;
 import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
 import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.entity.GLAccount;
@@ -74,6 +75,19 @@ public class BankCashAccounts {
     /** Every active bank account of the tenant, ordered by account code. */
     public @NonNull List<BankCashAccount> listActive() {
         return glAccounts.findReconcilableActiveOn(AccountSubtype.BANK_CASH, LocalDateTime.now(clock)).stream()
+                .map(BankCashAccounts::toRef)
+                .toList();
+    }
+
+    /**
+     * The accounts close readiness evaluates under the tenant's {@code BANK_REC_CLOSE_SCOPE} (SPEC §5.2, D5; story
+     * S6, #2305), ordered by account code: the active bank accounts, or every active reconcilable account.
+     */
+    public @NonNull List<BankCashAccount> listInScope(@NonNull BankRecCloseScope scope) {
+        if (scope == BankRecCloseScope.BANK_CASH_SUBTYPE) {
+            return listActive();
+        }
+        return glAccounts.findAllReconcilableActiveOn(LocalDateTime.now(clock)).stream()
                 .map(BankCashAccounts::toRef)
                 .toList();
     }

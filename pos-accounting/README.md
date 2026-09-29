@@ -154,6 +154,29 @@ Monthly periods keyed by `YYYY-MM` code with a two-state OPEN → CLOSED lifecyc
 - Close and reopen are audit-logged with the acting user
 - Concurrent close/reopen of the same period is serialized by optimistic locking (`@Version`, V15)
 
+### Bank reconciliation close readiness and policy (#2305)
+
+- `GET /v1/accounting/periods/{periodCode}/close-readiness` — the derived readiness read model: per in-scope
+  bank account the baseline that applies at the period end, the coverage and reconciled frontiers, the OPEN
+  outstanding items with their sum and the checks that fired; tenant-wide `DRAFT_JOURNAL_ENTRIES` and
+  `CLEARING_BALANCE_AGING` in the top-level `checks[]` (permission `accounting:period:view`, event
+  `ACCOUNTING_PERIOD_CLOSE_READINESS`)
+- `GET|PUT /v1/accounting/periods/bank-reconciliation-policy` — `closePolicy` (`ADVISORY` /
+  `REQUIRED_WITH_EXCEPTION` / `REQUIRED`), `closeScope` (`BANK_CASH_SUBTYPE` / `ALL_RECONCILABLE`),
+  `closeCoverageLagDays`, `allowSelfApproval`, `otherApprovalThreshold` (null = unset); PUT replaces all five
+  with a justification of at least 10 characters and writes one `BANK_REC_POLICY_SET` audit row per changed
+  setting (GET `accounting:period:view`, PUT `accounting:period:hard_lock`; events
+  `ACCOUNTING_PERIOD_BANK_REC_POLICY_VIEW` / `_SET`). Defaults with no row: `REQUIRED_WITH_EXCEPTION`,
+  `BANK_CASH_SUBTYPE`, `0`, `false`, unset
+- Close evaluates readiness under the period row lock after the DRAFT check. Under `REQUIRED*` a BLOCKING
+  check refuses the close (`422 PERIOD_BANK_RECONCILIATION_INCOMPLETE`) unless, under
+  `REQUIRED_WITH_EXCEPTION`, the body carries `bankReconciliationException.justification` and the caller holds
+  `accounting:period:close` and `accounting:period:override` (else `403 PERIOD_CLOSE_EXCEPTION_NOT_PERMITTED`);
+  a granted exception is audited as `PERIOD_CLOSE_BANKREC_EXCEPTION` with the readiness snapshot. The
+  `PERIOD_CLOSE` audit row carries a readiness summary; the response carries `bankReconciliationReady` and
+  `bankReconciliationException`. Because the seeded `1000 Cash` is in scope, an unreconciled tenant cannot close
+  under the default policy until it reconciles, takes the exception, or sets `ADVISORY`
+
 ### Period Enforcement (B2, #944)
 
 `AccountingPeriodGate` is the single choke point wired into `postJournalEntry` and `reverseJournalEntry`,
@@ -309,6 +332,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `AUTHORIZATION_DENIED` | 403 | Audit-trail event creation refused because the caller may not record that event |
 | `RECONCILIATION_SELF_APPROVAL` | 403 | The approver submitted the reconciliation and the tenant's `BANK_REC_ALLOW_SELF_APPROVAL` is not true; the refusal is audited (#2304) |
 | `RECONCILIATION_ADJUSTMENT_APPROVAL_REQUIRED` | 403 | An OTHER reconciliation adjustment above `BANK_REC_OTHER_APPROVAL_THRESHOLD` (or any non-residual OTHER while it is unset) without `accounting:reconciliation:approve` (#2303) |
+| `PERIOD_CLOSE_EXCEPTION_NOT_PERMITTED` | 403 | A bank reconciliation close exception from a caller without both `accounting:period:close` and `accounting:period:override`; the period stays OPEN (#2305) |
 | `NOT_FOUND` | 404 | A JPA entity the request addresses does not exist (`EntityNotFoundException`) |
 | `JOURNAL_ENTRY_NOT_FOUND` | 404 | Referenced journal entry does not exist |
 | `DEFAULT_GL_MAPPING_NOT_FOUND` | 404 | Referenced default GL mapping does not exist |
@@ -355,6 +379,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `PERIOD_HARD_LOCKED` | 422 | The transaction date falls in a hard-locked accounting period |
 | `HARD_LOCK_DATE_REGRESSION` | 422 | The requested hard-lock date is earlier than the current one |
 | `PERIOD_HAS_DRAFT_ENTRIES` | 422 | The period cannot close while DRAFT journal entries remain; `fieldErrors` lists each `draftJournalEntryIds` value |
+| `PERIOD_BANK_RECONCILIATION_INCOMPLETE` | 422 | The bank reconciliation close policy refuses the close: one `fieldErrors[unreconciledGlAccountIds]` entry per blocked account, message `<glAccountId> <accountCode>: <check codes>`; under `REQUIRED` an exception body adds `fieldErrors[bankReconciliationException]` (#2305) |
 | `UNBALANCED_RULES` | 422 | A posting-rule publish violates the split-group/`factorPercent` invariants; `fieldErrors` locates each offending group or line |
 | `WRITE_OFF_THRESHOLD_EXCEEDED` | 422 | A settlement write-off exceeds the configured threshold |
 | `WHOLE_REQUEST_REVERSAL_REQUIRED` | 422 | A payment application that was applied as one request must be reversed as one request |
@@ -390,6 +415,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `pos.accounting.bankrec.match.date-window-days`     | `7`                  | Bank reconciliation candidate date window W (#2303) |
 | `pos.accounting.bankrec.duplicate.date-window-days` | `3`                  | Near-duplicate candidate window (#2303) |
 | `pos.accounting.bankrec.outstanding.aging-warning-days` | `90`             | Age past which an outstanding item needs a justification and an OTHER_LEDGER_TIMING item a reaffirmation (#2303) |
+| `pos.accounting.bankrec.clearing.aging-warning-days` | `90`               | A clearing account (a counter account of POSTED `OTHER` adjustments, e.g. 2360) away from zero both at the period end and this many days before it raises the `CLEARING_BALANCE_AGING` readiness warning (#2305) |
 
 ## Multitenancy (ADR-0062, WS3 wave 2)
 
