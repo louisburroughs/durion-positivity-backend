@@ -215,9 +215,9 @@ public class PaymentApplicationController {
                     OLDEST_FIRST to allocate by ascending invoice date.
                     Emits an ACCOUNTING_PAYMENT_APPLY event; the application is atomic across all invoices \
                     and idempotent on applicationRequestId.
-                    Returns 404 when the payment is not found, 400 for insufficient funds, 409 for a \
-                    currency mismatch or an inapplicable invoice, and 503 when the invoice service is \
-                    unreachable.
+                    Returns 404 when the payment is not found, 400 for insufficient funds, 409 for an \
+                    inapplicable invoice, 422 CURRENCY_NOT_SUPPORTED for a payment in a currency other than \
+                    the ledger's (nothing is written), and 503 when the invoice service is unreachable.
                     """,
             tags = {"Payment Applications"})
     @ApiResponse(responseCode = "201", description = "Payment applied successfully")
@@ -231,7 +231,12 @@ public class PaymentApplicationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Currency mismatch or invoice not applicable",
+            description = "Invoice not applicable",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "CURRENCY_NOT_SUPPORTED: the payment is in a currency other than the ledger's;"
+                    + " nothing is written (ADR-0067 PC-9)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_PAYMENT_APPLY", apiVersion = "1")
     public ResponseEntity<PaymentApplicationResponse> applyPayment(

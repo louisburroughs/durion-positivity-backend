@@ -19,7 +19,7 @@ import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedEx
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
-import com.positivity.accounting.internal.exception.CurrencyMismatchException;
+import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
 import com.positivity.accounting.internal.exception.EventValidationException;
@@ -243,8 +243,9 @@ class AccountingExceptionHandlerTest {
                     Named.of("handleMultiApplicationReversal", (HandlerInvocation)
                             request -> handler.handleMultiApplicationReversal(
                                     new MultiApplicationReversalException("reverse whole payment"), request)),
-                    Named.of("handleCurrencyMismatch", (HandlerInvocation) request -> handler.handleCurrencyMismatch(
-                            new CurrencyMismatchException("payment EUR, invoice USD"), request)),
+                    Named.of("handleCurrencyNotSupported", (HandlerInvocation)
+                            request -> handler.handleCurrencyNotSupported(
+                                    new CurrencyNotSupportedException("payment EUR, invoice USD"), request)),
                     Named.of("handleAccountNotReconcilable", (HandlerInvocation)
                             request -> handler.handleAccountNotReconcilable(
                                     new AccountNotReconcilableException("not reconcilable"), request)),
@@ -435,15 +436,15 @@ class AccountingExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("CurrencyMismatchException maps to 409 CURRENCY_MISMATCH in the ApiError envelope (#2310)")
-    void currencyMismatchIs409() {
+    @DisplayName("CurrencyNotSupportedException maps to 422 CURRENCY_NOT_SUPPORTED in the ApiError envelope (#2334)")
+    void currencyNotSupportedIs422() {
         ResponseEntity<ApiError> response = new AccountingExceptionHandler(TEST_CLOCK)
-                .handleCurrencyMismatch(
-                        new CurrencyMismatchException("payment EUR, invoice USD"), requestWithoutHeader());
+                .handleCurrencyNotSupported(
+                        new CurrencyNotSupportedException("payment EUR, invoice USD"), requestWithoutHeader());
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().code()).isEqualTo("CURRENCY_MISMATCH");
-        assertThat(response.getBody().status()).isEqualTo(409);
+        assertThat(response.getBody().code()).isEqualTo("CURRENCY_NOT_SUPPORTED");
+        assertThat(response.getBody().status()).isEqualTo(422);
     }
 }

@@ -13,7 +13,7 @@ import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedEx
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
-import com.positivity.accounting.internal.exception.CurrencyMismatchException;
+import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
 import com.positivity.accounting.internal.exception.EventValidationException;
@@ -449,12 +449,14 @@ public class AccountingExceptionHandler {
     }
 
     /**
-     * A payment applied to an invoice in another currency (issue #2310, ADR-0067 DF-2): refused
-     * before any amount moves.
+     * A payment in a currency the ledger does not book, applied to invoices (ADR-0067 PC-9 (a),
+     * issues #2310 and #2334): refused before any amount moves. 422, not 409: the refusal is about
+     * the referenced payment's state (ADR-0017 §2).
      */
-    @ExceptionHandler(CurrencyMismatchException.class)
-    public ResponseEntity<ApiError> handleCurrencyMismatch(CurrencyMismatchException ex, HttpServletRequest request) {
-        return build(HttpStatus.CONFLICT, "CURRENCY_MISMATCH", ex.getMessage(), request);
+    @ExceptionHandler(CurrencyNotSupportedException.class)
+    public ResponseEntity<ApiError> handleCurrencyNotSupported(
+            CurrencyNotSupportedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "CURRENCY_NOT_SUPPORTED", ex.getMessage(), request);
     }
 
     /**

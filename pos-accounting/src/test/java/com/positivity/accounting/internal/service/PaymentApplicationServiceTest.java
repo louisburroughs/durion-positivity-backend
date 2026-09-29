@@ -25,7 +25,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
-import com.positivity.accounting.internal.exception.CurrencyMismatchException;
+import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
@@ -229,8 +229,8 @@ class PaymentApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("A payment in another currency than the invoice is refused 409 before anything is written (#2310)")
-    void testApplyPaymentToInvoices_CurrencyMismatch_Refused() {
+    @DisplayName("A payment in a currency other than the ledger's is refused 422 before anything is written (#2334)")
+    void testApplyPaymentToInvoices_CurrencyNotSupported_Refused() {
         testPayment.setCurrency("EUR");
         PaymentApplicationRequest request = createApplicationRequest(
                 testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "500.00")));
@@ -239,7 +239,7 @@ class PaymentApplicationServiceTest {
         when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
 
         assertThatThrownBy(() -> service.applyPaymentToInvoices(testPaymentId, request))
-                .isInstanceOf(CurrencyMismatchException.class)
+                .isInstanceOf(CurrencyNotSupportedException.class)
                 .hasMessageContaining("EUR")
                 .hasMessageContaining("USD");
 

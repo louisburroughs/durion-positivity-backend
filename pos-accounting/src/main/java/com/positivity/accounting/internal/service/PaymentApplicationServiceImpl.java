@@ -15,7 +15,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.enums.AllocationStrategy;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
-import com.positivity.accounting.internal.exception.CurrencyMismatchException;
+import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
@@ -178,8 +178,8 @@ public class PaymentApplicationServiceImpl
      * @throws ResponseStatusException with NOT_FOUND if payment not found
      * @throws ResponseStatusException with BAD_REQUEST if validation fails or
      *                                 insufficient funds
-     * @throws CurrencyMismatchException (409 CURRENCY_MISMATCH) if the payment's currency is not
-     *                                 the invoices' currency; nothing is written
+     * @throws CurrencyNotSupportedException (422 CURRENCY_NOT_SUPPORTED) if the payment is in a
+     *                                 currency other than the ledger's; nothing is written
      * @throws ResponseStatusException with CONFLICT if an invoice is not applicable
      * @throws ResponseStatusException with SERVICE_UNAVAILABLE if invoice service
      *                                 call fails (after compensating reversals)
@@ -710,18 +710,19 @@ public class PaymentApplicationServiceImpl
     }
 
     /**
-     * A payment applies one-for-one only to invoices in its own currency (issue #2310, ADR-0067
-     * DF-2, story #114). The {@code ext_invoice} replica carries no currency: pos-invoice bills in
-     * a single currency, so an invoice's currency is the ledger currency ({@link LedgerCurrency})
-     * until invoice facts carry one (ADR-0067 PC-3, PC-8). Refused before any amount moves, so no
-     * partial application or compensating reversal is ever needed. A payment recorded without a
-     * currency is in the ledger currency (ADR-0067 E-3).
+     * A Stage A ledger books its own currency only (ADR-0067 PC-9 (a); issues #2310, #2334; story
+     * #114): a payment in another currency is refused with 422 CURRENCY_NOT_SUPPORTED. The {@code
+     * ext_invoice} replica carries no currency: pos-invoice bills in a single currency, so an
+     * invoice's currency is the ledger currency ({@link LedgerCurrency}) until invoice facts carry
+     * one (ADR-0067 PC-3, PC-8). Refused before any amount moves, so no partial application or
+     * compensating reversal is ever needed. A payment recorded without a currency is in the ledger
+     * currency (ADR-0067 E-3).
      */
     private void validateSameCurrency(ReceivablePayment payment) {
         if (ledgerCurrency.isForeign(payment.getCurrency())) {
-            throw new CurrencyMismatchException("Payment " + payment.getPaymentId() + " is in "
-                    + payment.getCurrency() + " but the invoices are in " + ledgerCurrency.code()
-                    + "; a payment applies only to invoices in its own currency");
+            throw new CurrencyNotSupportedException("Payment " + payment.getPaymentId() + " is in "
+                    + payment.getCurrency() + " but the ledger books " + ledgerCurrency.code()
+                    + " only; a payment in another currency is not applied to invoices (ADR-0067 PC-9)");
         }
     }
 
