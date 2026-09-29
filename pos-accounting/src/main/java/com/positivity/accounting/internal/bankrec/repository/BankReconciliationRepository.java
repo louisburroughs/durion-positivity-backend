@@ -96,4 +96,11 @@ public interface BankReconciliationRepository
     @NonNull
     List<BankReconciliation> findByStatementIdInAndStatusIn(
             @NonNull Collection<UUID> statementIds, @NonNull Collection<ReconciliationStatus> statuses);
+
+    /**
+     * The statement a reconciliation is of, read without loading (or locking) the reconciliation: supersede
+     * locks the statement before the reconciliation, in the order statement supersession takes them (S5, #2304).
+     */
+    @Query("SELECT r.statementId FROM BankReconciliation r WHERE r.reconciliationId = :id")
+    Optional<UUID> findStatementIdById(@Param("id") @NonNull UUID reconciliationId);
 }

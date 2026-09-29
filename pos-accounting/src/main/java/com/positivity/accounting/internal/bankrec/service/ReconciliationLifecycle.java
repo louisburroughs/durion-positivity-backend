@@ -11,6 +11,7 @@ import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationBankMatchRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationGlMatchRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationMatchRepository;
+import com.positivity.accounting.internal.bankrec.repository.BankReconciliationOutstandingItemRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
 import com.positivity.accounting.internal.bankrec.service.MatchWriter.LedgerMember;
@@ -43,6 +44,7 @@ public class ReconciliationLifecycle {
     private final BankReconciliationGlMatchRepository glMatches;
     private final BankReconciliationBankMatchRepository bankMatches;
     private final BankTransactionRepository transactions;
+    private final BankReconciliationOutstandingItemRepository items;
     private final BankRecAuditRecorder audit;
     private final BankReconciliationFacts facts;
 
@@ -93,6 +95,9 @@ public class ReconciliationLifecycle {
     /**
      * Releases the active members of every match of {@code recon}: members {@code active = false}, their bank
      * rows back to {@code UNMATCHED}, the headers keeping their state as sealed history (§4.9 paths 1 and 3).
+     * The ledger-side items a released match cleared are re-opened, as an unmatch re-opens them: a successor
+     * only re-proposes the match, so the clearance stands again only when the preparer re-accepts it (which
+     * clears the item against the new match), and a rejected re-proposal leaves the item outstanding.
      * Members are flushed inactive before returning, so a successor can propose them at once.
      *
      * @return the matches released, oldest first, with their members
@@ -118,6 +123,7 @@ public class ReconciliationLifecycle {
             bankMatches.saveAll(bankMembers);
             glMembers.forEach(m -> m.setActive(false));
             glMatches.saveAll(glMembers);
+            MatchWriter.reopenCleared(items, match.getMatchId());
             released.add(new ReleasedMatch(
                     match,
                     bankIds,

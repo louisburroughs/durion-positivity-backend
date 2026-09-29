@@ -31,7 +31,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Statement supersession by a corrected re-import (SPEC-manual-bank-reconciliation §4.9 path 3, R2, O2, D15;
- * story S5, #2304). The intake runs {@link #requireEligible} before it writes anything, {@link #retire} before
+ * story S5, #2304). The intake runs {@link #lockEligible} before it writes anything, {@link #retire} before
  * it commits the corrected statement (so U1, U2 and the collision check leave the old one out), and {@link
  * #link} once the corrected statement has its id. The file adapter runs {@link #requireEligible} at upload too.
  */
@@ -70,10 +70,29 @@ public class StatementSupersession {
      * (else 409 {@code RECONCILIATION_WINDOW_ALREADY_RECONCILED}). A justification without a statement is a
      * {@code VALIDATION_ERROR}.
      *
+     * <p>This is the unlocked read for a preview (the file adapter's upload); the commit uses {@link
+     * #lockEligible}.
+     *
      * @return the request, or null when {@code supersedesStatementId} is absent
      */
     public @Nullable Request requireEligible(
             @NonNull UUID glAccountId, @Nullable UUID supersedesStatementId, @Nullable String justification) {
+        return eligible(glAccountId, supersedesStatementId, justification, false);
+    }
+
+    /**
+     * {@link #requireEligible} for the commit: the named statement is row-locked ({@code FOR UPDATE}) before the
+     * checks and stays locked until the commit, so a reconciliation create (which takes the same lock) cannot
+     * start on it between the check and {@link #retire}, and a create that won the lock is seen by the {@code
+     * RECONCILIATION_WINDOW_ALREADY_RECONCILED} check. Must run in a read-write transaction.
+     */
+    public @Nullable Request lockEligible(
+            @NonNull UUID glAccountId, @Nullable UUID supersedesStatementId, @Nullable String justification) {
+        return eligible(glAccountId, supersedesStatementId, justification, true);
+    }
+
+    private @Nullable Request eligible(
+            UUID glAccountId, @Nullable UUID supersedesStatementId, @Nullable String justification, boolean lock) {
         if (supersedesStatementId == null) {
             if (justification != null) {
                 throw BankRecException.field(
@@ -85,8 +104,9 @@ public class StatementSupersession {
             return null;
         }
         String reason = Justification.required(justification, "supersessionJustification");
-        BankStatement superseded = statements
-                .findById(supersedesStatementId)
+        BankStatement superseded = (lock
+                        ? statements.lockById(supersedesStatementId)
+                        : statements.findById(supersedesStatementId))
                 .filter(s -> s.getGlAccountId().equals(glAccountId))
                 .filter(s -> s.getStatus() == BankStatementStatus.COMMITTED)
                 .orElseThrow(() -> BankRecException.field(

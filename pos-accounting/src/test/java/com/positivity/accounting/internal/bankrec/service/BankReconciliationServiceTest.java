@@ -144,7 +144,7 @@ class BankReconciliationServiceTest {
         void createsFromACommittedStatement() {
             BankStatement statement = statement(STATEMENT_ID, START, END, "Opened the account this month");
             when(reconciliationRepository.findByRequestId(requestId)).thenReturn(Optional.empty());
-            when(statementRepository.findById(STATEMENT_ID)).thenReturn(Optional.of(statement));
+            when(statementRepository.lockById(STATEMENT_ID)).thenReturn(Optional.of(statement));
             when(reconciliationRepository.findByStatementIdAndStatusIn(eq(STATEMENT_ID), anyCollection()))
                     .thenReturn(List.of());
             when(reconciliationRepository.saveAndFlush(any())).thenAnswer(inv -> {
@@ -201,7 +201,7 @@ class BankReconciliationServiceTest {
         void activeReconciliationRefuses() {
             BankReconciliation existing = reconciliation();
             when(reconciliationRepository.findByRequestId(requestId)).thenReturn(Optional.empty());
-            when(statementRepository.findById(STATEMENT_ID))
+            when(statementRepository.lockById(STATEMENT_ID))
                     .thenReturn(Optional.of(statement(STATEMENT_ID, START, END, null)));
             when(reconciliationRepository.findByStatementIdAndStatusIn(eq(STATEMENT_ID), anyCollection()))
                     .thenReturn(List.of(existing));
@@ -220,7 +220,7 @@ class BankReconciliationServiceTest {
             BankReconciliation finalized = reconciliation();
             finalized.setStatus(ReconciliationStatus.FINALIZED);
             when(reconciliationRepository.findByRequestId(requestId)).thenReturn(Optional.empty());
-            when(statementRepository.findById(STATEMENT_ID))
+            when(statementRepository.lockById(STATEMENT_ID))
                     .thenReturn(Optional.of(statement(STATEMENT_ID, START, END, null)));
             when(reconciliationRepository.findByStatementIdAndStatusIn(eq(STATEMENT_ID), anyCollection()))
                     .thenReturn(List.of(finalized));
@@ -241,7 +241,7 @@ class BankReconciliationServiceTest {
         @DisplayName("a concurrent create losing the partial unique race answers the same 409")
         void concurrentCreateRefused() {
             when(reconciliationRepository.findByRequestId(requestId)).thenReturn(Optional.empty());
-            when(statementRepository.findById(STATEMENT_ID))
+            when(statementRepository.lockById(STATEMENT_ID))
                     .thenReturn(Optional.of(statement(STATEMENT_ID, START, END, null)));
             when(reconciliationRepository.findByStatementIdAndStatusIn(eq(STATEMENT_ID), anyCollection()))
                     .thenReturn(List.of());
@@ -261,7 +261,7 @@ class BankReconciliationServiceTest {
             BankStatement superseded = statement(STATEMENT_ID, START, END, null);
             superseded.setStatus(BankStatementStatus.SUPERSEDED);
             when(reconciliationRepository.findByRequestId(requestId)).thenReturn(Optional.empty());
-            when(statementRepository.findById(STATEMENT_ID)).thenReturn(Optional.of(superseded));
+            when(statementRepository.lockById(STATEMENT_ID)).thenReturn(Optional.of(superseded));
 
             assertThatThrownBy(() -> service.create(createRequest(requestId)))
                     .isInstanceOfSatisfying(

@@ -83,8 +83,10 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
             return response;
         }
 
+        // Row-locked: a statement supersession takes the same lock before its checks, so a create either sees
+        // the statement SUPERSEDED or is seen by the supersession's active-reconciliation check (§4.9 path 3).
         BankStatement statement = statementRepository
-                .findById(request.getStatementId())
+                .lockById(request.getStatementId())
                 .filter(s -> s.getGlAccountId().equals(request.getGlAccountId()))
                 .filter(s -> s.getStatus() == BankStatementStatus.COMMITTED)
                 .orElseThrow(() -> new BankRecException(

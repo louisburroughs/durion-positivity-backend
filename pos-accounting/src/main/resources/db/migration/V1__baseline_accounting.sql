@@ -338,6 +338,7 @@ CREATE TABLE public.bank_reconciliation (
     cancel_reason character varying(1000),
     version bigint DEFAULT 0 NOT NULL,
     request_id uuid,
+    request_hash character varying(64),
     CONSTRAINT bank_reconciliation_status_ck CHECK (((status)::text = ANY ((ARRAY['IN_PROGRESS'::character varying, 'SUBMITTED'::character varying, 'FINALIZED'::character varying, 'INVALIDATED'::character varying, 'SUPERSEDED'::character varying, 'CANCELLED'::character varying])::text[])))
 );
 

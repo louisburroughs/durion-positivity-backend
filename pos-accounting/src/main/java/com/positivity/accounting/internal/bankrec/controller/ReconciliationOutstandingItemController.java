@@ -63,7 +63,8 @@ public class ReconciliationOutstandingItemController {
                     bank side while it is open and carries forward until matched, cleared or released.
                     Use this tool for a timing difference; do not use addReconciliationAdjustment, which posts a \
                     journal entry, and use createReconciliationMatch when the other side is already present.
-                    Preconditions: the reconciliation must not be FINALIZED; the line or bank transaction must be \
+                    Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when \
+                    FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); the line or bank transaction must be \
                     on the account, dated on or before the window end, in no active match and in no OPEN item; a \
                     deposit in transit must be positive and an outstanding check negative.
                     Required inputs: reconciliationId as a path parameter; itemKind and exactly one of glLineId \
@@ -72,7 +73,8 @@ public class ReconciliationOutstandingItemController {
                     Emits an ACCOUNTING_RECONCILIATION_OUTSTANDING_REGISTER event and a \
                     RECONCILIATION_OUTSTANDING_REGISTER audit row; no journal entry is posted.
                     Returns 400 JUSTIFICATION_REQUIRED when a needed justification is missing or short, 409 \
-                    RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_LINE_INELIGIBLE (a concurrent \
+                    RECONCILIATION_ALREADY_FINALIZED, RECONCILIATION_NOT_EDITABLE or RECONCILIATION_LINE_INELIGIBLE (a \
+                    concurrent \
                     registration), and 422 OUTSTANDING_ITEM_NOT_ELIGIBLE when the line, sign, window or state \
                     does not allow the item.
                     """)
@@ -94,7 +96,8 @@ public class ReconciliationOutstandingItemController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_LINE_INELIGIBLE",
+            description = "RECONCILIATION_ALREADY_FINALIZED, RECONCILIATION_NOT_EDITABLE or"
+                    + " RECONCILIATION_LINE_INELIGIBLE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -133,7 +136,8 @@ public class ReconciliationOutstandingItemController {
                     transaction is free again.
                     Use this tool to undo a wrong registration; do not use it for an item whose other side has \
                     appeared, which createReconciliationMatch clears.
-                    Preconditions: the reconciliation must not be FINALIZED; the item must be OPEN on the account \
+                    Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when \
+                    FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); the item must be OPEN on the account \
                     and its registering reconciliation not FINALIZED.
                     Required inputs: reconciliationId and itemId as path parameters; reason (at least 10 \
                     characters) in the body.
@@ -161,7 +165,7 @@ public class ReconciliationOutstandingItemController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "RECONCILIATION_ALREADY_FINALIZED",
+            description = "RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -196,7 +200,8 @@ public class ReconciliationOutstandingItemController {
                     re-judges it here, and counts again in the next window.
                     Use this tool when the timing explanation still holds; release the item instead, or correct \
                     the books by a journal-entry reversal, when it does not.
-                    Preconditions: the reconciliation must not be FINALIZED; the item must be an OPEN \
+                    Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when \
+                    FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); the item must be an OPEN \
                     OTHER_LEDGER_TIMING item on the account, aged at this window's end.
                     Required inputs: reconciliationId and itemId as path parameters; justification (at least 10 \
                     characters) in the body.
@@ -224,7 +229,7 @@ public class ReconciliationOutstandingItemController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "RECONCILIATION_ALREADY_FINALIZED",
+            description = "RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -261,7 +266,9 @@ public class ReconciliationOutstandingItemController {
                     Use this tool only in the reconciliation of an acknowledged statement; use \
                     createReconciliationMatch for an item whose other side is in a bank row, and \
                     releaseReconciliationOutstandingItem to undo a wrong registration.
-                    Preconditions: the reconciliation must not be FINALIZED and rest on a statement with a gap \
+                    Preconditions: the reconciliation must be IN_PROGRESS or SUBMITTED (409 \
+                    RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE otherwise) and rest \
+                    on a statement with a gap \
                     acknowledgement; the item must be OPEN, dated before the statement start and registered in \
                     an earlier reconciliation.
                     Required inputs: reconciliationId and itemId as path parameters; justification (at least 10 \
@@ -290,7 +297,7 @@ public class ReconciliationOutstandingItemController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "RECONCILIATION_ALREADY_FINALIZED",
+            description = "RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",

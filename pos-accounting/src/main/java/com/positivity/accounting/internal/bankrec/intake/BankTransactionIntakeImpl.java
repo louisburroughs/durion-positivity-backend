@@ -104,7 +104,7 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
                         "supersedesStatementId",
                         "only a statement supersedes a statement");
             }
-            supersede = supersession.requireEligible(
+            supersede = supersession.lockEligible(
                     glAccountId, ctx.supersedesStatementId(), ctx.supersessionJustification());
         }
         UUID superseded = supersede == null ? null : supersede.superseded().getStatementId();

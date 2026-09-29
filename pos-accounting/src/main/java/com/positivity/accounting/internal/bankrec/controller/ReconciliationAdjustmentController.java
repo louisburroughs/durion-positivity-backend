@@ -71,7 +71,8 @@ public class ReconciliationAdjustmentController {
                     Use this tool for a bank-only movement the books lack; do not use it for a timing difference \
                     (registerReconciliationOutstandingItem), a duplicate (bank-transaction duplicate review) or a \
                     books error (a journal-entry reversal).
-                    Preconditions: the reconciliation must not be FINALIZED; an OTHER needs a justification of at \
+                    Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when \
+                    FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); an OTHER needs a justification of at \
                     least 10 characters and, above the tenant's BANK_REC_OTHER_APPROVAL_THRESHOLD (or while it is \
                     unset, for anything but a residual), accounting:reconciliation:approve; posting into a CLOSED \
                     period needs overrideJustification and accounting:period:override.
@@ -81,8 +82,9 @@ public class ReconciliationAdjustmentController {
                     and posts a journal entry that changes GL balances.
                     Returns 201 with the adjustment (200 with replayed true for a replayed requestId); 400 \
                     JUSTIFICATION_REQUIRED; 403 RECONCILIATION_ADJUSTMENT_APPROVAL_REQUIRED; 409 \
-                    RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT or \
-                    RECONCILIATION_ALREADY_FINALIZED; 422 RECONCILIATION_ADJUSTMENT_SIGN_INVALID, \
+                    RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT, \
+                    RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE; 422 \
+                    RECONCILIATION_ADJUSTMENT_SIGN_INVALID, \
                     ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE, GL_ACCOUNT_NOT_ACTIVE, \
                     ACCOUNT_NOT_RECONCILABLE, MATCH_AMOUNT_MISMATCH, PERIOD_CLOSED, PERIOD_HARD_LOCKED or \
                     GL_MAPPING_NOT_CONFIGURED when the rule named fails.
@@ -110,8 +112,8 @@ public class ReconciliationAdjustmentController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT or"
-                    + " RECONCILIATION_ALREADY_FINALIZED",
+            description = "RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT,"
+                    + " RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -163,14 +165,16 @@ public class ReconciliationAdjustmentController {
                     unexplained; a reversed gap bridge frees its statement for a new bridge.
                     Use this tool when an adjustment was wrong or the bank reversed the item; do not use the \
                     journal-entry reversal endpoint, which leaves the reconciliation's links in place.
-                    Preconditions: the reconciliation must not be FINALIZED and the adjustment must be POSTED.
+                    Preconditions: the reconciliation must be IN_PROGRESS, SUBMITTED or FINALIZED (a reversal under a \
+                    FINALIZED one invalidates it; 409 RECONCILIATION_NOT_EDITABLE otherwise) and the adjustment \
+                    must be POSTED.
                     Required inputs: reconciliationId and adjustmentId as path parameters; reason (at least 10 \
                     characters) in the body; reversalDate and overrideJustification optional.
                     Emits an ACCOUNTING_RECONCILIATION_ADJUSTMENT_REVERSE event and a \
                     RECONCILIATION_ADJUSTMENT_REVERSE audit row, and posts the reversal journal entry.
                     Returns 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED for the reason, 404 \
                     RECONCILIATION_NOT_FOUND for an unknown adjustment, 409 ADJUSTMENT_ALREADY_REVERSED, \
-                    JE_NOT_POSTED, JE_ALREADY_REVERSED or RECONCILIATION_ALREADY_FINALIZED, and 422 PERIOD_CLOSED \
+                    JE_NOT_POSTED, JE_ALREADY_REVERSED or RECONCILIATION_NOT_EDITABLE, and 422 PERIOD_CLOSED \
                     or PERIOD_HARD_LOCKED when the reversal date is not open.
                     """)
     @ApiResponse(
@@ -192,7 +196,7 @@ public class ReconciliationAdjustmentController {
     @ApiResponse(
             responseCode = "409",
             description = "ADJUSTMENT_ALREADY_REVERSED, JE_NOT_POSTED, JE_ALREADY_REVERSED or"
-                    + " RECONCILIATION_ALREADY_FINALIZED",
+                    + " RECONCILIATION_NOT_EDITABLE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",

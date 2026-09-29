@@ -92,7 +92,7 @@ class BankReconciliationLedgerChangeServiceTest {
     @BeforeEach
     void setUp() {
         ReconciliationLifecycle lifecycle = new ReconciliationLifecycle(
-                clock, reconciliations, matches, glMatches, bankMatches, transactions, audit, facts);
+                clock, reconciliations, matches, glMatches, bankMatches, transactions, items, audit, facts);
         hook = new BankReconciliationLedgerChangeService(reconciliations, matches, glMatches, items, writer, lifecycle);
         finalized = reconciliation();
         finalized.setStatus(ReconciliationStatus.FINALIZED);
