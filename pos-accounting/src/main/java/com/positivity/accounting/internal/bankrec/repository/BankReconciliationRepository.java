@@ -42,6 +42,11 @@ public interface BankReconciliationRepository
     List<BankReconciliation> findByGlAccount_GlAccountIdAndStatusOrderByStatementStartDateAsc(
             @NonNull UUID glAccountId, @NonNull ReconciliationStatus status);
 
+    /** The accounts' reconciliations in {@code status}, oldest window first (the bank-account list, §4.1). */
+    @NonNull
+    List<BankReconciliation> findByGlAccount_GlAccountIdInAndStatusOrderByStatementStartDateAsc(
+            @NonNull Collection<UUID> glAccountIds, @NonNull ReconciliationStatus status);
+
     /** The reconciliations of one statement (§6.1 statement read). */
     @NonNull
     List<BankReconciliation> findByStatementIdOrderByStatementStartDateAsc(@NonNull UUID statementId);

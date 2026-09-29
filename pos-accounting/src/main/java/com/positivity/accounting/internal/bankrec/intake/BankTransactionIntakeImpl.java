@@ -361,21 +361,20 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
     private static RuntimeException translate(DataIntegrityViolationException refused, StatementHeader header) {
         String detail = constraintDetail(refused);
         if (detail.contains(WINDOW_CONSTRAINT)) {
-            return new BankRecException(
+            return new ConcurrentCommitException(
                     BankRecErrorCode.STATEMENT_ALREADY_IMPORTED,
                     "A statement for " + header.startDate() + ".." + header.endDate()
                             + " is already committed on this account");
         }
         if (detail.contains(OVERLAP_CONSTRAINT)) {
-            return BankRecException.field(
+            return new ConcurrentCommitException(
                     BankRecErrorCode.STATEMENT_PERIOD_OVERLAP,
                     "The window " + header.startDate() + ".." + header.endDate()
                             + " overlaps a committed statement on this account",
-                    "statementId",
-                    "a concurrently committed statement");
+                    Map.of("statementId", "a concurrently committed statement"));
         }
         if (detail.contains(REQUEST_CONSTRAINT)) {
-            return new BankRecException(
+            return new ConcurrentCommitException(
                     BankRecErrorCode.IDEMPOTENCY_CONFLICT, "The requestId was used by a concurrent request");
         }
         return refused;
@@ -459,6 +458,15 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
                 // U3: same source, same id → update the retained fields, never a second row.
                 BankTransaction existing = sameSource.get();
                 applyObserved(existing, p, glAccountId, sourceKind, ctx);
+                if (existing.getStatus() == BankTransactionStatus.UNMATCHED
+                        || existing.getStatus() == BankTransactionStatus.POSSIBLE_DUPLICATE) {
+                    // The update may change the fingerprint: R1 again, never against the row itself.
+                    Set<UUID> skip = new HashSet<>(writtenByThisBatch);
+                    skip.add(existing.getBankTransactionId());
+                    UUID original =
+                            duplicateOf(p, glAccountId, sourceKind, ctx, skip, byFingerprint, firstOfFingerprint);
+                    flag(existing, original, collidesInBatch(byFingerprint.get(p.fingerprint())), tally);
+                }
                 existing.setFeedChange(FeedChange.MODIFIED);
                 existing.setLastObservedAt(observedAt);
                 if (existing.getStatementId() == null && statement != null) {
@@ -467,6 +475,7 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
                 transactions.save(existing);
                 tally.ids.add(existing.getBankTransactionId());
                 writtenByThisBatch.add(existing.getBankTransactionId());
+                firstOfFingerprint.putIfAbsent(p.fingerprint(), existing.getBankTransactionId());
                 tally.modified++;
                 if (statement != null && statement.getStatementId().equals(existing.getStatementId())) {
                     tally.linkedToStatement++;
@@ -491,18 +500,9 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
             created.setCreatedBy(ctx.actor());
 
             // R1: a fingerprint collision enters as POSSIBLE_DUPLICATE, never a silent drop.
-            UUID original = collidingOriginal(p, glAccountId, sourceKind, ctx, writtenByThisBatch);
-            boolean inBatchCollision = collidesInBatch(byFingerprint.get(p.fingerprint()));
-            if (original == null && inBatchCollision) {
-                original = firstOfFingerprint.get(p.fingerprint());
-            }
-            if (original != null || inBatchCollision) {
-                created.setStatus(BankTransactionStatus.POSSIBLE_DUPLICATE);
-                created.setDuplicateOfBankTransactionId(original);
-                tally.possibleDuplicates++;
-            } else {
-                created.setStatus(BankTransactionStatus.UNMATCHED);
-            }
+            UUID original =
+                    duplicateOf(p, glAccountId, sourceKind, ctx, writtenByThisBatch, byFingerprint, firstOfFingerprint);
+            flag(created, original, collidesInBatch(byFingerprint.get(p.fingerprint())), tally);
             // D10: a feed row inside a FINALIZED window is flagged, never refused (phase 2 only — a
             // phase-1 row lies inside its own statement window, and windows never overlap).
             if (sourceKind == SourceKind.BANK_FEED
@@ -566,17 +566,45 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
         }
     }
 
+    /** The row a colliding row points at: the earliest existing one, else the first of its batch. */
+    private @Nullable UUID duplicateOf(
+            Prepared p,
+            UUID glAccountId,
+            SourceKind sourceKind,
+            IntakeContext ctx,
+            Set<UUID> skip,
+            Map<String, List<Prepared>> byFingerprint,
+            Map<String, UUID> firstOfFingerprint) {
+        UUID original = collidingOriginal(p, glAccountId, sourceKind, ctx, skip);
+        if (original == null && collidesInBatch(byFingerprint.get(p.fingerprint()))) {
+            original = firstOfFingerprint.get(p.fingerprint());
+        }
+        return original;
+    }
+
+    /** R1: a collision leaves the row POSSIBLE_DUPLICATE, never a silent drop; otherwise UNMATCHED. */
+    private static void flag(BankTransaction row, @Nullable UUID original, boolean inBatchCollision, Tally tally) {
+        if (original != null || inBatchCollision) {
+            row.setStatus(BankTransactionStatus.POSSIBLE_DUPLICATE);
+            row.setDuplicateOfBankTransactionId(original);
+            tally.possibleDuplicates++;
+        } else {
+            row.setStatus(BankTransactionStatus.UNMATCHED);
+            row.setDuplicateOfBankTransactionId(null);
+        }
+    }
+
     /**
      * The earliest existing row on the account the new row collides with (R1), or null. {@code
      * EXCLUDED} and {@code REMOVED_BY_SOURCE} rows never collide; nor does a row the same source
      * reported under a different id (both carry ids, so the source itself says they differ).
      */
     private @Nullable UUID collidingOriginal(
-            Prepared p, UUID glAccountId, SourceKind sourceKind, IntakeContext ctx, Set<UUID> writtenByThisBatch) {
+            Prepared p, UUID glAccountId, SourceKind sourceKind, IntakeContext ctx, Set<UUID> skip) {
         for (BankTransaction candidate :
                 transactions.findByGlAccountIdAndFingerprintAndStatusNotInOrderByFirstObservedAtAscBankTransactionIdAsc(
                         glAccountId, p.fingerprint(), NOT_COLLIDING)) {
-            if (writtenByThisBatch.contains(candidate.getBankTransactionId())) {
+            if (skip.contains(candidate.getBankTransactionId())) {
                 continue;
             }
             boolean sameSource = candidate.getSourceKind() == sourceKind

@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.bankrec.repository.BankAccountProfileR
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
+import com.positivity.accounting.internal.bankrec.repository.StatementCounts;
 import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankCashAccount;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.BankTransactionObserved;
@@ -32,6 +33,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Currency;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -152,8 +154,13 @@ public class BankStatementServiceImpl implements BankStatementService {
                 statements.findAll(spec, BankRecPaging.page(page, size, Sort.by("startDate", "statementId")));
         Map<UUID, BankCashAccount> accounts = bankCashAccounts.displayValues(
                 result.getContent().stream().map(BankStatement::getGlAccountId).toList());
+        Map<UUID, StatementCounts> counts = counts(
+                result.getContent().stream().map(BankStatement::getStatementId).toList());
         List<BankStatementResponse> rows = result.getContent().stream()
-                .map(s -> withCounts(BankRecViews.statement(s, accounts.get(s.getGlAccountId())), s, null)
+                .map(s -> withCounts(
+                                BankRecViews.statement(s, accounts.get(s.getGlAccountId())),
+                                counts.get(s.getStatementId()),
+                                null)
                         .build())
                 .toList();
         return new BankStatementListResponse(
@@ -182,18 +189,32 @@ public class BankStatementServiceImpl implements BankStatementService {
                         .map(r -> new BankStatementResponse.ReconciliationLink(
                                 r.getReconciliationId(), r.getStatus().name()))
                         .toList();
-        return withCounts(BankRecViews.statement(statement, account), statement, result)
+        return withCounts(
+                        BankRecViews.statement(statement, account),
+                        counts(List.of(statement.getStatementId())).get(statement.getStatementId()),
+                        result)
                 .reconciliations(links);
     }
 
-    private BankStatementResponse.BankStatementResponseBuilder withCounts(
+    /** Row and possible-duplicate counts of the statements, from one grouped query. */
+    private Map<UUID, StatementCounts> counts(List<UUID> statementIds) {
+        if (statementIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, StatementCounts> byStatement = new HashMap<>();
+        for (StatementCounts row :
+                transactions.countByStatementIdIn(statementIds, BankTransactionStatus.POSSIBLE_DUPLICATE)) {
+            byStatement.put(row.statementId(), row);
+        }
+        return byStatement;
+    }
+
+    private static BankStatementResponse.BankStatementResponseBuilder withCounts(
             BankStatementResponse.BankStatementResponseBuilder builder,
-            BankStatement statement,
+            @Nullable StatementCounts counts,
             @Nullable IntakeResult result) {
-        UUID id = statement.getStatementId();
-        return builder.bankTransactionCount(transactions.countByStatementId(id))
-                .possibleDuplicateCount(
-                        transactions.countByStatementIdAndStatus(id, BankTransactionStatus.POSSIBLE_DUPLICATE))
+        return builder.bankTransactionCount(counts == null ? 0L : counts.bankTransactionCount())
+                .possibleDuplicateCount(counts == null ? 0L : counts.possibleDuplicateCount())
                 .modifiedCount(result == null ? null : (long) result.modifiedCount());
     }
 
@@ -358,44 +379,37 @@ public class BankStatementServiceImpl implements BankStatementService {
         return value == null || value.isBlank() ? null : value;
     }
 
-    /** SHA-256 of the command's payload, scale-independent for amounts, to tell a replay from a reuse. */
+    /**
+     * SHA-256 of the command's payload, scale-independent for amounts, to tell a replay from a reuse.
+     * Every field is length-prefixed ({@code <length>:<text>}, {@code ~} for absent), so free text that
+     * contains a delimiter can never shift a field boundary and collide with a different payload.
+     */
     static @NonNull String hash(@NonNull BankStatementCreateRequest request) {
         StringBuilder canonical = new StringBuilder();
         BankStatementCreateRequest.Header header = request.getStatement();
-        canonical
-                .append(request.getGlAccountId())
-                .append('|')
-                .append(
-                        request.getCurrency() == null
-                                ? ""
-                                : request.getCurrency().trim().toUpperCase(Locale.ROOT))
-                .append('|')
-                .append(
-                        request.getGapAcknowledgement() == null
-                                ? ""
-                                : request.getGapAcknowledgement().trim())
-                .append('|')
-                .append(header.getStatementRef())
-                .append('|')
-                .append(header.getStartDate())
-                .append('|')
-                .append(header.getEndDate())
-                .append('|')
-                .append(plain(header.getOpeningBalance()))
-                .append('|')
-                .append(plain(header.getClosingBalance()));
+        field(canonical, request.getGlAccountId());
+        field(
+                canonical,
+                request.getCurrency() == null
+                        ? null
+                        : request.getCurrency().trim().toUpperCase(Locale.ROOT));
+        field(
+                canonical,
+                request.getGapAcknowledgement() == null
+                        ? null
+                        : request.getGapAcknowledgement().trim());
+        field(canonical, header.getStatementRef());
+        field(canonical, header.getStartDate());
+        field(canonical, header.getEndDate());
+        field(canonical, plain(header.getOpeningBalance()));
+        field(canonical, plain(header.getClosingBalance()));
+        field(canonical, request.getTransactions().size());
         for (BankStatementCreateRequest.Transaction row : request.getTransactions()) {
-            canonical
-                    .append("\n")
-                    .append(row.getDate())
-                    .append('|')
-                    .append(plain(signedAmount(row)))
-                    .append('|')
-                    .append(row.getDescription())
-                    .append('|')
-                    .append(row.getReference())
-                    .append('|')
-                    .append(row.getCheckNumber());
+            field(canonical, row.getDate());
+            field(canonical, plain(signedAmount(row)));
+            field(canonical, row.getDescription());
+            field(canonical, row.getReference());
+            field(canonical, row.getCheckNumber());
         }
         try {
             return HexFormat.of()
@@ -404,6 +418,15 @@ public class BankStatementServiceImpl implements BankStatementService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is required by every Java platform", e);
         }
+    }
+
+    private static void field(StringBuilder canonical, @Nullable Object value) {
+        if (value == null) {
+            canonical.append('~');
+            return;
+        }
+        String text = value.toString();
+        canonical.append(text.length()).append(':').append(text);
     }
 
     private static String plain(BigDecimal value) {

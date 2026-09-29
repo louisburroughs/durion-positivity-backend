@@ -9,6 +9,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /** Repository for {@link BankReconciliationOutstandingItem} rows (SPEC §3.6; stories S1 #2300, S2 #2301, S4 #2303). */
 public interface BankReconciliationOutstandingItemRepository
@@ -42,4 +44,19 @@ public interface BankReconciliationOutstandingItemRepository
 
     Optional<BankReconciliationOutstandingItem> findByOutstandingItemIdAndGlAccountId(
             @NonNull UUID outstandingItemId, @NonNull UUID glAccountId);
+
+    /**
+     * Items in {@code status} per account, counting only items dated on or after the account's
+     * baseline when it has one (§4.1) — one grouped query for a page of the bank-account list.
+     */
+    @Query(
+            "SELECT new com.positivity.accounting.internal.bankrec.repository.AccountCount(i.glAccountId, COUNT(i)) FROM BankReconciliationOutstandingItem i"
+                    + " LEFT JOIN BankAccountProfile p ON p.glAccountId = i.glAccountId"
+                    + " WHERE i.glAccountId IN :ids AND i.status = :status"
+                    + " AND (p.reconciliationBaselineDate IS NULL OR i.itemDate >= p.reconciliationBaselineDate)"
+                    + " GROUP BY i.glAccountId")
+    @NonNull
+    List<AccountCount> countSinceBaselineByGlAccountIdIn(
+            @Param("ids") @NonNull Collection<UUID> glAccountIds,
+            @Param("status") @NonNull OutstandingItemStatus status);
 }

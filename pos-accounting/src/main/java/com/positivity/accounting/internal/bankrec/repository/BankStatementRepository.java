@@ -3,11 +3,15 @@ package com.positivity.accounting.internal.bankrec.repository;
 import com.positivity.accounting.internal.bankrec.entity.BankStatement;
 import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for {@link BankStatement} headers (SPEC §3.1; stories S1 #2300, S2 #2301). The list
@@ -56,4 +60,12 @@ public interface BankStatementRepository
 
     /** The statement a manual-statement command created (§6.3). */
     Optional<BankStatement> findByRequestId(@NonNull UUID requestId);
+
+    /** The latest end date of a {@code status} statement per account (coverage frontier, §4.1). */
+    @Query(
+            "SELECT new com.positivity.accounting.internal.bankrec.repository.AccountDate(s.glAccountId, MAX(s.endDate)) FROM BankStatement s"
+                    + " WHERE s.glAccountId IN :ids AND s.status = :status GROUP BY s.glAccountId")
+    @NonNull
+    List<AccountDate> findLatestEndDateByGlAccountIdIn(
+            @Param("ids") @NonNull Collection<UUID> glAccountIds, @Param("status") @NonNull BankStatementStatus status);
 }

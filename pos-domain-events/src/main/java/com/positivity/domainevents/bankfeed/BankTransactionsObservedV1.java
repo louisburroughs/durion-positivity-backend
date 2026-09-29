@@ -175,10 +175,12 @@ public record BankTransactionsObservedV1(
                 IsoCurrency.require("currency", currency);
             }
             if (change == Change.REMOVED) {
-                if (settlementState != null
+                if (sourceRowNumber != null
+                        || settlementState != null
                         || transactionDate != null
                         || authorizedDate != null
                         || signedAmount != null
+                        || currency != null
                         || description != null
                         || originalDescription != null
                         || reference != null
