@@ -33,6 +33,7 @@ import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankC
 import com.positivity.accounting.internal.bankrec.service.BankRecPolicy;
 import com.positivity.accounting.internal.bankrec.service.BankRecSettings;
 import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
+import com.positivity.accounting.internal.bankrec.service.LedgerEntries;
 import com.positivity.accounting.internal.bankrec.service.LedgerLine;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationCalculator;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationCalculator.Unexplained;
@@ -40,16 +41,10 @@ import com.positivity.accounting.internal.bankrec.service.ReconciliationChain;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationLedger;
 import com.positivity.accounting.internal.dto.BankReconciliationExceptionRequest;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
-import com.positivity.accounting.internal.entity.GLAccount;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException.UnreconciledAccount;
 import com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException;
-import com.positivity.accounting.internal.repository.EntryAccount;
-import com.positivity.accounting.internal.repository.GLAccountRepository;
-import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
-import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.AccountingPeriodGate;
 import com.positivity.security.common.SecurityContextHelper;
@@ -101,7 +96,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class BankReconciliationCloseReadinessService {
+public class BankReconciliationCloseReadiness {
 
     /** How many ids a reference list carries (§5.3 "first 50"). */
     static final int REFERENCE_LIMIT = 50;
@@ -128,9 +123,7 @@ public class BankReconciliationCloseReadinessService {
     private final BankReconciliationAdjustmentRepository adjustments;
     private final ReconciliationCalculator calculator;
     private final ReconciliationLedger ledger;
-    private final JournalEntryRepository journalEntries;
-    private final JournalEntryLineRepository journalEntryLines;
-    private final GLAccountRepository glAccounts;
+    private final LedgerEntries ledgerEntries;
     private final ObjectProvider<IncompleteImportLookup> importLookups;
 
     /**
@@ -493,8 +486,7 @@ public class BankReconciliationCloseReadinessService {
                 .map(BankReconciliationAdjustment::getJournalEntryId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        Map<UUID, JournalEntryStatus> statusById = journalEntries.findAllById(entryIds).stream()
-                .collect(Collectors.toMap(JournalEntry::getJournalEntryId, JournalEntry::getStatus));
+        Map<UUID, JournalEntryStatus> statusById = ledgerEntries.statuses(entryIds);
         List<UUID> unposted = posted.stream()
                 .filter(a -> a.getJournalEntryId() == null
                         || statusById.get(a.getJournalEntryId()) != JournalEntryStatus.POSTED)
@@ -582,14 +574,7 @@ public class BankReconciliationCloseReadinessService {
     // ---- tenant-wide ------------------------------------------------------------------------------------
 
     private Optional<CloseReadinessCheck> draftEntries(LocalDate start, LocalDate end) {
-        List<UUID> drafts = journalEntries
-                .findByStatusAndTransactionDateInRange(
-                        JournalEntryStatus.DRAFT,
-                        start.atStartOfDay(),
-                        end.plusDays(1).atStartOfDay())
-                .stream()
-                .map(JournalEntry::getJournalEntryId)
-                .toList();
+        List<UUID> drafts = ledgerEntries.draftEntryIds(start, end);
         if (drafts.isEmpty()) {
             return Optional.empty();
         }
@@ -616,13 +601,16 @@ public class BankReconciliationCloseReadinessService {
                 .collect(Collectors.toMap(
                         BankReconciliationAdjustment::getJournalEntryId, Function.identity(), (a, b) -> a));
         Map<UUID, List<BankReconciliationAdjustment>> byClearingAccount = new LinkedHashMap<>();
-        for (EntryAccount row : journalEntryLines.findEntryAccounts(byEntry.keySet())) {
-            BankReconciliationAdjustment adjustment = byEntry.get(row.journalEntryId());
+        for (Map.Entry<UUID, Set<UUID>> entry :
+                ledgerEntries.accountsOf(byEntry.keySet()).entrySet()) {
+            BankReconciliationAdjustment adjustment = byEntry.get(entry.getKey());
             UUID bankAccount = adjustment.getReconciliation().getGlAccount().getGlAccountId();
-            if (!row.glAccountId().equals(bankAccount)) {
-                byClearingAccount
-                        .computeIfAbsent(row.glAccountId(), k -> new ArrayList<>())
-                        .add(adjustment);
+            for (UUID account : entry.getValue()) {
+                if (!account.equals(bankAccount)) {
+                    byClearingAccount
+                            .computeIfAbsent(account, k -> new ArrayList<>())
+                            .add(adjustment);
+                }
             }
         }
         if (byClearingAccount.isEmpty()) {
@@ -630,8 +618,7 @@ public class BankReconciliationCloseReadinessService {
         }
         LocalDate agingDate = end.minusDays(settings.clearingAgingWarningDays());
         BigDecimal tolerance = currency.tolerance();
-        Map<UUID, GLAccount> accounts = glAccounts.findAllById(byClearingAccount.keySet()).stream()
-                .collect(Collectors.toMap(GLAccount::getGlAccountId, Function.identity()));
+        Map<UUID, BankCashAccount> accounts = bankCashAccounts.displayValues(byClearingAccount.keySet());
         List<CloseReadinessCheck> checks = new ArrayList<>();
         byClearingAccount.entrySet().stream()
                 .sorted(Comparator.comparing(e -> accountCode(accounts.get(e.getKey()))))
@@ -673,8 +660,8 @@ public class BankReconciliationCloseReadinessService {
         return SecurityContextHelper.isAuthenticated() && SecurityContextHelper.hasAuthority(authority);
     }
 
-    private static String accountCode(@Nullable GLAccount account) {
-        return account != null ? account.getAccountCode() : "";
+    private static String accountCode(@Nullable BankCashAccount account) {
+        return account != null ? account.accountCode() : "";
     }
 
     private static LocalDate earlier(LocalDate a, LocalDate b) {

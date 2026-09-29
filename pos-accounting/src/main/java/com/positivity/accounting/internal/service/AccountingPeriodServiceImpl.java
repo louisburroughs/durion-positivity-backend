@@ -1,8 +1,8 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.bankrec.dto.CloseReadinessResponse;
-import com.positivity.accounting.internal.bankrec.readmodel.BankReconciliationCloseReadinessService;
-import com.positivity.accounting.internal.bankrec.readmodel.BankReconciliationCloseReadinessService.CloseDecision;
+import com.positivity.accounting.internal.bankrec.readmodel.BankReconciliationCloseReadiness;
+import com.positivity.accounting.internal.bankrec.readmodel.BankReconciliationCloseReadiness.CloseDecision;
 import com.positivity.accounting.internal.dto.AccountingPeriodResponse;
 import com.positivity.accounting.internal.dto.PeriodCloseRequest;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
@@ -65,7 +65,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     private final AccountingPeriodProvisioner periodProvisioner;
     private final JournalEntryRepository journalEntryRepository;
     private final AccountingAuditLogRepository auditLogRepository;
-    private final BankReconciliationCloseReadinessService closeReadiness;
+    private final BankReconciliationCloseReadiness closeReadiness;
 
     @Override
     @NonNull
@@ -172,16 +172,16 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
                     "Close of period {} refused by bank reconciliation policy {}: {}",
                     canonicalCode,
                     readiness.policy(),
-                    BankReconciliationCloseReadinessService.summary(readiness));
+                    BankReconciliationCloseReadiness.summary(readiness));
             throw e;
         }
 
         String actor = currentActor();
-        String summary = BankReconciliationCloseReadinessService.summary(readiness);
+        String summary = BankReconciliationCloseReadiness.summary(readiness);
         if (decision.exceptionGranted()) {
             AccountingAuditLog exceptionRow = auditRow(period, "PERIOD_CLOSE_BANKREC_EXCEPTION", actor);
             exceptionRow.setJustification(decision.justification());
-            exceptionRow.setOldValue(BankReconciliationCloseReadinessService.snapshot(readiness));
+            exceptionRow.setOldValue(BankReconciliationCloseReadiness.snapshot(readiness));
             exceptionRow.setNewValue(AccountingPeriodStatus.CLOSED.name());
             auditLogRepository.save(exceptionRow);
             log.info("Period {} closes on a bank reconciliation exception by {}: {}", canonicalCode, actor, summary);

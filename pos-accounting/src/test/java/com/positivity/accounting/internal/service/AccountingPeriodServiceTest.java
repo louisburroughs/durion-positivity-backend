@@ -9,7 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.bankrec.dto.CloseReadinessResponse;
 import com.positivity.accounting.internal.bankrec.enums.BankRecClosePolicy;
-import com.positivity.accounting.internal.bankrec.readmodel.BankReconciliationCloseReadinessService;
+import com.positivity.accounting.internal.bankrec.readmodel.BankReconciliationCloseReadiness;
 import com.positivity.accounting.internal.dto.AccountingPeriodResponse;
 import com.positivity.accounting.internal.dto.BankReconciliationExceptionRequest;
 import com.positivity.accounting.internal.dto.PeriodCloseRequest;
@@ -72,7 +72,7 @@ class AccountingPeriodServiceTest {
     private AccountingAuditLogRepository auditLogRepository;
 
     @Mock
-    private BankReconciliationCloseReadinessService closeReadiness;
+    private BankReconciliationCloseReadiness closeReadiness;
 
     @InjectMocks
     private AccountingPeriodServiceImpl service;
@@ -416,7 +416,7 @@ class AccountingPeriodServiceTest {
         CloseReadinessResponse ready = readiness(true, 0);
         when(closeReadiness.evaluate(open, true)).thenReturn(ready);
         when(closeReadiness.decide(ready, null))
-                .thenReturn(new BankReconciliationCloseReadinessService.CloseDecision(true, false));
+                .thenReturn(new BankReconciliationCloseReadiness.CloseDecision(true, false));
         when(periodRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         AccountingPeriodResponse response = service.closePeriod("2023-12", null);
@@ -441,7 +441,7 @@ class AccountingPeriodServiceTest {
         when(closeReadiness.evaluate(open, true)).thenReturn(blocked);
         PeriodCloseRequest request = exception("Statement delayed by the bank");
         when(closeReadiness.decide(blocked, request.getBankReconciliationException()))
-                .thenReturn(new BankReconciliationCloseReadinessService.CloseDecision(
+                .thenReturn(new BankReconciliationCloseReadiness.CloseDecision(
                         false, true, "Statement delayed by the bank"));
         when(periodRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 

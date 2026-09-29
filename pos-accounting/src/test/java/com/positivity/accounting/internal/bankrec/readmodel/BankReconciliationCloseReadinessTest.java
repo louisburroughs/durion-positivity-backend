@@ -42,6 +42,7 @@ import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankC
 import com.positivity.accounting.internal.bankrec.service.BankRecPolicy;
 import com.positivity.accounting.internal.bankrec.service.BankRecSettings;
 import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
+import com.positivity.accounting.internal.bankrec.service.LedgerEntries;
 import com.positivity.accounting.internal.bankrec.service.LedgerLine;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationCalculator;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationCalculator.Unexplained;
@@ -50,21 +51,18 @@ import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.BankReconciliationExceptionRequest;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
 import com.positivity.accounting.internal.entity.GLAccount;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.exception.PeriodBankReconciliationIncompleteException;
 import com.positivity.accounting.internal.exception.PeriodCloseExceptionNotPermittedException;
-import com.positivity.accounting.internal.repository.EntryAccount;
-import com.positivity.accounting.internal.repository.GLAccountRepository;
-import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
-import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
@@ -88,8 +86,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-@DisplayName("BankReconciliationCloseReadinessService (#2305)")
-class BankReconciliationCloseReadinessServiceTest {
+@DisplayName("BankReconciliationCloseReadiness (#2305)")
+class BankReconciliationCloseReadinessTest {
 
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-09-28T12:00:00Z"), ZoneOffset.UTC);
     private static final UUID CASH = UUID.fromString("01936e5e-0000-7000-8000-000000001000");
@@ -125,13 +123,7 @@ class BankReconciliationCloseReadinessServiceTest {
     private ReconciliationLedger ledger;
 
     @Mock
-    private JournalEntryRepository journalEntries;
-
-    @Mock
-    private JournalEntryLineRepository journalEntryLines;
-
-    @Mock
-    private GLAccountRepository glAccounts;
+    private LedgerEntries ledgerEntries;
 
     @Mock
     private ObjectProvider<IncompleteImportLookup> importLookups;
@@ -139,12 +131,12 @@ class BankReconciliationCloseReadinessServiceTest {
     @Mock
     private IncompleteImportLookup importLookup;
 
-    private BankReconciliationCloseReadinessService service;
+    private BankReconciliationCloseReadiness service;
     private AccountingPeriod period;
 
     @BeforeEach
     void setUp() {
-        service = new BankReconciliationCloseReadinessService(
+        service = new BankReconciliationCloseReadiness(
                 CLOCK,
                 policy,
                 BankRecSettings.defaults(),
@@ -157,9 +149,7 @@ class BankReconciliationCloseReadinessServiceTest {
                 adjustments,
                 calculator,
                 ledger,
-                journalEntries,
-                journalEntryLines,
-                glAccounts,
+                ledgerEntries,
                 importLookups);
         period = new AccountingPeriod();
         period.setPeriodId(UUID.randomUUID());
@@ -175,8 +165,8 @@ class BankReconciliationCloseReadinessServiceTest {
         when(calculator.unexplained(any(), any(), any(), any()))
                 .thenReturn(new Unexplained(List.of(), List.of(), List.of()));
         when(ledger.balanceAsOf(any(), any())).thenReturn(BigDecimal.ZERO);
-        when(journalEntries.findByStatusAndTransactionDateInRange(any(), any(), any()))
-                .thenReturn(List.of());
+        when(ledgerEntries.draftEntryIds(any(), any())).thenReturn(List.of());
+        when(ledgerEntries.statuses(any())).thenReturn(Map.of());
         when(reconciliations.findIntersecting(any(), any(), any(), any())).thenReturn(List.of());
         when(reconciliations
                         .findByGlAccount_GlAccountIdAndStatusInAndStatementEndDateLessThanEqualOrderByStatementStartDateAsc(
@@ -484,7 +474,6 @@ class BankReconciliationCloseReadinessServiceTest {
         orphan.setStatus(AdjustmentStatus.POSTED);
         orphan.setTransactionDate(LocalDate.of(2026, 8, 20));
         when(adjustments.findAllOnAccount(CASH)).thenReturn(List.of(orphan));
-        when(journalEntries.findAllById(any())).thenReturn(List.of());
 
         CloseReadinessAccount cash = cash(service.evaluate(period));
 
@@ -523,13 +512,10 @@ class BankReconciliationCloseReadinessServiceTest {
             other.setReconciliation(recon(LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31), "0"));
             when(adjustments.findAllOfType(BankAdjustmentType.OTHER)).thenReturn(List.of(other));
             // Read from the entry's lines: the bank side and the counter account the entry actually hit.
-            when(journalEntryLines.findEntryAccounts(any()))
-                    .thenReturn(List.of(
-                            new EntryAccount(other.getJournalEntryId(), CASH),
-                            new EntryAccount(other.getJournalEntryId(), CLEARING)));
-            GLAccount clearing = new GLAccount(CLEARING);
-            clearing.setAccountCode("2360");
-            when(glAccounts.findAllById(any())).thenReturn(List.of(clearing));
+            when(ledgerEntries.accountsOf(any())).thenReturn(Map.of(other.getJournalEntryId(), Set.of(CASH, CLEARING)));
+            when(bankCashAccounts.displayValues(any()))
+                    .thenReturn(
+                            Map.of(CLEARING, new BankCashAccount(CLEARING, "2360", "Bank reconciliation clearing")));
         }
 
         @Test
@@ -575,7 +561,7 @@ class BankReconciliationCloseReadinessServiceTest {
             when(adjustments.findAllOfType(BankAdjustmentType.OTHER)).thenReturn(List.of());
 
             assertThat(service.evaluate(period).checks()).isEmpty();
-            verify(journalEntryLines, never()).findEntryAccounts(any());
+            verify(ledgerEntries, never()).accountsOf(any());
         }
     }
 
@@ -688,10 +674,7 @@ class BankReconciliationCloseReadinessServiceTest {
         @DisplayName("ADVISORY: DRAFT entries alone make readiness false")
         void advisoryDraftsNotReady() {
             policy(BankRecClosePolicy.ADVISORY, 0);
-            JournalEntry draft = new JournalEntry();
-            draft.setJournalEntryId(UUID.randomUUID());
-            when(journalEntries.findByStatusAndTransactionDateInRange(any(), any(), any()))
-                    .thenReturn(List.of(draft));
+            when(ledgerEntries.draftEntryIds(any(), any())).thenReturn(List.of(UUID.randomUUID()));
 
             CloseReadinessResponse readiness = service.evaluate(period);
 
@@ -702,7 +685,7 @@ class BankReconciliationCloseReadinessServiceTest {
         @Test
         @DisplayName("the summary names the policy, counts and each blocked account's codes")
         void summary() {
-            assertThat(BankReconciliationCloseReadinessService.summary(service.evaluate(period)))
+            assertThat(BankReconciliationCloseReadiness.summary(service.evaluate(period)))
                     .isEqualTo("policy=REQUIRED_WITH_EXCEPTION;ready=false;blocking=1;warning=0;"
                             + "unreconciled=1000:RECONCILIATION_IN_FLIGHT");
         }
