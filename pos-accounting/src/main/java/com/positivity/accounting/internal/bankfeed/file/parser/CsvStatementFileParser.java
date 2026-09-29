@@ -201,6 +201,10 @@ public class CsvStatementFileParser implements StatementFileParser {
                 cell.append(c);
             }
         }
+        if (inQuotes) {
+            // Every later physical row would otherwise fold into this one cell.
+            throw unreadable("Line " + recordLine + ": a quoted field is not closed before the end of the file");
+        }
         cells.add(cell.toString());
         addIfNotBlank(records, recordLine, cells);
         return records;
