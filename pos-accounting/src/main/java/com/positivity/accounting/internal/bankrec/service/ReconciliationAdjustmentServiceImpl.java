@@ -175,14 +175,13 @@ public class ReconciliationAdjustmentServiceImpl implements ReconciliationAdjust
             bankRow = eligibility
                     .lockBankForMatch(recon, List.of(links.bankTransactionId()), null)
                     .get(0);
-            // §3.5: a linked adjustment explains its bank transaction exactly — no tolerance (domain review, S6).
+            // M5 (§3.4): the ADJUSTMENT match is exact (toleranceUsed = 0), so no difference is accepted — not even
+            // one minor unit. Compared by value, scale-insensitive.
             if (bankRow.getSignedAmount().compareTo(amount) != 0) {
-                throw BankRecException.field(
-                        BankRecErrorCode.ADJUSTMENT_LINK_NOT_ELIGIBLE,
-                        "The adjustment of " + currency.display(amount) + " does not equal bank transaction "
-                                + bankRow.getBankTransactionId() + " of " + currency.display(bankRow.getSignedAmount()),
-                        "amount",
-                        "expected " + currency.display(bankRow.getSignedAmount()));
+                throw notEligible(
+                        "The adjustment of " + amount + " must equal bank transaction " + bankRow.getBankTransactionId()
+                                + " of " + bankRow.getSignedAmount() + " exactly",
+                        "amount");
             }
             explainingDate = bankRow.getTransactionDate();
         }

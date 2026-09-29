@@ -419,24 +419,42 @@ class ReconciliationAdjustmentServiceTest {
         }
 
         @Test
-        @DisplayName("a linked adjustment must equal its bank transaction exactly: ADJUSTMENT_LINK_NOT_ELIGIBLE [M]")
-        void linkedAmountMustAgree() {
+        @DisplayName("a linked adjustment differing from its bank transaction, even by one cent, is"
+                + " ADJUSTMENT_LINK_NOT_ELIGIBLE on amount and posts nothing (M5)")
+        void linkedAmountMustEqualExactly() {
             BankTransaction bank = transaction("-15.00", LocalDate.of(2026, 9, 10));
             when(eligibility.lockBankForMatch(eq(recon), anyCollection(), isNull()))
                     .thenReturn(List.of(bank));
-            for (String amount : List.of("-12.00", "-14.99")) {
+            for (String amount : new String[] {"-12.00", "-14.99", "-15.01"}) {
                 assertThatThrownBy(() -> service.addAdjustment(
                                 RECON_ID,
                                 request(BankAdjustmentType.BANK_FEE, amount)
                                         .bankTransactionId(bank.getBankTransactionId())
                                         .build()))
-                        .as(amount)
                         .isInstanceOfSatisfying(BankRecException.class, e -> {
                             assertThat(e.code()).isEqualTo(BankRecErrorCode.ADJUSTMENT_LINK_NOT_ELIGIBLE);
-                            assertThat(e.fieldErrors()).containsEntry("amount", "expected -15.00");
+                            assertThat(e.fieldErrors()).containsKey("amount");
                         });
             }
             verify(journalEntryService, never()).createJournalEntry(any());
+            verify(writer, never()).create(any(), any(), anyList(), anyList(), anyString());
+        }
+
+        @Test
+        @DisplayName("a linked adjustment equal by value at another scale (-15.5 vs -15.50) posts its ADJUSTMENT match")
+        void linkedAmountEqualByValue() {
+            BankTransaction bank = transaction("-15.50", LocalDate.of(2026, 9, 10));
+            when(eligibility.lockBankForMatch(eq(recon), anyCollection(), isNull()))
+                    .thenReturn(List.of(bank));
+            BankReconciliationAdjustmentResponse posted = service.addAdjustment(
+                    RECON_ID,
+                    request(BankAdjustmentType.BANK_FEE, "-15.5")
+                            .bankTransactionId(bank.getBankTransactionId())
+                            .build());
+            assertThat(posted.getBankTransactionId()).isEqualTo(bank.getBankTransactionId());
+            ArgumentCaptor<Header> header = ArgumentCaptor.forClass(Header.class);
+            verify(writer).create(eq(recon), header.capture(), eq(List.of(bank)), anyList(), anyString());
+            assertThat(header.getValue().kind()).isEqualTo(MatchKind.ADJUSTMENT);
         }
     }
 

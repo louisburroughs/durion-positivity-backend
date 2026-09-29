@@ -86,8 +86,9 @@ public class ReconciliationAdjustmentController {
                     RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE; 422 \
                     RECONCILIATION_ADJUSTMENT_SIGN_INVALID, \
                     ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE, GL_ACCOUNT_NOT_ACTIVE, \
-                    ACCOUNT_NOT_RECONCILABLE, MATCH_AMOUNT_MISMATCH, PERIOD_CLOSED, PERIOD_HARD_LOCKED or \
-                    GL_MAPPING_NOT_CONFIGURED when the rule named fails.
+                    ACCOUNT_NOT_RECONCILABLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED when \
+                    the rule named fails. An adjustment linked to a bank transaction must equal its amount exactly \
+                    (no minor-unit tolerance); any difference is ADJUSTMENT_LINK_NOT_ELIGIBLE on amount.
                     """)
     @ApiResponse(
             responseCode = "201",
