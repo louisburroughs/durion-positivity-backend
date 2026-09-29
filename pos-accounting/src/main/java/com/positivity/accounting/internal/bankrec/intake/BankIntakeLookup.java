@@ -91,11 +91,49 @@ public interface BankIntakeLookup {
             @NonNull UUID glAccountId, @NonNull StatementHeader header, @Nullable String gapAcknowledgement);
 
     /**
+     * The header checks for a corrected statement: as {@link #checkHeader(UUID, StatementHeader, String)}, with
+     * the statement it supersedes left out of U1, U2 and E2 (§4.9 path 3; story S5, #2304). A null {@code
+     * supersededStatementId} is the plain check.
+     */
+    @NonNull
+    default HeaderCheck checkHeader(
+            @NonNull UUID glAccountId,
+            @NonNull StatementHeader header,
+            @Nullable String gapAcknowledgement,
+            @Nullable UUID supersededStatementId) {
+        return checkHeader(glAccountId, header, gapAcknowledgement);
+    }
+
+    /**
      * R1 against the account's stored transactions: for each fingerprint that collides, the earliest
      * transaction it collides with ({@code EXCLUDED} and {@code REMOVED_BY_SOURCE} rows never collide).
      */
     @NonNull
     Map<String, UUID> collidingFingerprints(@NonNull UUID glAccountId, @NonNull Collection<String> fingerprints);
+
+    /**
+     * R1 for a corrected statement: the rows of the statement it supersedes are about to be excluded and never
+     * collide (§4.5, §4.9 path 3; story S5, #2304). A null {@code supersededStatementId} is the plain check.
+     */
+    @NonNull
+    default Map<String, UUID> collidingFingerprints(
+            @NonNull UUID glAccountId, @NonNull Collection<String> fingerprints, @Nullable UUID supersededStatementId) {
+        return collidingFingerprints(glAccountId, fingerprints);
+    }
+
+    /**
+     * Checks a statement supersession named by an import before anything is written (§4.9 path 3; story S5,
+     * #2304): the justification, the named statement's eligibility, and no active reconciliation of it.
+     *
+     * @return the trimmed justification, or null when {@code supersedesStatementId} is absent
+     * @throws BankRecException {@code VALIDATION_ERROR} / {@code JUSTIFICATION_REQUIRED}, {@code
+     *     STATEMENT_SUPERSESSION_NOT_ELIGIBLE}, {@code RECONCILIATION_WINDOW_ALREADY_RECONCILED}
+     */
+    @Nullable
+    default String checkSupersession(
+            @NonNull UUID glAccountId, @Nullable UUID supersedesStatementId, @Nullable String justification) {
+        return null;
+    }
 
     /**
      * Saves a column mapping as the account's default (§3.1, §4.4 {@code saveAsAccountDefault}) when the

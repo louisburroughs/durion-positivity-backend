@@ -88,6 +88,19 @@ public class BankImportCreateRequest {
     private String gapAcknowledgement;
 
     @Schema(
+            description = "A COMMITTED statement of the same account this corrected file supersedes (§4.9 path 3):"
+                    + " checked at upload and again at commit, where the old statement becomes SUPERSEDED, its rows"
+                    + " EXCLUDED and a FINALIZED reconciliation of it INVALIDATED; not combined with splitAt",
+            example = "019a0000-0000-7000-8000-000000000002")
+    private UUID supersedesStatementId;
+
+    @Schema(
+            description = "Why the statement is superseded (at least 10 characters); required with"
+                    + " supersedesStatementId and refused without it",
+            example = "The bank reissued September with the missing wire of 2026-09-14")
+    private String supersessionJustification;
+
+    @Schema(
             description = "Split points: each date ends a segment committed as its own statement, with its keyed"
                     + " closing balance")
     private List<BankImportSplitPoint> splitAt;

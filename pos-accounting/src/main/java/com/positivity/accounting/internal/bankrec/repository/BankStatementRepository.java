@@ -38,6 +38,20 @@ public interface BankStatementRepository
                     @NonNull LocalDate endDate,
                     @NonNull LocalDate startDate);
 
+    /** U2 for a corrected statement (§4.9 path 3; S5): every statement overlapping the window, earliest first. */
+    @NonNull
+    List<BankStatement>
+            findByGlAccountIdAndStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByStartDateAsc(
+                    @NonNull UUID glAccountId,
+                    @NonNull BankStatementStatus status,
+                    @NonNull LocalDate endDate,
+                    @NonNull LocalDate startDate);
+
+    /** E2 for a corrected statement (§4.9 path 3; S5): the two latest statements ending before the window. */
+    @NonNull
+    List<BankStatement> findTop2ByGlAccountIdAndStatusAndEndDateLessThanOrderByEndDateDesc(
+            @NonNull UUID glAccountId, @NonNull BankStatementStatus status, @NonNull LocalDate startDate);
+
     /** E2: the statement a new window starting at {@code startDate} would continue. */
     Optional<BankStatement> findFirstByGlAccountIdAndStatusAndEndDateLessThanOrderByEndDateDesc(
             @NonNull UUID glAccountId, @NonNull BankStatementStatus status, @NonNull LocalDate startDate);

@@ -2477,6 +2477,8 @@ CREATE TABLE public.bank_import (
     discard_reason character varying(1000),
     request_hash character varying(64),
     gap_acknowledgement character varying(1000),
+    supersedes_statement_id uuid,
+    supersession_justification character varying(1000),
     split_at jsonb,
     statement_ids jsonb,
     source_columns jsonb,
@@ -2738,6 +2740,8 @@ ALTER TABLE ONLY public.bank_import
     ADD CONSTRAINT bank_import_gl_account_fk FOREIGN KEY (tenant_id, gl_account_id) REFERENCES public.gl_account(tenant_id, gl_account_id);
 ALTER TABLE ONLY public.bank_import
     ADD CONSTRAINT bank_import_statement_fk FOREIGN KEY (tenant_id, statement_id) REFERENCES public.bank_statement(tenant_id, statement_id);
+ALTER TABLE ONLY public.bank_import
+    ADD CONSTRAINT bank_import_supersedes_statement_fk FOREIGN KEY (tenant_id, supersedes_statement_id) REFERENCES public.bank_statement(tenant_id, statement_id);
 ALTER TABLE ONLY public.bank_import
     ADD CONSTRAINT bank_import_reconciliation_fk FOREIGN KEY (tenant_id, reconciliation_id) REFERENCES public.bank_reconciliation(tenant_id, reconciliation_id);
 

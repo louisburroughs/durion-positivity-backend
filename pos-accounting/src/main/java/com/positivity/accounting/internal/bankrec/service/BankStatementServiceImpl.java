@@ -109,7 +109,10 @@ public class BankStatementServiceImpl implements BankStatementService {
                         null,
                         request.getRequestId(),
                         requestHash,
-                        null));
+                        null,
+                        java.util.Set.of(),
+                        request.getSupersedesStatementId(),
+                        request.getSupersessionJustification()));
         UUID statementId = result.statementId();
         if (Boolean.TRUE.equals(request.getStartReconciliation())) {
             // §6.1 startReconciliation: the reconciliation starts in the commit transaction.
@@ -271,6 +274,10 @@ public class BankStatementServiceImpl implements BankStatementService {
                 && request.getGapAcknowledgement().length() > 1000) {
             errors.put("gapAcknowledgement", "at most 1000 characters");
         }
+        if (request.getSupersessionJustification() != null
+                && request.getSupersessionJustification().length() > 1000) {
+            errors.put("supersessionJustification", "at most 1000 characters");
+        }
         if (!errors.isEmpty()) {
             throw new BankRecException(BankRecErrorCode.VALIDATION_ERROR, "The statement request is invalid", errors);
         }
@@ -420,6 +427,15 @@ public class BankStatementServiceImpl implements BankStatementService {
             field(canonical, row.getDescription());
             field(canonical, row.getReference());
             field(canonical, row.getCheckNumber());
+        }
+        if (request.getSupersedesStatementId() != null || request.getSupersessionJustification() != null) {
+            // Appended only when present, so a request without a supersession keeps its earlier hash.
+            field(canonical, request.getSupersedesStatementId());
+            field(
+                    canonical,
+                    request.getSupersessionJustification() == null
+                            ? null
+                            : request.getSupersessionJustification().trim());
         }
         try {
             return HexFormat.of()

@@ -183,6 +183,14 @@ public class BankImport extends TenantScopedEntity {
     @Column(name = "gap_acknowledgement", length = 1000)
     private String gapAcknowledgement;
 
+    /** The COMMITTED statement this corrected file supersedes (§4.9 path 3; S5, #2304); re-checked at commit. */
+    @Column(name = "supersedes_statement_id", columnDefinition = "UUID")
+    private UUID supersedesStatementId;
+
+    /** Why it supersedes it (D15), handed to the intake and to the {@code BANK_STATEMENT_SUPERSEDE} audit row. */
+    @Column(name = "supersession_justification", length = 1000)
+    private String supersessionJustification;
+
     /** {@code splitAt} points (§4.4, §5.7): {@code [{date, closingBalance}]}, each date the last day of a segment. */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "split_at")

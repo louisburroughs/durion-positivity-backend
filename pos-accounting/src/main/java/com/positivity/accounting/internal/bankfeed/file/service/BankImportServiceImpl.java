@@ -190,7 +190,18 @@ public class BankImportServiceImpl implements BankImportService {
                 : request.getCurrency().trim().toUpperCase(Locale.ROOT);
         requireCurrency(currency, terms);
         requireFileNotCommitted(glAccountId, sha256);
-        lookup.checkHeader(glAccountId, statementHeader(header), request.getGapAcknowledgement());
+        // A corrected file (§4.9 path 3; S5): the supersession is checked at upload for the preview, and the
+        // header is checked with the superseded statement left out.
+        if (request.getSupersedesStatementId() != null && !split.isEmpty()) {
+            throw BankRecException.field(
+                    BankRecErrorCode.VALIDATION_ERROR,
+                    "A corrected file supersedes one statement; it cannot be split",
+                    "splitAt",
+                    "not accepted with supersedesStatementId");
+        }
+        String supersessionJustification = lookup.checkSupersession(
+                glAccountId, request.getSupersedesStatementId(), request.getSupersessionJustification());
+        checkHeader(glAccountId, header, request.getGapAcknowledgement(), request.getSupersedesStatementId());
 
         ColumnMapping mapping = requested != null ? requested : savedMapping(terms);
         ParsedFile parsed = parser.parse(content, options, mapping);
@@ -212,6 +223,8 @@ public class BankImportServiceImpl implements BankImportService {
                 request.getGapAcknowledgement() == null
                         ? null
                         : request.getGapAcknowledgement().trim());
+        created.setSupersedesStatementId(request.getSupersedesStatementId());
+        created.setSupersessionJustification(supersessionJustification);
         applyOptions(created, options, parsed);
         created.setCreatedBy(actor);
         created.setRetentionUntil(LocalDate.now(clock).plusDays(retentionDays));
@@ -341,8 +354,16 @@ public class BankImportServiceImpl implements BankImportService {
                 : splitPoints(fromJson(found.getSplitAt()), header);
         if (request.getStatement() != null) {
             // A corrected or widened header re-runs the header checks (§4.5: a widening may overlap).
-            lookup.checkHeader(found.getGlAccountId(), statementHeader(header), found.getGapAcknowledgement());
+            checkHeader(
+                    found.getGlAccountId(), header, found.getGapAcknowledgement(), found.getSupersedesStatementId());
             applyHeader(found, header);
+        }
+        if (found.getSupersedesStatementId() != null && !split.isEmpty()) {
+            throw BankRecException.field(
+                    BankRecErrorCode.VALIDATION_ERROR,
+                    "A corrected file supersedes one statement; it cannot be split",
+                    "splitAt",
+                    "not accepted with supersedesStatementId");
         }
         found.setSplitAt(toJson(split));
 
@@ -652,7 +673,10 @@ public class BankImportServiceImpl implements BankImportService {
         requireFileNotCommitted(glAccountId, found.getFileSha256());
         // The previous COMMITTED statement can change after upload (§4.2): the acknowledgement rules
         // run again and answer their own codes.
-        lookup.checkHeader(glAccountId, statementHeader(headerOf(found)), found.getGapAcknowledgement());
+        // A corrected file (§4.9 path 3; S5): the supersession is checked again — the named statement or its
+        // reconciliations can change after upload — and the header leaves the superseded statement out.
+        lookup.checkSupersession(glAccountId, found.getSupersedesStatementId(), found.getSupersessionJustification());
+        checkHeader(glAccountId, headerOf(found), found.getGapAcknowledgement(), found.getSupersedesStatementId());
 
         Set<Integer> distinct = new HashSet<>();
         for (BankImportRow row : rows) {
@@ -682,7 +706,9 @@ public class BankImportServiceImpl implements BankImportService {
                             null,
                             null,
                             found.isSaveMappingAsDefault() ? found.getColumnMapping() : null,
-                            distinct));
+                            distinct,
+                            i == 0 ? found.getSupersedesStatementId() : null,
+                            i == 0 ? found.getSupersessionJustification() : null));
             statementIds.add(result.statementId());
             transactionCount += result.bankTransactionCount();
             possibleDuplicates += result.possibleDuplicateCount();
@@ -945,6 +971,19 @@ public class BankImportServiceImpl implements BankImportService {
         }
     }
 
+    /** The header checks, leaving out the statement a corrected file supersedes (§4.9 path 3; S5, #2304). */
+    private void checkHeader(
+            UUID glAccountId,
+            BankImportStatementHeader header,
+            @Nullable String gapAcknowledgement,
+            @Nullable UUID supersedesStatementId) {
+        if (supersedesStatementId == null) {
+            lookup.checkHeader(glAccountId, statementHeader(header), gapAcknowledgement);
+        } else {
+            lookup.checkHeader(glAccountId, statementHeader(header), gapAcknowledgement, supersedesStatementId);
+        }
+    }
+
     // ---- evaluation helpers --------------------------------------------------------------------
 
     private void evaluate(BankImport found, List<BankImportRow> rows) {
@@ -954,7 +993,9 @@ public class BankImportServiceImpl implements BankImportService {
                 glAccountId,
                 found.getStatementStartDate(),
                 found.getStatementEndDate(),
-                fingerprints -> lookup.collidingFingerprints(glAccountId, fingerprints));
+                fingerprints -> found.getSupersedesStatementId() == null
+                        ? lookup.collidingFingerprints(glAccountId, fingerprints)
+                        : lookup.collidingFingerprints(glAccountId, fingerprints, found.getSupersedesStatementId()));
     }
 
     private static void applyCounts(BankImport found, List<BankImportRow> rows) {
@@ -1080,6 +1121,10 @@ public class BankImportServiceImpl implements BankImportService {
         if (request.getGapAcknowledgement() != null
                 && request.getGapAcknowledgement().length() > 1000) {
             errors.put("gapAcknowledgement", "at most 1000 characters");
+        }
+        if (request.getSupersessionJustification() != null
+                && request.getSupersessionJustification().length() > 1000) {
+            errors.put("supersessionJustification", "at most 1000 characters");
         }
         throwIfAny(errors, "The import request is invalid");
     }
@@ -1258,6 +1303,8 @@ public class BankImportServiceImpl implements BankImportService {
                 .delimiter(found.getDelimiter())
                 .saveMappingAsDefault(found.isSaveMappingAsDefault())
                 .gapAcknowledgement(found.getGapAcknowledgement())
+                .supersedesStatementId(found.getSupersedesStatementId())
+                .supersessionJustification(found.getSupersessionJustification())
                 .rowCount(found.getRowCount())
                 .acceptedCount(found.getAcceptedCount())
                 .rejectedCount(found.getRejectedCount())
@@ -1394,6 +1441,15 @@ public class BankImportServiceImpl implements BankImportService {
         for (SplitPoint point : split) {
             field(canonical, point.date());
             field(canonical, plain(point.closingBalance()));
+        }
+        if (request.getSupersedesStatementId() != null || request.getSupersessionJustification() != null) {
+            // Appended only when present, so a request without a supersession keeps its earlier hash.
+            field(canonical, request.getSupersedesStatementId());
+            field(
+                    canonical,
+                    request.getSupersessionJustification() == null
+                            ? null
+                            : request.getSupersessionJustification().trim());
         }
         return sha256(canonical.toString().getBytes(StandardCharsets.UTF_8));
     }
