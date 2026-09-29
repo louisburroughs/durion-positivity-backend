@@ -1,0 +1,8 @@
+# `test` profile for pos-people-contact's Spring tests. The datasource and the other switches come from each test's
+# @SpringBootTest(properties = …); this file only carries what every test context must share.
+#
+# Test contexts never reach pos-security-service or pos-event-receiver. Skip permission registration
+# (its startup retry loop otherwise sleeps ~8 s in every Spring test context) and point the event-type
+# initializer at a loopback port that refuses instantly. Same arrangement as pos-mcp-server's test profile.
+pos.security.permission-registration.enabled: false
+pos.events.base-url: http://127.0.0.1:1

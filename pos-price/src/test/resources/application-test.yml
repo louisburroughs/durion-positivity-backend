@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-customer-test
+    name: pos-price-test
   datasource:
     # MODE=PostgreSQL matches this module's own dev profile. Without it these tests ran on plain H2
     # dialect while production and dev are Postgres, so H2-only behaviour could pass here unnoticed.
@@ -46,3 +46,9 @@ logging:
     org:
       springframework:
         security: DEBUG
+
+# Test contexts never reach pos-security-service or pos-event-receiver. Skip permission registration
+# (its startup retry loop otherwise sleeps ~8 s in every Spring test context) and point the event-type
+# initializer at a loopback port that refuses instantly. Same arrangement as pos-mcp-server's test profile.
+pos.security.permission-registration.enabled: false
+pos.events.base-url: http://127.0.0.1:1
