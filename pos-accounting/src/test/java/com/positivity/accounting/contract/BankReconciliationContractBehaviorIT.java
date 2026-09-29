@@ -354,6 +354,7 @@ class BankReconciliationContractBehaviorIT extends BaseContractIntegrationTest {
             body.put(
                     "transactions",
                     List.of(Map.of("date", "2021-10-05", "signedAmount", "10.00", "description", "ROW")));
+            body.remove("gapAcknowledgement"); // October continues September
             postJson("/v1/accounting/bank-statements", body)
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.reconciliations.length()").value(0));
