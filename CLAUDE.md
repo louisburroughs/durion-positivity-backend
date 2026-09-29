@@ -209,7 +209,8 @@ Each module also needs a `{Module}EventTypes` registry (`internal/config`) listi
 preset (`fastRead`, `search`, `write`, `approval`), plus a `{Module}EventTypeInitializer`
 (`ApplicationRunner`) that PUTs these to `pos-event-receiver` (`pos.events.base-url`, `X-Events-Api-Secret`/
 `pos.events.api-secret`) at startup, swallowing failures so startup never blocks. Modules using `@EmitEvent` must
-depend on `pos-events`. Full templates: `AGENTS.md`.
+depend on `pos-events`. Test profiles point `pos.events.base-url` at `http://127.0.0.1:1` and set
+`pos.security.permission-registration.enabled: false` so no test context waits on either service (`AGENTS.md` §Critical Rules). Full templates: `AGENTS.md`.
 
 ### Permissions / RBAC — code-first registration
 

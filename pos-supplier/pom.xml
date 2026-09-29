@@ -250,6 +250,10 @@
                 <configuration>
                     <systemPropertyVariables>
                         <spring.profiles.active>test</spring.profiles.active>
+                        <!-- Same as the other modules' test profiles: never wait on pos-security-service
+                             or pos-event-receiver from a test context (see application-pg.yml). -->
+                        <pos.security.permission-registration.enabled>false</pos.security.permission-registration.enabled>
+                        <pos.events.base-url>http://127.0.0.1:1</pos.events.base-url>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

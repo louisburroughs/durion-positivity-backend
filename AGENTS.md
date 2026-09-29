@@ -101,6 +101,14 @@
      and the test then demands a catalog entry for an event id.
   2. **Strip comments before scanning.** A `hasAuthority('…')` inside javadoc that documents an
      endpoint is not enforcement, but reads identically to a regex.
+- Test profiles never wait on startup registration. Every module's `src/test/resources/application-test.yml`
+  and `application-pg.yml` (or, where Surefire fixes the profile in the pom, its `systemPropertyVariables`) set
+  `pos.security.permission-registration.enabled: false` and `pos.events.base-url: http://127.0.0.1:1`.
+  Without them each Spring test context sleeps ~8 s in `PermissionRegistrationSupport`'s five-attempt retry
+  loop against an unresolvable `pos-security-service` and fires ~100 failing PUTs at `pos-event-receiver`;
+  measured on `pos-accounting`, that was over half of the Spring test tier's runtime. A new module's test
+  profile must carry both lines. A test that exercises the registration itself sets the property back on
+  its own `@SpringBootTest(properties = …)`.
 - Keep ArchUnit rules green.
 
 ## Where to Look
