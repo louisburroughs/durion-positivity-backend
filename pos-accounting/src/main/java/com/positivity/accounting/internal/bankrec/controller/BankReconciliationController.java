@@ -317,8 +317,9 @@ public class BankReconciliationController {
                     approval gate E4 holds on the live figures: the difference within 0.01, then no unexplained \
                     bank transaction and no unexplained ledger line from the window's baseline to its end. The \
                     opening difference is never a condition.
-                    Use this tool when the preparer has explained every item; use finalizeReconciliation for the \
-                    approver's step, and getReconciliationReview to see what still blocks (readiness.canSubmit).
+                    Use this tool when the preparer has explained every item; do not use it for the approver's \
+                    step (use finalizeReconciliation instead), and use getReconciliationReview to see what still \
+                    blocks (readiness.canSubmit).
                     Preconditions: the reconciliation must be IN_PROGRESS; while SUBMITTED it no longer changes \
                     until the approver returns it.
                     Required inputs: reconciliationId (UUID) as a path parameter; the body is optional and may \
@@ -354,7 +355,18 @@ public class BankReconciliationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankReconciliationResponse> submitReconciliation(
             @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
-            @RequestBody(required = false) @Nullable ReconciliationTransitionRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Optional; the version the caller read, for optimistic locking.",
+                            required = false,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "With version", value = """
+                                                                    {"version":3}
+                                                                    """)))
+                    @RequestBody(required = false)
+                    @Nullable
+                    ReconciliationTransitionRequest request) {
         if (log.isInfoEnabled()) {
             log.info("Submit reconciliation {}", sanitizeForLog(reconciliationId));
         }
@@ -415,7 +427,18 @@ public class BankReconciliationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankReconciliationResponse> finalizeReconciliation(
             @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
-            @RequestBody(required = false) @Nullable ReconciliationTransitionRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Optional; the version the caller read, for optimistic locking.",
+                            required = false,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "With version", value = """
+                                                                    {"version":3}
+                                                                    """)))
+                    @RequestBody(required = false)
+                    @Nullable
+                    ReconciliationTransitionRequest request) {
         if (log.isInfoEnabled()) {
             log.info("Approve reconciliation {}", sanitizeForLog(reconciliationId));
         }
@@ -434,8 +457,8 @@ public class BankReconciliationController {
             description = """
                     Returns a SUBMITTED reconciliation to its preparer (SUBMITTED to IN_PROGRESS) with the \
                     approver's reason, so it can change again.
-                    Use this tool when the approver will not approve as submitted; use cancelReconciliation to \
-                    abandon it and finalizeReconciliation to approve it.
+                    Use this tool when the approver will not approve as submitted; use cancelReconciliation \
+                    instead to abandon it, or finalizeReconciliation to approve it.
                     Preconditions: the reconciliation must be SUBMITTED.
                     Required inputs: reconciliationId (UUID) as a path parameter and reason (at least 10 \
                     characters) in the body; version is optional.
@@ -468,7 +491,21 @@ public class BankReconciliationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankReconciliationResponse> returnReconciliation(
             @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
-            @Valid @RequestBody @NonNull ReconciliationReasonRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The approver's reason (at least 10 characters) and, optionally, the"
+                                    + " version the caller read.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Return with reason", value = """
+                                                                    {"reason":"Outstanding cheque 1042 needs support",
+                                                                     "version":4}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    ReconciliationReasonRequest request) {
         if (log.isInfoEnabled()) {
             log.info("Return reconciliation {}", sanitizeForLog(reconciliationId));
         }
@@ -489,8 +526,8 @@ public class BankReconciliationController {
                     matches become UNMATCHED with unmatchReason RECONCILIATION_CANCELLED (bank rows back to \
                     UNMATCHED), the OPEN outstanding items it registered are RELEASED, and posted adjustments \
                     stay posted — they are real journal entries, reversed explicitly if wrong.
-                    Use this tool to abandon a reconciliation; use returnReconciliation to send a submitted one \
-                    back, and supersedeReconciliation to correct an approved one.
+                    Use this tool to abandon a reconciliation; use returnReconciliation instead to send a \
+                    submitted one back, and supersedeReconciliation to correct an approved one.
                     Preconditions: the reconciliation must be IN_PROGRESS or SUBMITTED.
                     Required inputs: reconciliationId (UUID) as a path parameter and justification (at least \
                     10 characters) in the body; version is optional.
@@ -523,7 +560,21 @@ public class BankReconciliationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankReconciliationResponse> cancelReconciliation(
             @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
-            @Valid @RequestBody @NonNull ReconciliationJustificationRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The justification (at least 10 characters) and, optionally, the version"
+                                    + " the caller read.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Cancel with justification", value = """
+                                                                    {"justification":"Started against the wrong statement",
+                                                                     "version":2}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    ReconciliationJustificationRequest request) {
         if (log.isInfoEnabled()) {
             log.info("Cancel reconciliation {}", sanitizeForLog(reconciliationId));
         }
@@ -546,8 +597,8 @@ public class BankReconciliationController {
                     re-confirm; OPEN outstanding items carry over unchanged. The successor uses the baseline \
                     that governed the window. When the successor is approved the predecessor becomes SUPERSEDED.
                     Use this tool to correct an approved window (there is no reopen); use createReconciliation \
-                    for a statement never reconciled, and a corrected re-import (supersedesStatementId) when the \
-                    bank's statement itself was wrong.
+                    instead for a statement never reconciled, and a corrected re-import (supersedesStatementId) \
+                    when the bank's statement itself was wrong.
                     Preconditions: the reconciliation must be FINALIZED or INVALIDATED, not already superseded, \
                     and its statement still COMMITTED.
                     Required inputs: reconciliationId (UUID) as a path parameter and justification (at least \
@@ -589,7 +640,24 @@ public class BankReconciliationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankReconciliationResponse> supersedeReconciliation(
             @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
-            @Valid @RequestBody @NonNull ReconciliationJustificationRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The justification (at least 10 characters), a requestId (UUIDv7) so a"
+                                    + " retry returns the same successor, and optionally the version the caller"
+                                    + " read.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(name = "Supersede with justification", value = """
+                                                                    {"justification":"Bank corrected a posting date after approval",
+                                                                     "requestId":"019a0000-0000-7000-8000-000000000003",
+                                                                     "version":5}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    ReconciliationJustificationRequest request) {
         if (log.isInfoEnabled()) {
             log.info("Supersede reconciliation {}", sanitizeForLog(reconciliationId));
         }
@@ -625,8 +693,8 @@ public class BankReconciliationController {
                     near-duplicate candidates, aged timing items awaiting reaffirmation, proposed and broken \
                     matches); the posted adjustments; the evidence (matches with their served residual, items, \
                     exclusions, the adjustments to clearing, the statement); and the readiness with its reasons.
-                    Use this tool to render or audit the reconciliation workspace; use getReconciliation for the \
-                    header alone and getReconciliationReport for the printable report.
+                    Use this tool to render or audit the reconciliation workspace; use getReconciliation instead \
+                    for the header alone and getReconciliationReport for the printable report.
                     Preconditions: the reconciliation must exist.
                     Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
                     Emits an ACCOUNTING_RECONCILIATION_REVIEW event; no state changes.

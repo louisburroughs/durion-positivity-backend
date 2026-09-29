@@ -114,8 +114,8 @@ public class ReconciliationMatchController {
                     top candidate scores at least 90 and beats the second by at least 20; closer calls propose \
                     nothing and are counted as ambiguous. The system never accepts a match.
                     Use this tool to pre-pair the obvious rows before reviewing them with \
-                    acceptReconciliationMatch or rejectReconciliationMatch; use createReconciliationMatch to \
-                    record a pairing directly.
+                    acceptReconciliationMatch or rejectReconciliationMatch; use createReconciliationMatch \
+                    instead to record a pairing directly.
                     Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when \
                     FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status).
                     Required inputs: reconciliationId as a path parameter; the body is empty.
@@ -247,7 +247,7 @@ public class ReconciliationMatchController {
                     Accepts a PROPOSED match: the match becomes ACCEPTED, its bank rows MATCHED, and any OPEN \
                     ledger-side outstanding item on its lines CLEARED.
                     Use this tool to confirm a proposal from autoMatchReconciliation; use \
-                    rejectReconciliationMatch to decline it.
+                    rejectReconciliationMatch instead to decline it.
                     Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when \
                     FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); the match must be PROPOSED and its \
                     members still matchable; a justification is needed when the proposal uses the tolerance or \
@@ -288,8 +288,16 @@ public class ReconciliationMatchController {
             @Parameter(description = RECONCILIATION_ID, required = true) @PathVariable @NonNull UUID reconciliationId,
             @Parameter(description = "Match id", required = true) @PathVariable @NonNull UUID matchId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Optional justification.",
-                            content = @Content(mediaType = "application/json"))
+                            description = "Optional justification (at least 10 characters when given).",
+                            required = false,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Accept with justification",
+                                                            value =
+                                                                    "{\"justification\":\"Amount within tolerance, same payer\"}")))
                     @Valid
                     @RequestBody(required = false)
                     ReconciliationMatchDecisionRequest request) {
@@ -306,7 +314,7 @@ public class ReconciliationMatchController {
                     Rejects a PROPOSED match: it becomes REJECTED (kept as history, never deleted) and its \
                     members are released for other matches.
                     Use this tool to decline a proposal from autoMatchReconciliation; use \
-                    acceptReconciliationMatch to confirm it.
+                    acceptReconciliationMatch instead to confirm it.
                     Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when \
                     FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status) and the match must be PROPOSED.
                     Required inputs: reconciliationId and matchId as path parameters; justification optional.
@@ -339,8 +347,16 @@ public class ReconciliationMatchController {
             @Parameter(description = RECONCILIATION_ID, required = true) @PathVariable @NonNull UUID reconciliationId,
             @Parameter(description = "Match id", required = true) @PathVariable @NonNull UUID matchId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Optional justification.",
-                            content = @Content(mediaType = "application/json"))
+                            description = "Optional justification (at least 10 characters when given).",
+                            required = false,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Reject with justification",
+                                                            value =
+                                                                    "{\"justification\":\"Different payer on the deposit slip\"}")))
                     @Valid
                     @RequestBody(required = false)
                     ReconciliationMatchDecisionRequest request) {
