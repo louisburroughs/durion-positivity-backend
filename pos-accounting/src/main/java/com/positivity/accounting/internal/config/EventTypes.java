@@ -367,10 +367,10 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write(
                                 "ACCOUNTING_RECONCILIATION_MATCH",
-                                "Match statement lines to posted GL journal-entry lines")
+                                "Create a match of bank transactions and posted ledger lines (1:1, 1:N, N:1)")
                         .build(),
                 EventTypeRegistration.write(
-                                "ACCOUNTING_RECONCILIATION_UNMATCH", "Reverse a match, returning lines to UNMATCHED")
+                                "ACCOUNTING_RECONCILIATION_UNMATCH", "Unmatch an accepted match with a reason")
                         .build(),
                 EventTypeRegistration.approval(
                                 "ACCOUNTING_RECONCILIATION_ADJUSTMENT",

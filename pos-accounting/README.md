@@ -304,6 +304,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `UNAUTHENTICATED` | 401 | No usable authentication on the request |
 | `FORBIDDEN` | 403 | Caller lacks the required permission |
 | `AUTHORIZATION_DENIED` | 403 | Audit-trail event creation refused because the caller may not record that event |
+| `RECONCILIATION_ADJUSTMENT_APPROVAL_REQUIRED` | 403 | An OTHER reconciliation adjustment above `BANK_REC_OTHER_APPROVAL_THRESHOLD` (or any non-residual OTHER while it is unset) without `accounting:reconciliation:approve` (#2303) |
 | `NOT_FOUND` | 404 | A JPA entity the request addresses does not exist (`EntityNotFoundException`) |
 | `JOURNAL_ENTRY_NOT_FOUND` | 404 | Referenced journal entry does not exist |
 | `DEFAULT_GL_MAPPING_NOT_FOUND` | 404 | Referenced default GL mapping does not exist |
@@ -333,7 +334,11 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `SETTLEMENT_LINE_NOT_UNMATCHED` | 409 | The settlement line is no longer in the UNMATCHED state the operation needs |
 | `SETTLEMENT_NOT_POSTED` | 409 | The operation needs a POSTED settlement |
 | `RECONCILIATION_ALREADY_FINALIZED` | 409 | The bank reconciliation is finalized and no longer editable |
-| `RECONCILIATION_LINE_INELIGIBLE` | 409 | The reconciliation line's state does not allow the requested match or adjustment |
+| `RECONCILIATION_LINE_INELIGIBLE` | 409 | A bank transaction or ledger line is not in a matchable state (already matched, excluded, pending, in an OPEN outstanding item, or a ledger line dated after the window) |
+| `RECONCILIATION_WINDOW_ALREADY_RECONCILED` | 409 | The statement already has an IN_PROGRESS reconciliation or a FINALIZED one without a successor; `fieldErrors[reconciliationId]` names it (#2303) |
+| `MATCH_STATE_INVALID` | 409 | Accept / reject of a match that is not PROPOSED, or unmatch of one that is not ACCEPTED (#2303) |
+| `ADJUSTMENT_ALREADY_REVERSED` | 409 | Reversing a reconciliation adjustment twice (#2303) |
+| `ADJUSTMENT_BRIDGE_ALREADY_POSTED` | 409 | A POSTED gap bridge already exists for the statement (#2303) |
 | `OPTIMISTIC_LOCK` | 409 | The record was changed by another request since it was read (stale `@Version`); reload and retry |
 | `CONFLICT` | 409 | An `IllegalStateException` reporting an item that is `already PROCESSED` |
 | `ILLEGAL_STATE` | 409 | Any other `IllegalStateException` raised by this module's services |
@@ -351,6 +356,12 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `MATCH_AMOUNT_MISMATCH` | 422 | The matched statement and ledger amounts differ |
 | `RECONCILIATION_ADJUSTMENT_SIGN_INVALID` | 422 | A reconciliation adjustment carries the wrong sign for its type |
 | `RECONCILIATION_NOT_BALANCED` | 422 | The reconciliation cannot finalize while a difference remains; `fieldErrors` carries the `difference` |
+| `MATCH_CARDINALITY_NOT_ALLOWED` | 422 | A match with more than one member on both sides (N:M) (#2303) |
+| `MATCH_REQUIRES_REVIEW` | 422 | A non-1:1 match, tolerance use, out-of-window dates or a former possible duplicate without a justification; `fieldErrors[justification]` lists the reasons (#2303) |
+| `OUTSTANDING_ITEM_NOT_ELIGIBLE` | 422 | The line, sign, window or state does not allow the outstanding item, reaffirmation, release or clear-in-gap (#2303) |
+| `ADJUSTMENT_LINK_REQUIRED` | 422 | An OTHER without exactly one link, a residual/bridge link on another type, or a TRANSFER counter missing or misplaced (#2303) |
+| `ADJUSTMENT_LINK_NOT_ELIGIBLE` | 422 | The named match, statement, amount or TRANSFER counter fails its rule (#2303) |
+| `BANK_ACCOUNT_FEED_NOT_LINKED` | 422 | A statementless (feed-backed) reconciliation on an account without a feed link — every account in phase 1 (#2303) |
 | `PAYMENT_GATEWAY_FAILURE` | 500 | The AP payment gateway call failed |
 | `INTERNAL_ERROR` | 500 | Audit-trail event creation failed unexpectedly |
 | `REQUEST_FAILED` | varies | A `ResponseStatusException` raised by a service (payment application, credit memos, report exports, mapping keys): the status is the exception's own and the message is its reason |
@@ -368,6 +379,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `pos.accounting.outbox.poll-interval-ms`            | `1000`               | Kafka outbox drain interval (#1843) |
 | `pos.accounting.outbox.send-timeout-ms`             | `10000`              | Broker ack timeout per outbox row (#1843) |
 | `stripe.api-key`                                    | required             | Stripe API key for payment processing    |
+| `pos.accounting.bankrec.match.date-window-days`     | `7`                  | Bank reconciliation candidate date window W (#2303) |
+| `pos.accounting.bankrec.duplicate.date-window-days` | `3`                  | Near-duplicate candidate window (#2303) |
+| `pos.accounting.bankrec.outstanding.aging-warning-days` | `90`             | Age past which an outstanding item needs a justification and an OTHER_LEDGER_TIMING item a reaffirmation (#2303) |
 
 ## Multitenancy (ADR-0062, WS3 wave 2)
 
