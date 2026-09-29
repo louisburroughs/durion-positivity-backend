@@ -13002,7 +13002,7 @@ components:
           description: Why the period closes without bank reconciliation readiness; at least 10 characters (400 JUSTIFICATION_REQUIRED otherwise); recorded with the readiness snapshot in the PERIOD_CLOSE_BANKREC_EXCEPTION audit row
           example: September bank statement delayed by the bank; controller approved close
           maxLength: 1000
-          minLength: 0
+          minLength: 10
           type: string
       required:
       - justification
@@ -13115,7 +13115,7 @@ components:
           description: Why the policy changes; at least 10 characters (400 JUSTIFICATION_REQUIRED otherwise); recorded on every BANK_REC_POLICY_SET audit row
           example: Finance sets the OTHER threshold after the Q3 review
           maxLength: 1000
-          minLength: 0
+          minLength: 10
           type: string
         otherApprovalThreshold:
           description: OTHER adjustment amount in the functional currency above which accounting:reconciliation:approve is needed; required, null clears it (unset)
