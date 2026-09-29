@@ -77,8 +77,11 @@ Every display value is resolved from data accounting already holds — its own r
 - `POST /v1/accounting/reconciliations/{id}/match` · `/unmatch` — match (1-to-1 / N-to-1, ±0.01) or unmatch statement lines to posted GL lines (permission `accounting:reconciliation:adjust`)
 - `GET /v1/accounting/reconciliations/adjustment-types` — served adjustment-type enum (`BANK_FEE, NSF_FEE, INTEREST_EARNED, FLOAT_ADJUSTMENT, OTHER`; frontend never hardcodes it)
 - `POST /v1/accounting/reconciliations/{id}/adjustments` — record an adjustment; posts a real balanced JE via posting categories, respecting period locks (permission `accounting:reconciliation:adjust`)
-- `POST /v1/accounting/reconciliations/{id}/finalize` — finalize only when statement vs GL ending balance agree within ±0.01 (permission `accounting:reconciliation:adjust`)
-- `GET /v1/accounting/reconciliations/{id}/report` · `/audit` — reconciliation report / audit trail (permission `accounting:reconciliation:view`)
+- `POST /v1/accounting/reconciliations/{id}/submit` — submit for approval behind the gate E4: the live difference within ±0.01, then no unexplained bank transaction or ledger line from the baseline (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_RECONCILIATION_SUBMIT`, fact `accounting.bankreconciliation.submitted`, #2304)
+- `POST /v1/accounting/reconciliations/{id}/finalize` — approve a SUBMITTED reconciliation: row lock, live E4, `approvedGlEndingBalance` and `baselineDate` snapshots; the submitter is refused unless `BANK_REC_ALLOW_SELF_APPROVAL` is true (permission `accounting:reconciliation:approve`, fact `accounting.bankreconciliation.approved`, #2304)
+- `POST /v1/accounting/reconciliations/{id}/return` · `/cancel` · `/supersede` — return to the preparer, cancel (matches unmatched, registered items released), or start a successor of a FINALIZED / INVALIDATED one (permission `accounting:reconciliation:approve`, #2304)
+- `GET /v1/accounting/reconciliations/{id}/report` · `/audit` — reconciliation report / the stored `AccountingAuditLog` trail of the reconciliation, its matches and its items, paged (permission `accounting:reconciliation:view`)
+- A posting or reversal that touches an approved window invalidates it in the same transaction (`INVALIDATED`, fact `accounting.bankreconciliation.invalidated`); a corrected statement (`supersedesStatementId` on the manual statement or the import) supersedes the old one and invalidates its approval (#2304)
 - `GET /v1/accounting/reports/financial/tax-liability` — sales-tax liability by jurisdiction with GL drift (permission `reporting:view:financial-statements`, story T8)
 - `GET /v1/accounting/customer-credits` · `/{creditId}` — list / get AR customer credits with their remaining open amount (permission `accounting:customer-credit:view`, issue #992)
 - `POST /v1/accounting/customer-credits/{creditId}/applications` — apply an open credit to an invoice; posts Dr Customer Credit Liability (2300) / Cr AR, idempotent on `requestId` (permission `accounting:customer-credit:apply`, issue #992)
@@ -304,6 +307,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `UNAUTHENTICATED` | 401 | No usable authentication on the request |
 | `FORBIDDEN` | 403 | Caller lacks the required permission |
 | `AUTHORIZATION_DENIED` | 403 | Audit-trail event creation refused because the caller may not record that event |
+| `RECONCILIATION_SELF_APPROVAL` | 403 | The approver submitted the reconciliation and the tenant's `BANK_REC_ALLOW_SELF_APPROVAL` is not true; the refusal is audited (#2304) |
 | `RECONCILIATION_ADJUSTMENT_APPROVAL_REQUIRED` | 403 | An OTHER reconciliation adjustment above `BANK_REC_OTHER_APPROVAL_THRESHOLD` (or any non-residual OTHER while it is unset) without `accounting:reconciliation:approve` (#2303) |
 | `NOT_FOUND` | 404 | A JPA entity the request addresses does not exist (`EntityNotFoundException`) |
 | `JOURNAL_ENTRY_NOT_FOUND` | 404 | Referenced journal entry does not exist |
@@ -335,7 +339,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `SETTLEMENT_NOT_POSTED` | 409 | The operation needs a POSTED settlement |
 | `RECONCILIATION_ALREADY_FINALIZED` | 409 | The bank reconciliation is finalized and no longer editable |
 | `RECONCILIATION_LINE_INELIGIBLE` | 409 | A bank transaction or ledger line is not in a matchable state (already matched, excluded, pending, in an OPEN outstanding item, or a ledger line dated after the window) |
-| `RECONCILIATION_WINDOW_ALREADY_RECONCILED` | 409 | The statement already has an IN_PROGRESS reconciliation or a FINALIZED one without a successor; `fieldErrors[reconciliationId]` names it (#2303) |
+| `RECONCILIATION_WINDOW_ALREADY_RECONCILED` | 409 | The statement already has an IN_PROGRESS or SUBMITTED reconciliation, or a FINALIZED / INVALIDATED one without a successor (supersede it instead); supersede of an IN_PROGRESS / SUBMITTED one; a statement supersession over a statement with an IN_PROGRESS or SUBMITTED reconciliation. `fieldErrors[reconciliationId]` names it (#2303, #2304) |
+| `RECONCILIATION_NOT_EDITABLE` | 409 | A preparer's change on a SUBMITTED (return it first), INVALIDATED, SUPERSEDED or CANCELLED reconciliation; supersede of a superseded or cancelled one, or of one whose statement was superseded (#2304) |
+| `RECONCILIATION_NOT_SUBMITTED` | 409 | Approve or return of a reconciliation that is not SUBMITTED (#2304) |
 | `MATCH_STATE_INVALID` | 409 | Accept / reject of a match that is not PROPOSED, or unmatch of one that is not ACCEPTED (#2303) |
 | `ADJUSTMENT_ALREADY_REVERSED` | 409 | Reversing a reconciliation adjustment twice (#2303) |
 | `ADJUSTMENT_BRIDGE_ALREADY_POSTED` | 409 | A POSTED gap bridge already exists for the statement (#2303) |
@@ -355,7 +361,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ACCOUNT_NOT_RECONCILABLE` | 422 | The GL account is not flagged as reconcilable |
 | `MATCH_AMOUNT_MISMATCH` | 422 | The matched statement and ledger amounts differ |
 | `RECONCILIATION_ADJUSTMENT_SIGN_INVALID` | 422 | A reconciliation adjustment carries the wrong sign for its type |
-| `RECONCILIATION_NOT_BALANCED` | 422 | The reconciliation cannot finalize while a difference remains; `fieldErrors` carries the `difference` |
+| `RECONCILIATION_NOT_BALANCED` | 422 | Submit or approve while the live difference is beyond ±0.01; `fieldErrors` carries the `difference` |
+| `RECONCILIATION_HAS_UNEXPLAINED_ITEMS` | 422 | Submit or approve while balanced but with unexplained bank transactions or ledger lines from the baseline; `fieldErrors` carries `countUnexplainedBank`, `countUnexplainedLedger` and the first 50 `unexplainedBankTransactionIds[n]` / `unexplainedGlLineIds[n]` (#2304) |
+| `STATEMENT_SUPERSESSION_NOT_ELIGIBLE` | 422 | `supersedesStatementId` names a statement unknown in the tenant, of another account, or not COMMITTED (#2304) |
 | `MATCH_CARDINALITY_NOT_ALLOWED` | 422 | A match with more than one member on both sides (N:M) (#2303) |
 | `MATCH_REQUIRES_REVIEW` | 422 | A non-1:1 match, tolerance use, out-of-window dates or a former possible duplicate without a justification; `fieldErrors[justification]` lists the reasons (#2303) |
 | `OUTSTANDING_ITEM_NOT_ELIGIBLE` | 422 | The line, sign, window or state does not allow the outstanding item, reaffirmation, release or clear-in-gap (#2303) |

@@ -162,15 +162,17 @@ public final class AccountingPermissions {
     public static final String POSTING_RULES_VIEW = "accounting:posting_rules:view";
 
     /**
-     * Prepare reconciliations: manually match or write off settlement lines, and enter bank statements,
-     * review possible duplicates and maintain bank-account profiles.
+     * Prepare reconciliations: manually match or write off settlement lines; import and enter bank statements
+     * (a corrected one included), review possible duplicates, maintain bank-account profiles, and create,
+     * match, register outstanding items on, adjust and submit bank reconciliations (SPEC §6.2).
      */
     public static final String RECONCILIATION_ADJUST = "accounting:reconciliation:adjust";
 
     /**
      * Approve bank reconciliation work — the separation-of-duties key (SPEC-manual-bank-reconciliation
-     * §6.2, D3): exclude and restore bank transactions (story S2, #2301); finalize, return, cancel,
-     * supersede and the rest arrive with story S5, which also allocates its catalog bit and role grants.
+     * §6.2, D3): approve (finalize), return, cancel and supersede reconciliations (story S5, #2304); exclude and
+     * restore bank transactions (S2); reverse adjustments, clear outstanding items in a gap and post OTHER
+     * adjustments above the tenant threshold (S4); read a retained import file (S3).
      */
     public static final String RECONCILIATION_APPROVE = "accounting:reconciliation:approve";
 
