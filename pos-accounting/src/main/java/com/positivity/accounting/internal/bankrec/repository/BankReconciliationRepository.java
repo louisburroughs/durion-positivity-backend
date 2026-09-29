@@ -120,4 +120,11 @@ public interface BankReconciliationRepository
             @Param("status") @NonNull ReconciliationStatus status,
             @Param("start") @NonNull LocalDate start,
             @Param("end") @NonNull LocalDate end);
+
+    /**
+     * The statement a reconciliation is of, read without loading (or locking) the reconciliation: supersede
+     * locks the statement before the reconciliation, in the order statement supersession takes them (S5, #2304).
+     */
+    @Query("SELECT r.statementId FROM BankReconciliation r WHERE r.reconciliationId = :id")
+    Optional<UUID> findStatementIdById(@Param("id") @NonNull UUID reconciliationId);
 }

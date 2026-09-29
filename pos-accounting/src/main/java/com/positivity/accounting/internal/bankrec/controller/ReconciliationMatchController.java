@@ -116,12 +116,14 @@ public class ReconciliationMatchController {
                     Use this tool to pre-pair the obvious rows before reviewing them with \
                     acceptReconciliationMatch or rejectReconciliationMatch; use createReconciliationMatch to \
                     record a pairing directly.
-                    Preconditions: the reconciliation must not be FINALIZED.
+                    Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when \
+                    FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status).
                     Required inputs: reconciliationId as a path parameter; the body is empty.
                     Emits an ACCOUNTING_RECONCILIATION_AUTO_MATCH event and writes a RECONCILIATION_AUTO_MATCH \
                     audit row with the counts.
                     Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation is unknown and 409 \
-                    RECONCILIATION_ALREADY_FINALIZED when it is finalized.
+                    RECONCILIATION_ALREADY_FINALIZED when it is finalized or RECONCILIATION_NOT_EDITABLE when it is \
+                    not IN_PROGRESS.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -137,7 +139,8 @@ public class ReconciliationMatchController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED), or a proposed line"
+            description = "Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED) or not IN_PROGRESS"
+                    + " (RECONCILIATION_NOT_EDITABLE), or a proposed line"
                     + " was concurrently matched (RECONCILIATION_LINE_INELIGIBLE)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AutoMatchResponse> autoMatch(
@@ -162,7 +165,8 @@ public class ReconciliationMatchController {
                     Use this tool to record that bank and ledger rows describe the same cash movement; use \
                     addReconciliationAdjustment instead for a bank-only item, and \
                     registerReconciliationOutstandingItem for a timing difference.
-                    Preconditions: the reconciliation must not be FINALIZED; bank rows UNMATCHED, settled, in no \
+                    Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when \
+                    FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); bank rows UNMATCHED, settled, in no \
                     match or open item and dated on or before the window end; ledger lines POSTED, on the \
                     account, in no active match and dated on or before the window end; the sides must agree \
                     within 0.01. A justification of at least 10 characters is required for a non-1:1 match, any \
@@ -173,7 +177,8 @@ public class ReconciliationMatchController {
                     journal entry is posted.
                     Returns 201 with the match (200 with replayed true for a replayed requestId); 409 \
                     RECONCILIATION_LINE_INELIGIBLE for a row not matchable (including a ledger line dated after \
-                    the window end), 409 RECONCILIATION_ALREADY_FINALIZED or IDEMPOTENCY_CONFLICT; 422 \
+                    the window end), 409 RECONCILIATION_ALREADY_FINALIZED, RECONCILIATION_NOT_EDITABLE or \
+                    IDEMPOTENCY_CONFLICT; 422 \
                     MATCH_AMOUNT_MISMATCH when the sides differ by more than 0.01, 422 \
                     MATCH_CARDINALITY_NOT_ALLOWED for N:M, and 422 MATCH_REQUIRES_REVIEW listing the reasons in \
                     fieldErrors[justification] when a justification is needed.
@@ -201,7 +206,8 @@ public class ReconciliationMatchController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "RECONCILIATION_LINE_INELIGIBLE, RECONCILIATION_ALREADY_FINALIZED or IDEMPOTENCY_CONFLICT",
+            description = "RECONCILIATION_LINE_INELIGIBLE, RECONCILIATION_ALREADY_FINALIZED,"
+                    + " RECONCILIATION_NOT_EDITABLE or IDEMPOTENCY_CONFLICT",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -242,7 +248,8 @@ public class ReconciliationMatchController {
                     ledger-side outstanding item on its lines CLEARED.
                     Use this tool to confirm a proposal from autoMatchReconciliation; use \
                     rejectReconciliationMatch to decline it.
-                    Preconditions: the reconciliation must not be FINALIZED; the match must be PROPOSED and its \
+                    Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when \
+                    FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); the match must be PROPOSED and its \
                     members still matchable; a justification is needed when the proposal uses the tolerance or \
                     spans dates beyond the window.
                     Required inputs: reconciliationId and matchId as path parameters; justification optional.
@@ -270,7 +277,8 @@ public class ReconciliationMatchController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "MATCH_STATE_INVALID, RECONCILIATION_LINE_INELIGIBLE or RECONCILIATION_ALREADY_FINALIZED",
+            description = "MATCH_STATE_INVALID, RECONCILIATION_LINE_INELIGIBLE, RECONCILIATION_ALREADY_FINALIZED or"
+                    + " RECONCILIATION_NOT_EDITABLE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -299,7 +307,8 @@ public class ReconciliationMatchController {
                     members are released for other matches.
                     Use this tool to decline a proposal from autoMatchReconciliation; use \
                     acceptReconciliationMatch to confirm it.
-                    Preconditions: the reconciliation must not be FINALIZED and the match must be PROPOSED.
+                    Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when \
+                    FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status) and the match must be PROPOSED.
                     Required inputs: reconciliationId and matchId as path parameters; justification optional.
                     Emits an ACCOUNTING_RECONCILIATION_MATCH_REJECT event and a RECONCILIATION_MATCH_REJECT \
                     audit row.
@@ -324,7 +333,7 @@ public class ReconciliationMatchController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "MATCH_STATE_INVALID or RECONCILIATION_ALREADY_FINALIZED",
+            description = "MATCH_STATE_INVALID, RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReconciliationMatchResponse> rejectMatch(
             @Parameter(description = RECONCILIATION_ID, required = true) @PathVariable @NonNull UUID reconciliationId,
@@ -350,7 +359,8 @@ public class ReconciliationMatchController {
                     cleared re-open.
                     Use this tool to correct a wrong pairing; do not use rejectReconciliationMatch, which \
                     declines a proposal that was never accepted.
-                    Preconditions: the reconciliation must not be FINALIZED and the match must be ACCEPTED.
+                    Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when \
+                    FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status) and the match must be ACCEPTED.
                     Required inputs: reconciliationId and matchId as path parameters; reason (at least 10 \
                     characters) in the body.
                     Emits an ACCOUNTING_RECONCILIATION_UNMATCH event and a RECONCILIATION_UNMATCH audit row with \
@@ -377,7 +387,7 @@ public class ReconciliationMatchController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "MATCH_STATE_INVALID or RECONCILIATION_ALREADY_FINALIZED",
+            description = "MATCH_STATE_INVALID, RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReconciliationMatchResponse> unmatchMatch(
             @Parameter(description = RECONCILIATION_ID, required = true) @PathVariable @NonNull UUID reconciliationId,

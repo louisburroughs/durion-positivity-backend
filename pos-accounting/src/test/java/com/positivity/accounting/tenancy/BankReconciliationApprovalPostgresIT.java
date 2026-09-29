@@ -68,6 +68,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -512,6 +513,72 @@ class BankReconciliationApprovalPostgresIT extends PostgresTenancyTestBase {
         });
     }
 
+    @Test
+    @DisplayName("supersede re-opens the item a released match cleared; a rejected re-proposal leaves it OPEN (§4.9)")
+    void supersedeReopensClearedItem() {
+        UUID cash = bankAccount();
+        UUID revenue = otherAccount();
+        // January: a deposit on the last day, not yet at the bank, registered as a deposit in transit.
+        UUID deposit = cashLine(post(cash, revenue, "100.00", LocalDate.of(2017, 1, 31)), cash);
+        UUID banked = cashLine(post(cash, revenue, "50.00", LocalDate.of(2017, 1, 10)), cash);
+        UUID january = statement(
+                cash, "2017-01-01", "2017-01-31", "0", "50.00", ACK, List.of("50.00"), LocalDate.of(2017, 1, 10));
+        as(PREPARER);
+        UUID januaryRecon = create(cash, january);
+        match(januaryRecon, bankRows(january), List.of(banked));
+        UUID itemId = inTx(() -> itemService.register(
+                        januaryRecon,
+                        OutstandingItemRegisterRequest.builder()
+                                .glLineId(deposit)
+                                .itemKind(OutstandingItemKind.DEPOSIT_IN_TRANSIT)
+                                .justification(TRANSIT)
+                                .build()))
+                .getOutstandingItemId();
+        approve(januaryRecon);
+
+        // February: the bank credits it; the match clears the item, and the window is approved.
+        UUID february = statement(
+                cash, "2017-02-01", "2017-02-28", "50.00", "150.00", null, List.of("100.00"), LocalDate.of(2017, 2, 2));
+        as(PREPARER);
+        UUID februaryRecon = create(cash, february);
+        UUID matchId = match(februaryRecon, bankRows(february), List.of(deposit), TRANSIT)
+                .getMatchId();
+        assertThat(itemStatus(itemId)).isEqualTo(OutstandingItemStatus.CLEARED);
+        approve(februaryRecon);
+        as(PREPARER);
+        post(cash, revenue, "30.00", LocalDate.of(2017, 2, 20));
+        assertThat(status(februaryRecon)).isEqualTo(ReconciliationStatus.INVALIDATED);
+
+        as(APPROVER);
+        UUID successorId = inTx(() -> approval.supersede(
+                        februaryRecon, new ReconciliationJustificationRequest(WHY, UUIDv7Generator.generate(), null)))
+                .getReconciliationId();
+        inTx(() -> {
+            var item = itemRepository.findById(itemId).orElseThrow();
+            assertThat(item.getStatus())
+                    .as("the clearance fell with the released match")
+                    .isEqualTo(OutstandingItemStatus.OPEN);
+            assertThat(item.getClearedByMatchId()).isNull();
+            assertThat(item.getClearedInReconciliationId()).isNull();
+            assertThat(item.getClosedOn()).isNull();
+            return null;
+        });
+        assertThat(matchState(matchId)).isEqualTo(MatchState.ACCEPTED);
+
+        as(PREPARER);
+        UUID proposed = inTx(() -> matchRepository.findByReconciliationIdAndState(successorId, MatchState.PROPOSED))
+                .getFirst()
+                .getMatchId();
+        inTx(() -> matching.reject(successorId, proposed, new ReconciliationMatchDecisionRequest(null)));
+        assertThat(itemStatus(itemId))
+                .as("a rejected re-proposal leaves the deposit outstanding")
+                .isEqualTo(OutstandingItemStatus.OPEN);
+    }
+
+    private OutstandingItemStatus itemStatus(UUID itemId) {
+        return inTx(() -> itemRepository.findById(itemId).orElseThrow().getStatus());
+    }
+
     // ---- AC 14, 15 ---------------------------------------------------------------------------------
 
     @Test
@@ -805,6 +872,137 @@ class BankReconciliationApprovalPostgresIT extends PostgresTenancyTestBase {
             assertThat(recon.getInvalidationReason()).isEqualTo("LEDGER_LINE_POSTED");
             return null;
         });
+    }
+
+    // ---- §4.9 path 3: supersession vs create ------------------------------------------------------
+
+    @Test
+    @DisplayName("a supersession that locks the statement first leaves a racing create nothing to start (§4.9 path 3)")
+    void supersessionBeforeCreate() throws Exception {
+        UUID cash = bankAccount();
+        UUID revenue = otherAccount();
+        LocalDate day = LocalDate.of(2018, 5, 10);
+        post(cash, revenue, "100.00", day);
+        UUID old = statement(cash, "2018-05-01", "2018-05-31", "0", "100.00", ACK, List.of("100.00"), day);
+        CountDownLatch superseded = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> superseding = pool.submit(() -> inTxAs(new String[] {PREPARER}, () -> {
+                supersedeStatement(cash, old, "2018-05-01", "2018-05-31", "100.00", day);
+                superseded.countDown();
+                release.await(20, TimeUnit.SECONDS);
+                return null;
+            }));
+            assertThat(superseded.await(20, TimeUnit.SECONDS)).isTrue();
+            Future<Object> creating = pool.submit(() -> {
+                try {
+                    return inTxAs(
+                            new String[] {PREPARER},
+                            () -> reconciliationService.create(ReconciliationCreateRequest.builder()
+                                    .glAccountId(cash)
+                                    .requestId(UUIDv7Generator.generate())
+                                    .statementId(old)
+                                    .build()));
+                } catch (RuntimeException e) {
+                    return e;
+                }
+            });
+            Thread.sleep(500);
+            assertThat(creating.isDone())
+                    .as("the create waits for the supersession's statement lock")
+                    .isFalse();
+            release.countDown();
+            superseding.get(20, TimeUnit.SECONDS);
+            assertThat(creating.get(20, TimeUnit.SECONDS))
+                    .isInstanceOfSatisfying(
+                            BankRecException.class,
+                            e -> assertThat(e.code()).isEqualTo(BankRecErrorCode.BANK_STATEMENT_NOT_FOUND));
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+        assertThat(statusOf(old)).isEqualTo(BankStatementStatus.SUPERSEDED);
+        assertThat(inTx(() -> reconciliationRepository.findByStatementIdAndStatusIn(
+                        old, EnumSet.allOf(ReconciliationStatus.class))))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a create that locks the statement first refuses the racing supersession (§4.9 path 3)")
+    void createBeforeSupersession() throws Exception {
+        UUID cash = bankAccount();
+        UUID revenue = otherAccount();
+        LocalDate day = LocalDate.of(2018, 6, 10);
+        post(cash, revenue, "100.00", day);
+        UUID old = statement(cash, "2018-06-01", "2018-06-30", "0", "100.00", ACK, List.of("100.00"), day);
+        CountDownLatch created = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> creating = pool.submit(() -> inTxAs(new String[] {PREPARER}, () -> {
+                reconciliationService.create(ReconciliationCreateRequest.builder()
+                        .glAccountId(cash)
+                        .requestId(UUIDv7Generator.generate())
+                        .statementId(old)
+                        .build());
+                created.countDown();
+                release.await(20, TimeUnit.SECONDS);
+                return null;
+            }));
+            assertThat(created.await(20, TimeUnit.SECONDS)).isTrue();
+            Future<Object> superseding = pool.submit(() -> {
+                try {
+                    return inTxAs(
+                            new String[] {PREPARER},
+                            () -> supersedeStatement(cash, old, "2018-06-01", "2018-06-30", "100.00", day));
+                } catch (RuntimeException e) {
+                    return e;
+                }
+            });
+            Thread.sleep(500);
+            assertThat(superseding.isDone())
+                    .as("the supersession waits for the create's statement lock")
+                    .isFalse();
+            release.countDown();
+            creating.get(20, TimeUnit.SECONDS);
+            assertThat(superseding.get(20, TimeUnit.SECONDS))
+                    .isInstanceOfSatisfying(
+                            BankRecException.class,
+                            e -> assertThat(e.code())
+                                    .isEqualTo(BankRecErrorCode.RECONCILIATION_WINDOW_ALREADY_RECONCILED));
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+        assertThat(statusOf(old)).isEqualTo(BankStatementStatus.COMMITTED);
+        assertThat(inTx(() -> reconciliationRepository.findByStatementIdAndStatusIn(
+                        old, EnumSet.of(ReconciliationStatus.IN_PROGRESS))))
+                .hasSize(1);
+    }
+
+    /** A corrected manual statement for the window that supersedes {@code old}, one row on {@code day}. */
+    private UUID supersedeStatement(UUID cash, UUID old, String start, String end, String closing, LocalDate day) {
+        return statementService
+                .createManualStatement(BankStatementCreateRequest.builder()
+                        .glAccountId(cash)
+                        .requestId(UUIDv7Generator.generate())
+                        .statement(BankStatementCreateRequest.Header.builder()
+                                .startDate(LocalDate.parse(start))
+                                .endDate(LocalDate.parse(end))
+                                .openingBalance(BigDecimal.ZERO)
+                                .closingBalance(new BigDecimal(closing))
+                                .build())
+                        .transactions(List.of(BankStatementCreateRequest.Transaction.builder()
+                                .date(day)
+                                .signedAmount(new BigDecimal(closing))
+                                .description("ROW 1")
+                                .build()))
+                        .gapAcknowledgement(ACK)
+                        .supersedesStatementId(old)
+                        .supersessionJustification(WHY)
+                        .build())
+                .getStatementId();
     }
 
     // ---- fixtures ----------------------------------------------------------------------------------

@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -287,11 +288,15 @@ public class ReconciliationApprovalServiceImpl implements ReconciliationApproval
     public @NonNull BankReconciliationResponse supersede(
             @NonNull UUID reconciliationId, @NonNull ReconciliationJustificationRequest request) {
         String justification = Justification.required(request.getJustification(), "justification");
+        String requestHash = supersedeHash(reconciliationId, justification, request.getVersion());
         if (request.getRequestId() != null) {
             BankReconciliation replay =
                     reconciliations.findByRequestId(request.getRequestId()).orElse(null);
             if (replay != null) {
-                if (!reconciliationId.equals(replay.getSupersedesReconciliationId())) {
+                boolean same = replay.getRequestHash() != null
+                        ? replay.getRequestHash().equals(requestHash)
+                        : reconciliationId.equals(replay.getSupersedesReconciliationId());
+                if (!same) {
                     throw new BankRecException(
                             BankRecErrorCode.IDEMPOTENCY_CONFLICT,
                             "requestId " + request.getRequestId() + " was already used with a different payload");
@@ -301,11 +306,14 @@ public class ReconciliationApprovalServiceImpl implements ReconciliationApproval
                 return response;
             }
         }
+        // The statement is locked before the reconciliation, the order statement supersession takes them in
+        // (statement, then its reconciliations), so the two serialize without a deadlock (§4.9 path 3).
+        Optional<BankStatement> lockedStatement =
+                reconciliations.findStatementIdById(reconciliationId).flatMap(statements::lockById);
         BankReconciliation predecessor = support.lock(reconciliationId);
         ReconciliationSupport.requireVersion(predecessor, request.getVersion());
         requireSupersedable(predecessor);
-        BankStatement statement = statements
-                .findById(predecessor.getStatementId())
+        BankStatement statement = lockedStatement
                 .filter(s -> s.getStatus() == BankStatementStatus.COMMITTED)
                 .orElseThrow(() -> new BankRecException(
                         BankRecErrorCode.RECONCILIATION_NOT_EDITABLE,
@@ -327,6 +335,7 @@ public class ReconciliationApprovalServiceImpl implements ReconciliationApproval
         successor.setStatus(ReconciliationStatus.IN_PROGRESS);
         successor.setSupersedesReconciliationId(predecessor.getReconciliationId());
         successor.setRequestId(request.getRequestId());
+        successor.setRequestHash(request.getRequestId() == null ? null : requestHash);
         // Terms are stored after the members move; the create needs non-null balances.
         successor.setGlEndingBalance(predecessor.getGlEndingBalance());
         BankReconciliation saved;
@@ -391,6 +400,20 @@ public class ReconciliationApprovalServiceImpl implements ReconciliationApproval
                 predecessor.getReconciliationId(),
                 reproposed);
         return BankReconciliationResponse.from(saved);
+    }
+
+    /**
+     * The canonical hash of the whole supersede command (§6.3): the predecessor, the justification as stored
+     * (trimmed) and the version it was issued against, so a reused {@code requestId} with any changed field is
+     * {@code IDEMPOTENCY_CONFLICT}, not a replay.
+     */
+    static @NonNull String supersedeHash(
+            @NonNull UUID reconciliationId, @NonNull String justification, @Nullable Long version) {
+        return new CanonicalRequestHash()
+                .field(reconciliationId)
+                .field(justification)
+                .field(version)
+                .digest();
     }
 
     /**

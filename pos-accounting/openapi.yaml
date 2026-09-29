@@ -7360,13 +7360,13 @@ paths:
 
         Use this tool for a bank-only movement the books lack; do not use it for a timing difference (registerReconciliationOutstandingItem), a duplicate (bank-transaction duplicate review) or a books error (a journal-entry reversal).
 
-        Preconditions: the reconciliation must not be FINALIZED; an OTHER needs a justification of at least 10 characters and, above the tenant''s BANK_REC_OTHER_APPROVAL_THRESHOLD (or while it is unset, for anything but a residual), accounting:reconciliation:approve; posting into a CLOSED period needs overrideJustification and accounting:period:override.
+        Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); an OTHER needs a justification of at least 10 characters and, above the tenant''s BANK_REC_OTHER_APPROVAL_THRESHOLD (or while it is unset, for anything but a residual), accounting:reconciliation:approve; posting into a CLOSED period needs overrideJustification and accounting:period:override.
 
         Required inputs: reconciliationId as a path parameter; type and requestId in the body, amount unless a residual or bridge is named, and the links and justification the type needs.
 
         Emits an ACCOUNTING_RECONCILIATION_ADJUSTMENT event and a RECONCILIATION_ADJUSTMENT audit row, and posts a journal entry that changes GL balances.
 
-        Returns 201 with the adjustment (200 with replayed true for a replayed requestId); 400 JUSTIFICATION_REQUIRED; 403 RECONCILIATION_ADJUSTMENT_APPROVAL_REQUIRED; 409 RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT or RECONCILIATION_ALREADY_FINALIZED; 422 RECONCILIATION_ADJUSTMENT_SIGN_INVALID, ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE, GL_ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_RECONCILABLE, MATCH_AMOUNT_MISMATCH, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED when the rule named fails.
+        Returns 201 with the adjustment (200 with replayed true for a replayed requestId); 400 JUSTIFICATION_REQUIRED; 403 RECONCILIATION_ADJUSTMENT_APPROVAL_REQUIRED; 409 RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT, RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE; 422 RECONCILIATION_ADJUSTMENT_SIGN_INVALID, ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE, GL_ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_RECONCILABLE, MATCH_AMOUNT_MISMATCH, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED when the rule named fails.
 
         '
       operationId: addReconciliationAdjustment
@@ -7430,7 +7430,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT or RECONCILIATION_ALREADY_FINALIZED
+          description: RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT, RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE
         '422':
           content:
             application/json:
@@ -7451,13 +7451,13 @@ paths:
 
         Use this tool when an adjustment was wrong or the bank reversed the item; do not use the journal-entry reversal endpoint, which leaves the reconciliation''s links in place.
 
-        Preconditions: the reconciliation must not be FINALIZED and the adjustment must be POSTED.
+        Preconditions: the reconciliation must be IN_PROGRESS, SUBMITTED or FINALIZED (a reversal under a FINALIZED one invalidates it; 409 RECONCILIATION_NOT_EDITABLE otherwise) and the adjustment must be POSTED.
 
         Required inputs: reconciliationId and adjustmentId as path parameters; reason (at least 10 characters) in the body; reversalDate and overrideJustification optional.
 
         Emits an ACCOUNTING_RECONCILIATION_ADJUSTMENT_REVERSE event and a RECONCILIATION_ADJUSTMENT_REVERSE audit row, and posts the reversal journal entry.
 
-        Returns 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED for the reason, 404 RECONCILIATION_NOT_FOUND for an unknown adjustment, 409 ADJUSTMENT_ALREADY_REVERSED, JE_NOT_POSTED, JE_ALREADY_REVERSED or RECONCILIATION_ALREADY_FINALIZED, and 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED when the reversal date is not open.
+        Returns 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED for the reason, 404 RECONCILIATION_NOT_FOUND for an unknown adjustment, 409 ADJUSTMENT_ALREADY_REVERSED, JE_NOT_POSTED, JE_ALREADY_REVERSED or RECONCILIATION_NOT_EDITABLE, and 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED when the reversal date is not open.
 
         '
       operationId: reverseReconciliationAdjustment
@@ -7518,7 +7518,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: ADJUSTMENT_ALREADY_REVERSED, JE_NOT_POSTED, JE_ALREADY_REVERSED or RECONCILIATION_ALREADY_FINALIZED
+          description: ADJUSTMENT_ALREADY_REVERSED, JE_NOT_POSTED, JE_ALREADY_REVERSED or RECONCILIATION_NOT_EDITABLE
         '422':
           content:
             application/json:
@@ -7608,13 +7608,13 @@ paths:
 
         Use this tool to pre-pair the obvious rows before reviewing them with acceptReconciliationMatch or rejectReconciliationMatch; use createReconciliationMatch to record a pairing directly.
 
-        Preconditions: the reconciliation must not be FINALIZED.
+        Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status).
 
         Required inputs: reconciliationId as a path parameter; the body is empty.
 
         Emits an ACCOUNTING_RECONCILIATION_AUTO_MATCH event and writes a RECONCILIATION_AUTO_MATCH audit row with the counts.
 
-        Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation is unknown and 409 RECONCILIATION_ALREADY_FINALIZED when it is finalized.
+        Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation is unknown and 409 RECONCILIATION_ALREADY_FINALIZED when it is finalized or RECONCILIATION_NOT_EDITABLE when it is not IN_PROGRESS.
 
         '
       operationId: autoMatchReconciliation
@@ -7650,7 +7650,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED), or a proposed line was concurrently matched (RECONCILIATION_LINE_INELIGIBLE)
+          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED) or not IN_PROGRESS (RECONCILIATION_NOT_EDITABLE), or a proposed line was concurrently matched (RECONCILIATION_LINE_INELIGIBLE)
       security:
       - bearerAuth:
         - accounting:reconciliation:adjust
@@ -7881,13 +7881,13 @@ paths:
 
         Use this tool to record that bank and ledger rows describe the same cash movement; use addReconciliationAdjustment instead for a bank-only item, and registerReconciliationOutstandingItem for a timing difference.
 
-        Preconditions: the reconciliation must not be FINALIZED; bank rows UNMATCHED, settled, in no match or open item and dated on or before the window end; ledger lines POSTED, on the account, in no active match and dated on or before the window end; the sides must agree within 0.01. A justification of at least 10 characters is required for a non-1:1 match, any tolerance use, dates beyond the window, or a former possible duplicate.
+        Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); bank rows UNMATCHED, settled, in no match or open item and dated on or before the window end; ledger lines POSTED, on the account, in no active match and dated on or before the window end; the sides must agree within 0.01. A justification of at least 10 characters is required for a non-1:1 match, any tolerance use, dates beyond the window, or a former possible duplicate.
 
         Required inputs: reconciliationId as a path parameter; bankTransactionIds, glLineIds and requestId in the body.
 
         Emits an ACCOUNTING_RECONCILIATION_MATCH event and a RECONCILIATION_MATCH audit row; no journal entry is posted.
 
-        Returns 201 with the match (200 with replayed true for a replayed requestId); 409 RECONCILIATION_LINE_INELIGIBLE for a row not matchable (including a ledger line dated after the window end), 409 RECONCILIATION_ALREADY_FINALIZED or IDEMPOTENCY_CONFLICT; 422 MATCH_AMOUNT_MISMATCH when the sides differ by more than 0.01, 422 MATCH_CARDINALITY_NOT_ALLOWED for N:M, and 422 MATCH_REQUIRES_REVIEW listing the reasons in fieldErrors[justification] when a justification is needed.
+        Returns 201 with the match (200 with replayed true for a replayed requestId); 409 RECONCILIATION_LINE_INELIGIBLE for a row not matchable (including a ledger line dated after the window end), 409 RECONCILIATION_ALREADY_FINALIZED, RECONCILIATION_NOT_EDITABLE or IDEMPOTENCY_CONFLICT; 422 MATCH_AMOUNT_MISMATCH when the sides differ by more than 0.01, 422 MATCH_CARDINALITY_NOT_ALLOWED for N:M, and 422 MATCH_REQUIRES_REVIEW listing the reasons in fieldErrors[justification] when a justification is needed.
 
         '
       operationId: createReconciliationMatch
@@ -7953,7 +7953,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: RECONCILIATION_LINE_INELIGIBLE, RECONCILIATION_ALREADY_FINALIZED or IDEMPOTENCY_CONFLICT
+          description: RECONCILIATION_LINE_INELIGIBLE, RECONCILIATION_ALREADY_FINALIZED, RECONCILIATION_NOT_EDITABLE or IDEMPOTENCY_CONFLICT
         '422':
           content:
             application/json:
@@ -7974,7 +7974,7 @@ paths:
 
         Use this tool to confirm a proposal from autoMatchReconciliation; use rejectReconciliationMatch to decline it.
 
-        Preconditions: the reconciliation must not be FINALIZED; the match must be PROPOSED and its members still matchable; a justification is needed when the proposal uses the tolerance or spans dates beyond the window.
+        Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); the match must be PROPOSED and its members still matchable; a justification is needed when the proposal uses the tolerance or spans dates beyond the window.
 
         Required inputs: reconciliationId and matchId as path parameters; justification optional.
 
@@ -8035,7 +8035,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: MATCH_STATE_INVALID, RECONCILIATION_LINE_INELIGIBLE or RECONCILIATION_ALREADY_FINALIZED
+          description: MATCH_STATE_INVALID, RECONCILIATION_LINE_INELIGIBLE, RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE
         '422':
           content:
             application/json:
@@ -8056,7 +8056,7 @@ paths:
 
         Use this tool to decline a proposal from autoMatchReconciliation; use acceptReconciliationMatch to confirm it.
 
-        Preconditions: the reconciliation must not be FINALIZED and the match must be PROPOSED.
+        Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status) and the match must be PROPOSED.
 
         Required inputs: reconciliationId and matchId as path parameters; justification optional.
 
@@ -8117,7 +8117,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: MATCH_STATE_INVALID or RECONCILIATION_ALREADY_FINALIZED
+          description: MATCH_STATE_INVALID, RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE
       security:
       - bearerAuth:
         - accounting:reconciliation:adjust
@@ -8132,7 +8132,7 @@ paths:
 
         Use this tool to correct a wrong pairing; do not use rejectReconciliationMatch, which declines a proposal that was never accepted.
 
-        Preconditions: the reconciliation must not be FINALIZED and the match must be ACCEPTED.
+        Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status) and the match must be ACCEPTED.
 
         Required inputs: reconciliationId and matchId as path parameters; reason (at least 10 characters) in the body.
 
@@ -8199,7 +8199,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: MATCH_STATE_INVALID or RECONCILIATION_ALREADY_FINALIZED
+          description: MATCH_STATE_INVALID, RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE
       security:
       - bearerAuth:
         - accounting:reconciliation:adjust
@@ -8214,13 +8214,13 @@ paths:
 
         Use this tool for a timing difference; do not use addReconciliationAdjustment, which posts a journal entry, and use createReconciliationMatch when the other side is already present.
 
-        Preconditions: the reconciliation must not be FINALIZED; the line or bank transaction must be on the account, dated on or before the window end, in no active match and in no OPEN item; a deposit in transit must be positive and an outstanding check negative.
+        Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); the line or bank transaction must be on the account, dated on or before the window end, in no active match and in no OPEN item; a deposit in transit must be positive and an outstanding check negative.
 
         Required inputs: reconciliationId as a path parameter; itemKind and exactly one of glLineId or bankTransactionId in the body; justification (at least 10 characters) for OTHER_LEDGER_TIMING, BANK_ERROR_PENDING and an item older than the aging days.
 
         Emits an ACCOUNTING_RECONCILIATION_OUTSTANDING_REGISTER event and a RECONCILIATION_OUTSTANDING_REGISTER audit row; no journal entry is posted.
 
-        Returns 400 JUSTIFICATION_REQUIRED when a needed justification is missing or short, 409 RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_LINE_INELIGIBLE (a concurrent registration), and 422 OUTSTANDING_ITEM_NOT_ELIGIBLE when the line, sign, window or state does not allow the item.
+        Returns 400 JUSTIFICATION_REQUIRED when a needed justification is missing or short, 409 RECONCILIATION_ALREADY_FINALIZED, RECONCILIATION_NOT_EDITABLE or RECONCILIATION_LINE_INELIGIBLE (a concurrent registration), and 422 OUTSTANDING_ITEM_NOT_ELIGIBLE when the line, sign, window or state does not allow the item.
 
         '
       operationId: registerReconciliationOutstandingItem
@@ -8275,7 +8275,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_LINE_INELIGIBLE
+          description: RECONCILIATION_ALREADY_FINALIZED, RECONCILIATION_NOT_EDITABLE or RECONCILIATION_LINE_INELIGIBLE
         '422':
           content:
             application/json:
@@ -8296,7 +8296,7 @@ paths:
 
         Use this tool only in the reconciliation of an acknowledged statement; use createReconciliationMatch for an item whose other side is in a bank row, and releaseReconciliationOutstandingItem to undo a wrong registration.
 
-        Preconditions: the reconciliation must not be FINALIZED and rest on a statement with a gap acknowledgement; the item must be OPEN, dated before the statement start and registered in an earlier reconciliation.
+        Preconditions: the reconciliation must be IN_PROGRESS or SUBMITTED (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE otherwise) and rest on a statement with a gap acknowledgement; the item must be OPEN, dated before the statement start and registered in an earlier reconciliation.
 
         Required inputs: reconciliationId and itemId as path parameters; justification (at least 10 characters) in the body.
 
@@ -8358,7 +8358,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: RECONCILIATION_ALREADY_FINALIZED
+          description: RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE
         '422':
           content:
             application/json:
@@ -8379,7 +8379,7 @@ paths:
 
         Use this tool when the timing explanation still holds; release the item instead, or correct the books by a journal-entry reversal, when it does not.
 
-        Preconditions: the reconciliation must not be FINALIZED; the item must be an OPEN OTHER_LEDGER_TIMING item on the account, aged at this window''s end.
+        Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); the item must be an OPEN OTHER_LEDGER_TIMING item on the account, aged at this window''s end.
 
         Required inputs: reconciliationId and itemId as path parameters; justification (at least 10 characters) in the body.
 
@@ -8441,7 +8441,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: RECONCILIATION_ALREADY_FINALIZED
+          description: RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE
         '422':
           content:
             application/json:
@@ -8462,7 +8462,7 @@ paths:
 
         Use this tool to undo a wrong registration; do not use it for an item whose other side has appeared, which createReconciliationMatch clears.
 
-        Preconditions: the reconciliation must not be FINALIZED; the item must be OPEN on the account and its registering reconciliation not FINALIZED.
+        Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); the item must be OPEN on the account and its registering reconciliation not FINALIZED.
 
         Required inputs: reconciliationId and itemId as path parameters; reason (at least 10 characters) in the body.
 
@@ -8524,7 +8524,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: RECONCILIATION_ALREADY_FINALIZED
+          description: RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE
         '422':
           content:
             application/json:

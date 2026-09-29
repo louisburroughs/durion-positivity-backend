@@ -176,6 +176,25 @@ public class MatchWriter {
     }
 
     /**
+     * Re-opens the ledger-side items {@code matchId} cleared: {@code OPEN} again with the closure fields cleared,
+     * so a later match (or the successor's re-accepted one) clears them anew. Shared by unmatch and by the
+     * member release of supersede (§4.9 paths 1 and 3).
+     */
+    static void reopenCleared(@NonNull BankReconciliationOutstandingItemRepository items, @NonNull UUID matchId) {
+        List<BankReconciliationOutstandingItem> reopened =
+                items.findByClearedByMatchIdAndStatus(matchId, OutstandingItemStatus.CLEARED);
+        for (BankReconciliationOutstandingItem item : reopened) {
+            item.setStatus(OutstandingItemStatus.OPEN);
+            item.setClearedInReconciliationId(null);
+            item.setClearedByMatchId(null);
+            item.setClearedAt(null);
+            item.setClearedBy(null);
+            item.setClosedOn(null);
+        }
+        items.saveAll(reopened);
+    }
+
+    /**
      * Ends a live match: the header moves to {@code state} (UNMATCHED, REJECTED) with the actor and reason, its
      * members go inactive and its bank rows return to {@code UNMATCHED}. An unmatch re-opens the items this match
      * cleared. Members are flushed inactive before returning, so a replacement can re-use them at once.
@@ -199,17 +218,7 @@ public class MatchWriter {
         glMatches.saveAllAndFlush(glMembers);
 
         if (state == MatchState.UNMATCHED) {
-            List<BankReconciliationOutstandingItem> reopened =
-                    items.findByClearedByMatchIdAndStatus(match.getMatchId(), OutstandingItemStatus.CLEARED);
-            for (BankReconciliationOutstandingItem item : reopened) {
-                item.setStatus(OutstandingItemStatus.OPEN);
-                item.setClearedInReconciliationId(null);
-                item.setClearedByMatchId(null);
-                item.setClearedAt(null);
-                item.setClearedBy(null);
-                item.setClosedOn(null);
-            }
-            items.saveAll(reopened);
+            reopenCleared(items, match.getMatchId());
             match.setUnmatchedBy(actor);
             match.setUnmatchedAt(now);
             match.setUnmatchReason(reason);

@@ -137,7 +137,7 @@ class ReconciliationApprovalServiceTest {
     @BeforeEach
     void setUp() {
         ReconciliationLifecycle lifecycle = new ReconciliationLifecycle(
-                clock, reconciliations, matches, glMatches, bankMatches, transactions, audit, facts);
+                clock, reconciliations, matches, glMatches, bankMatches, transactions, items, audit, facts);
         service = new ReconciliationApprovalServiceImpl(
                 new ReconciliationSupport(reconciliations, calculator, clock),
                 new ApprovalGate(usd()),
@@ -298,8 +298,9 @@ class ReconciliationApprovalServiceTest {
         @DisplayName("supersede is legal from FINALIZED and INVALIDATED")
         void supersedeFrom(ReconciliationStatus from) {
             recon.setStatus(from);
+            lenient().when(reconciliations.findStatementIdById(RECON_ID)).thenReturn(Optional.of(STATEMENT_ID));
             lenient()
-                    .when(statements.findById(STATEMENT_ID))
+                    .when(statements.lockById(STATEMENT_ID))
                     .thenReturn(Optional.of(statement(STATEMENT_ID, START, END, null)));
             ReconciliationJustificationRequest request = new ReconciliationJustificationRequest(WHY, null, null);
             switch (from) {
@@ -614,7 +615,8 @@ class ReconciliationApprovalServiceTest {
         @DisplayName("supersede releases the predecessor's members and re-proposes its accepted matches (AC 13)")
         void supersede() {
             recon.setStatus(ReconciliationStatus.INVALIDATED);
-            when(statements.findById(STATEMENT_ID)).thenReturn(Optional.of(statement(STATEMENT_ID, START, END, null)));
+            when(reconciliations.findStatementIdById(RECON_ID)).thenReturn(Optional.of(STATEMENT_ID));
+            when(statements.lockById(STATEMENT_ID)).thenReturn(Optional.of(statement(STATEMENT_ID, START, END, null)));
             BankReconciliationMatch accepted = match(MatchState.ACCEPTED);
             BankReconciliationMatch broken = match(MatchState.BROKEN);
             when(matches.findByReconciliationIdOrderByCreatedAtAsc(RECON_ID)).thenReturn(List.of(accepted, broken));
@@ -663,19 +665,96 @@ class ReconciliationApprovalServiceTest {
         }
 
         @Test
+        @DisplayName("supersede re-opens the items the released matches cleared, until the successor re-accepts")
+        void supersedeReopensClearedItems() {
+            recon.setStatus(ReconciliationStatus.INVALIDATED);
+            when(reconciliations.findStatementIdById(RECON_ID)).thenReturn(Optional.of(STATEMENT_ID));
+            when(statements.lockById(STATEMENT_ID)).thenReturn(Optional.of(statement(STATEMENT_ID, START, END, null)));
+            BankReconciliationMatch accepted = match(MatchState.ACCEPTED);
+            when(matches.findByReconciliationIdOrderByCreatedAtAsc(RECON_ID)).thenReturn(List.of(accepted));
+            BankReconciliationGlMatch glMember = new BankReconciliationGlMatch();
+            glMember.setMatchId(accepted.getMatchId());
+            glMember.setGlLineId(UUIDv7Generator.generate());
+            glMember.setSignedAmount(new BigDecimal("25.00"));
+            glMember.setActive(true);
+            when(glMatches.findByMatchIdAndActiveTrue(accepted.getMatchId())).thenReturn(List.of(glMember));
+            BankReconciliationOutstandingItem cleared = new BankReconciliationOutstandingItem();
+            cleared.setSide(OutstandingItemSide.LEDGER);
+            cleared.setGlLineId(glMember.getGlLineId());
+            cleared.setStatus(OutstandingItemStatus.CLEARED);
+            cleared.setClearedInReconciliationId(RECON_ID);
+            cleared.setClearedByMatchId(accepted.getMatchId());
+            cleared.setClearedAt(Instant.now(clock));
+            cleared.setClearedBy(PREPARER);
+            cleared.setClosedOn(END);
+            when(items.findByClearedByMatchIdAndStatus(accepted.getMatchId(), OutstandingItemStatus.CLEARED))
+                    .thenReturn(List.of(cleared));
+            as(APPROVER);
+
+            service.supersede(RECON_ID, new ReconciliationJustificationRequest(WHY, null, null));
+
+            assertThat(cleared.getStatus()).isEqualTo(OutstandingItemStatus.OPEN);
+            assertThat(cleared.getClearedInReconciliationId()).isNull();
+            assertThat(cleared.getClearedByMatchId()).isNull();
+            assertThat(cleared.getClearedAt()).isNull();
+            assertThat(cleared.getClearedBy()).isNull();
+            assertThat(cleared.getClosedOn()).isNull();
+            verify(items).saveAll(List.of(cleared));
+        }
+
+        @Test
         @DisplayName("a supersede replay returns the successor it created")
         void supersedeReplay() {
             BankReconciliation successor = reconciliation();
             successor.setReconciliationId(UUIDv7Generator.generate());
             successor.setSupersedesReconciliationId(RECON_ID);
+            successor.setRequestHash(ReconciliationApprovalServiceImpl.supersedeHash(RECON_ID, WHY, 3L));
             UUID requestId = UUIDv7Generator.generate();
             when(reconciliations.findByRequestId(requestId)).thenReturn(Optional.of(successor));
 
-            BankReconciliationResponse replay =
-                    service.supersede(RECON_ID, new ReconciliationJustificationRequest(WHY, requestId, null));
+            BankReconciliationResponse replay = service.supersede(
+                    RECON_ID, new ReconciliationJustificationRequest("  " + WHY + " ", requestId, 3L));
 
             assertThat(replay.isReplayed()).isTrue();
             assertThat(replay.getReconciliationId()).isEqualTo(successor.getReconciliationId());
+        }
+
+        @Test
+        @DisplayName("a supersede requestId reused with another justification or version is IDEMPOTENCY_CONFLICT")
+        void supersedeReplayWithAnotherPayload() {
+            BankReconciliation successor = reconciliation();
+            successor.setReconciliationId(UUIDv7Generator.generate());
+            successor.setSupersedesReconciliationId(RECON_ID);
+            successor.setRequestHash(ReconciliationApprovalServiceImpl.supersedeHash(RECON_ID, WHY, 3L));
+            UUID requestId = UUIDv7Generator.generate();
+            when(reconciliations.findByRequestId(requestId)).thenReturn(Optional.of(successor));
+
+            assertCode(
+                    () -> service.supersede(
+                            RECON_ID,
+                            new ReconciliationJustificationRequest("A different reason entirely", requestId, 3L)),
+                    BankRecErrorCode.IDEMPOTENCY_CONFLICT);
+            assertCode(
+                    () -> service.supersede(RECON_ID, new ReconciliationJustificationRequest(WHY, requestId, 4L)),
+                    BankRecErrorCode.IDEMPOTENCY_CONFLICT);
+            verify(reconciliations, never()).saveAndFlush(any());
+        }
+
+        @Test
+        @DisplayName("supersede stores the command's hash with its requestId")
+        void supersedeStoresRequestHash() {
+            recon.setStatus(ReconciliationStatus.INVALIDATED);
+            when(reconciliations.findStatementIdById(RECON_ID)).thenReturn(Optional.of(STATEMENT_ID));
+            when(statements.lockById(STATEMENT_ID)).thenReturn(Optional.of(statement(STATEMENT_ID, START, END, null)));
+            UUID requestId = UUIDv7Generator.generate();
+            as(APPROVER);
+
+            service.supersede(RECON_ID, new ReconciliationJustificationRequest(WHY, requestId, 3L));
+
+            verify(reconciliations)
+                    .saveAndFlush(argThat((BankReconciliation r) -> requestId.equals(r.getRequestId())
+                            && ReconciliationApprovalServiceImpl.supersedeHash(RECON_ID, WHY, 3L)
+                                    .equals(r.getRequestHash())));
         }
 
         private BankReconciliationMatch match(MatchState state) {
