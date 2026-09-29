@@ -51,6 +51,12 @@ public class BankStatementCreateRequest {
             example = "Account opened at the new bank on 2026-09-01; earlier history is on the old statements")
     private String gapAcknowledgement;
 
+    @Schema(
+            description = "Start an IN_PROGRESS reconciliation of the committed statement in the same transaction;"
+                    + " it appears in reconciliations (story S4)",
+            example = "true")
+    private Boolean startReconciliation;
+
     /** The statement header. */
     @Data
     @Builder

@@ -303,6 +303,45 @@ class BankReconciliationContractBehaviorIT extends BaseContractIntegrationTest {
         }
 
         @Test
+        void aManualStatementWithStartReconciliationStartsOneInTheSameCommit() throws Exception {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("glAccountId", cash.toString());
+            body.put("requestId", UUIDv7Generator.generate().toString());
+            body.put(
+                    "statement",
+                    Map.of(
+                            "startDate",
+                            "2021-09-01",
+                            "endDate",
+                            "2021-09-30",
+                            "openingBalance",
+                            "0",
+                            "closingBalance",
+                            "25.00"));
+            body.put(
+                    "transactions",
+                    List.of(Map.of("date", DAY.toString(), "signedAmount", "25.00", "description", "ROW")));
+            body.put("gapAcknowledgement", ACK);
+            body.put("startReconciliation", true);
+            JsonNode created = json(postJson("/v1/accounting/bank-statements", body)
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.reconciliations.length()").value(1))
+                    .andExpect(jsonPath("$.reconciliations[0].status").value("IN_PROGRESS")));
+            String reconciliationId = created.get("reconciliations")
+                    .get(0)
+                    .get("reconciliationId")
+                    .asString();
+            mockMvc.perform(withAuth(get(RECONCILIATIONS + "/" + reconciliationId)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.statementId")
+                            .value(created.get("statementId").asString()));
+            postJson("/v1/accounting/bank-statements", body)
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.replayed").value(true))
+                    .andExpect(jsonPath("$.reconciliations.length()").value(1));
+        }
+
+        @Test
         void theListFiltersByPeriodAndWindow() throws Exception {
             reconcile(cash, statement(cash, "0", "250.00", "250.00"));
             mockMvc.perform(withAuth(get(RECONCILIATIONS)

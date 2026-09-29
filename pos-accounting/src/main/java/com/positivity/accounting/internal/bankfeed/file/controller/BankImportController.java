@@ -435,11 +435,13 @@ public class BankImportController {
                     acknowledgement moves the account's reconciliation baseline, and the \
                     accounting.bankstatement.committed fact is queued.
                     Use this tool once the preview ties and every rejected or out-of-window row is corrected or \
-                    skipped; do not use it to start a reconciliation, which is created from the statement.
+                    skipped; set startReconciliation to start the reconciliation of the committed statement (the \
+                    first segment's) in the same transaction instead of calling createReconciliation after.
                     Preconditions: status VALIDATED; no REJECTED rows; OUT_OF_WINDOW rows skipped; opening + \
                     activity equal to closing within one minor unit; POSSIBLE_DUPLICATE rows either decided in \
                     duplicateDecisions or committed as possible duplicates for later review.
-                    Required inputs: importId in the path; optional duplicateDecisions [{rowNumber, decision}].
+                    Required inputs: importId in the path; optional duplicateDecisions [{rowNumber, decision}] and \
+                    startReconciliation (its id is returned as reconciliationId).
                     Emits an ACCOUNTING_BANK_IMPORT_COMMIT event; a second commit returns the same result.
                     Returns 422 IMPORT_NOT_COMMITTABLE with fieldErrors rows[n] and activityTotal, or the header \
                     codes when the previous statement changed since upload; 409 when the import is DISCARDED, the \

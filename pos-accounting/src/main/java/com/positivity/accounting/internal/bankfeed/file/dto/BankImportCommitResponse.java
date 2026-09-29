@@ -40,7 +40,9 @@ public class BankImportCommitResponse {
             requiredMode = REQUIRED)
     private Integer possibleDuplicateCount;
 
-    @Schema(description = "The reconciliation started with the commit; null until story S4 wires it")
+    @Schema(
+            description =
+                    "The reconciliation started with the commit (startReconciliation); null when none was asked for")
     private UUID reconciliationId;
 
     @Schema(description = "The import version after the commit", example = "4", requiredMode = REQUIRED)

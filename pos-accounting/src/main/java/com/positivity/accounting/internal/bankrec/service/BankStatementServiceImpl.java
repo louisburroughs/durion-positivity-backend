@@ -11,6 +11,7 @@ import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.intake.BankTransactionIntake;
 import com.positivity.accounting.internal.bankrec.intake.IntakeContext;
 import com.positivity.accounting.internal.bankrec.intake.IntakeResult;
+import com.positivity.accounting.internal.bankrec.intake.ReconciliationStarter;
 import com.positivity.accounting.internal.bankrec.repository.BankAccountProfileRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
@@ -74,6 +75,7 @@ public class BankStatementServiceImpl implements BankStatementService {
     private final BankReconciliationRepository reconciliations;
     private final BankRecAuditRecorder audit;
     private final Clock clock;
+    private final ReconciliationStarter reconciliationStarter;
 
     @Override
     public @NonNull BankStatementResponse createManualStatement(@NonNull BankStatementCreateRequest request) {
@@ -109,6 +111,14 @@ public class BankStatementServiceImpl implements BankStatementService {
                         requestHash,
                         null));
         UUID statementId = result.statementId();
+        if (Boolean.TRUE.equals(request.getStartReconciliation())) {
+            // §6.1 startReconciliation: the reconciliation starts in the commit transaction.
+            reconciliationStarter.start(
+                    request.getGlAccountId(),
+                    statementId,
+                    UUID.nameUUIDFromBytes(("BANK_STATEMENT_RECONCILIATION:" + request.getRequestId())
+                            .getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        }
         BankStatement statement = statements
                 .findById(statementId)
                 .orElseThrow(() -> new IllegalStateException("committed statement not found: " + statementId));

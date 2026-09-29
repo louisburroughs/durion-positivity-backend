@@ -170,7 +170,16 @@ class BankRecListQueryCountTest {
                     .thenReturn(List.of(new StatementCounts(id(11), 7, 2)));
 
             BankStatementServiceImpl service = new BankStatementServiceImpl(
-                    null, bankCashAccounts, null, statements, transactions, profiles, reconciliations, null, null);
+                    null,
+                    bankCashAccounts,
+                    null,
+                    statements,
+                    transactions,
+                    profiles,
+                    reconciliations,
+                    null,
+                    null,
+                    null);
             BankStatementListResponse response = service.listStatements(null, null, null, 0, 4);
 
             assertThat(response.getStatements()).hasSize(4);
