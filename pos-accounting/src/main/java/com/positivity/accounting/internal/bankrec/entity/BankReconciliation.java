@@ -225,6 +225,10 @@ public class BankReconciliation extends TenantScopedEntity {
     @Column(name = "version", nullable = false)
     private Long version;
 
+    /** The caller's UUIDv7 {@code requestId} of the create command; a replay finds this row (§6.3; S4, #2303). */
+    @Column(name = "request_id", columnDefinition = "UUID")
+    private UUID requestId;
+
     @PrePersist
     void onPrePersist() {
         if (createdBy == null) {

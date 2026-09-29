@@ -88,6 +88,13 @@ public class BankReconciliationAdjustment extends TenantScopedEntity {
     @Column(name = "request_id", columnDefinition = "UUID")
     private UUID requestId;
 
+    /**
+     * SHA-256 of the adjustment command's canonical payload (story S4, #2303), to tell a replay from a reuse of
+     * {@code requestId} with other posting instructions (§6.3); null on a row written before it was kept.
+     */
+    @Column(name = "request_hash", length = 64)
+    private String requestHash;
+
     /** The date the adjustment journal entry was actually posted at (D7). */
     @Column(name = "transaction_date")
     private LocalDate transactionDate;

@@ -3,14 +3,15 @@ package com.positivity.accounting.internal.bankrec.controller;
 import com.positivity.accounting.internal.bankrec.dto.AdjustmentTypeResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
-import com.positivity.accounting.internal.bankrec.dto.ReconciliationAdjustmentRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationApiStatus;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAuditResponse;
-import com.positivity.accounting.internal.bankrec.dto.ReconciliationMatchRequest;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationCreateRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationReportResponse;
-import com.positivity.accounting.internal.bankrec.dto.ReconciliationUnmatchRequest;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationReviewResponse;
 import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.bankrec.service.BankReconciliationService;
+import com.positivity.accounting.internal.bankrec.service.ReconciliationListFilter;
+import com.positivity.accounting.internal.bankrec.service.ReconciliationReviewService;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
@@ -24,6 +25,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -35,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -73,6 +76,95 @@ public class BankReconciliationController {
     private static final Logger log = LoggerFactory.getLogger(BankReconciliationController.class);
 
     private final BankReconciliationService bankReconciliationService;
+    private final ReconciliationReviewService reviewService;
+
+    @PostMapping
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:reconciliation:adjust"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
+    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_CREATE", apiVersion = "1")
+    @Operation(
+            operationId = "createReconciliation",
+            summary = "Start Reconciliation From Statement",
+            description = """
+                    Starts an IN_PROGRESS reconciliation of a COMMITTED bank statement: the window, opening and \
+                    closing balances are copied from the statement, and the explicit equation (E3), the opening \
+                    terms, the account baseline and the unexplained counts are computed live from the ledger.
+                    Use this tool to begin reconciling a statement committed through bank-statements or a file \
+                    import; do not use createBankStatement or the bank-import commit, which commit the statement \
+                    itself.
+                    Preconditions: the account must be a reconcilable BANK_CASH account; the statement must be \
+                    COMMITTED on that account and have no IN_PROGRESS reconciliation and no FINALIZED one without \
+                    a successor. An interim reconciliation to a date is a manual-entry statement in phase 1.
+                    Required inputs: glAccountId, requestId (UUIDv7) and statementId in the body.
+                    Emits an ACCOUNTING_RECONCILIATION_CREATE event and writes a RECONCILIATION_CREATE audit row; \
+                    no journal entry is posted.
+                    Returns 201 with the header, or 200 with replayed true when the same requestId and payload \
+                    are sent again; 409 RECONCILIATION_WINDOW_ALREADY_RECONCILED (fieldErrors naming the \
+                    reconciliationId) when the statement is already reconciled, 409 IDEMPOTENCY_CONFLICT when the \
+                    requestId was used with another payload, 404 BANK_STATEMENT_NOT_FOUND when the statement is \
+                    unknown on the account, 422 ACCOUNT_NOT_RECONCILABLE when the account is not a bank account, \
+                    and 422 BANK_ACCOUNT_FEED_NOT_LINKED when the body has no statementId (the statementless \
+                    interim is phase 2).
+                    """,
+            tags = {"Bank Reconciliation"})
+    @ApiResponse(
+            responseCode = "201",
+            description = "Reconciliation started",
+            content = @Content(schema = @Schema(implementation = BankReconciliationResponse.class)))
+    @ApiResponse(
+            responseCode = "200",
+            description = "Replay of an earlier create with the same requestId (replayed = true)",
+            content = @Content(schema = @Schema(implementation = BankReconciliationResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Request body invalid (VALIDATION_ERROR)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks the accounting:reconciliation:adjust permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Statement not found on the account (BANK_STATEMENT_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Statement already reconciled (RECONCILIATION_WINDOW_ALREADY_RECONCILED) or requestId"
+                    + " reused with another payload (IDEMPOTENCY_CONFLICT)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Account is not a reconcilable bank account (ACCOUNT_NOT_RECONCILABLE), or the body is"
+                    + " statementless on an account without a feed link (BANK_ACCOUNT_FEED_NOT_LINKED)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<BankReconciliationResponse> createReconciliation(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The statement to reconcile and the command's requestId.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "September statement", value = """
+                                                                    {"glAccountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "requestId":"019a0000-0000-7000-8000-000000000001",
+                                                                     "statementId":"019a0000-0000-7000-8000-000000000002"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    ReconciliationCreateRequest request) {
+        if (log.isInfoEnabled()) {
+            log.info(
+                    "Create reconciliation of statement {} on account {}",
+                    sanitizeForLog(request.getStatementId()),
+                    sanitizeForLog(request.getGlAccountId()));
+        }
+        BankReconciliationResponse response = bankReconciliationService.create(request);
+        return ResponseEntity.status(response.isReplayed() ? HttpStatus.OK : HttpStatus.CREATED)
+                .body(response);
+    }
 
     @GetMapping("/adjustment-types")
     @SecurityRequirement(
@@ -85,8 +177,8 @@ public class BankReconciliationController {
             summary = "List Reconciliation Adjustment Types",
             description = """
                     Returns the supported reconciliation adjustment types with their sign rules (BANK_FEE and \
-                    NSF_FEE negative-only, INTEREST_EARNED positive-only, OTHER any), so clients never \
-                    hardcode the enum.
+                    NSF_FEE negative-only, INTEREST_EARNED positive-only, OTHER and TRANSFER any), so clients \
+                    never hardcode the enum.
                     Use this tool to populate an adjustment picker before calling \
                     addReconciliationAdjustment; do not use addReconciliationAdjustment itself just to \
                     discover the types.
@@ -121,13 +213,14 @@ public class BankReconciliationController {
             operationId = "listReconciliations",
             summary = "List Reconciliations",
             description = """
-                    Lists bank reconciliations most recent first as a paginated projection, optionally \
-                    filtered by GL account and status.
+                    Lists bank reconciliation headers most recent first as a paginated projection, optionally \
+                    filtered by GL account, status, attribution period (periodCode, YYYY-MM) and a from/to \
+                    window on the statement end date; each row carries the terms its last mutation stored.
                     Use this tool to find in-progress or finalized reconciliations; do not use \
                     getReconciliation, which fetches one reconciliation with its lines by id.
                     Preconditions: none beyond the caller holding accounting:reconciliation:view.
-                    Required inputs: none; glAccountId and status (IN_PROGRESS, FINALIZED) are optional \
-                    filters, page defaults to 0 and size to 20.
+                    Required inputs: none; glAccountId, status (IN_PROGRESS, FINALIZED), periodCode, from and \
+                    to are optional filters, page defaults to 0 and size to 20.
                     Emits an ACCOUNTING_RECONCILIATION_LIST audit event; no state changes.
                     Returns 200 with an empty page when nothing matches the filters.
                     """,
@@ -145,11 +238,26 @@ public class BankReconciliationController {
                     UUID glAccountId,
             @Parameter(description = "Filter by reconciliation status") @RequestParam(required = false)
                     ReconciliationApiStatus status,
+            @Parameter(
+                            description = "Filter by attribution period (YYYY-MM of the statement end date)",
+                            example = "2026-09")
+                    @RequestParam(required = false)
+                    String periodCode,
+            @Parameter(description = "Statement end date on or after this date", example = "2026-01-01")
+                    @RequestParam(required = false)
+                    LocalDate from,
+            @Parameter(description = "Statement end date on or before this date", example = "2026-12-31")
+                    @RequestParam(required = false)
+                    LocalDate to,
             @Parameter(description = "Zero-based page index", example = "0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size", example = "20") @RequestParam(defaultValue = "20") int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return ResponseEntity.ok(
-                bankReconciliationService.list(glAccountId, status != null ? status.toDomain() : null, pageable));
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "reconciliationId")));
+        ReconciliationListFilter filter = new ReconciliationListFilter(
+                glAccountId, status != null ? status.toDomain() : null, periodCode, from, to);
+        return ResponseEntity.ok(bankReconciliationService.list(filter, pageable));
     }
 
     @GetMapping("/{reconciliationId}")
@@ -162,11 +270,12 @@ public class BankReconciliationController {
             operationId = "getReconciliation",
             summary = "Get Reconciliation",
             description = """
-                    Returns one bank reconciliation with its imported statement lines, match state and \
-                    adjustments.
+                    Returns one bank reconciliation header with every term of the explicit equation (E3) and \
+                    the opening terms computed live from the ledger, the baseline date and the unexplained \
+                    counts; statement lines are not embedded (read them from bank-transactions).
                     Use this tool when the reconciliation id is already known; use listReconciliations \
-                    instead when searching by account or status, or getReconciliationReport for the balance \
-                    summary view.
+                    instead when searching by account or status, or getReconciliationReview for the full \
+                    workspace read model.
                     Preconditions: the reconciliation must exist.
                     Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
                     Emits an ACCOUNTING_RECONCILIATION_GET audit event; no state changes.
@@ -190,235 +299,6 @@ public class BankReconciliationController {
         return ResponseEntity.ok(bankReconciliationService.get(reconciliationId));
     }
 
-    @PostMapping("/{reconciliationId}/match")
-    @SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {"accounting:reconciliation:adjust"})
-    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
-    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_MATCH", apiVersion = "1")
-    @Operation(
-            operationId = "matchReconciliation",
-            summary = "Match Statement Lines To GL Lines",
-            description = """
-                    Matches a set of statement lines to a set of posted GL journal-entry lines on the \
-                    reconciled account (1-to-1 or N-to-1), marking the statement lines MATCHED and recording \
-                    the linkage.
-                    Use this tool to pair bank activity with ledger activity; do not use \
-                    unmatchReconciliation, which reverses a match, and use addReconciliationAdjustment for \
-                    bank-only items like fees that have no GL counterpart yet.
-                    Preconditions: the reconciliation must be IN_PROGRESS, every statement line must be \
-                    UNMATCHED, every GL line must be POSTED and not already reconciled, and the two sets must \
-                    net to equal signed amounts within 0.01.
-                    Required inputs: reconciliationId (UUID) as a path parameter plus non-empty \
-                    statementLineIds and glLineIds lists.
-                    Emits an ACCOUNTING_RECONCILIATION_MATCH event; no journal entries are created by \
-                    matching.
-                    Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation or a line is missing, 409 \
-                    RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_LINE_INELIGIBLE for state conflicts, \
-                    and 422 MATCH_AMOUNT_MISMATCH when the sets do not net.
-                    """,
-            tags = {"Bank Reconciliation"})
-    @ApiResponse(
-            responseCode = "200",
-            description = "Lines matched",
-            content = @Content(schema = @Schema(implementation = BankReconciliationResponse.class)))
-    @ApiResponse(
-            responseCode = "400",
-            description = "Request body invalid (ARGUMENT_NOT_VALID / VALIDATION_ERROR)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "403",
-            description = "Caller lacks the accounting:reconciliation:adjust permission",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "404",
-            description = "Reconciliation or a referenced line not found (RECONCILIATION_NOT_FOUND)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "409",
-            description = "Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED), or a statement/GL"
-                    + " line is ineligible — not UNMATCHED, not POSTED, or already reconciled"
-                    + " (RECONCILIATION_LINE_INELIGIBLE)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "422",
-            description = "Matched sets do not net to equal amounts (MATCH_AMOUNT_MISMATCH)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<BankReconciliationResponse> matchReconciliation(
-            @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description =
-                                    "Statement-line and GL-line id sets to link; the sets must net to equal amounts.",
-                            required = true,
-                            content =
-                                    @Content(
-                                            mediaType = "application/json",
-                                            examples = @ExampleObject(name = "One-to-one match", value = """
-                                                                    {"statementLineIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"],
-                                                                     "glLineIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c"]}
-                                                                    """)))
-                    @Valid
-                    @RequestBody
-                    @NonNull
-                    ReconciliationMatchRequest request) {
-        if (log.isInfoEnabled()) {
-            log.info("Match lines in reconciliation {}", sanitizeForLog(reconciliationId));
-        }
-        return ResponseEntity.ok(bankReconciliationService.match(reconciliationId, request));
-    }
-
-    @PostMapping("/{reconciliationId}/unmatch")
-    @SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {"accounting:reconciliation:adjust"})
-    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
-    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_UNMATCH", apiVersion = "1")
-    @Operation(
-            operationId = "unmatchReconciliation",
-            summary = "Reverse A Reconciliation Match",
-            description = """
-                    Reverses a previously recorded match, returning the affected statement lines to UNMATCHED \
-                    and releasing the linked GL lines for re-matching.
-                    Use this tool to correct a wrong pairing while the reconciliation is still IN_PROGRESS; \
-                    do not use matchReconciliation, which records new matches.
-                    Preconditions: the reconciliation must not be FINALIZED, and either the matchId or the \
-                    statementLineIds must resolve to exactly one match group.
-                    Required inputs: reconciliationId (UUID) as a path parameter plus matchId or \
-                    statementLineIds in the body (one of the two is required).
-                    Emits an ACCOUNTING_RECONCILIATION_UNMATCH event.
-                    Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation or match group is missing, \
-                    409 RECONCILIATION_ALREADY_FINALIZED when finalized, and 400 when neither identifier \
-                    resolves to a single match group.
-                    """,
-            tags = {"Bank Reconciliation"})
-    @ApiResponse(
-            responseCode = "200",
-            description = "Match reversed",
-            content = @Content(schema = @Schema(implementation = BankReconciliationResponse.class)))
-    @ApiResponse(
-            responseCode = "400",
-            description = "Neither matchId nor statementLineIds resolved to a single match group (VALIDATION_ERROR)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "403",
-            description = "Caller lacks the accounting:reconciliation:adjust permission",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "404",
-            description = "Reconciliation or match group not found (RECONCILIATION_NOT_FOUND)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "409",
-            description = "Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<BankReconciliationResponse> unmatchReconciliation(
-            @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Match group to reverse, identified by matchId or by its statement line ids.",
-                            required = true,
-                            content =
-                                    @Content(
-                                            mediaType = "application/json",
-                                            examples =
-                                                    @ExampleObject(
-                                                            name = "Unmatch by match id",
-                                                            value =
-                                                                    "{\"matchId\":\"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d\"}")))
-                    @Valid
-                    @RequestBody
-                    @NonNull
-                    ReconciliationUnmatchRequest request) {
-        if (log.isInfoEnabled()) {
-            log.info("Unmatch in reconciliation {}", sanitizeForLog(reconciliationId));
-        }
-        return ResponseEntity.ok(bankReconciliationService.unmatch(reconciliationId, request));
-    }
-
-    @PostMapping("/{reconciliationId}/adjustments")
-    @SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {"accounting:reconciliation:adjust"})
-    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
-    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_ADJUSTMENT", apiVersion = "1")
-    @Operation(
-            operationId = "addReconciliationAdjustment",
-            summary = "Record Reconciliation Adjustment",
-            description = """
-                    Records a signed reconciliation adjustment and posts a real balanced journal entry, \
-                    debiting or crediting the reconciled cash account against the type's mapped counter \
-                    account, through the accounting-period gate.
-                    Use this tool for bank-only items such as fees or interest that have no GL counterpart; \
-                    do not use matchReconciliation, which links existing posted GL lines.
-                    Preconditions: the reconciliation must be IN_PROGRESS, and the amount sign must be \
-                    permitted for the type (BANK_FEE and NSF_FEE negative, INTEREST_EARNED positive, OTHER \
-                    any).
-                    Required inputs: reconciliationId (UUID) as a path parameter, type (BANK_FEE, NSF_FEE, \
-                    INTEREST_EARNED or OTHER) and a non-zero signed amount; description (max 500 chars) is \
-                    optional.
-                    Emits an ACCOUNTING_RECONCILIATION_ADJUSTMENT event and posts a journal entry that \
-                    changes GL balances.
-                    Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation is missing, 409 \
-                    RECONCILIATION_ALREADY_FINALIZED when finalized, and 422 PERIOD_CLOSED, \
-                    PERIOD_HARD_LOCKED, RECONCILIATION_ADJUSTMENT_SIGN_INVALID or GL_MAPPING_NOT_CONFIGURED \
-                    (no GL counter-account mapping configured for the adjustment type) for period-gate, \
-                    sign or configuration failures.
-                    """,
-            tags = {"Bank Reconciliation"})
-    @ApiResponse(
-            responseCode = "200",
-            description = "Adjustment recorded and JE posted",
-            content = @Content(schema = @Schema(implementation = BankReconciliationResponse.class)))
-    @ApiResponse(
-            responseCode = "400",
-            description = "Request body invalid or amount is zero (ARGUMENT_NOT_VALID / VALIDATION_ERROR)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "403",
-            description = "Caller lacks the accounting:reconciliation:adjust permission",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "404",
-            description = "Reconciliation not found (RECONCILIATION_NOT_FOUND)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "409",
-            description = "Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "422",
-            description =
-                    "Adjustment JE dated into a CLOSED or hard-locked period (PERIOD_CLOSED / PERIOD_HARD_LOCKED),"
-                            + " the amount sign is not permitted for the type — BANK_FEE/NSF_FEE must be negative,"
-                            + " INTEREST_EARNED must be positive (RECONCILIATION_ADJUSTMENT_SIGN_INVALID) — or no GL"
-                            + " counter-account mapping is configured for the adjustment type"
-                            + " (GL_MAPPING_NOT_CONFIGURED)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<BankReconciliationResponse> addReconciliationAdjustment(
-            @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Typed, signed adjustment that will post a balanced journal entry.",
-                            required = true,
-                            content =
-                                    @Content(
-                                            mediaType = "application/json",
-                                            examples = @ExampleObject(name = "Bank fee", value = """
-                                                                    {"type":"BANK_FEE",
-                                                                     "amount":-15.00,
-                                                                     "description":"Monthly account service fee"}
-                                                                    """)))
-                    @Valid
-                    @RequestBody
-                    @NonNull
-                    ReconciliationAdjustmentRequest request) {
-        if (log.isInfoEnabled()) {
-            log.info(
-                    "Record {} adjustment on reconciliation {}",
-                    sanitizeForLog(request.getType()),
-                    sanitizeForLog(reconciliationId));
-        }
-        return ResponseEntity.ok(bankReconciliationService.addAdjustment(reconciliationId, request));
-    }
-
     @PostMapping("/{reconciliationId}/finalize")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -431,11 +311,10 @@ public class BankReconciliationController {
             description = """
                     Finalizes a reconciliation (IN_PROGRESS to FINALIZED), locking it against further \
                     matching, unmatching or adjustments.
-                    Use this tool once all lines are matched or adjusted; do not use it while a difference \
-                    remains, which addReconciliationAdjustment or further matching must clear first.
-                    Preconditions: the statement ending balance must equal the GL ending balance plus the \
-                    sum of adjustments within 0.01, matched GL lines being already reflected in the GL \
-                    ending balance.
+                    Use this tool once the live difference is cleared; do not use it while a difference \
+                    remains, which outstanding items, matches or addReconciliationAdjustment must explain first.
+                    Preconditions: the live difference (adjustedBankBalance − adjustedBookBalance, E3) must be \
+                    within 0.01; the approval gate on unexplained items arrives with the submit/approve story.
                     Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
                     Emits an ACCOUNTING_RECONCILIATION_FINALIZE event; FINALIZED is terminal for the \
                     reconciliation.
@@ -480,6 +359,51 @@ public class BankReconciliationController {
         return value.toString().replace('\n', '_').replace('\r', '_');
     }
 
+    @GetMapping("/{reconciliationId}/review")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:reconciliation:view"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_VIEW + "')")
+    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_REVIEW", apiVersion = "1")
+    @Operation(
+            operationId = "getReconciliationReview",
+            summary = "Get Reconciliation Review",
+            description = """
+                    Returns the review read model in one call, computed live, so a client never does arithmetic: \
+                    the header (account, window, baseline and whether this statement set it, provenance, status, \
+                    preparer, period state, version); every term of the explicit equation E3 with its \
+                    drill-down, including late adjustments with their owning reconciliation; the opening terms \
+                    and the OPENING_DIFFERENCE diagnostic, which never blocks; everything unresolved from the \
+                    baseline on (late arrivals first, unexplained bank rows with their top ledger candidate, \
+                    unexplained ledger lines with their top bank candidate, possible duplicates with their \
+                    near-duplicate candidates, aged timing items awaiting reaffirmation, proposed and broken \
+                    matches); the posted adjustments; the evidence (matches with their served residual, items, \
+                    exclusions, the adjustments to clearing, the statement); and the readiness with its reasons.
+                    Use this tool to render or audit the reconciliation workspace; use getReconciliation for the \
+                    header alone and getReconciliationReport for the printable report.
+                    Preconditions: the reconciliation must exist.
+                    Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
+                    Emits an ACCOUNTING_RECONCILIATION_REVIEW event; no state changes.
+                    Returns 404 RECONCILIATION_NOT_FOUND when the id is unknown.
+                    """,
+            tags = {"Bank Reconciliation"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Review read",
+            content = @Content(schema = @Schema(implementation = ReconciliationReviewResponse.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks the accounting:reconciliation:view permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Reconciliation not found (RECONCILIATION_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<ReconciliationReviewResponse> getReconciliationReview(
+            @Parameter(description = "Reconciliation id", required = true) @PathVariable UUID reconciliationId) {
+        return ResponseEntity.ok(reviewService.review(reconciliationId));
+    }
+
     @GetMapping("/{reconciliationId}/report")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -490,8 +414,10 @@ public class BankReconciliationController {
             operationId = "getReconciliationReport",
             summary = "Get Reconciliation Report",
             description = """
-                    Returns the reconciliation report: opening GL and closing statement balances, matched \
-                    versus outstanding lines, adjustments and the outstanding difference.
+                    Returns the reconciliation report: the statement lines matched versus outstanding, every \
+                    term of the explicit equation E3 and the opening terms, the outstanding items with their \
+                    age, the unexplained counts and sums, the adjustments and the adjustments to clearing, and \
+                    the live difference.
                     Use this tool to see how far a reconciliation is from balancing before \
                     finalizeReconciliation; use getReconciliation instead for the raw line-level detail.
                     Preconditions: the reconciliation must exist.

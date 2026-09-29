@@ -1450,11 +1450,11 @@ paths:
     post:
       description: 'Commits a validated import in one transaction: its rows become bank transactions of one statement (one per split segment) through the same intake as a manual statement, the gap acknowledgement moves the account''s reconciliation baseline, and the accounting.bankstatement.committed fact is queued.
 
-        Use this tool once the preview ties and every rejected or out-of-window row is corrected or skipped; do not use it to start a reconciliation, which is created from the statement.
+        Use this tool once the preview ties and every rejected or out-of-window row is corrected or skipped; set startReconciliation to start the reconciliation of the committed statement (the first segment''s) in the same transaction instead of calling createReconciliation after.
 
         Preconditions: status VALIDATED; no REJECTED rows; OUT_OF_WINDOW rows skipped; opening + activity equal to closing within one minor unit; POSSIBLE_DUPLICATE rows either decided in duplicateDecisions or committed as possible duplicates for later review.
 
-        Required inputs: importId in the path; optional duplicateDecisions [{rowNumber, decision}].
+        Required inputs: importId in the path; optional duplicateDecisions [{rowNumber, decision}] and startReconciliation (its id is returned as reconciliationId).
 
         Emits an ACCOUNTING_BANK_IMPORT_COMMIT event; a second commit returns the same result.
 
@@ -1973,7 +1973,7 @@ paths:
 
         Preconditions: the statement must continue the account''s previous statement (opening balance equals its closing balance, start date the day after its end) unless a gapAcknowledgement of at least 10 characters is given, which is required for the account''s first statement, refused on a contiguous one and moves the account''s reconciliation baseline.
 
-        Required inputs: glAccountId, a UUIDv7 requestId, statement {startDate, endDate, openingBalance, closingBalance} and transactions[] each with a date, a description and either signedAmount or one of debit/credit.
+        Required inputs: glAccountId, a UUIDv7 requestId, statement {startDate, endDate, openingBalance, closingBalance} and transactions[] each with a date, a description and either signedAmount or one of debit/credit; startReconciliation optionally starts the statement''s reconciliation in the same transaction (listed under reconciliations).
 
         Emits an ACCOUNTING_BANK_STATEMENT_CREATE event and queues the accounting.bankstatement.committed fact; a replay of the same requestId and payload returns the original statement with replayed=true.
 
@@ -7087,13 +7087,13 @@ paths:
       - accounting:posting_rules:view
   /v1/accounting/reconciliations:
     get:
-      description: 'Lists bank reconciliations most recent first as a paginated projection, optionally filtered by GL account and status.
+      description: 'Lists bank reconciliation headers most recent first as a paginated projection, optionally filtered by GL account, status, attribution period (periodCode, YYYY-MM) and a from/to window on the statement end date; each row carries the terms its last mutation stored.
 
         Use this tool to find in-progress or finalized reconciliations; do not use getReconciliation, which fetches one reconciliation with its lines by id.
 
         Preconditions: none beyond the caller holding accounting:reconciliation:view.
 
-        Required inputs: none; glAccountId and status (IN_PROGRESS, FINALIZED) are optional filters, page defaults to 0 and size to 20.
+        Required inputs: none; glAccountId, status (IN_PROGRESS, FINALIZED), periodCode, from and to are optional filters, page defaults to 0 and size to 20.
 
         Emits an ACCOUNTING_RECONCILIATION_LIST audit event; no state changes.
 
@@ -7118,6 +7118,29 @@ paths:
           - IN_PROGRESS
           - FINALIZED
           - CANCELLED
+          type: string
+      - description: Filter by attribution period (YYYY-MM of the statement end date)
+        example: 2026-09
+        in: query
+        name: periodCode
+        required: false
+        schema:
+          type: string
+      - description: Statement end date on or after this date
+        example: '2026-01-01'
+        in: query
+        name: from
+        required: false
+        schema:
+          format: date
+          type: string
+      - description: Statement end date on or before this date
+        example: '2026-12-31'
+        in: query
+        name: to
+        required: false
+        schema:
+          format: date
           type: string
       - description: Zero-based page index
         example: 0
@@ -7158,9 +7181,89 @@ paths:
       - Bank Reconciliation
       x-required-permissions:
       - accounting:reconciliation:view
+    post:
+      description: 'Starts an IN_PROGRESS reconciliation of a COMMITTED bank statement: the window, opening and closing balances are copied from the statement, and the explicit equation (E3), the opening terms, the account baseline and the unexplained counts are computed live from the ledger.
+
+        Use this tool to begin reconciling a statement committed through bank-statements or a file import; do not use createBankStatement or the bank-import commit, which commit the statement itself.
+
+        Preconditions: the account must be a reconcilable BANK_CASH account; the statement must be COMMITTED on that account and have no IN_PROGRESS reconciliation and no FINALIZED one without a successor. An interim reconciliation to a date is a manual-entry statement in phase 1.
+
+        Required inputs: glAccountId, requestId (UUIDv7) and statementId in the body.
+
+        Emits an ACCOUNTING_RECONCILIATION_CREATE event and writes a RECONCILIATION_CREATE audit row; no journal entry is posted.
+
+        Returns 201 with the header, or 200 with replayed true when the same requestId and payload are sent again; 409 RECONCILIATION_WINDOW_ALREADY_RECONCILED (fieldErrors naming the reconciliationId) when the statement is already reconciled, 409 IDEMPOTENCY_CONFLICT when the requestId was used with another payload, 404 BANK_STATEMENT_NOT_FOUND when the statement is unknown on the account, 422 ACCOUNT_NOT_RECONCILABLE when the account is not a bank account, and 422 BANK_ACCOUNT_FEED_NOT_LINKED when the body has no statementId (the statementless interim is phase 2).
+
+        '
+      operationId: createReconciliation
+      requestBody:
+        content:
+          application/json:
+            examples:
+              September statement:
+                description: September statement
+                value:
+                  glAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  requestId: 019a0000-0000-7000-8000-000000000001
+                  statementId: 019a0000-0000-7000-8000-000000000002
+            schema:
+              $ref: '#/components/schemas/ReconciliationCreateRequest'
+        description: The statement to reconcile and the command's requestId.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+          description: Replay of an earlier create with the same requestId (replayed = true)
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationResponse'
+          description: Reconciliation started
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Request body invalid (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks the accounting:reconciliation:adjust permission
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Statement not found on the account (BANK_STATEMENT_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Statement already reconciled (RECONCILIATION_WINDOW_ALREADY_RECONCILED) or requestId reused with another payload (IDEMPOTENCY_CONFLICT)
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Account is not a reconcilable bank account (ACCOUNT_NOT_RECONCILABLE), or the body is statementless on an account without a feed link (BANK_ACCOUNT_FEED_NOT_LINKED)
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Start Reconciliation From Statement
+      tags:
+      - Bank Reconciliation
+      x-required-permissions:
+      - accounting:reconciliation:adjust
   /v1/accounting/reconciliations/adjustment-types:
     get:
-      description: 'Returns the supported reconciliation adjustment types with their sign rules (BANK_FEE and NSF_FEE negative-only, INTEREST_EARNED positive-only, OTHER any), so clients never hardcode the enum.
+      description: 'Returns the supported reconciliation adjustment types with their sign rules (BANK_FEE and NSF_FEE negative-only, INTEREST_EARNED positive-only, OTHER and TRANSFER any), so clients never hardcode the enum.
 
         Use this tool to populate an adjustment picker before calling addReconciliationAdjustment; do not use addReconciliationAdjustment itself just to discover the types.
 
@@ -7199,9 +7302,9 @@ paths:
       - accounting:reconciliation:view
   /v1/accounting/reconciliations/{reconciliationId}:
     get:
-      description: 'Returns one bank reconciliation with its imported statement lines, match state and adjustments.
+      description: 'Returns one bank reconciliation header with every term of the explicit equation (E3) and the opening terms computed live from the ledger, the baseline date and the unexplained counts; statement lines are not embedded (read them from bank-transactions).
 
-        Use this tool when the reconciliation id is already known; use listReconciliations instead when searching by account or status, or getReconciliationReport for the balance summary view.
+        Use this tool when the reconciliation id is already known; use listReconciliations instead when searching by account or status, or getReconciliationReview for the full workspace read model.
 
         Preconditions: the reconciliation must exist.
 
@@ -7250,17 +7353,17 @@ paths:
       - accounting:reconciliation:view
   /v1/accounting/reconciliations/{reconciliationId}/adjustments:
     post:
-      description: 'Records a signed reconciliation adjustment and posts a real balanced journal entry, debiting or crediting the reconciled cash account against the type''s mapped counter account, through the accounting-period gate.
+      description: 'Posts a reconciliation adjustment as a real balanced journal entry through the accounting-period gate: positive debits the reconciled cash account against the type''s mapped counter account, negative credits it. BANK_FEE and NSF_FEE are negative, INTEREST_EARNED positive; TRANSFER (either sign) posts against counterGlAccountId, another bank account, with no mapping. OTHER posts to the clearing account and names exactly one link: a bank transaction, settlesMatchId (a match residual; the server sets the amount to the served residual and replaces the match with an exact one) or bridgesStatementId (this statement''s acknowledged gap; the server sets the amount to the opening difference). With a bankTransactionId the entry''s cash line is matched to it as an ADJUSTMENT match. The entry is dated at the explaining date (the bank date, the residual match''s latest bank date, or the day before the window) when its period is open, else at transactionDate.
 
-        Use this tool for bank-only items such as fees or interest that have no GL counterpart; do not use matchReconciliation, which links existing posted GL lines.
+        Use this tool for a bank-only movement the books lack; do not use it for a timing difference (registerReconciliationOutstandingItem), a duplicate (bank-transaction duplicate review) or a books error (a journal-entry reversal).
 
-        Preconditions: the reconciliation must be IN_PROGRESS, and the amount sign must be permitted for the type (BANK_FEE and NSF_FEE negative, INTEREST_EARNED positive, OTHER any).
+        Preconditions: the reconciliation must not be FINALIZED; an OTHER needs a justification of at least 10 characters and, above the tenant''s BANK_REC_OTHER_APPROVAL_THRESHOLD (or while it is unset, for anything but a residual), accounting:reconciliation:approve; posting into a CLOSED period needs overrideJustification and accounting:period:override.
 
-        Required inputs: reconciliationId (UUID) as a path parameter, type (BANK_FEE, NSF_FEE, INTEREST_EARNED or OTHER) and a non-zero signed amount; description (max 500 chars) is optional.
+        Required inputs: reconciliationId as a path parameter; type and requestId in the body, amount unless a residual or bridge is named, and the links and justification the type needs.
 
-        Emits an ACCOUNTING_RECONCILIATION_ADJUSTMENT event and posts a journal entry that changes GL balances.
+        Emits an ACCOUNTING_RECONCILIATION_ADJUSTMENT event and a RECONCILIATION_ADJUSTMENT audit row, and posts a journal entry that changes GL balances.
 
-        Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation is missing, 409 RECONCILIATION_ALREADY_FINALIZED when finalized, and 422 PERIOD_CLOSED, PERIOD_HARD_LOCKED, RECONCILIATION_ADJUSTMENT_SIGN_INVALID or GL_MAPPING_NOT_CONFIGURED (no GL counter-account mapping configured for the adjustment type) for period-gate, sign or configuration failures.
+        Returns 201 with the adjustment (200 with replayed true for a replayed requestId); 400 JUSTIFICATION_REQUIRED; 403 RECONCILIATION_ADJUSTMENT_APPROVAL_REQUIRED; 409 RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT or RECONCILIATION_ALREADY_FINALIZED; 422 RECONCILIATION_ADJUSTMENT_SIGN_INVALID, ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE, GL_ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_RECONCILABLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED when the rule named fails. An adjustment linked to a bank transaction must equal its amount exactly (no minor-unit tolerance); any difference is ADJUSTMENT_LINK_NOT_ELIGIBLE on amount.
 
         '
       operationId: addReconciliationAdjustment
@@ -7276,61 +7379,157 @@ paths:
         content:
           application/json:
             examples:
-              Bank fee:
-                description: Bank fee
+              Bank fee linked to its bank row:
+                description: Bank fee linked to its bank row
                 value:
                   amount: -15.0
+                  bankTransactionId: 019a0000-0000-7000-8000-000000000030
                   description: Monthly account service fee
+                  requestId: 019a0000-0000-7000-8000-000000000031
                   type: BANK_FEE
             schema:
               $ref: '#/components/schemas/ReconciliationAdjustmentRequest'
-        description: Typed, signed adjustment that will post a balanced journal entry.
+        description: The typed adjustment, its links and the command's requestId.
         required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BankReconciliationResponse'
-          description: Adjustment recorded and JE posted
+                $ref: '#/components/schemas/BankReconciliationAdjustmentResponse'
+          description: Replay of an earlier adjustment with the same requestId (replayed = true)
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationAdjustmentResponse'
+          description: Adjustment posted
         '400':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Request body invalid or amount is zero (ARGUMENT_NOT_VALID / VALIDATION_ERROR)
+          description: VALIDATION_ERROR or JUSTIFICATION_REQUIRED
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks the accounting:reconciliation:adjust permission
+          description: Caller lacks accounting:reconciliation:adjust, or approve for this OTHER (RECONCILIATION_ADJUSTMENT_APPROVAL_REQUIRED)
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
+          description: Reconciliation or bank transaction not found
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)
+          description: RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT or RECONCILIATION_ALREADY_FINALIZED
         '422':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Adjustment JE dated into a CLOSED or hard-locked period (PERIOD_CLOSED / PERIOD_HARD_LOCKED), the amount sign is not permitted for the type — BANK_FEE/NSF_FEE must be negative, INTEREST_EARNED must be positive (RECONCILIATION_ADJUSTMENT_SIGN_INVALID) — or no GL counter-account mapping is configured for the adjustment type (GL_MAPPING_NOT_CONFIGURED)
+          description: RECONCILIATION_ADJUSTMENT_SIGN_INVALID, ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE, GL_ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_RECONCILABLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED
       security:
       - bearerAuth:
         - accounting:reconciliation:adjust
-      summary: Record Reconciliation Adjustment
+      summary: Post Reconciliation Adjustment
       tags:
       - Bank Reconciliation
       x-required-permissions:
       - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/adjustments/{adjustmentId}/reverse:
+    post:
+      description: 'Reverses a posted adjustment by posting the inverse journal entry through the period gate; the adjustment becomes REVERSED, its ADJUSTMENT match is unmatched and its bank transaction returns to UNMATCHED. The original and its reversal form a reversal pair that never counts as unexplained; a reversed gap bridge frees its statement for a new bridge.
+
+        Use this tool when an adjustment was wrong or the bank reversed the item; do not use the journal-entry reversal endpoint, which leaves the reconciliation''s links in place.
+
+        Preconditions: the reconciliation must not be FINALIZED and the adjustment must be POSTED.
+
+        Required inputs: reconciliationId and adjustmentId as path parameters; reason (at least 10 characters) in the body; reversalDate and overrideJustification optional.
+
+        Emits an ACCOUNTING_RECONCILIATION_ADJUSTMENT_REVERSE event and a RECONCILIATION_ADJUSTMENT_REVERSE audit row, and posts the reversal journal entry.
+
+        Returns 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED for the reason, 404 RECONCILIATION_NOT_FOUND for an unknown adjustment, 409 ADJUSTMENT_ALREADY_REVERSED, JE_NOT_POSTED, JE_ALREADY_REVERSED or RECONCILIATION_ALREADY_FINALIZED, and 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED when the reversal date is not open.
+
+        '
+      operationId: reverseReconciliationAdjustment
+      parameters:
+      - description: Reconciliation id
+        in: path
+        name: reconciliationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Adjustment id
+        in: path
+        name: adjustmentId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Refunded fee:
+                description: Refunded fee
+                value:
+                  reason: Bank refunded the service fee
+            schema:
+              $ref: '#/components/schemas/AdjustmentReverseRequest'
+        description: Why the adjustment is reversed.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliationAdjustmentResponse'
+          description: Adjustment reversed
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR or JUSTIFICATION_REQUIRED
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:approve
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reconciliation or adjustment not found (RECONCILIATION_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ADJUSTMENT_ALREADY_REVERSED, JE_NOT_POSTED, JE_ALREADY_REVERSED or RECONCILIATION_ALREADY_FINALIZED
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PERIOD_CLOSED or PERIOD_HARD_LOCKED
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:approve
+      summary: Reverse Reconciliation Adjustment
+      tags:
+      - Bank Reconciliation
+      x-required-permissions:
+      - accounting:reconciliation:approve
   /v1/accounting/reconciliations/{reconciliationId}/audit:
     get:
       description: 'Returns the time-ordered audit trail of a reconciliation''s actions: import, matches, unmatches, adjustments and finalize, each with the acting user.
@@ -7382,13 +7581,149 @@ paths:
       - Bank Reconciliation
       x-required-permissions:
       - accounting:reconciliation:view
+  /v1/accounting/reconciliations/{reconciliationId}/auto-match:
+    post:
+      description: 'Proposes a ONE_TO_ONE RULE match, state PROPOSED, for every unexplained bank transaction whose top candidate scores at least 90 and beats the second by at least 20; closer calls propose nothing and are counted as ambiguous. The system never accepts a match.
+
+        Use this tool to pre-pair the obvious rows before reviewing them with acceptReconciliationMatch or rejectReconciliationMatch; use createReconciliationMatch to record a pairing directly.
+
+        Preconditions: the reconciliation must not be FINALIZED.
+
+        Required inputs: reconciliationId as a path parameter; the body is empty.
+
+        Emits an ACCOUNTING_RECONCILIATION_AUTO_MATCH event and writes a RECONCILIATION_AUTO_MATCH audit row with the counts.
+
+        Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation is unknown and 409 RECONCILIATION_ALREADY_FINALIZED when it is finalized.
+
+        '
+      operationId: autoMatchReconciliation
+      parameters:
+      - description: Reconciliation id
+        in: path
+        name: reconciliationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoMatchResponse'
+          description: Proposals made
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED), or a proposed line was concurrently matched (RECONCILIATION_LINE_INELIGIBLE)
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Propose Matches Automatically
+      tags:
+      - Bank Reconciliation
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/candidates:
+    get:
+      description: 'Ranks match candidates deterministically for one bank transaction (posted ledger lines on the account) or one ledger line (bank transactions), each with its score and reason codes: EXACT_AMOUNT +60, WITHIN_TOLERANCE +40, DATE_IN_WINDOW +20 × (1 − d/W), REFERENCE_MATCH +20, DESCRIPTION_SIMILAR up to +10; beyond W a widened window marks DATE_OUT_OF_WINDOW.
+
+        Use this tool to find the ledger lines a bank row should be matched to before createReconciliationMatch; use autoMatchReconciliation instead to propose matches for every unexplained bank row at once.
+
+        Preconditions: the reconciliation must exist; exactly one of bankTransactionId and glLineId.
+
+        Required inputs: reconciliationId as a path parameter and bankTransactionId or glLineId as a query parameter; windowDays optionally widens the date window W (default 7).
+
+        Emits an ACCOUNTING_RECONCILIATION_CANDIDATES event; no state changes.
+
+        Returns 400 VALIDATION_ERROR when neither or both subjects are named, and 404 RECONCILIATION_NOT_FOUND or BANK_TRANSACTION_NOT_FOUND when the reconciliation or the subject is unknown.
+
+        '
+      operationId: listReconciliationCandidates
+      parameters:
+      - description: Reconciliation id
+        in: path
+        name: reconciliationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Bank transaction to find ledger candidates for
+        in: query
+        name: bankTransactionId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Ledger line to find bank candidates for
+        in: query
+        name: glLineId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Widen the date window to this many days
+        example: 30
+        in: query
+        name: windowDays
+        required: false
+        schema:
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationCandidatesResponse'
+          description: Candidates ranked
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Neither or both of bankTransactionId and glLineId (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:view
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reconciliation, bank transaction or ledger line not found (RECONCILIATION_NOT_FOUND / BANK_TRANSACTION_NOT_FOUND)
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      summary: List Match Candidates
+      tags:
+      - Bank Reconciliation
+      x-required-permissions:
+      - accounting:reconciliation:view
   /v1/accounting/reconciliations/{reconciliationId}/finalize:
     post:
       description: 'Finalizes a reconciliation (IN_PROGRESS to FINALIZED), locking it against further matching, unmatching or adjustments.
 
-        Use this tool once all lines are matched or adjusted; do not use it while a difference remains, which addReconciliationAdjustment or further matching must clear first.
+        Use this tool once the live difference is cleared; do not use it while a difference remains, which outstanding items, matches or addReconciliationAdjustment must explain first.
 
-        Preconditions: the statement ending balance must equal the GL ending balance plus the sum of adjustments within 0.01, matched GL lines being already reflected in the GL ending balance.
+        Preconditions: the live difference (adjustedBankBalance − adjustedBookBalance, E3) must be within 0.01; the approval gate on unexplained items arrives with the submit/approve story.
 
         Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
 
@@ -7445,22 +7780,22 @@ paths:
       - Bank Reconciliation
       x-required-permissions:
       - accounting:reconciliation:adjust
-  /v1/accounting/reconciliations/{reconciliationId}/match:
+  /v1/accounting/reconciliations/{reconciliationId}/matches:
     post:
-      description: 'Matches a set of statement lines to a set of posted GL journal-entry lines on the reconciled account (1-to-1 or N-to-1), marking the statement lines MATCHED and recording the linkage.
+      description: 'Creates an ACCEPTED match of bank transactions to posted ledger lines on the reconciled account (1:1, 1:N or N:1), marks the bank rows MATCHED and clears any OPEN ledger-side outstanding item on the matched lines; the response serves toleranceUsed and the signed residual (bankTotal − ledgerTotal).
 
-        Use this tool to pair bank activity with ledger activity; do not use unmatchReconciliation, which reverses a match, and use addReconciliationAdjustment for bank-only items like fees that have no GL counterpart yet.
+        Use this tool to record that bank and ledger rows describe the same cash movement; use addReconciliationAdjustment instead for a bank-only item, and registerReconciliationOutstandingItem for a timing difference.
 
-        Preconditions: the reconciliation must be IN_PROGRESS, every statement line must be UNMATCHED, every GL line must be POSTED and not already reconciled, and the two sets must net to equal signed amounts within 0.01.
+        Preconditions: the reconciliation must not be FINALIZED; bank rows UNMATCHED, settled, in no match or open item and dated on or before the window end; ledger lines POSTED, on the account, in no active match and dated on or before the window end; the sides must agree within 0.01. A justification of at least 10 characters is required for a non-1:1 match, any tolerance use, dates beyond the window, or a former possible duplicate.
 
-        Required inputs: reconciliationId (UUID) as a path parameter plus non-empty statementLineIds and glLineIds lists.
+        Required inputs: reconciliationId as a path parameter; bankTransactionIds, glLineIds and requestId in the body.
 
-        Emits an ACCOUNTING_RECONCILIATION_MATCH event; no journal entries are created by matching.
+        Emits an ACCOUNTING_RECONCILIATION_MATCH event and a RECONCILIATION_MATCH audit row; no journal entry is posted.
 
-        Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation or a line is missing, 409 RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_LINE_INELIGIBLE for state conflicts, and 422 MATCH_AMOUNT_MISMATCH when the sets do not net.
+        Returns 201 with the match (200 with replayed true for a replayed requestId); 409 RECONCILIATION_LINE_INELIGIBLE for a row not matchable (including a ledger line dated after the window end), 409 RECONCILIATION_ALREADY_FINALIZED or IDEMPOTENCY_CONFLICT; 422 MATCH_AMOUNT_MISMATCH when the sides differ by more than 0.01, 422 MATCH_CARDINALITY_NOT_ALLOWED for N:M, and 422 MATCH_REQUIRES_REVIEW listing the reasons in fieldErrors[justification] when a justification is needed.
 
         '
-      operationId: matchReconciliation
+      operationId: createReconciliationMatch
       parameters:
       - description: Reconciliation id
         in: path
@@ -7473,65 +7808,645 @@ paths:
         content:
           application/json:
             examples:
-              One-to-one match:
-                description: One-to-one match
+              Batch deposit (1:N):
+                description: Batch deposit (1:N)
                 value:
+                  bankTransactionIds:
+                  - 019a0000-0000-7000-8000-000000000010
                   glLineIds:
-                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
-                  statementLineIds:
-                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  - 019a0000-0000-7000-8000-000000000011
+                  - 019a0000-0000-7000-8000-000000000012
+                  justification: Batch deposit of two receipts
+                  requestId: 019a0000-0000-7000-8000-000000000013
             schema:
-              $ref: '#/components/schemas/ReconciliationMatchRequest'
-        description: Statement-line and GL-line id sets to link; the sets must net to equal amounts.
+              $ref: '#/components/schemas/ReconciliationMatchCreateRequest'
+        description: The members of the match and the command's requestId.
         required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BankReconciliationResponse'
-          description: Lines matched
+                $ref: '#/components/schemas/ReconciliationMatchResponse'
+          description: Replay of an earlier match with the same requestId (replayed = true)
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationMatchResponse'
+          description: Match created
         '400':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Request body invalid (ARGUMENT_NOT_VALID / VALIDATION_ERROR)
+          description: Request body invalid (VALIDATION_ERROR) or justification shorter than 10 characters (JUSTIFICATION_REQUIRED)
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks the accounting:reconciliation:adjust permission
+          description: Caller lacks accounting:reconciliation:adjust
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Reconciliation or a referenced line not found (RECONCILIATION_NOT_FOUND)
+          description: Reconciliation, bank transaction or ledger line not found
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED), or a statement/GL line is ineligible — not UNMATCHED, not POSTED, or already reconciled (RECONCILIATION_LINE_INELIGIBLE)
+          description: RECONCILIATION_LINE_INELIGIBLE, RECONCILIATION_ALREADY_FINALIZED or IDEMPOTENCY_CONFLICT
         '422':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Matched sets do not net to equal amounts (MATCH_AMOUNT_MISMATCH)
+          description: MATCH_AMOUNT_MISMATCH, MATCH_CARDINALITY_NOT_ALLOWED or MATCH_REQUIRES_REVIEW
       security:
       - bearerAuth:
         - accounting:reconciliation:adjust
-      summary: Match Statement Lines To GL Lines
+      summary: Match Bank Transactions To Ledger Lines
+      tags:
+      - Bank Reconciliation
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/matches/{matchId}/accept:
+    post:
+      description: 'Accepts a PROPOSED match: the match becomes ACCEPTED, its bank rows MATCHED, and any OPEN ledger-side outstanding item on its lines CLEARED.
+
+        Use this tool to confirm a proposal from autoMatchReconciliation; use rejectReconciliationMatch to decline it.
+
+        Preconditions: the reconciliation must not be FINALIZED; the match must be PROPOSED and its members still matchable; a justification is needed when the proposal uses the tolerance or spans dates beyond the window.
+
+        Required inputs: reconciliationId and matchId as path parameters; justification optional.
+
+        Emits an ACCOUNTING_RECONCILIATION_MATCH_ACCEPT event and a RECONCILIATION_MATCH_ACCEPT audit row.
+
+        Returns 404 RECONCILIATION_NOT_FOUND for an unknown match, 409 MATCH_STATE_INVALID when the match is not PROPOSED, 409 RECONCILIATION_LINE_INELIGIBLE when a member is no longer matchable, and 422 MATCH_REQUIRES_REVIEW when a justification is needed.
+
+        '
+      operationId: acceptReconciliationMatch
+      parameters:
+      - description: Reconciliation id
+        in: path
+        name: reconciliationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Match id
+        in: path
+        name: matchId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationMatchDecisionRequest'
+        description: Optional justification.
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationMatchResponse'
+          description: Match accepted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Justification shorter than 10 characters (JUSTIFICATION_REQUIRED)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reconciliation or match not found (RECONCILIATION_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: MATCH_STATE_INVALID, RECONCILIATION_LINE_INELIGIBLE or RECONCILIATION_ALREADY_FINALIZED
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A justification is needed (MATCH_REQUIRES_REVIEW)
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Accept Proposed Match
+      tags:
+      - Bank Reconciliation
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/matches/{matchId}/reject:
+    post:
+      description: 'Rejects a PROPOSED match: it becomes REJECTED (kept as history, never deleted) and its members are released for other matches.
+
+        Use this tool to decline a proposal from autoMatchReconciliation; use acceptReconciliationMatch to confirm it.
+
+        Preconditions: the reconciliation must not be FINALIZED and the match must be PROPOSED.
+
+        Required inputs: reconciliationId and matchId as path parameters; justification optional.
+
+        Emits an ACCOUNTING_RECONCILIATION_MATCH_REJECT event and a RECONCILIATION_MATCH_REJECT audit row.
+
+        Returns 404 RECONCILIATION_NOT_FOUND for an unknown match and 409 MATCH_STATE_INVALID when the match is not PROPOSED.
+
+        '
+      operationId: rejectReconciliationMatch
+      parameters:
+      - description: Reconciliation id
+        in: path
+        name: reconciliationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Match id
+        in: path
+        name: matchId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationMatchDecisionRequest'
+        description: Optional justification.
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationMatchResponse'
+          description: Match rejected
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Justification shorter than 10 characters (JUSTIFICATION_REQUIRED)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reconciliation or match not found (RECONCILIATION_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: MATCH_STATE_INVALID or RECONCILIATION_ALREADY_FINALIZED
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Reject Proposed Match
+      tags:
+      - Bank Reconciliation
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/matches/{matchId}/unmatch:
+    post:
+      description: 'Undoes an ACCEPTED match: it becomes UNMATCHED with the reason (never deleted), its bank rows return to UNMATCHED, its lines are released for re-matching, and the outstanding items it had cleared re-open.
+
+        Use this tool to correct a wrong pairing; do not use rejectReconciliationMatch, which declines a proposal that was never accepted.
+
+        Preconditions: the reconciliation must not be FINALIZED and the match must be ACCEPTED.
+
+        Required inputs: reconciliationId and matchId as path parameters; reason (at least 10 characters) in the body.
+
+        Emits an ACCOUNTING_RECONCILIATION_UNMATCH event and a RECONCILIATION_UNMATCH audit row with the actor and reason.
+
+        Returns 400 VALIDATION_ERROR without a reason or JUSTIFICATION_REQUIRED for a short one, 404 RECONCILIATION_NOT_FOUND for an unknown match, and 409 MATCH_STATE_INVALID when the match is not ACCEPTED.
+
+        '
+      operationId: unmatchReconciliationMatch
+      parameters:
+      - description: Reconciliation id
+        in: path
+        name: reconciliationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Match id
+        in: path
+        name: matchId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Wrong pairing:
+                description: Wrong pairing
+                value:
+                  reason: Paired the wrong deposit
+            schema:
+              $ref: '#/components/schemas/ReconciliationUnmatchRequest'
+        description: Why the match is undone.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationMatchResponse'
+          description: Match unmatched
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reason missing (VALIDATION_ERROR) or shorter than 10 characters (JUSTIFICATION_REQUIRED)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reconciliation or match not found (RECONCILIATION_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: MATCH_STATE_INVALID or RECONCILIATION_ALREADY_FINALIZED
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Unmatch Accepted Match
+      tags:
+      - Bank Reconciliation
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/outstanding-items:
+    post:
+      description: 'Registers a non-posting outstanding item: a deposit in transit (a debit to cash), an outstanding check (a credit) or another ledger timing item on a posted ledger line, or a bank error the bank will correct on a bank transaction. The item enters the explicit equation''s bank side while it is open and carries forward until matched, cleared or released.
+
+        Use this tool for a timing difference; do not use addReconciliationAdjustment, which posts a journal entry, and use createReconciliationMatch when the other side is already present.
+
+        Preconditions: the reconciliation must not be FINALIZED; the line or bank transaction must be on the account, dated on or before the window end, in no active match and in no OPEN item; a deposit in transit must be positive and an outstanding check negative.
+
+        Required inputs: reconciliationId as a path parameter; itemKind and exactly one of glLineId or bankTransactionId in the body; justification (at least 10 characters) for OTHER_LEDGER_TIMING, BANK_ERROR_PENDING and an item older than the aging days.
+
+        Emits an ACCOUNTING_RECONCILIATION_OUTSTANDING_REGISTER event and a RECONCILIATION_OUTSTANDING_REGISTER audit row; no journal entry is posted.
+
+        Returns 400 JUSTIFICATION_REQUIRED when a needed justification is missing or short, 409 RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_LINE_INELIGIBLE (a concurrent registration), and 422 OUTSTANDING_ITEM_NOT_ELIGIBLE when the line, sign, window or state does not allow the item.
+
+        '
+      operationId: registerReconciliationOutstandingItem
+      parameters:
+      - description: Reconciliation id
+        in: path
+        name: reconciliationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Deposit in transit:
+                description: Deposit in transit
+                value:
+                  glLineId: 019a0000-0000-7000-8000-000000000020
+                  itemKind: DEPOSIT_IN_TRANSIT
+            schema:
+              $ref: '#/components/schemas/OutstandingItemRegisterRequest'
+        description: The line or bank transaction and the item kind.
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutstandingItemResponse'
+          description: Item registered
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR or JUSTIFICATION_REQUIRED
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reconciliation, line or bank transaction not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_LINE_INELIGIBLE
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: OUTSTANDING_ITEM_NOT_ELIGIBLE
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Register Outstanding Item
+      tags:
+      - Bank Reconciliation
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/outstanding-items/{itemId}/clear-in-gap:
+    post:
+      description: 'Closes an OPEN item registered in an earlier reconciliation whose other side appeared during the gap this reconciliation''s statement acknowledges: the item becomes CLEARED_IN_GAP with closedOn the day before the statement start and leaves this window''s opening and closing terms.
+
+        Use this tool only in the reconciliation of an acknowledged statement; use createReconciliationMatch for an item whose other side is in a bank row, and releaseReconciliationOutstandingItem to undo a wrong registration.
+
+        Preconditions: the reconciliation must not be FINALIZED and rest on a statement with a gap acknowledgement; the item must be OPEN, dated before the statement start and registered in an earlier reconciliation.
+
+        Required inputs: reconciliationId and itemId as path parameters; justification (at least 10 characters) in the body.
+
+        Emits an ACCOUNTING_RECONCILIATION_OUTSTANDING_CLEAR_IN_GAP event and a RECONCILIATION_OUTSTANDING_CLEAR_IN_GAP audit row.
+
+        Returns 400 JUSTIFICATION_REQUIRED, 403 without accounting:reconciliation:approve, 404 RECONCILIATION_NOT_FOUND for an unknown item, and 422 OUTSTANDING_ITEM_NOT_ELIGIBLE when the statement has no acknowledgement or the item fails its rule.
+
+        '
+      operationId: clearReconciliationOutstandingItemInGap
+      parameters:
+      - description: Reconciliation id
+        in: path
+        name: reconciliationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Outstanding item id
+        in: path
+        name: itemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutstandingItemJustificationRequest'
+        description: Why the other side is taken to have cleared during the gap.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutstandingItemResponse'
+          description: Item cleared in the gap
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: JUSTIFICATION_REQUIRED
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:approve
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reconciliation or item not found (RECONCILIATION_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: RECONCILIATION_ALREADY_FINALIZED
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: OUTSTANDING_ITEM_NOT_ELIGIBLE
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:approve
+      summary: Clear Outstanding Item In Gap
+      tags:
+      - Bank Reconciliation
+      x-required-permissions:
+      - accounting:reconciliation:approve
+  /v1/accounting/reconciliations/{reconciliationId}/outstanding-items/{itemId}/reaffirm:
+    post:
+      description: 'Reaffirms an aged OTHER_LEDGER_TIMING item in this reconciliation: an item dated more than the aging days before the window end counts as an unexplained ledger line until the preparer re-judges it here, and counts again in the next window.
+
+        Use this tool when the timing explanation still holds; release the item instead, or correct the books by a journal-entry reversal, when it does not.
+
+        Preconditions: the reconciliation must not be FINALIZED; the item must be an OPEN OTHER_LEDGER_TIMING item on the account, aged at this window''s end.
+
+        Required inputs: reconciliationId and itemId as path parameters; justification (at least 10 characters) in the body.
+
+        Emits an ACCOUNTING_RECONCILIATION_OUTSTANDING_REAFFIRM event and a RECONCILIATION_OUTSTANDING_REAFFIRM audit row.
+
+        Returns 400 JUSTIFICATION_REQUIRED for a missing or short justification, 404 RECONCILIATION_NOT_FOUND for an unknown item, and 422 OUTSTANDING_ITEM_NOT_ELIGIBLE when the item is not an aged OPEN OTHER_LEDGER_TIMING item.
+
+        '
+      operationId: reaffirmReconciliationOutstandingItem
+      parameters:
+      - description: Reconciliation id
+        in: path
+        name: reconciliationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Outstanding item id
+        in: path
+        name: itemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutstandingItemJustificationRequest'
+        description: Why the timing explanation still holds.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutstandingItemResponse'
+          description: Item reaffirmed
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: JUSTIFICATION_REQUIRED
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reconciliation or item not found (RECONCILIATION_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: RECONCILIATION_ALREADY_FINALIZED
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: OUTSTANDING_ITEM_NOT_ELIGIBLE
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Reaffirm Aged Timing Item
+      tags:
+      - Bank Reconciliation
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/reconciliations/{reconciliationId}/outstanding-items/{itemId}/release:
+    post:
+      description: 'Releases an OPEN outstanding item with a reason: it leaves the equation and its line or bank transaction is free again.
+
+        Use this tool to undo a wrong registration; do not use it for an item whose other side has appeared, which createReconciliationMatch clears.
+
+        Preconditions: the reconciliation must not be FINALIZED; the item must be OPEN on the account and its registering reconciliation not FINALIZED.
+
+        Required inputs: reconciliationId and itemId as path parameters; reason (at least 10 characters) in the body.
+
+        Emits an ACCOUNTING_RECONCILIATION_OUTSTANDING_RELEASE event and a RECONCILIATION_OUTSTANDING_RELEASE audit row.
+
+        Returns 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED for a missing or short reason, 404 RECONCILIATION_NOT_FOUND for an unknown item, and 422 OUTSTANDING_ITEM_NOT_ELIGIBLE when the item is not OPEN or its registering reconciliation is FINALIZED.
+
+        '
+      operationId: releaseReconciliationOutstandingItem
+      parameters:
+      - description: Reconciliation id
+        in: path
+        name: reconciliationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Outstanding item id
+        in: path
+        name: itemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutstandingItemReasonRequest'
+        description: Why the item is released.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutstandingItemResponse'
+          description: Item released
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR or JUSTIFICATION_REQUIRED
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Reconciliation or item not found (RECONCILIATION_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: RECONCILIATION_ALREADY_FINALIZED
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: OUTSTANDING_ITEM_NOT_ELIGIBLE
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Release Outstanding Item
       tags:
       - Bank Reconciliation
       x-required-permissions:
       - accounting:reconciliation:adjust
   /v1/accounting/reconciliations/{reconciliationId}/report:
     get:
-      description: 'Returns the reconciliation report: opening GL and closing statement balances, matched versus outstanding lines, adjustments and the outstanding difference.
+      description: 'Returns the reconciliation report: the statement lines matched versus outstanding, every term of the explicit equation E3 and the opening terms, the outstanding items with their age, the unexplained counts and sums, the adjustments and the adjustments to clearing, and the live difference.
 
         Use this tool to see how far a reconciliation is from balancing before finalizeReconciliation; use getReconciliation instead for the raw line-level detail.
 
@@ -7580,22 +8495,22 @@ paths:
       - Bank Reconciliation
       x-required-permissions:
       - accounting:reconciliation:view
-  /v1/accounting/reconciliations/{reconciliationId}/unmatch:
-    post:
-      description: 'Reverses a previously recorded match, returning the affected statement lines to UNMATCHED and releasing the linked GL lines for re-matching.
+  /v1/accounting/reconciliations/{reconciliationId}/review:
+    get:
+      description: 'Returns the review read model in one call, computed live, so a client never does arithmetic: the header (account, window, baseline and whether this statement set it, provenance, status, preparer, period state, version); every term of the explicit equation E3 with its drill-down, including late adjustments with their owning reconciliation; the opening terms and the OPENING_DIFFERENCE diagnostic, which never blocks; everything unresolved from the baseline on (late arrivals first, unexplained bank rows with their top ledger candidate, unexplained ledger lines with their top bank candidate, possible duplicates with their near-duplicate candidates, aged timing items awaiting reaffirmation, proposed and broken matches); the posted adjustments; the evidence (matches with their served residual, items, exclusions, the adjustments to clearing, the statement); and the readiness with its reasons.
 
-        Use this tool to correct a wrong pairing while the reconciliation is still IN_PROGRESS; do not use matchReconciliation, which records new matches.
+        Use this tool to render or audit the reconciliation workspace; use getReconciliation for the header alone and getReconciliationReport for the printable report.
 
-        Preconditions: the reconciliation must not be FINALIZED, and either the matchId or the statementLineIds must resolve to exactly one match group.
+        Preconditions: the reconciliation must exist.
 
-        Required inputs: reconciliationId (UUID) as a path parameter plus matchId or statementLineIds in the body (one of the two is required).
+        Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
 
-        Emits an ACCOUNTING_RECONCILIATION_UNMATCH event.
+        Emits an ACCOUNTING_RECONCILIATION_REVIEW event; no state changes.
 
-        Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation or match group is missing, 409 RECONCILIATION_ALREADY_FINALIZED when finalized, and 400 when neither identifier resolves to a single match group.
+        Returns 404 RECONCILIATION_NOT_FOUND when the id is unknown.
 
         '
-      operationId: unmatchReconciliation
+      operationId: getReconciliationReview
       parameters:
       - description: Reconciliation id
         in: path
@@ -7604,57 +8519,33 @@ paths:
         schema:
           format: uuid
           type: string
-      requestBody:
-        content:
-          application/json:
-            examples:
-              Unmatch by match id:
-                description: Unmatch by match id
-                value:
-                  matchId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
-            schema:
-              $ref: '#/components/schemas/ReconciliationUnmatchRequest'
-        description: Match group to reverse, identified by matchId or by its statement line ids.
-        required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BankReconciliationResponse'
-          description: Match reversed
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Neither matchId nor statementLineIds resolved to a single match group (VALIDATION_ERROR)
+                $ref: '#/components/schemas/ReconciliationReviewResponse'
+          description: Review read
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks the accounting:reconciliation:adjust permission
+          description: Caller lacks the accounting:reconciliation:view permission
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Reconciliation or match group not found (RECONCILIATION_NOT_FOUND)
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Reconciliation already finalized (RECONCILIATION_ALREADY_FINALIZED)
+          description: Reconciliation not found (RECONCILIATION_NOT_FOUND)
       security:
       - bearerAuth:
-        - accounting:reconciliation:adjust
-      summary: Reverse A Reconciliation Match
+        - accounting:reconciliation:view
+      summary: Get Reconciliation Review
       tags:
       - Bank Reconciliation
       x-required-permissions:
-      - accounting:reconciliation:adjust
+      - accounting:reconciliation:view
   /v1/accounting/reports/export:
     get:
       description: 'Lists all asynchronous report export jobs as a paginated projection, most recent first.
@@ -9949,6 +10840,27 @@ components:
           example: OPEN
           type: string
       type: object
+    AdjustmentReverseRequest:
+      description: Reverse a posted reconciliation adjustment
+      properties:
+        overrideJustification:
+          description: Reverse into a CLOSED period; needs accounting:period:override
+          maxLength: 1000
+          minLength: 0
+          type: string
+        reason:
+          description: Why the adjustment is reversed (at least 10 characters)
+          example: Bank refunded the fee
+          maxLength: 1000
+          minLength: 0
+          type: string
+        reversalDate:
+          description: Reversal date; defaults to the original's date when its period is open, else today
+          format: date
+          type: string
+      required:
+      - reason
+      type: object
     AdjustmentTypeResponse:
       description: A supported reconciliation adjustment type
       properties:
@@ -9959,6 +10871,7 @@ components:
           - NSF_FEE
           - INTEREST_EARNED
           - OTHER
+          - TRANSFER
           example: BANK_FEE
           type: string
       type: object
@@ -10439,6 +11352,20 @@ components:
       - exceptionType
       - timestamp
       type: object
+    AutoMatchResponse:
+      description: Proposals made by auto-match, and bank transactions left ambiguous
+      properties:
+        ambiguousCount:
+          description: Bank transactions whose top two candidates were too close to propose
+          example: 2
+          format: int32
+          type: integer
+        proposedCount:
+          description: PROPOSED one-to-one RULE matches created
+          example: 12
+          format: int32
+          type: integer
+      type: object
     BalanceSheetReport:
       description: Balance Sheet report response with assets, liabilities, and equity totals derived from POSTED journal entries
       properties:
@@ -10656,6 +11583,10 @@ components:
           items:
             $ref: '#/components/schemas/BankImportDuplicateDecision'
           type: array
+        startReconciliation:
+          description: Start an IN_PROGRESS reconciliation of the committed statement (the first segment's when the file was split); its id is returned as reconciliationId
+          example: true
+          type: boolean
         version:
           description: The import version the commit was made against
           example: 3
@@ -10680,7 +11611,7 @@ components:
           format: int32
           type: integer
         reconciliationId:
-          description: The reconciliation started with the commit; null until story S4 wires it
+          description: The reconciliation started with the commit (startReconciliation); null when none was asked for
           format: uuid
           type: string
         statementId:
@@ -11082,7 +12013,7 @@ components:
         preview:
           $ref: '#/components/schemas/BankImportPreview'
         reconciliationId:
-          description: The reconciliation started with the commit (story S4)
+          description: The reconciliation started with the commit (startReconciliation), if any
           format: uuid
           type: string
         rejectedCount:
@@ -11460,7 +12391,7 @@ components:
       - meta
       type: object
     BankReconciliationAdjustmentResponse:
-      description: Reconciliation adjustment with its posted journal entry
+      description: Reconciliation adjustment with its posted journal entry, link and reversal state
       properties:
         adjustmentId:
           description: Adjustment id
@@ -11470,6 +12401,18 @@ components:
           description: Signed adjustment amount
           example: -12.5
           type: number
+        bankTransactionId:
+          description: The bank transaction the adjustment explains
+          format: uuid
+          type: string
+        bridgesStatementId:
+          description: The statement whose acknowledged gap the adjustment bridges
+          format: uuid
+          type: string
+        counterGlAccountId:
+          description: TRANSFER counter bank account
+          format: uuid
+          type: string
         createdAt:
           description: When the adjustment was recorded
           format: date-time
@@ -11480,17 +12423,71 @@ components:
         description:
           description: Adjustment description
           type: string
+        entryNumber:
+          description: Posted entry number
+          example: JE-202609-0042
+          type: string
         journalEntryId:
-          description: Id of the real balanced journal entry this adjustment posted
+          description: Id of the balanced journal entry this adjustment posted
           format: uuid
           type: string
+        justification:
+          description: Justification recorded for the adjustment
+          type: string
+        matchId:
+          description: The ADJUSTMENT match of a linked bank transaction, or a residual's replacement match
+          format: uuid
+          type: string
+        overrideJustification:
+          description: Justification of a posting into a CLOSED period
+          type: string
+        periodOverride:
+          description: Whether the posting used the period override
+          type: boolean
+        postedPeriodCode:
+          description: YearMonth of the posting date
+          example: 2026-09
+          type: string
+        reconciliationId:
+          description: The reconciliation that owns the adjustment
+          format: uuid
+          type: string
+        replayed:
+          description: True when this answers a replayed command (same requestId and payload)
+          type: boolean
+        reversalJournalEntryId:
+          format: uuid
+          type: string
+        reversalReason:
+          type: string
+        reversedAt:
+          format: date-time
+          type: string
+        reversedBy:
+          type: string
+        settlesMatchId:
+          description: The match whose residual the adjustment settled
+          format: uuid
+          type: string
+        status:
+          description: POSTED or REVERSED
+          enum:
+          - POSTED
+          - REVERSED
+          type: string
+        transactionDate:
+          description: The date the entry posted at (D7)
+          example: '2026-09-15'
+          format: date
+          type: string
         type:
-          description: Adjustment type (decision D-6)
+          description: Adjustment type
           enum:
           - BANK_FEE
           - NSF_FEE
           - INTEREST_EARNED
           - OTHER
+          - TRANSFER
           example: BANK_FEE
           type: string
       type: object
@@ -11571,7 +12568,7 @@ components:
       - totalPages
       type: object
     BankReconciliationResponse:
-      description: Bank reconciliation with its statement lines and adjustments
+      description: Bank reconciliation header with the live equation (E3), opening terms and unexplained counts
       properties:
         accountCode:
           description: Reconciled account code
@@ -11581,24 +12578,42 @@ components:
           description: Reconciled account name
           example: Cash
           type: string
-        adjustments:
-          description: Recorded adjustments
-          items:
-            $ref: '#/components/schemas/BankReconciliationAdjustmentResponse'
-          type: array
+        accountingPeriodCode:
+          description: YearMonth of the statement end date, for attribution only (never a window constraint)
+          example: 2026-09
+          type: string
+        adjustedBankBalance:
+          description: statementClosingBalance + sumOutstandingLedgerItems − sumOutstandingBankItems
+          type: number
+        adjustedBookBalance:
+          description: glEndingBalance + sumLateAdjustments
+          type: number
+        baselineDate:
+          description: 'Start date of the latest acknowledged statement on or before the window start: nothing dated before it counts as unexplained; null when the account has no acknowledged statement'
+          example: '2026-09-01'
+          format: date
+          type: string
+        countUnexplainedBank:
+          description: Unexplained bank transactions from the baseline to the window end (exact count)
+          format: int32
+          type: integer
+        countUnexplainedLedger:
+          description: Unexplained ledger lines from the baseline to the window end, aged OTHER_LEDGER_TIMING items not reaffirmed here included (exact count)
+          format: int32
+          type: integer
         createdAt:
           description: When the reconciliation was created
           format: date-time
           type: string
         createdBy:
-          description: Who created the reconciliation
+          description: Who created the reconciliation (the preparer)
           type: string
         currency:
-          description: Reconciliation currency
+          description: Reconciliation currency (the ledger currency)
           example: USD
           type: string
         difference:
-          description: statementEndingBalance − (glEndingBalance + Σ adjustments); 0 when balanced
+          description: adjustedBankBalance − adjustedBookBalance; balanced within ±0.01
           example: 0.0
           type: number
         finalizedAt:
@@ -11613,37 +12628,43 @@ components:
           format: uuid
           type: string
         glEndingBalance:
-          description: GL ending balance snapshotted at import as-of the statement date
-          example: 12000.0
+          description: Live ledger balance at the end of the statement end date, entries POSTED or REVERSED at their own dates
           type: number
-        periodEndDate:
-          description: Statement period end date
-          example: '2026-06-30'
-          format: date
-          type: string
-        periodStartDate:
-          description: Statement period start date
-          example: '2026-06-01'
-          format: date
-          type: string
+        glOpeningBalance:
+          description: Live ledger balance at the end of the day before the window start
+          type: number
+        openingDifference:
+          description: 'Diagnostic only, never blocking: statementOpeningBalance + ledger items − bank items open at the day before the start − (glOpeningBalance + sumOpeningAdjustments)'
+          type: number
         reconciliationId:
           description: Reconciliation id
           format: uuid
           type: string
-        statementDate:
-          description: Statement date
-          example: '2026-06-30'
+        replayed:
+          description: True when this answers a replayed create command (same requestId and payload)
+          type: boolean
+        statementClosingBalance:
+          description: Statement closing balance
+          example: 12345.67
+          type: number
+        statementEndDate:
+          description: Statement window end date; the as-of date of every closing term
+          example: '2026-09-30'
           format: date
           type: string
-        statementEndingBalance:
-          description: Statement ending balance
-          example: 12500.0
+        statementId:
+          description: The bank statement this reconciliation rests on
+          format: uuid
+          type: string
+        statementOpeningBalance:
+          description: Statement opening balance
+          example: 12000.0
           type: number
-        statementLines:
-          description: Imported statement lines
-          items:
-            $ref: '#/components/schemas/BankReconciliationLineResponse'
-          type: array
+        statementStartDate:
+          description: Statement window start date
+          example: '2026-09-01'
+          format: date
+          type: string
         status:
           description: Reconciliation status
           enum:
@@ -11651,6 +12672,67 @@ components:
           - FINALIZED
           - CANCELLED
           example: IN_PROGRESS
+          type: string
+        sumLateAdjustments:
+          description: Adjustment postings of this or an earlier reconciliation on the account dated after the statement end date
+          type: number
+        sumOpeningAdjustments:
+          description: Adjustment postings of earlier windows, and this statement's gap bridges, dated on or after the window start
+          type: number
+        sumOutstandingBankItems:
+          description: Σ bank-side outstanding items open at the end of the window (bank errors)
+          type: number
+        sumOutstandingLedgerItems:
+          description: Σ ledger-side outstanding items open at the end of the window (deposits +, checks −)
+          type: number
+        sumUnexplainedBank:
+          description: Σ signed amounts of the unexplained bank transactions
+          type: number
+        sumUnexplainedLedger:
+          description: Σ signed amounts of the unexplained ledger lines
+          type: number
+        version:
+          description: Optimistic-lock version of the row
+          example: 3
+          format: int64
+          type: integer
+      type: object
+    BankRow:
+      description: Bank transaction row
+      properties:
+        arrivedAfterApproval:
+          type: boolean
+        bankTransactionId:
+          format: uuid
+          type: string
+        checkNumber:
+          type: string
+        description:
+          type: string
+        firstObservedAt:
+          format: date-time
+          type: string
+        nearDuplicates:
+          description: Near-duplicate candidates (candidate originals), best first, at most five
+          items:
+            $ref: '#/components/schemas/BankRow'
+          type: array
+        reference:
+          type: string
+        signedAmount:
+          type: number
+        status:
+          enum:
+          - UNMATCHED
+          - POSSIBLE_DUPLICATE
+          - MATCHED
+          - EXCLUDED
+          - REMOVED_BY_SOURCE
+          type: string
+        topCandidate:
+          $ref: '#/components/schemas/Candidate'
+        transactionDate:
+          format: date
           type: string
       type: object
     BankStatementCreateRequest:
@@ -11672,6 +12754,10 @@ components:
           description: Caller-generated UUIDv7; a replay with the same payload returns the original statement
           format: uuid
           type: string
+        startReconciliation:
+          description: Start an IN_PROGRESS reconciliation of the committed statement in the same transaction; it appears in reconciliations (story S4)
+          example: true
+          type: boolean
         statement:
           $ref: '#/components/schemas/BankStatementHeaderRequest'
         transactions:
@@ -12244,6 +13330,60 @@ components:
       - cancellationType
       - reason
       type: object
+    Candidate:
+      description: One match candidate with its score and reason codes
+      properties:
+        bankTransactionId:
+          description: The candidate bank transaction (asked by glLineId)
+          format: uuid
+          type: string
+        date:
+          description: Candidate date
+          example: '2026-09-12'
+          format: date
+          type: string
+        dateDistance:
+          description: Days between the candidate and the subject
+          example: 1
+          format: int64
+          type: integer
+        description:
+          description: Candidate description
+          type: string
+        entryNumber:
+          description: The candidate's posted entry number
+          example: JE-202609-0042
+          type: string
+        glLineId:
+          description: The candidate ledger line (asked by bankTransactionId)
+          format: uuid
+          type: string
+        journalEntryId:
+          description: The candidate's journal entry
+          format: uuid
+          type: string
+        reasons:
+          description: Reason codes of the score
+          items:
+            enum:
+            - EXACT_AMOUNT
+            - WITHIN_TOLERANCE
+            - DATE_IN_WINDOW
+            - DATE_OUT_OF_WINDOW
+            - REFERENCE_MATCH
+            - DESCRIPTION_SIMILAR
+            type: string
+          type: array
+        score:
+          description: Score 0–110
+          example: 80
+          format: int32
+          type: integer
+        signedAmount:
+          description: Candidate signed amount
+          example: 250.0
+          type: number
+      type: object
     CandidateSelectionRequest:
       description: Request payload for selecting a match candidate
       properties:
@@ -12254,6 +13394,38 @@ components:
           type: string
       required:
       - operatorId
+      type: object
+    ClearingAdjustment:
+      description: Adjustment to clearing
+      properties:
+        adjustmentId:
+          format: uuid
+          type: string
+        ageDays:
+          description: Days from the posting date to the window end
+          format: int64
+          type: integer
+        amount:
+          type: number
+        journalEntryId:
+          format: uuid
+          type: string
+        justification:
+          type: string
+        linkId:
+          format: uuid
+          type: string
+        linkKind:
+          description: BANK_TRANSACTION, RESIDUAL_SETTLEMENT or GAP_BRIDGE
+          type: string
+        postedBy:
+          description: Who posted it
+          type: string
+        status:
+          type: string
+        transactionDate:
+          format: date
+          type: string
       type: object
     CollectionsAnalyticsReport:
       description: 'Invoiced-vs-collected analytics for one date window. invoiced and collected are different invoice cohorts (see field descriptions) — do not present collectionRatePct as a cohort collection rate. collected is applied-to-A/R net of reversals recorded in the window, not cash received: it excludes deposit-credit and customer-credit settlement. refunded is gross completed refunds (cash out); netCashCollected = collected - refunded but mixes bases and under-counts when a refund also reversed an application, so prefer received - refunded for a clean cash-in-vs-cash-out pair. received is cash actually taken in (cash basis), independent of application. nonCashSettled is invoice settlement without new cash (deposit/customer credit draw-downs); settled = collected + nonCashSettled and settlementRatePct = settled/invoiced is the "billed vs settled by any means" pair, distinct from the cash-only collectionRatePct.'
@@ -12851,6 +14023,38 @@ components:
       - eventType
       - mappingId
       type: object
+    Diagnostics:
+      description: Opening terms (diagnostic only)
+      properties:
+        bridge:
+          $ref: '#/components/schemas/BankReconciliationAdjustmentResponse'
+        flags:
+          description: OPENING_DIFFERENCE when the opening difference is outside ±0.01
+          items:
+            type: string
+          type: array
+        glOpeningBalance:
+          type: number
+        likelyCause:
+          description: 'Likely cause of an opening difference: GAP_NOT_BRIDGED, INVALIDATED_PREDECESSOR or UNKNOWN'
+          type: string
+        openingAdjustments:
+          items:
+            $ref: '#/components/schemas/Posting'
+          type: array
+        openingBankItems:
+          description: Σ bank-side items open at the end of the day before the window
+          type: number
+        openingDifference:
+          type: number
+        openingLedgerItems:
+          description: Σ ledger-side items open at the end of the day before the window
+          type: number
+        statementOpeningBalance:
+          type: number
+        sumOpeningAdjustments:
+          type: number
+      type: object
     DuplicateReviewRequest:
       description: 'Duplicate review: DISTINCT returns the row to UNMATCHED, DUPLICATE excludes it'
       properties:
@@ -12920,6 +14124,39 @@ components:
       required:
       - missingNumbers
       - scopeKey
+      type: object
+    Equation:
+      description: The explicit equation E3, term by term
+      properties:
+        adjustedBankBalance:
+          type: number
+        adjustedBookBalance:
+          type: number
+        difference:
+          type: number
+        glEndingBalance:
+          type: number
+        lateAdjustments:
+          description: Adjustment postings dated after the window end, each with its owning reconciliation
+          items:
+            $ref: '#/components/schemas/Posting'
+          type: array
+        outstandingBankItems:
+          items:
+            $ref: '#/components/schemas/OutstandingItemResponse'
+          type: array
+        outstandingLedgerItems:
+          items:
+            $ref: '#/components/schemas/OutstandingItemResponse'
+          type: array
+        statementClosingBalance:
+          type: number
+        sumLateAdjustments:
+          type: number
+        sumOutstandingBankItems:
+          type: number
+        sumOutstandingLedgerItems:
+          type: number
       type: object
     EventEnvelopeContract:
       description: Describes the expected structure of accounting event envelopes
@@ -13030,6 +14267,32 @@ components:
       - message
       - occurredAt
       - severity
+      type: object
+    Evidence:
+      description: Evidence
+      properties:
+        adjustmentsToClearing:
+          description: 'Adjustments to clearing: every OTHER adjustment with its link, justification, poster and age'
+          items:
+            $ref: '#/components/schemas/ClearingAdjustment'
+          type: array
+        exclusions:
+          description: Bank transactions excluded, dated from the baseline to the window end
+          items:
+            $ref: '#/components/schemas/BankRow'
+          type: array
+        matches:
+          description: Every match of this reconciliation, history included
+          items:
+            $ref: '#/components/schemas/ReconciliationMatchResponse'
+          type: array
+        outstandingItems:
+          description: Outstanding items registered in this reconciliation, with age and last reaffirmation
+          items:
+            $ref: '#/components/schemas/OutstandingItemResponse'
+          type: array
+        statement:
+          $ref: '#/components/schemas/StatementSummary'
       type: object
     ExceptionResolutionRequest:
       description: Request payload for resolving a vendor bill match exception
@@ -13859,6 +15122,71 @@ components:
       - hardLockDate
       - justification
       type: object
+    Header:
+      description: Review header
+      properties:
+        accountCode:
+          example: '1000'
+          type: string
+        accountName:
+          example: Cash
+          type: string
+        accountingPeriodCode:
+          example: 2026-09
+          type: string
+        approver:
+          description: The approver (who finalized it); null until then
+          type: string
+        baselineDate:
+          description: The account baseline that applies to this window
+          format: date
+          type: string
+        baselineSetByThisStatement:
+          description: Whether this window's statement set the baseline with its gap acknowledgement
+          type: boolean
+        currency:
+          type: string
+        gapAcknowledgement:
+          description: The gap acknowledgement text of the statement that set the baseline
+          type: string
+        glAccountId:
+          format: uuid
+          type: string
+        periodState:
+          description: 'State of the period of the statement end date: OPEN, CLOSED or HARD_LOCKED'
+          type: string
+        preparer:
+          description: The preparer (who created the reconciliation)
+          type: string
+        reconciliationId:
+          format: uuid
+          type: string
+        sourceKind:
+          description: Statement provenance
+          enum:
+          - FILE_IMPORT
+          - MANUAL_ENTRY
+          - BANK_FEED
+          type: string
+        statementEndDate:
+          format: date
+          type: string
+        statementId:
+          format: uuid
+          type: string
+        statementStartDate:
+          format: date
+          type: string
+        status:
+          enum:
+          - IN_PROGRESS
+          - FINALIZED
+          - CANCELLED
+          type: string
+        version:
+          format: int64
+          type: integer
+      type: object
     IdempotencyOutcomeDescriptor:
       description: One Kafka fact-consumption idempotency outcome and its meaning
       properties:
@@ -14616,6 +15944,27 @@ components:
       - usdOnly
       - ytd
       type: object
+    LedgerRow:
+      description: Ledger line row
+      properties:
+        date:
+          format: date
+          type: string
+        description:
+          type: string
+        entryNumber:
+          type: string
+        glLineId:
+          format: uuid
+          type: string
+        journalEntryId:
+          format: uuid
+          type: string
+        signedAmount:
+          type: number
+        topCandidate:
+          $ref: '#/components/schemas/Candidate'
+      type: object
     MappingKeyCreateRequest:
       description: Request payload for creating a new mapping key
       properties:
@@ -14880,6 +16229,157 @@ components:
           type: string
         total:
           type: number
+      type: object
+    OutstandingItemJustificationRequest:
+      description: A justification of at least 10 characters
+      properties:
+        justification:
+          description: At least 10 characters
+          example: Vendor confirmed the refund posts next month
+          maxLength: 1000
+          minLength: 0
+          type: string
+      required:
+      - justification
+      type: object
+    OutstandingItemReasonRequest:
+      description: Release an OPEN outstanding item
+      properties:
+        reason:
+          description: Why the item is released (at least 10 characters)
+          example: Registered on the wrong line
+          maxLength: 1000
+          minLength: 0
+          type: string
+      required:
+      - reason
+      type: object
+    OutstandingItemRegisterRequest:
+      description: Register an outstanding item on a ledger line or a bank transaction
+      properties:
+        bankTransactionId:
+          description: The bank transaction of a BANK_ERROR_PENDING item
+          format: uuid
+          type: string
+        glLineId:
+          description: The ledger line of a ledger-side item
+          format: uuid
+          type: string
+        itemKind:
+          description: Kind of the item
+          enum:
+          - DEPOSIT_IN_TRANSIT
+          - OUTSTANDING_CHECK
+          - OTHER_LEDGER_TIMING
+          - BANK_ERROR_PENDING
+          example: DEPOSIT_IN_TRANSIT
+          type: string
+        justification:
+          description: Required (at least 10 characters) for OTHER_LEDGER_TIMING, BANK_ERROR_PENDING and any item older than the aging days
+          example: Deposit made after the bank's cut-off on the last day
+          maxLength: 1000
+          minLength: 0
+          type: string
+      required:
+      - itemKind
+      type: object
+    OutstandingItemResponse:
+      description: 'Outstanding (timing) item: explains a difference, never posts'
+      properties:
+        ageDays:
+          description: Days from itemDate to the date the item is read at
+          example: 12
+          format: int64
+          type: integer
+        bankTransactionId:
+          format: uuid
+          type: string
+        clearanceJustification:
+          type: string
+        clearedAt:
+          format: date-time
+          type: string
+        clearedBy:
+          type: string
+        clearedByMatchId:
+          format: uuid
+          type: string
+        clearedInReconciliationId:
+          format: uuid
+          type: string
+        closedOn:
+          description: The day the item left OPEN other than by release
+          format: date
+          type: string
+        glAccountId:
+          format: uuid
+          type: string
+        glLineId:
+          format: uuid
+          type: string
+        itemDate:
+          description: Date of the source line
+          example: '2026-09-30'
+          format: date
+          type: string
+        itemKind:
+          enum:
+          - DEPOSIT_IN_TRANSIT
+          - OUTSTANDING_CHECK
+          - OTHER_LEDGER_TIMING
+          - BANK_ERROR_PENDING
+          example: DEPOSIT_IN_TRANSIT
+          type: string
+        justification:
+          type: string
+        lastReaffirmedAt:
+          format: date-time
+          type: string
+        lastReaffirmedBy:
+          type: string
+        lastReaffirmedInReconciliationId:
+          description: The reconciliation that last reaffirmed an aged OTHER_LEDGER_TIMING item
+          format: uuid
+          type: string
+        outstandingItemId:
+          format: uuid
+          type: string
+        reaffirmJustification:
+          type: string
+        registeredAt:
+          format: date-time
+          type: string
+        registeredBy:
+          type: string
+        registeredInReconciliationId:
+          format: uuid
+          type: string
+        releaseReason:
+          type: string
+        releasedAt:
+          format: date-time
+          type: string
+        releasedBy:
+          type: string
+        side:
+          description: LEDGER or BANK
+          enum:
+          - LEDGER
+          - BANK
+          type: string
+        signedAmount:
+          description: Signed amount copied from the source line
+          example: 500.0
+          type: number
+        status:
+          description: OPEN, CLEARED, CLEARED_IN_GAP, VOIDED or RELEASED
+          enum:
+          - OPEN
+          - CLEARED
+          - CLEARED_IN_GAP
+          - VOIDED
+          - RELEASED
+          type: string
       type: object
     PageAccountingEventResponse:
       properties:
@@ -15375,6 +16875,28 @@ components:
       - issuedTo
       - truncated
       type: object
+    Posting:
+      description: An adjustment posting (the entry's or its reversal's cash line)
+      properties:
+        adjustmentId:
+          format: uuid
+          type: string
+        amount:
+          type: number
+        date:
+          format: date
+          type: string
+        journalEntryId:
+          format: uuid
+          type: string
+        reconciliationId:
+          description: The reconciliation that owns the adjustment
+          format: uuid
+          type: string
+        reversal:
+          description: Whether this is the reversal's line
+          type: boolean
+      type: object
     PostingCategoryCreateRequest:
       description: Request payload for creating a new posting category
       properties:
@@ -15778,6 +17300,37 @@ components:
       - restSubmissionLifecycle
       - statuses
       type: object
+    Readiness:
+      description: Readiness (E4)
+      properties:
+        canApprove:
+          type: boolean
+        canSubmit:
+          type: boolean
+        countUnexplainedBank:
+          format: int32
+          type: integer
+        countUnexplainedLedger:
+          format: int32
+          type: integer
+        proposalsPending:
+          description: PROPOSED matches await acceptance (their rows are already unexplained)
+          type: boolean
+        reasons:
+          description: 'Blocking reasons: NOT_BALANCED, UNEXPLAINED_BANK, UNEXPLAINED_LEDGER'
+          items:
+            enum:
+            - NOT_BALANCED
+            - UNEXPLAINED_BANK
+            - UNEXPLAINED_LEDGER
+            - PROPOSALS_PENDING
+            type: string
+          type: array
+        sumUnexplainedBank:
+          type: number
+        sumUnexplainedLedger:
+          type: number
+      type: object
     ReceivedLineItem:
       description: Line item received from vendor
       properties:
@@ -15814,29 +17367,66 @@ components:
       - unitPrice
       type: object
     ReconciliationAdjustmentRequest:
-      description: Request to record a reconciliation adjustment (posts a real JE)
+      description: Post a reconciliation adjustment (a real journal entry)
       properties:
         amount:
-          description: Signed adjustment amount; positive increases the reconciled cash account
+          description: Signed amount; positive increases the reconciled cash. Required unless settlesMatchId or bridgesStatementId is set, when the server computes it and a sent value must equal it
           example: -12.5
           type: number
+        bankTransactionId:
+          description: The UNMATCHED bank transaction this adjustment explains; its cash line is matched to it
+          format: uuid
+          type: string
+        bridgesStatementId:
+          description: 'OTHER only: this reconciliation''s statement, whose acknowledged gap this bridges'
+          format: uuid
+          type: string
+        counterGlAccountId:
+          description: 'TRANSFER only: the counter bank account (a reconcilable BANK_CASH account)'
+          format: uuid
+          type: string
         description:
-          description: Optional description recorded on the adjustment
+          description: Description recorded on the adjustment
           example: Monthly account service charge
           maxLength: 500
           minLength: 0
           type: string
+        justification:
+          description: Required for OTHER (at least 10 characters)
+          example: Bank debit pending classification
+          maxLength: 1000
+          minLength: 0
+          type: string
+        overrideJustification:
+          description: Post into a CLOSED period; needs accounting:period:override (never a hard-locked one)
+          maxLength: 1000
+          minLength: 0
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7; a replay returns the original with replayed true
+          format: uuid
+          type: string
+        settlesMatchId:
+          description: 'OTHER only: the ACCEPTED match whose residual this settles'
+          format: uuid
+          type: string
+        transactionDate:
+          description: The date to post at when the explaining date's period is closed; it must be in an OPEN period
+          example: '2026-10-01'
+          format: date
+          type: string
         type:
-          description: Adjustment type (decision D-6)
+          description: Adjustment type
           enum:
           - BANK_FEE
           - NSF_FEE
           - INTEREST_EARNED
           - OTHER
+          - TRANSFER
           example: BANK_FEE
           type: string
       required:
-      - amount
+      - requestId
       - type
       type: object
     ReconciliationAuditResponse:
@@ -15852,26 +17442,210 @@ components:
           format: uuid
           type: string
       type: object
-    ReconciliationMatchRequest:
-      description: Request to match statement lines to GL journal-entry lines
+    ReconciliationCandidatesResponse:
+      description: Ranked, explained match candidates
       properties:
-        glLineIds:
-          description: Posted GL journal-entry line ids to match against
+        bankTransactionId:
+          description: The bank transaction the candidates are for, when asked by bankTransactionId
+          format: uuid
+          type: string
+        candidates:
+          description: Candidates, best first
           items:
-            format: uuid
-            type: string
-          minItems: 1
+            $ref: '#/components/schemas/Candidate'
           type: array
-        statementLineIds:
-          description: Statement line ids to match
-          items:
-            format: uuid
-            type: string
-          minItems: 1
-          type: array
+        glLineId:
+          description: The ledger line the candidates are for, when asked by glLineId
+          format: uuid
+          type: string
+        windowDays:
+          description: The date window applied, in days
+          example: 7
+          format: int32
+          type: integer
+      type: object
+    ReconciliationCreateRequest:
+      description: Start a reconciliation from a COMMITTED bank statement
+      properties:
+        closingBalance:
+          description: Phase 2 statementless interim only — refused in phase 1 (BANK_ACCOUNT_FEED_NOT_LINKED)
+          type: number
+        glAccountId:
+          description: Reconciled GL cash account id
+          format: uuid
+          type: string
+        openingBalance:
+          description: Phase 2 statementless interim only — refused in phase 1 (BANK_ACCOUNT_FEED_NOT_LINKED)
+          type: number
+        requestId:
+          description: Caller-generated UUIDv7; a replay with the same payload returns the original
+          format: uuid
+          type: string
+        statementId:
+          description: The COMMITTED bank statement to reconcile (required in phase 1)
+          format: uuid
+          type: string
+        windowEndDate:
+          description: Phase 2 statementless interim only — refused in phase 1 (BANK_ACCOUNT_FEED_NOT_LINKED)
+          format: date
+          type: string
+        windowStartDate:
+          description: Phase 2 statementless interim only — refused in phase 1 (BANK_ACCOUNT_FEED_NOT_LINKED)
+          format: date
+          type: string
       required:
+      - glAccountId
+      - requestId
+      type: object
+    ReconciliationMatchCreateRequest:
+      description: Match bank transactions to posted ledger lines (1:1, 1:N or N:1)
+      properties:
+        bankTransactionIds:
+          description: Bank transactions of the match
+          items:
+            format: uuid
+            type: string
+          minItems: 1
+          type: array
+        glLineIds:
+          description: Posted journal-entry lines on the reconciled account
+          items:
+            format: uuid
+            type: string
+          minItems: 1
+          type: array
+        justification:
+          description: Required (at least 10 characters) when the match is not 1:1, uses the ±0.01 tolerance, spans dates beyond the window or includes a former possible duplicate
+          example: Batch deposit of two receipts
+          maxLength: 1000
+          minLength: 0
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7; a replay with the same members returns the match
+          format: uuid
+          type: string
+      required:
+      - bankTransactionIds
       - glLineIds
-      - statementLineIds
+      - requestId
+      type: object
+    ReconciliationMatchDecisionRequest:
+      description: Accept or reject a PROPOSED match, with an optional justification
+      properties:
+        justification:
+          description: At least 10 characters; required to accept a proposal that uses the tolerance or spans dates beyond the window
+          example: Same processor payout, one day late
+          maxLength: 1000
+          minLength: 0
+          type: string
+      type: object
+    ReconciliationMatchResponse:
+      description: Reconciliation match with its members, totals, tolerance and signed residual
+      properties:
+        acceptedAt:
+          format: date-time
+          type: string
+        acceptedBy:
+          type: string
+        bankTotal:
+          description: Σ bank members
+          example: 99.99
+          type: number
+        bankTransactionIds:
+          description: Bank members (current members; history once unmatched)
+          items:
+            format: uuid
+            type: string
+          type: array
+        confidenceScore:
+          description: 0–100 for a rule proposal; null for a user match
+          example: 95
+          format: int32
+          type: integer
+        glLineIds:
+          description: Ledger members (current members; history once unmatched)
+          items:
+            format: uuid
+            type: string
+          type: array
+        justification:
+          description: Justification recorded for the match
+          type: string
+        ledgerTotal:
+          description: Σ ledger members (debit − credit)
+          example: 100.0
+          type: number
+        matchId:
+          description: Match id
+          format: uuid
+          type: string
+        matchKind:
+          description: Cardinality
+          enum:
+          - ONE_TO_ONE
+          - ONE_TO_MANY
+          - MANY_TO_ONE
+          - ADJUSTMENT
+          example: ONE_TO_ONE
+          type: string
+        origin:
+          description: 'Who proposed it: USER or RULE (a RULE match is never accepted by the system)'
+          enum:
+          - USER
+          - RULE
+          type: string
+        proposedAt:
+          format: date-time
+          type: string
+        proposedBy:
+          type: string
+        reasons:
+          description: Candidate reason codes of a rule proposal
+          items:
+            type: string
+          type: array
+        reconciliationId:
+          description: Reconciliation the match belongs to
+          format: uuid
+          type: string
+        rejectedAt:
+          format: date-time
+          type: string
+        rejectedBy:
+          type: string
+        replacesMatchId:
+          description: The match a residual settlement replaced
+          format: uuid
+          type: string
+        replayed:
+          description: True when this answers a replayed match command
+          type: boolean
+        residual:
+          description: 'bankTotal − ledgerTotal: what a residual settlement posts'
+          example: -0.01
+          type: number
+        state:
+          description: State
+          enum:
+          - PROPOSED
+          - ACCEPTED
+          - REJECTED
+          - UNMATCHED
+          - BROKEN
+          example: ACCEPTED
+          type: string
+        toleranceUsed:
+          description: abs(bankTotal − ledgerTotal), at most 0.01
+          example: 0.01
+          type: number
+        unmatchReason:
+          description: Free text, or RESIDUAL_SETTLED when a residual settlement replaced the match
+          type: string
+        unmatchedAt:
+          format: date-time
+          type: string
+        unmatchedBy:
+          type: string
       type: object
     ReconciliationReportResponse:
       description: Bank reconciliation report
@@ -15889,16 +17663,31 @@ components:
           items:
             $ref: '#/components/schemas/BankReconciliationAdjustmentResponse'
           type: array
+        adjustmentsToClearing:
+          description: 'Adjustments to clearing: every OTHER adjustment with link, justification, poster and age'
+          items:
+            $ref: '#/components/schemas/ClearingAdjustment'
+          type: array
+        countUnexplainedBank:
+          description: Unexplained bank transactions from the baseline to the window end
+          format: int32
+          type: integer
+        countUnexplainedLedger:
+          description: Unexplained ledger lines from the baseline to the window end
+          format: int32
+          type: integer
         currency:
           description: Reconciliation currency
           example: USD
           type: string
         difference:
-          description: statementEndingBalance − (glEndingBalance + totalAdjustments); matched lines are already reflected in glEndingBalance
+          description: 'The live difference of E3: adjustedBankBalance − adjustedBookBalance'
           example: 0.0
           type: number
+        equation:
+          $ref: '#/components/schemas/Equation'
         glEndingBalance:
-          description: GL ending balance snapshotted at import (opening basis)
+          description: Live GL balance at the end of the statement end date
           example: 12000.0
           type: number
         matchedLineCount:
@@ -15906,6 +17695,13 @@ components:
           example: 5
           format: int32
           type: integer
+        openingTerms:
+          $ref: '#/components/schemas/Diagnostics'
+        outstandingItems:
+          description: Outstanding items open at the window end, with their age
+          items:
+            $ref: '#/components/schemas/OutstandingItemResponse'
+          type: array
         outstandingLineCount:
           description: Number of UNMATCHED statement lines
           example: 0
@@ -15929,6 +17725,10 @@ components:
           description: Statement ending balance (closing basis)
           example: 12500.0
           type: number
+        sumUnexplainedBank:
+          type: number
+        sumUnexplainedLedger:
+          type: number
         totalAdjustments:
           description: Sum of signed adjustment amounts
           example: 0.0
@@ -15942,19 +17742,38 @@ components:
           example: 0.0
           type: number
       type: object
-    ReconciliationUnmatchRequest:
-      description: Request to reverse a match by matchId or by statement line ids
+    ReconciliationReviewResponse:
+      description: 'Reconciliation review: equation, diagnostics, unresolved items, adjustments, evidence, readiness'
       properties:
-        matchId:
-          description: Match group id to reverse
-          format: uuid
-          type: string
-        statementLineIds:
-          description: Statement line ids whose match group should be reversed
+        adjustments:
+          description: Posted adjustments of this reconciliation, with entry number, date, period, override and reversal
           items:
-            format: uuid
-            type: string
+            $ref: '#/components/schemas/BankReconciliationAdjustmentResponse'
           type: array
+        diagnostics:
+          $ref: '#/components/schemas/Diagnostics'
+        equation:
+          $ref: '#/components/schemas/Equation'
+        evidence:
+          $ref: '#/components/schemas/Evidence'
+        header:
+          $ref: '#/components/schemas/Header'
+        readiness:
+          $ref: '#/components/schemas/Readiness'
+        unresolved:
+          $ref: '#/components/schemas/Unresolved'
+      type: object
+    ReconciliationUnmatchRequest:
+      description: Unmatch an ACCEPTED match; the reason is recorded on the match and in the audit trail
+      properties:
+        reason:
+          description: Why the match is undone (at least 10 characters)
+          example: Paired the wrong deposit
+          maxLength: 1000
+          minLength: 0
+          type: string
+      required:
+      - reason
       type: object
     RefundRequest:
       description: Request to record a refund audit event
@@ -16370,6 +18189,33 @@ components:
           type: boolean
         unsorted:
           type: boolean
+      type: object
+    StatementSummary:
+      description: Statement header
+      properties:
+        closingBalance:
+          type: number
+        endDate:
+          format: date
+          type: string
+        gapAcknowledgement:
+          type: string
+        openingBalance:
+          type: number
+        sourceKind:
+          enum:
+          - FILE_IMPORT
+          - MANUAL_ENTRY
+          - BANK_FEED
+          type: string
+        startDate:
+          format: date
+          type: string
+        statementId:
+          format: uuid
+          type: string
+        statementRef:
+          type: string
       type: object
     SuggestedAlternative:
       description: A suggested alternative accompanying a 409 conflict
@@ -16811,6 +18657,43 @@ components:
       - balance
       - totalCredit
       - totalDebit
+      type: object
+    Unresolved:
+      description: Unresolved items, late arrivals first
+      properties:
+        agedItemsAwaitingReaffirmation:
+          description: Aged OTHER_LEDGER_TIMING items awaiting reaffirmation in this reconciliation
+          items:
+            $ref: '#/components/schemas/OutstandingItemResponse'
+          type: array
+        brokenMatches:
+          items:
+            $ref: '#/components/schemas/ReconciliationMatchResponse'
+          type: array
+        lateArrivals:
+          description: Late arrivals (phase 2 only), each with near-duplicate candidates
+          items:
+            $ref: '#/components/schemas/BankRow'
+          type: array
+        possibleDuplicates:
+          description: POSSIBLE_DUPLICATE rows awaiting review, each with its near-duplicate candidates
+          items:
+            $ref: '#/components/schemas/BankRow'
+          type: array
+        proposedMatches:
+          items:
+            $ref: '#/components/schemas/ReconciliationMatchResponse'
+          type: array
+        unexplainedBank:
+          description: Unexplained bank transactions with their top ledger candidate
+          items:
+            $ref: '#/components/schemas/BankRow'
+          type: array
+        unexplainedLedger:
+          description: Unexplained ledger lines with their top bank candidate
+          items:
+            $ref: '#/components/schemas/LedgerRow'
+          type: array
       type: object
     VendorBillListRow:
       description: One vendor bill in a due-date-window listing

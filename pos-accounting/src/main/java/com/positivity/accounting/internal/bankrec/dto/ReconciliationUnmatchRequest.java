@@ -1,28 +1,26 @@
 package com.positivity.accounting.internal.bankrec.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.util.List;
-import java.util.UUID;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Request to reverse a match (Story F2, issue #965). Supply either {@link #matchId}
- * (unmatch the whole match set) or {@link #statementLineIds} (unmatch by the lines'
- * match group); at least one must be present.
- */
+/** Unmatch an accepted match, with the reason (SPEC §4.6, G3; story S4, #2303). */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Request to reverse a match by matchId or by statement line ids")
+@Schema(description = "Unmatch an ACCEPTED match; the reason is recorded on the match and in the audit trail")
 public class ReconciliationUnmatchRequest {
 
-    @Schema(description = "Match group id to reverse")
-    private UUID matchId;
-
-    @Schema(description = "Statement line ids whose match group should be reversed")
-    private List<UUID> statementLineIds;
+    @Size(max = 1000, message = "reason must not exceed 1000 characters")
+    @Schema(
+            description = "Why the match is undone (at least 10 characters)",
+            example = "Paired the wrong deposit",
+            requiredMode = REQUIRED)
+    private String reason;
 }

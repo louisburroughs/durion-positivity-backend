@@ -13,6 +13,8 @@ import java.sql.Savepoint;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
@@ -25,7 +27,9 @@ import org.junit.jupiter.api.Test;
  * The bank reconciliation schema of story S1 (#2300; durion SPEC-manual-bank-reconciliation §6.4) as Flyway
  * builds it from the flattened baseline on an empty Postgres: every table and column §6.4 assigns to S1, the
  * database-held invariants U1/U2/U4/O1, the corrected {@code 1000 Cash} seed — and the constraints §6.4 assigns
- * to story S4 (the adjustment link CHECKs, the {@code TRANSFER} value, the bridge unique) still absent.
+ * to story S4 (#2303): the adjustment link CHECKs, the {@code TRANSFER} value with its counter CHECK and the one
+ * POSTED bridge per statement, each refusing the rows the service refuses when the service check is removed
+ * (§8.2, §8.3).
  *
  * <p>H2 enforces none of the partial uniques or the exclusion constraint, so these run on Postgres only. Each
  * test works in its own transaction and rolls back. Requires Docker.
@@ -41,6 +45,9 @@ class BankReconciliationSchemaIT {
 
     /** Seeded {@code 1000 Cash} (R__seed_reference_accounting.sql). */
     private static final UUID CASH_ACCOUNT_ID = UUID.fromString("5eed0acc-0000-4000-8000-000000001000");
+
+    /** Seeded {@code 1090 Undeposited Funds}. */
+    private static final UUID UNDEPOSITED_ACCOUNT_ID = UUID.fromString("5eed0acc-0000-4000-8000-000000001090");
 
     @BeforeAll
     static void migrate() {
@@ -99,7 +106,8 @@ class BankReconciliationSchemaIT {
                         "counter_gl_account_id",
                         "justification",
                         "settles_match_id",
-                        "bridges_statement_id")) {
+                        "bridges_statement_id",
+                        "request_hash")) {
                     assertNullable(c, "bank_reconciliation_adjustment", column);
                 }
                 assertNullable(c, "bank_reconciliation_outstanding_item", "closed_on");
@@ -118,7 +126,7 @@ class BankReconciliationSchemaIT {
         }
 
         @Test
-        @DisplayName("the S1 constraints and indexes exist; S4's adjustment constraints do not")
+        @DisplayName("the S1 constraints and indexes exist, and so do S4's adjustment constraints")
         void constraintsBelongToTheirStory() throws SQLException {
             try (Connection c = open()) {
                 assertThat(constraintType(c, "bank_statement_no_overlap_ex")).isEqualTo("x");
@@ -138,11 +146,19 @@ class BankReconciliationSchemaIT {
                         .as("the F2 full unique on gl_line_id is replaced by the partial one")
                         .isNull();
                 assertThat(checkConstraints(c, "bank_reconciliation_adjustment"))
-                        .as("only the unchanged type CHECK and the status CHECK — the link, counter and TRANSFER"
-                                + " rules are story S4's")
+                        .as("the type and status CHECKs plus story S4's counter and link CHECKs")
                         .containsExactlyInAnyOrder(
-                                "bank_reconciliation_adjustment_type_ck", "bank_reconciliation_adjustment_status_ck");
-                assertThat(indexes(c)).noneMatch(name -> name.contains("bridge"));
+                                "bank_reconciliation_adjustment_type_ck",
+                                "bank_reconciliation_adjustment_status_ck",
+                                "bank_reconciliation_adjustment_counter_ck",
+                                "bank_reconciliation_adjustment_one_link_ck",
+                                "bank_reconciliation_adjustment_other_link_ck",
+                                "bank_reconciliation_adjustment_other_only_ck");
+                assertThat(indexes(c))
+                        .contains(
+                                "bank_reconciliation_adjustment_bridge_uk",
+                                "bank_reconciliation_request_uk",
+                                "bank_reconciliation_match_request_uk");
                 c.rollback();
             }
         }
@@ -276,11 +292,11 @@ class BankReconciliationSchemaIT {
     class AdjustmentsAndOutstandingItems {
 
         @Test
-        @DisplayName("an OTHER adjustment with every new column null (the F2 shape) is accepted")
-        void f2OtherAdjustmentShapeAccepted() throws SQLException {
+        @DisplayName("a typed adjustment with every new column null (the F2 shape) is accepted, status POSTED")
+        void f2TypedAdjustmentShapeAccepted() throws SQLException {
             try (Connection c = open()) {
                 UUID reconciliationId = insertReconciliation(c);
-                insertAdjustment(c, reconciliationId, "OTHER");
+                insertAdjustment(c, reconciliationId, "BANK_FEE", Map.of());
                 try (PreparedStatement ps = c.prepareStatement(
                         "SELECT status FROM bank_reconciliation_adjustment WHERE reconciliation_id = ?"); ) {
                     ps.setObject(1, reconciliationId);
@@ -296,13 +312,107 @@ class BankReconciliationSchemaIT {
         }
 
         @Test
-        @DisplayName("a TRANSFER adjustment is refused by the unchanged type CHECK (TRANSFER ships in S4)")
-        void transferRefused() throws SQLException {
+        @DisplayName("an OTHER adjustment needs exactly one link and a justification [M]")
+        void otherNeedsOneLinkAndAJustification() throws SQLException {
             try (Connection c = open()) {
                 UUID reconciliationId = insertReconciliation(c);
-                assertThatThrownBy(() -> insertAdjustment(c, reconciliationId, "TRANSFER"))
-                        .isInstanceOf(SQLException.class)
-                        .hasMessageContaining("bank_reconciliation_adjustment_type_ck");
+                UUID statementId = insertStatement(c, LocalDate.of(2032, 3, 1), LocalDate.of(2032, 3, 31), "COMMITTED");
+                UUID transactionId = insertTransaction(c, statementId);
+                String justification = "Unclassified bank debit pending review";
+
+                assertRefused(
+                        c,
+                        () -> insertAdjustment(c, reconciliationId, "OTHER", Map.of("justification", justification)),
+                        "bank_reconciliation_adjustment_other_link_ck");
+                assertRefused(
+                        c,
+                        () -> insertAdjustment(
+                                c, reconciliationId, "OTHER", Map.of("bank_transaction_id", transactionId)),
+                        "bank_reconciliation_adjustment_other_link_ck");
+                assertRefused(
+                        c,
+                        () -> insertAdjustment(
+                                c,
+                                reconciliationId,
+                                "OTHER",
+                                Map.of(
+                                        "bank_transaction_id",
+                                        transactionId,
+                                        "bridges_statement_id",
+                                        statementId,
+                                        "justification",
+                                        justification)),
+                        "bank_reconciliation_adjustment_one_link_ck");
+                insertAdjustment(
+                        c,
+                        reconciliationId,
+                        "OTHER",
+                        Map.of("bank_transaction_id", transactionId, "justification", justification));
+                c.rollback();
+            }
+        }
+
+        @Test
+        @DisplayName("settlesMatchId and bridgesStatementId are OTHER-only")
+        void residualAndBridgeLinksAreOtherOnly() throws SQLException {
+            try (Connection c = open()) {
+                UUID reconciliationId = insertReconciliation(c);
+                UUID matchId = insertMatchHeader(c, reconciliationId);
+                assertRefused(
+                        c,
+                        () -> insertAdjustment(c, reconciliationId, "BANK_FEE", Map.of("settles_match_id", matchId)),
+                        "bank_reconciliation_adjustment_other_only_ck");
+                c.rollback();
+            }
+        }
+
+        @Test
+        @DisplayName("TRANSFER is a type value and carries a counter account; no other type does [M]")
+        void transferCarriesACounterAccount() throws SQLException {
+            try (Connection c = open()) {
+                UUID reconciliationId = insertReconciliation(c);
+                assertRefused(
+                        c,
+                        () -> insertAdjustment(c, reconciliationId, "TRANSFER", Map.of()),
+                        "bank_reconciliation_adjustment_counter_ck");
+                assertRefused(
+                        c,
+                        () -> insertAdjustment(
+                                c,
+                                reconciliationId,
+                                "BANK_FEE",
+                                Map.of("counter_gl_account_id", UNDEPOSITED_ACCOUNT_ID)),
+                        "bank_reconciliation_adjustment_counter_ck");
+                assertRefused(
+                        c,
+                        () -> insertAdjustment(c, reconciliationId, "RETURNED_PAYMENT", Map.of()),
+                        "bank_reconciliation_adjustment_type_ck");
+                insertAdjustment(
+                        c, reconciliationId, "TRANSFER", Map.of("counter_gl_account_id", UNDEPOSITED_ACCOUNT_ID));
+                c.rollback();
+            }
+        }
+
+        @Test
+        @DisplayName("one POSTED gap bridge per statement; a REVERSED one leaves room for the next [M]")
+        void oneBridgePerStatement() throws SQLException {
+            try (Connection c = open()) {
+                UUID reconciliationId = insertReconciliation(c);
+                UUID statementId = insertStatement(c, LocalDate.of(2032, 4, 1), LocalDate.of(2032, 4, 30), "COMMITTED");
+                Map<String, Object> bridge =
+                        Map.of("bridges_statement_id", statementId, "justification", "Gap left by the bank change");
+                UUID first = insertAdjustment(c, reconciliationId, "OTHER", bridge);
+
+                assertRefused(
+                        c,
+                        () -> insertAdjustment(c, reconciliationId, "OTHER", bridge),
+                        "bank_reconciliation_adjustment_bridge_uk");
+
+                update(
+                        c,
+                        "UPDATE bank_reconciliation_adjustment SET status = 'REVERSED' WHERE adjustment_id = ?",
+                        first);
+                insertAdjustment(c, reconciliationId, "OTHER", bridge);
                 c.rollback();
             }
         }
@@ -448,16 +558,35 @@ class BankReconciliationSchemaIT {
                 active);
     }
 
-    private static void insertAdjustment(Connection c, UUID reconciliationId, String type) throws SQLException {
+    private static UUID insertAdjustment(Connection c, UUID reconciliationId, String type, Map<String, Object> extra)
+            throws SQLException {
+        UUID id = UUID.randomUUID();
+        StringBuilder columns = new StringBuilder(
+                "adjustment_id, reconciliation_id, adjustment_type, amount, journal_entry_id, created_at, created_by");
+        StringBuilder values = new StringBuilder("?, ?, ?, -5.00, ?, now(), 'it'");
+        List<Object> params = new ArrayList<>(List.of(id, reconciliationId, type, UUID.randomUUID()));
+        for (Map.Entry<String, Object> column : new TreeMap<>(extra).entrySet()) {
+            columns.append(", ").append(column.getKey());
+            values.append(", ?");
+            params.add(column.getValue());
+        }
         execute(
                 c,
-                "INSERT INTO bank_reconciliation_adjustment (adjustment_id, reconciliation_id, adjustment_type,"
-                        + " amount, journal_entry_id, created_at, created_by)"
-                        + " VALUES (?, ?, ?, -5.00, ?, now(), 'it')",
-                UUID.randomUUID(),
-                reconciliationId,
-                type,
-                UUID.randomUUID());
+                "INSERT INTO bank_reconciliation_adjustment (" + columns + ") VALUES (" + values + ")",
+                params.toArray());
+        return id;
+    }
+
+    /** Runs {@code insert} under a savepoint, expects the named constraint to refuse it, and rolls back to it. */
+    private static void assertRefused(Connection c, ThrowingInsert insert, String constraint) throws SQLException {
+        Savepoint before = c.setSavepoint();
+        assertThatThrownBy(insert::run).isInstanceOf(SQLException.class).hasMessageContaining(constraint);
+        c.rollback(before);
+    }
+
+    @FunctionalInterface
+    private interface ThrowingInsert {
+        void run() throws SQLException;
     }
 
     private static void insertOutstandingItem(Connection c, UUID reconciliationId, UUID glLineId, String status)

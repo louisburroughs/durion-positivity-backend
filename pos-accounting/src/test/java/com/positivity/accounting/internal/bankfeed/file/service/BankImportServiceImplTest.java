@@ -40,6 +40,7 @@ import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.intake.BankTransactionIntake;
 import com.positivity.accounting.internal.bankrec.intake.IntakeContext;
 import com.positivity.accounting.internal.bankrec.intake.IntakeResult;
+import com.positivity.accounting.internal.bankrec.intake.ReconciliationStarter;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -100,6 +101,9 @@ class BankImportServiceImplTest {
     @Mock
     private BankImportAuditRecorder audit;
 
+    @Mock
+    private ReconciliationStarter reconciliationStarter;
+
     private BankImportServiceImpl service;
     private final Map<UUID, BankImport> importStore = new HashMap<>();
     private final Map<UUID, BankImportFile> fileStore = new HashMap<>();
@@ -115,6 +119,7 @@ class BankImportServiceImplTest {
                 new StatementFileParsers(List.of(new CsvStatementFileParser())),
                 lookup,
                 intake,
+                reconciliationStarter,
                 audit,
                 CLOCK,
                 2555,
@@ -815,6 +820,36 @@ class BankImportServiceImplTest {
             assertThat(importStore.get(id).getStatus()).isEqualTo(BankImportStatus.COMMITTED);
             verify(audit)
                     .record(eq(id), eq(BankImportAuditRecorder.BANK_IMPORT_COMMIT), any(), eq(ACK), isNull(), any());
+        }
+
+        @Test
+        void startReconciliationStartsOneOfTheCommittedStatementAndReturnsIt() {
+            UUID id = validUpload().getImportId();
+            UUID statementId = UUID.fromString("01980000-0000-7000-8000-000000000500");
+            UUID reconciliationId = UUID.fromString("01980000-0000-7000-8000-000000000600");
+            acceptReturns(statementId, 2, 0);
+            UUID requestId = UUID.nameUUIDFromBytes(
+                    ("BANK_IMPORT_RECONCILIATION:" + id).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            when(reconciliationStarter.start(ACCOUNT, statementId, requestId)).thenReturn(reconciliationId);
+
+            BankImportCommitResponse result = service.commit(
+                    id,
+                    BankImportCommitRequest.builder().startReconciliation(true).build());
+
+            assertThat(result.getReconciliationId()).isEqualTo(reconciliationId);
+            assertThat(importStore.get(id).getReconciliationId()).isEqualTo(reconciliationId);
+            assertThat(service.commit(id, null).getReconciliationId())
+                    .as("a repeated commit answers the same reconciliation")
+                    .isEqualTo(reconciliationId);
+            verify(reconciliationStarter, times(1)).start(any(), any(), any());
+        }
+
+        @Test
+        void aCommitWithoutTheFlagStartsNothing() {
+            UUID id = validUpload().getImportId();
+            acceptReturns(UUID.fromString("01980000-0000-7000-8000-000000000500"), 2, 0);
+            assertThat(service.commit(id, null).getReconciliationId()).isNull();
+            verify(reconciliationStarter, never()).start(any(), any(), any());
         }
 
         @Test

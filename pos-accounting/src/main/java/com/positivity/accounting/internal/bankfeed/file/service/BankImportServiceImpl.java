@@ -40,6 +40,7 @@ import com.positivity.accounting.internal.bankrec.intake.ConcurrentCommitExcepti
 import com.positivity.accounting.internal.bankrec.intake.IntakeContext;
 import com.positivity.accounting.internal.bankrec.intake.IntakeResult;
 import com.positivity.accounting.internal.bankrec.intake.Justification;
+import com.positivity.accounting.internal.bankrec.intake.ReconciliationStarter;
 import com.positivity.accounting.internal.bankrec.intake.TransactionNormalizer;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.BankTransactionObserved;
@@ -111,6 +112,7 @@ public class BankImportServiceImpl implements BankImportService {
     private final StatementFileParsers parsers;
     private final BankIntakeLookup lookup;
     private final BankTransactionIntake intake;
+    private final ReconciliationStarter reconciliationStarter;
     private final BankImportAuditRecorder audit;
     private final Clock clock;
     private final int retentionDays;
@@ -123,6 +125,7 @@ public class BankImportServiceImpl implements BankImportService {
             StatementFileParsers parsers,
             BankIntakeLookup lookup,
             BankTransactionIntake intake,
+            ReconciliationStarter reconciliationStarter,
             BankImportAuditRecorder audit,
             Clock clock,
             @Value("${pos.accounting.bankrec.import.file-retention-days:2555}") int retentionDays,
@@ -133,6 +136,7 @@ public class BankImportServiceImpl implements BankImportService {
         this.parsers = parsers;
         this.lookup = lookup;
         this.intake = intake;
+        this.reconciliationStarter = reconciliationStarter;
         this.audit = audit;
         this.clock = clock;
         this.retentionDays = retentionDays;
@@ -702,6 +706,15 @@ public class BankImportServiceImpl implements BankImportService {
         found.setPossibleDuplicateCount(possibleDuplicates);
         found.setStatementIds(statementIds.stream().map(UUID::toString).toList());
         found.setStatementId(statementIds.getLast());
+        if (request != null && Boolean.TRUE.equals(request.getStartReconciliation())) {
+            // §4.4, §6.1: the reconciliation starts in the commit transaction, of the first segment's statement
+            // (the window to reconcile first); a deterministic requestId keeps a retried commit to one.
+            found.setReconciliationId(reconciliationStarter.start(
+                    glAccountId,
+                    statementIds.getFirst(),
+                    UUID.nameUUIDFromBytes(
+                            ("BANK_IMPORT_RECONCILIATION:" + importId).getBytes(StandardCharsets.UTF_8))));
+        }
         found.setStatus(BankImportStatus.COMMITTED);
         found.setCommittedAt(now);
         found.setCommittedBy(actor);

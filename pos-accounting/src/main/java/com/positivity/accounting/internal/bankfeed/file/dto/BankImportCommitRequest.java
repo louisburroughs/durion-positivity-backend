@@ -12,7 +12,8 @@ import lombok.NoArgsConstructor;
 /**
  * Commit of an import (SPEC §4.4, §6.1; story S3, #2302). {@code duplicateDecisions} answer {@code
  * POSSIBLE_DUPLICATE} rows in bulk; an unanswered one is committed as a {@code POSSIBLE_DUPLICATE} bank
- * transaction for later review. Starting a reconciliation from the commit arrives with story S4.
+ * transaction for later review. {@code startReconciliation} starts a reconciliation of the committed statement
+ * — the first one when the file was split — in the commit transaction (story S4, #2303).
  */
 @Data
 @Builder
@@ -23,6 +24,12 @@ public class BankImportCommitRequest {
 
     @Schema(description = "Decisions on POSSIBLE_DUPLICATE rows, by row number")
     private List<DuplicateDecision> duplicateDecisions;
+
+    @Schema(
+            description = "Start an IN_PROGRESS reconciliation of the committed statement (the first segment's when"
+                    + " the file was split); its id is returned as reconciliationId",
+            example = "true")
+    private Boolean startReconciliation;
 
     @Schema(description = "The import version the commit was made against", example = "3")
     private Long version;

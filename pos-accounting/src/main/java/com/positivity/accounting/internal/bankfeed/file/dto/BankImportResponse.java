@@ -132,7 +132,7 @@ public class BankImportResponse {
     @Schema(description = "Every committed statement in window order")
     private List<UUID> statementIds;
 
-    @Schema(description = "The reconciliation started with the commit (story S4)")
+    @Schema(description = "The reconciliation started with the commit (startReconciliation), if any")
     private UUID reconciliationId;
 
     @Schema(description = "When the raw file becomes eligible for the retention purge", example = "2033-09-28")

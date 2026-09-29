@@ -68,7 +68,8 @@ public class BankStatementController {
                     first statement, refused on a contiguous one and moves the account's reconciliation baseline.
                     Required inputs: glAccountId, a UUIDv7 requestId, statement {startDate, endDate, \
                     openingBalance, closingBalance} and transactions[] each with a date, a description and \
-                    either signedAmount or one of debit/credit.
+                    either signedAmount or one of debit/credit; startReconciliation optionally starts the \
+                    statement's reconciliation in the same transaction (listed under reconciliations).
                     Emits an ACCOUNTING_BANK_STATEMENT_CREATE event and queues the \
                     accounting.bankstatement.committed fact; a replay of the same requestId and payload returns \
                     the original statement with replayed=true.

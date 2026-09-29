@@ -1,12 +1,14 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.JournalEntryLine;
+import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -53,16 +55,52 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
     BigDecimal getAccountBalance(UUID glAccountId);
 
     /**
-     * Signed GL balance for an account as-of a date: sum of (debit − credit) over POSTED lines whose
-     * parent entry's transaction date is on or before {@code asOf}. Used by bank reconciliation
-     * (Story F2, issue #965) to snapshot the GL ending balance at import time.
+     * Signed GL balance for an account as-of an instant: sum of (debit − credit) over the lines of
+     * every entry that was posted — {@code POSTED} or {@code REVERSED}, never {@code DRAFT} — whose
+     * transaction date is on or before {@code asOf}. A reversal is its own POSTED entry dated at the
+     * reversal, so a reversed pair counts the original from its date and the inverse from the
+     * reversal's, and nothing already reported changes (SPEC-manual-bank-reconciliation §3.7, G15;
+     * story S4, #2303 — the counterpart of #2308's report fix). The bank reconciliation is the only
+     * caller; it passes the end of a day at microsecond precision (Postgres {@code timestamp(6)}).
      */
     @Query("SELECT COALESCE(SUM(jel.debitAmount) - SUM(jel.creditAmount), 0) "
             + "FROM JournalEntryLine jel "
             + "JOIN jel.journalEntry je "
-            + "WHERE jel.glAccount.glAccountId = :glAccountId AND je.status = 'POSTED' "
+            + "WHERE jel.glAccount.glAccountId = :glAccountId AND je.status IN ('POSTED', 'REVERSED') "
             + "AND je.transactionDate <= :asOf")
     BigDecimal getAccountBalanceAsOf(@Param("glAccountId") UUID glAccountId, @Param("asOf") LocalDateTime asOf);
+
+    /**
+     * The lines on one account of POSTED entries dated in {@code [from, to]}, with their entry fetched
+     * (bank reconciliation — unexplained ledger lines and match candidates, SPEC §3.7, §4.6; story S4,
+     * #2303). A REVERSED original is not POSTED; the POSTED entry reversing it is returned and the
+     * caller tells it apart by its {@code reversalJournalEntry} link.
+     */
+    @Query("SELECT jel FROM JournalEntryLine jel "
+            + "JOIN FETCH jel.journalEntry je "
+            + "WHERE jel.glAccount.glAccountId = :glAccountId AND je.status = 'POSTED' "
+            + "AND je.transactionDate >= :from AND je.transactionDate <= :to")
+    List<JournalEntryLine> findPostedLinesOnAccountBetween(
+            @Param("glAccountId") UUID glAccountId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /**
+     * The lines on one account of the given entries, whatever their status, with their entry fetched
+     * (bank reconciliation — the cash lines of adjustment and reversal entries, SPEC §3.7; story S4).
+     */
+    @Query("SELECT jel FROM JournalEntryLine jel "
+            + "JOIN FETCH jel.journalEntry je "
+            + "WHERE jel.glAccount.glAccountId = :glAccountId AND je.journalEntryId IN :entryIds")
+    List<JournalEntryLine> findLinesOnAccountForEntries(
+            @Param("glAccountId") UUID glAccountId, @Param("entryIds") Collection<UUID> entryIds);
+
+    /**
+     * The given lines, row-locked for the rest of the transaction, with their entry fetched: a match and
+     * an outstanding-item registration that name the same line serialize here, so a line never ends in
+     * both an active match and an OPEN item (SPEC §3.6 O1; story S4, #2303).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT jel FROM JournalEntryLine jel WHERE jel.lineId IN :lineIds")
+    List<JournalEntryLine> lockByIds(@Param("lineIds") Collection<UUID> lineIds);
 
     /**
      * Find posted journal entry lines for a set of GL accounts whose entry transaction date falls

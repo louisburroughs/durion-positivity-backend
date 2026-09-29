@@ -36,6 +36,27 @@ public class BankRecAuditRecorder {
     public static final String BANK_ACCOUNT_PROFILE_SET = "BANK_ACCOUNT_PROFILE_SET";
     public static final String BANK_ACCOUNT_BASELINE_SET = "BANK_ACCOUNT_BASELINE_SET";
 
+    /** Entity types of the reconciliation core (§4.9, §6.4; story S4, #2303). */
+    public static final String BANK_RECONCILIATION = "BANK_RECONCILIATION";
+
+    public static final String RECONCILIATION_MATCH = "RECONCILIATION_MATCH";
+    public static final String OUTSTANDING_ITEM = "OUTSTANDING_ITEM";
+
+    /** Operations written by story S4. */
+    public static final String RECONCILIATION_CREATE = "RECONCILIATION_CREATE";
+
+    public static final String RECONCILIATION_MATCH_CREATE = "RECONCILIATION_MATCH";
+    public static final String RECONCILIATION_MATCH_ACCEPT = "RECONCILIATION_MATCH_ACCEPT";
+    public static final String RECONCILIATION_MATCH_REJECT = "RECONCILIATION_MATCH_REJECT";
+    public static final String RECONCILIATION_UNMATCH = "RECONCILIATION_UNMATCH";
+    public static final String RECONCILIATION_AUTO_MATCH = "RECONCILIATION_AUTO_MATCH";
+    public static final String RECONCILIATION_OUTSTANDING_REGISTER = "RECONCILIATION_OUTSTANDING_REGISTER";
+    public static final String RECONCILIATION_OUTSTANDING_RELEASE = "RECONCILIATION_OUTSTANDING_RELEASE";
+    public static final String RECONCILIATION_OUTSTANDING_REAFFIRM = "RECONCILIATION_OUTSTANDING_REAFFIRM";
+    public static final String RECONCILIATION_OUTSTANDING_CLEAR_IN_GAP = "RECONCILIATION_OUTSTANDING_CLEAR_IN_GAP";
+    public static final String RECONCILIATION_ADJUSTMENT = "RECONCILIATION_ADJUSTMENT";
+    public static final String RECONCILIATION_ADJUSTMENT_REVERSE = "RECONCILIATION_ADJUSTMENT_REVERSE";
+
     private final AccountingAuditLogRepository auditLogs;
 
     /** Records one audit row in the caller's transaction. */

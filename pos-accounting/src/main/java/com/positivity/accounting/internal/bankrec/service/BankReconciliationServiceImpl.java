@@ -1,67 +1,35 @@
 package com.positivity.accounting.internal.bankrec.service;
 
-import com.positivity.accounting.internal.bankrec.dto.BankReconciliationAdjustmentResponse;
-import com.positivity.accounting.internal.bankrec.dto.BankReconciliationLineResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
-import com.positivity.accounting.internal.bankrec.dto.ReconciliationAdjustmentRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAuditResponse;
-import com.positivity.accounting.internal.bankrec.dto.ReconciliationMatchRequest;
+import com.positivity.accounting.internal.bankrec.dto.ReconciliationCreateRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationReportResponse;
-import com.positivity.accounting.internal.bankrec.dto.ReconciliationUnmatchRequest;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationAdjustment;
-import com.positivity.accounting.internal.bankrec.entity.BankReconciliationBankMatch;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationGlMatch;
-import com.positivity.accounting.internal.bankrec.entity.BankReconciliationMatch;
-import com.positivity.accounting.internal.bankrec.entity.BankTransaction;
-import com.positivity.accounting.internal.bankrec.enums.AdjustmentStatus;
-import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
-import com.positivity.accounting.internal.bankrec.enums.BankTransactionStatus;
-import com.positivity.accounting.internal.bankrec.enums.MatchKind;
-import com.positivity.accounting.internal.bankrec.enums.MatchOrigin;
-import com.positivity.accounting.internal.bankrec.enums.MatchState;
+import com.positivity.accounting.internal.bankrec.entity.BankStatement;
+import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
+import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
+import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationAdjustmentRepository;
-import com.positivity.accounting.internal.bankrec.repository.BankReconciliationBankMatchRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationGlMatchRepository;
-import com.positivity.accounting.internal.bankrec.repository.BankReconciliationMatchRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
-import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
-import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
-import com.positivity.accounting.internal.dto.JournalEntryResponse;
-import com.positivity.accounting.internal.entity.JournalEntryLine;
-import com.positivity.accounting.internal.enums.JournalEntryStatus;
-import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
-import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
-import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
-import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
-import com.positivity.accounting.internal.exception.ReconciliationLineIneligibleException;
+import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankCashAccount;
 import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
-import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
-import com.positivity.accounting.internal.repository.GLAccountRepository;
-import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
-import com.positivity.accounting.internal.service.GLMappingResolver;
-import com.positivity.accounting.internal.service.JournalEntryService;
-import com.positivity.security.common.SecurityContextHelper;
-import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -69,27 +37,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Manual CSV bank reconciliation (Story F2, issue #965, decisions D-5/D-6; persistence evolved by
- * story S1, #2300 — SPEC-manual-bank-reconciliation §3, §6.4).
+ * The bank reconciliation header lifecycle (SPEC-manual-bank-reconciliation §3.7, §4.1, §6.1; stories F2
+ * #965, S1 #2300, S4 #2303): create from a COMMITTED statement, read with the live equation E3, list,
+ * finalize over the live difference (balance-only until S5), report and derived audit. Matching,
+ * outstanding items and adjustments live in their own services and share {@link ReconciliationSupport}.
  *
- * <p>Repository access lives here in the service layer (ADR-0011). Adjustments post
- * real balanced journal entries through {@link JournalEntryService#postJournalEntry}
- * with a null override justification, so a locked accounting period (story B2) yields
- * 422 exactly like the settlement write-off path.
- *
- * <p>Persistence (story S1): statements and their {@code bank_transaction} rows (the F2
- * "statement lines") enter through the intake port (stories S2, S3; the F2 CSV import is retired,
- * D14); a match writes a
- * {@code bank_reconciliation_match} header with ledger and bank members; an unmatch never deletes
- * anything (M7) — it moves the header to {@code UNMATCHED} and clears the members' {@code active}
- * flag. The API answers exactly as F2 did.
- *
- * <p>Balance gate (finalize): {@code statementClosingBalance} must equal
- * {@code glEndingBalance + Σ adjustments} within ±0.01, where {@code glEndingBalance}
- * is snapshotted at import from posted GL lines as-of the statement end date (so it
- * already reflects matched GL lines — matching is documentation, not arithmetic; see
- * {@link #computeDifference}) and {@code Σ adjustments} sums the signed amounts of the
- * adjustments, whose real JEs post after the frozen snapshot.
+ * <p>Every read computes E3 live from the ledger ({@link ReconciliationCalculator}); every mutation stores
+ * the terms on the row. Statements enter through the intake port (a file import or a manual statement);
+ * the F2 CSV import endpoint is retired (D14).
  */
 @Slf4j
 @Service
@@ -97,45 +52,135 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class BankReconciliationServiceImpl implements BankReconciliationService {
 
-    static final String POSTING_CATEGORY = "BANK_RECONCILIATION";
-    private static final BigDecimal TOLERANCE = new BigDecimal("0.01");
-    private static final String SYSTEM = "SYSTEM";
-
     private final Clock clock;
     private final BankReconciliationRepository reconciliationRepository;
     private final BankStatementRepository statementRepository;
-    private final BankTransactionRepository transactionRepository;
-    private final BankReconciliationMatchRepository matchRepository;
     private final BankReconciliationGlMatchRepository glMatchRepository;
-    private final BankReconciliationBankMatchRepository bankMatchRepository;
     private final BankReconciliationAdjustmentRepository adjustmentRepository;
-    private final GLAccountRepository glAccountRepository;
-    private final JournalEntryLineRepository journalEntryLineRepository;
-    private final GLMappingResolver glMappingResolver;
-    private final JournalEntryService journalEntryService;
+    private final BankCashAccounts bankCashAccounts;
+    private final ReconciliationCalculator calculator;
+    private final ReconciliationSupport support;
+    private final BankRecAuditRecorder auditRecorder;
+    private final FunctionalCurrency functionalCurrency;
+    private final ReconciliationReviewService reviewService;
 
     @Override
-    @Transactional(readOnly = true)
-    public BankReconciliationResponse get(@NonNull UUID reconciliationId) {
-        return toResponse(requireReconciliation(reconciliationId));
+    public BankReconciliationResponse create(@NonNull ReconciliationCreateRequest request) {
+        BankCashAccount account = bankCashAccounts.requireForIntake(request.getGlAccountId());
+        if (request.getStatementId() == null) {
+            // Phase 1 (§4.1 d, §6.1): the statementless interim body belongs to a feed-linked account,
+            // and no account has a feed link yet.
+            throw new BankRecException(
+                    BankRecErrorCode.BANK_ACCOUNT_FEED_NOT_LINKED,
+                    "Account " + account.accountCode() + " has no bank-feed link; start the reconciliation from a"
+                            + " COMMITTED statement (an interim to a date is a manual-entry statement)");
+        }
+        BankReconciliation replay =
+                reconciliationRepository.findByRequestId(request.getRequestId()).orElse(null);
+        if (replay != null) {
+            if (!replay.getGlAccountId().equals(request.getGlAccountId())
+                    || !request.getStatementId().equals(replay.getStatementId())) {
+                throw new BankRecException(
+                        BankRecErrorCode.IDEMPOTENCY_CONFLICT,
+                        "requestId " + request.getRequestId() + " was already used with a different payload");
+            }
+            BankReconciliationResponse response = toResponse(replay, calculator.compute(replay));
+            response.setReplayed(true);
+            return response;
+        }
+
+        BankStatement statement = statementRepository
+                .findById(request.getStatementId())
+                .filter(s -> s.getGlAccountId().equals(request.getGlAccountId()))
+                .filter(s -> s.getStatus() == BankStatementStatus.COMMITTED)
+                .orElseThrow(() -> new BankRecException(
+                        BankRecErrorCode.BANK_STATEMENT_NOT_FOUND,
+                        "No COMMITTED statement " + request.getStatementId() + " on account " + account.accountCode()));
+        requireWindowNotReconciled(statement);
+
+        BankReconciliation recon = new BankReconciliation();
+        recon.setGlAccountId(account.glAccountId());
+        recon.setAccountCode(account.accountCode());
+        recon.setAccountName(account.accountName());
+        recon.setStatementId(statement.getStatementId());
+        recon.setStatementStartDate(statement.getStartDate());
+        recon.setStatementEndDate(statement.getEndDate());
+        recon.setStatementOpeningBalance(statement.getOpeningBalance());
+        recon.setStatementClosingBalance(statement.getClosingBalance());
+        recon.setCurrency(statement.getCurrency());
+        recon.setAccountingPeriodCode(YearMonth.from(statement.getEndDate()).toString());
+        recon.setStatus(ReconciliationStatus.IN_PROGRESS);
+        recon.setRequestId(request.getRequestId());
+        ReconciliationSnapshot snapshot = calculator.compute(recon);
+        ReconciliationCalculator.apply(recon, snapshot);
+        BankReconciliation saved;
+        try {
+            // The partial unique (tenant_id, statement_id) WHERE status IN (IN_PROGRESS, SUBMITTED) is the
+            // backstop for two creates racing past requireWindowNotReconciled.
+            saved = reconciliationRepository.saveAndFlush(recon);
+        } catch (DataIntegrityViolationException e) {
+            throw new BankRecException(
+                    BankRecErrorCode.RECONCILIATION_WINDOW_ALREADY_RECONCILED,
+                    "Statement " + statement.getStatementId() + " was concurrently given a reconciliation");
+        }
+        auditRecorder.record(
+                BankRecAuditRecorder.BANK_RECONCILIATION,
+                saved.getReconciliationId(),
+                BankRecAuditRecorder.RECONCILIATION_CREATE,
+                support.currentUser(),
+                null,
+                null,
+                "statementId=" + statement.getStatementId() + ";status=" + saved.getStatus());
+        log.info(
+                "Started reconciliation {} of statement {} on account {} ({}..{})",
+                saved.getReconciliationId(),
+                statement.getStatementId(),
+                account.accountCode(),
+                statement.getStartDate(),
+                statement.getEndDate());
+        return toResponse(saved, snapshot);
+    }
+
+    /**
+     * §4.1, §6.4: a statement has at most one IN_PROGRESS or SUBMITTED reconciliation (partial unique), and a
+     * FINALIZED one without a successor already reconciles it — the correction path is supersede (S5).
+     */
+    private void requireWindowNotReconciled(BankStatement statement) {
+        List<BankReconciliation> existing = reconciliationRepository.findByStatementIdAndStatusIn(
+                statement.getStatementId(),
+                List.of(
+                        ReconciliationStatus.IN_PROGRESS,
+                        ReconciliationStatus.SUBMITTED,
+                        ReconciliationStatus.FINALIZED));
+        existing.stream()
+                .filter(r ->
+                        r.getStatus() != ReconciliationStatus.FINALIZED || r.getSupersededByReconciliationId() == null)
+                .findFirst()
+                .ifPresent(r -> {
+                    throw BankRecException.field(
+                            BankRecErrorCode.RECONCILIATION_WINDOW_ALREADY_RECONCILED,
+                            "Statement " + statement.getStatementId() + " already has reconciliation "
+                                    + r.getReconciliationId() + " (" + r.getStatus() + ")",
+                            "reconciliationId",
+                            r.getReconciliationId().toString());
+                });
     }
 
     @Override
     @Transactional(readOnly = true)
-    public BankReconciliationListResponse list(
-            @Nullable UUID glAccountId, @Nullable ReconciliationStatus status, @NonNull Pageable pageable) {
-        Page<BankReconciliation> page;
-        if (glAccountId != null && status != null) {
-            page = reconciliationRepository.findByGlAccount_GlAccountIdAndStatus(glAccountId, status, pageable);
-        } else if (glAccountId != null) {
-            page = reconciliationRepository.findByGlAccount_GlAccountId(glAccountId, pageable);
-        } else if (status != null) {
-            page = reconciliationRepository.findByStatus(status, pageable);
-        } else {
-            page = reconciliationRepository.findAll(pageable);
-        }
+    public BankReconciliationResponse get(@NonNull UUID reconciliationId) {
+        BankReconciliation recon = support.require(reconciliationId);
+        return toResponse(recon, calculator.compute(recon));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BankReconciliationListResponse list(@NonNull ReconciliationListFilter filter, @NonNull Pageable pageable) {
+        Page<BankReconciliation> page = reconciliationRepository.findAll(filter.toSpecification(), pageable);
+        // The list serves each row's terms as the last mutation stored them; GET /{id} and the review
+        // read them live (§3.7) — recomputing every row of a page would read the ledger N times.
         List<BankReconciliationResponse> items =
-                page.getContent().stream().map(this::toResponse).toList();
+                page.getContent().stream().map(BankReconciliationResponse::from).toList();
         BankReconciliationListResponse response = new BankReconciliationListResponse();
         response.setReconciliations(items);
         response.setTotalElements(page.getTotalElements());
@@ -146,359 +191,33 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
     }
 
     @Override
-    public BankReconciliationResponse match(
-            @NonNull UUID reconciliationId, @NonNull ReconciliationMatchRequest request) {
-        BankReconciliation recon = requireOpenReconciliation(reconciliationId);
-
-        List<BankTransaction> transactions = requireMatchableTransactions(recon, request.getStatementLineIds());
-        List<JournalEntryLine> glLines = requireMatchableGlLines(recon, request.getGlLineIds());
-        BigDecimal bankTotal = sumBank(transactions);
-        BigDecimal ledgerTotal = sumLedger(glLines);
-        requireAmountsAgree(bankTotal, ledgerTotal);
-
-        String actor = currentUser();
-        Instant now = Instant.now(clock);
-        BankReconciliationMatch header = new BankReconciliationMatch();
-        header.setReconciliationId(reconciliationId);
-        header.setMatchKind(matchKind(transactions.size(), glLines.size()));
-        header.setState(MatchState.ACCEPTED);
-        header.setOrigin(MatchOrigin.USER);
-        header.setBankTotal(bankTotal);
-        header.setLedgerTotal(ledgerTotal);
-        header.setToleranceUsed(bankTotal.subtract(ledgerTotal).abs());
-        header.setProposedBy(actor);
-        header.setProposedAt(now);
-        header.setAcceptedBy(actor);
-        header.setAcceptedAt(now);
-        UUID matchId = matchRepository.save(header).getMatchId();
-
-        for (BankTransaction transaction : transactions) {
-            transaction.setStatus(BankTransactionStatus.MATCHED);
-        }
-        transactionRepository.saveAll(transactions);
-
-        List<BankReconciliationGlMatch> glMembers = new ArrayList<>();
-        for (JournalEntryLine glLine : glLines) {
-            BankReconciliationGlMatch m = new BankReconciliationGlMatch();
-            m.setReconciliationId(reconciliationId);
-            m.setMatchId(matchId);
-            m.setGlLineId(glLine.getLineId());
-            m.setSignedAmount(signedGl(glLine));
-            m.setActive(true);
-            glMembers.add(m);
-        }
-        List<BankReconciliationBankMatch> bankMembers = transactions.stream()
-                .map(t -> new BankReconciliationBankMatch(matchId, t.getBankTransactionId()))
-                .toList();
-        try {
-            // Flush inside the guard so a concurrent match that raced past the existsBy…ActiveTrue()
-            // check-then-act surfaces the partial unique(gl_line_id / bank_transaction_id) WHERE active
-            // violation here as a 409 rather than bubbling to a 500 at commit time.
-            bankMatchRepository.saveAll(bankMembers);
-            glMatchRepository.saveAllAndFlush(glMembers);
-        } catch (DataIntegrityViolationException e) {
-            throw new ReconciliationLineIneligibleException(
-                    "A GL line in this match was concurrently matched in another reconciliation");
-        }
-
-        recomputeDifference(recon);
-        reconciliationRepository.save(recon);
-        log.info(
-                "Matched {} statement line(s) to {} GL line(s) in reconciliation {} (matchId={})",
-                transactions.size(),
-                glLines.size(),
-                reconciliationId,
-                matchId);
-        return toResponse(recon);
-    }
-
-    /**
-     * The statement side of a match: every requested line (bank transaction) must exist, belong to
-     * this reconciliation's statement, and still be UNMATCHED.
-     *
-     * <p>The size check compares against the distinct requested ids, so a duplicated id dedupes
-     * rather than erroring — but an id resolving to no row fails the whole request. Matching only
-     * the lines that were found would report success for a selection the operator did not make.
-     */
-    private List<BankTransaction> requireMatchableTransactions(BankReconciliation recon, List<UUID> statementLineIds) {
-        List<BankTransaction> transactions = requireStatementLines(recon, statementLineIds);
-        for (BankTransaction transaction : transactions) {
-            if (transaction.getStatus() != BankTransactionStatus.UNMATCHED) {
-                throw new ReconciliationLineIneligibleException(
-                        "Statement line " + transaction.getBankTransactionId() + " is not UNMATCHED");
-            }
-        }
-        return transactions;
-    }
-
-    /** Every requested statement line must exist and belong to this reconciliation's statement (else 404). */
-    private List<BankTransaction> requireStatementLines(BankReconciliation recon, List<UUID> statementLineIds) {
-        List<BankTransaction> transactions = transactionRepository.findAllById(statementLineIds);
-        if (transactions.size() != new HashSet<>(statementLineIds).size()) {
-            throw new ReconciliationNotFoundException("One or more statement lines were not found");
-        }
-        for (BankTransaction transaction : transactions) {
-            if (recon.getStatementId() == null || !recon.getStatementId().equals(transaction.getStatementId())) {
-                throw new ReconciliationNotFoundException("Statement line " + transaction.getBankTransactionId()
-                        + " does not belong to reconciliation " + recon.getReconciliationId());
-            }
-        }
-        return transactions;
-    }
-
-    /**
-     * The GL side of a match: every requested line must exist, post to the reconciled account, sit
-     * on a POSTED entry, and not already explain a statement anywhere.
-     */
-    private List<JournalEntryLine> requireMatchableGlLines(BankReconciliation recon, List<UUID> glLineIds) {
-        List<JournalEntryLine> glLines = journalEntryLineRepository.findAllById(glLineIds);
-        if (glLines.size() != new HashSet<>(glLineIds).size()) {
-            throw new ReconciliationNotFoundException("One or more GL journal-entry lines were not found");
-        }
-        for (JournalEntryLine glLine : glLines) {
-            if (!recon.getGlAccountId().equals(glLine.getGlAccountId())) {
-                throw new InvalidRequestParameterException("GL line " + glLine.getLineId()
-                        + " does not post to the reconciled account " + recon.getGlAccountId());
-            }
-            if (glLine.getJournalEntry() == null || glLine.getJournalEntry().getStatus() != JournalEntryStatus.POSTED) {
-                throw new ReconciliationLineIneligibleException(
-                        "GL line " + glLine.getLineId() + " is not on a POSTED entry");
-            }
-            // Global dedup: a posted GL line represents one cash movement and may be in at most one live
-            // match (across all reconciliations, not just this one). The partial unique index on
-            // bank_reconciliation_gl_match(gl_line_id) WHERE active is the backstop.
-            if (glMatchRepository.existsByGlLineIdAndActiveTrue(glLine.getLineId())) {
-                throw new ReconciliationLineIneligibleException(
-                        "GL line " + glLine.getLineId() + " is already matched in a reconciliation");
-            }
-        }
-        return glLines;
-    }
-
-    /** Both sides of a match must net to the same amount, within the ±0.01 rounding tolerance. */
-    private static void requireAmountsAgree(BigDecimal statementSum, BigDecimal glSum) {
-        if (statementSum.subtract(glSum).abs().compareTo(TOLERANCE) > 0) {
-            throw new MatchAmountMismatchException("Statement lines net " + statementSum + " but GL lines net " + glSum
-                    + " (must agree within ±0.01)");
-        }
-    }
-
-    /**
-     * The match kind of a user match (§3.4). An N-bank × M-ledger group fits no kind; F2 still accepts
-     * it until story S4 restricts the cardinality (M2), and it is stored with no kind.
-     */
-    private static @Nullable MatchKind matchKind(int bankMembers, int ledgerMembers) {
-        if (bankMembers == 1 && ledgerMembers == 1) {
-            return MatchKind.ONE_TO_ONE;
-        }
-        if (bankMembers == 1) {
-            return MatchKind.ONE_TO_MANY;
-        }
-        if (ledgerMembers == 1) {
-            return MatchKind.MANY_TO_ONE;
-        }
-        return null;
-    }
-
-    @Override
-    public BankReconciliationResponse unmatch(
-            @NonNull UUID reconciliationId, @NonNull ReconciliationUnmatchRequest request) {
-        BankReconciliation recon = requireOpenReconciliation(reconciliationId);
-
-        UUID matchId = request.getMatchId() != null
-                ? request.getMatchId()
-                : resolveMatchId(recon, request.getStatementLineIds());
-
-        BankReconciliationMatch header = matchRepository
-                .findByMatchIdAndReconciliationId(matchId, reconciliationId)
-                .filter(m -> m.getState() == MatchState.ACCEPTED)
-                .orElseThrow(() -> new ReconciliationNotFoundException(
-                        "No matched statement lines for match " + matchId + " in reconciliation " + reconciliationId));
-        List<BankReconciliationBankMatch> bankMembers = bankMatchRepository.findByMatchIdAndActiveTrue(matchId);
-        List<BankTransaction> transactions = transactionRepository.findAllById(bankMembers.stream()
-                .map(BankReconciliationBankMatch::getBankTransactionId)
-                .toList());
-        for (BankTransaction transaction : transactions) {
-            transaction.setStatus(BankTransactionStatus.UNMATCHED);
-        }
-        transactionRepository.saveAll(transactions);
-        // M7: matches are never deleted — the members go inactive (releasing their lines) and the
-        // header records who unmatched it and when.
-        bankMembers.forEach(m -> m.setActive(false));
-        bankMatchRepository.saveAll(bankMembers);
-        List<BankReconciliationGlMatch> glMembers = glMatchRepository.findByMatchIdAndActiveTrue(matchId);
-        glMembers.forEach(m -> m.setActive(false));
-        glMatchRepository.saveAll(glMembers);
-        header.setState(MatchState.UNMATCHED);
-        header.setUnmatchedBy(currentUser());
-        header.setUnmatchedAt(Instant.now(clock));
-        matchRepository.save(header);
-
-        recomputeDifference(recon);
-        reconciliationRepository.save(recon);
-        log.info(
-                "Unmatched match {} in reconciliation {} ({} line(s))", matchId, reconciliationId, transactions.size());
-        return toResponse(recon);
-    }
-
-    /**
-     * Resolves the one match group the requested statement lines belong to.
-     *
-     * <p>Exactly one, deliberately: lines spanning two groups would release a match the operator
-     * meant to keep, and lines in no group name nothing to release. A line from another
-     * reconciliation is a 404 before it can influence the resolution at all.
-     */
-    private UUID resolveMatchId(BankReconciliation recon, @Nullable List<UUID> statementLineIds) {
-        if (statementLineIds == null || statementLineIds.isEmpty()) {
-            throw new InvalidRequestParameterException("Provide either matchId or statementLineIds to unmatch");
-        }
-        List<BankTransaction> requested = requireStatementLines(recon, statementLineIds);
-        Set<UUID> matchIds = new HashSet<>();
-        bankMatchRepository
-                .findByBankTransactionIdInAndActiveTrue(requested.stream()
-                        .map(BankTransaction::getBankTransactionId)
-                        .toList())
-                .forEach(m -> matchIds.add(m.getMatchId()));
-        if (matchIds.size() != 1) {
-            throw new InvalidRequestParameterException(
-                    "statementLineIds must resolve to exactly one match group; found " + matchIds.size());
-        }
-        return matchIds.iterator().next();
-    }
-
-    @Override
-    public BankReconciliationResponse addAdjustment(
-            @NonNull UUID reconciliationId, @NonNull ReconciliationAdjustmentRequest request) {
-        BankReconciliation recon = requireOpenReconciliation(reconciliationId);
-        BigDecimal amount = request.getAmount();
-        if (amount.signum() == 0) {
-            throw new InvalidRequestParameterException("Adjustment amount must be non-zero");
-        }
-        BankAdjustmentType type = request.getType();
-        if (!type.permits(amount.signum())) {
-            throw new AdjustmentSignInvalidException(type);
-        }
-
-        LocalDateTime txDate = recon.getStatementEndDate().atStartOfDay();
-        UUID cashAccountId = recon.getGlAccountId();
-        UUID counterAccountId = glMappingResolver.resolveGLAccount(POSTING_CATEGORY, type.name(), txDate);
-
-        String desc = "Bank reconciliation adjustment (" + type + ")"
-                + (request.getDescription() != null && !request.getDescription().isBlank()
-                        ? ": " + request.getDescription()
-                        : "");
-
-        BigDecimal abs = amount.abs();
-        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
-        // Positive amount increases the reconciled cash (Dr cash / Cr counter); negative decreases it
-        // (Cr cash / Dr counter). The cash account is the reconciled account; the counter account is
-        // the type's mapped expense/income/clearing account.
-        if (amount.signum() > 0) {
-            lines.add(debit(cashAccountId, abs, desc));
-            lines.add(credit(counterAccountId, abs, desc));
-        } else {
-            lines.add(debit(counterAccountId, abs, desc));
-            lines.add(credit(cashAccountId, abs, desc));
-        }
-
-        JournalEntryCreateRequest journalEntryRequest = JournalEntryCreateRequest.builder()
-                .transactionDate(txDate)
-                .sourceEventId(UUIDv7Generator.generate())
-                .description(desc)
-                .lines(lines)
-                .build();
-
-        JournalEntryResponse created = journalEntryService.createJournalEntry(journalEntryRequest);
-        JournalEntryResponse posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), null);
-
-        BankReconciliationAdjustment adjustment = new BankReconciliationAdjustment();
-        adjustment.setReconciliation(recon);
-        adjustment.setAdjustmentType(type);
-        adjustment.setAmount(amount);
-        adjustment.setDescription(request.getDescription());
-        adjustment.setJournalEntryId(posted.getJournalEntryId());
-        adjustment.setStatus(AdjustmentStatus.POSTED);
-        adjustmentRepository.save(adjustment);
-
-        recomputeDifference(recon);
-        reconciliationRepository.save(recon);
-        log.info(
-                "Recorded {} adjustment {} on reconciliation {} (JE {})",
-                type,
-                amount,
-                reconciliationId,
-                posted.getJournalEntryId());
-        return toResponse(recon);
-    }
-
-    @Override
     public BankReconciliationResponse finalizeReconciliation(@NonNull UUID reconciliationId) {
-        BankReconciliation recon = requireReconciliation(reconciliationId);
-        if (recon.getStatus() == ReconciliationStatus.FINALIZED) {
-            throw new ReconciliationAlreadyFinalizedException(
-                    "Reconciliation " + reconciliationId + " is already FINALIZED");
-        }
-        BigDecimal difference = computeDifference(recon);
-        if (difference.abs().compareTo(TOLERANCE) > 0) {
+        BankReconciliation recon = support.requireOpen(reconciliationId);
+        // Balance-only gate over the live difference until S5 adds SUBMITTED, E4 and the approver.
+        ReconciliationSnapshot snapshot = support.refresh(recon);
+        BigDecimal difference = snapshot.terms().difference();
+        if (!ReconciliationEquation.withinTolerance(difference, functionalCurrency.tolerance())) {
             throw new ReconciliationNotBalancedException(
                     "Reconciliation " + reconciliationId + " does not balance; difference " + difference, difference);
         }
-        recon.setDifference(difference);
         recon.setStatus(ReconciliationStatus.FINALIZED);
         recon.setFinalizedAt(Instant.now(clock));
-        recon.setFinalizedBy(currentUser());
+        recon.setFinalizedBy(support.currentUser());
         reconciliationRepository.save(recon);
         log.info("Finalized reconciliation {} (difference={})", reconciliationId, difference);
-        return toResponse(recon);
+        return toResponse(recon, snapshot);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ReconciliationReportResponse report(@NonNull UUID reconciliationId) {
-        BankReconciliation recon = requireReconciliation(reconciliationId);
-        List<BankTransaction> lines = statementTransactions(recon);
-        List<BankReconciliationAdjustment> adjustments =
-                adjustmentRepository.findByReconciliation_ReconciliationId(reconciliationId);
-
-        List<BankTransaction> matched =
-                lines.stream().filter(BankReconciliationServiceImpl::isMatched).toList();
-        List<BankTransaction> outstanding =
-                lines.stream().filter(l -> !isMatched(l)).toList();
-        BigDecimal totalMatched = sumBank(matched);
-        BigDecimal totalAdjustments = sumAdjustments(adjustments);
-        BigDecimal totalOutstanding = sumBank(outstanding);
-        int matchedCount = matched.size();
-        int outstandingCount = lines.size() - matchedCount;
-        BigDecimal difference = recon.getStatementClosingBalance()
-                .subtract(recon.getGlEndingBalance().add(totalAdjustments));
-
-        return ReconciliationReportResponse.builder()
-                .reconciliationId(reconciliationId)
-                .accountCode(recon.getAccountCode())
-                .accountName(recon.getAccountName())
-                .currency(recon.getCurrency())
-                .statementDate(recon.getStatementEndDate())
-                .glEndingBalance(recon.getGlEndingBalance())
-                .statementEndingBalance(recon.getStatementClosingBalance())
-                .totalMatched(totalMatched)
-                .totalAdjustments(totalAdjustments)
-                .totalOutstanding(totalOutstanding)
-                .matchedLineCount(matchedCount)
-                .outstandingLineCount(outstandingCount)
-                .difference(difference)
-                .adjustments(adjustments.stream()
-                        .map(BankReconciliationAdjustmentResponse::from)
-                        .toList())
-                .outstandingLines(outstanding.stream()
-                        .map(l -> BankReconciliationLineResponse.from(l, null))
-                        .toList())
-                .build();
+        return reviewService.report(reconciliationId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ReconciliationAuditResponse audit(@NonNull UUID reconciliationId) {
-        BankReconciliation recon = requireReconciliation(reconciliationId);
+        BankReconciliation recon = support.require(reconciliationId);
         List<BankReconciliationAdjustment> adjustments =
                 adjustmentRepository.findByReconciliation_ReconciliationId(reconciliationId);
         // F2's derived trail lists surviving match groups only; unmatched history stays out of it
@@ -556,116 +275,10 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
 
     // ---- helpers -----------------------------------------------------------
 
-    private BankReconciliation requireReconciliation(@NonNull UUID reconciliationId) {
-        return reconciliationRepository
-                .findById(reconciliationId)
-                .orElseThrow(
-                        () -> new ReconciliationNotFoundException("Reconciliation not found: " + reconciliationId));
-    }
-
-    private BankReconciliation requireOpenReconciliation(@NonNull UUID reconciliationId) {
-        BankReconciliation recon = requireReconciliation(reconciliationId);
-        if (recon.getStatus() == ReconciliationStatus.FINALIZED) {
-            throw new ReconciliationAlreadyFinalizedException(
-                    "Reconciliation " + reconciliationId + " is already FINALIZED");
-        }
-        return recon;
-    }
-
-    /** The reconciliation's statement lines: its statement's bank transactions in file order. */
-    private List<BankTransaction> statementTransactions(@NonNull BankReconciliation recon) {
-        if (recon.getStatementId() == null) {
-            return List.of();
-        }
-        return transactionRepository.findByStatementIdOrderBySourceRowNumberAsc(recon.getStatementId());
-    }
-
-    /** Recompute and store the reconciliation difference from its current adjustments. */
-    private void recomputeDifference(@NonNull BankReconciliation recon) {
-        recon.setDifference(computeDifference(recon));
-    }
-
-    /**
-     * Reconciliation difference = statementClosingBalance − (glEndingBalance + Σ adjustments).
-     *
-     * <p>{@code glEndingBalance} is the GL balance snapshotted at import as-of the statement end date, so it
-     * ALREADY reflects every posted GL line that a match links to (a matched line is POSTED on the
-     * reconciled account and dated on/before the statement end date). Adding Σ matched would double-count
-     * those lines, so matched statement lines do not enter the arithmetic — matching records which
-     * statement lines are explained (see the report's matched-vs-outstanding split), while the balance
-     * is reconciled by real adjustment JEs. Adjustments, in contrast, post AFTER the frozen snapshot, so
-     * Σ adjustments is added exactly once.
-     */
-    private BigDecimal computeDifference(@NonNull BankReconciliation recon) {
-        List<BankReconciliationAdjustment> adjustments =
-                adjustmentRepository.findByReconciliation_ReconciliationId(recon.getReconciliationId());
-        BigDecimal expected = recon.getGlEndingBalance().add(sumAdjustments(adjustments));
-        return recon.getStatementClosingBalance().subtract(expected);
-    }
-
-    private static boolean isMatched(BankTransaction transaction) {
-        return transaction.getStatus() == BankTransactionStatus.MATCHED;
-    }
-
-    private static BigDecimal sumBank(List<BankTransaction> transactions) {
-        return transactions.stream().map(BankTransaction::getSignedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private static BigDecimal sumLedger(List<JournalEntryLine> glLines) {
-        return glLines.stream().map(BankReconciliationServiceImpl::signedGl).reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private static BigDecimal sumAdjustments(List<BankReconciliationAdjustment> adjustments) {
-        return adjustments.stream()
-                .map(BankReconciliationAdjustment::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private static BigDecimal signedGl(JournalEntryLine line) {
-        return line.getDebitAmount().subtract(line.getCreditAmount());
-    }
-
-    private static JournalEntryCreateRequest.JournalEntryLineRequest debit(
-            UUID accountId, BigDecimal amount, String description) {
-        return JournalEntryCreateRequest.JournalEntryLineRequest.builder()
-                .glAccountId(accountId)
-                .debitAmount(amount)
-                .creditAmount(BigDecimal.ZERO)
-                .description(description)
-                .build();
-    }
-
-    private static JournalEntryCreateRequest.JournalEntryLineRequest credit(
-            UUID accountId, BigDecimal amount, String description) {
-        return JournalEntryCreateRequest.JournalEntryLineRequest.builder()
-                .glAccountId(accountId)
-                .debitAmount(BigDecimal.ZERO)
-                .creditAmount(amount)
-                .description(description)
-                .build();
-    }
-
-    private String currentUser() {
-        return SecurityContextHelper.isAuthenticated()
-                ? SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM)
-                : SYSTEM;
-    }
-
-    private BankReconciliationResponse toResponse(@NonNull BankReconciliation recon) {
-        List<BankTransaction> transactions = statementTransactions(recon);
-        Map<UUID, UUID> matchIdByTransaction = new HashMap<>();
-        if (!transactions.isEmpty()) {
-            bankMatchRepository
-                    .findByBankTransactionIdInAndActiveTrue(transactions.stream()
-                            .map(BankTransaction::getBankTransactionId)
-                            .toList())
-                    .forEach(m -> matchIdByTransaction.put(m.getBankTransactionId(), m.getMatchId()));
-        }
-        List<BankReconciliationLineResponse> lines = transactions.stream()
-                .map(t -> BankReconciliationLineResponse.from(t, matchIdByTransaction.get(t.getBankTransactionId())))
-                .toList();
-        List<BankReconciliationAdjustment> adjustments =
-                adjustmentRepository.findByReconciliation_ReconciliationId(recon.getReconciliationId());
-        return BankReconciliationResponse.from(recon, lines, adjustments);
+    /** The header with the live terms of {@code snapshot} applied (not stored on a read). */
+    private static BankReconciliationResponse toResponse(
+            @NonNull BankReconciliation recon, @NonNull ReconciliationSnapshot snapshot) {
+        ReconciliationCalculator.apply(recon, snapshot);
+        return BankReconciliationResponse.from(recon);
     }
 }
