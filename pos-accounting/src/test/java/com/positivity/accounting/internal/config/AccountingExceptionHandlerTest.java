@@ -19,7 +19,6 @@ import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedEx
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
-import com.positivity.accounting.internal.exception.BankStatementParseException;
 import com.positivity.accounting.internal.exception.CurrencyMismatchException;
 import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
@@ -134,9 +133,6 @@ class AccountingExceptionHandlerTest {
                     Named.of("handleInvalidRequestParameter", (HandlerInvocation)
                             request -> handler.handleInvalidRequestParameter(
                                     new InvalidRequestParameterException("bad parameter"), request)),
-                    Named.of(
-                            "handleBankStatementParse", (HandlerInvocation) request -> handler.handleBankStatementParse(
-                                    new BankStatementParseException("malformed row"), request)),
                     Named.of("handleEventValidation", (HandlerInvocation) request ->
                             handler.handleEventValidation(new EventValidationException("missing field"), request)),
                     Named.of("handlePostingRulePublishValidation", (HandlerInvocation)

@@ -23,7 +23,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * The raw bytes of an imported statement file (SPEC-manual-bank-reconciliation §3.3, §6.4, D13;
  * story S1, #2300), kept apart from {@link BankImport} so the metadata row outlives them: a
- * per-tenant retention job deletes this row after {@link #retentionUntil} (story S3). Encrypted at
+ * per-tenant retention job deletes this row after {@link #retentionUntil} (story S3, #2302). Encrypted at
  * rest by the database; no application cipher column.
  */
 @Getter

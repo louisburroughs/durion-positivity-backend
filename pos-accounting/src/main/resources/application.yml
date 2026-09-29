@@ -1,6 +1,11 @@
 spring:
   application:
     name: accounting
+  servlet:
+    multipart:
+      # Statement files (story S3, #2302) up to pos.accounting.bankrec.import.max-file-bytes.
+      max-file-size: 10MB
+      max-request-size: 11MB
   kafka:
     bootstrap-servers:
       - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -57,6 +62,16 @@ pos:
   tenancy:
     default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   accounting:
+    bankrec:
+      import:
+        # SPEC-manual-bank-reconciliation D13 (story S3, #2302): raw statement files are kept this many
+        # days (default 7 years, the audit retention) and then hard-deleted per tenant; the bank_import
+        # metadata and parsed rows stay.
+        file-retention-days: ${POS_ACCOUNTING_BANKREC_IMPORT_FILE_RETENTION_DAYS:2555}
+        # When the nightly retention job runs (server time).
+        retention-cron: ${POS_ACCOUNTING_BANKREC_IMPORT_RETENTION_CRON:0 30 3 * * *}
+        # Largest statement file accepted, in bytes (spring.servlet.multipart must allow it).
+        max-file-bytes: ${POS_ACCOUNTING_BANKREC_IMPORT_MAX_FILE_BYTES:10485760}
     credit-memo:
       # Required: GL account for revenue reversals (typically 4000-4999 range)
       revenue-account-id: ${POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID}

@@ -52,14 +52,16 @@ tags:
   name: Mapping Keys
 - description: Manage posting categories for GL mapping taxonomy
   name: Posting Categories
+- description: 'Manual bank reconciliation: match statement lines to posted GL entries, record adjustments, and finalize when balanced.'
+  name: Bank Reconciliation
 - description: Reconcilable bank accounts and their bank-account profiles.
   name: Bank Accounts
 - description: Manage chart of accounts including lifecycle actions.
   name: GL Accounts
-- description: 'Manual CSV bank reconciliation: import a statement, match lines to posted GL entries, record adjustments, and finalize when balanced.'
-  name: Bank Reconciliation
 - description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period, and manage the org-level hard-lock date.'
   name: Accounting Periods
+- description: 'Bank statement file imports: upload, preview, mapping, correction, commit.'
+  name: Bank Imports
 - description: Bank statement headers and manual statement entry for bank reconciliation.
   name: Bank Statements
 - description: Income Statement and Balance Sheet generation with drilldown
@@ -1247,6 +1249,636 @@ paths:
       summary: Set Bank Account Profile
       tags:
       - Bank Accounts
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/bank-imports:
+    get:
+      description: 'Lists statement-file imports, optionally for one GL bank account and one status, newest first and paginated, without their previews.
+
+        Use this tool to find an import still waiting for a mapping, a correction or a commit; do not use it for committed statements, use listBankStatements instead.
+
+        Preconditions: none beyond the view permission.
+
+        Inputs: optional glAccountId and status (UPLOADED, VALIDATED, COMMITTED, DISCARDED), page and size (at most 200).
+
+        No events are emitted beyond the ACCOUNTING_BANK_IMPORT_LIST audit event.
+
+        Returns 400 when the page bounds are invalid, and 403 without accounting:reconciliation:view.
+
+        '
+      operationId: listBankImports
+      parameters:
+      - description: GL bank account id
+        in: query
+        name: glAccountId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Import status
+        in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - UPLOADED
+          - VALIDATED
+          - COMMITTED
+          - DISCARDED
+          type: string
+      - description: Zero-based page index
+        example: 0
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          format: int32
+          type: integer
+      - description: Page size (1-200)
+        example: 20
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankImportListResponse'
+          description: Imports
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid page (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:view
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      summary: List Bank Imports
+      tags:
+      - Bank Imports
+      x-required-permissions:
+      - accounting:reconciliation:view
+    post:
+      description: 'Uploads a bank statement file (CSV) with its statement header for a reconcilable BANK_CASH account and stages it for review: every row is parsed under the column mapping and sign convention, bad rows are rejected one by one, and a preview shows opening + activity against closing. Nothing is committed until the import is committed.
+
+        Use this tool to bring a downloaded bank statement into reconciliation; do not use it for a statement keyed by hand, use createBankStatement instead.
+
+        Preconditions: the header must continue the account''s previous committed statement unless a gapAcknowledgement of at least 10 characters is given (required for the account''s first statement, refused on a contiguous one); the same file must not already be committed for the account.
+
+        Required inputs: glAccountId, a UUIDv7 requestId, formatCode CSV, the file and statement {startDate, endDate, openingBalance, closingBalance}.
+
+        Emits an ACCOUNTING_BANK_IMPORT_CREATE event; a replay of the same requestId and payload returns the original import with replayed=true.
+
+        Returns 201 with status VALIDATED, or UPLOADED with mappingRequired when the columns need a mapping; 422 when the file is unreadable (STATEMENT_IMPORT_FAILED), the account is not reconcilable, the currency is not the account''s, the window overlaps a committed statement or the contiguity rule fails; 409 for a file already committed (naming the earlier importId and statementId), a window already committed or a reused requestId; 400 when the request is malformed or the acknowledgement is shorter than 10 characters.
+
+        '
+      operationId: createBankImport
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankImportCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BankImportUploadForm'
+        description: 'The file as base64 content with its statement header and parse options (application/json), or the file and that request as parts (multipart/form-data: file, meta).'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankImportResponse'
+          description: Import staged (or replayed)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR or JUSTIFICATION_REQUIRED
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: IMPORT_FILE_ALREADY_COMMITTED, STATEMENT_ALREADY_IMPORTED or IDEMPOTENCY_CONFLICT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: STATEMENT_IMPORT_FAILED, ACCOUNT_NOT_RECONCILABLE, CURRENCY_NOT_SUPPORTED, STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS or STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Upload Bank Statement File
+      tags:
+      - Bank Imports
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/bank-imports/{importId}:
+    get:
+      description: 'Returns one statement-file import with its header, mapping, counts, status, outcome ids and the preview: the first five rows with their resulting sign and running balance, and opening + activity against closing for each statement it will create.
+
+        Use this tool to check an import before committing it; do not use it for the rows themselves, use listBankImportRows instead.
+
+        Preconditions: the import must belong to the caller''s tenant.
+
+        Required inputs: importId (UUID) in the path.
+
+        No events are emitted beyond the ACCOUNTING_BANK_IMPORT_GET audit event.
+
+        Returns 404 when the import does not exist in the tenant, and 403 without accounting:reconciliation:view.
+
+        '
+      operationId: getBankImport
+      parameters:
+      - description: Import id
+        in: path
+        name: importId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankImportResponse'
+          description: Import with preview
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:view
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_IMPORT_NOT_FOUND
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      summary: Get Bank Import
+      tags:
+      - Bank Imports
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/bank-imports/{importId}/commit:
+    post:
+      description: 'Commits a validated import in one transaction: its rows become bank transactions of one statement (one per split segment) through the same intake as a manual statement, the gap acknowledgement moves the account''s reconciliation baseline, and the accounting.bankstatement.committed fact is queued.
+
+        Use this tool once the preview ties and every rejected or out-of-window row is corrected or skipped; do not use it to start a reconciliation, which is created from the statement.
+
+        Preconditions: status VALIDATED; no REJECTED rows; OUT_OF_WINDOW rows skipped; opening + activity equal to closing within one minor unit; POSSIBLE_DUPLICATE rows either decided in duplicateDecisions or committed as possible duplicates for later review.
+
+        Required inputs: importId in the path; optional duplicateDecisions [{rowNumber, decision}].
+
+        Emits an ACCOUNTING_BANK_IMPORT_COMMIT event; a second commit returns the same result.
+
+        Returns 422 IMPORT_NOT_COMMITTABLE with fieldErrors rows[n] and activityTotal, or the header codes when the previous statement changed since upload; 409 when the import is DISCARDED, the window or the file is already committed, or the version is stale; 404 for an unknown import.
+
+        '
+      operationId: commitBankImport
+      parameters:
+      - description: Import id
+        in: path
+        name: importId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankImportCommitRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankImportCommitResponse'
+          description: Committed (or already committed)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_IMPORT_NOT_FOUND
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: IMPORT_DISCARDED, STATEMENT_ALREADY_IMPORTED, IMPORT_FILE_ALREADY_COMMITTED or OPTIMISTIC_LOCK
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: IMPORT_NOT_COMMITTABLE, CURRENCY_NOT_SUPPORTED, STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS or STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Commit Bank Import
+      tags:
+      - Bank Imports
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/bank-imports/{importId}/discard:
+    post:
+      description: 'Discards an import that will not be committed; the status becomes DISCARDED, which is terminal, and the raw file stays retained until its retention date.
+
+        Use this tool for a wrong or superseded upload; do not use it on a committed import, whose statement is corrected by an explicit supersede instead.
+
+        Preconditions: the import must be UPLOADED or VALIDATED.
+
+        Required inputs: importId in the path and a reason of at least 10 characters.
+
+        Emits an ACCOUNTING_BANK_IMPORT_DISCARD event.
+
+        Returns 409 when the import is COMMITTED or already DISCARDED or the version is stale; 400 when the reason is missing or too short; 404 for an unknown import.
+
+        '
+      operationId: discardBankImport
+      parameters:
+      - description: Import id
+        in: path
+        name: importId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankImportDiscardRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankImportResponse'
+          description: Discarded
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR or JUSTIFICATION_REQUIRED
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_IMPORT_NOT_FOUND
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: IMPORT_ALREADY_COMMITTED, IMPORT_DISCARDED or OPTIMISTIC_LOCK
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Discard Bank Import
+      tags:
+      - Bank Imports
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/bank-imports/{importId}/file:
+    get:
+      description: 'Returns the raw bytes of an import''s uploaded file, as retained for audit, with its media type and file name; every download is recorded in the audit log.
+
+        Use this tool to review the evidence behind a committed statement; do not use it to read the parsed rows, use listBankImportRows instead.
+
+        Preconditions: the file must still be retained (the import carries retentionUntil).
+
+        Required inputs: importId (UUID) in the path.
+
+        Emits an ACCOUNTING_BANK_IMPORT_FILE_READ event and a BANK_IMPORT_FILE_READ audit row.
+
+        Returns 404 when the import does not exist (BANK_IMPORT_NOT_FOUND) or its file was purged after retention (BANK_IMPORT_FILE_NOT_FOUND), and 403 without accounting:reconciliation:approve.
+
+        '
+      operationId: downloadBankImportFile
+      parameters:
+      - description: Import id
+        in: path
+        name: importId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/octet-stream:
+              schema:
+                format: binary
+                type: string
+          description: The raw file
+        '403':
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:approve
+        '404':
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_IMPORT_NOT_FOUND or BANK_IMPORT_FILE_NOT_FOUND
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:approve
+      summary: Download Bank Import File
+      tags:
+      - Bank Imports
+      x-required-permissions:
+      - accounting:reconciliation:approve
+  /v1/accounting/bank-imports/{importId}/mapping:
+    put:
+      description: 'Sets an import''s column mapping, sign convention and parser options and parses every row again from the retained file; the import becomes VALIDATED once its columns are mapped. A corrected or widened header and split points may come with it.
+
+        Use this tool when the columns need a mapping or the preview does not tie because the sign convention is wrong; do not use it to fix one row, use updateBankImportRow instead.
+
+        Preconditions: the import must be UPLOADED or VALIDATED; earlier corrections, skips and duplicate decisions are discarded by the re-parse.
+
+        Required inputs: importId in the path and columnMapping; optional saveAsAccountDefault stores the mapping on the account''s profile for the next import.
+
+        Emits an ACCOUNTING_BANK_IMPORT_MAPPING_SET event.
+
+        Returns 409 when the import is COMMITTED (IMPORT_ALREADY_COMMITTED) or DISCARDED (IMPORT_DISCARDED) or the version is stale; 422 when a changed header overlaps or breaks contiguity; 400 when the mapping or options are malformed; 404 for an unknown import.
+
+        '
+      operationId: setBankImportMapping
+      parameters:
+      - description: Import id
+        in: path
+        name: importId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankImportMappingRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankImportResponse'
+          description: Import re-parsed
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_IMPORT_NOT_FOUND
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: IMPORT_ALREADY_COMMITTED, IMPORT_DISCARDED, STATEMENT_ALREADY_IMPORTED or OPTIMISTIC_LOCK
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS or STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE after a header change
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Set Bank Import Mapping
+      tags:
+      - Bank Imports
+      x-required-permissions:
+      - accounting:reconciliation:adjust
+  /v1/accounting/bank-imports/{importId}/rows:
+    get:
+      description: 'Lists an import''s rows by row number with their raw cells, parsed values, status, rejection code and fingerprint collision, optionally in one status, paginated.
+
+        Use this tool to find the rejected, out-of-window or possibly duplicated rows to correct, skip or decide; do not use it for committed bank transactions, use listBankTransactions instead.
+
+        Preconditions: the import must belong to the caller''s tenant.
+
+        Required inputs: importId (UUID) in the path; optional status (PARSED, REJECTED, CORRECTED, SKIPPED, POSSIBLE_DUPLICATE, OUT_OF_WINDOW, COMMITTED), page and size (at most 200).
+
+        No events are emitted beyond the ACCOUNTING_BANK_IMPORT_ROWS audit event.
+
+        Returns 404 when the import does not exist, 400 when the page bounds are invalid, and 403 without accounting:reconciliation:view.
+
+        '
+      operationId: listBankImportRows
+      parameters:
+      - description: Import id
+        in: path
+        name: importId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Row status
+        in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - PARSED
+          - REJECTED
+          - CORRECTED
+          - SKIPPED
+          - POSSIBLE_DUPLICATE
+          - OUT_OF_WINDOW
+          - COMMITTED
+          type: string
+      - description: Zero-based page index
+        example: 0
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          format: int32
+          type: integer
+      - description: Page size (1-200)
+        example: 50
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 50
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankImportRowListResponse'
+          description: Rows
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid page (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:view
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_IMPORT_NOT_FOUND
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:view
+      summary: List Bank Import Rows
+      tags:
+      - Bank Imports
+      x-required-permissions:
+      - accounting:reconciliation:view
+  /v1/accounting/bank-imports/{importId}/rows/{rowId}:
+    put:
+      description: 'Corrects one row of an import (its raw cells are kept), skips it with a reason, or answers a possible duplicate (DISTINCT keeps it, DUPLICATE skips it).
+
+        Use this tool for rows the preview shows as REJECTED, OUT_OF_WINDOW or POSSIBLE_DUPLICATE; do not use it to remap every row, use setBankImportMapping instead.
+
+        Preconditions: the import must be UPLOADED or VALIDATED; a skipped row cannot be corrected; a duplicate decision only applies to a POSSIBLE_DUPLICATE row.
+
+        Required inputs: importId and rowId in the path and exactly one of correctedValues, skip=true with a reason of at least 10 characters, or duplicateDecision.
+
+        Emits an ACCOUNTING_BANK_IMPORT_ROW_CORRECT event.
+
+        Returns 409 when the import is COMMITTED or DISCARDED or the version is stale; 400 when the values are malformed or the reason is too short; 404 for an unknown import or row.
+
+        '
+      operationId: updateBankImportRow
+      parameters:
+      - description: Import id
+        in: path
+        name: importId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Row id
+        in: path
+        name: rowId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankImportRowUpdateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankImportRowResponse'
+          description: Row after the change
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: VALIDATION_ERROR or JUSTIFICATION_REQUIRED
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:reconciliation:adjust
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: BANK_IMPORT_NOT_FOUND or BANK_IMPORT_ROW_NOT_FOUND
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: IMPORT_ALREADY_COMMITTED, IMPORT_DISCARDED or OPTIMISTIC_LOCK
+      security:
+      - bearerAuth:
+        - accounting:reconciliation:adjust
+      summary: Correct Or Skip Bank Import Row
+      tags:
+      - Bank Imports
       x-required-permissions:
       - accounting:reconciliation:adjust
   /v1/accounting/bank-statements:
@@ -6668,77 +7300,6 @@ paths:
       - Bank Reconciliation
       x-required-permissions:
       - accounting:reconciliation:view
-  /v1/accounting/reconciliations/import:
-    post:
-      description: 'Parses a bank statement CSV (columns: date, description, signed amount, reference) for a reconcilable GL cash account and creates an IN_PROGRESS reconciliation whose statement lines start UNMATCHED, snapshotting the GL ending balance from posted journal-entry lines as of the statement date.
-
-        Use this tool to start a reconciliation cycle; do not use matchReconciliation, addReconciliationAdjustment or finalizeReconciliation, which operate on a reconciliation that already exists.
-
-        Preconditions: the GL account must exist with its reconcilable flag set to true.
-
-        Required inputs: glAccountId (UUID), periodStartDate, periodEndDate, statementDate, statementEndingBalance, currency (3-letter ISO code) and the csv text itself.
-
-        Emits an ACCOUNTING_RECONCILIATION_IMPORT event.
-
-        Returns 422 ACCOUNT_NOT_RECONCILABLE when the account''s reconcilable flag is false, and 400 when the CSV is malformed.
-
-        '
-      operationId: importReconciliation
-      requestBody:
-        content:
-          application/json:
-            examples:
-              July statement import:
-                description: July statement import
-                value:
-                  csv: 'date,description,amount,reference
-
-                    2026-07-02,Deposit,500.00,DEP-1
-
-                    2026-07-05,Bank fee,-15.00,FEE-1'
-                  currency: USD
-                  glAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-                  periodEndDate: '2026-07-31'
-                  periodStartDate: '2026-07-01'
-                  statementDate: '2026-07-31'
-                  statementEndingBalance: 10250.75
-            schema:
-              $ref: '#/components/schemas/BankReconciliationImportRequest'
-        description: Statement metadata plus the raw CSV text to import for the cash account.
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BankReconciliationResponse'
-          description: Reconciliation created
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Request body invalid or CSV malformed (ARGUMENT_NOT_VALID / VALIDATION_ERROR)
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Caller lacks the accounting:reconciliation:adjust permission
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: GL account is not reconcilable (ACCOUNT_NOT_RECONCILABLE)
-      security:
-      - bearerAuth:
-        - accounting:reconciliation:adjust
-      summary: Import Bank Statement CSV
-      tags:
-      - Bank Reconciliation
-      x-required-permissions:
-      - accounting:reconciliation:adjust
   /v1/accounting/reconciliations/{reconciliationId}:
     get:
       description: 'Returns one bank reconciliation header with every term of the explicit equation (E3) and the opening terms computed live from the ledger, the baseline date and the unexplained counts; statement lines are not embedded (read them from bank-transactions).
@@ -11014,6 +11575,813 @@ components:
           format: int64
           type: integer
       type: object
+    BankImportCommitRequest:
+      description: Commit of an import, with optional decisions on its possible duplicates
+      properties:
+        duplicateDecisions:
+          description: Decisions on POSSIBLE_DUPLICATE rows, by row number
+          items:
+            $ref: '#/components/schemas/BankImportDuplicateDecision'
+          type: array
+        version:
+          description: The import version the commit was made against
+          example: 3
+          format: int64
+          type: integer
+      type: object
+    BankImportCommitResponse:
+      description: Outcome of an import commit
+      properties:
+        bankTransactionCount:
+          description: Bank transactions created
+          example: 240
+          format: int32
+          type: integer
+        importId:
+          description: The import
+          format: uuid
+          type: string
+        possibleDuplicateCount:
+          description: Of which entered as POSSIBLE_DUPLICATE for later review
+          example: 0
+          format: int32
+          type: integer
+        reconciliationId:
+          description: The reconciliation started with the commit; null until story S4 wires it
+          format: uuid
+          type: string
+        statementId:
+          description: The committed statement (the last segment's when the window was split)
+          format: uuid
+          type: string
+        statementIds:
+          description: 'Every committed statement in window order: one, or one per split segment'
+          items:
+            format: uuid
+            type: string
+          type: array
+        version:
+          description: The import version after the commit
+          example: 4
+          format: int64
+          type: integer
+      required:
+      - bankTransactionCount
+      - importId
+      - possibleDuplicateCount
+      - statementId
+      - statementIds
+      - version
+      type: object
+    BankImportCreateRequest:
+      description: A bank statement file with its statement header, column mapping and parser options
+      properties:
+        columnMapping:
+          description: Column mapping {date, description, amount | debit + credit, reference, checkNumber, sourceTransactionId}, each a header name or a zero-based column index; defaults to the account's saved mapping, else date, description, amount, reference
+          example:
+            amount: Amount
+            date: Posted Date
+            description: Payee
+          type: object
+        content:
+          description: Base64 of the file's bytes (JSON upload only; omitted in a multipart upload)
+          example: ZGF0ZSxkZXNjcmlwdGlvbixhbW91bnQKMjAyNi0wOS0wMixBQ0ggREVQT1NJVCw1MDAuMDA=
+          type: string
+        contentType:
+          description: Media type of the file (defaults to text/csv)
+          example: text/csv
+          type: string
+        currency:
+          description: ISO 4217 code of the file's amounts; defaults to, and must equal, the account's currency
+          example: USD
+          type: string
+        dateFormat:
+          description: Date pattern of the file, e.g. dd/MM/yyyy; defaults to ISO and US dates
+          example: MM/dd/yyyy
+          type: string
+        decimalFormat:
+          description: DECIMAL_POINT (default, 1,234.56) or DECIMAL_COMMA (1.234,56)
+          example: DECIMAL_POINT
+          type: string
+        delimiter:
+          description: 'Field delimiter: one character or TAB (default ,)'
+          example: ','
+          type: string
+        encoding:
+          description: Character set of the file (default UTF-8)
+          example: UTF-8
+          type: string
+        fileName:
+          description: Name of the uploaded file
+          example: september.csv
+          type: string
+        formatCode:
+          description: File format; CSV in phase 1
+          example: CSV
+          type: string
+        gapAcknowledgement:
+          description: Justification (at least 10 characters) required when the statement does not continue the previous one — always for the account's first statement — and refused when it does
+          example: First statement reconciled on this account
+          type: string
+        glAccountId:
+          description: Reconcilable BANK_CASH GL account the statement belongs to
+          format: uuid
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7; a replay with the same payload returns the original import
+          format: uuid
+          type: string
+        signConvention:
+          description: SIGNED_AMOUNT (default, positive = cash in), SIGNED_AMOUNT_INVERTED or DEBIT_CREDIT_COLUMNS
+          example: SIGNED_AMOUNT
+          type: string
+        splitAt:
+          description: 'Split points: each date ends a segment committed as its own statement, with its keyed closing balance'
+          items:
+            $ref: '#/components/schemas/BankImportSplitPoint'
+          type: array
+        statement:
+          $ref: '#/components/schemas/BankImportStatementHeader'
+      required:
+      - formatCode
+      - glAccountId
+      - requestId
+      - statement
+      type: object
+    BankImportDiscardRequest:
+      description: Discard of an import that will not be committed
+      properties:
+        reason:
+          description: Why the import is discarded (at least 10 characters)
+          example: Uploaded the savings account's file by mistake
+          type: string
+        version:
+          description: The import version the discard was made against
+          example: 3
+          format: int64
+          type: integer
+      required:
+      - reason
+      type: object
+    BankImportDuplicateDecision:
+      description: A decision on one POSSIBLE_DUPLICATE row
+      properties:
+        decision:
+          description: DISTINCT commits it as its own transaction; DUPLICATE skips it
+          enum:
+          - DISTINCT
+          - DUPLICATE
+          type: string
+        rowNumber:
+          description: The row's number in the file
+          example: 12
+          format: int32
+          type: integer
+      required:
+      - decision
+      - rowNumber
+      type: object
+    BankImportListResponse:
+      description: Paginated list of statement-file imports, newest first
+      properties:
+        imports:
+          description: Imports on the current page (without preview)
+          items:
+            $ref: '#/components/schemas/BankImportResponse'
+          type: array
+        pageNumber:
+          description: Zero-based page index
+          example: 0
+          format: int32
+          type: integer
+        pageSize:
+          description: Page size
+          example: 20
+          format: int32
+          type: integer
+        totalElements:
+          description: Total number of matching imports
+          example: 3
+          format: int64
+          type: integer
+        totalPages:
+          description: Total number of pages
+          example: 1
+          format: int32
+          type: integer
+      required:
+      - imports
+      - pageNumber
+      - pageSize
+      - totalElements
+      - totalPages
+      type: object
+    BankImportMappingRequest:
+      description: Column mapping, sign convention and parser options to re-parse an import with
+      properties:
+        columnMapping:
+          description: Column mapping, each a header name or a zero-based column index
+          example:
+            amount: Amount
+            date: Posted Date
+            description: Payee
+          type: object
+        dateFormat:
+          description: Date pattern; defaults to the import's current option
+          example: dd/MM/yyyy
+          type: string
+        decimalFormat:
+          description: DECIMAL_POINT or DECIMAL_COMMA; defaults to the import's current option
+          type: string
+        delimiter:
+          description: Field delimiter; defaults to the import's current option
+          example: ','
+          type: string
+        encoding:
+          description: Character set; defaults to the import's current option
+          example: UTF-8
+          type: string
+        saveAsAccountDefault:
+          description: Store the mapping as the account's default for the next import
+          type: boolean
+        signConvention:
+          description: SIGNED_AMOUNT, SIGNED_AMOUNT_INVERTED or DEBIT_CREDIT_COLUMNS; defaults to the import's current convention
+          example: DEBIT_CREDIT_COLUMNS
+          type: string
+        splitAt:
+          description: New split points; an empty list removes them, absent keeps them
+          items:
+            $ref: '#/components/schemas/BankImportSplitPoint'
+          type: array
+        statement:
+          $ref: '#/components/schemas/BankImportStatementHeader'
+        version:
+          description: The import version the change was made against; a stale one answers 409 OPTIMISTIC_LOCK
+          example: 3
+          format: int64
+          type: integer
+      required:
+      - columnMapping
+      type: object
+    BankImportPreview:
+      description: First rows with their resulting sign and running balance, and opening + activity against closing per statement segment
+      properties:
+        firstRows:
+          description: The first five rows of the file
+          items:
+            $ref: '#/components/schemas/BankImportPreviewRow'
+          type: array
+        segments:
+          description: 'E1 per segment: one, or one per split segment'
+          items:
+            $ref: '#/components/schemas/BankImportSegmentTotal'
+          type: array
+        ties:
+          description: Whether opening + activity equals closing in every segment
+          type: boolean
+      required:
+      - firstRows
+      - segments
+      - ties
+      type: object
+    BankImportPreviewRow:
+      description: A row with its resulting sign and running balance
+      properties:
+        date:
+          description: Posting date
+          example: '2026-09-02'
+          format: date
+          type: string
+        description:
+          description: Description
+          example: ACH DEPOSIT
+          type: string
+        rowNumber:
+          description: Row number
+          example: 1
+          format: int32
+          type: integer
+        rowStatus:
+          description: Row status
+          enum:
+          - PARSED
+          - REJECTED
+          - CORRECTED
+          - SKIPPED
+          - POSSIBLE_DUPLICATE
+          - OUT_OF_WINDOW
+          - COMMITTED
+          type: string
+        runningBalance:
+          description: Opening balance plus the counted rows so far; null for a row not counted
+          example: 12845.67
+          type: number
+        signedAmount:
+          description: Amount, positive = cash in
+          example: 500.0
+          type: number
+      required:
+      - rowNumber
+      - rowStatus
+      type: object
+    BankImportResponse:
+      description: 'A statement-file import: header, mapping, counts, status, outcome ids and preview'
+      properties:
+        acceptedCount:
+          description: Rows PARSED, CORRECTED (or COMMITTED)
+          example: 237
+          format: int32
+          type: integer
+        columnMapping:
+          description: The column mapping the rows were read with
+          type: object
+        columns:
+          description: The file's column labels in file order
+          items:
+            type: string
+          type: array
+        committedAt:
+          description: Committed at
+          format: date-time
+          type: string
+        committedBy:
+          description: Committed by
+          type: string
+        contentType:
+          description: Uploaded media type
+          example: text/csv
+          type: string
+        createdAt:
+          description: Created at
+          format: date-time
+          type: string
+        createdBy:
+          description: Created by
+          type: string
+        currency:
+          description: ISO 4217 code of the amounts
+          example: USD
+          type: string
+        dateFormat:
+          description: Date pattern, when set
+          example: MM/dd/yyyy
+          type: string
+        decimalFormat:
+          description: Decimal separator option
+          example: DECIMAL_POINT
+          type: string
+        delimiter:
+          description: Field delimiter
+          example: ','
+          type: string
+        discardReason:
+          description: Why the import was discarded
+          type: string
+        discardedAt:
+          description: Discarded at
+          format: date-time
+          type: string
+        discardedBy:
+          description: Discarded by
+          type: string
+        encoding:
+          description: Character set
+          example: UTF-8
+          type: string
+        fileName:
+          description: Uploaded file name
+          example: september.csv
+          type: string
+        filePurged:
+          description: Whether the raw file was purged after retention
+          type: boolean
+        fileSha256:
+          description: SHA-256 of the file's bytes
+          type: string
+        fileSize:
+          description: File size in bytes
+          example: 18234
+          format: int64
+          type: integer
+        formatCode:
+          description: File format
+          example: CSV
+          type: string
+        gapAcknowledgement:
+          description: The gap acknowledgement the commit hands to the intake
+          type: string
+        glAccountCode:
+          description: Account code shown beside the id
+          example: '1010'
+          type: string
+        glAccountId:
+          description: GL bank account
+          format: uuid
+          type: string
+        glAccountName:
+          description: Account name shown beside the id
+          example: Operating Checking
+          type: string
+        headerRow:
+          description: Whether the first record was read as a header row
+          type: boolean
+        importId:
+          description: Import id
+          format: uuid
+          type: string
+        mappingRequired:
+          description: Whether the file's columns still need a mapping (status UPLOADED)
+          type: boolean
+        outOfWindowCount:
+          description: Rows OUT_OF_WINDOW
+          example: 0
+          format: int32
+          type: integer
+        possibleDuplicateCount:
+          description: 'Rows POSSIBLE_DUPLICATE (after commit: transactions entered as possible duplicates)'
+          example: 0
+          format: int32
+          type: integer
+        preview:
+          $ref: '#/components/schemas/BankImportPreview'
+        reconciliationId:
+          description: The reconciliation started with the commit (story S4)
+          format: uuid
+          type: string
+        rejectedCount:
+          description: Rows REJECTED
+          example: 3
+          format: int32
+          type: integer
+        replayed:
+          description: True when this response replays an earlier create with the same requestId
+          type: boolean
+        requestId:
+          description: The client's requestId
+          format: uuid
+          type: string
+        retentionUntil:
+          description: When the raw file becomes eligible for the retention purge
+          example: '2033-09-28'
+          format: date
+          type: string
+        rowCount:
+          description: Rows in the file
+          example: 240
+          format: int32
+          type: integer
+        saveMappingAsDefault:
+          description: Whether the commit saves the mapping on the account profile it creates
+          type: boolean
+        signConvention:
+          description: Sign convention
+          example: SIGNED_AMOUNT
+          type: string
+        skippedCount:
+          description: Rows SKIPPED
+          example: 0
+          format: int32
+          type: integer
+        splitAt:
+          description: Split points of the window, when split
+          items:
+            $ref: '#/components/schemas/BankImportSplitPoint'
+          type: array
+        statement:
+          $ref: '#/components/schemas/BankImportStatementHeader'
+        statementId:
+          description: The committed statement (the last segment's when split)
+          format: uuid
+          type: string
+        statementIds:
+          description: Every committed statement in window order
+          items:
+            format: uuid
+            type: string
+          type: array
+        status:
+          description: Import status
+          enum:
+          - UPLOADED
+          - VALIDATED
+          - COMMITTED
+          - DISCARDED
+          type: string
+        version:
+          description: Optimistic-lock version
+          example: 2
+          format: int64
+          type: integer
+      required:
+      - acceptedCount
+      - columns
+      - createdAt
+      - createdBy
+      - currency
+      - filePurged
+      - fileSha256
+      - formatCode
+      - glAccountCode
+      - glAccountId
+      - glAccountName
+      - importId
+      - mappingRequired
+      - outOfWindowCount
+      - possibleDuplicateCount
+      - rejectedCount
+      - replayed
+      - requestId
+      - rowCount
+      - skippedCount
+      - statement
+      - status
+      - version
+      type: object
+    BankImportRowListResponse:
+      description: Paginated rows of an import, sorted by rowNumber
+      properties:
+        columns:
+          description: The file's column labels in file order
+          items:
+            type: string
+          type: array
+        pageNumber:
+          description: Zero-based page index
+          example: 0
+          format: int32
+          type: integer
+        pageSize:
+          description: Page size
+          example: 50
+          format: int32
+          type: integer
+        rows:
+          description: Rows on the current page
+          items:
+            $ref: '#/components/schemas/BankImportRowResponse'
+          type: array
+        totalElements:
+          description: Total number of matching rows
+          example: 240
+          format: int64
+          type: integer
+        totalPages:
+          description: Total number of pages
+          example: 5
+          format: int32
+          type: integer
+      required:
+      - columns
+      - pageNumber
+      - pageSize
+      - rows
+      - totalElements
+      - totalPages
+      type: object
+    BankImportRowResponse:
+      description: 'One row of a statement-file import: raw cells, parsed values, status and duplicate hints'
+      properties:
+        bankTransactionId:
+          description: The bank transaction the row became at commit
+          format: uuid
+          type: string
+        checkNumber:
+          description: Check number
+          example: '1001'
+          type: string
+        correctedAt:
+          description: When the row was corrected, skipped or decided
+          format: date-time
+          type: string
+        correctedBy:
+          description: Who corrected, skipped or decided the row
+          type: string
+        correctedValues:
+          description: What the preparer corrected
+          type: object
+        date:
+          description: Parsed (or corrected) posting date
+          example: '2026-09-14'
+          format: date
+          type: string
+        description:
+          description: Parsed (or corrected) description
+          example: MONTHLY FEE
+          type: string
+        duplicateDecision:
+          description: A human's answer to the collision
+          enum:
+          - DISTINCT
+          - DUPLICATE
+          type: string
+        duplicateOfBankTransactionId:
+          description: A stored bank transaction this row's fingerprint collides with
+          format: uuid
+          type: string
+        duplicateOfRowNumber:
+          description: Another row of the file this row's fingerprint collides with
+          example: 11
+          format: int32
+          type: integer
+        fingerprint:
+          description: The §3.2 dedupe fingerprint (SHA-256 hex)
+          type: string
+        importId:
+          description: The import
+          format: uuid
+          type: string
+        rawValues:
+          description: Column label → cell text as read from the file; never rewritten
+          type: object
+        reference:
+          description: Bank reference
+          example: REF-1
+          type: string
+        rejectionCode:
+          description: 'Why the row is REJECTED: DATE_UNPARSEABLE, AMOUNT_UNPARSEABLE, AMOUNT_ZERO, AMOUNT_AND_DEBIT_CREDIT_BOTH, REQUIRED_COLUMN_MISSING or DATE_OUTSIDE_STATEMENT'
+          example: DATE_UNPARSEABLE
+          type: string
+        rejectionDetail:
+          description: The line and value that failed
+          example: 'Line 13: unparseable date ''2026-13-45'''
+          type: string
+        rowId:
+          description: Row id
+          format: uuid
+          type: string
+        rowNumber:
+          description: 1-based position among the file's data rows; the transaction's sourceRowNumber
+          example: 12
+          format: int32
+          type: integer
+        rowStatus:
+          description: Row status
+          enum:
+          - PARSED
+          - REJECTED
+          - CORRECTED
+          - SKIPPED
+          - POSSIBLE_DUPLICATE
+          - OUT_OF_WINDOW
+          - COMMITTED
+          type: string
+        signedAmount:
+          description: Parsed (or corrected) amount, positive = cash in
+          example: -15.0
+          type: number
+        skipReason:
+          description: Why the row was skipped
+          type: string
+        sourceTransactionId:
+          description: The bank's transaction id, when the file carries one
+          example: TX-88121
+          type: string
+      required:
+      - importId
+      - rawValues
+      - rowId
+      - rowNumber
+      - rowStatus
+      type: object
+    BankImportRowUpdateRequest:
+      description: A correction, a skip or a duplicate decision for one import row
+      properties:
+        correctedValues:
+          description: 'Corrected values: any of date (ISO), signedAmount (positive = cash in), description, reference, checkNumber, sourceTransactionId; the raw values are kept'
+          example:
+            date: '2026-09-14'
+          type: object
+        duplicateDecision:
+          description: 'On a POSSIBLE_DUPLICATE row: DISTINCT (keep it) or DUPLICATE (skip it, with a reason)'
+          enum:
+          - DISTINCT
+          - DUPLICATE
+          type: string
+        reason:
+          description: Why the row is skipped (at least 10 characters)
+          example: Pending item already on the August statement
+          type: string
+        skip:
+          description: Skip the row; requires a reason
+          type: boolean
+        version:
+          description: The import version the change was made against
+          example: 3
+          format: int64
+          type: integer
+      type: object
+    BankImportSegmentTotal:
+      description: Opening + activity against closing for one statement
+      properties:
+        activityTotal:
+          description: Sum of the counted rows
+          example: 485.0
+          type: number
+        closingBalance:
+          description: Closing balance
+          example: 12830.67
+          type: number
+        difference:
+          description: Expected closing − closing
+          example: 0.0
+          type: number
+        endDate:
+          description: Last day
+          example: '2026-09-30'
+          format: date
+          type: string
+        expectedClosing:
+          description: Opening + activity
+          example: 12830.67
+          type: number
+        openingBalance:
+          description: Opening balance
+          example: 12345.67
+          type: number
+        startDate:
+          description: First day
+          example: '2026-09-01'
+          format: date
+          type: string
+        ties:
+          description: Whether the difference is within one minor unit (E1)
+          type: boolean
+        transactionCount:
+          description: Rows counted in the segment
+          example: 2
+          format: int32
+          type: integer
+      required:
+      - activityTotal
+      - closingBalance
+      - difference
+      - endDate
+      - expectedClosing
+      - openingBalance
+      - startDate
+      - ties
+      - transactionCount
+      type: object
+    BankImportSplitPoint:
+      description: 'A split of the statement window: the last day of a segment and its keyed closing balance'
+      properties:
+        closingBalance:
+          description: Closing balance of the segment ending on date
+          example: 10500.0
+          type: number
+        date:
+          description: Last day of the earlier segment; inside the window, before its end date
+          example: '2026-09-30'
+          format: date
+          type: string
+      required:
+      - closingBalance
+      - date
+      type: object
+    BankImportStatementHeader:
+      description: Statement header as printed by the bank, entered with the file
+      properties:
+        closingBalance:
+          description: Balance printed at the end of the window
+          example: 12830.67
+          type: number
+        endDate:
+          description: Last day of the statement window; not in the future
+          example: '2026-09-30'
+          format: date
+          type: string
+        openingBalance:
+          description: Balance printed at the start of the window
+          example: 12345.67
+          type: number
+        startDate:
+          description: First day of the statement window
+          example: '2026-09-01'
+          format: date
+          type: string
+        statementRef:
+          description: The bank's statement number, when printed
+          example: 2026-09
+          type: string
+      required:
+      - closingBalance
+      - endDate
+      - openingBalance
+      - startDate
+      type: object
+    BankImportUploadForm:
+      description: 'Multipart upload: the statement file and the request as a JSON part'
+      properties:
+        file:
+          description: The statement file
+          format: binary
+          type: string
+        meta:
+          $ref: '#/components/schemas/BankImportCreateRequest'
+      required:
+      - file
+      - meta
+      type: object
     BankReconciliationAdjustmentResponse:
       description: Reconciliation adjustment with its posted journal entry, link and reversal state
       properties:
@@ -11114,51 +12482,6 @@ components:
           - TRANSFER
           example: BANK_FEE
           type: string
-      type: object
-    BankReconciliationImportRequest:
-      description: Request to import a bank statement CSV and start a reconciliation
-      properties:
-        csv:
-          description: 'Bank statement CSV (columns: date, description, amount, reference), raw text lines or base64'
-          minLength: 1
-          type: string
-        currency:
-          description: ISO currency code; single currency governs the reconciliation
-          example: USD
-          maxLength: 3
-          minLength: 3
-          type: string
-        glAccountId:
-          description: Reconcilable GL cash account being reconciled
-          format: uuid
-          type: string
-        periodEndDate:
-          description: Statement period end date
-          example: '2026-06-30'
-          format: date
-          type: string
-        periodStartDate:
-          description: Statement period start date
-          example: '2026-06-01'
-          format: date
-          type: string
-        statementDate:
-          description: Statement date; GL ending balance is computed as-of this date
-          example: '2026-06-30'
-          format: date
-          type: string
-        statementEndingBalance:
-          description: Statement ending balance
-          example: 12500.0
-          type: number
-      required:
-      - csv
-      - currency
-      - glAccountId
-      - periodEndDate
-      - periodStartDate
-      - statementDate
-      - statementEndingBalance
       type: object
     BankReconciliationLineResponse:
       description: Imported bank statement line

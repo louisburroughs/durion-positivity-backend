@@ -12,7 +12,6 @@ import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures
 import static com.positivity.accounting.internal.bankrec.service.BankRecFixtures.usd;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
@@ -22,29 +21,21 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationApiStatus;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationCreateRequest;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
 import com.positivity.accounting.internal.bankrec.entity.BankStatement;
-import com.positivity.accounting.internal.bankrec.entity.BankTransaction;
 import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
-import com.positivity.accounting.internal.bankrec.enums.BankTransactionStatus;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
-import com.positivity.accounting.internal.bankrec.enums.SettlementState;
-import com.positivity.accounting.internal.bankrec.enums.SourceKind;
 import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
 import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationAdjustmentRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationGlMatchRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
-import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
-import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
-import com.positivity.accounting.internal.exception.BankStatementParseException;
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
@@ -52,7 +43,6 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -85,9 +75,6 @@ class BankReconciliationServiceTest {
     private BankStatementRepository statementRepository;
 
     @Mock
-    private BankTransactionRepository transactionRepository;
-
-    @Mock
     private BankReconciliationGlMatchRepository glMatchRepository;
 
     @Mock
@@ -113,10 +100,8 @@ class BankReconciliationServiceTest {
                 clock,
                 reconciliationRepository,
                 statementRepository,
-                transactionRepository,
                 glMatchRepository,
                 adjustmentRepository,
-                glAccountRepository,
                 new BankCashAccounts(glAccountRepository, clock),
                 calculator,
                 new ReconciliationSupport(reconciliationRepository, calculator, clock),
@@ -368,103 +353,5 @@ class BankReconciliationServiceTest {
             assertThatThrownBy(() -> service.finalizeReconciliation(RECON_ID))
                     .isInstanceOf(ReconciliationAlreadyFinalizedException.class);
         }
-    }
-
-    @Nested
-    @DisplayName("F2 CSV import (retired by S3)")
-    class Import {
-
-        @BeforeEach
-        void stubs() {
-            lenient().when(glAccountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(bankAccount()));
-            lenient().when(statementRepository.save(any(BankStatement.class))).thenAnswer(inv -> {
-                BankStatement statement = inv.getArgument(0);
-                statement.setStatementId(STATEMENT_ID);
-                return statement;
-            });
-            lenient()
-                    .when(reconciliationRepository.save(any(BankReconciliation.class)))
-                    .thenAnswer(inv -> inv.getArgument(0));
-        }
-
-        @Test
-        @DisplayName("parses the CSV into one COMMITTED statement and UNMATCHED rows, E1 by construction")
-        void importParsesCsv() {
-            BankReconciliationResponse response = service.importStatement(
-                    request("date,description,amount,reference\n2026-06-15,ACH DEPOSIT,1500.00,REF-1\n"
-                            + "2026-06-20,SERVICE FEE,(12.50),REF-2"));
-
-            ArgumentCaptor<BankStatement> statementCaptor = ArgumentCaptor.forClass(BankStatement.class);
-            verify(statementRepository).save(statementCaptor.capture());
-            BankStatement statement = statementCaptor.getValue();
-            assertThat(statement.getSourceKind()).isEqualTo(SourceKind.FILE_IMPORT);
-            assertThat(statement.getActivityTotal()).isEqualByComparingTo("1487.50");
-            assertThat(statement.getOpeningBalance()).isEqualByComparingTo("512.50");
-            List<BankTransaction> lines = savedTransactions();
-            assertThat(lines)
-                    .extracting(
-                            BankTransaction::getSourceRowNumber,
-                            BankTransaction::getSignedAmount,
-                            BankTransaction::getStatus)
-                    .containsExactly(
-                            tuple(1, new BigDecimal("1500.00"), BankTransactionStatus.UNMATCHED),
-                            tuple(2, new BigDecimal("-12.50"), BankTransactionStatus.UNMATCHED));
-            assertThat(lines).allSatisfy(l -> assertThat(l.getSettlementState()).isEqualTo(SettlementState.POSTED));
-            assertThat(response.getStatementId()).isEqualTo(STATEMENT_ID);
-            assertThat(response.getAccountingPeriodCode()).isEqualTo("2026-06");
-            assertThat(response.getStatementOpeningBalance()).isEqualByComparingTo("512.50");
-        }
-
-        @Test
-        @DisplayName("unquotes an embedded comma, a doubled quote and a quoted last field")
-        void importParsesQuotedFields() {
-            service.importStatement(request(
-                    "2026-06-15,\"ACME, INC\",100.00,\"REF-1\"\n" + "2026-06-16,\"Joe\"\"s Diner\",50.00,REF-2"));
-            List<BankTransaction> lines = savedTransactions();
-            assertThat(lines.get(0).getDescription()).isEqualTo("ACME, INC");
-            assertThat(lines.get(0).getReference()).isEqualTo("REF-1");
-            assertThat(lines.get(1).getDescription()).isEqualTo("Joe\"s Diner");
-        }
-
-        @Test
-        @DisplayName("refuses a malformed amount and a header-less first row with a bad date")
-        void importRefusesMalformedRows() {
-            assertThatThrownBy(() -> service.importStatement(request("2026-06-15,ACH DEPOSIT,NOT_A_NUMBER,REF-1")))
-                    .isInstanceOf(BankStatementParseException.class);
-            assertThatThrownBy(() -> service.importStatement(request("2026-13-45,BAD DATE,100.00,REF-1")))
-                    .isInstanceOf(BankStatementParseException.class);
-        }
-
-        @Test
-        @DisplayName("refuses a non-reconcilable account")
-        void importRefusesNonReconcilable() {
-            GLAccount revenue = new GLAccount(ACCOUNT_ID);
-            revenue.setAccountCode("4000");
-            revenue.setReconcilable(false);
-            when(glAccountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(revenue));
-
-            assertThatThrownBy(() -> service.importStatement(request("2026-06-15,ACH DEPOSIT,1500.00,REF-1")))
-                    .isInstanceOf(AccountNotReconcilableException.class);
-            verify(reconciliationRepository, never()).save(any());
-        }
-
-        private BankReconciliationImportRequest request(String csv) {
-            return BankReconciliationImportRequest.builder()
-                    .glAccountId(ACCOUNT_ID)
-                    .periodStartDate(LocalDate.of(2026, 6, 1))
-                    .periodEndDate(LocalDate.of(2026, 6, 30))
-                    .statementDate(LocalDate.of(2026, 6, 30))
-                    .statementEndingBalance(new BigDecimal("2000.0000"))
-                    .currency("USD")
-                    .csv(csv)
-                    .build();
-        }
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private List<BankTransaction> savedTransactions() {
-        ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
-        verify(transactionRepository).saveAll(captor.capture());
-        return captor.getValue();
     }
 }

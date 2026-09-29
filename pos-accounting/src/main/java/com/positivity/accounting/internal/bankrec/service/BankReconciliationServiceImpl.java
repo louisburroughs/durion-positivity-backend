@@ -1,6 +1,5 @@
 package com.positivity.accounting.internal.bankrec.service;
 
-import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAuditResponse;
@@ -10,31 +9,19 @@ import com.positivity.accounting.internal.bankrec.entity.BankReconciliation;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationAdjustment;
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationGlMatch;
 import com.positivity.accounting.internal.bankrec.entity.BankStatement;
-import com.positivity.accounting.internal.bankrec.entity.BankTransaction;
 import com.positivity.accounting.internal.bankrec.enums.BankStatementStatus;
-import com.positivity.accounting.internal.bankrec.enums.BankTransactionStatus;
-import com.positivity.accounting.internal.bankrec.enums.FeedChange;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
-import com.positivity.accounting.internal.bankrec.enums.SettlementState;
-import com.positivity.accounting.internal.bankrec.enums.SourceKind;
 import com.positivity.accounting.internal.bankrec.intake.BankRecErrorCode;
 import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationAdjustmentRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationGlMatchRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
-import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
 import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankCashAccount;
-import com.positivity.accounting.internal.bankrec.service.BankStatementCsvParser.ParsedLine;
-import com.positivity.accounting.internal.entity.GLAccount;
-import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
-import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
-import com.positivity.accounting.internal.repository.GLAccountRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -56,8 +43,8 @@ import org.springframework.transaction.annotation.Transactional;
  * outstanding items and adjustments live in their own services and share {@link ReconciliationSupport}.
  *
  * <p>Every read computes E3 live from the ledger ({@link ReconciliationCalculator}); every mutation stores
- * the terms on the row. The F2 {@code /import} path (retired by S3) still creates a statement and a
- * reconciliation in one call.
+ * the terms on the row. Statements enter through the intake port (a file import or a manual statement);
+ * the F2 CSV import endpoint is retired (D14).
  */
 @Slf4j
 @Service
@@ -68,10 +55,8 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
     private final Clock clock;
     private final BankReconciliationRepository reconciliationRepository;
     private final BankStatementRepository statementRepository;
-    private final BankTransactionRepository transactionRepository;
     private final BankReconciliationGlMatchRepository glMatchRepository;
     private final BankReconciliationAdjustmentRepository adjustmentRepository;
-    private final GLAccountRepository glAccountRepository;
     private final BankCashAccounts bankCashAccounts;
     private final ReconciliationCalculator calculator;
     private final ReconciliationSupport support;
@@ -179,85 +164,6 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
                             "reconciliationId",
                             r.getReconciliationId().toString());
                 });
-    }
-
-    @Override
-    public BankReconciliationResponse importStatement(@NonNull BankReconciliationImportRequest request) {
-        GLAccount account = glAccountRepository
-                .findById(request.getGlAccountId())
-                .orElseThrow(() ->
-                        new InvalidRequestParameterException("GL account not found: " + request.getGlAccountId()));
-        if (!account.isReconcilable()) {
-            throw new AccountNotReconcilableException(
-                    "GL account " + account.getAccountCode() + " is not reconcilable");
-        }
-
-        List<ParsedLine> parsed = BankStatementCsvParser.parse(request.getCsv());
-
-        // statementDate is retired (§3.7): the statement end date is the as-of date.
-        LocalDate statementEndDate = request.getPeriodEndDate();
-        String currency = request.getCurrency().toUpperCase();
-
-        BigDecimal activityTotal = parsed.stream().map(ParsedLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BankStatement statement = new BankStatement();
-        statement.setGlAccountId(request.getGlAccountId());
-        statement.setSourceKind(SourceKind.FILE_IMPORT);
-        statement.setStartDate(request.getPeriodStartDate());
-        statement.setEndDate(statementEndDate);
-        // F2's request carries no opening balance; E1 holds by construction (§6.4 conversion rule).
-        statement.setClosingBalance(request.getStatementEndingBalance());
-        statement.setActivityTotal(activityTotal);
-        statement.setOpeningBalance(request.getStatementEndingBalance().subtract(activityTotal));
-        statement.setCurrency(currency);
-        statement.setStatus(BankStatementStatus.COMMITTED);
-        BankStatement savedStatement = statementRepository.save(statement);
-
-        Instant now = Instant.now(clock);
-        List<BankTransaction> transactions = new ArrayList<>();
-        int rowNumber = 1;
-        for (ParsedLine p : parsed) {
-            BankTransaction transaction = new BankTransaction();
-            transaction.setGlAccountId(request.getGlAccountId());
-            transaction.setStatementId(savedStatement.getStatementId());
-            transaction.setSourceKind(SourceKind.FILE_IMPORT);
-            transaction.setSourceRowNumber(rowNumber++);
-            transaction.setSettlementState(SettlementState.POSTED);
-            transaction.setTransactionDate(p.date());
-            transaction.setSignedAmount(p.amount());
-            transaction.setCurrency(currency);
-            transaction.setDescription(p.description());
-            transaction.setReference(p.reference());
-            transaction.setStatus(BankTransactionStatus.UNMATCHED);
-            transaction.setFeedChange(FeedChange.ADDED);
-            transaction.setFirstObservedAt(now);
-            transaction.setLastObservedAt(now);
-            transactions.add(transaction);
-        }
-        transactionRepository.saveAll(transactions);
-
-        BankReconciliation recon = new BankReconciliation();
-        recon.setGlAccountId(request.getGlAccountId());
-        recon.setAccountCode(account.getAccountCode());
-        recon.setAccountName(account.getAccountName());
-        recon.setStatementId(savedStatement.getStatementId());
-        recon.setStatementStartDate(request.getPeriodStartDate());
-        recon.setStatementEndDate(statementEndDate);
-        recon.setStatementOpeningBalance(savedStatement.getOpeningBalance());
-        recon.setCurrency(currency);
-        recon.setStatementClosingBalance(request.getStatementEndingBalance());
-        recon.setAccountingPeriodCode(YearMonth.from(statementEndDate).toString());
-        recon.setStatus(ReconciliationStatus.IN_PROGRESS);
-        ReconciliationSnapshot snapshot = calculator.compute(recon);
-        ReconciliationCalculator.apply(recon, snapshot);
-
-        BankReconciliation saved = reconciliationRepository.save(recon);
-        log.info(
-                "Imported bank reconciliation {} for account {} ({} lines, glEndingBalance={})",
-                saved.getReconciliationId(),
-                account.getAccountCode(),
-                parsed.size(),
-                saved.getGlEndingBalance());
-        return toResponse(saved, snapshot);
     }
 
     @Override

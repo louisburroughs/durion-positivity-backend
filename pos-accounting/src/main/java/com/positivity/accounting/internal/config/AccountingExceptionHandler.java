@@ -13,7 +13,6 @@ import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedEx
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
-import com.positivity.accounting.internal.exception.BankStatementParseException;
 import com.positivity.accounting.internal.exception.CurrencyMismatchException;
 import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
@@ -101,12 +100,6 @@ public class AccountingExceptionHandler {
     @ExceptionHandler(InvalidRequestParameterException.class)
     public ResponseEntity<ApiError> handleInvalidRequestParameter(
             InvalidRequestParameterException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
-    }
-
-    @ExceptionHandler(BankStatementParseException.class)
-    public ResponseEntity<ApiError> handleBankStatementParse(
-            BankStatementParseException ex, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
     }
 

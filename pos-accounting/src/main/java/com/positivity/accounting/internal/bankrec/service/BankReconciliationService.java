@@ -1,6 +1,5 @@
 package com.positivity.accounting.internal.bankrec.service;
 
-import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAuditResponse;
@@ -19,10 +18,6 @@ public interface BankReconciliationService {
     /** Start a reconciliation from a COMMITTED statement (status IN_PROGRESS); a replayed requestId returns it. */
     @NonNull
     BankReconciliationResponse create(@NonNull ReconciliationCreateRequest request);
-
-    /** Import a statement CSV and start a reconciliation (F2; retired by story S3). */
-    @NonNull
-    BankReconciliationResponse importStatement(@NonNull BankReconciliationImportRequest request);
 
     /** One reconciliation header with its live terms. */
     @NonNull

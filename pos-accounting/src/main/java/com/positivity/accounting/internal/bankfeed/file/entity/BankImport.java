@@ -17,6 +17,7 @@ import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.EqualsAndHashCode;
@@ -34,7 +35,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * A statement-file import session (SPEC-manual-bank-reconciliation §3.3; story S1, #2300): the
  * file adapter's own staging aggregate. Nothing here is accounting truth until {@code COMMITTED},
  * when the adapter hands the parsed rows to the reconciliation core's intake. The lifecycle
- * (upload, parse, mapping, preview, correction, commit, discard) arrives with story S3.
+ * (upload, parse, mapping, preview, correction, commit, discard) is story S3's (#2302).
  *
  * <p>The raw bytes live in {@link BankImportFile}; the parsed rows in {@link BankImportRow}.
  */
@@ -173,6 +174,45 @@ public class BankImport extends TenantScopedEntity {
 
     @Column(name = "discard_reason", length = 1000)
     private String discardReason;
+
+    /** SHA-256 of the create command's payload, to tell a {@code requestId} replay from a reuse (§6.3). */
+    @Column(name = "request_hash", length = 64)
+    private String requestHash;
+
+    /** The upload's gap acknowledgement, re-checked at commit and handed to the intake (§4.2, D17). */
+    @Column(name = "gap_acknowledgement", length = 1000)
+    private String gapAcknowledgement;
+
+    /** {@code splitAt} points (§4.4, §5.7): {@code [{date, closingBalance}]}, each date the last day of a segment. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "split_at")
+    private List<Map<String, Object>> splitAt;
+
+    /** Set at commit: one statement per segment, in window order; {@link #statementId} is the last. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "statement_ids")
+    private List<String> statementIds;
+
+    /** The file's column labels in file order (header text, or {@code column n}), for the preview. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "source_columns")
+    private List<String> sourceColumns;
+
+    /** Whether the file's first record was read as a header row. */
+    @Column(name = "header_row")
+    private Boolean headerRow;
+
+    /** Whether the commit hands the mapping to the intake for a profile it creates (§3.1). */
+    @Column(name = "save_mapping_as_default", nullable = false)
+    private boolean saveMappingAsDefault;
+
+    /** When the raw file becomes eligible for the retention purge (D13); kept after the purge. */
+    @Column(name = "retention_until")
+    private LocalDate retentionUntil;
+
+    /** When the retention job deleted the raw file; null while it is retained. */
+    @Column(name = "file_purged_at")
+    private Instant filePurgedAt;
 
     @Version
     @Column(name = "version", nullable = false)

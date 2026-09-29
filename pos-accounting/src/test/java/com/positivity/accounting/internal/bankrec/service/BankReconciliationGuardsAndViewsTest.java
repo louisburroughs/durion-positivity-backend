@@ -20,7 +20,6 @@ import com.positivity.accounting.internal.bankrec.repository.BankReconciliationA
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationGlMatchRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
-import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -57,9 +56,6 @@ class BankReconciliationGuardsAndViewsTest {
     private BankStatementRepository statementRepository;
 
     @Mock
-    private BankTransactionRepository transactionRepository;
-
-    @Mock
     private BankReconciliationGlMatchRepository glMatchRepository;
 
     @Mock
@@ -85,10 +81,8 @@ class BankReconciliationGuardsAndViewsTest {
                 clock,
                 reconciliationRepository,
                 statementRepository,
-                transactionRepository,
                 glMatchRepository,
                 adjustmentRepository,
-                glAccountRepository,
                 new BankCashAccounts(glAccountRepository, clock),
                 calculator,
                 new ReconciliationSupport(reconciliationRepository, calculator, clock),
