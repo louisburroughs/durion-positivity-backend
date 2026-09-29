@@ -497,23 +497,26 @@ class BankImportServiceImplTest {
         }
 
         @Test
-        void aLaterMappingWithoutTheOptInClearsSaveMappingAsDefault() {
-            UUID id = validUpload().getImportId();
-            Map<String, Object> mapping = Map.of("date", "date", "description", "description", "amount", "amount");
+        void aLaterMappingWithoutTheOptInResetsSaveAsAccountDefault() {
+            UUID id = service.create(
+                            upload("Posted,Payee,Amt\n2026-09-02,DEP,500.00", "0", "500", ACK), null, null, null)
+                    .getImportId();
+            Map<String, Object> columns = Map.of("date", "Posted", "description", "Payee", "amount", "Amt");
             service.updateMapping(
                     id,
                     BankImportMappingRequest.builder()
-                            .columnMapping(mapping)
+                            .columnMapping(columns)
                             .saveAsAccountDefault(true)
                             .build());
-            assertThat(importStore.get(id).isSaveMappingAsDefault()).isTrue();
+            assertThat(service.get(id).getSaveMappingAsDefault()).isTrue();
 
-            BankImportResponse remapped = service.updateMapping(
+            BankImportResponse again = service.updateMapping(
                     id,
-                    BankImportMappingRequest.builder().columnMapping(mapping).build());
+                    BankImportMappingRequest.builder().columnMapping(columns).build());
 
-            assertThat(remapped.getSaveMappingAsDefault()).isFalse();
-            assertThat(importStore.get(id).isSaveMappingAsDefault()).isFalse();
+            assertThat(again.getSaveMappingAsDefault()).isFalse();
+            assertThat(service.get(id).getSaveMappingAsDefault()).isFalse();
+            verify(lookup, times(1)).saveDefaultColumnMapping(eq(ACCOUNT), eq(columns), any());
         }
 
         @Test
@@ -573,6 +576,39 @@ class BankImportServiceImplTest {
         }
 
         @Test
+        void aMappingMayChangeTheGapAcknowledgementTheCorrectedHeaderIsCheckedWith() {
+            UUID id = validUpload().getImportId();
+            assertThat(service.get(id).getGapAcknowledgement()).isEqualTo(ACK);
+            Map<String, Object> columns = Map.of("date", "date", "description", "description", "amount", "amount");
+            BankImportStatementHeader widened = BankImportStatementHeader.builder()
+                    .startDate(LocalDate.of(2026, 8, 1))
+                    .endDate(LocalDate.of(2026, 9, 30))
+                    .openingBalance(new BigDecimal("1000.00"))
+                    .closingBalance(new BigDecimal("1485.00"))
+                    .build();
+
+            String changed = "Earlier history reconciled outside the system";
+
+            // A changed acknowledgement is what the corrected header is rechecked with, and it is stored.
+            service.updateMapping(
+                    id,
+                    BankImportMappingRequest.builder()
+                            .columnMapping(columns)
+                            .statement(widened)
+                            .gapAcknowledgement(changed)
+                            .build());
+            verify(lookup).checkHeader(eq(ACCOUNT), any(), eq(changed));
+            assertThat(service.get(id).getGapAcknowledgement()).isEqualTo(changed);
+            assertThat(importStore.get(id).getStatementStartDate()).isEqualTo(LocalDate.of(2026, 8, 1));
+
+            // Absent with no corrected header keeps it.
+            service.updateMapping(
+                    id,
+                    BankImportMappingRequest.builder().columnMapping(columns).build());
+            assertThat(service.get(id).getGapAcknowledgement()).isEqualTo(changed);
+        }
+
+        @Test
         void theWrongSignConventionDoesNotTieAndSwitchingItDoes() {
             // §8.2: a bank that shows withdrawals positive.
             UUID id = service.create(
@@ -621,6 +657,50 @@ class BankImportServiceImplTest {
             assertThat(corrected.getCorrectedValues()).containsEntry("date", "2026-09-14");
             assertThat(corrected.getRejectionCode()).isNull();
             assertThat(importStore.get(id).getRejectedCount()).isZero();
+        }
+
+        @Test
+        void aCorrectionDropsAnEarlierDistinctDecisionSoANewCollisionIsFlaggedAgain() {
+            UUID id = service.create(
+                            upload(
+                                    "date,description,amount\n2026-09-02,DEP,500.00\n2026-09-02,DEP,500.00\n"
+                                            + "2026-09-15,FEE,-15.00",
+                                    "1000",
+                                    "1985",
+                                    ACK),
+                            null,
+                            null,
+                            null)
+                    .getImportId();
+            List<BankImportRow> rows = rowRepository.findByImportIdOrderByRowNumberAsc(id);
+            assertThat(rows)
+                    .extracting(BankImportRow::getRowStatus)
+                    .containsExactly(
+                            BankImportRowStatus.POSSIBLE_DUPLICATE,
+                            BankImportRowStatus.POSSIBLE_DUPLICATE,
+                            BankImportRowStatus.PARSED);
+            BankImportRow first = rows.get(0);
+
+            service.updateRow(
+                    id,
+                    first.getRowId(),
+                    BankImportRowUpdateRequest.builder()
+                            .duplicateDecision("DISTINCT")
+                            .build());
+            assertThat(first.getRowStatus()).isEqualTo(BankImportRowStatus.PARSED);
+
+            // Corrected to the values of row 3: the decision taken on the old values no longer covers it.
+            BankImportRowResponse corrected = service.updateRow(
+                    id,
+                    first.getRowId(),
+                    BankImportRowUpdateRequest.builder()
+                            .correctedValues(
+                                    Map.of("date", "2026-09-15", "description", "FEE", "signedAmount", "-15.00"))
+                            .build());
+
+            assertThat(corrected.getRowStatus()).isEqualTo(BankImportRowStatus.POSSIBLE_DUPLICATE);
+            assertThat(corrected.getDuplicateDecision()).isNull();
+            assertThat(corrected.getDuplicateOfRowNumber()).isEqualTo(3);
         }
 
         @Test

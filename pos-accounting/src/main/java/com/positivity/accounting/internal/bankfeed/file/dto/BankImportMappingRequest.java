@@ -13,7 +13,8 @@ import lombok.NoArgsConstructor;
 /**
  * A new column mapping, sign convention or parser options for an import (SPEC §4.4, §6.1; story S3,
  * #2302). Every row is parsed again from the retained file, so earlier corrections, skips and duplicate
- * decisions are discarded. A widened or corrected header and new split points may come with it.
+ * decisions are discarded. A widened or corrected header, the gap acknowledgement it is checked with,
+ * and new split points may come with it.
  */
 @Data
 @Builder

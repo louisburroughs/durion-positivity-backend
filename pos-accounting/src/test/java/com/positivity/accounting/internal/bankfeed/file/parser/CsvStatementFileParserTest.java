@@ -161,6 +161,12 @@ class CsvStatementFileParserTest {
                     "Line 2: a quoted field is not closed");
         }
 
+        @Test
+        void aQuotedFieldLeftOpenAtTheEndOfTheFileIsUnreadableNotOneLongRow() {
+            String csv = "2026-06-15,\"ACME, INC,100.00,REF-1\n2026-06-16,FEE,-1.00,REF-2\n";
+            assertFailed(csv.getBytes(StandardCharsets.UTF_8), "quoted field is not closed");
+        }
+
         private void assertFailed(byte[] content, String message) {
             assertThatThrownBy(() -> parser.parse(content, ParserOptions.defaults(), null))
                     .isInstanceOfSatisfying(

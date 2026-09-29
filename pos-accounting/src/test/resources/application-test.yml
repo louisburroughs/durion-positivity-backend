@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-customer-test
+    name: pos-accounting-test
   datasource:
     # One in-memory database per application context. The TestContext cache is bounded
     # (src/test/resources/spring.properties), so contexts are evicted mid-run; with a shared
@@ -56,3 +56,9 @@ pos:
       revenue-account-id: "01234567-89ab-cdef-0123-456789abcdef"
       tax-payable-account-id: "fedcba98-7654-3210-fedc-ba9876543210"
       ar-account-id: "11111111-2222-3333-4444-555555555555"
+
+# Test contexts never reach pos-security-service or pos-event-receiver. Skip permission registration
+# (its startup retry loop otherwise sleeps ~8 s in every Spring test context) and point the event-type
+# initializer at a loopback port that refuses instantly. Same arrangement as pos-mcp-server's test profile.
+pos.security.permission-registration.enabled: false
+pos.events.base-url: http://127.0.0.1:1

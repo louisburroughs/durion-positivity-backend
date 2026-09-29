@@ -376,12 +376,11 @@ public class BankImportServiceImpl implements BankImportService {
                 importId,
                 BankImportAuditRecorder.BANK_IMPORT_MAPPING_SET,
                 actor,
-                null,
+                headerChecked ? saved.getGapAcknowledgement() : null,
                 previousMapping == null ? null : "columnMapping=" + previousMapping,
                 "columnMapping=" + mapping.toJson() + ", signConvention=" + options.signConvention()
                         + ", window=" + saved.getStatementStartDate() + ".." + saved.getStatementEndDate()
                         + ", saveAsAccountDefault=" + saved.isSaveMappingAsDefault()
-                        + (headerChecked ? ", gapAcknowledgement=" + saved.getGapAcknowledgement() : "")
                         + ", status=" + saved.getStatus());
         return view(saved, rows, true).build();
     }
@@ -551,10 +550,11 @@ public class BankImportServiceImpl implements BankImportService {
                 : new LinkedHashMap<>(row.getCorrectedValues());
         corrections.forEach((k, v) -> merged.put(k, v == null ? null : v.toString()));
         row.setCorrectedValues(merged);
-        // New effective values may mean a new fingerprint: an earlier DISTINCT answer no longer applies.
-        row.setDuplicateDecision(null);
         row.setCorrectedBy(actor);
         row.setCorrectedAt(now);
+        // The corrected values are a new row as far as R1 is concerned: a duplicate decision taken on
+        // the old values no longer stands, so evaluate() flags a collision of the new ones again.
+        row.setDuplicateDecision(null);
         if (row.getTransactionDate() == null || row.getSignedAmount() == null || row.getDescription() == null) {
             ImportEvaluator.reject(
                     row,

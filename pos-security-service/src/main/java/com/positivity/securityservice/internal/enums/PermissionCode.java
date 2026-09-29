@@ -1020,13 +1020,15 @@ public enum PermissionCode {
     INVOICE__PAYMENT__OVERRIDE(540, "invoice:payment:override"),
     INVOICE__RECEIPT__REPRINT_OVERRIDE(541, "invoice:receipt:reprint_override"),
     // ── Appointments (new) ─────────────────────────────────────────────────────
-    APPOINTMENTS__RESCHEDULE__APPROVE(542, "appointments:reschedule:approve");
+    APPOINTMENTS__RESCHEDULE__APPROVE(542, "appointments:reschedule:approve"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__RECONCILIATION__APPROVE(543, "accounting:reconciliation:approve");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 93;
+    public static final int CATALOG_VERSION = 94;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
