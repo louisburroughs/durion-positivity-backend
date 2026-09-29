@@ -635,6 +635,21 @@ class BankReconciliationContractBehaviorIT extends BaseContractIntegrationTest {
                                             "Gap left by the change of bank"))),
                     422,
                     "ADJUSTMENT_LINK_NOT_ELIGIBLE");
+            // M5: a linked adjustment equals its bank transaction exactly; one minor unit off is refused.
+            expectError(
+                            postJson(
+                                    adjustments,
+                                    adjustment(
+                                            "TRANSFER",
+                                            "249.99",
+                                            Map.of(
+                                                    "counterGlAccountId",
+                                                    otherBank.toString(),
+                                                    "bankTransactionId",
+                                                    bank.get(0).toString()))),
+                            422,
+                            "ADJUSTMENT_LINK_NOT_ELIGIBLE")
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("amount"));
         }
 
         @Test

@@ -84,8 +84,9 @@ public class ReconciliationAdjustmentController {
                     RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT or \
                     RECONCILIATION_ALREADY_FINALIZED; 422 RECONCILIATION_ADJUSTMENT_SIGN_INVALID, \
                     ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE, GL_ACCOUNT_NOT_ACTIVE, \
-                    ACCOUNT_NOT_RECONCILABLE, MATCH_AMOUNT_MISMATCH, PERIOD_CLOSED, PERIOD_HARD_LOCKED or \
-                    GL_MAPPING_NOT_CONFIGURED when the rule named fails.
+                    ACCOUNT_NOT_RECONCILABLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED when \
+                    the rule named fails. An adjustment linked to a bank transaction must equal its amount exactly \
+                    (no minor-unit tolerance); any difference is ADJUSTMENT_LINK_NOT_ELIGIBLE on amount.
                     """)
     @ApiResponse(
             responseCode = "201",
@@ -117,7 +118,7 @@ public class ReconciliationAdjustmentController {
             responseCode = "422",
             description =
                     "RECONCILIATION_ADJUSTMENT_SIGN_INVALID, ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE,"
-                            + " GL_ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_RECONCILABLE, MATCH_AMOUNT_MISMATCH, PERIOD_CLOSED,"
+                            + " GL_ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_RECONCILABLE, PERIOD_CLOSED,"
                             + " PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankReconciliationAdjustmentResponse> addReconciliationAdjustment(
