@@ -37,6 +37,26 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1audit~1refund
   /v1/accounting/audit/type/{type}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1audit~1type~1{type}
+  /v1/accounting/bank-accounts:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-accounts
+  /v1/accounting/bank-accounts/{glAccountId}/profile:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-accounts~1{glAccountId}~1profile
+  /v1/accounting/bank-statements:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-statements
+  /v1/accounting/bank-statements/{statementId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-statements~1{statementId}
+  /v1/accounting/bank-transactions:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-transactions
+  /v1/accounting/bank-transactions/duplicate-review:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-transactions~1duplicate-review
+  /v1/accounting/bank-transactions/{bankTransactionId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-transactions~1{bankTransactionId}
+  /v1/accounting/bank-transactions/{bankTransactionId}/duplicate-review:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-transactions~1{bankTransactionId}~1duplicate-review
+  /v1/accounting/bank-transactions/{bankTransactionId}/exclude:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-transactions~1{bankTransactionId}~1exclude
+  /v1/accounting/bank-transactions/{bankTransactionId}/restore:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-transactions~1{bankTransactionId}~1restore
   /v1/accounting/credit-memos:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1credit-memos
   /v1/accounting/credit-memos/{creditMemoId}:
