@@ -495,7 +495,7 @@ ignored without recording its eventId.
   recorded `PROCESSED`, not `SKIPPED`.
 - **Metrics** — `accounting.inventory.fact.posted{eventType}` (a journal entry was posted) and
   `accounting.inventory.fact.skipped{eventType, reason=UNCOSTED}` (scrap and adjustment only).
-- **Ingestion records** (AD-007, #2186 D5) — each consumed fact writes one terminal `AccountingEvent` row:
+- **Ingestion records** (AD-007, #2186 D5) — each consumed fact writes one `AccountingEvent` row, terminal except a currency hold (below):
   `eventType` = the fact type, `sourceSystem = pos-inventory`, `domainKeyId` = `adjustmentId` / `scrapId` /
   `revaluationId`, `ingestionId` = envelope `eventId`, `transactionDate` = business date, `payload` = the fact,
   and a display `eventReference` (`AE-YYYYMM-n`). A posted fact is `PROCESSED` with `journalEntryId` and

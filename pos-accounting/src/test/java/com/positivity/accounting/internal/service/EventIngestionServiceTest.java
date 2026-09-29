@@ -331,7 +331,8 @@ class EventIngestionServiceTest {
                 .allSatisfy(descriptor -> assertThat(descriptor.getMeaning()).isNotBlank());
         assertThat(contract.getProcessingStatuses().getRestSubmissionLifecycle())
                 .containsExactly("RECEIVED", "PROCESSING", "PROCESSED|FAILED|SUSPENDED");
-        assertThat(contract.getProcessingStatuses().getKafkaFactLifecycle()).containsExactly("PROCESSED|SKIPPED");
+        assertThat(contract.getProcessingStatuses().getKafkaFactLifecycle())
+                .containsExactly("PROCESSED|SKIPPED|SUSPENDED");
     }
 
     @Test

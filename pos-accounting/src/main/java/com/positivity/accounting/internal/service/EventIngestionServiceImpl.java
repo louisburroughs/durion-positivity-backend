@@ -628,14 +628,14 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         return ProcessingStatusesContract.builder()
                 .statuses(statuses)
                 .restSubmissionLifecycle(List.of("RECEIVED", "PROCESSING", "PROCESSED|FAILED|SUSPENDED"))
-                .kafkaFactLifecycle(List.of("PROCESSED|SKIPPED"))
+                .kafkaFactLifecycle(List.of("PROCESSED|SKIPPED|SUSPENDED"))
                 .build();
     }
 
     /**
      * The two idempotency mechanisms (issue #2207): REST submission (content-hash dedup, 24h
      * window, rejects a replay with 409 DUPLICATE_EVENT) and Kafka fact consumption (every
-     * consumed fact writes a terminal row; outcomes derived from {@code
+     * consumed fact writes one row, terminal except a currency hold; outcomes derived from {@code
      * IdempotencyOutcome.values()} — never hand-typed).
      */
     private IdempotencyOutcomesContract buildIdempotencyOutcomes() {

@@ -5,8 +5,8 @@ package com.positivity.accounting.internal.enums;
  * ({@code InventoryFactIngestionRecorder}, issue #2191/#2186 D5). Distinct from the REST
  * {@code submitEvent} idempotency mechanism (content-hash dedup via {@code IdempotencyService},
  * 24h window, rejects a replay with HTTP 409 {@code DUPLICATE_EVENT} and persists nothing) — this
- * enum covers only the fact-consumption path, where every consumed fact writes a terminal
- * {@code AccountingEvent} row and the row itself carries the outcome.
+ * enum covers only the fact-consumption path, where every consumed fact writes one
+ * {@code AccountingEvent} row (terminal, except a SUSPENDED currency hold) and the row itself carries the outcome.
  *
  * <p>The persisted {@code accounting_event.idempotency_outcome} column stays a plain {@code
  * String} (not {@code @Enumerated}); callers write {@code name()} and read it back as text.
