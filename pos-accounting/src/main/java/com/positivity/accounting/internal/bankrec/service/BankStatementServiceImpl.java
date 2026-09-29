@@ -408,6 +408,8 @@ public class BankStatementServiceImpl implements BankStatementService {
                 request.getGapAcknowledgement() == null
                         ? null
                         : request.getGapAcknowledgement().trim());
+        // startReconciliation is part of the command: absent means false.
+        field(canonical, Boolean.TRUE.equals(request.getStartReconciliation()));
         field(canonical, header.getStatementRef());
         field(canonical, header.getStartDate());
         field(canonical, header.getEndDate());

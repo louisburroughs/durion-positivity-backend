@@ -339,6 +339,26 @@ class BankReconciliationContractBehaviorIT extends BaseContractIntegrationTest {
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.replayed").value(true))
                     .andExpect(jsonPath("$.reconciliations.length()").value(1));
+
+            // The flag is part of the payload: flipping it under the same requestId is a reuse, both ways.
+            body.put("startReconciliation", false);
+            expectError(postJson("/v1/accounting/bank-statements", body), 409, "IDEMPOTENCY_CONFLICT");
+            body.put("requestId", UUIDv7Generator.generate().toString());
+            body.put(
+                    "statement",
+                    Map.of(
+                            "startDate", "2021-10-01",
+                            "endDate", "2021-10-31",
+                            "openingBalance", "25.00",
+                            "closingBalance", "35.00"));
+            body.put(
+                    "transactions",
+                    List.of(Map.of("date", "2021-10-05", "signedAmount", "10.00", "description", "ROW")));
+            postJson("/v1/accounting/bank-statements", body)
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.reconciliations.length()").value(0));
+            body.put("startReconciliation", true);
+            expectError(postJson("/v1/accounting/bank-statements", body), 409, "IDEMPOTENCY_CONFLICT");
         }
 
         @Test
