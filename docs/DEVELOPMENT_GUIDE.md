@@ -186,6 +186,55 @@ added, and an enumeration copied elsewhere goes stale.
 ./mvnw versions:display-plugin-updates
 ```
 
+### Postgres-backed tests without Docker
+
+The real-Postgres tests (the `pg` profile: schema conformance, tenant isolation, the committing ledger
+ITs) start one `postgres:16-alpine` Testcontainers container per test JVM. Thirteen of pos-accounting's
+are plain `*Test` classes, so even `./mvnw test` needs Docker there. On a machine or a remote session
+without Docker, point them at a Postgres that is already running instead:
+
+```bash
+export POS_TEST_PG_URL=jdbc:postgresql://localhost:5433/postgres   # the server and its maintenance database
+export POS_TEST_PG_USER=<owner role>                               # superuser, or at least CREATEDB + CREATEROLE
+export POS_TEST_PG_PASSWORD=<its password>
+./mvnw -pl pos-accounting -am -DskipTests=false verify -Darchunit.skipTests=true
+```
+
+What the tests then do on that server, and never anything else:
+
+- create every database they use under a per-run prefix (`acct_test_<token>_main` for the shared,
+  rollback-only contexts; `acct_test_<token>_<name>` for each committing IT), run Flyway in those, and
+  `DROP DATABASE … WITH (FORCE)` all of them when the JVM exits;
+- create a per-run application role `pos_app_test_<token>` (LOGIN, no BYPASSRLS) for the pools to
+  connect as, and drop it last. The server's own `pos_app` and its password are never read or changed.
+
+Set `POS_TEST_PG_KEEP=1` to keep the databases for a look afterwards; drop them by hand then
+(`SELECT datname FROM pg_database WHERE datname LIKE 'acct_test_%'`, and the matching role). A run
+that is killed before its shutdown hook leaves the same orphans; the same query finds them.
+
+**Local server.** Any PostgreSQL 16 works (`btree_gist` is the only extension the accounting baseline
+needs, and it ships with the server). A native install or a long-lived `docker run -p 5433:5432
+postgres:16-alpine` both do; the latter also saves the per-run container start.
+
+**Alpha.** The alpha cell's Postgres binds `127.0.0.1:5432` on the host and the security group opens
+only 22, 80 and 443, so reach it through an SSH tunnel and use the owner credential Flyway runs as
+there (`POSTGRES_USER` / `POSTGRES_PASSWORD` in the host's `.env`):
+
+```bash
+ssh -N -L 5433:127.0.0.1:5432 -i ~/.ssh/<key>.pem ec2-user@<alpha-elastic-ip> &
+export POS_TEST_PG_URL=jdbc:postgresql://localhost:5433/postgres
+```
+
+Two things to weigh before doing that routinely. The test databases live on the same server as the
+alpha services' databases, so a run adds load and connections there: the `pg` profile caps each cached
+Spring context's pool at 8 connections with 1 idle, and one pos-accounting JVM holds up to a dozen such
+contexts, so budget for around 100 connections at peak against the server's `max_connections`. And
+the tunnel puts staging credentials on the developer machine. A local server has neither cost; alpha is
+the fallback when none is at hand. Never point these variables at a production server.
+
+Today only `pos-accounting`'s `AccountingPostgresContainer` reads these variables; the sibling
+`*PostgresContainer` helpers in the other modules still require Docker.
+
 ---
 
 ## Runtime Profile Matrix
