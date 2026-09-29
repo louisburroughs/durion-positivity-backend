@@ -179,34 +179,11 @@ public class BankAccountServiceImpl implements BankAccountService {
                 .profileExists(profile.isPresent())
                 .reconciliationBaselineDate(baseline)
                 .coverageFrontier(coverageFrontier)
-                .reconciledFrontier(reconciledFrontier(finalized, baseline))
+                .reconciledFrontier(ReconciliationChain.frontier(finalized, baseline))
                 .unexplainedBankTransactionCount(unexplained)
                 .openOutstandingItemCount(openItems)
                 .feedLinkState(BankFeedLinkState.NONE)
                 .build();
-    }
-
-    /**
-     * The end of the contiguous chain of FINALIZED reconciliations from the baseline (§4.1): windows
-     * that end before the baseline are skipped; the chain stops at the first gap.
-     */
-    private static @Nullable LocalDate reconciledFrontier(
-            List<BankReconciliation> finalized, @Nullable LocalDate baseline) {
-        LocalDate next = baseline;
-        LocalDate frontier = null;
-        for (BankReconciliation reconciliation : finalized) {
-            LocalDate start = reconciliation.getStatementStartDate();
-            LocalDate end = reconciliation.getStatementEndDate();
-            if (start == null || end == null || (next != null && end.isBefore(next))) {
-                continue;
-            }
-            if (next != null && start.isAfter(next)) {
-                break;
-            }
-            frontier = end;
-            next = end.plusDays(1);
-        }
-        return frontier;
     }
 
     private static String validate(BankAccountProfileRequest request) {

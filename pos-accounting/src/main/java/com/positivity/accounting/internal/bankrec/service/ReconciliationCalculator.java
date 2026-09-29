@@ -20,6 +20,7 @@ import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepo
 import com.positivity.accounting.internal.bankrec.service.ReconciliationEquation.Posting;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationEquation.Terms;
 import com.positivity.accounting.internal.bankrec.service.ReconciliationEquation.Window;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -109,13 +110,8 @@ public class ReconciliationCalculator {
                 .map(BankReconciliationAdjustment::getJournalEntryId)
                 .collect(Collectors.toSet());
 
-        List<BankReconciliationOutstandingItem> openItems = accountItems.stream()
-                .filter(i -> i.getStatus() == OutstandingItemStatus.OPEN)
-                .toList();
-        List<BankReconciliationOutstandingItem> aged = openItems.stream()
-                .filter(i -> isAgedAwaitingReaffirmation(i, reconciliation))
-                .filter(i -> baselineDate == null || !i.getItemDate().isBefore(baselineDate))
-                .toList();
+        Unexplained unexplained = unexplained(
+                account, baselineDate, end, reconciliation.getReconciliationId(), accountItems, bridgeEntries);
 
         return new ReconciliationSnapshot(
                 terms,
@@ -126,10 +122,83 @@ public class ReconciliationCalculator {
                 ReconciliationEquation.openAt(accountItems, OutstandingItemSide.BANK, dayBefore),
                 ReconciliationEquation.latePostings(postings, end),
                 ReconciliationEquation.openingPostings(postings, start, reconciliation.getStatementId()),
+                unexplained.bank(),
+                unexplained.ledger(),
+                unexplained.agedAwaitingReaffirmation(),
+                bridges);
+    }
+
+    /**
+     * The unexplained items on an account from {@code baselineDate} to {@code end} (§3.7 {@code
+     * countUnexplainedBank} / {@code countUnexplainedLedger}), the one implementation approval (E4) and close
+     * readiness ({@code UNEXPLAINED_*}, §5.3; story S6, #2305) share.
+     *
+     * @param baselineDate the lower bound; null means none (every item on/before {@code end})
+     * @param reaffirmedIn the reconciliation whose reaffirmation spares an aged {@code OTHER_LEDGER_TIMING} item
+     *     (§3.6); null spares none
+     */
+    public @NonNull Unexplained unexplained(
+            @NonNull UUID account,
+            @Nullable LocalDate baselineDate,
+            @NonNull LocalDate end,
+            @Nullable UUID reaffirmedIn) {
+        Set<UUID> bridgeEntries = adjustments.findAllOnAccount(account).stream()
+                .filter(a -> a.getBridgesStatementId() != null)
+                .map(BankReconciliationAdjustment::getJournalEntryId)
+                .collect(Collectors.toSet());
+        return unexplained(
+                account,
+                baselineDate,
+                end,
+                reaffirmedIn,
+                items.findByGlAccountIdAndItemDateLessThanEqual(account, end),
+                bridgeEntries);
+    }
+
+    /** The §3.7 unexplained items; {@link #countBank()} and {@link #countLedger()} are exact, never toleranced. */
+    public record Unexplained(
+            @NonNull List<BankTransaction> bank,
+            @NonNull List<LedgerLine> ledger,
+            @NonNull List<BankReconciliationOutstandingItem> agedAwaitingReaffirmation) {
+
+        public int countBank() {
+            return bank.size();
+        }
+
+        public @NonNull BigDecimal sumBank() {
+            return bank.stream().map(BankTransaction::getSignedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+
+        /** Unexplained lines plus aged items awaiting reaffirmation (§3.6). */
+        public int countLedger() {
+            return ledger.size() + agedAwaitingReaffirmation.size();
+        }
+
+        public @NonNull BigDecimal sumLedger() {
+            BigDecimal lines = ledger.stream().map(LedgerLine::signedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            return lines.add(ReconciliationEquation.sumItems(agedAwaitingReaffirmation));
+        }
+    }
+
+    private Unexplained unexplained(
+            UUID account,
+            @Nullable LocalDate baselineDate,
+            LocalDate end,
+            @Nullable UUID reaffirmedIn,
+            List<BankReconciliationOutstandingItem> accountItems,
+            Set<UUID> bridgeEntries) {
+        List<BankReconciliationOutstandingItem> openItems = accountItems.stream()
+                .filter(i -> i.getStatus() == OutstandingItemStatus.OPEN)
+                .toList();
+        List<BankReconciliationOutstandingItem> aged = openItems.stream()
+                .filter(i -> isAged(i, end))
+                .filter(i -> !Objects.equals(i.getLastReaffirmedInReconciliationId(), reaffirmedIn))
+                .filter(i -> baselineDate == null || !i.getItemDate().isBefore(baselineDate))
+                .toList();
+        return new Unexplained(
                 unexplainedBank(account, baselineDate, end, openItems),
                 unexplainedLedger(account, baselineDate, end, openItems, bridgeEntries),
-                aged,
-                bridges);
+                aged);
     }
 
     /** Stores the live terms on the row (§3.7: persisted on every mutation). */
