@@ -1,7 +1,6 @@
 package com.positivity.accounting.internal.bankrec.controller;
 
 import com.positivity.accounting.internal.bankrec.dto.AdjustmentTypeResponse;
-import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAdjustmentRequest;
@@ -48,11 +47,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * REST controller for the manual CSV bank reconciliation workflow (Story F2,
+ * REST controller for the manual bank reconciliation workflow (Story F2,
  * issue
- * #965, decisions D-5/D-6): import a bank statement CSV for a reconcilable GL
+ * #965, decisions D-5/D-6): match the statement lines of a reconcilable GL
  * cash
- * account, match statement lines to posted GL journal-entry lines, record
+ * account to posted GL journal-entry lines, record
  * adjustments (which post real balanced journal entries through the
  * accounting-period
  * gate), and finalize only when the statement and GL ending balances agree.
@@ -65,7 +64,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/accounting/reconciliations")
 @Tag(
         name = "Bank Reconciliation",
-        description = "Manual CSV bank reconciliation: import a statement, match lines to posted GL entries,"
+        description = "Manual bank reconciliation: match statement lines to posted GL entries,"
                 + " record adjustments, and finalize when balanced.")
 @RequiredArgsConstructor
 @Validated
@@ -74,73 +73,6 @@ public class BankReconciliationController {
     private static final Logger log = LoggerFactory.getLogger(BankReconciliationController.class);
 
     private final BankReconciliationService bankReconciliationService;
-
-    @PostMapping("/import")
-    @SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {"accounting:reconciliation:adjust"})
-    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
-    @EmitEvent(id = "ACCOUNTING_RECONCILIATION_IMPORT", apiVersion = "1")
-    @Operation(
-            operationId = "importReconciliation",
-            summary = "Import Bank Statement CSV",
-            description = """
-                    Parses a bank statement CSV (columns: date, description, signed amount, reference) for a \
-                    reconcilable GL cash account and creates an IN_PROGRESS reconciliation whose statement \
-                    lines start UNMATCHED, snapshotting the GL ending balance from posted journal-entry lines \
-                    as of the statement date.
-                    Use this tool to start a reconciliation cycle; do not use matchReconciliation, \
-                    addReconciliationAdjustment or finalizeReconciliation, which operate on a reconciliation \
-                    that already exists.
-                    Preconditions: the GL account must exist with its reconcilable flag set to true.
-                    Required inputs: glAccountId (UUID), periodStartDate, periodEndDate, statementDate, \
-                    statementEndingBalance, currency (3-letter ISO code) and the csv text itself.
-                    Emits an ACCOUNTING_RECONCILIATION_IMPORT event.
-                    Returns 422 ACCOUNT_NOT_RECONCILABLE when the account's reconcilable flag is false, and \
-                    400 when the CSV is malformed.
-                    """,
-            tags = {"Bank Reconciliation"})
-    @ApiResponse(
-            responseCode = "200",
-            description = "Reconciliation created",
-            content = @Content(schema = @Schema(implementation = BankReconciliationResponse.class)))
-    @ApiResponse(
-            responseCode = "400",
-            description = "Request body invalid or CSV malformed (ARGUMENT_NOT_VALID / VALIDATION_ERROR)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "403",
-            description = "Caller lacks the accounting:reconciliation:adjust permission",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "422",
-            description = "GL account is not reconcilable (ACCOUNT_NOT_RECONCILABLE)",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<BankReconciliationResponse> importReconciliation(
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Statement metadata plus the raw CSV text to import for the cash account.",
-                            required = true,
-                            content =
-                                    @Content(
-                                            mediaType = "application/json",
-                                            examples = @ExampleObject(name = "July statement import", value = """
-                                                                    {"glAccountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
-                                                                     "periodStartDate":"2026-07-01",
-                                                                     "periodEndDate":"2026-07-31",
-                                                                     "statementDate":"2026-07-31",
-                                                                     "statementEndingBalance":10250.75,
-                                                                     "currency":"USD",
-                                                                     "csv":"date,description,amount,reference\\n2026-07-02,Deposit,500.00,DEP-1\\n2026-07-05,Bank fee,-15.00,FEE-1"}
-                                                                    """)))
-                    @Valid
-                    @RequestBody
-                    @NonNull
-                    BankReconciliationImportRequest request) {
-        if (log.isInfoEnabled()) {
-            log.info("Import bank reconciliation for account {}", sanitizeForLog(request.getGlAccountId()));
-        }
-        return ResponseEntity.ok(bankReconciliationService.importStatement(request));
-    }
 
     @GetMapping("/adjustment-types")
     @SecurityRequirement(

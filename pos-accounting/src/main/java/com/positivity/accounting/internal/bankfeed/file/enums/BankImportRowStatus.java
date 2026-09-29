@@ -1,6 +1,6 @@
 package com.positivity.accounting.internal.bankfeed.file.enums;
 
-/** Status of one parsed row of a statement-file import (SPEC §3.3, §3.8); behaviour arrives with story S3. */
+/** Status of one parsed row of a statement-file import (SPEC §3.3, §3.8; story S3, #2302). */
 public enum BankImportRowStatus {
     PARSED,
     REJECTED,

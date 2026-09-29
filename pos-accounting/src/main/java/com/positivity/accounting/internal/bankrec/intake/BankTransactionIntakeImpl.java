@@ -190,57 +190,9 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
             IntakeContext ctx,
             UUID glAccountId,
             SourceKind sourceKind) {
-        LocalDate today = LocalDate.now(clock);
-        if (header.endDate().isAfter(today)) {
-            throw BankRecException.field(
-                    BankRecErrorCode.VALIDATION_ERROR,
-                    "Statement endDate " + header.endDate() + " is in the future",
-                    "statement.endDate",
-                    "must not be after " + today);
-        }
-        String acknowledgement = Justification.optional(ctx.gapAcknowledgement(), "gapAcknowledgement");
-
-        // U1, then U2 (a window equal to a committed one overlaps it too, so U1 answers first).
-        statements
-                .findFirstByGlAccountIdAndStatusAndStartDateAndEndDate(
-                        glAccountId, BankStatementStatus.COMMITTED, header.startDate(), header.endDate())
-                .ifPresent(same -> {
-                    throw BankRecException.field(
-                            BankRecErrorCode.STATEMENT_ALREADY_IMPORTED,
-                            "A statement for " + header.startDate() + ".." + header.endDate()
-                                    + " is already committed on this account",
-                            "statementId",
-                            same.getStatementId().toString());
-                });
-        statements
-                .findFirstByGlAccountIdAndStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByStartDateAsc(
-                        glAccountId, BankStatementStatus.COMMITTED, header.endDate(), header.startDate())
-                .ifPresent(overlapping -> {
-                    throw overlap(overlapping.getStatementId().toString(), header);
-                });
-
-        // E2 against the previous COMMITTED statement, with the acknowledgement (§4.2 steps 2–3).
-        Optional<BankStatement> previous =
-                statements.findFirstByGlAccountIdAndStatusAndEndDateLessThanOrderByEndDateDesc(
-                        glAccountId, BankStatementStatus.COMMITTED, header.startDate());
-        Map<String, String> discontinuities = discontinuities(previous, header);
-        if (!discontinuities.isEmpty() && acknowledgement == null) {
-            throw new BankRecException(
-                    BankRecErrorCode.STATEMENT_NOT_CONTIGUOUS,
-                    previous.isEmpty()
-                            ? "The account's first statement needs a gapAcknowledgement (at least "
-                                    + Justification.MIN_LENGTH + " characters)"
-                            : "The statement does not continue the previous statement; correct the header or"
-                                    + " commit it with a gapAcknowledgement",
-                    discontinuities);
-        }
-        if (discontinuities.isEmpty() && acknowledgement != null) {
-            throw BankRecException.field(
-                    BankRecErrorCode.STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE,
-                    "The statement continues the previous statement; a gapAcknowledgement is not accepted",
-                    "gapAcknowledgement",
-                    "not applicable to a contiguous statement");
-        }
+        String acknowledgement = StatementHeaderChecks.check(
+                        statements, functionalCurrency, clock, glAccountId, header, ctx.gapAcknowledgement())
+                .gapAcknowledgement();
 
         // §4.3: every row of a file or manual statement lies inside its own window. Feed batches carry
         // no header in phase 1; a later format that does (CAMT.053) is checked the same way.
@@ -248,23 +200,6 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
             requireRowsInWindow(batch, header);
         }
         return acknowledgement;
-    }
-
-    private Map<String, String> discontinuities(Optional<BankStatement> previous, StatementHeader header) {
-        Map<String, String> fieldErrors = new LinkedHashMap<>();
-        if (previous.isEmpty()) {
-            fieldErrors.put("gapAcknowledgement", "required for the account's first statement");
-            return fieldErrors;
-        }
-        BankStatement before = previous.get();
-        if (before.getClosingBalance().compareTo(header.openingBalance()) != 0) {
-            fieldErrors.put("openingBalance", "expected " + functionalCurrency.display(before.getClosingBalance()));
-        }
-        LocalDate expectedStart = before.getEndDate().plusDays(1);
-        if (!expectedStart.equals(header.startDate())) {
-            fieldErrors.put("startDate", "expected " + expectedStart);
-        }
-        return fieldErrors;
     }
 
     private static void requireRowsInWindow(BankTransactionsObservedV1 batch, StatementHeader header) {
@@ -297,15 +232,6 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
                     "opening + activity = " + functionalCurrency.display(expectedClosing) + ", closing = "
                             + functionalCurrency.display(header.closingBalance()));
         }
-    }
-
-    private static BankRecException overlap(String statementId, StatementHeader header) {
-        return BankRecException.field(
-                BankRecErrorCode.STATEMENT_PERIOD_OVERLAP,
-                "The window " + header.startDate() + ".." + header.endDate()
-                        + " overlaps a committed statement on this account",
-                "statementId",
-                statementId);
     }
 
     private static BigDecimal activityTotal(BankTransactionsObservedV1 batch) {
@@ -465,7 +391,12 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
                     skip.add(existing.getBankTransactionId());
                     UUID original =
                             duplicateOf(p, glAccountId, sourceKind, ctx, skip, byFingerprint, firstOfFingerprint);
-                    flag(existing, original, collidesInBatch(byFingerprint.get(p.fingerprint())), tally);
+                    flag(
+                            existing,
+                            original,
+                            collidesInBatch(byFingerprint.get(p.fingerprint())),
+                            confirmedDistinct(row, ctx),
+                            tally);
                 }
                 existing.setFeedChange(FeedChange.MODIFIED);
                 existing.setLastObservedAt(observedAt);
@@ -502,7 +433,12 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
             // R1: a fingerprint collision enters as POSSIBLE_DUPLICATE, never a silent drop.
             UUID original =
                     duplicateOf(p, glAccountId, sourceKind, ctx, writtenByThisBatch, byFingerprint, firstOfFingerprint);
-            flag(created, original, collidesInBatch(byFingerprint.get(p.fingerprint())), tally);
+            flag(
+                    created,
+                    original,
+                    collidesInBatch(byFingerprint.get(p.fingerprint())),
+                    confirmedDistinct(row, ctx),
+                    tally);
             // D10: a feed row inside a FINALIZED window is flagged, never refused (phase 2 only — a
             // phase-1 row lies inside its own statement window, and windows never overlap).
             if (sourceKind == SourceKind.BANK_FEED
@@ -583,8 +519,21 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
     }
 
     /** R1: a collision leaves the row POSSIBLE_DUPLICATE, never a silent drop; otherwise UNMATCHED. */
-    private static void flag(BankTransaction row, @Nullable UUID original, boolean inBatchCollision, Tally tally) {
-        if (original != null || inBatchCollision) {
+    /**
+     * Whether a human confirmed this row distinct before the commit (the file adapter's duplicate
+     * decisions, §4.4; story S3, #2302): R1 has asked and been answered, so a collision does not flag it.
+     */
+    private static boolean confirmedDistinct(BankTransactionObserved row, IntakeContext ctx) {
+        return row.sourceRowNumber() != null && ctx.confirmedDistinctRows().contains(row.sourceRowNumber());
+    }
+
+    private static void flag(
+            BankTransaction row,
+            @Nullable UUID original,
+            boolean inBatchCollision,
+            boolean confirmedDistinct,
+            Tally tally) {
+        if (!confirmedDistinct && (original != null || inBatchCollision)) {
             row.setStatus(BankTransactionStatus.POSSIBLE_DUPLICATE);
             row.setDuplicateOfBankTransactionId(original);
             tally.possibleDuplicates++;

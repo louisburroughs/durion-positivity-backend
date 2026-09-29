@@ -1,6 +1,5 @@
 package com.positivity.accounting.internal.bankrec.service;
 
-import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAdjustmentRequest;
@@ -17,15 +16,13 @@ import org.springframework.data.domain.Pageable;
 /**
  * Manual CSV bank reconciliation (Story F2, issue #965, decisions D-5/D-6).
  *
- * <p>Import a bank statement CSV for a reconcilable GL cash account, match statement
- * lines to posted GL journal-entry lines, record adjustments (which post real JEs
+ * <p>Match the statement lines of a reconcilable GL cash account (a statement enters
+ * through the intake port — a file import or a manual statement, story S2/S3; the F2
+ * CSV import endpoint is retired, D14) to posted GL journal-entry lines, record adjustments (which post real JEs
  * through the accounting-period gate), and finalize only when the statement and GL
  * ending balances agree (difference within ±0.01).
  */
 public interface BankReconciliationService {
-
-    /** Import a statement CSV and start a reconciliation (status IN_PROGRESS). */
-    BankReconciliationResponse importStatement(@NonNull BankReconciliationImportRequest request);
 
     /** Get one reconciliation with its lines and adjustments. */
     BankReconciliationResponse get(@NonNull UUID reconciliationId);

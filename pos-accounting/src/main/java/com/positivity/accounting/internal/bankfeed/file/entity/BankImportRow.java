@@ -30,7 +30,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * One parsed row of a statement-file import (SPEC-manual-bank-reconciliation §3.3; story S1,
  * #2300). A row is corrected by editing values or skipped with a reason; the original
- * {@link #rawValues} are never rewritten. Behaviour arrives with story S3.
+ * {@link #rawValues} are never rewritten; the parsed columns hold the row's effective values (the
+ * correction applied), {@link #correctedValues} what the preparer changed (story S3, #2302).
  */
 @Getter
 @Setter
@@ -103,6 +104,22 @@ public class BankImportRow extends TenantScopedEntity {
     /** Set at commit: the bank transaction this row became. */
     @Column(name = "bank_transaction_id", columnDefinition = "UUID")
     private UUID bankTransactionId;
+
+    /** Why the row was skipped (at least 10 characters, D15). */
+    @Column(name = "skip_reason", length = 1000)
+    private String skipReason;
+
+    /** A human's answer to a fingerprint collision: {@code DISTINCT} or {@code DUPLICATE} (§4.4). */
+    @Column(name = "duplicate_decision", length = 16)
+    private String duplicateDecision;
+
+    /** The stored transaction this row's fingerprint collides with (R1). */
+    @Column(name = "duplicate_of_bank_transaction_id", columnDefinition = "UUID")
+    private UUID duplicateOfBankTransactionId;
+
+    /** Another row of the same file this row's fingerprint collides with. */
+    @Column(name = "duplicate_of_row_number")
+    private Integer duplicateOfRowNumber;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

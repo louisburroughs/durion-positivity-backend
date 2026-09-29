@@ -11,7 +11,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseIntegrationTest;
-import com.positivity.accounting.internal.bankrec.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.bankrec.dto.BankReconciliationResponse;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationAdjustmentRequest;
 import com.positivity.accounting.internal.bankrec.dto.ReconciliationApiStatus;
@@ -19,14 +18,12 @@ import com.positivity.accounting.internal.bankrec.dto.ReconciliationMatchRequest
 import com.positivity.accounting.internal.bankrec.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.bankrec.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.bankrec.service.BankReconciliationService;
-import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -61,68 +58,17 @@ class BankReconciliationControllerTest extends BaseIntegrationTest {
                 .build();
     }
 
-    private static BankReconciliationImportRequest importRequest() {
-        return BankReconciliationImportRequest.builder()
-                .glAccountId(ACCOUNT_ID)
-                .periodStartDate(LocalDate.of(2026, 6, 1))
-                .periodEndDate(LocalDate.of(2026, 6, 30))
-                .statementDate(LocalDate.of(2026, 6, 30))
-                .statementEndingBalance(new BigDecimal("2000.0000"))
-                .currency("USD")
-                .csv("2026-06-15,ACH DEPOSIT,1500.00,REF-1")
-                .build();
-    }
-
     @Nested
-    @DisplayName("POST /v1/accounting/reconciliations/import")
-    class Import {
+    @DisplayName("POST /v1/accounting/reconciliations/import — retired (D14, #2302)")
+    class RetiredImport {
 
         @Test
-        @DisplayName("Should import a reconciliation")
-        void shouldImport() throws Exception {
-            when(bankReconciliationService.importStatement(any())).thenReturn(response());
-
+        @DisplayName("Should no longer serve the F2 CSV import")
+        void theRetiredRouteIsNotServed() throws Exception {
             mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/import"))
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(importRequest())))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.reconciliationId").value(RECON_ID.toString()));
-        }
-
-        @Test
-        @DisplayName("Should return 422 ACCOUNT_NOT_RECONCILABLE for a non-reconcilable account")
-        void shouldReturn422NotReconcilable() throws Exception {
-            when(bankReconciliationService.importStatement(any()))
-                    .thenThrow(new AccountNotReconcilableException("not reconcilable"));
-
-            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/import"))
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(importRequest())))
-                    .andExpect(status().isUnprocessableContent())
-                    .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_RECONCILABLE"));
-        }
-
-        @Test
-        @DisplayName("Should return 400 when csv is missing")
-        void shouldReturn400WhenCsvMissing() throws Exception {
-            BankReconciliationImportRequest req = importRequest();
-            req.setCsv(null);
-
-            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/import"))
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(req)))
-                    .andExpect(status().isBadRequest());
-
-            verify(bankReconciliationService, never()).importStatement(any());
-        }
-
-        @Test
-        @DisplayName("Should reject import without accounting:reconciliation:adjust authority")
-        void shouldRejectWithoutPermission() throws Exception {
-            mockMvc.perform(withAuth(post("/v1/accounting/reconciliations/import"), "accounting:reconciliation:view")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(importRequest())))
-                    .andExpect(status().isForbidden());
+                            .content("{\"csv\":\"2026-06-15,ACH DEPOSIT,1500.00\"}"))
+                    .andExpect(status().is4xxClientError());
         }
     }
 
