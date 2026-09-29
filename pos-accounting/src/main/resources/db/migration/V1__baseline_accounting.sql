@@ -365,6 +365,7 @@ CREATE TABLE public.bank_reconciliation_adjustment (
     justification character varying(1000),
     settles_match_id uuid,
     bridges_statement_id uuid,
+    request_hash character varying(64),
     CONSTRAINT bank_reconciliation_adjustment_status_ck CHECK (((status)::text = ANY ((ARRAY['POSTED'::character varying, 'REVERSED'::character varying])::text[]))),
     CONSTRAINT bank_reconciliation_adjustment_type_ck CHECK (((adjustment_type)::text = ANY ((ARRAY['BANK_FEE'::character varying, 'NSF_FEE'::character varying, 'INTEREST_EARNED'::character varying, 'OTHER'::character varying, 'TRANSFER'::character varying])::text[]))),
     -- Story S4 (#2303; SPEC-manual-bank-reconciliation §3.5, §6.4, D2, D9): the link and counter rules.

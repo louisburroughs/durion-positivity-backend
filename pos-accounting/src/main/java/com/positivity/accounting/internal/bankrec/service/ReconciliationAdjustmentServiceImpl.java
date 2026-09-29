@@ -207,6 +207,7 @@ public class ReconciliationAdjustmentServiceImpl implements ReconciliationAdjust
         adjustment.setJournalEntryId(posted.getJournalEntryId());
         adjustment.setStatus(AdjustmentStatus.POSTED);
         adjustment.setRequestId(request.getRequestId());
+        adjustment.setRequestHash(requestHash(reconciliationId, request));
         adjustment.setTransactionDate(date);
         adjustment.setPostedPeriodCode(YearMonth.from(date).toString());
         adjustment.setBankTransactionId(links.bankTransactionId());
@@ -486,15 +487,36 @@ public class ReconciliationAdjustmentServiceImpl implements ReconciliationAdjust
 
     // ---- replay ----------------------------------------------------------------------------------
 
+    /**
+     * The canonical hash of the whole adjustment command (§6.3): every field that steers the posting — amount,
+     * description, links, justification, requested date, override — so a reused {@code requestId} with any changed
+     * instruction is a conflict, not a replay. Justifications are compared as the service stores them (trimmed).
+     */
+    static @NonNull String requestHash(
+            @NonNull UUID reconciliationId, @NonNull ReconciliationAdjustmentRequest request) {
+        return new CanonicalRequestHash()
+                .field(reconciliationId)
+                .field(request.getType())
+                .field(request.getAmount())
+                .field(request.getDescription())
+                .field(request.getBankTransactionId())
+                .field(request.getSettlesMatchId())
+                .field(request.getBridgesStatementId())
+                .field(request.getCounterGlAccountId())
+                .field(
+                        request.getJustification() == null
+                                ? null
+                                : request.getJustification().trim())
+                .field(request.getTransactionDate())
+                .field(blankToNull(request.getOverrideJustification()))
+                .digest();
+    }
+
     private BankReconciliationAdjustmentResponse replay(
             BankReconciliationAdjustment original, UUID reconciliationId, ReconciliationAdjustmentRequest request) {
-        boolean same = reconciliationId.equals(original.getReconciliationId())
-                && original.getAdjustmentType() == request.getType()
-                && (request.getAmount() == null || request.getAmount().compareTo(original.getAmount()) == 0)
-                && Objects.equals(original.getBankTransactionId(), request.getBankTransactionId())
-                && Objects.equals(original.getSettlesMatchId(), request.getSettlesMatchId())
-                && Objects.equals(original.getBridgesStatementId(), request.getBridgesStatementId())
-                && Objects.equals(original.getCounterGlAccountId(), request.getCounterGlAccountId());
+        boolean same = original.getRequestHash() != null
+                ? original.getRequestHash().equals(requestHash(reconciliationId, request))
+                : sameLinksAndAmount(original, reconciliationId, request);
         if (!same) {
             throw new BankRecException(
                     BankRecErrorCode.IDEMPOTENCY_CONFLICT,
@@ -506,6 +528,18 @@ public class ReconciliationAdjustmentServiceImpl implements ReconciliationAdjust
                 .getEntryNumber());
         response.setReplayed(true);
         return response;
+    }
+
+    /** The comparison left for a row written before its request hash was kept. */
+    private static boolean sameLinksAndAmount(
+            BankReconciliationAdjustment original, UUID reconciliationId, ReconciliationAdjustmentRequest request) {
+        return reconciliationId.equals(original.getReconciliationId())
+                && original.getAdjustmentType() == request.getType()
+                && (request.getAmount() == null || request.getAmount().compareTo(original.getAmount()) == 0)
+                && Objects.equals(original.getBankTransactionId(), request.getBankTransactionId())
+                && Objects.equals(original.getSettlesMatchId(), request.getSettlesMatchId())
+                && Objects.equals(original.getBridgesStatementId(), request.getBridgesStatementId())
+                && Objects.equals(original.getCounterGlAccountId(), request.getCounterGlAccountId());
     }
 
     private static String linkText(Links links) {

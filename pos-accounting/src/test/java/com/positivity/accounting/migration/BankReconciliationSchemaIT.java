@@ -106,7 +106,8 @@ class BankReconciliationSchemaIT {
                         "counter_gl_account_id",
                         "justification",
                         "settles_match_id",
-                        "bridges_statement_id")) {
+                        "bridges_statement_id",
+                        "request_hash")) {
                     assertNullable(c, "bank_reconciliation_adjustment", column);
                 }
                 assertNullable(c, "bank_reconciliation_outstanding_item", "closed_on");

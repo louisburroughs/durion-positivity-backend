@@ -287,6 +287,56 @@ class ReconciliationAdjustmentServiceTest {
                             e -> assertThat(e.code()).isEqualTo(BankRecErrorCode.IDEMPOTENCY_CONFLICT));
             verify(journalEntryService, never()).createJournalEntry(any());
         }
+
+        @Test
+        @DisplayName("a replay compares the whole command: any changed posting instruction is IDEMPOTENCY_CONFLICT")
+        void replayComparesTheWholeCommand() {
+            UUID requestId = UUID.randomUUID();
+            java.util.function.Supplier<ReconciliationAdjustmentRequest.ReconciliationAdjustmentRequestBuilder> base =
+                    () -> request(BankAdjustmentType.BANK_FEE, "-15.00")
+                            .requestId(requestId)
+                            .description("Monthly service fee")
+                            .justification(WHY)
+                            .transactionDate(END)
+                            .overrideJustification("Posting into the reopened period");
+            service.addAdjustment(RECON_ID, base.get().build());
+            ArgumentCaptor<BankReconciliationAdjustment> saved =
+                    ArgumentCaptor.forClass(BankReconciliationAdjustment.class);
+            verify(adjustments).saveAndFlush(saved.capture());
+            assertThat(saved.getValue().getRequestHash()).hasSize(64);
+            when(adjustments.findByRequestId(requestId)).thenReturn(Optional.of(saved.getValue()));
+            when(journalEntryService.getJournalEntry(journalEntryId))
+                    .thenReturn(JournalEntryResponse.builder()
+                            .entryNumber("JE-202609-0042")
+                            .build());
+
+            assertThat(service.addAdjustment(
+                                    RECON_ID,
+                                    base.get()
+                                            .amount(new BigDecimal("-15.0"))
+                                            .justification("  " + WHY + " ")
+                                            .build())
+                            .isReplayed())
+                    .as("amount scale and justification padding are not a different command")
+                    .isTrue();
+            List<ReconciliationAdjustmentRequest> changed = List.of(
+                    base.get().description("Another fee").build(),
+                    base.get().description(null).build(),
+                    base.get().justification("Another justification").build(),
+                    base.get().justification(null).build(),
+                    base.get().transactionDate(END.minusDays(1)).build(),
+                    base.get().transactionDate(null).build(),
+                    base.get().overrideJustification("Another override reason").build(),
+                    base.get().overrideJustification(null).build());
+            for (ReconciliationAdjustmentRequest request : changed) {
+                assertThatThrownBy(() -> service.addAdjustment(RECON_ID, request))
+                        .as("%s", request)
+                        .isInstanceOfSatisfying(
+                                BankRecException.class,
+                                e -> assertThat(e.code()).isEqualTo(BankRecErrorCode.IDEMPOTENCY_CONFLICT));
+            }
+            verify(journalEntryService).createJournalEntry(any());
+        }
     }
 
     @Nested
