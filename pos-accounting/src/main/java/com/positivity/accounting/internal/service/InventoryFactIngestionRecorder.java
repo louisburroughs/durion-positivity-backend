@@ -33,12 +33,13 @@ import tools.jackson.databind.ObjectMapper;
  * listener's handler transaction, so the uncosted skip and the posted journal entry are visible
  * through {@code listAccountingEvents?eventType=…&domainKeyId=…} without log access.
  *
- * <p><b>Terminal states only.</b> A row is {@link AccountingEventStatus#PROCESSED} (posted, or a
- * re-emitted fact whose posting key was already registered) or {@link AccountingEventStatus#SKIPPED}
- * (uncosted, {@code failureReasonCode = UNCOSTED_FACT}). Never {@code FAILED} or {@code SUSPENDED}:
- * the REST retry scheduler and {@code retryAccountingEvent} select those and would run the fact
- * through posting rule sets that do not exist. Failures that propagate (closed period, missing
- * mapping, transient) roll this row back with the handler and are visible on the DLQ instead.
+ * <p><b>Inventory facts: terminal states only.</b> A row is {@link AccountingEventStatus#PROCESSED}
+ * (posted, or a re-emitted fact whose posting key was already registered) or {@link
+ * AccountingEventStatus#SKIPPED} (uncosted, {@code failureReasonCode = UNCOSTED_FACT}). Never
+ * {@code FAILED} or {@code SUSPENDED}: the REST retry scheduler and {@code retryAccountingEvent}
+ * select those and would run the fact through posting rule sets that do not exist. Failures that
+ * propagate (closed period, missing mapping, transient) roll this row back with the handler and are
+ * visible on the DLQ instead. The one exception is a currency hold, below.
  *
  * <p>{@code eventReference} is the module's display reference {@code AE-{YYYYMM}-{seq}}, assigned
  * from the same per-month {@code accounting_sequence} counter as {@code
@@ -47,8 +48,11 @@ import tools.jackson.databind.ObjectMapper;
  * fact writes a second row for the same id.
  *
  * <p>It also holds a fact from another producer whose amount is in a currency other than the
- * ledger's ({@link #recordCurrencyHeld}, ADR-0067 PC-9, issue #2312): {@code SKIPPED} with
- * {@code failureReasonCode = CURRENCY_NOT_SUPPORTED}, under that producer's source system.
+ * ledger's ({@link #recordCurrencyHeld}, ADR-0067 PC-9, issues #2312, #2334): {@code SUSPENDED}
+ * with {@code failureReasonCode = CURRENCY_NOT_SUPPORTED}, under that producer's source system.
+ * SUSPENDED, not SKIPPED, so the hold is releasable through the audited reprocess path; the
+ * scheduled auto-retry loop skips it ({@link PostingFailureReason#isExcludedFromAutoRetry()}) and
+ * the posting engine re-suspends it while its currency is still not the ledger's.
  */
 @Slf4j
 @Component
@@ -132,9 +136,10 @@ public class InventoryFactIngestionRecorder {
 
     /**
      * Hold a consumed fact whose amount is in a currency other than the ledger's (ADR-0067 PC-9,
-     * E-5, issue #2312): {@code SKIPPED / CURRENCY_NOT_SUPPORTED}, with the currency in the error
-     * message, findable through {@code listAccountingEvents?eventType=…&domainKeyId=…}. Nothing is
-     * posted. A redelivered fact already held is not recorded twice.
+     * E-5, issues #2312, #2334): {@code SUSPENDED / CURRENCY_NOT_SUPPORTED}, with the currency in
+     * the error message, findable through {@code listAccountingEvents?eventType=…&domainKeyId=…} and
+     * releasable through {@code reprocessSuspendedEvent}. Nothing is posted. A redelivered fact
+     * already held is not recorded twice.
      *
      * @param sourceSystem the producing module, e.g. {@code pos-order}
      * @param envelopeEventId the consumed envelope's event id, kept as the record's {@code
@@ -161,9 +166,10 @@ public class InventoryFactIngestionRecorder {
         }
         AccountingEvent event = newEvent(eventType, envelopeEventId, domainKeyId, transactionDate, fact);
         event.setSourceSystem(sourceSystem);
-        event.setStatus(AccountingEventStatus.SKIPPED);
+        event.setStatus(AccountingEventStatus.SUSPENDED);
         event.setIdempotencyOutcome(IdempotencyOutcome.NEW.name());
         event.setFailureReasonCode(reason);
+        event.setFailureDetails(detail);
         event.setErrorMessage(detail);
         save(event);
         return true;

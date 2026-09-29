@@ -33,7 +33,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * Accounting Event - canonical event ingestion for JE generation.
  *
  * Lifecycle: RECEIVED → PROCESSING → PROCESSED (or FAILED/SUSPENDED). Kafka-consumed posting
- * facts write one terminal row directly: PROCESSED, or SKIPPED (not retryable, issue #2191).
+ * facts write one row directly: PROCESSED, or SKIPPED (not retryable, issue #2191), except a fact
+ * held for its currency, SUSPENDED / CURRENCY_NOT_SUPPORTED and released only through the audited
+ * reprocess endpoint (ADR-0067 PC-9, issue #2334).
  *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend

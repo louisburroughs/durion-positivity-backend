@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryMapper;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
@@ -114,7 +115,8 @@ class PostingEngineOrchestratorTest {
                 accountingEventRepository,
                 reprocessingAttemptHistoryRepository,
                 objectMapper,
-                accountingPeriodGate);
+                accountingPeriodGate,
+                new LedgerCurrency("USD"));
 
         // B2 period gate defaults to "open" so pre-B2 scenarios are
         // unaffected; PeriodGate tests override this stub explicitly.
@@ -977,6 +979,83 @@ class PostingEngineOrchestratorTest {
             assertThat(savedEvent.getFailureDetails())
                     .contains("posting is permanently blocked and cannot be reprocessed"
                             + " (the hard lock is never reopened)");
+        }
+    }
+
+    @Nested
+    @DisplayName("Currency hold release (ADR-0067 PC-9, #2334)")
+    class CurrencyHoldReleaseTests {
+
+        private void holdForCurrency(String currencyCode) {
+            testPayload.put("currencyCode", currencyCode);
+            testEvent.setOrganizationId(null); // Kafka-held facts carry no organization id
+            testEvent.setStatus(AccountingEventStatus.PROCESSING);
+            testEvent.setFailureReasonCode(PostingFailureReason.CURRENCY_NOT_SUPPORTED.name());
+            testEvent.setFailureDetails("held: " + currencyCode);
+        }
+
+        @Test
+        @DisplayName("Reprocessing a fact still in an unsupported currency re-suspends it; nothing is posted at par")
+        void stillForeign_reSuspendsWithCurrencyReason() {
+            holdForCurrency("EUR");
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PostingResult result = orchestrator.processEvent(testEvent, null, testUserId, true);
+
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.CURRENCY_NOT_SUPPORTED);
+
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            AccountingEvent savedEvent = eventCaptor.getValue();
+            assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+            assertThat(savedEvent.getFailureReasonCode()).isEqualTo("CURRENCY_NOT_SUPPORTED");
+            assertThat(savedEvent.getFailureDetails()).contains("EUR").contains("USD");
+            assertThat(savedEvent.getFinalPostingReferenceId()).isNull();
+
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            ReprocessingAttemptHistory attempt = attemptHistoryCaptor.getValue();
+            assertThat(attempt.getOutcome()).isEqualTo(ReprocessingOutcome.FAILURE);
+            assertThat(attempt.getTriggeredByUserId()).isEqualTo(testUserId);
+            assertThat(attempt.getOutcomeDetails()).contains("CURRENCY_NOT_SUPPORTED");
+
+            verify(postingRuleEvaluator, never()).evaluateEvent(any(), any());
+            verify(journalEntryService, never()).createJournalEntry(any());
+            verify(idempotencyService, never()).registerKey(anyString(), any());
+        }
+
+        @Test
+        @DisplayName("A held fact whose currency the ledger now books goes on to rule evaluation")
+        void nowLedgerCurrency_proceedsToEvaluation() {
+            holdForCurrency("usd");
+            testEvent.setOrganizationId(testOrganizationId);
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, null))
+                    .thenReturn(PostingResult.failure(PostingFailureReason.UNMAPPED_EVENT_TYPE, "no mapping"));
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PostingResult result = orchestrator.processEvent(testEvent, null, testUserId, true);
+
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.UNMAPPED_EVENT_TYPE);
+            verify(postingRuleEvaluator).evaluateEvent(testEvent, null);
+            assertThat(testEvent.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+            assertThat(testEvent.getFailureReasonCode()).isEqualTo("UNMAPPED_EVENT_TYPE");
+        }
+
+        @Test
+        @DisplayName("An event not held for its currency is not currency-gated, whatever its payload says")
+        void notHeld_isNotCurrencyGated() {
+            testPayload.put("currencyCode", "EUR");
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, null))
+                    .thenReturn(PostingResult.failure(PostingFailureReason.UNMAPPED_EVENT_TYPE, "no mapping"));
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            orchestrator.processEvent(testEvent, null, testUserId, true);
+
+            verify(postingRuleEvaluator).evaluateEvent(testEvent, null);
         }
     }
 }

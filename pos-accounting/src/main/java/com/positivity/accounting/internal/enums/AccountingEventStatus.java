@@ -29,7 +29,9 @@ public enum AccountingEventStatus {
     FAILED,
 
     /**
-     * Event has been suspended for manual review/resolution.
+     * Event has been suspended for manual review/resolution, released through the audited reprocess
+     * endpoint. Also the visible exception state of a consumed fact held for its currency
+     * ({@code failureReasonCode = CURRENCY_NOT_SUPPORTED}, ADR-0067 PC-9, issue #2334).
      */
     SUSPENDED,
 
@@ -61,12 +63,14 @@ public enum AccountingEventStatus {
                         + "retryable via the retry endpoint or the scheduled retry job.";
             case SUSPENDED ->
                 "Event suspended for manual review/resolution; retryable via the "
-                        + "reprocess endpoint once the underlying mapping or rule gap is fixed.";
+                        + "reprocess endpoint once the underlying mapping or rule gap is fixed. A "
+                        + "suspension for a closed period (failureReasonCode PERIOD_CLOSED) or a fact "
+                        + "held for its currency (CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9) is left out of "
+                        + "the scheduled auto-retry and released only through the reprocess endpoint.";
             case SKIPPED ->
                 "Terminal: an event or Kafka-consumed posting fact deliberately not posted (for "
                         + "example an uncosted inventory fact, failureReasonCode UNCOSTED_FACT, or a "
-                        + "default-mapping event with no amount, MISSING_AMOUNT or ZERO_AMOUNT, or a "
-                        + "fact held for its currency, CURRENCY_NOT_SUPPORTED). Not "
+                        + "default-mapping event with no amount, MISSING_AMOUNT or ZERO_AMOUNT). Not "
                         + "retryable — the retry scheduler and retryAccountingEvent select only FAILED "
                         + "and SUSPENDED (issue #2191).";
         };

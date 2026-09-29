@@ -296,7 +296,9 @@ public class EventIngestionController {
                     Use this tool once the underlying mapping gap is fixed; do not use retryAccountingEvent, \
                     which is the unaudited retry for transient failures.
                     Preconditions: the event must exist and be SUSPENDED; an event already PROCESSED is \
-                    rejected to preserve idempotency.
+                    rejected to preserve idempotency. A fact held for its currency (failureReasonCode \
+                    CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9) is released here too; while its currency is still \
+                    not the ledger's it stays SUSPENDED with that reason and nothing is posted.
                     Required inputs: eventId (UUID) as a path parameter and triggeredByUserId in the body; \
                     mappingVersionToUse and reprocessingNotes are optional.
                     Emits an ACCOUNTING_EVENT_REPROCESS event; a successful synchronous outcome returns 200 \

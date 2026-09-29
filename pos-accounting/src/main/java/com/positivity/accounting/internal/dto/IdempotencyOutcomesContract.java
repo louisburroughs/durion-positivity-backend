@@ -11,7 +11,8 @@ import lombok.NoArgsConstructor;
 /**
  * Additive section of {@link EventEnvelopeContract} (issue #2207) publishing the two distinct
  * idempotency mechanisms the ingestion pipeline uses: REST submission (content-hash dedup,
- * rejects a replay) and Kafka fact consumption (every consumed fact writes a terminal row, a
+ * rejects a replay) and Kafka fact consumption (every consumed fact writes one row, terminal
+ * except a SUSPENDED currency hold, a
  * re-delivery reuses the earlier posting).
  */
 @Data

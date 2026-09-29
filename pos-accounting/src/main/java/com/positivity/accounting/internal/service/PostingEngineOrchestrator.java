@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.JournalEntryMapper;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.PostingResult;
@@ -61,6 +62,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class PostingEngineOrchestrator {
 
+    /** The payload field a currency-held fact states its currency in (ADR-0067 E-3). */
+    private static final String PAYLOAD_CURRENCY_FIELD = "currencyCode";
+
     private final Clock clock;
     private final PostingRuleEvaluator postingRuleEvaluator;
     private final JournalEntryService journalEntryService;
@@ -69,6 +73,7 @@ public class PostingEngineOrchestrator {
     private final ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
     private final ObjectMapper objectMapper;
     private final AccountingPeriodGate accountingPeriodGate;
+    private final LedgerCurrency ledgerCurrency;
 
     /**
      * Processes an accounting event through the posting engine.
@@ -76,6 +81,8 @@ public class PostingEngineOrchestrator {
      *
      * Flow:
      * 1. Create attempt history record (default to FAILURE)
+     * 1a. Currency hold (ADR-0067 PC-9, #2334): a fact held with CURRENCY_NOT_SUPPORTED whose
+     * currency is still not the ledger's is re-suspended with that reason, never posted at par
      * 2. Check idempotency key
      * 3. Period gate pre-check for autoPost (B2): closed/hard-locked
      * transaction date suspends the event with PERIOD_CLOSED
@@ -107,6 +114,13 @@ public class PostingEngineOrchestrator {
         attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
 
         try {
+            // 0. Currency hold: never post a held fact at par (before the idempotency key, which
+            // needs an organization id a Kafka-held fact does not carry).
+            Optional<PostingResult> currencyHeld = checkCurrencyHold(event, attemptHistory);
+            if (currencyHeld.isPresent()) {
+                return currencyHeld.get();
+            }
+
             // 1. Idempotency check
             String idempotencyKey = computePostingIdempotencyKey(event, mappingVersionToUse);
             Optional<PostingResult> idempotentResult = checkIdempotency(event, idempotencyKey, mappingVersionToUse);
@@ -191,6 +205,44 @@ public class PostingEngineOrchestrator {
                 .mappingVersionUsed(mappingVersionToUse)
                 .evaluationDetails(Map.of("postingReference", existingRef, "idempotent", true))
                 .build());
+    }
+
+    /**
+     * Currency hold (ADR-0067 PC-9, issue #2334): an event held because its fact states an amount
+     * in a currency other than the ledger's ({@code failureReasonCode = CURRENCY_NOT_SUPPORTED},
+     * written by {@link InventoryFactIngestionRecorder#recordCurrencyHeld}) stays SUSPENDED with
+     * that reason while its {@code payload.currencyCode} is still not the ledger currency — a
+     * reprocess records an audited FAILURE attempt and posts nothing, rather than booking the
+     * amount at par. Once the ledger books that currency the event continues to normal evaluation.
+     * Events not held for their currency are not gated here.
+     */
+    @NonNull
+    private Optional<PostingResult> checkCurrencyHold(
+            @NonNull AccountingEvent event, @NonNull ReprocessingAttemptHistory attemptHistory) {
+        if (!PostingFailureReason.CURRENCY_NOT_SUPPORTED.name().equals(event.getFailureReasonCode())) {
+            return Optional.empty();
+        }
+        Object currency = event.getPayload() == null ? null : event.getPayload().get(PAYLOAD_CURRENCY_FIELD);
+        String currencyCode = currency == null ? null : currency.toString();
+        if (!ledgerCurrency.isForeign(currencyCode)) {
+            return Optional.empty();
+        }
+        String details = "Fact is in " + currencyCode + " but the ledger books " + ledgerCurrency.code()
+                + " only; never booked at par (ADR-0067 PC-9). Event re-suspended with"
+                + " CURRENCY_NOT_SUPPORTED until a booking rate or manual handling releases it";
+        log.warn("Re-suspending currency-held event {}: {}", event.getEventId(), details);
+
+        event.setStatus(AccountingEventStatus.SUSPENDED);
+        event.setFailureReasonCode(PostingFailureReason.CURRENCY_NOT_SUPPORTED.name());
+        event.setFailureDetails(details);
+
+        attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
+        attemptHistory.setOutcomeDetails("CURRENCY_NOT_SUPPORTED: " + details);
+
+        accountingEventRepository.save(event);
+        reprocessingAttemptHistoryRepository.save(attemptHistory);
+
+        return Optional.of(PostingResult.failure(PostingFailureReason.CURRENCY_NOT_SUPPORTED, details));
     }
 
     /**

@@ -189,8 +189,8 @@ Check order: **hard lock > closed period > override**.
   holds `accounting:period:override` **and** supplies a non-blank `overrideJustification`, in which case
   the posting proceeds and the override is audit-logged (`PERIOD_OVERRIDE_POST`)
 - **Posting engine** — closed-period autoPost events land in SUSPENDED with
-  `failureReasonCode=PERIOD_CLOSED`; the auto-retry loop skips them, and they become reprocessable
-  after the period is reopened
+  `failureReasonCode=PERIOD_CLOSED`; the auto-retry loop skips them (as it skips currency holds,
+  `CURRENCY_NOT_SUPPORTED`), and they become reprocessable after the period is reopened
 
 ### Hard Lock
 
@@ -295,13 +295,18 @@ one place. A Stage A ledger never books another currency at par (ADR-0067 PC-9);
 on an inbound fact means the ledger currency until producers stamp one (E-3).
 
 - **Register over/short** (`order.session.closed`, #2312) — a session closed in another currency posts
-  nothing. It is held as one `AccountingEvent` row, `sourceSystem = pos-order`, `status = SKIPPED`,
+  nothing. It is held as one `AccountingEvent` row, `sourceSystem = pos-order`, `status = SUSPENDED`,
   `failureReasonCode = CURRENCY_NOT_SUPPORTED`, `domainKeyId` = `sessionId`, the currency in
   `errorMessage`; a redelivery writes no second row. Find one with
   `GET /v1/accounting/events?eventType=order.session.closed&domainKeyId=<sessionId>`.
 - **Settled payments** (`payment.payment.settled`, #2310) — one in another currency never becomes an
-  `AVAILABLE` `ReceivablePayment`. It is held the same way: `sourceSystem = pos-invoice`, `SKIPPED`,
+  `AVAILABLE` `ReceivablePayment`. It is held the same way: `sourceSystem = pos-invoice`, `SUSPENDED`,
   `CURRENCY_NOT_SUPPORTED`, `domainKeyId` = `paymentIntentId`.
+- **Releasing a hold** (#2334) — a held fact is `SUSPENDED`, not terminal, so it stays visible until a
+  booking rate (ADR-0067 B1) or manual handling releases it. The scheduled auto-retry skips it, as it skips
+  `PERIOD_CLOSED`; release goes through the audited `POST /v1/accounting/events/{eventId}/reprocess`. While
+  the fact's `currencyCode` is still not the ledger currency, a reprocess records a `FAILURE` attempt,
+  re-suspends it with `CURRENCY_NOT_SUPPORTED` and posts nothing.
 - **Vendor bills from supplier invoices** (`supplier.invoice.received`, #2309) — the bill records the
   invoice's `currency` (`vendor_bill.currency`, on `VendorBillResponse`). A bill in another currency gets status
   `CURRENCY_HOLD` with the reason in `rejectionReason`: it is not matched, cannot be approved through
@@ -310,8 +315,8 @@ on an inbound fact means the ledger currency until producers stamp one (E-3).
   different amount; a re-issue of a held bill keeps it held.
 - **Payment application** (`POST /v1/accounting/payments/{paymentId}/applications`, #2310) — a payment
   applies only to invoices in its own currency. The invoice replica carries no currency, so an invoice is
-  in the ledger currency; a payment in another currency is refused with 409 `CURRENCY_MISMATCH` before
-  any application, credit or journal entry is written.
+  in the ledger currency; a payment in another currency is refused with 422 `CURRENCY_NOT_SUPPORTED`
+  (ADR-0067 PC-9 (a), ADR-0017 §2; #2334) before any application, credit or journal entry is written.
 
 ## Error codes
 
@@ -352,7 +357,6 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ACCOUNT_NOT_ZERO_BALANCE` | 409 | GL account cannot be deactivated because its posted balance is not zero |
 | `ACCOUNT_NOT_INACTIVE` | 409 | GL account cannot be archived because it is not currently INACTIVE |
 | `ENTRY_ALREADY_POSTED` | 409 | Posting a journal entry that is already POSTED or REVERSED |
-| `CURRENCY_MISMATCH` | 409 | Applying a payment to invoices in another currency; refused before anything is written (#2310) |
 | `JE_ALREADY_REVERSED` | 409 | Reversing a journal entry that is already REVERSED |
 | `JE_NOT_POSTED` | 409 | Reversing a journal entry that was never POSTED |
 | `PERIOD_ALREADY_CLOSED` | 409 | Closing an accounting period that is already closed |
@@ -384,6 +388,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `WRITE_OFF_THRESHOLD_EXCEEDED` | 422 | A settlement write-off exceeds the configured threshold |
 | `WHOLE_REQUEST_REVERSAL_REQUIRED` | 422 | A payment application that was applied as one request must be reversed as one request |
 | `ACCOUNT_NOT_RECONCILABLE` | 422 | The GL account is not flagged as reconcilable |
+| `CURRENCY_NOT_SUPPORTED` | 422 | A document in a currency the ledger does not book (ADR-0067 PC-9): a payment applied to invoices in another currency, refused before anything is written (#2334); a bank account, statement or import in another currency |
 | `MATCH_AMOUNT_MISMATCH` | 422 | The matched statement and ledger amounts differ |
 | `RECONCILIATION_ADJUSTMENT_SIGN_INVALID` | 422 | A reconciliation adjustment carries the wrong sign for its type |
 | `RECONCILIATION_NOT_BALANCED` | 422 | Submit or approve while the live difference is beyond ±0.01; `fieldErrors` carries the `difference` |
@@ -490,7 +495,7 @@ ignored without recording its eventId.
   recorded `PROCESSED`, not `SKIPPED`.
 - **Metrics** — `accounting.inventory.fact.posted{eventType}` (a journal entry was posted) and
   `accounting.inventory.fact.skipped{eventType, reason=UNCOSTED}` (scrap and adjustment only).
-- **Ingestion records** (AD-007, #2186 D5) — each consumed fact writes one terminal `AccountingEvent` row:
+- **Ingestion records** (AD-007, #2186 D5) — each consumed fact writes one `AccountingEvent` row, terminal except a currency hold (below):
   `eventType` = the fact type, `sourceSystem = pos-inventory`, `domainKeyId` = `adjustmentId` / `scrapId` /
   `revaluationId`, `ingestionId` = envelope `eventId`, `transactionDate` = business date, `payload` = the fact,
   and a display `eventReference` (`AE-YYYYMM-n`). A posted fact is `PROCESSED` with `journalEntryId` and
@@ -499,7 +504,9 @@ ignored without recording its eventId.
   with `GET /v1/accounting/events?eventType=inventory.adjustment.posted&domainKeyId=<adjustmentId>` (or
   `eventType=inventory.product-value.changed&domainKeyId=<revaluationId>`).
   **Kafka facts are not REST-retryable**: they never end `FAILED` or `SUSPENDED`, which are the only statuses
-  the retry scheduler and `retryAccountingEvent` select; a failed fact is replayed from the DLQ instead.
+  the retry scheduler and `retryAccountingEvent` select; a failed fact is replayed from the DLQ instead. The one
+  exception is a fact held for its currency (see Ledger currency above): `SUSPENDED / CURRENCY_NOT_SUPPORTED`,
+  skipped by the retry scheduler and released only through the audited reprocess.
 - **Event envelope contract** (`GET /v1/accounting/events/contract`, issue #2207) — `version`/`fields`/`examples`
   describe the submission envelope as before; four additive optional sections document the rest of the
   ingestion surface, each sourced from the real rules rather than a hand-typed list that could drift:

@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -468,6 +469,25 @@ class EventIngestionServiceAdditionalTest {
         assertThat(result).isEqualTo(1);
         verify(accountingEventRepository, never()).findById(periodClosedEventId);
         verify(postingEngineOrchestrator).processEvent(eq(unmappedEvent), any(), anyString(), eq(true));
+    }
+
+    @Test
+    @DisplayName("processFailed skips CURRENCY_NOT_SUPPORTED holds, like PERIOD_CLOSED (ADR-0067 PC-9, #2334)")
+    void processFailed_SkipsCurrencyHolds() {
+        // A fact held for its currency waits for a booking rate (B1) or manual handling; the retry
+        // cadence cannot change the ledger's currency, so retrying only burns attempts.
+        UUID heldEventId = UUID.fromString("00000000-0000-0000-0000-000000000079");
+        AccountingEvent heldEvent = buildEvent(heldEventId, AccountingEventStatus.SUSPENDED);
+        heldEvent.setAttemptCount(0);
+        heldEvent.setFailureReasonCode(PostingFailureReason.CURRENCY_NOT_SUPPORTED.name());
+
+        when(accountingEventRepository.findAll()).thenReturn(List.of(heldEvent));
+
+        int result = service.processFailed(3);
+
+        assertThat(result).isZero();
+        verify(accountingEventRepository, never()).findById(heldEventId);
+        verify(postingEngineOrchestrator, never()).processEvent(any(), any(), anyString(), anyBoolean());
     }
 
     @Test

@@ -3899,7 +3899,7 @@ paths:
 
         Use this tool once the underlying mapping gap is fixed; do not use retryAccountingEvent, which is the unaudited retry for transient failures.
 
-        Preconditions: the event must exist and be SUSPENDED; an event already PROCESSED is rejected to preserve idempotency.
+        Preconditions: the event must exist and be SUSPENDED; an event already PROCESSED is rejected to preserve idempotency. A fact held for its currency (failureReasonCode CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9) is released here too; while its currency is still not the ledger''s it stays SUSPENDED with that reason and nothing is posted.
 
         Required inputs: eventId (UUID) as a path parameter and triggeredByUserId in the body; mappingVersionToUse and reprocessingNotes are optional.
 
@@ -5924,7 +5924,7 @@ paths:
 
         Emits an ACCOUNTING_PAYMENT_APPLY event; the application is atomic across all invoices and idempotent on applicationRequestId.
 
-        Returns 404 when the payment is not found, 400 for insufficient funds, 409 for a currency mismatch or an inapplicable invoice, and 503 when the invoice service is unreachable.
+        Returns 404 when the payment is not found, 400 for insufficient funds, 409 for an inapplicable invoice, 422 CURRENCY_NOT_SUPPORTED for a payment in a currency other than the ledger''s (nothing is written), and 503 when the invoice service is unreachable.
 
         '
       operationId: applyPayment
@@ -5978,7 +5978,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Currency mismatch or invoice not applicable
+          description: Invoice not applicable
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'CURRENCY_NOT_SUPPORTED: the payment is in a currency other than the ledger''s; nothing is written (ADR-0067 PC-9)'
       security:
       - bearerAuth:
         - accounting:payment:apply
@@ -18225,9 +18231,9 @@ components:
       description: Every accounting event processing status, and the lifecycles that produce them
       properties:
         kafkaFactLifecycle:
-          description: 'Status sequence for a Kafka-consumed inventory posting fact: exactly one terminal row is written per consumed fact, never a non-terminal one'
+          description: 'Status sequence for a Kafka-consumed posting fact: exactly one row is written per consumed fact, never RECEIVED, PROCESSING or FAILED. It is terminal (PROCESSED or SKIPPED), except a fact held for its currency, which is SUSPENDED with failureReasonCode CURRENCY_NOT_SUPPORTED: never auto-retried, released only through the audited reprocess endpoint'
           example:
-          - PROCESSED|SKIPPED
+          - PROCESSED|SKIPPED|SUSPENDED
           items:
             type: string
           type: array

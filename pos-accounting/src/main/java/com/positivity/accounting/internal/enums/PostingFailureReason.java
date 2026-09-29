@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.enums;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Reasons why posting rule evaluation can fail.
  * Used to provide actionable feedback when posting engine cannot produce a
@@ -77,9 +79,12 @@ public enum PostingFailureReason {
 
     /**
      * A consumed fact states an amount in a currency other than the ledger currency (ADR-0067
-     * PC-9, E-5; issue #2312). Never booked at par: the fact is held visibly with a currency
-     * reason, recorded SKIPPED — never retried by the scheduler — until a later stage can release
-     * it (a booking rate, or manual handling).
+     * PC-9, E-5; issues #2312, #2334). Never booked at par: the fact is parked visibly as {@code
+     * SUSPENDED} with this reason until a later stage can release it (a booking rate, B1, or manual
+     * handling). The scheduled auto-retry loop skips it, as it skips {@link #PERIOD_CLOSED}: the
+     * retry cadence cannot change the ledger's currency. It is released through the audited
+     * reprocess path, which re-suspends it with this reason while its currency is still not the
+     * ledger's.
      */
     CURRENCY_NOT_SUPPORTED;
 
@@ -89,6 +94,32 @@ public enum PostingFailureReason {
      * operator fixes and reprocesses ({@code SUSPENDED}).
      */
     public boolean isTerminalSkip() {
-        return this == UNCOSTED_FACT || this == MISSING_AMOUNT || this == ZERO_AMOUNT || this == CURRENCY_NOT_SUPPORTED;
+        return this == UNCOSTED_FACT || this == MISSING_AMOUNT || this == ZERO_AMOUNT;
+    }
+
+    /**
+     * Whether a {@code SUSPENDED} event with this reason is left out of the scheduled auto-retry
+     * loop: its remedy is an operator action (reopening a period, a booking rate or manual handling
+     * for a currency), never the passage of time, so retrying on a cadence only burns attempts. It
+     * stays eligible for the audited manual reprocess.
+     */
+    public boolean isExcludedFromAutoRetry() {
+        return this == PERIOD_CLOSED || this == CURRENCY_NOT_SUPPORTED;
+    }
+
+    /**
+     * {@link #isExcludedFromAutoRetry()} for a stored {@code failureReasonCode}; an absent or
+     * unknown code is not excluded.
+     */
+    public static boolean isExcludedFromAutoRetry(@Nullable String failureReasonCode) {
+        if (failureReasonCode == null) {
+            return false;
+        }
+        for (PostingFailureReason reason : values()) {
+            if (reason.name().equals(failureReasonCode)) {
+                return reason.isExcludedFromAutoRetry();
+            }
+        }
+        return false;
     }
 }
