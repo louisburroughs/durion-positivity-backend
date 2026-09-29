@@ -1231,6 +1231,7 @@ FROM (VALUES
     ('ADMIN', 'shop:dashboard:view'),
     ('ADMIN', 'shop:schedule:edit'),
     ('ADMIN', 'shop:schedule:view'),
+    ('ADMIN', 'shop:technician:view'),
     ('ADMIN', 'supplier:audit:read'),
     ('ADMIN', 'supplier:invoice:fetch'),
     ('ADMIN', 'supplier:mktcat:import'),
