@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.repository;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,4 +36,7 @@ public interface AccountingAuditLogRepository extends JpaRepository<AccountingAu
             @Param("itemType") String itemType,
             @Param("itemIds") Collection<UUID> itemIds,
             Pageable pageable);
+
+    /** The latest audit row of an operation (bank reconciliation policy {@code updatedAt}/{@code updatedBy}, #2305). */
+    Optional<AccountingAuditLog> findFirstByOperationOrderByTimestampDesc(String operation);
 }
