@@ -38,9 +38,10 @@ import org.springframework.transaction.annotation.Transactional;
  * propagates unwrapped for container retry / DLQ.
  *
  * <p><b>Currency (ADR-0067 PC-9, E-5; #2312):</b> a session closed in a currency other than the
- * ledger's ({@link LedgerCurrency}) is never posted at par. It is held as a {@code SKIPPED}
- * ingestion record with {@code failureReasonCode = CURRENCY_NOT_SUPPORTED}, once per session, and
- * nothing is posted.
+ * ledger's ({@link LedgerCurrency}) is never posted at par. It is held as a {@code SUSPENDED}
+ * ingestion record with {@code failureReasonCode = CURRENCY_NOT_SUPPORTED} (#2334), once per
+ * session, and nothing is posted; the auto-retry loop skips it and the audited reprocess path
+ * releases it.
  *
  * <p>Per-order revenue postings remain authoritative — this carries only the drawer variance
  * (spec §14), never a consolidated closing entry.

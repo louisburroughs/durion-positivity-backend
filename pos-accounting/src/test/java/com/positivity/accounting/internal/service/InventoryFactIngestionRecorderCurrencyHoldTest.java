@@ -29,8 +29,9 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * {@link InventoryFactIngestionRecorder#recordCurrencyHeld} (ADR-0067 PC-9, issue #2312): a fact in
- * a currency other than the ledger's is held as one visible {@code SKIPPED /
- * CURRENCY_NOT_SUPPORTED} record, and a redelivery does not write a second.
+ * a currency other than the ledger's is held as one visible {@code SUSPENDED /
+ * CURRENCY_NOT_SUPPORTED} record (releasable through the audited reprocess path, #2334), and a
+ * redelivery does not write a second.
  */
 class InventoryFactIngestionRecorderCurrencyHoldTest {
 
@@ -57,7 +58,7 @@ class InventoryFactIngestionRecorderCurrencyHoldTest {
     }
 
     @Test
-    @DisplayName("First delivery writes one SKIPPED / CURRENCY_NOT_SUPPORTED record under the producer")
+    @DisplayName("First delivery writes one SUSPENDED / CURRENCY_NOT_SUPPORTED record under the producer (#2334)")
     void firstDeliveryIsHeldVisibly() {
         when(accountingEventRepository.existsByEventTypeAndDomainKeyIdAndFailureReasonCode(
                         EVENT_TYPE, SESSION_ID.toString(), "CURRENCY_NOT_SUPPORTED"))
@@ -85,7 +86,7 @@ class InventoryFactIngestionRecorderCurrencyHoldTest {
         ArgumentCaptor<AccountingEvent> saved = ArgumentCaptor.forClass(AccountingEvent.class);
         verify(accountingEventRepository).save(saved.capture());
         AccountingEvent event = saved.getValue();
-        assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.SKIPPED);
+        assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
         assertThat(event.getFailureReasonCode()).isEqualTo("CURRENCY_NOT_SUPPORTED");
         assertThat(event.getErrorMessage()).contains("EUR");
         assertThat(event.getSourceSystem()).isEqualTo("pos-order");

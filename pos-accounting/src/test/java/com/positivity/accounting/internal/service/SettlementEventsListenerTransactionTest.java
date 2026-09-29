@@ -35,7 +35,7 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Pins {@link SettlementEventsListener}'s transaction shape (ADR-0044 as amended by #2146, PR
  * #2324 review) against a real transaction manager: the listener method opens no transaction of its
- * own, and a settled payment held for its currency (ADR-0067 PC-9) commits its {@code SKIPPED /
+ * own, and a settled payment held for its currency (ADR-0067 PC-9) commits its {@code SUSPENDED /
  * CURRENCY_NOT_SUPPORTED} record and its processed mark together in a {@code REQUIRES_NEW}
  * transaction, independent of any caller's transaction.
  */
@@ -112,7 +112,7 @@ class SettlementEventsListenerTransactionTest {
         List<AccountingEvent> held = heldRecords();
         assertThat(held).hasSize(1);
         AccountingEvent record = held.getFirst();
-        assertThat(record.getStatus()).isEqualTo(AccountingEventStatus.SKIPPED);
+        assertThat(record.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
         assertThat(record.getFailureReasonCode()).isEqualTo("CURRENCY_NOT_SUPPORTED");
         assertThat(record.getSourceSystem()).isEqualTo("pos-invoice");
         assertThat(record.getIngestionId()).isEqualTo(UUID.fromString(eventId));

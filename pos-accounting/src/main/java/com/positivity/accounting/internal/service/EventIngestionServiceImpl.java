@@ -694,14 +694,15 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
         // Query all FAILED and SUSPENDED events that haven't exceeded max
         // retries. Events suspended with PERIOD_CLOSED (story B2, issue #944)
-        // are skipped: a closed accounting period will not reopen on the
-        // retry cadence, so retrying only burns attempts. They stay eligible
-        // for manual reprocessing after the period is reopened.
+        // or held for their currency, CURRENCY_NOT_SUPPORTED (ADR-0067 PC-9,
+        // issue #2334), are skipped: neither a closed period nor the ledger's
+        // currency changes on the retry cadence, so retrying only burns
+        // attempts. They stay eligible for the audited manual reprocess.
         List<AccountingEvent> failedEvents = accountingEventRepository.findAll().stream()
                 .filter(event -> (event.getStatus() == AccountingEventStatus.FAILED
                                 || event.getStatus() == AccountingEventStatus.SUSPENDED)
                         && (event.getAttemptCount() == null || event.getAttemptCount() < maxRetries)
-                        && !PostingFailureReason.PERIOD_CLOSED.name().equals(event.getFailureReasonCode()))
+                        && !PostingFailureReason.isExcludedFromAutoRetry(event.getFailureReasonCode()))
                 .toList();
 
         log.info("Found {} eligible failed/suspended events for retry", failedEvents.size());
