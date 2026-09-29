@@ -11,6 +11,8 @@ import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.event.JournalEntryReversed;
+import com.positivity.accounting.internal.event.LedgerPostingApplied;
+import com.positivity.accounting.internal.event.LedgerReversalApplied;
 import com.positivity.accounting.internal.exception.JournalEntryNotFoundException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
@@ -32,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -68,6 +71,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     private final AccountingPeriodGate accountingPeriodGate;
     private final AccountingAuditLogRepository auditLogRepository;
     private final OutboxService outboxService;
+    private final ApplicationEventPublisher eventPublisher;
 
     private static final BigDecimal BALANCE_TOLERANCE = new BigDecimal("0.0001");
     private static final String SYSTEM = "SYSTEM";
@@ -299,6 +303,10 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         entry.setUpdatedAt(Instant.now(clock));
 
         JournalEntry saved = journalEntryRepository.saveAndFlush(entry);
+        // The bank reconciliation's ledger-change hook (§5.5, #2304): a line posted into an approved window
+        // invalidates that approval, in this transaction; the posting itself proceeds (D11).
+        eventPublisher.publishEvent(new LedgerPostingApplied(
+                saved.getJournalEntryId(), transactionDate, accountsOf(saved), currentActor()));
         log.info(
                 "Posted journal entry {} as {} with total debits/credits: {}",
                 saved.getJournalEntryId(),
@@ -479,6 +487,17 @@ public class JournalEntryServiceImpl implements JournalEntryService {
             throw new JournalEntryNotReversibleException(originalEntryId, JournalEntryStatus.REVERSED);
         }
 
+        // The bank reconciliation's ledger-change hook (§5.5, #2304): matches on the original's lines break, its
+        // open outstanding items are voided and the approvals resting on them are invalidated, in this
+        // transaction; the reversal itself proceeds (D11).
+        eventPublisher.publishEvent(new LedgerReversalApplied(
+                originalEntryId,
+                savedReversal.getJournalEntryId(),
+                reversalTransactionDate.toLocalDate(),
+                original.getLines().stream().map(JournalEntryLine::getLineId).toList(),
+                accountsOf(original),
+                actor));
+
         recordReversalAudit(original, savedReversal, actor, reversalReason);
         publishReversalEvent(original, savedReversal, reversalTransactionDate.toLocalDate(), reversalReason, actor);
 
@@ -574,6 +593,13 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      * Acting user from the security context (ADR-0018), falling back to
      * SYSTEM for unauthenticated internal flows.
      */
+    private static java.util.Set<UUID> accountsOf(JournalEntry entry) {
+        return entry.getLines().stream()
+                .map(JournalEntryLine::getGlAccountId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
     private static String currentActor() {
         return SecurityContextHelper.isAuthenticated()
                 ? SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM)
