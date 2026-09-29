@@ -749,6 +749,136 @@ class BankReconciliationContractBehaviorIT extends BaseContractIntegrationTest {
         }
     }
 
+    // ---- approval workflow (#2304) ----------------------------------------------------------------
+
+    @Nested
+    @DisplayName("approval workflow (#2304)")
+    class Approval {
+
+        private static final String WHY = "The window was started from the wrong statement";
+
+        @Test
+        void unexplainedItemsAnswer422WithBothCountsAndTheIds() throws Exception {
+            UUID reconId = reconcile(cash, statement(cash, "0", "250.00", "250.00"));
+            UUID deposit = postEntry(cash, revenue, "250.00", DAY);
+            postJson(RECONCILIATIONS + "/" + reconId + "/matches", match(bankRows(cash), List.of(deposit), null))
+                    .andExpect(status().isCreated());
+            // A pair that nets to zero on the account: balanced, two lines unexplained.
+            postEntry(cash, revenue, "25.00", DAY);
+            postEntry(revenue, cash, "25.00", DAY);
+
+            expectError(
+                            postJson(RECONCILIATIONS + "/" + reconId + "/submit", Map.of()),
+                            422,
+                            "RECONCILIATION_HAS_UNEXPLAINED_ITEMS")
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("countUnexplainedBank"))
+                    .andExpect(jsonPath("$.fieldErrors[0].message").value("0"))
+                    .andExpect(jsonPath("$.fieldErrors[1].field").value("countUnexplainedLedger"))
+                    .andExpect(jsonPath("$.fieldErrors[1].message").value("2"))
+                    .andExpect(jsonPath("$.fieldErrors[2].field").value("unexplainedGlLineIds[0]"))
+                    .andExpect(jsonPath("$.fieldErrors[3].field").value("unexplainedGlLineIds[1]"));
+        }
+
+        @Test
+        void selfApprovalIs403AndAStaleVersion409() throws Exception {
+            UUID reconId = balancedReconciliation();
+            expectError(
+                    postJson(RECONCILIATIONS + "/" + reconId + "/submit", Map.of("version", 999)),
+                    409,
+                    "OPTIMISTIC_LOCK");
+            postJson(RECONCILIATIONS + "/" + reconId + "/submit", Map.of()).andExpect(status().isOk());
+            expectError(
+                    postJson(RECONCILIATIONS + "/" + reconId + "/finalize", Map.of()),
+                    403,
+                    "RECONCILIATION_SELF_APPROVAL");
+            mockMvc.perform(withAuth(get(RECONCILIATIONS + "/" + reconId + "/review")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.readiness.canApprove").value(false))
+                    .andExpect(jsonPath("$.readiness.reasons[0]").value("SELF_APPROVAL"));
+            // SUBMITTED no longer changes until the approver returns it.
+            expectError(
+                    postJson(RECONCILIATIONS + "/" + reconId + "/auto-match", Map.of()),
+                    409,
+                    "RECONCILIATION_NOT_EDITABLE");
+        }
+
+        @Test
+        void returnCancelAndSupersedeCodes() throws Exception {
+            UUID reconId = balancedReconciliation();
+            expectError(
+                    asApprover(post(RECONCILIATIONS + "/" + reconId + "/return"), "{\"reason\":\"" + WHY + "\"}"),
+                    409,
+                    "RECONCILIATION_NOT_SUBMITTED");
+            expectError(
+                    asApprover(
+                            post(RECONCILIATIONS + "/" + reconId + "/supersede"),
+                            "{\"justification\":\"" + WHY + "\"}"),
+                    409,
+                    "RECONCILIATION_WINDOW_ALREADY_RECONCILED");
+            postJson(RECONCILIATIONS + "/" + reconId + "/submit", Map.of()).andExpect(status().isOk());
+            expectError(
+                    asApprover(post(RECONCILIATIONS + "/" + reconId + "/return"), "{\"reason\":\"too short\"}"),
+                    400,
+                    "JUSTIFICATION_REQUIRED");
+            asApprover(post(RECONCILIATIONS + "/" + reconId + "/return"), "{\"reason\":\"" + WHY + "\"}")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
+            asApprover(post(RECONCILIATIONS + "/" + reconId + "/cancel"), "{\"justification\":\"" + WHY + "\"}")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("CANCELLED"))
+                    .andExpect(jsonPath("$.cancelReason").value(WHY));
+            expectError(
+                    postJson(RECONCILIATIONS + "/" + reconId + "/auto-match", Map.of()),
+                    409,
+                    "RECONCILIATION_NOT_EDITABLE");
+            mockMvc.perform(withAuth(get(RECONCILIATIONS + "/" + reconId + "/audit")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalElements").isNumber())
+                    .andExpect(jsonPath("$.entries[?(@.operation == 'RECONCILIATION_CANCEL')].userId")
+                            .value(APPROVER))
+                    .andExpect(jsonPath("$.entries[?(@.operation == 'RECONCILIATION_RETURN')].justification")
+                            .value(WHY));
+        }
+
+        @Test
+        void aSupersessionNamingAnUnknownStatementIs422() throws Exception {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("glAccountId", cash.toString());
+            body.put("requestId", UUIDv7Generator.generate().toString());
+            body.put(
+                    "statement",
+                    Map.of(
+                            "startDate",
+                            "2021-09-01",
+                            "endDate",
+                            "2021-09-30",
+                            "openingBalance",
+                            "0",
+                            "closingBalance",
+                            "10.00"));
+            body.put(
+                    "transactions",
+                    List.of(Map.of("date", DAY.toString(), "signedAmount", "10.00", "description", "ROW 1")));
+            body.put("gapAcknowledgement", ACK);
+            body.put("supersedesStatementId", UUIDv7Generator.generate().toString());
+            body.put("supersessionJustification", "short");
+            expectError(postJson("/v1/accounting/bank-statements", body), 400, "JUSTIFICATION_REQUIRED");
+            body.put("requestId", UUIDv7Generator.generate().toString());
+            body.put("supersessionJustification", WHY);
+            expectError(postJson("/v1/accounting/bank-statements", body), 422, "STATEMENT_SUPERSESSION_NOT_ELIGIBLE")
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("supersedesStatementId"));
+        }
+
+        /** An IN_PROGRESS reconciliation whose one row is matched: E4 holds. */
+        private UUID balancedReconciliation() throws Exception {
+            UUID reconId = reconcile(cash, statement(cash, "0", "250.00", "250.00"));
+            UUID deposit = postEntry(cash, revenue, "250.00", DAY);
+            postJson(RECONCILIATIONS + "/" + reconId + "/matches", match(bankRows(cash), List.of(deposit), null))
+                    .andExpect(status().isCreated());
+            return reconId;
+        }
+    }
+
     // ---- 403 per endpoint ------------------------------------------------------------------------
 
     @Test
