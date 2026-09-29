@@ -59,15 +59,16 @@ public class ReconciliationAdjustmentController {
             description = """
                     Posts a reconciliation adjustment as a real balanced journal entry through the \
                     accounting-period gate: positive debits the reconciled cash account against the type's mapped \
-                    counter account, negative credits it. BANK_FEE and NSF_FEE are negative, INTEREST_EARNED \
-                    positive; TRANSFER (either sign) posts against counterGlAccountId, another bank account, with \
-                    no mapping. OTHER posts to the clearing account and names exactly one link: a bank transaction, \
+                    counter account, negative credits it; BANK_FEE and NSF_FEE are negative, INTEREST_EARNED \
+                    positive, and TRANSFER (either sign) posts against counterGlAccountId, another bank account, \
+                    with no mapping.
+                    OTHER posts to the clearing account and names exactly one link: a bank transaction, \
                     settlesMatchId (a match residual; the server sets the amount to the served residual and \
                     replaces the match with an exact one) or bridgesStatementId (this statement's acknowledged gap; \
-                    the server sets the amount to the opening difference). With a bankTransactionId the entry's \
-                    cash line is matched to it as an ADJUSTMENT match. The entry is dated at the explaining date \
-                    (the bank date, the residual match's latest bank date, or the day before the window) when its \
-                    period is open, else at transactionDate.
+                    the server sets the amount to the opening difference); with a bankTransactionId the entry's \
+                    cash line is matched to it as an ADJUSTMENT match, and the entry is dated at the explaining \
+                    date (the bank date, the residual match's latest bank date, or the day before the window) when \
+                    its period is open, else at transactionDate.
                     Use this tool for a bank-only movement the books lack; do not use it for a timing difference \
                     (registerReconciliationOutstandingItem), a duplicate (bank-transaction duplicate review) or a \
                     books error (a journal-entry reversal).
@@ -87,8 +88,8 @@ public class ReconciliationAdjustmentController {
                     RECONCILIATION_ADJUSTMENT_SIGN_INVALID, \
                     ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE, GL_ACCOUNT_NOT_ACTIVE, \
                     ACCOUNT_NOT_RECONCILABLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED when \
-                    the rule named fails. An adjustment linked to a bank transaction must equal its amount exactly \
-                    (no minor-unit tolerance); any difference is ADJUSTMENT_LINK_NOT_ELIGIBLE on amount.
+                    the rule named fails; an adjustment linked to a bank transaction must equal its amount exactly \
+                    (no minor-unit tolerance), and any difference is ADJUSTMENT_LINK_NOT_ELIGIBLE on amount.
                     """)
     @ApiResponse(
             responseCode = "201",

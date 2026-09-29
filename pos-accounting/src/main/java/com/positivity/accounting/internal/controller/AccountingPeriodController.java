@@ -119,15 +119,15 @@ public class AccountingPeriodController {
                     reopenAccountingPeriod, which reverses this transition for late adjustments.
                     Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may be \
                     dated inside the period; a valid YYYY-MM code with no row whose month has already started \
-                    is auto-provisioned and then closed. Then bank reconciliation readiness is evaluated under \
+                    is auto-provisioned and then closed; bank reconciliation readiness is then evaluated under \
                     the tenant's close policy: under REQUIRED or REQUIRED_WITH_EXCEPTION any BLOCKING check \
                     refuses the close; ADVISORY never refuses.
-                    Required inputs: periodCode (YYYY-MM) as a path parameter. The body is optional: \
+                    Required inputs: periodCode (YYYY-MM) as a path parameter; the body is optional: \
                     bankReconciliationException.justification (at least 10 characters) closes despite BLOCKING \
                     checks under REQUIRED_WITH_EXCEPTION when the caller also holds accounting:period:override.
                     Emits an ACCOUNTING_PERIOD_CLOSE event and audit-logs the close (with a readiness summary) \
                     with the acting user; a granted exception adds a PERIOD_CLOSE_BANKREC_EXCEPTION audit row \
-                    holding the readiness snapshot. The response carries bankReconciliationReady and \
+                    holding the readiness snapshot, and the response carries bankReconciliationReady and \
                     bankReconciliationException.
                     Returns 409 PERIOD_ALREADY_CLOSED when the period is already closed, 404 PERIOD_NOT_FOUND \
                     when no row exists and the month has not started, 422 PERIOD_HAS_DRAFT_ENTRIES listing \
@@ -391,8 +391,8 @@ public class AccountingPeriodController {
                     Preconditions: none; a month with no period row is evaluated as OPEN without creating it.
                     Required inputs: periodCode (YYYY-MM) as a path parameter; there is no request body.
                     Emits an ACCOUNTING_PERIOD_CLOSE_READINESS audit event; nothing is created or changed.
-                    Returns ready = true when no BLOCKING check remains under the tenant's close policy (under \
-                    ADVISORY only DRAFT journal entries count), and 400 VALIDATION_ERROR for a malformed \
+                    Returns 200 with ready = true when no BLOCKING check remains under the tenant's close policy \
+                    (under ADVISORY only DRAFT journal entries count), and 400 VALIDATION_ERROR for a malformed \
                     periodCode.
                     """,
             tags = {"Accounting Periods"})
@@ -433,7 +433,7 @@ public class AccountingPeriodController {
                     closeCoverageLagDays, allowSelfApproval and otherApprovalThreshold (null while unset), with \
                     the functional currency of the threshold and who changed a setting last.
                     Use this tool to see how period close treats unreconciled bank accounts; use \
-                    setBankReconciliationPolicy to change it.
+                    setBankReconciliationPolicy instead to change it.
                     Preconditions: none; a setting never written reads as its default (REQUIRED_WITH_EXCEPTION, \
                     BANK_CASH_SUBTYPE, 0, false, unset).
                     Required inputs: none; there are no parameters and no request body.
@@ -470,7 +470,8 @@ public class AccountingPeriodController {
                     (amount >= 0 in the functional currency, or null to unset it).
                     Use this tool when Finance changes how period close treats unreconciled bank accounts, \
                     whether preparers may approve their own reconciliations, or the OTHER adjustment approval \
-                    threshold; use getBankReconciliationPolicy to read the current values first.
+                    threshold; do not use it just to read the current values (use getBankReconciliationPolicy \
+                    instead).
                     Preconditions: the caller holds accounting:period:hard_lock, the governance level of the \
                     hard lock.
                     Required inputs: all six body fields, including otherApprovalThreshold (null clears it) and \

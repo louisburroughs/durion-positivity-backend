@@ -1349,12 +1349,23 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              September CSV:
+                description: September CSV
+                value:
+                  content: ZGF0ZSxkZXNjcmlwdGlvbixhbW91bnQKMjAyNi0wOS0wMixBQ0ggREVQT1NJVCw1MDAuMDA=
+                  fileName: september.csv
+                  formatCode: CSV
+                  glAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  requestId: 019a0000-0000-7000-8000-000000000020
+                  statement:
+                    closingBalance: 12830.67
+                    endDate: '2026-09-30'
+                    openingBalance: 12345.67
+                    startDate: '2026-09-01'
             schema:
               $ref: '#/components/schemas/BankImportCreateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/BankImportUploadForm'
-        description: 'The file as base64 content with its statement header and parse options (application/json), or the file and that request as parts (multipart/form-data: file, meta).'
+        description: The file as base64 content with its statement header and parse options. The same request is also accepted as multipart/form-data with the bytes in a part named file and this body, without content, in a JSON part named meta.
         required: true
       responses:
         '201':
@@ -1473,8 +1484,18 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Commit and start reconciling:
+                description: Commit and start reconciling
+                value:
+                  duplicateDecisions:
+                  - decision: DISTINCT
+                    rowNumber: 12
+                  startReconciliation: true
+                  version: 3
             schema:
               $ref: '#/components/schemas/BankImportCommitRequest'
+        description: Optional; decisions on POSSIBLE_DUPLICATE rows, whether to start a reconciliation, and the version the caller read.
       responses:
         '200':
           content:
@@ -1547,8 +1568,15 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Wrong account:
+                description: Wrong account
+                value:
+                  reason: Uploaded the savings account's file by mistake
+                  version: 3
             schema:
               $ref: '#/components/schemas/BankImportDiscardRequest'
+        description: Why the import is discarded and, optionally, the version the caller read.
         required: true
       responses:
         '200':
@@ -1668,8 +1696,22 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Debit and credit columns:
+                description: Debit and credit columns
+                value:
+                  columnMapping:
+                    credit: Credit
+                    date: Posted Date
+                    debit: Debit
+                    description: Payee
+                  dateFormat: dd/MM/yyyy
+                  saveAsAccountDefault: true
+                  signConvention: DEBIT_CREDIT_COLUMNS
+                  version: 3
             schema:
               $ref: '#/components/schemas/BankImportMappingRequest'
+        description: The column mapping and parse options to re-parse the file with; omitted options keep the import's current values.
         required: true
       responses:
         '200':
@@ -1839,8 +1881,16 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Correct a date:
+                description: Correct a date
+                value:
+                  correctedValues:
+                    date: '2026-09-14'
+                  version: 3
             schema:
               $ref: '#/components/schemas/BankImportRowUpdateRequest'
+        description: The row's corrected values, or a skip or duplicate decision with its reason.
         required: true
       responses:
         '200':
@@ -6095,7 +6145,7 @@ paths:
     get:
       description: 'Returns the tenant''s effective bank reconciliation policy: closePolicy, closeScope, closeCoverageLagDays, allowSelfApproval and otherApprovalThreshold (null while unset), with the functional currency of the threshold and who changed a setting last.
 
-        Use this tool to see how period close treats unreconciled bank accounts; use setBankReconciliationPolicy to change it.
+        Use this tool to see how period close treats unreconciled bank accounts; use setBankReconciliationPolicy instead to change it.
 
         Preconditions: none; a setting never written reads as its default (REQUIRED_WITH_EXCEPTION, BANK_CASH_SUBTYPE, 0, false, unset).
 
@@ -6131,7 +6181,7 @@ paths:
     put:
       description: 'Replaces the tenant''s bank reconciliation policy: closePolicy (ADVISORY, REQUIRED_WITH_EXCEPTION or REQUIRED), closeScope (BANK_CASH_SUBTYPE or ALL_RECONCILABLE), closeCoverageLagDays (integer >= 0), allowSelfApproval (boolean) and otherApprovalThreshold (amount >= 0 in the functional currency, or null to unset it).
 
-        Use this tool when Finance changes how period close treats unreconciled bank accounts, whether preparers may approve their own reconciliations, or the OTHER adjustment approval threshold; use getBankReconciliationPolicy to read the current values first.
+        Use this tool when Finance changes how period close treats unreconciled bank accounts, whether preparers may approve their own reconciliations, or the OTHER adjustment approval threshold; do not use it just to read the current values (use getBankReconciliationPolicy instead).
 
         Preconditions: the caller holds accounting:period:hard_lock, the governance level of the hard lock.
 
@@ -6297,11 +6347,11 @@ paths:
 
         Use this tool during month-end close after all journal entries for the month are posted and getAccountingPeriodCloseReadiness shows the bank accounts reconciled; do not use reopenAccountingPeriod, which reverses this transition for late adjustments.
 
-        Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may be dated inside the period; a valid YYYY-MM code with no row whose month has already started is auto-provisioned and then closed. Then bank reconciliation readiness is evaluated under the tenant''s close policy: under REQUIRED or REQUIRED_WITH_EXCEPTION any BLOCKING check refuses the close; ADVISORY never refuses.
+        Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may be dated inside the period; a valid YYYY-MM code with no row whose month has already started is auto-provisioned and then closed; bank reconciliation readiness is then evaluated under the tenant''s close policy: under REQUIRED or REQUIRED_WITH_EXCEPTION any BLOCKING check refuses the close; ADVISORY never refuses.
 
-        Required inputs: periodCode (YYYY-MM) as a path parameter. The body is optional: bankReconciliationException.justification (at least 10 characters) closes despite BLOCKING checks under REQUIRED_WITH_EXCEPTION when the caller also holds accounting:period:override.
+        Required inputs: periodCode (YYYY-MM) as a path parameter; the body is optional: bankReconciliationException.justification (at least 10 characters) closes despite BLOCKING checks under REQUIRED_WITH_EXCEPTION when the caller also holds accounting:period:override.
 
-        Emits an ACCOUNTING_PERIOD_CLOSE event and audit-logs the close (with a readiness summary) with the acting user; a granted exception adds a PERIOD_CLOSE_BANKREC_EXCEPTION audit row holding the readiness snapshot. The response carries bankReconciliationReady and bankReconciliationException.
+        Emits an ACCOUNTING_PERIOD_CLOSE event and audit-logs the close (with a readiness summary) with the acting user; a granted exception adds a PERIOD_CLOSE_BANKREC_EXCEPTION audit row holding the readiness snapshot, and the response carries bankReconciliationReady and bankReconciliationException.
 
         Returns 409 PERIOD_ALREADY_CLOSED when the period is already closed, 404 PERIOD_NOT_FOUND when no row exists and the month has not started, 422 PERIOD_HAS_DRAFT_ENTRIES listing the blocking draftJournalEntryIds in fieldErrors, 422 PERIOD_BANK_RECONCILIATION_INCOMPLETE listing unreconciledGlAccountIds in fieldErrors, 403 PERIOD_CLOSE_EXCEPTION_NOT_PERMITTED for an exception without the override authority, and 400 JUSTIFICATION_REQUIRED for a justification shorter than 10 characters.
 
@@ -6384,7 +6434,7 @@ paths:
 
         Emits an ACCOUNTING_PERIOD_CLOSE_READINESS audit event; nothing is created or changed.
 
-        Returns ready = true when no BLOCKING check remains under the tenant''s close policy (under ADVISORY only DRAFT journal entries count), and 400 VALIDATION_ERROR for a malformed periodCode.
+        Returns 200 with ready = true when no BLOCKING check remains under the tenant''s close policy (under ADVISORY only DRAFT journal entries count), and 400 VALIDATION_ERROR for a malformed periodCode.
 
         '
       operationId: getAccountingPeriodCloseReadiness
@@ -7527,7 +7577,9 @@ paths:
       - accounting:reconciliation:view
   /v1/accounting/reconciliations/{reconciliationId}/adjustments:
     post:
-      description: 'Posts a reconciliation adjustment as a real balanced journal entry through the accounting-period gate: positive debits the reconciled cash account against the type''s mapped counter account, negative credits it. BANK_FEE and NSF_FEE are negative, INTEREST_EARNED positive; TRANSFER (either sign) posts against counterGlAccountId, another bank account, with no mapping. OTHER posts to the clearing account and names exactly one link: a bank transaction, settlesMatchId (a match residual; the server sets the amount to the served residual and replaces the match with an exact one) or bridgesStatementId (this statement''s acknowledged gap; the server sets the amount to the opening difference). With a bankTransactionId the entry''s cash line is matched to it as an ADJUSTMENT match. The entry is dated at the explaining date (the bank date, the residual match''s latest bank date, or the day before the window) when its period is open, else at transactionDate.
+      description: 'Posts a reconciliation adjustment as a real balanced journal entry through the accounting-period gate: positive debits the reconciled cash account against the type''s mapped counter account, negative credits it; BANK_FEE and NSF_FEE are negative, INTEREST_EARNED positive, and TRANSFER (either sign) posts against counterGlAccountId, another bank account, with no mapping.
+
+        OTHER posts to the clearing account and names exactly one link: a bank transaction, settlesMatchId (a match residual; the server sets the amount to the served residual and replaces the match with an exact one) or bridgesStatementId (this statement''s acknowledged gap; the server sets the amount to the opening difference); with a bankTransactionId the entry''s cash line is matched to it as an ADJUSTMENT match, and the entry is dated at the explaining date (the bank date, the residual match''s latest bank date, or the day before the window) when its period is open, else at transactionDate.
 
         Use this tool for a bank-only movement the books lack; do not use it for a timing difference (registerReconciliationOutstandingItem), a duplicate (bank-transaction duplicate review) or a books error (a journal-entry reversal).
 
@@ -7537,7 +7589,7 @@ paths:
 
         Emits an ACCOUNTING_RECONCILIATION_ADJUSTMENT event and a RECONCILIATION_ADJUSTMENT audit row, and posts a journal entry that changes GL balances.
 
-        Returns 201 with the adjustment (200 with replayed true for a replayed requestId); 400 JUSTIFICATION_REQUIRED; 403 RECONCILIATION_ADJUSTMENT_APPROVAL_REQUIRED; 409 RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT, RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE; 422 RECONCILIATION_ADJUSTMENT_SIGN_INVALID, ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE, GL_ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_RECONCILABLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED when the rule named fails. An adjustment linked to a bank transaction must equal its amount exactly (no minor-unit tolerance); any difference is ADJUSTMENT_LINK_NOT_ELIGIBLE on amount.
+        Returns 201 with the adjustment (200 with replayed true for a replayed requestId); 400 JUSTIFICATION_REQUIRED; 403 RECONCILIATION_ADJUSTMENT_APPROVAL_REQUIRED; 409 RECONCILIATION_LINE_INELIGIBLE, ADJUSTMENT_BRIDGE_ALREADY_POSTED, IDEMPOTENCY_CONFLICT, RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_NOT_EDITABLE; 422 RECONCILIATION_ADJUSTMENT_SIGN_INVALID, ADJUSTMENT_LINK_REQUIRED, ADJUSTMENT_LINK_NOT_ELIGIBLE, GL_ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_RECONCILABLE, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED when the rule named fails; an adjustment linked to a bank transaction must equal its amount exactly (no minor-unit tolerance), and any difference is ADJUSTMENT_LINK_NOT_ELIGIBLE on amount.
 
         '
       operationId: addReconciliationAdjustment
@@ -7777,7 +7829,7 @@ paths:
     post:
       description: 'Proposes a ONE_TO_ONE RULE match, state PROPOSED, for every unexplained bank transaction whose top candidate scores at least 90 and beats the second by at least 20; closer calls propose nothing and are counted as ambiguous. The system never accepts a match.
 
-        Use this tool to pre-pair the obvious rows before reviewing them with acceptReconciliationMatch or rejectReconciliationMatch; use createReconciliationMatch to record a pairing directly.
+        Use this tool to pre-pair the obvious rows before reviewing them with acceptReconciliationMatch or rejectReconciliationMatch; use createReconciliationMatch instead to record a pairing directly.
 
         Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status).
 
@@ -7834,7 +7886,7 @@ paths:
     post:
       description: 'Cancels an IN_PROGRESS or SUBMITTED reconciliation (to CANCELLED): its proposed and accepted matches become UNMATCHED with unmatchReason RECONCILIATION_CANCELLED (bank rows back to UNMATCHED), the OPEN outstanding items it registered are RELEASED, and posted adjustments stay posted — they are real journal entries, reversed explicitly if wrong.
 
-        Use this tool to abandon a reconciliation; use returnReconciliation to send a submitted one back, and supersedeReconciliation to correct an approved one.
+        Use this tool to abandon a reconciliation; use returnReconciliation instead to send a submitted one back, and supersedeReconciliation to correct an approved one.
 
         Preconditions: the reconciliation must be IN_PROGRESS or SUBMITTED.
 
@@ -7857,8 +7909,15 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Cancel with justification:
+                description: Cancel with justification
+                value:
+                  justification: Started against the wrong statement
+                  version: 2
             schema:
               $ref: '#/components/schemas/ReconciliationJustificationRequest'
+        description: The justification (at least 10 characters) and, optionally, the version the caller read.
         required: true
       responses:
         '200':
@@ -8005,8 +8064,14 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              With version:
+                description: With version
+                value:
+                  version: 3
             schema:
               $ref: '#/components/schemas/ReconciliationTransitionRequest'
+        description: Optional; the version the caller read, for optimistic locking.
       responses:
         '200':
           content:
@@ -8143,7 +8208,7 @@ paths:
     post:
       description: 'Accepts a PROPOSED match: the match becomes ACCEPTED, its bank rows MATCHED, and any OPEN ledger-side outstanding item on its lines CLEARED.
 
-        Use this tool to confirm a proposal from autoMatchReconciliation; use rejectReconciliationMatch to decline it.
+        Use this tool to confirm a proposal from autoMatchReconciliation; use rejectReconciliationMatch instead to decline it.
 
         Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status); the match must be PROPOSED and its members still matchable; a justification is needed when the proposal uses the tolerance or spans dates beyond the window.
 
@@ -8173,9 +8238,14 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Accept with justification:
+                description: Accept with justification
+                value:
+                  justification: Amount within tolerance, same payer
             schema:
               $ref: '#/components/schemas/ReconciliationMatchDecisionRequest'
-        description: Optional justification.
+        description: Optional justification (at least 10 characters when given).
       responses:
         '200':
           content:
@@ -8225,7 +8295,7 @@ paths:
     post:
       description: 'Rejects a PROPOSED match: it becomes REJECTED (kept as history, never deleted) and its members are released for other matches.
 
-        Use this tool to decline a proposal from autoMatchReconciliation; use acceptReconciliationMatch to confirm it.
+        Use this tool to decline a proposal from autoMatchReconciliation; use acceptReconciliationMatch instead to confirm it.
 
         Preconditions: the reconciliation must be IN_PROGRESS (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE in any other status) and the match must be PROPOSED.
 
@@ -8255,9 +8325,14 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Reject with justification:
+                description: Reject with justification
+                value:
+                  justification: Different payer on the deposit slip
             schema:
               $ref: '#/components/schemas/ReconciliationMatchDecisionRequest'
-        description: Optional justification.
+        description: Optional justification (at least 10 characters when given).
       responses:
         '200':
           content:
@@ -8465,7 +8540,7 @@ paths:
     post:
       description: 'Closes an OPEN item registered in an earlier reconciliation whose other side appeared during the gap this reconciliation''s statement acknowledges: the item becomes CLEARED_IN_GAP with closedOn the day before the statement start and leaves this window''s opening and closing terms.
 
-        Use this tool only in the reconciliation of an acknowledged statement; use createReconciliationMatch for an item whose other side is in a bank row, and releaseReconciliationOutstandingItem to undo a wrong registration.
+        Use this tool only in the reconciliation of an acknowledged statement; use createReconciliationMatch instead for an item whose other side is in a bank row, and releaseReconciliationOutstandingItem to undo a wrong registration.
 
         Preconditions: the reconciliation must be IN_PROGRESS or SUBMITTED (409 RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE otherwise) and rest on a statement with a gap acknowledgement; the item must be OPEN, dated before the statement start and registered in an earlier reconciliation.
 
@@ -8495,6 +8570,11 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Cleared in gap:
+                description: Cleared in gap
+                value:
+                  justification: Deposit cleared in the unreported statement gap
             schema:
               $ref: '#/components/schemas/OutstandingItemJustificationRequest'
         description: Why the other side is taken to have cleared during the gap.
@@ -8578,6 +8658,11 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Still in transit:
+                description: Still in transit
+                value:
+                  justification: Cheque 1042 not yet presented by the payee
             schema:
               $ref: '#/components/schemas/OutstandingItemJustificationRequest'
         description: Why the timing explanation still holds.
@@ -8661,6 +8746,11 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Wrong registration:
+                description: Wrong registration
+                value:
+                  reason: Registered against the wrong cheque
             schema:
               $ref: '#/components/schemas/OutstandingItemReasonRequest'
         description: Why the item is released.
@@ -8765,7 +8855,7 @@ paths:
     post:
       description: 'Returns a SUBMITTED reconciliation to its preparer (SUBMITTED to IN_PROGRESS) with the approver''s reason, so it can change again.
 
-        Use this tool when the approver will not approve as submitted; use cancelReconciliation to abandon it and finalizeReconciliation to approve it.
+        Use this tool when the approver will not approve as submitted; use cancelReconciliation instead to abandon it, or finalizeReconciliation to approve it.
 
         Preconditions: the reconciliation must be SUBMITTED.
 
@@ -8788,8 +8878,15 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Return with reason:
+                description: Return with reason
+                value:
+                  reason: Outstanding cheque 1042 needs support
+                  version: 4
             schema:
               $ref: '#/components/schemas/ReconciliationReasonRequest'
+        description: The approver's reason (at least 10 characters) and, optionally, the version the caller read.
         required: true
       responses:
         '200':
@@ -8834,7 +8931,7 @@ paths:
     get:
       description: 'Returns the review read model in one call, computed live, so a client never does arithmetic: the header (account, window, baseline and whether this statement set it, provenance, status, preparer, period state, version); every term of the explicit equation E3 with its drill-down, including late adjustments with their owning reconciliation; the opening terms and the OPENING_DIFFERENCE diagnostic, which never blocks; everything unresolved from the baseline on (late arrivals first, unexplained bank rows with their top ledger candidate, unexplained ledger lines with their top bank candidate, possible duplicates with their near-duplicate candidates, aged timing items awaiting reaffirmation, proposed and broken matches); the posted adjustments; the evidence (matches with their served residual, items, exclusions, the adjustments to clearing, the statement); and the readiness with its reasons.
 
-        Use this tool to render or audit the reconciliation workspace; use getReconciliation for the header alone and getReconciliationReport for the printable report.
+        Use this tool to render or audit the reconciliation workspace; use getReconciliation instead for the header alone and getReconciliationReport for the printable report.
 
         Preconditions: the reconciliation must exist.
 
@@ -8885,7 +8982,7 @@ paths:
     post:
       description: 'Submits an IN_PROGRESS reconciliation for approval (IN_PROGRESS to SUBMITTED) after the approval gate E4 holds on the live figures: the difference within 0.01, then no unexplained bank transaction and no unexplained ledger line from the window''s baseline to its end. The opening difference is never a condition.
 
-        Use this tool when the preparer has explained every item; use finalizeReconciliation for the approver''s step, and getReconciliationReview to see what still blocks (readiness.canSubmit).
+        Use this tool when the preparer has explained every item; do not use it for the approver''s step (use finalizeReconciliation instead), and use getReconciliationReview to see what still blocks (readiness.canSubmit).
 
         Preconditions: the reconciliation must be IN_PROGRESS; while SUBMITTED it no longer changes until the approver returns it.
 
@@ -8908,8 +9005,14 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              With version:
+                description: With version
+                value:
+                  version: 3
             schema:
               $ref: '#/components/schemas/ReconciliationTransitionRequest'
+        description: Optional; the version the caller read, for optimistic locking.
       responses:
         '200':
           content:
@@ -8953,7 +9056,7 @@ paths:
     post:
       description: 'Starts a new IN_PROGRESS reconciliation of the same statement that supersedes a FINALIZED or INVALIDATED one: the predecessor''s match members are released (its matches keep their state as sealed history) and re-proposed in the successor as PROPOSED matches for the preparer to re-confirm; OPEN outstanding items carry over unchanged. The successor uses the baseline that governed the window. When the successor is approved the predecessor becomes SUPERSEDED.
 
-        Use this tool to correct an approved window (there is no reopen); use createReconciliation for a statement never reconciled, and a corrected re-import (supersedesStatementId) when the bank''s statement itself was wrong.
+        Use this tool to correct an approved window (there is no reopen); use createReconciliation instead for a statement never reconciled, and a corrected re-import (supersedesStatementId) when the bank''s statement itself was wrong.
 
         Preconditions: the reconciliation must be FINALIZED or INVALIDATED, not already superseded, and its statement still COMMITTED.
 
@@ -8976,8 +9079,16 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Supersede with justification:
+                description: Supersede with justification
+                value:
+                  justification: Bank corrected a posting date after approval
+                  requestId: 019a0000-0000-7000-8000-000000000003
+                  version: 5
             schema:
               $ref: '#/components/schemas/ReconciliationJustificationRequest'
+        description: The justification (at least 10 characters), a requestId (UUIDv7) so a retry returns the same successor, and optionally the version the caller read.
         required: true
       responses:
         '200':
@@ -12880,19 +12991,6 @@ components:
       - endDate
       - openingBalance
       - startDate
-      type: object
-    BankImportUploadForm:
-      description: 'Multipart upload: the statement file and the request as a JSON part'
-      properties:
-        file:
-          description: The statement file
-          format: binary
-          type: string
-        meta:
-          $ref: '#/components/schemas/BankImportCreateRequest'
-      required:
-      - file
-      - meta
       type: object
     BankReconciliationAdjustmentResponse:
       description: Reconciliation adjustment with its posted journal entry, link and reversal state

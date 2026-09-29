@@ -41,6 +41,22 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-accounts
   /v1/accounting/bank-accounts/{glAccountId}/profile:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-accounts~1{glAccountId}~1profile
+  /v1/accounting/bank-imports:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-imports
+  /v1/accounting/bank-imports/{importId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-imports~1{importId}
+  /v1/accounting/bank-imports/{importId}/commit:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-imports~1{importId}~1commit
+  /v1/accounting/bank-imports/{importId}/discard:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-imports~1{importId}~1discard
+  /v1/accounting/bank-imports/{importId}/file:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-imports~1{importId}~1file
+  /v1/accounting/bank-imports/{importId}/mapping:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-imports~1{importId}~1mapping
+  /v1/accounting/bank-imports/{importId}/rows:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-imports~1{importId}~1rows
+  /v1/accounting/bank-imports/{importId}/rows/{rowId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-imports~1{importId}~1rows~1{rowId}
   /v1/accounting/bank-statements:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1bank-statements
   /v1/accounting/bank-statements/{statementId}:
@@ -155,10 +171,14 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payments~1{paymentId}~1void
   /v1/accounting/periods:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1periods
+  /v1/accounting/periods/bank-reconciliation-policy:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1periods~1bank-reconciliation-policy
   /v1/accounting/periods/hard-lock:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1periods~1hard-lock
   /v1/accounting/periods/{periodCode}/close:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1periods~1{periodCode}~1close
+  /v1/accounting/periods/{periodCode}/close-readiness:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1periods~1{periodCode}~1close-readiness
   /v1/accounting/periods/{periodCode}/reopen:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1periods~1{periodCode}~1reopen
   /v1/accounting/posting-categories:
@@ -183,22 +203,48 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations
   /v1/accounting/reconciliations/adjustment-types:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1adjustment-types
-  /v1/accounting/reconciliations/import:
-    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1import
   /v1/accounting/reconciliations/{reconciliationId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}
   /v1/accounting/reconciliations/{reconciliationId}/adjustments:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1adjustments
+  /v1/accounting/reconciliations/{reconciliationId}/adjustments/{adjustmentId}/reverse:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1adjustments~1{adjustmentId}~1reverse
   /v1/accounting/reconciliations/{reconciliationId}/audit:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1audit
+  /v1/accounting/reconciliations/{reconciliationId}/auto-match:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1auto-match
+  /v1/accounting/reconciliations/{reconciliationId}/cancel:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1cancel
+  /v1/accounting/reconciliations/{reconciliationId}/candidates:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1candidates
   /v1/accounting/reconciliations/{reconciliationId}/finalize:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1finalize
-  /v1/accounting/reconciliations/{reconciliationId}/match:
-    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1match
+  /v1/accounting/reconciliations/{reconciliationId}/matches:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1matches
+  /v1/accounting/reconciliations/{reconciliationId}/matches/{matchId}/accept:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1matches~1{matchId}~1accept
+  /v1/accounting/reconciliations/{reconciliationId}/matches/{matchId}/reject:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1matches~1{matchId}~1reject
+  /v1/accounting/reconciliations/{reconciliationId}/matches/{matchId}/unmatch:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1matches~1{matchId}~1unmatch
+  /v1/accounting/reconciliations/{reconciliationId}/outstanding-items:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1outstanding-items
+  /v1/accounting/reconciliations/{reconciliationId}/outstanding-items/{itemId}/clear-in-gap:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1outstanding-items~1{itemId}~1clear-in-gap
+  /v1/accounting/reconciliations/{reconciliationId}/outstanding-items/{itemId}/reaffirm:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1outstanding-items~1{itemId}~1reaffirm
+  /v1/accounting/reconciliations/{reconciliationId}/outstanding-items/{itemId}/release:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1outstanding-items~1{itemId}~1release
   /v1/accounting/reconciliations/{reconciliationId}/report:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1report
-  /v1/accounting/reconciliations/{reconciliationId}/unmatch:
-    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1unmatch
+  /v1/accounting/reconciliations/{reconciliationId}/return:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1return
+  /v1/accounting/reconciliations/{reconciliationId}/review:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1review
+  /v1/accounting/reconciliations/{reconciliationId}/submit:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1submit
+  /v1/accounting/reconciliations/{reconciliationId}/supersede:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reconciliations~1{reconciliationId}~1supersede
   /v1/accounting/reports/export:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export
   /v1/accounting/reports/export/{exportId}:

@@ -10,7 +10,6 @@ import com.positivity.accounting.internal.bankfeed.file.dto.BankImportResponse;
 import com.positivity.accounting.internal.bankfeed.file.dto.BankImportRowListResponse;
 import com.positivity.accounting.internal.bankfeed.file.dto.BankImportRowResponse;
 import com.positivity.accounting.internal.bankfeed.file.dto.BankImportRowUpdateRequest;
-import com.positivity.accounting.internal.bankfeed.file.dto.BankImportUploadForm;
 import com.positivity.accounting.internal.bankfeed.file.enums.BankImportRowStatus;
 import com.positivity.accounting.internal.bankfeed.file.enums.BankImportStatus;
 import com.positivity.accounting.internal.bankfeed.file.service.BankImportService;
@@ -22,6 +21,7 @@ import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -119,18 +119,23 @@ public class BankImportController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankImportResponse> createBankImport(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "The file as base64 content with its statement header and parse options"
-                                    + " (application/json), or the file and that request as parts"
-                                    + " (multipart/form-data: file, meta).",
+                            description = "The file as base64 content with its statement header and parse options."
+                                    + " The same request is also accepted as multipart/form-data with the bytes in a"
+                                    + " part named file and this body, without content, in a JSON part named meta.",
                             required = true,
-                            content = {
-                                @Content(
-                                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                                        schema = @Schema(implementation = BankImportCreateRequest.class)),
-                                @Content(
-                                        mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
-                                        schema = @Schema(implementation = BankImportUploadForm.class))
-                            })
+                            content =
+                                    @Content(
+                                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                            schema = @Schema(implementation = BankImportCreateRequest.class),
+                                            examples = @ExampleObject(name = "September CSV", value = """
+                                                                    {"glAccountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "requestId":"019a0000-0000-7000-8000-000000000020",
+                                                                     "formatCode":"CSV",
+                                                                     "content":"ZGF0ZSxkZXNjcmlwdGlvbixhbW91bnQKMjAyNi0wOS0wMixBQ0ggREVQT1NJVCw1MDAuMDA=",
+                                                                     "fileName":"september.csv",
+                                                                     "statement":{"startDate":"2026-09-01","endDate":"2026-09-30",
+                                                                                  "openingBalance":12345.67,"closingBalance":12830.67}}
+                                                                    """)))
                     @RequestBody
                     @NonNull
                     BankImportCreateRequest request) {
@@ -367,7 +372,24 @@ public class BankImportController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankImportResponse> setBankImportMapping(
             @Parameter(description = "Import id") @PathVariable @NonNull UUID importId,
-            @RequestBody @NonNull BankImportMappingRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The column mapping and parse options to re-parse the file with; omitted"
+                                    + " options keep the import's current values.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                            examples = @ExampleObject(name = "Debit and credit columns", value = """
+                                                                    {"columnMapping":{"date":"Posted Date","description":"Payee",
+                                                                                      "debit":"Debit","credit":"Credit"},
+                                                                     "signConvention":"DEBIT_CREDIT_COLUMNS",
+                                                                     "dateFormat":"dd/MM/yyyy",
+                                                                     "saveAsAccountDefault":true,
+                                                                     "version":3}
+                                                                    """)))
+                    @RequestBody
+                    @NonNull
+                    BankImportMappingRequest request) {
         return ResponseEntity.ok(bankImportService.updateMapping(importId, request));
     }
 
@@ -422,7 +444,20 @@ public class BankImportController {
     public ResponseEntity<BankImportRowResponse> updateBankImportRow(
             @Parameter(description = "Import id") @PathVariable @NonNull UUID importId,
             @Parameter(description = "Row id") @PathVariable @NonNull UUID rowId,
-            @RequestBody @NonNull BankImportRowUpdateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The row's corrected values, or a skip or duplicate decision with its" + " reason.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                            examples = @ExampleObject(name = "Correct a date", value = """
+                                                                    {"correctedValues":{"date":"2026-09-14"},
+                                                                     "version":3}
+                                                                    """)))
+                    @RequestBody
+                    @NonNull
+                    BankImportRowUpdateRequest request) {
         return ResponseEntity.ok(bankImportService.updateRow(importId, rowId, request));
     }
 
@@ -483,7 +518,22 @@ public class BankImportController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankImportCommitResponse> commitBankImport(
             @Parameter(description = "Import id") @PathVariable @NonNull UUID importId,
-            @RequestBody(required = false) @Nullable BankImportCommitRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Optional; decisions on POSSIBLE_DUPLICATE rows, whether to start a"
+                                    + " reconciliation, and the version the caller read.",
+                            required = false,
+                            content =
+                                    @Content(
+                                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                            examples =
+                                                    @ExampleObject(name = "Commit and start reconciling", value = """
+                                                                    {"duplicateDecisions":[{"rowNumber":12,"decision":"DISTINCT"}],
+                                                                     "startReconciliation":true,
+                                                                     "version":3}
+                                                                    """)))
+                    @RequestBody(required = false)
+                    @Nullable
+                    BankImportCommitRequest request) {
         return ResponseEntity.ok(bankImportService.commit(importId, request));
     }
 
@@ -530,7 +580,19 @@ public class BankImportController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankImportResponse> discardBankImport(
             @Parameter(description = "Import id") @PathVariable @NonNull UUID importId,
-            @RequestBody @NonNull BankImportDiscardRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Why the import is discarded and, optionally, the version the caller read.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                            examples = @ExampleObject(name = "Wrong account", value = """
+                                                                    {"reason":"Uploaded the savings account's file by mistake",
+                                                                     "version":3}
+                                                                    """)))
+                    @RequestBody
+                    @NonNull
+                    BankImportDiscardRequest request) {
         return ResponseEntity.ok(bankImportService.discard(importId, request));
     }
 

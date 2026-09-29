@@ -177,7 +177,14 @@ public class ReconciliationOutstandingItemController {
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Why the item is released.",
                             required = true,
-                            content = @Content(mediaType = "application/json"))
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Wrong registration",
+                                                            value =
+                                                                    "{\"reason\":\"Registered against the wrong cheque\"}")))
                     @Valid
                     @RequestBody
                     @NonNull
@@ -241,7 +248,14 @@ public class ReconciliationOutstandingItemController {
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Why the timing explanation still holds.",
                             required = true,
-                            content = @Content(mediaType = "application/json"))
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Still in transit",
+                                                            value =
+                                                                    "{\"justification\":\"Cheque 1042 not yet presented by the payee\"}")))
                     @Valid
                     @RequestBody
                     @NonNull
@@ -264,7 +278,7 @@ public class ReconciliationOutstandingItemController {
                     closedOn the day before the statement start and leaves this window's opening and closing \
                     terms.
                     Use this tool only in the reconciliation of an acknowledged statement; use \
-                    createReconciliationMatch for an item whose other side is in a bank row, and \
+                    createReconciliationMatch instead for an item whose other side is in a bank row, and \
                     releaseReconciliationOutstandingItem to undo a wrong registration.
                     Preconditions: the reconciliation must be IN_PROGRESS or SUBMITTED (409 \
                     RECONCILIATION_ALREADY_FINALIZED when FINALIZED, RECONCILIATION_NOT_EDITABLE otherwise) and rest \
@@ -309,7 +323,14 @@ public class ReconciliationOutstandingItemController {
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Why the other side is taken to have cleared during the gap.",
                             required = true,
-                            content = @Content(mediaType = "application/json"))
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Cleared in gap",
+                                                            value =
+                                                                    "{\"justification\":\"Deposit cleared in the unreported statement gap\"}")))
                     @Valid
                     @RequestBody
                     @NonNull
