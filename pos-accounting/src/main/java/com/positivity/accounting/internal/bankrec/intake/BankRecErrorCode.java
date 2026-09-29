@@ -72,6 +72,12 @@ public enum BankRecErrorCode {
     BANK_ACCOUNT_FEED_NOT_LINKED(422),
     /** The account is not a reconcilable {@code BANK_CASH} account (422, D5). */
     ACCOUNT_NOT_RECONCILABLE(422),
+    /**
+     * An amount with more decimal places than its currency's ISO 4217 minor unit allows, for example
+     * {@code 10.005} in USD; trailing zeros do not count. Refused, never rounded; {@code fieldErrors} names each
+     * offending amount (422, ADR-0067 PC-6).
+     */
+    AMOUNT_PRECISION_EXCEEDS_CURRENCY(422),
     /** A currency other than the account profile's — or the functional currency's (422, D18, ADR-0067). */
     CURRENCY_NOT_SUPPORTED(422),
     /** The window overlaps a COMMITTED statement (422, U2). */

@@ -100,7 +100,8 @@ public class BankStatementController {
             responseCode = "422",
             description = "ACCOUNT_NOT_RECONCILABLE, CURRENCY_NOT_SUPPORTED, STATEMENT_PERIOD_OVERLAP,"
                     + " STATEMENT_NOT_CONTIGUOUS, STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE,"
-                    + " STATEMENT_TRANSACTION_OUT_OF_WINDOW or STATEMENT_ACTIVITY_MISMATCH",
+                    + " STATEMENT_TRANSACTION_OUT_OF_WINDOW, STATEMENT_ACTIVITY_MISMATCH or"
+                    + " AMOUNT_PRECISION_EXCEEDS_CURRENCY",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankStatementResponse> createBankStatement(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

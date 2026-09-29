@@ -40,6 +40,7 @@ import com.positivity.accounting.internal.bankrec.intake.ConcurrentCommitExcepti
 import com.positivity.accounting.internal.bankrec.intake.IntakeContext;
 import com.positivity.accounting.internal.bankrec.intake.IntakeResult;
 import com.positivity.accounting.internal.bankrec.intake.Justification;
+import com.positivity.accounting.internal.bankrec.intake.MinorUnit;
 import com.positivity.accounting.internal.bankrec.intake.ReconciliationStarter;
 import com.positivity.accounting.internal.bankrec.intake.TransactionNormalizer;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1;
@@ -189,6 +190,7 @@ public class BankImportServiceImpl implements BankImportService {
                 ? terms.currency()
                 : request.getCurrency().trim().toUpperCase(Locale.ROOT);
         requireCurrency(currency, terms);
+        requireMinorUnit(header, split, currency);
         requireFileNotCommitted(glAccountId, sha256);
         // A corrected file (§4.9 path 3; S5): the supersession is checked at upload for the preview, and the
         // header is checked with the superseded statement left out.
@@ -355,6 +357,7 @@ public class BankImportServiceImpl implements BankImportService {
         List<SplitPoint> split = request.getSplitAt() != null
                 ? splitPoints(request.getSplitAt(), header)
                 : splitPoints(fromJson(found.getSplitAt()), header);
+        requireMinorUnit(header, split, found.getCurrency());
         if (headerChecked) {
             // A corrected or widened header re-runs the header checks (§4.5: a widening may overlap).
             checkHeader(
@@ -526,6 +529,7 @@ public class BankImportServiceImpl implements BankImportService {
         ParserOptions options = ParserOptions.of(
                 found.getEncoding(), found.getDelimiter(), found.getDateFormat(), found.getDecimalFormat(), null);
         Map<String, String> errors = new LinkedHashMap<>();
+        Map<String, String> tooPrecise = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : corrections.entrySet()) {
             String key = entry.getKey();
             String field = "correctedValues." + key;
@@ -550,8 +554,8 @@ public class BankImportServiceImpl implements BankImportService {
                         errors.put(field, "a number, positive = cash in");
                     } else if (amount.signum() == 0) {
                         errors.put(field, "must not be zero");
-                    } else if (amount.stripTrailingZeros().scale() > TransactionNormalizer.AMOUNT_SCALE) {
-                        errors.put(field, "at most " + TransactionNormalizer.AMOUNT_SCALE + " decimal places");
+                    } else if (!MinorUnit.fits(amount, found.getCurrency())) {
+                        tooPrecise.put(field, MinorUnit.detail(found.getCurrency()));
                     } else {
                         row.setSignedAmount(TransactionNormalizer.scaleAmount(amount));
                     }
@@ -569,6 +573,10 @@ public class BankImportServiceImpl implements BankImportService {
             }
         }
         throwIfAny(errors, "The corrected values are invalid");
+        // ADR-0067 PC-6: shape first (400), then precision (422).
+        if (!tooPrecise.isEmpty()) {
+            throw MinorUnit.exceeded(tooPrecise);
+        }
 
         Map<String, Object> merged = row.getCorrectedValues() == null
                 ? new LinkedHashMap<>()
@@ -976,6 +984,32 @@ public class BankImportServiceImpl implements BankImportService {
                     "Currency " + currency + " is not the account's currency " + terms.currency(),
                     "currency",
                     "expected " + terms.currency());
+        }
+    }
+
+    /**
+     * ADR-0067 PC-6: the header balances and every split closing balance fit the currency's minor unit; the
+     * rest is refused with 422 {@code AMOUNT_PRECISION_EXCEEDS_CURRENCY} naming each field, never rounded.
+     */
+    private static void requireMinorUnit(
+            @Nullable BankImportStatementHeader header, List<SplitPoint> split, String currency) {
+        Map<String, String> tooPrecise = new LinkedHashMap<>();
+        String detail = MinorUnit.detail(currency);
+        if (header != null) {
+            if (header.getOpeningBalance() != null && !MinorUnit.fits(header.getOpeningBalance(), currency)) {
+                tooPrecise.put("statement.openingBalance", detail);
+            }
+            if (header.getClosingBalance() != null && !MinorUnit.fits(header.getClosingBalance(), currency)) {
+                tooPrecise.put("statement.closingBalance", detail);
+            }
+        }
+        for (int i = 0; i < split.size(); i++) {
+            if (!MinorUnit.fits(split.get(i).closingBalance(), currency)) {
+                tooPrecise.put("splitAt[" + i + "].closingBalance", detail);
+            }
+        }
+        if (!tooPrecise.isEmpty()) {
+            throw MinorUnit.exceeded(tooPrecise);
         }
     }
 

@@ -478,9 +478,10 @@ public class AccountingPeriodController {
                     Emits an ACCOUNTING_PERIOD_BANK_REC_POLICY_SET event and writes one BANK_REC_POLICY_SET \
                     audit row per setting whose value changes (old and new value, justification); an unchanged \
                     setting writes nothing.
-                    Returns 400 VALIDATION_ERROR for a missing field, an unknown value, a negative number, too \
-                    many decimals or a blank justification, and 400 JUSTIFICATION_REQUIRED for a justification \
-                    of 1 to 9 characters.
+                    Returns 400 VALIDATION_ERROR for a missing field, an unknown value, a negative number or a \
+                    blank justification, 400 JUSTIFICATION_REQUIRED for a justification of 1 to 9 characters, and \
+                    422 AMOUNT_PRECISION_EXCEEDS_CURRENCY when otherApprovalThreshold has more decimal places \
+                    than the functional currency's minor unit (it is refused, never rounded).
                     """,
             tags = {"Accounting Periods"})
     @ApiResponse(
@@ -495,6 +496,11 @@ public class AccountingPeriodController {
     @ApiResponse(
             responseCode = "403",
             description = "Caller lacks the accounting:period:hard_lock permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "otherApprovalThreshold has more decimal places than the functional currency allows"
+                    + " (AMOUNT_PRECISION_EXCEEDS_CURRENCY, fieldErrors[otherApprovalThreshold])",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankReconciliationPolicyResponse> setBankReconciliationPolicy(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

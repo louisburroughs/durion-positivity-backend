@@ -233,8 +233,8 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
     }
 
     /**
-     * The threshold as stored: in the functional currency's minor unit (ADR-0067); finer precision is refused
-     * rather than rounded.
+     * The threshold as stored: in the functional currency's minor unit; finer precision is refused with 422
+     * {@code AMOUNT_PRECISION_EXCEEDS_CURRENCY} rather than rounded (ADR-0067 PC-6).
      */
     private @Nullable String threshold(@Nullable BigDecimal amount) {
         if (amount == null) {
@@ -247,13 +247,7 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
                     "otherApprovalThreshold",
                     "must not be negative");
         }
-        if (amount.stripTrailingZeros().scale() > functionalCurrency.fractionDigits()) {
-            throw BankRecException.field(
-                    BankRecErrorCode.VALIDATION_ERROR,
-                    "otherApprovalThreshold has more decimals than " + functionalCurrency.code() + " allows",
-                    "otherApprovalThreshold",
-                    "at most " + functionalCurrency.fractionDigits() + " decimals");
-        }
+        functionalCurrency.requireMinorUnit(amount, "otherApprovalThreshold");
         return scaled(amount);
     }
 

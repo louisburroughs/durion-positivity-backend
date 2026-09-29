@@ -91,6 +91,7 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
         String accountCurrency =
                 existingProfile.map(BankAccountProfile::getCurrency).orElseGet(functionalCurrency::code);
         requireCurrency(batch, accountCurrency);
+        requireMinorUnit(batch, accountCurrency);
 
         // (c) statement header, (e) E1 — all before anything is written. A corrected statement names the one it
         // supersedes and is checked with that one left out (§4.9 path 3; S5, #2304).
@@ -207,6 +208,34 @@ public class BankTransactionIntakeImpl implements BankTransactionIntake {
                         "transactions[" + i + "].currency",
                         "expected " + accountCurrency);
             }
+        }
+    }
+
+    /**
+     * ADR-0067 PC-6: every balance and amount fits the currency's minor unit; the rest is refused, never
+     * rounded, naming each offending field (422 {@code AMOUNT_PRECISION_EXCEEDS_CURRENCY}).
+     */
+    private static void requireMinorUnit(BankTransactionsObservedV1 batch, String currency) {
+        Map<String, String> tooPrecise = new LinkedHashMap<>();
+        String detail = MinorUnit.detail(currency);
+        StatementHeader header = batch.statement();
+        if (header != null) {
+            if (header.openingBalance() != null && !MinorUnit.fits(header.openingBalance(), currency)) {
+                tooPrecise.put("openingBalance", detail);
+            }
+            if (header.closingBalance() != null && !MinorUnit.fits(header.closingBalance(), currency)) {
+                tooPrecise.put("closingBalance", detail);
+            }
+        }
+        List<BankTransactionObserved> rows = batch.transactions();
+        for (int i = 0; i < rows.size(); i++) {
+            BigDecimal amount = rows.get(i).signedAmount();
+            if (amount != null && !MinorUnit.fits(amount, currency)) {
+                tooPrecise.put("transactions[" + i + "].signedAmount", detail);
+            }
+        }
+        if (!tooPrecise.isEmpty()) {
+            throw MinorUnit.exceeded(tooPrecise);
         }
     }
 

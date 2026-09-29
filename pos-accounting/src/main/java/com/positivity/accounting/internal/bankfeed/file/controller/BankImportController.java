@@ -114,8 +114,8 @@ public class BankImportController {
     @ApiResponse(
             responseCode = "422",
             description = "STATEMENT_IMPORT_FAILED, ACCOUNT_NOT_RECONCILABLE, CURRENCY_NOT_SUPPORTED,"
-                    + " STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS or"
-                    + " STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE",
+                    + " STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS,"
+                    + " STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE or AMOUNT_PRECISION_EXCEEDS_CURRENCY",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankImportResponse> createBankImport(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -170,8 +170,8 @@ public class BankImportController {
     @ApiResponse(
             responseCode = "422",
             description = "STATEMENT_IMPORT_FAILED, ACCOUNT_NOT_RECONCILABLE, CURRENCY_NOT_SUPPORTED,"
-                    + " STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS or"
-                    + " STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE",
+                    + " STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS,"
+                    + " STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE or AMOUNT_PRECISION_EXCEEDS_CURRENCY",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankImportResponse> uploadBankImportFile(
             @Parameter(description = "The statement file") @RequestPart("file") @NonNull MultipartFile file,
@@ -362,7 +362,8 @@ public class BankImportController {
     @ApiResponse(
             responseCode = "422",
             description = "STATEMENT_PERIOD_OVERLAP, STATEMENT_NOT_CONTIGUOUS or"
-                    + " STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE after a header change",
+                    + " STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE after a header change;"
+                    + " AMOUNT_PRECISION_EXCEEDS_CURRENCY for a header or split balance finer than the currency",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankImportResponse> setBankImportMapping(
             @Parameter(description = "Import id") @PathVariable @NonNull UUID importId,
@@ -412,6 +413,11 @@ public class BankImportController {
     @ApiResponse(
             responseCode = "409",
             description = "IMPORT_ALREADY_COMMITTED, IMPORT_DISCARDED or OPTIMISTIC_LOCK",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "A corrected signedAmount has more decimal places than the import's currency allows"
+                    + " (AMOUNT_PRECISION_EXCEEDS_CURRENCY, fieldErrors[correctedValues.signedAmount])",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankImportRowResponse> updateBankImportRow(
             @Parameter(description = "Import id") @PathVariable @NonNull UUID importId,
@@ -472,7 +478,8 @@ public class BankImportController {
     @ApiResponse(
             responseCode = "422",
             description = "IMPORT_NOT_COMMITTABLE, CURRENCY_NOT_SUPPORTED, STATEMENT_PERIOD_OVERLAP,"
-                    + " STATEMENT_NOT_CONTIGUOUS or STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE",
+                    + " STATEMENT_NOT_CONTIGUOUS, STATEMENT_GAP_ACKNOWLEDGEMENT_NOT_APPLICABLE or"
+                    + " AMOUNT_PRECISION_EXCEEDS_CURRENCY",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankImportCommitResponse> commitBankImport(
             @Parameter(description = "Import id") @PathVariable @NonNull UUID importId,

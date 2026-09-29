@@ -394,6 +394,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `OUTSTANDING_ITEM_NOT_ELIGIBLE` | 422 | The line, sign, window or state does not allow the outstanding item, reaffirmation, release or clear-in-gap (#2303) |
 | `ADJUSTMENT_LINK_REQUIRED` | 422 | An OTHER without exactly one link, a residual/bridge link on another type, or a TRANSFER counter missing or misplaced (#2303) |
 | `ADJUSTMENT_LINK_NOT_ELIGIBLE` | 422 | The named match, statement, amount or TRANSFER counter fails its rule (#2303) |
+| `AMOUNT_PRECISION_EXCEEDS_CURRENCY` | 422 | An amount has more decimal places than its currency's ISO 4217 minor unit allows (e.g. `10.005` in USD; trailing zeros do not count). Refused, never rounded; `fieldErrors` names each amount — `otherApprovalThreshold` on the policy PUT, `amount` on a reconciliation adjustment, `openingBalance` / `closingBalance` / `transactions[n].signedAmount` on a manual statement or import commit, `statement.*Balance` / `splitAt[n].closingBalance` on an import upload or mapping change, `correctedValues.signedAmount` on an import row correction (ADR-0067 PC-6, #2305) |
 | `BANK_ACCOUNT_FEED_NOT_LINKED` | 422 | A statementless (feed-backed) reconciliation on an account without a feed link — every account in phase 1 (#2303) |
 | `PAYMENT_GATEWAY_FAILURE` | 500 | The AP payment gateway call failed |
 | `INTERNAL_ERROR` | 500 | Audit-trail event creation failed unexpectedly |

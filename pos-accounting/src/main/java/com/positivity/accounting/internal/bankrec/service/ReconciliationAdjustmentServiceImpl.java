@@ -130,6 +130,9 @@ public class ReconciliationAdjustmentServiceImpl implements ReconciliationAdjust
                 ? Justification.requiredByRule(request.getJustification(), JUSTIFICATION)
                 : Justification.optional(request.getJustification(), JUSTIFICATION);
 
+        // ADR-0067 PC-6: a sent amount finer than the currency's minor unit is refused, never rounded.
+        currency.requireMinorUnit(request.getAmount(), "amount");
+
         // The explaining evidence, and the server-computed amount of a residual or a bridge (§3.5).
         BankReconciliationMatch settled = null;
         List<BankTransaction> settledBank = List.of();

@@ -169,11 +169,24 @@ class BankReconciliationPolicyConfigurationTest extends PostgresIntegrationTestB
     }
 
     @Test
-    @DisplayName("a threshold finer than the functional currency's minor unit is 400 VALIDATION_ERROR")
+    @DisplayName("a threshold finer than the functional currency's minor unit is 422 AMOUNT_PRECISION_EXCEEDS_CURRENCY")
     void thresholdTooPrecise() {
         assertThatThrownBy(() -> configurationService.setBankReconciliationPolicy(request(0, false, "10.005")))
-                .isInstanceOfSatisfying(
-                        BankRecException.class, e -> assertThat(e.code()).isEqualTo(BankRecErrorCode.VALIDATION_ERROR));
+                .isInstanceOfSatisfying(BankRecException.class, e -> {
+                    assertThat(e.code()).isEqualTo(BankRecErrorCode.AMOUNT_PRECISION_EXCEEDS_CURRENCY);
+                    assertThat(e.code().httpStatus()).isEqualTo(422);
+                    assertThat(e.fieldErrors()).containsOnlyKeys("otherApprovalThreshold");
+                });
+        assertThat(policyAuditRows()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("trailing zeros beyond the minor unit are not extra precision: 10.0000 is stored as 10.00")
+    void trailingZerosAreNotPrecision() {
+        configurationService.setBankReconciliationPolicy(request(0, false, "10.0000"));
+
+        assertThat(configurationService.getBankReconciliationPolicy().getOtherApprovalThreshold())
+                .isEqualByComparingTo("10.00");
     }
 
     @Test
