@@ -497,6 +497,82 @@ class BankImportServiceImplTest {
         }
 
         @Test
+        void aLaterMappingWithoutTheOptInClearsSaveMappingAsDefault() {
+            UUID id = validUpload().getImportId();
+            Map<String, Object> mapping = Map.of("date", "date", "description", "description", "amount", "amount");
+            service.updateMapping(
+                    id,
+                    BankImportMappingRequest.builder()
+                            .columnMapping(mapping)
+                            .saveAsAccountDefault(true)
+                            .build());
+            assertThat(importStore.get(id).isSaveMappingAsDefault()).isTrue();
+
+            BankImportResponse remapped = service.updateMapping(
+                    id,
+                    BankImportMappingRequest.builder().columnMapping(mapping).build());
+
+            assertThat(remapped.getSaveMappingAsDefault()).isFalse();
+            assertThat(importStore.get(id).isSaveMappingAsDefault()).isFalse();
+        }
+
+        @Test
+        void aHeaderCorrectionThatMakesTheStatementContiguousCanDropTheAcknowledgement() {
+            UUID id = validUpload().getImportId();
+            assertThat(importStore.get(id).getGapAcknowledgement()).isEqualTo(ACK);
+            BankImportStatementHeader contiguous = BankImportStatementHeader.builder()
+                    .startDate(LocalDate.of(2026, 9, 1))
+                    .endDate(LocalDate.of(2026, 9, 30))
+                    .openingBalance(new BigDecimal("1000.00"))
+                    .closingBalance(new BigDecimal("1485.00"))
+                    .build();
+
+            service.updateMapping(
+                    id,
+                    BankImportMappingRequest.builder()
+                            .columnMapping(Map.of("date", "date", "description", "description", "amount", "amount"))
+                            .statement(contiguous)
+                            .build());
+
+            // A corrected header states its own acknowledgement: absent means none, not the stored one.
+            verify(lookup).checkHeader(eq(ACCOUNT), any(), isNull());
+            assertThat(importStore.get(id).getGapAcknowledgement()).isNull();
+        }
+
+        @Test
+        void aHeaderCorrectionThatOpensAGapCarriesANewAcknowledgement() {
+            UUID id = service.create(upload(CSV, "1000.00", "1485.00", null), null, null, null)
+                    .getImportId();
+            String ack = "The bank merged two accounts in August";
+
+            service.updateMapping(
+                    id,
+                    BankImportMappingRequest.builder()
+                            .columnMapping(Map.of("date", "date", "description", "description", "amount", "amount"))
+                            .gapAcknowledgement("  " + ack + " ")
+                            .build());
+
+            verify(lookup).checkHeader(eq(ACCOUNT), any(), eq("  " + ack + " "));
+            assertThat(importStore.get(id).getGapAcknowledgement()).isEqualTo(ack);
+        }
+
+        @Test
+        void aMappingAcknowledgementIsValidatedLikeTheUploadOne() {
+            UUID id = validUpload().getImportId();
+            assertThatThrownBy(() -> service.updateMapping(
+                            id,
+                            BankImportMappingRequest.builder()
+                                    .columnMapping(
+                                            Map.of("date", "date", "description", "description", "amount", "amount"))
+                                    .gapAcknowledgement("x".repeat(1001))
+                                    .build()))
+                    .isInstanceOfSatisfying(
+                            BankRecException.class,
+                            e -> assertThat(e.fieldErrors()).containsKey("gapAcknowledgement"));
+            assertThat(importStore.get(id).getGapAcknowledgement()).isEqualTo(ACK);
+        }
+
+        @Test
         void theWrongSignConventionDoesNotTieAndSwitchingItDoes() {
             // §8.2: a bank that shows withdrawals positive.
             UUID id = service.create(
@@ -571,6 +647,38 @@ class BankImportServiceImplTest {
                             .build());
             assertThat(skipped.getRowStatus()).isEqualTo(BankImportRowStatus.SKIPPED);
             assertThat(skipped.getSkipReason()).isEqualTo("already on August");
+        }
+
+        @Test
+        void aCorrectionDropsAnEarlierDistinctDecisionSoTheNewFingerprintIsReviewedAgain() {
+            // Every fingerprint collides: the row is flagged, confirmed distinct, then corrected.
+            when(lookup.collidingFingerprints(eq(ACCOUNT), anyCollection())).thenAnswer(inv -> {
+                Map<String, UUID> colliding = new HashMap<>();
+                for (Object fingerprint : inv.<java.util.Collection<?>>getArgument(1)) {
+                    colliding.put((String) fingerprint, UUID.fromString("01980000-0000-7000-8000-000000000777"));
+                }
+                return colliding;
+            });
+            UUID id = validUpload().getImportId();
+            BankImportRow row = rowStore.getFirst();
+            assertThat(row.getRowStatus()).isEqualTo(BankImportRowStatus.POSSIBLE_DUPLICATE);
+            service.updateRow(
+                    id,
+                    row.getRowId(),
+                    BankImportRowUpdateRequest.builder()
+                            .duplicateDecision("DISTINCT")
+                            .build());
+            assertThat(row.getRowStatus()).isEqualTo(BankImportRowStatus.PARSED);
+
+            BankImportRowResponse corrected = service.updateRow(
+                    id,
+                    row.getRowId(),
+                    BankImportRowUpdateRequest.builder()
+                            .correctedValues(Map.of("description", "ACH DEPOSIT PAYROLL"))
+                            .build());
+
+            assertThat(corrected.getRowStatus()).isEqualTo(BankImportRowStatus.POSSIBLE_DUPLICATE);
+            assertThat(row.getDuplicateDecision()).isNull();
         }
 
         @Test

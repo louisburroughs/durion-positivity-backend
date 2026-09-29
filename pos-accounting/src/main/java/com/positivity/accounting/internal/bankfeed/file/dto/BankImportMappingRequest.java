@@ -52,6 +52,13 @@ public class BankImportMappingRequest {
     @Schema(description = "A corrected or widened statement header; the header checks run again")
     private BankImportStatementHeader statement;
 
+    @Schema(
+            description = "Justification (at least 10 characters) when the statement does not continue the previous"
+                    + " one, refused when it does. It replaces the stored one whenever it or a statement header is"
+                    + " sent: a corrected header without it has no acknowledgement; absent with neither keeps it",
+            example = "The bank merged two accounts in August")
+    private String gapAcknowledgement;
+
     @Schema(description = "New split points; an empty list removes them, absent keeps them")
     private List<BankImportSplitPoint> splitAt;
 

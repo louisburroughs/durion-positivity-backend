@@ -204,10 +204,7 @@ public class BankImportServiceImpl implements BankImportService {
         created.setFileSha256(sha256);
         applyHeader(created, header);
         created.setSplitAt(toJson(split));
-        created.setGapAcknowledgement(
-                request.getGapAcknowledgement() == null
-                        ? null
-                        : request.getGapAcknowledgement().trim());
+        created.setGapAcknowledgement(trimmed(request.getGapAcknowledgement()));
         applyOptions(created, options, parsed);
         created.setCreatedBy(actor);
         created.setRetentionUntil(LocalDate.now(clock).plusDays(retentionDays));
@@ -327,18 +324,25 @@ public class BankImportServiceImpl implements BankImportService {
                 firstNonNull(request.getSignConvention(), found.getSignConvention()));
 
         BankImportStatementHeader header = request.getStatement() != null ? request.getStatement() : headerOf(found);
-        if (request.getStatement() != null) {
+        // A sent header or acknowledgement restates the acknowledgement: a corrected header may now continue
+        // the previous statement (the stored one would be NOT_APPLICABLE) or open a gap (it needs one).
+        boolean headerChecked = request.getStatement() != null || request.getGapAcknowledgement() != null;
+        if (headerChecked) {
             Map<String, String> errors = new LinkedHashMap<>();
-            validateHeader(errors, header);
+            if (request.getStatement() != null) {
+                validateHeader(errors, header);
+            }
+            validateGapAcknowledgement(errors, request.getGapAcknowledgement());
             throwIfAny(errors, "The statement header is invalid");
         }
         List<SplitPoint> split = request.getSplitAt() != null
                 ? splitPoints(request.getSplitAt(), header)
                 : splitPoints(fromJson(found.getSplitAt()), header);
-        if (request.getStatement() != null) {
+        if (headerChecked) {
             // A corrected or widened header re-runs the header checks (§4.5: a widening may overlap).
-            lookup.checkHeader(found.getGlAccountId(), statementHeader(header), found.getGapAcknowledgement());
+            lookup.checkHeader(found.getGlAccountId(), statementHeader(header), request.getGapAcknowledgement());
             applyHeader(found, header);
+            found.setGapAcknowledgement(trimmed(request.getGapAcknowledgement()));
         }
         found.setSplitAt(toJson(split));
 
@@ -358,8 +362,9 @@ public class BankImportServiceImpl implements BankImportService {
         String actor = currentActor();
         Map<String, Object> previousMapping = found.getColumnMapping();
         applyOptions(found, options, parsed);
-        if (Boolean.TRUE.equals(request.getSaveAsAccountDefault())) {
-            found.setSaveMappingAsDefault(true);
+        // Each mapping restates the opt-in: the commit saves the default only if the last mapping asked.
+        found.setSaveMappingAsDefault(Boolean.TRUE.equals(request.getSaveAsAccountDefault()));
+        if (found.isSaveMappingAsDefault()) {
             lookup.saveDefaultColumnMapping(found.getGlAccountId(), mapping.toJson(), actor);
         }
         found.setStatus(parsed.mappingResolved() ? BankImportStatus.VALIDATED : BankImportStatus.UPLOADED);
@@ -375,7 +380,8 @@ public class BankImportServiceImpl implements BankImportService {
                 previousMapping == null ? null : "columnMapping=" + previousMapping,
                 "columnMapping=" + mapping.toJson() + ", signConvention=" + options.signConvention()
                         + ", window=" + saved.getStatementStartDate() + ".." + saved.getStatementEndDate()
-                        + ", saveAsAccountDefault=" + Boolean.TRUE.equals(request.getSaveAsAccountDefault())
+                        + ", saveAsAccountDefault=" + saved.isSaveMappingAsDefault()
+                        + (headerChecked ? ", gapAcknowledgement=" + saved.getGapAcknowledgement() : "")
                         + ", status=" + saved.getStatus());
         return view(saved, rows, true).build();
     }
@@ -545,6 +551,8 @@ public class BankImportServiceImpl implements BankImportService {
                 : new LinkedHashMap<>(row.getCorrectedValues());
         corrections.forEach((k, v) -> merged.put(k, v == null ? null : v.toString()));
         row.setCorrectedValues(merged);
+        // New effective values may mean a new fingerprint: an earlier DISTINCT answer no longer applies.
+        row.setDuplicateDecision(null);
         row.setCorrectedBy(actor);
         row.setCorrectedAt(now);
         if (row.getTransactionDate() == null || row.getSignedAmount() == null || row.getDescription() == null) {
@@ -1064,11 +1072,19 @@ public class BankImportServiceImpl implements BankImportService {
         } else {
             validateHeader(errors, request.getStatement());
         }
-        if (request.getGapAcknowledgement() != null
-                && request.getGapAcknowledgement().length() > 1000) {
+        validateGapAcknowledgement(errors, request.getGapAcknowledgement());
+        throwIfAny(errors, "The import request is invalid");
+    }
+
+    /** The column's bound; its justification rules (§4.2) run in the header checks. */
+    private static void validateGapAcknowledgement(Map<String, String> errors, @Nullable String acknowledgement) {
+        if (acknowledgement != null && acknowledgement.length() > 1000) {
             errors.put("gapAcknowledgement", "at most 1000 characters");
         }
-        throwIfAny(errors, "The import request is invalid");
+    }
+
+    private static @Nullable String trimmed(@Nullable String value) {
+        return value == null ? null : value.trim();
     }
 
     private static void validateHeader(Map<String, String> errors, BankImportStatementHeader header) {
