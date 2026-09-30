@@ -11,6 +11,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -103,7 +105,11 @@ public class PaymentApplication extends TenantScopedEntity {
     /**
      * Invoice status at the time of application.
      * Stored to support idempotent retries without external service calls.
+     *
+     * <p>Ordinal, in a {@code smallint} column (V1 baseline). Pinned to {@code SMALLINT} because
+     * Hibernate's default ordinal type is {@code tinyint}, which H2 in PostgreSQL mode does not have.
      */
+    @JdbcTypeCode(SqlTypes.SMALLINT)
     @Column(name = "invoice_status", length = 50)
     private InvoiceStatus invoiceStatus;
 

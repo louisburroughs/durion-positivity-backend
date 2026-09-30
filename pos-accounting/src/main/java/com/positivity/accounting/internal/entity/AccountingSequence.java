@@ -31,7 +31,7 @@ import lombok.ToString;
  * statutory gapless guarantee is claimed).
  *
  * <p>Rows are bootstrapped on first use at {@code nextValue = 1} by
- * {@code AccountingSequenceProvisioner}; the bootstrap consumes no numbers.
+ * {@code AccountingSequenceLocker} (insert-if-absent in the caller's transaction); the bootstrap consumes no numbers.
  */
 @Getter
 @Setter
@@ -41,7 +41,11 @@ import lombok.ToString;
 @Entity
 @Table(
         name = "accounting_sequence",
-        uniqueConstraints = {@UniqueConstraint(name = "uq_accounting_sequence_scope_key", columnNames = "scope_key")})
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "uq_accounting_sequence_scope_key",
+                    columnNames = {"tenant_id", "scope_key"})
+        })
 public class AccountingSequence extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include

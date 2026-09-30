@@ -27,7 +27,6 @@ import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
-import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -85,10 +84,7 @@ class EventIngestionServiceAdditionalTest {
     private PostingEngineOrchestrator postingEngineOrchestrator;
 
     @Mock
-    private AccountingSequenceRepository sequenceRepository;
-
-    @Mock
-    private AccountingSequenceProvisioner sequenceProvisioner;
+    private AccountingSequenceLocker sequenceLocker;
 
     @InjectMocks
     private EventIngestionServiceImpl service;
@@ -107,7 +103,7 @@ class EventIngestionServiceAdditionalTest {
         AccountingSequence defaultSequence = new AccountingSequence();
         defaultSequence.setScopeKey("AE-202401");
         defaultSequence.setNextValue(1L);
-        when(sequenceRepository.findByScopeKey("AE-202401")).thenReturn(Optional.of(defaultSequence));
+        when(sequenceLocker.lockOrProvision("AE-202401")).thenReturn(defaultSequence);
     }
 
     // ========================================
@@ -608,8 +604,7 @@ class EventIngestionServiceAdditionalTest {
         // A rejected duplicate must never touch the accounting_sequence counter — no
         // reference number is consumed for a submission that never persists.
         verify(accountingEventRepository, never()).save(any());
-        verify(sequenceRepository, never()).findByScopeKey(any());
-        verify(sequenceProvisioner, never()).provision(any());
+        verify(sequenceLocker, never()).lockOrProvision(any());
     }
 
     @Test
@@ -639,7 +634,7 @@ class EventIngestionServiceAdditionalTest {
                 .hasMessageContaining("Event validation failed");
 
         verify(accountingEventRepository, never()).save(any());
-        verify(sequenceRepository, never()).findByScopeKey(any());
+        verify(sequenceLocker, never()).lockOrProvision(any());
     }
 
     // ========================================

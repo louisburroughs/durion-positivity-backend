@@ -1,11 +1,14 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantResolver;
 import com.positivity.workorder.internal.entity.DocumentNumberSequence;
 import com.positivity.workorder.internal.repository.DocumentNumberSequenceRepository;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class DocumentNumberAllocator {
 
     private final DocumentNumberSequenceRepository sequenceRepository;
-    private final DocumentNumberSequenceProvisioner sequenceProvisioner;
+    private final TenantResolver tenantResolver;
+    private final Clock clock;
 
     /**
      * Allocate the next free number in a scope.
@@ -64,12 +68,18 @@ public class DocumentNumberAllocator {
         return sequenceRepository.findByScopeKey(scopeKey).orElseGet(() -> provisionAndRelock(scopeKey, firstValue));
     }
 
+    /**
+     * First use of a scope: insert the counter row in the caller's own transaction, then re-read it
+     * under the lock. The insert is {@code ON CONFLICT DO NOTHING}, so a concurrent first use never
+     * raises a constraint violation: the caller's transaction is not marked rollback-only and no
+     * second ({@code REQUIRES_NEW}) connection is needed, which matters because a caller already
+     * holds one and a pool of a few connections would otherwise deadlock on first-use bursts (#2342).
+     * On PostgreSQL a concurrent insert of the same key waits for the in-flight inserter to
+     * commit or roll back, then does nothing, so the re-read below finds the winner's row.
+     */
     private DocumentNumberSequence provisionAndRelock(String scopeKey, long firstValue) {
-        try {
-            sequenceProvisioner.provision(scopeKey, firstValue);
-        } catch (DataIntegrityViolationException _) {
-            // Another create provisioned the scope first; its committed row is re-read below.
-        }
+        sequenceRepository.insertIfAbsent(
+                tenantResolver.require(), UUIDv7Generator.generate(), scopeKey, firstValue, Instant.now(clock));
         return sequenceRepository
                 .findByScopeKey(scopeKey)
                 .orElseThrow(() -> new IllegalStateException("Number sequence " + scopeKey + " was not provisioned"));

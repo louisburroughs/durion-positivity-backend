@@ -20,7 +20,6 @@ import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.DisplayReferenceType;
-import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import java.math.BigDecimal;
@@ -88,10 +87,7 @@ class CreditMemoServiceTest {
 
     /** Issue #1779: the CM-{YYYYMM} display-reference counter and its first-use bootstrap. */
     @Mock
-    private AccountingSequenceRepository sequenceRepository;
-
-    @Mock
-    private AccountingSequenceProvisioner sequenceProvisioner;
+    private AccountingSequenceLocker sequenceLocker;
 
     /** Issue #1779: invoice/customer display resolution; stubbed empty unless a test says otherwise. */
     @Mock
@@ -154,7 +150,7 @@ class CreditMemoServiceTest {
         AccountingSequence sequence = new AccountingSequence();
         sequence.setScopeKey("CM-202401");
         sequence.setNextValue(1L);
-        lenient().when(sequenceRepository.findByScopeKey(anyString())).thenReturn(Optional.of(sequence));
+        lenient().when(sequenceLocker.lockOrProvision(anyString())).thenReturn(sequence);
 
         // Issue #1779: display resolution is exercised by its own tests; the rest of this class
         // asserts ledger behavior against an empty resolver, which is also the production
@@ -180,7 +176,7 @@ class CreditMemoServiceTest {
         AccountingSequence sequence = new AccountingSequence();
         sequence.setScopeKey("CM-202401");
         sequence.setNextValue(7L);
-        when(sequenceRepository.findByScopeKey("CM-202401")).thenReturn(Optional.of(sequence));
+        when(sequenceLocker.lockOrProvision("CM-202401")).thenReturn(sequence);
         when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
 
         CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
@@ -193,25 +189,6 @@ class CreditMemoServiceTest {
         assertThat(response.getCreditMemoReference()).isEqualTo("CM-202401-7");
         assertThat(testCreditMemo.getCreditMemoReference()).isEqualTo("CM-202401-7");
         assertThat(sequence.getNextValue()).isEqualTo(8L);
-    }
-
-    @Test
-    @DisplayName("Bootstraps the month counter on its first use (issue #1779)")
-    void bootstrapsCreditMemoReferenceCounterOnFirstUse() {
-        stubReplica(testInvoice, "110.00");
-        AccountingSequence bootstrapped = new AccountingSequence();
-        bootstrapped.setScopeKey("CM-202401");
-        bootstrapped.setNextValue(1L);
-        // First use of the scope: absent, then present after the provisioner's isolated insert.
-        when(sequenceRepository.findByScopeKey("CM-202401"))
-                .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(bootstrapped));
-        when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
-
-        CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
-
-        verify(sequenceProvisioner).provision("CM-202401");
-        assertThat(response.getCreditMemoReference()).isEqualTo("CM-202401-1");
     }
 
     @Test

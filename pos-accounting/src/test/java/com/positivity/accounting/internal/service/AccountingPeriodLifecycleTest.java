@@ -87,9 +87,8 @@ class AccountingPeriodLifecycleTest extends PostgresIntegrationTestBase {
 
     @AfterTransaction
     void deleteProvisionedPeriods() {
-        // Auto-provisioned period rows commit in their own REQUIRES_NEW
-        // transaction (AccountingPeriodProvisioner) and therefore survive the
-        // test-transaction rollback; remove them so every test starts from an
+        // Auto-provisioned period rows are inserted in the caller's transaction and roll
+        // back with it; clear anything a test committed so every test starts from an
         // empty accounting_period table.
         periodRepository.deleteAll();
     }

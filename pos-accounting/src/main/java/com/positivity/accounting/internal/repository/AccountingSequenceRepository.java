@@ -8,7 +8,9 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for {@link AccountingSequence} counter rows (story A2, issue
@@ -27,6 +29,29 @@ public interface AccountingSequenceRepository extends JpaRepository<AccountingSe
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<AccountingSequence> findByScopeKey(String scopeKey);
+
+    /**
+     * Create a scope's counter row at {@code next_value = 1} unless one exists (#2342).
+     * {@code ON CONFLICT DO NOTHING} keeps a concurrent first use from throwing, so it runs in the
+     * caller's transaction on the caller's connection; the target-less form works on Postgres and
+     * on H2 in PostgreSQL mode. Native SQL skips the entity callbacks, so every column is passed.
+     *
+     * @param tenantId   the caller's resolved tenant
+     * @param sequenceId freshly generated UUID v7 (ignored on conflict)
+     * @param scopeKey   sequence scope, e.g. {@code JE-202607}
+     * @return 1 if this call inserted the row, 0 if the scope already had one
+     */
+    @TenantAudited(
+            reason = "names the tenant explicitly (the caller's resolved tenant), so the row is the bound tenant's on"
+                    + " Postgres and on the H2 slices alike; the policy's WITH CHECK still refuses any other tenant")
+    @Modifying
+    @Query(value = """
+                    INSERT INTO accounting_sequence (tenant_id, sequence_id, scope_key, next_value)
+                    VALUES (:tenantId, :sequenceId, :scopeKey, 1)
+                    ON CONFLICT DO NOTHING
+                    """, nativeQuery = true)
+    int insertIfAbsent(
+            @Param("tenantId") UUID tenantId, @Param("sequenceId") UUID sequenceId, @Param("scopeKey") String scopeKey);
 
     /**
      * All sequence rows in deterministic scope-key order (no lock). Used by

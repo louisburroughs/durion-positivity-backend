@@ -19,6 +19,8 @@ import com.positivity.accounting.internal.repository.AccountingAuditLogRepositor
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -31,7 +33,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,7 +63,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
 
     private final Clock clock;
     private final AccountingPeriodRepository periodRepository;
-    private final AccountingPeriodProvisioner periodProvisioner;
+    private final TenantResolver tenantResolver;
     private final JournalEntryRepository journalEntryRepository;
     private final AccountingAuditLogRepository auditLogRepository;
     private final BankReconciliationCloseReadiness closeReadiness;
@@ -263,25 +264,35 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     /**
      * Find the period row for the month, provisioning an OPEN row when absent.
      *
-     * Concurrency-safe: the insert runs in its own {@code REQUIRES_NEW}
-     * transaction ({@link AccountingPeriodProvisioner}), so a duplicate-key
-     * collision with a concurrent provisioner aborts only that inner
-     * transaction. This (outer) transaction stays committable, which keeps the
-     * catch-and-re-read below valid: the race loser returns the winner's row
-     * instead of failing with an {@code UnexpectedRollbackException}.
+     * <p>Concurrency-safe on the caller's own connection and transaction: the insert is
+     * {@code ON CONFLICT DO NOTHING}, so a collision with a concurrent auto-provisioner raises no
+     * constraint violation, leaves this transaction committable (no rollback-only mark), and needs
+     * no second ({@code REQUIRES_NEW}) connection, which would deadlock a small pool when several
+     * first-use requests each hold one already (#2342). On PostgreSQL a concurrent insert of the
+     * same period waits for the in-flight inserter to finish, then does nothing; the re-read then
+     * returns whichever row won. {@code created_by}/{@code modified_by} carry the same actor the
+     * entity's {@code @PrePersist} would have stamped.
      */
     private AccountingPeriod findOrProvision(YearMonth yearMonth) {
         String periodCode = yearMonth.toString();
         return periodRepository.findByPeriodCode(periodCode).orElseGet(() -> {
-            try {
-                AccountingPeriod saved =
-                        periodProvisioner.provision(periodCode, yearMonth.atDay(1), yearMonth.atEndOfMonth());
+            int inserted = periodRepository.insertIfAbsent(
+                    tenantResolver.require(),
+                    UUIDv7Generator.generate(),
+                    periodCode,
+                    yearMonth.atDay(1),
+                    yearMonth.atEndOfMonth(),
+                    clock.instant(),
+                    currentActor());
+            if (inserted > 0) {
                 log.info("Auto-provisioned OPEN accounting period {}", periodCode);
-                return saved;
-            } catch (DataIntegrityViolationException e) {
+            } else {
                 log.debug("Concurrent auto-provision of period {}; re-reading", periodCode);
-                return periodRepository.findByPeriodCode(periodCode).orElseThrow(() -> e);
             }
+            return periodRepository
+                    .findByPeriodCode(periodCode)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "accounting_period row missing after auto-provision: " + periodCode));
         });
     }
 

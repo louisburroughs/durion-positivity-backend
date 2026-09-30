@@ -10,7 +10,6 @@ import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.DisplayReferenceType;
-import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import java.math.BigDecimal;
@@ -26,7 +25,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -77,8 +75,7 @@ public class CreditMemoServiceImpl implements CreditMemoService {
 
     private final CreditMemoRepository creditMemoRepository;
     private final ExtInvoiceTaxRepository extInvoiceTaxRepository;
-    private final AccountingSequenceRepository sequenceRepository;
-    private final AccountingSequenceProvisioner sequenceProvisioner;
+    private final AccountingSequenceLocker sequenceLocker;
     private final DisplayReferenceResolver displayReferenceResolver;
     private final CreditMemoTaxAttributionService creditMemoTaxAttributionService;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
@@ -515,7 +512,7 @@ public class CreditMemoServiceImpl implements CreditMemoService {
     /**
      * Assigns the display reference {@code CM-{YYYYMM}-{seq}} from the per-month
      * {@code accounting_sequence} counter, reusing the same counter table and
-     * {@link AccountingSequenceProvisioner} bootstrap machinery as
+     * {@link AccountingSequenceLocker} bootstrap machinery as
      * {@code EventIngestionServiceImpl.assignEventReference} (#1680) and
      * {@code JournalEntryServiceImpl.assignEntryNumber} (#942).
      *
@@ -530,30 +527,10 @@ public class CreditMemoServiceImpl implements CreditMemoService {
      */
     private void assignCreditMemoReference(CreditMemo creditMemo) {
         String scopeKey = creditMemoReferenceScopeKey(creditMemo.getCreationTimestamp());
-        AccountingSequence sequence = sequenceRepository
-                .findByScopeKey(scopeKey)
-                .orElseGet(() -> provisionAndRelockCreditMemoReference(scopeKey));
+        AccountingSequence sequence = sequenceLocker.lockOrProvision(scopeKey);
         long assigned = sequence.getNextValue();
         sequence.setNextValue(assigned + 1);
         creditMemo.setCreditMemoReference(scopeKey + "-" + assigned);
-    }
-
-    /**
-     * First use of a month scope: bootstrap the counter row in an isolated transaction
-     * ({@link AccountingSequenceProvisioner}), then lock it in the current transaction. A
-     * concurrent bootstrapper losing the unique-key race falls through to the locked re-read of
-     * the winner's committed row.
-     */
-    private AccountingSequence provisionAndRelockCreditMemoReference(String scopeKey) {
-        try {
-            sequenceProvisioner.provision(scopeKey);
-        } catch (DataIntegrityViolationException raceLost) {
-            log.debug("Lost accounting_sequence bootstrap race for scope {}; re-reading winner's row", scopeKey);
-        }
-        return sequenceRepository
-                .findByScopeKey(scopeKey)
-                .orElseThrow(() ->
-                        new IllegalStateException("accounting_sequence row missing after bootstrap: " + scopeKey));
     }
 
     /**

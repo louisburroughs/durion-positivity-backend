@@ -28,7 +28,6 @@ import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
-import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -47,7 +46,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -104,8 +102,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     private final com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository
             auditTrailEntryRepository;
     private final PostingEngineOrchestrator postingEngineOrchestrator;
-    private final AccountingSequenceRepository sequenceRepository;
-    private final AccountingSequenceProvisioner sequenceProvisioner;
+    private final AccountingSequenceLocker sequenceLocker;
     private final EventPayloadReferenceProjector eventPayloadReferenceProjector;
 
     /** Scope-key prefix for the per-month {@code accounting_event.eventReference} counter. */
@@ -756,7 +753,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     /**
      * Assigns the display reference {@code AE-{YYYYMM}-{seq}} from the
      * per-month {@code accounting_sequence} counter, reusing the same
-     * {@code accounting_sequence} table and {@link AccountingSequenceProvisioner}
+     * {@code accounting_sequence} table and {@link AccountingSequenceLocker}
      * bootstrap machinery as {@code JournalEntryServiceImpl.assignEntryNumber}
      * (story A2, issue #942).
      *
@@ -773,30 +770,10 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      */
     private void assignEventReference(AccountingEvent accountingEvent) {
         String scopeKey = eventReferenceScopeKey(accountingEvent.getReceivedAt());
-        AccountingSequence sequence =
-                sequenceRepository.findByScopeKey(scopeKey).orElseGet(() -> provisionAndRelockEventReference(scopeKey));
+        AccountingSequence sequence = sequenceLocker.lockOrProvision(scopeKey);
         long assigned = sequence.getNextValue();
         sequence.setNextValue(assigned + 1);
         accountingEvent.setEventReference(scopeKey + "-" + assigned);
-    }
-
-    /**
-     * First use of a month scope: bootstrap the counter row in an isolated
-     * transaction ({@link AccountingSequenceProvisioner}), then lock it in
-     * the current transaction. A concurrent bootstrapper losing the
-     * unique-key race falls through to the locked re-read of the winner's
-     * committed row.
-     */
-    private AccountingSequence provisionAndRelockEventReference(String scopeKey) {
-        try {
-            sequenceProvisioner.provision(scopeKey);
-        } catch (DataIntegrityViolationException raceLost) {
-            log.debug("Lost accounting_sequence bootstrap race for scope {}; re-reading winner's row", scopeKey);
-        }
-        return sequenceRepository
-                .findByScopeKey(scopeKey)
-                .orElseThrow(() ->
-                        new IllegalStateException("accounting_sequence row missing after bootstrap: " + scopeKey));
     }
 
     /**

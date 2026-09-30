@@ -20,7 +20,6 @@ import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.IdempotencyOutcome;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
-import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -73,10 +72,7 @@ class EventIngestionServiceTest {
     private PostingEngineOrchestrator postingEngineOrchestrator;
 
     @Mock
-    private AccountingSequenceRepository sequenceRepository;
-
-    @Mock
-    private AccountingSequenceProvisioner sequenceProvisioner;
+    private AccountingSequenceLocker sequenceLocker;
 
     /** Issue #1778: payload display projection, attached to the detail response only. */
     @Mock
@@ -300,7 +296,7 @@ class EventIngestionServiceTest {
         AccountingSequence sequence = new AccountingSequence();
         sequence.setScopeKey("AE-202401");
         sequence.setNextValue(1L);
-        when(sequenceRepository.findByScopeKey("AE-202401")).thenReturn(Optional.of(sequence));
+        when(sequenceLocker.lockOrProvision("AE-202401")).thenReturn(sequence);
 
         // Act
         AccountingEventResponse result = service.submitEvent(testEventMap);
