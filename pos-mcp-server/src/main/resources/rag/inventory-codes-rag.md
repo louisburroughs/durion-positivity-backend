@@ -2,7 +2,7 @@
 rag_id: inventory.codes
 rag_scope: inventory
 required_permissions:
-  - inventory:purchase_order:view
+  - order:purchase_order:view
 ---
 
 ## Purpose

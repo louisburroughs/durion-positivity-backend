@@ -1,0 +1,107 @@
+# Entity lexicon of the pos-mcp-server scope graph (ADR-0069 section 3, item 1).
+#
+# The one curated source of truth behind the graph: which business entities exist, what people call
+# them, and which tools, schemas and screens are about them. Everything else in the graph is derived
+# (tool catalog, mcp.rag.preload.docs, OpenAPI specs, screen registry). Platform definitions only:
+# entity TYPES, never a tenant's records (ADR-0069 section 8).
+#
+# Read by EntityLexiconLoader (shape; an unknown field or a regex that does not compile fails the
+# load and names the entity) and ScopeGraphBuilder (references; one that does not resolve is a
+# validation finding). ScopeGraphRealConfigValidationTest fails the build on a strict finding.
+#
+# Top level
+#   domain_scopes   tool-catalog domain -> rag_scope, ONLY for the domains the two vocabularies spell
+#                   differently. The key is an mcp_tool.domain value: a facade domain, or for a
+#                   discovered operation the gateway routing prefix. The value is a rag-scope used by
+#                   a mcp.rag.preload.docs entry.
+#   unscoped_tools  enabled tools that deliberately act on no entity. Every other enabled facade tool
+#                   must be listed under some entity's facade_tools.
+#   entities        the list below.
+#
+# Per entity
+#   key             the entity key: lower-case, hyphenated (purchase-order). It is what a RAG document
+#                   lists under entities: in mcp.rag.preload.docs, and what relates_to points at.
+#   domain          the owning domain, in the tool-catalog vocabulary (shop-manager, not shopmanager).
+#   terms           language -> phrases that denote the entity. At least one phrase in EACH of en, fr
+#                   and es. Write them as a user would, with accents; matching folds case, accents
+#                   and a plural s/es/x, so list the singular. A phrase may denote several entities.
+#   identifiers     optional. key + pattern: a regex that recognises an identifier of the entity in a
+#                   message. Take patterns from rag/glossary-identifiers.md, do not invent them. A key
+#                   shared by two entities must carry the same pattern.
+#   relates_to      optional. entity + label, read from this entity: "estimate promotes_to workorder".
+#   schemas         optional. OpenAPI component schemas that represent the entity, written
+#                   domain:SchemaName (domain = gateway routing prefix: pos-workorder -> workorder).
+#                   A discovered operation whose request body or 2xx response is one of them acts on
+#                   the entity (GET reads, anything else writes). The status / state enum of THESE
+#                   schemas gives the entity's lifecycle states, so list the canonical response DTO.
+#   schema_patterns optional. Regexes matched against the WHOLE domain:SchemaName, to attach the many
+#                   DTOs of an entity without listing each. They attach tools only, never states.
+#                   Each pattern must match at least one schema.
+#   facade_tools    optional. tool + access (reads | writes): the facade tools (mcp_tool.name) that act
+#                   on the entity. Declared here because a facade row has no HTTP method or schema.
+#   screens         optional. mcp_screen_registry.screen_key values that show the entity. A screen no
+#                   entity lists falls back to the entities of its own domain.
+
+domain_scopes:
+  shop-manager: shopmanager
+  price: pricing
+  people: hr
+  security-service: security
+
+unscoped_tools:
+  - DateWindowFacadeTool
+  - GlossaryFacadeTool
+
+entities:
+  - key: workorder
+    domain: workorder
+    terms:
+      en: [work order, workorder, repair order]
+      fr: [bon de travail, ordre de réparation]
+      es: [orden de trabajo, orden de reparación]
+    identifiers:
+      - key: workorder-number
+        pattern: '\bWO-\d{4}-\d{4,}\b'
+    relates_to:
+      - {entity: estimate, label: promoted_from}
+      - {entity: customer, label: belongs_to}
+    schemas:
+      - 'workorder:WorkorderDetailResponse'
+      - 'workorder:WorkorderResponse'
+    schema_patterns:
+      - 'workorder:Workorder.*'
+    facade_tools:
+      - {tool: WorkorderFacadeTool, access: reads}
+      - {tool: ShopManagerFacadeTool, access: reads}
+    screens: [workorders.list, workorders.wip]
+
+  - key: estimate
+    domain: workorder
+    terms:
+      en: [estimate, quote, quotation]
+      fr: [devis, estimation]
+      es: [presupuesto, cotización]
+    identifiers:
+      - key: estimate-number
+        pattern: '\bEST-\d{4}-\d{4,}\b'
+    relates_to:
+      - {entity: workorder, label: promotes_to}
+      - {entity: customer, label: belongs_to}
+    schemas:
+      - 'workorder:EstimateSummaryResponse'
+      - 'workorder:EstimateResponse'
+    schema_patterns:
+      - 'workorder:Estimate.*'
+
+  - key: customer
+    domain: customer
+    terms:
+      en: [customer, client]
+      fr: [client, cliente]
+      es: [cliente]
+    schemas:
+      - 'customer:CustomerDTO'
+    schema_patterns:
+      - 'customer:(Customer|Party).*'
+    facade_tools:
+      - {tool: CustomerFacadeTool, access: reads}

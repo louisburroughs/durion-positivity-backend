@@ -128,9 +128,8 @@ public class OpenApiToolMapper {
         if (operation == null) {
             return;
         }
-        String domain = extractDomain(path);
         String operationId = buildOperationId(operation);
-        String toolName = sanitizeName(domain + "_" + operationId);
+        String toolName = discoveredToolName(path, operationId);
         String title = Optional.ofNullable(operation.getSummary()).orElse(operationId);
         String description = Optional.ofNullable(operation.getDescription()).orElse(title);
         operations.add(new DiscoveredOperation(
@@ -213,9 +212,8 @@ public class OpenApiToolMapper {
         if (operation == null) {
             return;
         }
-        String domain = extractDomain(path);
         String operationId = buildOperationId(operation);
-        String toolName = sanitizeName(domain + "_" + operationId);
+        String toolName = discoveredToolName(path, operationId);
         String title = Optional.ofNullable(operation.getSummary()).orElse(operationId);
         String description = Optional.ofNullable(operation.getDescription()).orElse(title);
 
@@ -237,6 +235,19 @@ public class OpenApiToolMapper {
                 .tool(tool)
                 .callHandler(handler)
                 .build());
+    }
+
+    /**
+     * The name an aggregate operation is registered and persisted under: {@code {domain}_{operationId}},
+     * sanitized. The one derivation, shared with the scope graph's schema index (ADR-0069), which
+     * must key an operation's schemas by exactly the name {@code mcp_tool.name} holds.
+     */
+    public static @NonNull String discoveredToolName(@NonNull String path, @NonNull Operation operation) {
+        return discoveredToolName(path, buildOperationId(operation));
+    }
+
+    private static @NonNull String discoveredToolName(@NonNull String path, @NonNull String operationId) {
+        return sanitizeName(extractDomain(path) + "_" + operationId);
     }
 
     public static String extractDomain(@NonNull String path) {
@@ -456,7 +467,7 @@ public class OpenApiToolMapper {
         return schema.getProperties() != null && !schema.getProperties().isEmpty();
     }
 
-    private String sanitizeName(@NonNull String raw) {
+    private static String sanitizeName(@NonNull String raw) {
         String sanitized = raw.toLowerCase(Locale.US).replaceAll("[^a-z0-9_\\-]", "_");
         if (!StringUtils.hasText(sanitized)) {
             return "tool_" + UUIDv7Generator.generate().toString().replace("-", "");
@@ -464,7 +475,7 @@ public class OpenApiToolMapper {
         return sanitized;
     }
 
-    private String buildOperationId(@NonNull Operation operation) {
+    private static String buildOperationId(@NonNull Operation operation) {
         if (StringUtils.hasText(operation.getOperationId())) {
             return operation.getOperationId();
         }

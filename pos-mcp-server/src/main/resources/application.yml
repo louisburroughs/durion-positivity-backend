@@ -114,6 +114,20 @@ mcp:
   write-plan:
     # Gate 6 (#1193): minutes a previewed write plan stays confirmable before it expires.
     ttl-minutes: ${MCP_WRITE_PLAN_TTL_MINUTES:10}
+  # ADR-0069: scope graph for pre-LLM narrowing. Off by default: nothing is built, read or logged.
+  scope-graph:
+    # off | shadow | enforce. shadow builds the graph and records the resolved scope; no consumer
+    # acts on it. A literal value must be quoted ("off"): bare off is the YAML boolean false.
+    mode: ${MCP_SCOPE_GRAPH_MODE:off}
+    # Consumers that act on the scope when mode is enforce: any of rag, tools, card (comma-separated).
+    # Each is promoted separately (ADR-0069 section 9); enforce with an empty list behaves as shadow.
+    enforce: ${MCP_SCOPE_GRAPH_ENFORCE:}
+    # Cap on the nodes of one expanded scope (two hops from the seed entities).
+    max-nodes: 60
+    # Cap on the tools the scope may add on top of the ranked cuts, facade and discovered together.
+    added-tool-slots: 8
+    # Token budget of the scope card appended to the system prompt.
+    card-token-budget: 400
   rag:
     table-name: mcp_document_embedding
     # G5.4 #1194 cutover complete + #1207 (V33): the embedding column is 1024-dim bge-m3; the 768

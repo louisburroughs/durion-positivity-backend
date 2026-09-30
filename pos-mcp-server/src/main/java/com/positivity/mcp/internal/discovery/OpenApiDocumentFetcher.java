@@ -3,6 +3,9 @@ package com.positivity.mcp.internal.discovery;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.config.McpServerProperties;
+import com.positivity.mcp.internal.config.ScopeGraphProperties;
+import com.positivity.mcp.internal.scopegraph.OpenApiSchemaIndexBuilder;
+import com.positivity.mcp.internal.scopegraph.OpenApiSchemaIndexHolder;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Paths;
 import io.swagger.v3.parser.OpenAPIV3Parser;
@@ -19,6 +22,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.stereotype.Component;
@@ -47,14 +51,31 @@ public class OpenApiDocumentFetcher {
     private final DiscoveryClient discoveryClient;
     private final WebClient webClient;
     private final McpServerProperties properties;
+    /**
+     * ADR-0069: where each service spec's schema index is captured for the scope graph. Null when
+     * {@code mcp.scope-graph.mode} is {@code off}, and then nothing is captured.
+     */
+    @Nullable
+    private final OpenApiSchemaIndexHolder schemaIndexHolder;
 
     OpenApiDocumentFetcher(
             @NonNull DiscoveryClient discoveryClient,
             @NonNull WebClient discoveryWebClient,
             @NonNull McpServerProperties properties) {
+        this(discoveryClient, discoveryWebClient, properties, ScopeGraphProperties.off(), null);
+    }
+
+    @Autowired
+    OpenApiDocumentFetcher(
+            @NonNull DiscoveryClient discoveryClient,
+            @NonNull WebClient discoveryWebClient,
+            @NonNull McpServerProperties properties,
+            @NonNull ScopeGraphProperties scopeGraphProperties,
+            @Nullable OpenApiSchemaIndexHolder schemaIndexHolder) {
         this.discoveryClient = discoveryClient;
         this.webClient = discoveryWebClient;
         this.properties = properties;
+        this.schemaIndexHolder = scopeGraphProperties.enabled() ? schemaIndexHolder : null;
     }
 
     public @NonNull Mono<DiscoveredOpenApi> fetchAggregateSpec() {
@@ -169,8 +190,9 @@ public class OpenApiDocumentFetcher {
                         specUri,
                         elapsedMs(fetchStartNanos),
                         raw.length()))
-                .map(raw -> deserialize(AGGREGATE, raw))
-                .flatMap(result -> {
+                .map(raw -> parse(AGGREGATE, raw))
+                .flatMap(parsed -> {
+                    SwaggerParseResult result = parsed.result();
                     OpenAPI openAPI = result.getOpenAPI();
                     if (openAPI == null) {
                         log.warn("Failed to parse aggregate OpenAPI from {}: {}", specUri, result.getMessages());
@@ -183,6 +205,7 @@ public class OpenApiDocumentFetcher {
                                 specUri);
                         return aggregateViaSwaggerConfig(specUri, baseUri);
                     }
+                    captureAggregateSchemas(parsed.rawForSchemaIndex());
                     return Mono.just(new DiscoveredOpenApi(AGGREGATE, baseUri, openAPI));
                 })
                 .onErrorResume(ex -> {
@@ -271,8 +294,9 @@ public class OpenApiDocumentFetcher {
                 .retryWhen(Retry.backoff(DISCOVERY_RETRY_ATTEMPTS, DISCOVERY_RETRY_MIN_BACKOFF)
                         .maxBackoff(DISCOVERY_RETRY_MAX_BACKOFF)
                         .filter(OpenApiDocumentFetcher::isTransient))
-                .map(raw -> deserialize(doc.routingPrefix(), raw))
-                .map(result -> {
+                .map(raw -> parse(doc.routingPrefix(), raw))
+                .map(parsed -> {
+                    SwaggerParseResult result = parsed.result();
                     OpenAPI openAPI = result.getOpenAPI();
                     if (openAPI == null) {
                         // OpenAPIV3Parser does not throw on garbage input — it returns a result
@@ -302,6 +326,9 @@ public class OpenApiDocumentFetcher {
                         return ServiceFetchResult.failure(doc.routingPrefix());
                     }
                     Paths paths = prefixPaths(openAPI, doc.routingPrefix());
+                    // ADR-0069: only the paths survive the merge; the component schemas are indexed
+                    // here, while this service's spec is still whole.
+                    captureServiceSchemas(parsed.rawForSchemaIndex(), doc.routingPrefix());
                     log.info(
                             "Fetched service spec {} → {} paths (prefix {})",
                             docUri,
@@ -538,8 +565,9 @@ public class OpenApiDocumentFetcher {
                         apiDocUri,
                         elapsedMs(fetchStartNanos),
                         raw.length()))
-                .map(raw -> deserialize(serviceId, raw))
-                .flatMap(result -> {
+                .map(raw -> parse(serviceId, raw))
+                .flatMap(parsed -> {
+                    SwaggerParseResult result = parsed.result();
                     OpenAPI openAPI = result.getOpenAPI();
                     if (openAPI == null) {
                         log.warn("Failed to parse OpenAPI for service {}: {}", serviceId, result.getMessages());
@@ -559,12 +587,81 @@ public class OpenApiDocumentFetcher {
                                 specTitle(openAPI));
                         return Mono.empty();
                     }
+                    captureServiceSchemas(parsed.rawForSchemaIndex(), "/" + routingDomain(serviceId));
                     return Mono.just(new DiscoveredOpenApi(serviceId, baseUri, openAPI));
                 })
                 .onErrorResume(ex -> {
                     log.warn("Could not fetch OpenAPI for service {} at {}: {}", serviceId, apiDocUri, ex.getMessage());
                     return Mono.empty();
                 });
+    }
+
+    /**
+     * A parsed spec and, only when the scope graph is on, the text it was parsed from. Discovery
+     * parses with {@code resolveFully}, which inlines every {@code $ref} and with it the schema
+     * names the scope graph needs (ADR-0069, spec §2.2), so the index is built from the text.
+     */
+    private record ParsedSpec(
+            @NonNull SwaggerParseResult result, @Nullable String rawForSchemaIndex) {}
+
+    private ParsedSpec parse(@NonNull String serviceId, @NonNull String raw) {
+        return new ParsedSpec(deserialize(serviceId, raw), schemaIndexHolder == null ? null : raw);
+    }
+
+    /**
+     * ADR-0069 (spec §2.2): indexes one service spec's schemas for the scope graph, keyed by the
+     * tool's domain (the routing prefix) and by the tool name discovery persists, so {@code
+     * mcp_tool.name} looks up the operation's schemas. Skipped in mode {@code off}.
+     *
+     * <p>Observation only: it re-reads the text discovery already accepted and can never change what
+     * discovery returns. Any failure is logged and swallowed, and the domain keeps the entry of the
+     * last cycle that indexed it.
+     */
+    private void captureServiceSchemas(@Nullable String rawSpec, @NonNull String routingPrefix) {
+        if (schemaIndexHolder == null || rawSpec == null) {
+            return;
+        }
+        try {
+            OpenAPI unresolved = OpenApiSchemaIndexBuilder.parseUnresolved(rawSpec);
+            if (unresolved == null) {
+                return;
+            }
+            schemaIndexHolder.put(OpenApiSchemaIndexBuilder.build(
+                    unresolved,
+                    OpenApiToolMapper.extractDomain(routingPrefix),
+                    (path, operation) -> OpenApiToolMapper.discoveredToolName(routingPrefix + path, operation)));
+        } catch (RuntimeException ex) {
+            log.warn("Could not index the schemas of prefix {} for the scope graph: {}", routingPrefix, ex.toString());
+        }
+    }
+
+    /** As {@link #captureServiceSchemas}, for a single merged document whose paths already carry the prefix. */
+    private void captureAggregateSchemas(@Nullable String rawSpec) {
+        if (schemaIndexHolder == null || rawSpec == null) {
+            return;
+        }
+        try {
+            OpenAPI unresolved = OpenApiSchemaIndexBuilder.parseUnresolved(rawSpec);
+            if (unresolved == null) {
+                return;
+            }
+            OpenApiSchemaIndexBuilder.buildByPathDomain(
+                            unresolved, OpenApiToolMapper::extractDomain, OpenApiToolMapper::discoveredToolName)
+                    .forEach(schemaIndexHolder::put);
+        } catch (RuntimeException ex) {
+            log.warn("Could not index the aggregate spec's schemas for the scope graph: {}", ex.toString());
+        }
+    }
+
+    /**
+     * The tool-catalog domain of a Eureka service id: lower-cased, conventional {@code pos-} prefix
+     * stripped ({@code pos-vehicle-fitment} → {@code vehicle-fitment}), which is the gateway routing
+     * prefix the aggregate path persists as {@code mcp_tool.domain}. The targeted failed-prefix
+     * fallback already passes the prefix itself.
+     */
+    private static @NonNull String routingDomain(@NonNull String serviceId) {
+        String lower = serviceId.toLowerCase(Locale.ROOT);
+        return lower.startsWith("pos-") ? lower.substring(4) : lower;
     }
 
     private Optional<ServiceInstance> pickInstance(@NonNull String serviceId) {
