@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +23,7 @@ import com.positivity.accounting.internal.exception.PeriodBankReconciliationInco
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -40,7 +42,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * Unit tests for AccountingPeriodService.
@@ -63,7 +64,7 @@ class AccountingPeriodServiceTest {
     private AccountingPeriodRepository periodRepository;
 
     @Mock
-    private AccountingPeriodProvisioner periodProvisioner;
+    private TenantResolver tenantResolver;
 
     @Mock
     private JournalEntryRepository journalEntryRepository;
@@ -314,15 +315,24 @@ class AccountingPeriodServiceTest {
     @Test
     @DisplayName("ensurePeriodExists - duplicate-key race falls back to re-read")
     void ensurePeriodExists_duplicateKeyRace_reReads() {
-        // Arrange: first read misses, the REQUIRES_NEW provisioning insert
-        // collides with a concurrent writer, re-read finds the winner's row.
+        // Arrange: first read misses, the ON CONFLICT DO NOTHING insert reports 0 rows
+        // (a concurrent writer won), re-read finds the winner's row.
         // Real-constraint coverage lives in AccountingPeriodProvisionRaceTest.
         AccountingPeriod winner = period("2024-01", AccountingPeriodStatus.OPEN);
         when(periodRepository.findByPeriodCode("2024-01"))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(winner));
-        when(periodProvisioner.provision("2024-01", LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 31)))
-                .thenThrow(new DataIntegrityViolationException("uq_accounting_period_code"));
+        UUID tenant = UUID.randomUUID();
+        when(tenantResolver.require()).thenReturn(tenant);
+        when(periodRepository.insertIfAbsent(
+                        eq(tenant),
+                        any(UUID.class),
+                        eq("2024-01"),
+                        eq(LocalDate.of(2024, 1, 1)),
+                        eq(LocalDate.of(2024, 1, 31)),
+                        eq(TEST_CLOCK.instant()),
+                        eq("SYSTEM")))
+                .thenReturn(0);
 
         // Act
         AccountingPeriodResponse result = service.ensurePeriodExists(LocalDate.of(2024, 1, 15));
@@ -345,7 +355,7 @@ class AccountingPeriodServiceTest {
 
         // Assert: status of an existing row is never changed by provisioning
         assertThat(result.getStatus()).isEqualTo(AccountingPeriodStatus.CLOSED);
-        verify(periodProvisioner, never()).provision(any(), any(), any());
+        verify(periodRepository, never()).insertIfAbsent(any(), any(), any(), any(), any(), any(), any());
     }
 
     // ===== LIFECYCLE INPUT VALIDATION TESTS =====
@@ -360,7 +370,7 @@ class AccountingPeriodServiceTest {
         assertThatThrownBy(() -> service.closePeriod("2024-02"))
                 .isInstanceOf(AccountingPeriodNotFoundException.class)
                 .hasMessageContaining("2024-02");
-        verify(periodProvisioner, never()).provision(any(), any(), any());
+        verify(periodRepository, never()).insertIfAbsent(any(), any(), any(), any(), any(), any(), any());
         verify(periodRepository, never()).save(any());
     }
 

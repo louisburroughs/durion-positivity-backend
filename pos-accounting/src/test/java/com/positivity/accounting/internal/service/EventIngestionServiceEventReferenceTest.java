@@ -10,7 +10,6 @@ import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
-import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -18,7 +17,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -65,10 +63,7 @@ class EventIngestionServiceEventReferenceTest {
     private PostingEngineOrchestrator postingEngineOrchestrator;
 
     @Mock
-    private AccountingSequenceRepository sequenceRepository;
-
-    @Mock
-    private AccountingSequenceProvisioner sequenceProvisioner;
+    private AccountingSequenceLocker sequenceLocker;
 
     @InjectMocks
     private EventIngestionServiceImpl service;
@@ -80,15 +75,14 @@ class EventIngestionServiceEventReferenceTest {
     void setUp() {
         testOrganizationId = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
-        when(sequenceRepository.findByScopeKey(anyString()))
-                .thenAnswer(invocation -> Optional.ofNullable(sequenceRows.get((String) invocation.getArgument(0))));
-        when(sequenceProvisioner.provision(anyString())).thenAnswer(invocation -> {
+        when(sequenceLocker.lockOrProvision(anyString())).thenAnswer(invocation -> {
             String scopeKey = invocation.getArgument(0);
-            AccountingSequence sequence = new AccountingSequence();
-            sequence.setScopeKey(scopeKey);
-            sequence.setNextValue(1L);
-            sequenceRows.put(scopeKey, sequence);
-            return sequence;
+            return sequenceRows.computeIfAbsent(scopeKey, key -> {
+                AccountingSequence sequence = new AccountingSequence();
+                sequence.setScopeKey(key);
+                sequence.setNextValue(1L);
+                return sequence;
+            });
         });
 
         when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);

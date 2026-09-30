@@ -1,12 +1,18 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.AccountingPeriod;
+import com.positivity.tenancy.TenantAudited;
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for AccountingPeriod entity.
@@ -35,4 +41,34 @@ public interface AccountingPeriodRepository extends JpaRepository<AccountingPeri
      * in chronological order).
      */
     List<AccountingPeriod> findAllByOrderByPeriodCodeDesc();
+
+    /**
+     * Create an OPEN period row unless one exists for the tenant and {@code periodCode} (#2342).
+     * {@code ON CONFLICT DO NOTHING} keeps a concurrent auto-provision from throwing, so it runs in
+     * the caller's transaction on the caller's connection and never marks it rollback-only; the
+     * target-less form works on Postgres and on H2 in PostgreSQL mode. Native SQL skips the entity
+     * callbacks, so the audit columns and version are passed explicitly.
+     *
+     * @return 1 if this call inserted the row, 0 if the period already existed
+     */
+    @TenantAudited(
+            reason = "names the tenant explicitly (the caller's resolved tenant), so the row is the bound tenant's on"
+                    + " Postgres and on the H2 slices alike; the policy's WITH CHECK still refuses any other tenant")
+    @Modifying
+    @Query(value = """
+                    INSERT INTO accounting_period
+                        (tenant_id, period_id, period_code, start_date, end_date, status,
+                         created_at, created_by, modified_at, modified_by, version)
+                    VALUES (:tenantId, :periodId, :periodCode, :startDate, :endDate, 'OPEN',
+                            :now, :actor, :now, :actor, 0)
+                    ON CONFLICT DO NOTHING
+                    """, nativeQuery = true)
+    int insertIfAbsent(
+            @Param("tenantId") UUID tenantId,
+            @Param("periodId") UUID periodId,
+            @Param("periodCode") String periodCode,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("now") Instant now,
+            @Param("actor") String actor);
 }

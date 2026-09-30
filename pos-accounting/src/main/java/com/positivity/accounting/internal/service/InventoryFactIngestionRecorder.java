@@ -7,7 +7,6 @@ import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.IdempotencyOutcome;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
-import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -20,7 +19,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,8 +64,7 @@ public class InventoryFactIngestionRecorder {
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final AccountingEventRepository accountingEventRepository;
-    private final AccountingSequenceRepository sequenceRepository;
-    private final AccountingSequenceProvisioner sequenceProvisioner;
+    private final AccountingSequenceLocker sequenceLocker;
     private final JournalEntryRepository journalEntryRepository;
 
     /**
@@ -204,23 +201,10 @@ public class InventoryFactIngestionRecorder {
         ZonedDateTime received = event.getReceivedAt().atZone(ZoneOffset.UTC);
         String scopeKey =
                 String.format("%s%04d%02d", EVENT_REFERENCE_SCOPE_PREFIX, received.getYear(), received.getMonthValue());
-        AccountingSequence sequence =
-                sequenceRepository.findByScopeKey(scopeKey).orElseGet(() -> provisionAndRelock(scopeKey));
+        AccountingSequence sequence = sequenceLocker.lockOrProvision(scopeKey);
         long assigned = sequence.getNextValue();
         sequence.setNextValue(assigned + 1);
         event.setEventReference(scopeKey + "-" + assigned);
-    }
-
-    private AccountingSequence provisionAndRelock(String scopeKey) {
-        try {
-            sequenceProvisioner.provision(scopeKey);
-        } catch (DataIntegrityViolationException raceLost) {
-            log.debug("Lost accounting_sequence bootstrap race for scope {}; re-reading winner's row", scopeKey);
-        }
-        return sequenceRepository
-                .findByScopeKey(scopeKey)
-                .orElseThrow(() ->
-                        new IllegalStateException("accounting_sequence row missing after bootstrap: " + scopeKey));
     }
 
     private static @Nullable UUID parseUuid(String value) {

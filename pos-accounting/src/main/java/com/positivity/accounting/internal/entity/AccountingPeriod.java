@@ -51,7 +51,11 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "accounting_period",
-        uniqueConstraints = {@UniqueConstraint(name = "uq_accounting_period_code", columnNames = "period_code")},
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "uq_accounting_period_code",
+                    columnNames = {"tenant_id", "period_code"})
+        },
         indexes = {@Index(name = "idx_accounting_period_status", columnList = "status")})
 public class AccountingPeriod extends TenantScopedEntity {
 

@@ -12,14 +12,12 @@ import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
-import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,7 +40,7 @@ class InventoryFactIngestionRecorderCurrencyHoldTest {
     private static final String ENVELOPE_EVENT_ID = "01960003-0000-7000-8000-0000000000e1";
 
     private final AccountingEventRepository accountingEventRepository = mock(AccountingEventRepository.class);
-    private final AccountingSequenceRepository sequenceRepository = mock(AccountingSequenceRepository.class);
+    private final AccountingSequenceLocker sequenceLocker = mock(AccountingSequenceLocker.class);
 
     private InventoryFactIngestionRecorder recorder;
 
@@ -52,8 +50,7 @@ class InventoryFactIngestionRecorderCurrencyHoldTest {
                 CLOCK,
                 new ObjectMapper(),
                 accountingEventRepository,
-                sequenceRepository,
-                mock(AccountingSequenceProvisioner.class),
+                sequenceLocker,
                 mock(JournalEntryRepository.class));
     }
 
@@ -71,7 +68,7 @@ class InventoryFactIngestionRecorderCurrencyHoldTest {
         AccountingSequence sequence = new AccountingSequence();
         sequence.setScopeKey("AE-202607");
         sequence.setNextValue(1L);
-        when(sequenceRepository.findByScopeKey(anyString())).thenReturn(Optional.of(sequence));
+        when(sequenceLocker.lockOrProvision(anyString())).thenReturn(sequence);
 
         boolean recorded = recorder.recordCurrencyHeld(
                 "pos-order",

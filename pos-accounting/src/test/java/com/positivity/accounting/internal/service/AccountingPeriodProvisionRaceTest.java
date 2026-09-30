@@ -30,9 +30,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  * <p>A pure-mock version of this scenario cannot catch the transactional bug
  * this test guards against: a unique-constraint violation raised inside the
  * caller's transaction marks it rollback-only (and aborts it outright on
- * Postgres), so the race loser's catch-and-re-read commits into an
- * {@code UnexpectedRollbackException}. The fix runs the insert in its own
- * {@code REQUIRES_NEW} transaction ({@code AccountingPeriodProvisioner}).
+ * Postgres), so the race loser would commit into an
+ * {@code UnexpectedRollbackException}. The provisioning insert is therefore
+ * {@code ON CONFLICT DO NOTHING} in the caller's own transaction (#2342), which
+ * never raises the violation; the loser re-reads the winner's row.
  *
  * <p>Setup: the winner's row is committed up front, then a repository spy
  * makes the initial {@code findByPeriodCode} existence check miss once, so
@@ -41,7 +42,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  * NOT {@code @Transactional}: the service call must run in its own committing
  * transaction so a rollback-only leak would surface as
  * {@code UnexpectedRollbackException}, and the pre-committed winner row must
- * be visible to the inner insert transaction.
+ * be visible to the insert.
  */
 @Import(TestSecurityConfig.class)
 @DisplayName("AccountingPeriod auto-provision race (real unique constraint)")
@@ -80,7 +81,7 @@ class AccountingPeriodProvisionRaceTest extends PostgresCommittingTestBase {
         UUID winnerId = periodRepository.saveAndFlush(winner).getPeriodId();
 
         // Lose the race: the initial existence check misses once, the real
-        // provisioning INSERT then violates the real unique constraint, and
+        // provisioning INSERT then conflicts with the real unique constraint (no-op), and
         // the recovery re-read must find the winner in the database. The spy
         // is interface-backed, so callRealMethod() is unsupported; unstubbed
         // spy calls DO delegate to the real Spring Data proxy, so the re-read

@@ -1,21 +1,27 @@
 package com.positivity.workorder.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.tenancy.TenantResolver;
 import com.positivity.workorder.internal.entity.DocumentNumberSequence;
 import com.positivity.workorder.internal.repository.DocumentNumberSequenceRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class DocumentNumberAllocatorTest {
@@ -27,10 +33,17 @@ class DocumentNumberAllocatorTest {
     private DocumentNumberSequenceRepository sequenceRepository;
 
     @Mock
-    private DocumentNumberSequenceProvisioner sequenceProvisioner;
+    private TenantResolver tenantResolver;
 
-    @InjectMocks
+    private static final UUID TENANT = UUID.randomUUID();
+    private static final Instant NOW = Instant.parse("2026-03-01T00:00:00Z");
+
     private DocumentNumberAllocator allocator;
+
+    @BeforeEach
+    void setUp() {
+        allocator = new DocumentNumberAllocator(sequenceRepository, tenantResolver, Clock.fixed(NOW, ZoneOffset.UTC));
+    }
 
     @Test
     void handsOutTheCounterValueAndAdvancesIt() {
@@ -41,7 +54,7 @@ class DocumentNumberAllocatorTest {
 
         assertThat(number).isEqualTo("WO-2026-1042");
         assertThat(sequence.getNextValue()).isEqualTo(1043L);
-        verify(sequenceProvisioner, never()).provision(SCOPE, 1000L);
+        verify(sequenceRepository, never()).insertIfAbsent(any(), any(), any(), anyLong(), any());
     }
 
     @Test
@@ -60,20 +73,22 @@ class DocumentNumberAllocatorTest {
     void provisionsAScopeOnFirstUseThenReadsItUnderTheLock() {
         DocumentNumberSequence provisioned = sequence(1000L);
         when(sequenceRepository.findByScopeKey(SCOPE)).thenReturn(Optional.empty(), Optional.of(provisioned));
+        when(tenantResolver.require()).thenReturn(TENANT);
 
         String number = allocator.allocate(SCOPE, PREFIX, 1000L, candidate -> false);
 
         assertThat(number).isEqualTo("WO-2026-1000");
-        verify(sequenceProvisioner).provision(SCOPE, 1000L);
+        verify(sequenceRepository).insertIfAbsent(eq(TENANT), any(UUID.class), eq(SCOPE), eq(1000L), eq(NOW));
     }
 
     @Test
     void losingTheFirstUseRaceReadsTheWinnersRow() {
         DocumentNumberSequence winners = sequence(1007L);
         when(sequenceRepository.findByScopeKey(SCOPE)).thenReturn(Optional.empty(), Optional.of(winners));
-        doThrow(new DataIntegrityViolationException("document_number_sequence_scope_key"))
-                .when(sequenceProvisioner)
-                .provision(SCOPE, 1000L);
+        when(tenantResolver.require()).thenReturn(TENANT);
+        // ON CONFLICT DO NOTHING: the racing insert reports 0 rows and nothing is thrown.
+        when(sequenceRepository.insertIfAbsent(eq(TENANT), any(UUID.class), eq(SCOPE), eq(1000L), eq(NOW)))
+                .thenReturn(0);
 
         String number = allocator.allocate(SCOPE, PREFIX, 1000L, candidate -> false);
 

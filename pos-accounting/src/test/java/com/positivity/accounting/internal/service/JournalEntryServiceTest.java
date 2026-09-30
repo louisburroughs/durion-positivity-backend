@@ -31,7 +31,6 @@ import com.positivity.accounting.internal.exception.JournalEntryNotFoundExceptio
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
-import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import java.math.BigDecimal;
@@ -82,10 +81,7 @@ class JournalEntryServiceTest {
     private GLAccountRepository glAccountRepository;
 
     @Mock
-    private AccountingSequenceRepository sequenceRepository;
-
-    @Mock
-    private AccountingSequenceProvisioner sequenceProvisioner;
+    private AccountingSequenceLocker sequenceLocker;
 
     @Mock
     private AccountingPeriodService accountingPeriodService;
@@ -128,8 +124,7 @@ class JournalEntryServiceTest {
                 journalEntryRepository,
                 glAccountService,
                 glAccountRepository,
-                sequenceRepository,
-                sequenceProvisioner,
+                sequenceLocker,
                 accountingPeriodService,
                 accountingPeriodGate,
                 auditLogRepository,
@@ -465,7 +460,7 @@ class JournalEntryServiceTest {
         AccountingSequence sequence = new AccountingSequence();
         sequence.setScopeKey("JE-202401");
         sequence.setNextValue(5L);
-        when(sequenceRepository.findByScopeKey("JE-202401")).thenReturn(Optional.of(sequence));
+        when(sequenceLocker.lockOrProvision("JE-202401")).thenReturn(sequence);
 
         // Act
         JournalEntryResponse result = service.postJournalEntry(testJournalEntryId);
@@ -513,7 +508,7 @@ class JournalEntryServiceTest {
         AccountingSequence sequence = new AccountingSequence();
         sequence.setScopeKey("JE-202401");
         sequence.setNextValue(5L);
-        when(sequenceRepository.findByScopeKey("JE-202401")).thenReturn(Optional.of(sequence));
+        when(sequenceLocker.lockOrProvision("JE-202401")).thenReturn(sequence);
 
         // Act
         JournalEntryResponse result = service.postJournalEntry(testJournalEntryId);
@@ -556,7 +551,7 @@ class JournalEntryServiceTest {
         AccountingSequence sequence = new AccountingSequence();
         sequence.setScopeKey("JE-202401");
         sequence.setNextValue(7L);
-        when(sequenceRepository.findByScopeKey("JE-202401")).thenReturn(Optional.of(sequence));
+        when(sequenceLocker.lockOrProvision("JE-202401")).thenReturn(sequence);
     }
 
     @Test
@@ -686,7 +681,7 @@ class JournalEntryServiceTest {
         AccountingSequence sequence = new AccountingSequence();
         sequence.setScopeKey("JE-202401");
         sequence.setNextValue(1L);
-        when(sequenceRepository.findByScopeKey("JE-202401")).thenReturn(Optional.of(sequence));
+        when(sequenceLocker.lockOrProvision("JE-202401")).thenReturn(sequence);
         when(journalEntryRepository.markReversed(
                         eq(testJournalEntryId), any(JournalEntry.class), any(Instant.class), eq("SYSTEM")))
                 .thenReturn(0);
