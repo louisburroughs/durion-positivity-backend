@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -15,6 +16,7 @@ import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.security.common.LocationAncestorResolver;
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.LocationScopeDeniedException;
+import com.positivity.web.common.ReplicationPendingException;
 import com.positivity.workorder.internal.config.InventoryCommandPublisher;
 import com.positivity.workorder.internal.dto.pick.CompletePickTaskRequest;
 import com.positivity.workorder.internal.dto.pick.ConfirmPickLineRequest;
@@ -26,8 +28,10 @@ import com.positivity.workorder.internal.entity.ExtPickTaskReplica;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.repository.ExtPickListReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPickTaskReplicaRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -102,12 +106,19 @@ class WorkorderPickFacadeServiceImplTest {
     @Mock
     private WorkorderRepository workorderRepository;
 
+    @Mock
+    private WorkorderPartRepository workorderPartRepository;
+
     private WorkorderPickFacadeServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new WorkorderPickFacadeServiceImpl(
-                pickListReplicaRepository, pickTaskReplicaRepository, publisherProvider, workorderRepository);
+                pickListReplicaRepository,
+                pickTaskReplicaRepository,
+                publisherProvider,
+                workorderRepository,
+                workorderPartRepository);
         when(publisherProvider.getIfAvailable()).thenReturn(publisher);
         pickListExists();
         taskExists(task());
@@ -513,6 +524,125 @@ class WorkorderPickFacadeServiceImplTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    // ─── replication pending (#1994) ─────────────────────────────────────────
+
+    /** A promoted workorder: it has a servicing site, so a pick list was asked for if it has parts. */
+    private void promotedWorkorder(boolean hasPickableParts) {
+        Workorder workorder = new Workorder();
+        workorder.setId(WORKORDER_ID);
+        workorder.setShopId(LOCATION_ID);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.existsByWorkorderIdAndProductEntityIdIsNotNullAndQuantityGreaterThan(
+                        WORKORDER_ID, BigDecimal.ZERO))
+                .thenReturn(hasPickableParts);
+    }
+
+    private void noPickListReplicated() {
+        when(pickListReplicaRepository.findByWorkorderIdOrderByPickListIdAsc(WORKORDER_ID))
+                .thenReturn(List.of());
+    }
+
+    private void pickListWithNoTasksYet() {
+        when(pickTaskReplicaRepository.findByPickListIdOrderBySortOrderAsc(PICK_LIST_ID))
+                .thenReturn(List.of());
+    }
+
+    private static void assertPickListPending(Throwable thrown) {
+        assertThat(thrown).isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+            assertThat(e.getCode()).isEqualTo("PICK_LIST_REPLICATION_PENDING");
+            assertThat(e.getReferenceId()).isEqualTo(WORKORDER_ID);
+            assertThat(e.getMessage()).doesNotContain(WORKORDER_ID.toString());
+        });
+    }
+
+    private static void assertNotFound(Throwable thrown) {
+        assertThat(thrown)
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("#1994: a workorder with pickable part lines and no replicated pick list is 503, not 404")
+    void pickListNotYetReplicatedIsReplicationPending() {
+        promotedWorkorder(true);
+        noPickListReplicated();
+
+        assertPickListPending(catchThrowable(() -> service.getPickListForWorkorder(WORKORDER_ID)));
+        assertPickListPending(
+                catchThrowable(() -> service.resolveScan(WORKORDER_ID, TASK_ID, scan(SKU_ID, LOCATION_ID))));
+        assertPickListPending(
+                catchThrowable(() -> service.completePickTask(WORKORDER_ID, TASK_ID, new CompletePickTaskRequest())));
+        verify(publisher, never()).requestPickTaskConfirm(any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("#1994: a workorder with no pickable part line keeps its 404 - no pick list will ever come")
+    void workorderWithNothingToPickKeepsItsNotFound() {
+        promotedWorkorder(false);
+        noPickListReplicated();
+
+        assertNotFound(catchThrowable(() -> service.getPickListForWorkorder(WORKORDER_ID)));
+    }
+
+    @Test
+    @DisplayName("#1994: a workorder without a servicing site was never sent for pick-list generation: 404")
+    void workorderWithoutSiteKeepsItsNotFound() {
+        Workorder workorder = new Workorder();
+        workorder.setId(WORKORDER_ID);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.existsByWorkorderIdAndProductEntityIdIsNotNullAndQuantityGreaterThan(
+                        WORKORDER_ID, BigDecimal.ZERO))
+                .thenReturn(true);
+        noPickListReplicated();
+
+        assertNotFound(catchThrowable(() -> service.getPickListForWorkorder(WORKORDER_ID)));
+    }
+
+    @Test
+    @DisplayName("#1994: a pick list with no tasks replicated behind it is 503 for a scan, a confirm and a consume")
+    void pickTasksNotYetReplicatedIsReplicationPending() {
+        promotedWorkorder(true);
+        pickListWithNoTasksYet();
+
+        assertPickListPending(
+                catchThrowable(() -> service.resolveScan(WORKORDER_ID, TASK_ID, scan(SKU_ID, LOCATION_ID))));
+        ConfirmPickLineRequest confirm = new ConfirmPickLineRequest();
+        confirm.setQuantityPicked(1);
+        assertPickListPending(catchThrowable(() -> service.confirmPickLine(WORKORDER_ID, TASK_ID, TASK_ID, confirm)));
+        ConsumePickedItemsRequest consume = new ConsumePickedItemsRequest();
+        ConsumePickedItemsRequest.ConsumeItem item = new ConsumePickedItemsRequest.ConsumeItem();
+        item.setPickTaskId(TASK_ID);
+        item.setQuantityToConsume(1);
+        consume.setItems(List.of(item));
+        assertPickListPending(catchThrowable(() -> service.consumePickedItems(WORKORDER_ID, consume)));
+        verify(publisher, never()).requestItemsConsume(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("#1994: a task id absent from a pick list that does hold tasks is a wrong id: 404 stays")
+    void unknownTaskOnAPopulatedPickListStaysNotFound() {
+        promotedWorkorder(true);
+
+        assertNotFound(catchThrowable(() -> service.resolveScan(WORKORDER_ID, OTHER_ID, scan(SKU_ID, LOCATION_ID))));
+        ConsumePickedItemsRequest consume = new ConsumePickedItemsRequest();
+        ConsumePickedItemsRequest.ConsumeItem item = new ConsumePickedItemsRequest.ConsumeItem();
+        item.setPickTaskId(OTHER_ID);
+        item.setQuantityToConsume(1);
+        consume.setItems(List.of(item));
+        assertNotFound(catchThrowable(() -> service.consumePickedItems(WORKORDER_ID, consume)));
+    }
+
+    @Test
+    @DisplayName("#1994: the tolerant reads still answer an empty list while the pick list is pending")
+    void tolerantReadsStayTolerant() {
+        promotedWorkorder(true);
+        noPickListReplicated();
+
+        assertThat(service.getPickTasksForWorkorder(WORKORDER_ID)).isEmpty();
+        assertThat(service.getPickedItemsForWorkorder(WORKORDER_ID)).isEmpty();
     }
 
     @Test

@@ -20,6 +20,7 @@ import com.positivity.shopmanager.internal.repository.TravelBlockRepository;
 import com.positivity.shopmanager.internal.service.dto.MechanicAvailabilityResult;
 import com.positivity.shopmanager.internal.service.enums.AvailabilityStatus;
 import com.positivity.shopmanager.internal.service.enums.ConflictReasonCode;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -241,19 +242,30 @@ class MechanicAvailabilityServiceTest {
     // -------------------------------------------------------------------------
 
     /**
-     * When personId does not match any mechanic in the local repository, the
-     * service throws ShopManagerValidationException before querying any downstream
-     * system.
+     * When personId matches no mechanic in the local projection, the mechanic may not have been
+     * projected from staffing events yet, so the service answers MECHANIC_REPLICATION_PENDING (503,
+     * #1994) before querying any downstream system. A malformed personId stays a validation error.
      */
     @Test
-    void mechanicNotFound_throwsValidationException() {
+    void mechanicNotYetProjected_isReplicationPending503() {
         when(mechanicRepository.findByPersonId(UUID.fromString(PERSON_ID))).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.queryAvailability(PERSON_ID, WINDOW_START, WINDOW_END))
-                .isInstanceOf(ShopManagerValidationException.class)
-                .hasMessageContaining(PERSON_ID);
+                .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo("MECHANIC_REPLICATION_PENDING");
+                    assertThat(e.getReferenceId()).isEqualTo(UUID.fromString(PERSON_ID));
+                    assertThat(e.getMessage()).doesNotContain(PERSON_ID);
+                });
 
         verifyNoInteractions(staffingScheduleService, appointmentRepository, travelBlockRepository);
+    }
+
+    @Test
+    void malformedPersonId_staysAValidationError() {
+        assertThatThrownBy(() -> service.queryAvailability("not-a-uuid", WINDOW_START, WINDOW_END))
+                .isInstanceOf(ShopManagerValidationException.class);
+
+        verifyNoInteractions(mechanicRepository, staffingScheduleService, appointmentRepository, travelBlockRepository);
     }
 
     // -------------------------------------------------------------------------

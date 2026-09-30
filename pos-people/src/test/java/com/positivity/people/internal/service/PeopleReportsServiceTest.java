@@ -20,6 +20,7 @@ import com.positivity.people.internal.repository.TimeEntryRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -97,7 +98,7 @@ class PeopleReportsServiceTest {
         rejected.setApprovedBy("manager-1");
 
         when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceService.getLocationName(locationId)).thenReturn("North Shop");
+        when(locationReferenceService.findLocationName(locationId)).thenReturn(Optional.of("North Shop"));
         when(extPersonReplicaRepository.findAllById(any()))
                 .thenReturn(List.of(ExtPersonReplica.builder()
                         .personId(personUuid)
@@ -145,7 +146,7 @@ class PeopleReportsServiceTest {
         approved.setApprovedBy("manager-1");
 
         when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceService.getLocationName(locationId)).thenReturn("North Shop");
+        when(locationReferenceService.findLocationName(locationId)).thenReturn(Optional.of("North Shop"));
         when(extPersonReplicaRepository.findAllById(any()))
                 .thenReturn(List.of(ExtPersonReplica.builder()
                         .personId(personUuid)
@@ -186,7 +187,7 @@ class PeopleReportsServiceTest {
         approved.setApprovedBy("manager-1");
 
         when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceService.getLocationName(locationId)).thenReturn("North Shop");
+        when(locationReferenceService.findLocationName(locationId)).thenReturn(Optional.of("North Shop"));
         when(extPersonReplicaRepository.findAllById(any()))
                 .thenReturn(List.of(ExtPersonReplica.builder()
                         .personId(personUuid)
@@ -213,7 +214,7 @@ class PeopleReportsServiceTest {
     void getApprovedTimeForExport_emptyResultReturns200EquivalentList() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceService.getLocationName(locationId)).thenReturn("North Shop");
+        when(locationReferenceService.findLocationName(locationId)).thenReturn(Optional.of("North Shop"));
         when(timeEntryRepository.findApprovedForExport(
                         eq(TimeEntryStatus.APPROVED), any(), any(), eq(List.of(locationId))))
                 .thenReturn(List.of());

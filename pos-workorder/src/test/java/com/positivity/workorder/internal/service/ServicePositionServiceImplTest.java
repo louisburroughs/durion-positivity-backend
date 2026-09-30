@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.testing.TenantTestSupport;
+import com.positivity.web.common.ReplicationPendingException;
 import com.positivity.workorder.internal.dto.AssignServicePositionRequest;
 import com.positivity.workorder.internal.dto.ServicePositionResponse;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
@@ -409,16 +410,64 @@ class ServicePositionServiceImplTest {
         }
 
         @Test
-        @DisplayName("#1983: an unknown bay, and a bay at another site, are both refused")
-        void refusesUnknownOrForeignPositions() {
+        @DisplayName("#1994: a bay neither location replica holds yet is 503 LOCATION_REPLICATION_PENDING")
+        void unreplicatedBayIsReplicationPending() {
             givenWorkorder(WorkorderStatus.APPROVED);
 
             UUID unknownBay = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f3309");
             when(extBayReplicaRepository.findById(unknownBay)).thenReturn(Optional.empty());
+            when(extMobileUnitReplicaRepository.existsById(unknownBay)).thenReturn(false);
             assertThatThrownBy(() ->
                             service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, unknownBay, null), ACTOR))
+                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("LOCATION_REPLICATION_PENDING");
+                        assertThat(e.getReferenceId()).isEqualTo(unknownBay);
+                        assertThat(e.getMessage()).doesNotContain(unknownBay.toString());
+                    });
+        }
+
+        @Test
+        @DisplayName("#1994: a mobile unit neither location replica holds yet is 503 LOCATION_REPLICATION_PENDING")
+        void unreplicatedMobileUnitIsReplicationPending() {
+            givenWorkorder(WorkorderStatus.APPROVED);
+
+            UUID unknownUnit = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f3319");
+            when(extMobileUnitReplicaRepository.findById(unknownUnit)).thenReturn(Optional.empty());
+            when(extBayReplicaRepository.existsById(unknownUnit)).thenReturn(false);
+            assertThatThrownBy(() -> service.assignPosition(
+                            WORKORDER_ID, request(ResourceType.MOBILE_UNIT, unknownUnit, null), ACTOR))
+                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("LOCATION_REPLICATION_PENDING");
+                        assertThat(e.getReferenceId()).isEqualTo(unknownUnit);
+                    });
+        }
+
+        @Test
+        @DisplayName("#1994: an id held by the other kind's replica is positively the wrong kind: 422, not 503")
+        void positionOfTheOtherKindStays422() {
+            givenWorkorder(WorkorderStatus.APPROVED);
+
+            UUID mobileUnitId = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f3329");
+            when(extBayReplicaRepository.findById(mobileUnitId)).thenReturn(Optional.empty());
+            when(extMobileUnitReplicaRepository.existsById(mobileUnitId)).thenReturn(true);
+            assertThatThrownBy(() ->
+                            service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, mobileUnitId, null), ACTOR))
                     .isInstanceOf(ServicePositionInvalidException.class)
-                    .hasMessageContaining("Unknown bay");
+                    .hasMessageContaining("mobile unit, not a bay");
+
+            UUID bayId = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f3339");
+            when(extMobileUnitReplicaRepository.findById(bayId)).thenReturn(Optional.empty());
+            when(extBayReplicaRepository.existsById(bayId)).thenReturn(true);
+            assertThatThrownBy(() ->
+                            service.assignPosition(WORKORDER_ID, request(ResourceType.MOBILE_UNIT, bayId, null), ACTOR))
+                    .isInstanceOf(ServicePositionInvalidException.class)
+                    .hasMessageContaining("bay, not a mobile unit");
+        }
+
+        @Test
+        @DisplayName("#1983: a bay at another site is refused")
+        void refusesForeignPositions() {
+            givenWorkorder(WorkorderStatus.APPROVED);
 
             UUID foreignBay = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f330a");
             givenBay(foreignBay, OTHER_SITE_ID);

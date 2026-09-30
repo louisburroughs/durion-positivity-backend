@@ -205,7 +205,9 @@ public class StaffingAssignmentBulkIngestController
      * No module-owned types to name: {@link StaffingAssignmentService#create} refuses a row by
      * raising {@code ResponseStatusException} with the status it wants, which
      * {@link com.positivity.bulkingest.BulkIngestFailures} recognises as a rejection
-     * platform-wide. Anything else on this path is a server-side fault and is reported
+     * platform-wide; a location that has not replicated yet raises a {@code
+     * ReplicationPendingException} (503), which it reports as {@code REPLICATION_PENDING} so the
+     * row is resubmitted rather than fixed (#1994). Anything else on this path is a server-side fault and is reported
      * generically against a correlation id (issue #1718).
      */
     @Override

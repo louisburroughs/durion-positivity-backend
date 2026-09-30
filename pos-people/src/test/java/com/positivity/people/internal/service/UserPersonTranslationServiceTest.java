@@ -1,12 +1,17 @@
 package com.positivity.people.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.positivity.people.internal.entity.ExtUserLinkReplica;
 import com.positivity.people.internal.repository.ExtUserLinkReplicaRepository;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.web.common.ReplicationPendingException;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.util.List;
@@ -14,6 +19,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 class UserPersonTranslationServiceTest {
 
@@ -66,6 +73,47 @@ class UserPersonTranslationServiceTest {
         assertThrows(
                 EntityNotFoundException.class,
                 () -> userPersonTranslationService.getPersonUuidForUser(missingUsername));
+    }
+
+    @Test
+    void hasLinkForUser_isTrueForAnyRowAndFalseForNone() {
+        when(linkReplicaRepository.findFirstByUsername(testUsername)).thenReturn(Optional.of(link()));
+        when(linkReplicaRepository.findFirstByUsername(missingUsername)).thenReturn(Optional.empty());
+
+        assertTrue(userPersonTranslationService.hasLinkForUser(testUsername));
+        assertFalse(userPersonTranslationService.hasLinkForUser(missingUsername));
+    }
+
+    /**
+     * #1994: the current-user read has no default to fall back on, so a user with no link row is
+     * "not yet" (503), where {@code getPersonUuidForUser} keeps its EntityNotFoundException for the
+     * defaulting callers (#1636), asserted above.
+     */
+    @Test
+    void getPersonUuidForCurrentUser_whenNoLinkRowIsReplicationPending() {
+        when(linkReplicaRepository.findFirstByUsername(missingUsername)).thenReturn(Optional.empty());
+
+        try (MockedStatic<SecurityContextHelper> helper = Mockito.mockStatic(SecurityContextHelper.class)) {
+            helper.when(SecurityContextHelper::getCurrentUsername).thenReturn(Optional.of(missingUsername));
+
+            ReplicationPendingException thrown = assertThrows(
+                    ReplicationPendingException.class,
+                    () -> userPersonTranslationService.getPersonUuidForCurrentUser());
+            assertEquals("USER_LINK_REPLICATION_PENDING", thrown.getCode());
+            assertNull(thrown.getReferenceId());
+            assertFalse(thrown.getMessage().contains(missingUsername));
+        }
+    }
+
+    @Test
+    void getPersonUuidForCurrentUser_returnsThePersonWhenLinked() {
+        when(linkReplicaRepository.findFirstByUsername(testUsername)).thenReturn(Optional.of(link()));
+
+        try (MockedStatic<SecurityContextHelper> helper = Mockito.mockStatic(SecurityContextHelper.class)) {
+            helper.when(SecurityContextHelper::getCurrentUsername).thenReturn(Optional.of(testUsername));
+
+            assertEquals(testPersonId, userPersonTranslationService.getPersonUuidForCurrentUser());
+        }
     }
 
     @Test

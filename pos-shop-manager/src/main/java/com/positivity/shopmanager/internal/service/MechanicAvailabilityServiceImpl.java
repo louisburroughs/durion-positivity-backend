@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.service;
 import com.positivity.shopmanager.internal.dto.HrScheduleBlock;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.TravelBlock;
+import com.positivity.shopmanager.internal.exception.ReplicationPendingCodes;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
@@ -11,6 +12,7 @@ import com.positivity.shopmanager.internal.service.dto.ConflictBlock;
 import com.positivity.shopmanager.internal.service.dto.MechanicAvailabilityResult;
 import com.positivity.shopmanager.internal.service.enums.AvailabilityStatus;
 import com.positivity.shopmanager.internal.service.enums.ConflictReasonCode;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -55,9 +57,14 @@ public class MechanicAvailabilityServiceImpl implements MechanicAvailabilityServ
         } catch (IllegalArgumentException notAUuid) {
             throw new ShopManagerValidationException("personId is not a UUID: " + personId);
         }
+        // A well-formed person id with no mechanic row may belong to a mechanic whose staffing
+        // event has not been consumed yet, so it is "not yet", not "no" (#1987, #1994).
         var mechanic = mechanicRepository
                 .findByPersonId(personUuid)
-                .orElseThrow(() -> new ShopManagerValidationException("Mechanic not found for personId: " + personId));
+                .orElseThrow(() -> new ReplicationPendingException(
+                        ReplicationPendingCodes.MECHANIC_REPLICATION_PENDING,
+                        "The mechanic has not been projected from staffing events yet; retry shortly",
+                        personUuid));
 
         // Schedule blocks come from the local staffing-assignment replica (#877); the HR
         // remote-failure path (503 HR_UNAVAILABLE) is gone with the sync client.

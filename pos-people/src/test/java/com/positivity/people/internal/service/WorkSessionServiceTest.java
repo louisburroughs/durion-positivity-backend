@@ -3,6 +3,7 @@ package com.positivity.people.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,6 +17,7 @@ import com.positivity.people.internal.entity.WorkSessionBreak;
 import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
@@ -49,6 +51,9 @@ class WorkSessionServiceTest {
     private ExtPersonReplicaRepository extPersonReplicaRepository;
 
     @Mock
+    private EmployeeRepository employeeRepository;
+
+    @Mock
     private TimeEntryRepository timeEntryRepository;
 
     @Mock
@@ -67,6 +72,7 @@ class WorkSessionServiceTest {
                 workSessionRepository,
                 workSessionBreakRepository,
                 extPersonReplicaRepository,
+                employeeRepository,
                 timeEntryRepository,
                 locationAssignmentRepository,
                 accessPolicy,
@@ -87,13 +93,34 @@ class WorkSessionServiceTest {
     }
 
     @Test
-    void startSession_whenPersonUnknownToReplica_throwsNotFound() {
+    void startSession_whenPersonInNeitherTheReplicaNorTheEmployeeTable_throwsNotFound() {
         UUID unknownPersonId = UUID.fromString("10000000-0000-0000-0000-0000000000ff");
         when(extPersonReplicaRepository.existsById(unknownPersonId)).thenReturn(false);
+        when(employeeRepository.existsByPersonId(unknownPersonId)).thenReturn(false);
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 com.positivity.people.internal.exception.PersonNotFoundException.class,
                 () -> service.startSession(unknownPersonId));
+        verify(workSessionRepository, never()).save(any(WorkSession.class));
+    }
+
+    /**
+     * #1994: the replica lags the employee upsert, but the module's own employee row proves the
+     * person exists, so a clock-in right after creation must not 404.
+     */
+    @Test
+    void startSession_whenOnlyTheEmployeeRowExists_replicaNotCaughtUp_startsTheSession() {
+        UUID newHire = UUID.fromString("10000000-0000-0000-0000-0000000000a1");
+        when(extPersonReplicaRepository.existsById(newHire)).thenReturn(false);
+        when(employeeRepository.existsByPersonId(newHire)).thenReturn(true);
+        when(workSessionRepository.findByPersonIdAndEndedAtIsNull(newHire)).thenReturn(Optional.empty());
+        when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkSessionDto result = service.startSession(newHire);
+
+        assertThat(result.getPersonId()).isEqualTo(newHire);
+        assertThat(result.getStatus()).isEqualTo("ACTIVE");
+        verify(accessPolicy).requireMayManage(newHire);
     }
 
     @Test

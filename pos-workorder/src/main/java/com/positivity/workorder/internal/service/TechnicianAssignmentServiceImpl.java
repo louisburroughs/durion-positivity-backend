@@ -1,15 +1,16 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.domainevents.AggregateTouch;
+import com.positivity.web.common.ReplicationPendingException;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentRecord;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.ReplicationPendingCodes;
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
-import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
 import com.positivity.workorder.internal.exception.TechnicianNotStaffedAtSiteException;
 import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
@@ -371,11 +372,13 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
     }
 
     /**
-     * Refuse a technician this module has never heard of (#1983).
+     * Refuse a technician this module has not heard of yet (#1983, #1994).
      *
      * <p>Checked against the {@code ext_person} replica pos-people feeds, not by a synchronous call
-     * into that service (ADR-0044 §6). 422 rather than 404: the technician is not what the URL
-     * addresses, and the request is well-formed — it names someone who does not exist here.
+     * into that service (ADR-0044 §6). The replica fills by event, so a well-formed id with no row
+     * is either a wrong id or a person whose event has not been consumed; the module cannot tell
+     * which, so it answers 503 {@code TECHNICIAN_REPLICATION_PENDING} with {@code Retry-After}
+     * rather than a 4xx that reads as "no such technician".
      *
      * <p>This deliberately checks existence only. Whether a technician may hold a workorder at a
      * site they are not staffed at is a separate question, answered by {@link #requireStaffedAtSite}
@@ -383,7 +386,10 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      */
     private void requireKnownTechnician(@NonNull UUID technicianId) {
         if (!extPersonReplicaRepository.existsById(technicianId)) {
-            throw new TechnicianNotFoundException(technicianId);
+            throw new ReplicationPendingException(
+                    ReplicationPendingCodes.TECHNICIAN_REPLICATION_PENDING,
+                    "The technician has not replicated from People yet; retry shortly",
+                    technicianId);
         }
     }
 

@@ -13,12 +13,12 @@ import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
 import com.positivity.security.common.SecurityContextHelper;
-import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -68,6 +68,8 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
+    private final EmployeeRepository employeeRepository;
+
     private final TimeEntryRepository timeEntryRepository;
 
     private final EmployeeLocationAssignmentRepository locationAssignmentRepository;
@@ -78,6 +80,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
             WorkSessionRepository workSessionRepository,
             WorkSessionBreakRepository workSessionBreakRepository,
             ExtPersonReplicaRepository extPersonReplicaRepository,
+            EmployeeRepository employeeRepository,
             TimeEntryRepository timeEntryRepository,
             EmployeeLocationAssignmentRepository locationAssignmentRepository,
             WorkSessionAccessPolicy accessPolicy,
@@ -90,6 +93,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
                 Objects.requireNonNull(workSessionBreakRepository, "workSessionBreakRepository must not be null");
         this.extPersonReplicaRepository =
                 Objects.requireNonNull(extPersonReplicaRepository, "extPersonReplicaRepository must not be null");
+        this.employeeRepository = Objects.requireNonNull(employeeRepository, "employeeRepository must not be null");
         this.timeEntryRepository = Objects.requireNonNull(timeEntryRepository, "timeEntryRepository must not be null");
         this.locationAssignmentRepository =
                 Objects.requireNonNull(locationAssignmentRepository, "locationAssignmentRepository must not be null");
@@ -102,7 +106,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
         // The person FK went with the ADR-0044 split (#875), so validate against the identity
         // replica instead — sessions must not be creatable for unknown persons.
-        if (!extPersonReplicaRepository.existsById(personId)) {
+        if (!personIsKnown(personId)) {
             throw new PersonNotFoundException(personId);
         }
         accessPolicy.requireMayManage(personId);
@@ -125,6 +129,20 @@ public class WorkSessionServiceImpl implements WorkSessionService {
             // Protect against concurrent start requests racing past the pre-check.
             throw new IllegalStateException("An active session already exists for personId=" + personId, ex);
         }
+    }
+
+    /**
+     * Whether this module knows the person: the module's own {@code employee} row, or the identity
+     * replica (#1994).
+     *
+     * <p>The replica fills by event and lags, but an employee this module created has its own row
+     * the moment the upsert commits, which proves the person exists whether or not the replica has
+     * caught up. Gating on the replica alone answered a 404 for an employee who had just been
+     * created; {@code EmployeeServiceImpl.getEmployee} accepts either for the same reason. Only a
+     * person in neither place is unknown.
+     */
+    private boolean personIsKnown(@NonNull UUID personId) {
+        return extPersonReplicaRepository.existsById(personId) || employeeRepository.existsByPersonId(personId);
     }
 
     @Override
@@ -234,14 +252,9 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull WorkSessionClockStateResponse getCurrentClockState(@Nullable UUID personId) {
-        UUID target = personId != null
-                ? personId
-                : accessPolicy
-                        .callerPersonId()
-                        .orElseThrow(() -> new EntityNotFoundException(
-                                "personId was not provided and no person is linked to the current user"));
+        UUID target = personId != null ? personId : accessPolicy.requireCallerPersonId();
         // 404 before 403, so an id cannot be probed through the access check.
-        if (!extPersonReplicaRepository.existsById(target)) {
+        if (!personIsKnown(target)) {
             throw new PersonNotFoundException(target);
         }
         accessPolicy.requireMayView(target);

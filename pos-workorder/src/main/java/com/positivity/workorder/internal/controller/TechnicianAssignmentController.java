@@ -11,6 +11,7 @@ import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.TechnicianAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -80,7 +81,8 @@ public class TechnicianAssignmentController {
                     reassignTechnician changes, and 422 TECHNICIAN_NOT_STAFFED_AT_SITE when the technician has \
                     one or more ACTIVE staffing assignments effective today and none of them is at the \
                     workorder's site — there is no override; have the technician staffed at this site in People, \
-                    effective today, and retry.
+                    effective today, and retry. A technician the People feed has not delivered yet is 503 \
+                    TECHNICIAN_REPLICATION_PENDING with a Retry-After header, not a 4xx.
                     """,
             responses = {
                 @ApiResponse(
@@ -107,12 +109,22 @@ public class TechnicianAssignmentController {
                         content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "422",
-                        description = "The technician is not known (ApiError.code TECHNICIAN_NOT_FOUND) or has "
-                                + "ACTIVE staffing effective today at one or more sites but not this workorder's "
-                                + "site (ApiError.code TECHNICIAN_NOT_STAFFED_AT_SITE, with the workorder's site "
-                                + "id as referenceId and a fieldErrors entry on technicianId). No override "
-                                + "exists for TECHNICIAN_NOT_STAFFED_AT_SITE; a technician with no ACTIVE "
+                        description = "The technician has ACTIVE staffing effective today at one or more sites "
+                                + "but not this workorder's site (ApiError.code TECHNICIAN_NOT_STAFFED_AT_SITE, "
+                                + "with the workorder's site id as referenceId and a fieldErrors entry on "
+                                + "technicianId). No override exists for it; a technician with no ACTIVE "
                                 + "staffing rows at all is allowed.",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "503",
+                        description = "The technician has not replicated from People yet (ApiError.code "
+                                + "TECHNICIAN_REPLICATION_PENDING, referenceId the technician id). Not-yet, not no: "
+                                + "retry after the Retry-After interval.",
+                        headers =
+                                @Header(
+                                        name = "Retry-After",
+                                        description = "Seconds to wait before retrying",
+                                        schema = @Schema(type = "integer")),
                         content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -212,7 +224,8 @@ public class TechnicianAssignmentController {
                     which assignTechnician creates, and 422 TECHNICIAN_NOT_STAFFED_AT_SITE when the new \
                     technician has one or more ACTIVE staffing assignments effective today and none of them is \
                     at the workorder's site — there is no override; have the technician staffed at this site in \
-                    People, effective today, and retry.
+                    People, effective today, and retry. A technician the People feed has not delivered yet is \
+                    503 TECHNICIAN_REPLICATION_PENDING with a Retry-After header, not a 4xx.
                     """,
             responses = {
                 @ApiResponse(
@@ -238,12 +251,22 @@ public class TechnicianAssignmentController {
                         content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "422",
-                        description = "The new technician is not known (ApiError.code TECHNICIAN_NOT_FOUND) or "
-                                + "has ACTIVE staffing effective today at one or more sites but not this "
-                                + "workorder's site (ApiError.code TECHNICIAN_NOT_STAFFED_AT_SITE, with the "
-                                + "workorder's site id as referenceId and a fieldErrors entry on technicianId). "
-                                + "No override exists for TECHNICIAN_NOT_STAFFED_AT_SITE; a technician with no "
-                                + "ACTIVE staffing rows at all is allowed.",
+                        description = "The new technician has ACTIVE staffing effective today at one or more "
+                                + "sites but not this workorder's site (ApiError.code "
+                                + "TECHNICIAN_NOT_STAFFED_AT_SITE, with the workorder's site id as referenceId "
+                                + "and a fieldErrors entry on technicianId). No override exists for it; a "
+                                + "technician with no ACTIVE staffing rows at all is allowed.",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "503",
+                        description = "The new technician has not replicated from People yet (ApiError.code "
+                                + "TECHNICIAN_REPLICATION_PENDING, referenceId the technician id). Not-yet, not no: "
+                                + "retry after the Retry-After interval.",
+                        headers =
+                                @Header(
+                                        name = "Retry-After",
+                                        description = "Seconds to wait before retrying",
+                                        schema = @Schema(type = "integer")),
                         content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(

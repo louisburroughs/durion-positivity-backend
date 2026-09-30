@@ -14,6 +14,7 @@ import com.positivity.people.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.web.common.ReplicationPendingException;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
@@ -186,6 +187,28 @@ class PeopleAvailabilityServiceTest {
 
             assertThat(resolution.locationId()).isEqualTo(TOP_LEVEL_LOCATION_ID);
             assertThat(resolution.defaulted()).isTrue();
+        }
+    }
+
+    /**
+     * #1994: the availability list has no top-level default for a caller with no assignment (only
+     * the primary-location resolution above does, #1636), so a caller whose link row has not
+     * replicated is "not yet" (503), not a permanent 404.
+     */
+    @Test
+    void getPeopleAvailability_withoutLocation_andNoPersonLinkRow_isUserLinkReplicationPending() {
+        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+            helperMock.when(SecurityContextHelper::getCurrentUsername).thenReturn(Optional.of(USERNAME));
+            helperMock.when(SecurityContextHelper::locationScope).thenReturn(LocationScope.unscoped());
+            when(userPersonTranslationService.getPersonUuidForUser(USERNAME))
+                    .thenThrow(new EntityNotFoundException("No person link found for username: " + USERNAME));
+
+            assertThatThrownBy(() -> service.getPeopleAvailability(null, null))
+                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("USER_LINK_REPLICATION_PENDING");
+                        assertThat(e.getMessage()).doesNotContain(USERNAME);
+                    });
+            verifyNoInteractions(extLocationReplicaRepository);
         }
     }
 

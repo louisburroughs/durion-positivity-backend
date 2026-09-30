@@ -16,17 +16,18 @@ import com.positivity.people.internal.entity.WorkSessionBreak;
 import com.positivity.people.internal.enums.ClockState;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
+import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,6 +65,9 @@ class WorkSessionClockStateTest {
     private ExtPersonReplicaRepository extPersonReplicaRepository;
 
     @Mock
+    private EmployeeRepository employeeRepository;
+
+    @Mock
     private TimeEntryRepository timeEntryRepository;
 
     @Mock
@@ -80,6 +84,7 @@ class WorkSessionClockStateTest {
                 workSessionRepository,
                 workSessionBreakRepository,
                 extPersonReplicaRepository,
+                employeeRepository,
                 timeEntryRepository,
                 locationAssignmentRepository,
                 accessPolicy,
@@ -213,7 +218,7 @@ class WorkSessionClockStateTest {
     @Test
     @DisplayName("the single-person read defaults to the caller's own linked person")
     void currentStateDefaultsToTheCallersPerson() {
-        when(accessPolicy.callerPersonId()).thenReturn(Optional.of(GRACE));
+        when(accessPolicy.requireCallerPersonId()).thenReturn(GRACE);
         when(extPersonReplicaRepository.existsById(GRACE)).thenReturn(true);
         WorkSession graceSession = openSession(GRACE_SESSION, GRACE, GRACE_IN);
         when(workSessionRepository.findByPersonIdInAndEndedAtIsNullOrderByStartedAtDesc(anyCollection()))
@@ -229,21 +234,51 @@ class WorkSessionClockStateTest {
     }
 
     @Test
-    @DisplayName("the single-person read is 404 for an unlinked caller with no personId")
+    @DisplayName("the single-person read is 404 for a caller whose link is present but no longer active")
     void currentStateWithoutAPersonIsNotFound() {
-        when(accessPolicy.callerPersonId()).thenReturn(Optional.empty());
+        when(accessPolicy.requireCallerPersonId())
+                .thenThrow(new EntityNotFoundException("no person is linked to the current user"));
 
         assertThatThrownBy(() -> service.getCurrentClockState(null)).isInstanceOf(EntityNotFoundException.class);
         verifyNoInteractions(workSessionRepository);
     }
 
     @Test
-    @DisplayName("an unknown person is 404 before the access check runs, so ids cannot be probed")
+    @DisplayName("#1994: the single-person read is 503 USER_LINK_REPLICATION_PENDING while the caller's link "
+            + "has not replicated")
+    void currentStateForACallerWhoseLinkHasNotReplicatedIsReplicationPending() {
+        when(accessPolicy.requireCallerPersonId()).thenThrow(UserPersonTranslationService.userLinkReplicationPending());
+
+        assertThatThrownBy(() -> service.getCurrentClockState(null))
+                .isInstanceOfSatisfying(
+                        ReplicationPendingException.class,
+                        e -> assertThat(e.getCode()).isEqualTo("USER_LINK_REPLICATION_PENDING"));
+        verifyNoInteractions(workSessionRepository);
+    }
+
+    @Test
+    @DisplayName("a person in neither the replica nor the employee table is 404 before the access check runs, "
+            + "so ids cannot be probed")
     void unknownPersonIsNotFoundBeforeTheAccessCheck() {
         when(extPersonReplicaRepository.existsById(ADA)).thenReturn(false);
+        when(employeeRepository.existsByPersonId(ADA)).thenReturn(false);
 
         assertThatThrownBy(() -> service.getCurrentClockState(ADA)).isInstanceOf(PersonNotFoundException.class);
         verify(accessPolicy, never()).requireMayView(any());
+    }
+
+    @Test
+    @DisplayName("#1994: an employee whose replica row has not arrived yet is still a known person")
+    void employeeRowAloneMakesThePersonKnown() {
+        when(extPersonReplicaRepository.existsById(ADA)).thenReturn(false);
+        when(employeeRepository.existsByPersonId(ADA)).thenReturn(true);
+        when(workSessionRepository.findByPersonIdInAndEndedAtIsNullOrderByStartedAtDesc(anyCollection()))
+                .thenReturn(List.of());
+
+        WorkSessionClockStateResponse state = service.getCurrentClockState(ADA);
+
+        assertThat(state.getClockState()).isEqualTo(ClockState.CLOCKED_OUT);
+        verify(accessPolicy).requireMayView(ADA);
     }
 
     @Test

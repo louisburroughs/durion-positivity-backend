@@ -12,6 +12,7 @@ import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkorderPickFacadeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -64,7 +65,9 @@ public class WorkorderPickFacadeController {
                     while releasing it marks it READY_TO_PICK for the floor.
                     Required inputs: workorderId (UUID) as a path parameter.
                     No events are emitted and no state changes; this is a read-only replica projection.
-                    Returns 404 when no pick list exists for the workorder, and 403 LOCATION_SCOPE_DENIED \
+                    Returns 404 when no pick list exists for the workorder and none is expected, 503 \
+                    PICK_LIST_REPLICATION_PENDING with a Retry-After header when the workorder holds part lines \
+                    but its pick list has not replicated from Inventory yet, and 403 LOCATION_SCOPE_DENIED \
                     when the caller holds inventory:pick_list:view but its location scope does not cover \
                     the workorder's own site (ADR-0061 mechanism, #2204).
                     """)
@@ -79,6 +82,17 @@ public class WorkorderPickFacadeController {
     @ApiResponse(
             responseCode = "404",
             description = "Workorder not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "The workorder holds part lines whose pick list or pick tasks have not replicated from "
+                    + "Inventory yet (ApiError.code PICK_LIST_REPLICATION_PENDING, referenceId the workorder "
+                    + "id). Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<WorkorderPickListResponse> getWorkorderPickList(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
@@ -162,9 +176,11 @@ public class WorkorderPickFacadeController {
                     purely evaluative.
                     Returns 400 VALIDATION_FAILED (with fieldErrors naming productTargetValid and/or \
                     locationTargetValid) when neither or both of a target pair is supplied, 404 when the \
-                    workorder has no pick list or the pick task is not on it, and 403 LOCATION_SCOPE_DENIED \
-                    when the caller's location scope does not cover the workorder's own site (ADR-0061 \
-                    mechanism, #2204).
+                    workorder has no pick list and none is expected or the pick task is not on a pick list that \
+                    has tasks, 503 PICK_LIST_REPLICATION_PENDING with a Retry-After header when the workorder \
+                    holds part lines but its pick list or tasks have not replicated from Inventory yet, and \
+                    403 LOCATION_SCOPE_DENIED when the caller's location scope does not cover the workorder's \
+                    own site (ADR-0061 mechanism, #2204).
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -181,6 +197,17 @@ public class WorkorderPickFacadeController {
     @ApiResponse(
             responseCode = "404",
             description = "Workorder or pick task not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "The workorder holds part lines whose pick list or pick tasks have not replicated from "
+                    + "Inventory yet (ApiError.code PICK_LIST_REPLICATION_PENDING, referenceId the workorder "
+                    + "id). Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ResolveScanResponse> resolveScan(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
@@ -232,8 +259,10 @@ public class WorkorderPickFacadeController {
                     callers must poll getPickTasks to observe the applied quantity.
                     Returns 202 with status PENDING when the confirmation is queued, 400 when pickLineId does \
                     not match pickTaskId, 404 when the pick list or task is missing, 503 when the command \
-                    feed is unavailable, and 403 LOCATION_SCOPE_DENIED when the caller's location scope does \
-                    not cover the workorder's own site (ADR-0061 mechanism, #2204).
+                    feed is unavailable or, with PICK_LIST_REPLICATION_PENDING and a Retry-After header, when \
+                    the workorder holds part lines but its pick list or tasks have not replicated from \
+                    Inventory yet, and 403 LOCATION_SCOPE_DENIED when the caller's location scope does not \
+                    cover the workorder's own site (ADR-0061 mechanism, #2204).
                     """)
     @ApiResponse(
             responseCode = "202",
@@ -254,6 +283,18 @@ public class WorkorderPickFacadeController {
     @ApiResponse(
             responseCode = "422",
             description = "Scan mismatch or domain validation error from pos-inventory",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "The workorder holds part lines whose pick list or pick tasks have not replicated from "
+                    + "Inventory yet (ApiError.code PICK_LIST_REPLICATION_PENDING, referenceId the workorder "
+                    + "id). Not-yet, not no: retry after the "
+                    + "Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<WorkorderPickTaskResponse> confirmPickLine(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
@@ -305,8 +346,10 @@ public class WorkorderPickFacadeController {
                     the remaining quantity; callers must poll getPickTasks to observe the applied state.
                     Returns 202 with status PENDING while the command is in flight, 200 with the current state \
                     when the task is already complete, 404 when the pick list or task is missing, 503 when \
-                    the command feed is unavailable, and 403 LOCATION_SCOPE_DENIED when the caller's location \
-                    scope does not cover the workorder's own site (ADR-0061 mechanism, #2204).
+                    the command feed is unavailable or, with PICK_LIST_REPLICATION_PENDING and a Retry-After \
+                    header, when the workorder holds part lines but its pick list or tasks have not replicated \
+                    from Inventory yet, and 403 LOCATION_SCOPE_DENIED when the caller's location scope does \
+                    not cover the workorder's own site (ADR-0061 mechanism, #2204).
                     """)
     @ApiResponse(
             responseCode = "202",
@@ -323,6 +366,18 @@ public class WorkorderPickFacadeController {
     @ApiResponse(
             responseCode = "404",
             description = "Workorder or pick task not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "The workorder holds part lines whose pick list or pick tasks have not replicated from "
+                    + "Inventory yet (ApiError.code PICK_LIST_REPLICATION_PENDING, referenceId the workorder "
+                    + "id). Not-yet, not no: retry after the "
+                    + "Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<WorkorderPickTaskResponse> completePickTask(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")

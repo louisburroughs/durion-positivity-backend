@@ -243,6 +243,13 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
     private UUID resolveRequesterPersonId() {
         String username = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new EntityNotFoundException("Authenticated user context is missing"));
-        return userPersonTranslationService.getPersonUuidForUser(username);
+        try {
+            return userPersonTranslationService.getPersonUuidForUser(username);
+        } catch (EntityNotFoundException noLinkRow) {
+            // No default applies on this path (unlike tryResolvePersonId, #1636), and a username the
+            // user-link replica holds no row for may just not have replicated yet: "not yet" (503),
+            // not a bare 404 (#1994). getPersonUuidForUser is unfiltered, so this is no row at all.
+            throw UserPersonTranslationService.userLinkReplicationPending();
+        }
     }
 }

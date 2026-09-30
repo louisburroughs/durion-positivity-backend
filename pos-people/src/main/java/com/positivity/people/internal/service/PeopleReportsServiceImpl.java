@@ -557,10 +557,17 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         return UUID.fromString(value);
     }
 
+    /**
+     * Display names for the export's location column. A name is decoration on rows this module
+     * already holds, so a location whose replica row or name has not arrived falls back to its id
+     * rather than refusing the export (#1994); the ids were validated active on entry.
+     */
     private Map<UUID, String> loadLocationNames(List<UUID> locationIds) {
         Map<UUID, String> namesById = new HashMap<>();
         for (UUID locationId : locationIds) {
-            namesById.put(locationId, locationReferenceService.getLocationName(locationId));
+            namesById.put(
+                    locationId,
+                    locationReferenceService.findLocationName(locationId).orElse(locationId.toString()));
         }
         return namesById;
     }

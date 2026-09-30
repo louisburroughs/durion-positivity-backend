@@ -18,6 +18,7 @@ import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -220,11 +221,31 @@ class StaffingAssignmentLifecycleTest {
         @Test
         void refusesAnAssignmentToAnInactiveLocation() {
             when(locationReferenceService.isLocationActive(LOCATION_ID)).thenReturn(false);
+            when(locationReferenceService.isLocationReplicated(LOCATION_ID)).thenReturn(true);
             CreateStaffingAssignmentRequest request = createRequest();
 
             assertThatThrownBy(() -> service.create(request, ACTOR))
-                    .isInstanceOf(ResponseStatusException.class)
-                    .hasMessageContaining("Location not found or inactive");
+                    .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+                        assertThat(e.getReason()).contains("Location is inactive");
+                    });
+            verify(repository, never()).save(any());
+        }
+
+        /** #1994: a location the replica does not hold yet is "not yet" (503), not a 404. */
+        @Test
+        void aLocationNotYetReplicatedIsReplicationPendingNotNotFound() {
+            when(locationReferenceService.isLocationActive(LOCATION_ID)).thenReturn(false);
+            when(locationReferenceService.isLocationReplicated(LOCATION_ID)).thenReturn(false);
+            CreateStaffingAssignmentRequest request = createRequest();
+
+            assertThatThrownBy(() -> service.create(request, ACTOR))
+                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("LOCATION_REPLICATION_PENDING");
+                        assertThat(e.getReferenceId()).isEqualTo(LOCATION_ID);
+                        assertThat(e.getMessage()).doesNotContain(LOCATION_ID.toString());
+                    });
+            verify(repository, never()).save(any());
         }
 
         @Test

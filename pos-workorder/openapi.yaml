@@ -5462,7 +5462,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only replica projection.
 
-        Returns 404 when no pick list exists for the workorder, and 403 LOCATION_SCOPE_DENIED when the caller holds inventory:pick_list:view but its location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
+        Returns 404 when no pick list exists for the workorder and none is expected, 503 PICK_LIST_REPLICATION_PENDING with a Retry-After header when the workorder holds part lines but its pick list has not replicated from Inventory yet, and 403 LOCATION_SCOPE_DENIED when the caller holds inventory:pick_list:view but its location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
 
         '
       operationId: getWorkorderPickList
@@ -5494,6 +5494,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Workorder not found
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The workorder holds part lines whose pick list or pick tasks have not replicated from Inventory yet (ApiError.code PICK_LIST_REPLICATION_PENDING, referenceId the workorder id). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - inventory:pick_list:view
@@ -5562,7 +5574,7 @@ paths:
 
         Emits a WORKORDER_PICK_FACADE_CONFIRM_LINE event and publishes a pick-confirm command; callers must poll getPickTasks to observe the applied quantity.
 
-        Returns 202 with status PENDING when the confirmation is queued, 400 when pickLineId does not match pickTaskId, 404 when the pick list or task is missing, 503 when the command feed is unavailable, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
+        Returns 202 with status PENDING when the confirmation is queued, 400 when pickLineId does not match pickTaskId, 404 when the pick list or task is missing, 503 when the command feed is unavailable or, with PICK_LIST_REPLICATION_PENDING and a Retry-After header, when the workorder holds part lines but its pick list or tasks have not replicated from Inventory yet, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
 
         '
       operationId: confirmPickLine
@@ -5634,6 +5646,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Scan mismatch or domain validation error from pos-inventory
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The workorder holds part lines whose pick list or pick tasks have not replicated from Inventory yet (ApiError.code PICK_LIST_REPLICATION_PENDING, referenceId the workorder id). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -5654,7 +5678,7 @@ paths:
 
         Emits a WORKORDER_PICK_FACADE_COMPLETE_TASK event and publishes a pick-confirm command for the remaining quantity; callers must poll getPickTasks to observe the applied state.
 
-        Returns 202 with status PENDING while the command is in flight, 200 with the current state when the task is already complete, 404 when the pick list or task is missing, 503 when the command feed is unavailable, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
+        Returns 202 with status PENDING while the command is in flight, 200 with the current state when the task is already complete, 404 when the pick list or task is missing, 503 when the command feed is unavailable or, with PICK_LIST_REPLICATION_PENDING and a Retry-After header, when the workorder holds part lines but its pick list or tasks have not replicated from Inventory yet, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
 
         '
       operationId: completePickTask
@@ -5711,6 +5735,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Workorder or pick task not found
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The workorder holds part lines whose pick list or pick tasks have not replicated from Inventory yet (ApiError.code PICK_LIST_REPLICATION_PENDING, referenceId the workorder id). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -5731,7 +5767,7 @@ paths:
 
         Emits a WORKORDER_PICK_FACADE_RESOLVE_SCAN audit event; no pick state changes — the check is purely evaluative.
 
-        Returns 400 VALIDATION_FAILED (with fieldErrors naming productTargetValid and/or locationTargetValid) when neither or both of a target pair is supplied, 404 when the workorder has no pick list or the pick task is not on it, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
+        Returns 400 VALIDATION_FAILED (with fieldErrors naming productTargetValid and/or locationTargetValid) when neither or both of a target pair is supplied, 404 when the workorder has no pick list and none is expected or the pick task is not on a pick list that has tasks, 503 PICK_LIST_REPLICATION_PENDING with a Retry-After header when the workorder holds part lines but its pick list or tasks have not replicated from Inventory yet, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
 
         '
       operationId: resolvePickScan
@@ -5790,6 +5826,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Workorder or pick task not found
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The workorder holds part lines whose pick list or pick tasks have not replicated from Inventory yet (ApiError.code PICK_LIST_REPLICATION_PENDING, referenceId the workorder id). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - inventory:pick_list:execute
@@ -5858,7 +5906,7 @@ paths:
 
         Emits a WORKORDER_PICKED_ITEMS_CONSUME event and publishes a consume command; callers must poll getPickedItems to observe the consumed quantities.
 
-        Returns 202 with per-item PENDING results, 404 when the pick list or a referenced pick task is missing, 503 when the command feed is unavailable, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
+        Returns 202 with per-item PENDING results, 404 when the pick list or a referenced pick task is missing, 503 when the command feed is unavailable or, with PICK_LIST_REPLICATION_PENDING and a Retry-After header, when the workorder holds part lines but its pick list or tasks have not replicated from Inventory yet, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the workorder''s own site (ADR-0061 mechanism, #2204).
 
         '
       operationId: consumeWorkorderPickedItems
@@ -5910,6 +5958,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Workorder not found
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The workorder holds part lines whose pick list or pick tasks have not replicated from Inventory yet (ApiError.code PICK_LIST_REPLICATION_PENDING, referenceId the workorder id). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - workorder:parts:consume
@@ -6041,7 +6101,7 @@ paths:
 
         Emits a WORKORDER_POSITION_ASSIGN event and marks the workorder fact changed.
 
-        Returns 403 when the caller''s location scope does not cover the workorder''s shop, 404 when no workorder exists for the id, 409 RESOURCE_OCCUPIED when the position already holds another open workorder, 409 WORKORDER_CLOSED when the workorder is COMPLETED or CANCELLED, 422 SERVICE_POSITION_INVALID when the position is unknown or at another site, 422 SERVICE_POSITION_INACTIVE when the bay is out of service or the mobile unit is not deployed, and 422 SERVICE_POSITION_DUTY_CLASS_EXCEEDED when the vehicle''s GVWR class is above the position''s maxDutyClass; specialty capability is never checked here, only duty class (DECISION-SHOPMGMT-021 rule 3), and an unknown vehicle or ceiling class skips the check.
+        Returns 403 when the caller''s location scope does not cover the workorder''s shop, 404 when no workorder exists for the id, 409 RESOURCE_OCCUPIED when the position already holds another open workorder, 409 WORKORDER_CLOSED when the workorder is COMPLETED or CANCELLED, 422 SERVICE_POSITION_INVALID when the position is at another site or is the other resource kind, 422 SERVICE_POSITION_INACTIVE when the bay is out of service or the mobile unit is not deployed, 422 SERVICE_POSITION_DUTY_CLASS_EXCEEDED when the vehicle''s GVWR class is above the position''s maxDutyClass, and 503 LOCATION_REPLICATION_PENDING with a Retry-After header when neither location replica holds the position id yet; specialty capability is never checked here, only duty class (DECISION-SHOPMGMT-021 rule 3), and an unknown vehicle or ceiling class skips the check.
 
         Placing an APPROVED workorder that already has a technician on a BAY or MOBILE_UNIT moves it to ASSIGNED; a HOLD does not, because it is a parking space rather than somewhere work happens.
 
@@ -6105,7 +6165,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Unknown position, or one belonging to another site (ApiError.code SERVICE_POSITION_INVALID), a bay or mobile unit that is not active (ApiError.code SERVICE_POSITION_INACTIVE), or the vehicle's GVWR class above the position's maxDutyClass (ApiError.code SERVICE_POSITION_DUTY_CLASS_EXCEEDED, ApiError.fieldErrors naming resourceId; skipped when either class is unknown)
+          description: A position belonging to another site or of the other resource kind (ApiError.code SERVICE_POSITION_INVALID), a bay or mobile unit that is not active (ApiError.code SERVICE_POSITION_INACTIVE), or the vehicle's GVWR class above the position's maxDutyClass (ApiError.code SERVICE_POSITION_DUTY_CLASS_EXCEEDED, ApiError.fieldErrors naming resourceId; skipped when either class is unknown)
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The bay or mobile unit has not replicated from Location yet (ApiError.code LOCATION_REPLICATION_PENDING, referenceId the position id). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - workorder:position:assign
@@ -6604,7 +6676,7 @@ paths:
 
         Emits a WORKORDER_TECHNICIAN_ASSIGN event; an APPROVED workorder that also holds a BAY or MOBILE_UNIT position is transitioned to ASSIGNED with a recorded state transition. ASSIGNED means both halves — a technician and somewhere to work — so a workorder with no position, or parked on HOLD, stays APPROVED until it is placed.
 
-        Returns 404 when the workorder does not exist, 400 with the failure reason when the workorder''s status cannot take a technician yet, which includes a reopened COMPLETED one, 409 WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — 409 TECHNICIAN_ALREADY_ASSIGNED when the workorder already has a current technician, which reassignTechnician changes, and 422 TECHNICIAN_NOT_STAFFED_AT_SITE when the technician has one or more ACTIVE staffing assignments effective today and none of them is at the workorder''s site — there is no override; have the technician staffed at this site in People, effective today, and retry.
+        Returns 404 when the workorder does not exist, 400 with the failure reason when the workorder''s status cannot take a technician yet, which includes a reopened COMPLETED one, 409 WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — 409 TECHNICIAN_ALREADY_ASSIGNED when the workorder already has a current technician, which reassignTechnician changes, and 422 TECHNICIAN_NOT_STAFFED_AT_SITE when the technician has one or more ACTIVE staffing assignments effective today and none of them is at the workorder''s site — there is no override; have the technician staffed at this site in People, effective today, and retry. A technician the People feed has not delivered yet is 503 TECHNICIAN_REPLICATION_PENDING with a Retry-After header, not a 4xx.
 
         '
       operationId: assignTechnician
@@ -6674,7 +6746,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: The technician is not known (ApiError.code TECHNICIAN_NOT_FOUND) or has ACTIVE staffing effective today at one or more sites but not this workorder's site (ApiError.code TECHNICIAN_NOT_STAFFED_AT_SITE, with the workorder's site id as referenceId and a fieldErrors entry on technicianId). No override exists for TECHNICIAN_NOT_STAFFED_AT_SITE; a technician with no ACTIVE staffing rows at all is allowed.
+          description: The technician has ACTIVE staffing effective today at one or more sites but not this workorder's site (ApiError.code TECHNICIAN_NOT_STAFFED_AT_SITE, with the workorder's site id as referenceId and a fieldErrors entry on technicianId). No override exists for it; a technician with no ACTIVE staffing rows at all is allowed.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The technician has not replicated from People yet (ApiError.code TECHNICIAN_REPLICATION_PENDING, referenceId the technician id). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - workorder:workorder:assign-technician
@@ -6694,7 +6778,7 @@ paths:
 
         Emits a WORKORDER_TECHNICIAN_REASSIGN event.
 
-        Returns 404 when the workorder does not exist, 400 with the failure reason when the workorder''s status cannot take a technician yet, which includes a reopened COMPLETED one, 409 WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — 409 TECHNICIAN_NOT_ASSIGNED when the workorder has no current technician to reassign from, which assignTechnician creates, and 422 TECHNICIAN_NOT_STAFFED_AT_SITE when the new technician has one or more ACTIVE staffing assignments effective today and none of them is at the workorder''s site — there is no override; have the technician staffed at this site in People, effective today, and retry.
+        Returns 404 when the workorder does not exist, 400 with the failure reason when the workorder''s status cannot take a technician yet, which includes a reopened COMPLETED one, 409 WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — 409 TECHNICIAN_NOT_ASSIGNED when the workorder has no current technician to reassign from, which assignTechnician creates, and 422 TECHNICIAN_NOT_STAFFED_AT_SITE when the new technician has one or more ACTIVE staffing assignments effective today and none of them is at the workorder''s site — there is no override; have the technician staffed at this site in People, effective today, and retry. A technician the People feed has not delivered yet is 503 TECHNICIAN_REPLICATION_PENDING with a Retry-After header, not a 4xx.
 
         '
       operationId: reassignTechnician
@@ -6765,7 +6849,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: The new technician is not known (ApiError.code TECHNICIAN_NOT_FOUND) or has ACTIVE staffing effective today at one or more sites but not this workorder's site (ApiError.code TECHNICIAN_NOT_STAFFED_AT_SITE, with the workorder's site id as referenceId and a fieldErrors entry on technicianId). No override exists for TECHNICIAN_NOT_STAFFED_AT_SITE; a technician with no ACTIVE staffing rows at all is allowed.
+          description: The new technician has ACTIVE staffing effective today at one or more sites but not this workorder's site (ApiError.code TECHNICIAN_NOT_STAFFED_AT_SITE, with the workorder's site id as referenceId and a fieldErrors entry on technicianId). No override exists for it; a technician with no ACTIVE staffing rows at all is allowed.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The new technician has not replicated from People yet (ApiError.code TECHNICIAN_REPLICATION_PENDING, referenceId the technician id). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - workorder:workorder:assign-technician

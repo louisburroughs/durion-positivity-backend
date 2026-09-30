@@ -16,6 +16,8 @@ import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.security.common.LocationAncestorResolver;
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.LocationScopeDeniedException;
+import com.positivity.web.common.ReplicationPendingException;
+import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -105,6 +107,61 @@ class WorkSessionAccessPolicyTest {
 
     private void unlinked(String username) {
         when(userPersonTranslationService.findActivePersonUuidForUser(username)).thenReturn(Optional.empty());
+    }
+
+    @Nested
+    @DisplayName("requireCallerPersonId — 'me' reads with no default (#1994)")
+    class RequireCallerPersonId {
+
+        @Test
+        @DisplayName("an ACTIVE link answers with the caller's person")
+        void activeLinkAnswers() {
+            linked(ADA_USER, ADA);
+            caller(ADA_USER, null);
+
+            assertThat(policy().requireCallerPersonId()).isEqualTo(ADA);
+        }
+
+        @Test
+        @DisplayName("a caller the user-link replica holds no row for is 503 USER_LINK_REPLICATION_PENDING")
+        void noLinkRowIsReplicationPending() {
+            unlinked(MANAGER_USER);
+            when(userPersonTranslationService.hasLinkForUser(MANAGER_USER)).thenReturn(false);
+            caller(MANAGER_USER, null);
+
+            assertThatThrownBy(() -> policy().requireCallerPersonId())
+                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("USER_LINK_REPLICATION_PENDING");
+                        assertThat(e.getReferenceId()).isNull();
+                    });
+        }
+
+        @Test
+        @DisplayName("a link that is present but no longer ACTIVE stays a 404")
+        void inactiveLinkStaysNotFound() {
+            unlinked(MANAGER_USER);
+            when(userPersonTranslationService.hasLinkForUser(MANAGER_USER)).thenReturn(true);
+            caller(MANAGER_USER, null);
+
+            assertThatThrownBy(() -> policy().requireCallerPersonId()).isInstanceOf(EntityNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("an unauthenticated caller stays a 404 and reads no link")
+        void noCallerStaysNotFound() {
+            assertThatThrownBy(() -> policy().requireCallerPersonId()).isInstanceOf(EntityNotFoundException.class);
+            verify(userPersonTranslationService, never()).hasLinkForUser(any());
+        }
+
+        @Test
+        @DisplayName("authorization is untouched: an unlinked caller is still just 'not self'")
+        void authorizationStillTreatsAnUnlinkedCallerAsNotSelf() {
+            unlinked(MANAGER_USER);
+            caller(MANAGER_USER, null);
+
+            assertThat(policy().callerPersonId()).isEmpty();
+            verify(userPersonTranslationService, never()).hasLinkForUser(any());
+        }
     }
 
     @Nested

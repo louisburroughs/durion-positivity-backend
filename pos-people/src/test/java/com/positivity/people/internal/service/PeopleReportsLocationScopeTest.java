@@ -108,7 +108,7 @@ class PeopleReportsLocationScopeTest {
         when(timekeepingThresholdCache.createContext(any(), any())).thenReturn(thresholdContext);
         when(thresholdContext.resolveThresholdMinutes(any(), any())).thenReturn(30);
         when(locationReferenceService.isLocationActive(any())).thenReturn(true);
-        when(locationReferenceService.getLocationName(any())).thenReturn("Loc");
+        when(locationReferenceService.findLocationName(any())).thenReturn(Optional.of("Loc"));
         when(locationHierarchyService.descendantsOf(DISTRICT, Dimension.OTHER)).thenReturn(Set.of(DISTRICT, SHOP_A));
         when(locationHierarchyService.descendantsOf(SHOP_C, Dimension.OTHER)).thenReturn(Set.of(SHOP_C));
     }

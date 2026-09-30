@@ -25,6 +25,7 @@ import com.positivity.people.internal.service.TimeEntryService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -166,7 +167,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         timeEntryRepository.save(approved);
 
         when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceService.getLocationName(locationId)).thenReturn("North Shop");
+        when(locationReferenceService.findLocationName(locationId)).thenReturn(Optional.of("North Shop"));
 
         mockMvc.perform(withAuth(get("/v1/people/reports/approvedTime")
                         .param("startDate", reportDate.toString())
@@ -210,7 +211,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         seedTechnician(technicianId, "Jane", "Doe");
 
         when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceService.getLocationName(locationId))
+        when(locationReferenceService.findLocationName(locationId))
                 .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to fetch location"));
 
         TimeEntry approved = new TimeEntry();

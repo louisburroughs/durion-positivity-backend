@@ -15,6 +15,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
 
     Optional<Employee> findByPersonId(UUID personId);
 
+    boolean existsByPersonId(UUID personId);
+
     Optional<Employee> findByEmployeeNumberIgnoreCase(String employeeNumber);
 
     List<Employee> findByPersonIdIn(Collection<UUID> personIds);

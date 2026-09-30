@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.web.common.ReplicationPendingException;
 import com.positivity.workorder.internal.dto.AssignServicePositionRequest;
 import com.positivity.workorder.internal.dto.ServicePositionAssignmentRecord;
 import com.positivity.workorder.internal.dto.ServicePositionResponse;
@@ -11,6 +12,7 @@ import com.positivity.workorder.internal.entity.ExtVehicleReplica;
 import com.positivity.workorder.internal.entity.ServicePositionAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
+import com.positivity.workorder.internal.exception.ReplicationPendingCodes;
 import com.positivity.workorder.internal.exception.ServicePositionDutyClassExceededException;
 import com.positivity.workorder.internal.exception.ServicePositionInactiveException;
 import com.positivity.workorder.internal.exception.ServicePositionInvalidException;
@@ -336,9 +338,13 @@ public class ServicePositionServiceImpl implements ServicePositionService {
         }
 
         if (resourceType == ResourceType.BAY) {
-            ExtBayReplica bay = extBayReplicaRepository
-                    .findById(requestedId)
-                    .orElseThrow(() -> new ServicePositionInvalidException("Unknown bay " + requestedId));
+            ExtBayReplica bay = extBayReplicaRepository.findById(requestedId).orElseThrow(() -> {
+                if (extMobileUnitReplicaRepository.existsById(requestedId)) {
+                    return new ServicePositionInvalidException(
+                            "Position " + requestedId + " is a mobile unit, not a bay");
+                }
+                return locationReplicationPending("bay", requestedId);
+            });
             requireSameSite(resourceType, requestedId, bay.getLocationId(), siteId);
             requireActive(resourceType, requestedId, bay.isActive(), bay.getName());
             requireDutyClass(resourceType, requestedId, bay.getMaxDutyClass(), workorder.getVehicleId(), bay.getName());
@@ -347,11 +353,30 @@ public class ServicePositionServiceImpl implements ServicePositionService {
 
         ExtMobileUnitReplica unit = extMobileUnitReplicaRepository
                 .findById(requestedId)
-                .orElseThrow(() -> new ServicePositionInvalidException("Unknown mobile unit " + requestedId));
+                .orElseThrow(() -> {
+                    if (extBayReplicaRepository.existsById(requestedId)) {
+                        return new ServicePositionInvalidException(
+                                "Position " + requestedId + " is a bay, not a mobile unit");
+                    }
+                    return locationReplicationPending("mobile unit", requestedId);
+                });
         requireSameSite(resourceType, requestedId, unit.getBaseLocationId(), siteId);
         requireActive(resourceType, requestedId, unit.isActive(), unit.getName());
         requireDutyClass(resourceType, requestedId, unit.getMaxDutyClass(), workorder.getVehicleId(), unit.getName());
         return requestedId;
+    }
+
+    /**
+     * A well-formed position id that neither {@code ext_bay} nor {@code ext_mobile_unit} holds may be
+     * a bay Location published a moment ago, so it is "not yet", not "no" (#1994): the row arrives by
+     * event, and a 422 would send the caller away from an id about to become valid. An id the other
+     * kind's replica holds is positively the wrong kind and stays 422.
+     */
+    private static ReplicationPendingException locationReplicationPending(String positionLabel, UUID positionId) {
+        return new ReplicationPendingException(
+                ReplicationPendingCodes.LOCATION_REPLICATION_PENDING,
+                "The " + positionLabel + " has not replicated from Location yet; retry shortly",
+                positionId);
     }
 
     private static void requireSameSite(

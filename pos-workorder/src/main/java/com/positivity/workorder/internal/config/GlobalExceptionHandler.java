@@ -28,7 +28,6 @@ import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionExc
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
-import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
 import com.positivity.workorder.internal.exception.TechnicianNotStaffedAtSiteException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
@@ -481,23 +480,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * A technician id that names nobody in the {@code ext_person} replica (#1983).
-     *
-     * <p>422 for the same reason {@link ServicePositionInvalidException} is: a cross-entity rule
-     * fails, and the technician is not what the URL addresses.
-     */
-    @ExceptionHandler(TechnicianNotFoundException.class)
-    public ResponseEntity<ApiError> handleTechnicianNotFound(
-            TechnicianNotFoundException ex, HttpServletRequest request) {
-        return buildErrorResponse(
-                HttpStatus.UNPROCESSABLE_ENTITY, TechnicianNotFoundException.ERROR_CODE, ex.getMessage(), request);
-    }
-
-    /**
      * A technician was assigned or reassigned to a workorder at a site they are not staffed at
      * (#1990). There is no override.
      *
-     * <p>422 for the same reason {@link #handleTechnicianNotFound} is: the technician exists, the
+     * <p>422 for the same reason {@link #handleServicePositionInvalid} is: the technician exists, the
      * request is well-formed, and what fails is a cross-entity rule. The workorder's site rides as
      * {@code referenceId} so a dispatch board can link straight to it, {@code fieldErrors} marks
      * {@code technicianId}, and {@code nextAction}/{@code supportAction} name the People-side fix

@@ -9,6 +9,7 @@ import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.StaffingAssignmentService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -74,9 +75,10 @@ public class StaffingAssignmentController {
                     primary demotes and ends any overlapping existing primary, and a person's first active \
                     assignment is forced primary regardless of the flag.
                     Returns 409 when an overlapping assignment exists for the person, location, and role, 404 when \
-                    the person, employee record, or active location cannot be resolved, 400 when the person's \
-                    employee status is not ACTIVE, and 403 LOCATION_SCOPE_DENIED when locationId is outside the \
-                    caller's location reach.
+                    the person, employee record, or an inactive location cannot be resolved, 503 \
+                    LOCATION_REPLICATION_PENDING with a Retry-After header when the location has not replicated \
+                    from Location yet, 400 when the person's employee status is not ACTIVE, and 403 \
+                    LOCATION_SCOPE_DENIED when locationId is outside the caller's location reach.
                     """)
     @ApiResponse(responseCode = "201", description = "Assignment created.")
     @ApiResponse(
@@ -89,8 +91,19 @@ public class StaffingAssignmentController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "Location or person not found.",
+            description = "Person not found, or the location is present but inactive.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description =
+                    "The location has not replicated from Location yet (ApiError.code LOCATION_REPLICATION_PENDING, "
+                            + "referenceId the location id). Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Overlapping assignment exists.",
@@ -218,10 +231,12 @@ public class StaffingAssignmentController {
                     is found, so a 404 precedes it).
                     Emits a PEOPLE_STAFFING_ASSIGNMENT_UPDATE event and publishes a staffing-assignment fact; \
                     setting isPrimary true demotes and ends any other overlapping primary assignment.
-                    Returns 404 when the assignment, person, employee record, or active location cannot be resolved, \
-                    409 when another assignment overlaps for the person, location, and role, 400 when the \
-                    person's employee status is not ACTIVE, and 403 LOCATION_SCOPE_DENIED when the current or \
-                    requested location is outside the caller's location reach.
+                    Returns 404 when the assignment, person, employee record, or an inactive location cannot be \
+                    resolved, 503 LOCATION_REPLICATION_PENDING with a Retry-After header when the requested \
+                    location has not replicated from Location yet, 409 when another assignment overlaps for the \
+                    person, location, and role, 400 when the person's employee status is not ACTIVE, and 403 \
+                    LOCATION_SCOPE_DENIED when the current or requested location is outside the caller's \
+                    location reach.
                     """)
     @ApiResponse(responseCode = "200", description = "Assignment updated.")
     @ApiResponse(
@@ -240,6 +255,17 @@ public class StaffingAssignmentController {
             responseCode = "409",
             description = "Overlapping assignment exists.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "The requested location has not replicated from Location yet (ApiError.code "
+                    + "LOCATION_REPLICATION_PENDING, referenceId the location id). Not-yet, not no: retry after the "
+                    + "Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_STAFFING_ASSIGNMENT_UPDATE", apiVersion = "1")
     @PutMapping(ASSIGNMENTS + "/{assignmentId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

@@ -9,6 +9,7 @@ import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.ServicePositionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -72,11 +73,13 @@ public class ServicePositionController {
                     Returns 403 when the caller's location scope does not cover the workorder's shop, 404 when \
                     no workorder exists for the id, 409 RESOURCE_OCCUPIED when the position already holds \
                     another open workorder, 409 WORKORDER_CLOSED when the workorder is COMPLETED or CANCELLED, \
-                    422 SERVICE_POSITION_INVALID when the position is unknown or at another site, 422 \
-                    SERVICE_POSITION_INACTIVE when the bay is out of service or the mobile unit is not deployed, \
-                    and 422 SERVICE_POSITION_DUTY_CLASS_EXCEEDED when the vehicle's GVWR class is above the \
-                    position's maxDutyClass; specialty capability is never checked here, only duty class \
-                    (DECISION-SHOPMGMT-021 rule 3), and an unknown vehicle or ceiling class skips the check.
+                    422 SERVICE_POSITION_INVALID when the position is at another site or is the other resource \
+                    kind, 422 SERVICE_POSITION_INACTIVE when the bay is out of service or the mobile unit is not \
+                    deployed, 422 SERVICE_POSITION_DUTY_CLASS_EXCEEDED when the vehicle's GVWR class is above the \
+                    position's maxDutyClass, and 503 LOCATION_REPLICATION_PENDING with a Retry-After header when \
+                    neither location replica holds the position id yet; specialty capability is never checked \
+                    here, only duty class (DECISION-SHOPMGMT-021 rule 3), and an unknown vehicle or ceiling class \
+                    skips the check.
                     Placing an APPROVED workorder that already has a technician on a BAY or MOBILE_UNIT moves it \
                     to ASSIGNED; a HOLD does not, because it is a parking space rather than somewhere work \
                     happens.
@@ -102,11 +105,22 @@ public class ServicePositionController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "Unknown position, or one belonging to another site (ApiError.code "
+            description = "A position belonging to another site or of the other resource kind (ApiError.code "
                     + "SERVICE_POSITION_INVALID), a bay or mobile unit that is not active (ApiError.code "
                     + "SERVICE_POSITION_INACTIVE), or the vehicle's GVWR class above the position's "
                     + "maxDutyClass (ApiError.code SERVICE_POSITION_DUTY_CLASS_EXCEEDED, ApiError.fieldErrors "
                     + "naming resourceId; skipped when either class is unknown)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "The bay or mobile unit has not replicated from Location yet (ApiError.code "
+                    + "LOCATION_REPLICATION_PENDING, referenceId the position id). Not-yet, not no: retry "
+                    + "after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ServicePositionResponse> assignServicePosition(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")

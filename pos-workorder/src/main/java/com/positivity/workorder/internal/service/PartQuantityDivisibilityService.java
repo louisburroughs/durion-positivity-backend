@@ -134,6 +134,11 @@ public class PartQuantityDivisibilityService {
      * value for it to own. What it owns is the pre-check: whether the exact converted quantity is
      * one the product's declaration would accept at all, mirrored from pos-inventory's semantics
      * because the module wall (ArchUnit) forbids importing its conversion service directly.
+     *
+     * <p>A missing conversion row stays 422 {@code UOM_CONVERSION_UNDEFINED} rather than becoming a
+     * replication-pending 503 (#1994 reviewed): {@code product_uom} is catalog configuration that is
+     * seeded ahead of use and changes rarely, so an absent row is a configuration gap a retry will
+     * not close.
      */
     private BigDecimal convertToBaseUnrounded(UUID productEntityId, String uomCode, BigDecimal quantity) {
         ExtProductUomReplica row = productUomReplicaRepository

@@ -49,6 +49,11 @@ public class UserPersonTranslationServiceImpl implements UserPersonTranslationSe
     }
 
     @Override
+    public boolean hasLinkForUser(@NonNull String username) {
+        return linkReplicaRepository.findFirstByUsername(username).isPresent();
+    }
+
+    @Override
     @NonNull
     public UUID getPersonUuidForCurrentUser() {
         String username;
@@ -62,7 +67,13 @@ public class UserPersonTranslationServiceImpl implements UserPersonTranslationSe
         if (username == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authenticated user context is missing");
         }
-        return getPersonUuidForUser(username);
+        // Not getPersonUuidForUser: that one's EntityNotFoundException means "no link" to the
+        // callers that apply a default (#1636), which a /me read does not have. A current-user read
+        // with no link row answers "not yet" (#1994). Unfiltered, like getPersonUuidForUser.
+        return linkReplicaRepository
+                .findFirstByUsername(username)
+                .map(ExtUserLinkReplica::getPersonId)
+                .orElseThrow(UserPersonTranslationService::userLinkReplicationPending);
     }
 
     @Override

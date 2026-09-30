@@ -412,7 +412,7 @@ present but in the wrong state keeps its own status.
 | `CRM_REPLICATION_PENDING` | `ext_customer_party`, `ext_vehicle` | `POST /v1/appointments` |
 | `LOCATION_REPLICATION_PENDING` | `ext_location` (opening search); `ext_bay` / `ext_mobile_unit` for a well-formed `resourceId` (submit, reschedule) | `GET /v1/schedules/openings`, `POST /v1/appointments`, `PUT /v1/appointments/{id}/reschedule` |
 | `CATALOG_REPLICATION_PENDING` | `ext_catalog_service` | `GET /v1/schedules/openings` |
-| `MECHANIC_REPLICATION_PENDING` | the mechanic projection built from staffing events | `POST /v1/appointments/{id}/assignments` |
+| `MECHANIC_REPLICATION_PENDING` | the mechanic projection built from staffing events | `POST /v1/appointments/{id}/assignments`; the internal mechanic availability query |
 
 **Bay/mobile-unit topology is event-sourced, not read live.** A synchronous `RestClient` into
 pos-location would work today but is a domain→domain call that ADR-0044 R1 forbids, and no standing
