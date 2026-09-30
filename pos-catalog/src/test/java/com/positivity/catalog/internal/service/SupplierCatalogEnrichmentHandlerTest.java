@@ -48,12 +48,13 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("supplier.events.v1 -> tread design enrichment (CAP-324 #1352, confidence tiers #1645)")
-class SupplierCatalogEnrichmentListenerTest {
+class SupplierCatalogEnrichmentHandlerTest {
 
     private static final UUID VENDOR_PROFILE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01");
     private static final UUID DESIGN_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b02");
@@ -63,7 +64,7 @@ class SupplierCatalogEnrichmentListenerTest {
 
     /**
      * Thresholds are deliberately loose in most of these tests: the subject here is which candidate
-     * the listener is <em>allowed</em> to attach, not where the score cut-offs sit — those belong to
+     * the handler is <em>allowed</em> to attach, not where the score cut-offs sit — those belong to
      * {@link TreadDesignMatcherTest}. A low auto threshold makes every plausible candidate AUTO-tier
      * so the attachment rules are the only thing being exercised.
      */
@@ -91,11 +92,11 @@ class SupplierCatalogEnrichmentListenerTest {
     @Mock
     private ProductRepository productRepository;
 
-    private SupplierCatalogEnrichmentListener listener;
+    private SupplierCatalogEnrichmentHandler handler;
 
     @BeforeEach
     void setUp() {
-        listener = listenerWith(LOOSE_THRESHOLDS);
+        handler = handlerWith(LOOSE_THRESHOLDS);
         when(treadDesignRepository.findByVendorProfileIdAndVendorVariantId(any(), any()))
                 .thenReturn(Optional.empty());
         when(treadDesignRepository.save(any(TreadDesignEntity.class))).thenAnswer(inv -> {
@@ -114,8 +115,13 @@ class SupplierCatalogEnrichmentListenerTest {
                 .thenReturn(false);
     }
 
-    private SupplierCatalogEnrichmentListener listenerWith(CatalogEnrichmentProperties properties) {
-        return new SupplierCatalogEnrichmentListener(
+    private void handle(String json) {
+        JsonNode envelope = new ObjectMapper().readTree(json);
+        handler.handle(envelope, envelope.path("eventId").stringValue(null));
+    }
+
+    private SupplierCatalogEnrichmentHandler handlerWith(CatalogEnrichmentProperties properties) {
+        return new SupplierCatalogEnrichmentHandler(
                 CLOCK,
                 new ObjectMapper(),
                 processedEventRepository,
@@ -180,7 +186,7 @@ class SupplierCatalogEnrichmentListenerTest {
 
         @Test
         void appliesAWellFormedEnrichmentAndRecordsProcessed() {
-            listener.onSupplierEvent(enrichmentEvent("e-1", "VAR-1", "hash-1", false));
+            handle(enrichmentEvent("e-1", "VAR-1", "hash-1", false));
 
             ArgumentCaptor<TreadDesignEntity> designCaptor = ArgumentCaptor.forClass(TreadDesignEntity.class);
             verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(designCaptor.capture());
@@ -211,7 +217,7 @@ class SupplierCatalogEnrichmentListenerTest {
 
         @Test
         void treatsAnUnresolvedImageAsNotYetRatherThanAbsent() {
-            listener.onSupplierEvent(enrichmentEvent("e-2", "VAR-2", "hash-1", true));
+            handle(enrichmentEvent("e-2", "VAR-2", "hash-1", true));
 
             ArgumentCaptor<TreadDesignEntity> designCaptor = ArgumentCaptor.forClass(TreadDesignEntity.class);
             verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(designCaptor.capture());
@@ -231,16 +237,6 @@ class SupplierCatalogEnrichmentListenerTest {
     class Redelivery {
 
         @Test
-        void redeliveredEventIdIsANoOp() {
-            when(processedEventRepository.existsById("e-3")).thenReturn(true);
-
-            listener.onSupplierEvent(enrichmentEvent("e-3", "VAR-1", "hash-1", false));
-
-            verify(treadDesignRepository, never()).save(any());
-            verify(processedEventRepository, never()).save(any());
-        }
-
-        @Test
         void unchangedContentHashOnANewEventIdIsANoOpButStillRecordsTheEvent() {
             when(treadDesignRepository.findByVendorProfileIdAndVendorVariantId(VENDOR_PROFILE_ID, "VAR-1"))
                     .thenReturn(Optional.of(TreadDesignEntity.builder()
@@ -252,7 +248,7 @@ class SupplierCatalogEnrichmentListenerTest {
 
             // A republication of unchanged content still arrives as a new event and is legitimately
             // processed -- the domain-level action is a no-op, but the delivery itself is not.
-            listener.onSupplierEvent(enrichmentEvent("e-4", "VAR-1", "hash-1", false));
+            handle(enrichmentEvent("e-4", "VAR-1", "hash-1", false));
 
             verify(treadDesignRepository, never()).save(any());
             verify(treadDesignTextRepository, never()).save(any());
@@ -269,7 +265,7 @@ class SupplierCatalogEnrichmentListenerTest {
                             .contentHash("old-hash")
                             .build()));
 
-            listener.onSupplierEvent(enrichmentEvent("e-5", "VAR-1", "new-hash", false));
+            handle(enrichmentEvent("e-5", "VAR-1", "new-hash", false));
 
             ArgumentCaptor<TreadDesignEntity> captor = ArgumentCaptor.forClass(TreadDesignEntity.class);
             verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
@@ -308,7 +304,7 @@ class SupplierCatalogEnrichmentListenerTest {
         void changedContentReRunsMatching(TreadDesignMatchState state) {
             existingDesignIs(state);
 
-            listener.onSupplierEvent(enrichmentEvent("e-20-" + state, "VAR-1", "new-hash", false));
+            handle(enrichmentEvent("e-20-" + state, "VAR-1", "new-hash", false));
 
             // A REJECTED design re-enters deliberately: the rejection was of what the vendor said,
             // and the vendor has now said something different.
@@ -322,7 +318,7 @@ class SupplierCatalogEnrichmentListenerTest {
             when(productRepository.existsByTreadDesignIdAndTreadDesignSource(DESIGN_ID, TreadDesignSource.MANUAL))
                     .thenReturn(true);
 
-            listener.onSupplierEvent(enrichmentEvent("e-21", "VAR-1", "new-hash", false));
+            handle(enrichmentEvent("e-21", "VAR-1", "new-hash", false));
 
             verify(productRepository, never()).save(any());
             verify(treadDesignMatchCandidateRepository, never()).deleteByTreadDesignId(any());
@@ -337,7 +333,7 @@ class SupplierCatalogEnrichmentListenerTest {
             when(productRepository.existsByTreadDesignIdAndTreadDesignSource(DESIGN_ID, TreadDesignSource.MANUAL))
                     .thenReturn(false);
 
-            listener.onSupplierEvent(enrichmentEvent("e-22", "VAR-1", "new-hash", false));
+            handle(enrichmentEvent("e-22", "VAR-1", "new-hash", false));
 
             verify(productRepository).save(any(ProductEntity.class));
         }
@@ -348,10 +344,10 @@ class SupplierCatalogEnrichmentListenerTest {
         void reMatchingToTheSameStateLeavesMatchStateAtUntouched() {
             // High auto threshold, low review floor: the candidate scores below AUTO but above REVIEW,
             // so the design lands on REVIEW both before and after this re-match.
-            listener = listenerWith(new CatalogEnrichmentProperties(0.99, 0.05, null));
+            handler = handlerWith(new CatalogEnrichmentProperties(0.99, 0.05, null));
             existingDesignIs(TreadDesignMatchState.REVIEW);
 
-            listener.onSupplierEvent(enrichmentEvent("e-23", "VAR-1", "new-hash", false));
+            handle(enrichmentEvent("e-23", "VAR-1", "new-hash", false));
 
             ArgumentCaptor<TreadDesignEntity> captor = ArgumentCaptor.forClass(TreadDesignEntity.class);
             verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
@@ -365,7 +361,7 @@ class SupplierCatalogEnrichmentListenerTest {
         void reMatchingToADifferentStateUpdatesMatchStateAt() {
             existingDesignIs(TreadDesignMatchState.UNMATCHED);
 
-            listener.onSupplierEvent(enrichmentEvent("e-24", "VAR-1", "new-hash", false));
+            handle(enrichmentEvent("e-24", "VAR-1", "new-hash", false));
 
             ArgumentCaptor<TreadDesignEntity> captor = ArgumentCaptor.forClass(TreadDesignEntity.class);
             verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
@@ -398,7 +394,7 @@ class SupplierCatalogEnrichmentListenerTest {
             when(supplierPriceEntryRepository.findDistinctProductIdsByVendorProfileId(VENDOR_PROFILE_ID))
                     .thenReturn(List.of());
 
-            listener.onSupplierEvent(enrichmentEvent("e-6", "VAR-1", "hash-1", false));
+            handle(enrichmentEvent("e-6", "VAR-1", "hash-1", false));
 
             verify(productRepository, never()).findAllById(any());
             verify(productRepository, never()).save(any());
@@ -414,7 +410,7 @@ class SupplierCatalogEnrichmentListenerTest {
             candidate.setManufacturerPartNumber("MPN-KEEP");
             vendorHasPriced(candidate);
 
-            listener.onSupplierEvent(enrichmentEvent("e-7", "VAR-1", "hash-1", false));
+            handle(enrichmentEvent("e-7", "VAR-1", "hash-1", false));
 
             ArgumentCaptor<ProductEntity> productCaptor = ArgumentCaptor.forClass(ProductEntity.class);
             verify(productRepository).save(productCaptor.capture());
@@ -434,7 +430,7 @@ class SupplierCatalogEnrichmentListenerTest {
             unrelated.setName("Continental ExtremeContact");
             vendorHasPriced(unrelated);
 
-            listener.onSupplierEvent(enrichmentEvent("e-8", "VAR-1", "hash-1", false));
+            handle(enrichmentEvent("e-8", "VAR-1", "hash-1", false));
 
             verify(productRepository, never()).save(any());
             assertThat(savedDesign().getMatchState()).isEqualTo(TreadDesignMatchState.UNMATCHED);
@@ -445,7 +441,7 @@ class SupplierCatalogEnrichmentListenerTest {
         void scoredCandidatesAreRecorded() {
             vendorHasPriced(michelinProduct(PRODUCT_ID));
 
-            listener.onSupplierEvent(enrichmentEvent("e-12", "VAR-1", "hash-1", false));
+            handle(enrichmentEvent("e-12", "VAR-1", "hash-1", false));
 
             verify(treadDesignMatchCandidateRepository).deleteByTreadDesignId(DESIGN_ID);
             ArgumentCaptor<TreadDesignMatchCandidateEntity> captor =
@@ -459,10 +455,10 @@ class SupplierCatalogEnrichmentListenerTest {
         @Test
         @DisplayName("a candidate below the auto threshold is parked for review, never attached")
         void belowAutoIsParkedForReview() {
-            listener = listenerWith(new CatalogEnrichmentProperties(0.99, 0.05, null));
+            handler = handlerWith(new CatalogEnrichmentProperties(0.99, 0.05, null));
             vendorHasPriced(michelinProduct(PRODUCT_ID));
 
-            listener.onSupplierEvent(enrichmentEvent("e-13", "VAR-1", "hash-1", false));
+            handle(enrichmentEvent("e-13", "VAR-1", "hash-1", false));
 
             verify(productRepository, never()).save(any());
             assertThat(savedDesign().getMatchState()).isEqualTo(TreadDesignMatchState.REVIEW);
@@ -485,7 +481,7 @@ class SupplierCatalogEnrichmentListenerTest {
                             .matchState(TreadDesignMatchState.MATCHED)
                             .build()));
 
-            listener.onSupplierEvent(enrichmentEvent("e-14", "VAR-1", "hash-1", false));
+            handle(enrichmentEvent("e-14", "VAR-1", "hash-1", false));
 
             verify(productRepository, never()).save(any());
             ArgumentCaptor<TreadDesignEntity> captor = ArgumentCaptor.forClass(TreadDesignEntity.class);
@@ -508,7 +504,7 @@ class SupplierCatalogEnrichmentListenerTest {
             manual.setTreadDesignSource(TreadDesignSource.MANUAL);
             vendorHasPriced(manual);
 
-            listener.onSupplierEvent(enrichmentEvent("e-15", "VAR-1", "hash-1", false));
+            handle(enrichmentEvent("e-15", "VAR-1", "hash-1", false));
 
             verify(productRepository, never()).save(any());
             assertThat(manual.getTreadDesignId()).isEqualTo(RIVAL_DESIGN_ID);
@@ -525,7 +521,7 @@ class SupplierCatalogEnrichmentListenerTest {
             stale.setTreadDesignSource(TreadDesignSource.AUTO);
             when(productRepository.findByTreadDesignId(DESIGN_ID)).thenReturn(List.of(stale));
 
-            listener.onSupplierEvent(enrichmentEvent("e-16", "VAR-1", "hash-1", false));
+            handle(enrichmentEvent("e-16", "VAR-1", "hash-1", false));
 
             assertThat(stale.getTreadDesignId()).isNull();
             assertThat(stale.getTreadDesignSource()).isNull();
@@ -552,7 +548,7 @@ class SupplierCatalogEnrichmentListenerTest {
                             .matchState(TreadDesignMatchState.MATCHED)
                             .build()));
 
-            listener.onSupplierEvent(enrichmentEvent("e-17", "VAR-1", "hash-1", false));
+            handle(enrichmentEvent("e-17", "VAR-1", "hash-1", false));
 
             verify(productRepository).save(disputed);
             assertThat(disputed.getTreadDesignId()).isNull();
@@ -576,7 +572,7 @@ class SupplierCatalogEnrichmentListenerTest {
                             .tier(MatchTier.AUTO)
                             .build()));
 
-            listener.onSupplierEvent(enrichmentEvent("e-18", "VAR-1", "hash-1", false));
+            handle(enrichmentEvent("e-18", "VAR-1", "hash-1", false));
 
             verify(productRepository, never()).save(any());
             assertThat(disputed.getTreadDesignId()).isEqualTo(RIVAL_DESIGN_ID);
@@ -596,7 +592,7 @@ class SupplierCatalogEnrichmentListenerTest {
                 }
                 vendorHasPriced(candidates.toArray(new ProductEntity[0]));
 
-                listener.onSupplierEvent(enrichmentEvent("e-40", "VAR-1", "hash-40", false));
+                handle(enrichmentEvent("e-40", "VAR-1", "hash-40", false));
 
                 ArgumentCaptor<TreadDesignMatchCandidateEntity> candidateCaptor =
                         ArgumentCaptor.forClass(TreadDesignMatchCandidateEntity.class);
@@ -629,7 +625,7 @@ class SupplierCatalogEnrichmentListenerTest {
                 }
                 vendorHasPriced(candidates.toArray(new ProductEntity[0]));
 
-                listener.onSupplierEvent(enrichmentEvent("e-41", "VAR-1", "hash-41", false));
+                handle(enrichmentEvent("e-41", "VAR-1", "hash-41", false));
 
                 ArgumentCaptor<TreadDesignMatchCandidateEntity> candidateCaptor =
                         ArgumentCaptor.forClass(TreadDesignMatchCandidateEntity.class);
@@ -667,7 +663,7 @@ class SupplierCatalogEnrichmentListenerTest {
                 when(productRepository.findAllById(List.of(disputedProductId)))
                         .thenReturn(List.of(michelinProduct(disputedProductId)));
 
-                listener.onSupplierEvent(enrichmentEvent("e-42", "VAR-RIVAL", "hash-42", false));
+                handle(enrichmentEvent("e-42", "VAR-RIVAL", "hash-42", false));
 
                 ArgumentCaptor<TreadDesignEntity> designCaptor = ArgumentCaptor.forClass(TreadDesignEntity.class);
                 verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(designCaptor.capture());
@@ -688,7 +684,7 @@ class SupplierCatalogEnrichmentListenerTest {
             @Test
             @DisplayName("REVIEW-tier candidates beyond the cap are dropped, best score first")
             void reviewTierCandidatesAreCappedBestScoreFirst() {
-                listener = listenerWith(new CatalogEnrichmentProperties(0.90, 0.01, null));
+                handler = handlerWith(new CatalogEnrichmentProperties(0.90, 0.01, null));
                 // A lower-scoring group, deliberately listed FIRST, so a naive input-order cap would
                 // keep them instead of the higher-scoring group listed after them.
                 List<ProductEntity> lowScoring = new ArrayList<>();
@@ -705,7 +701,7 @@ class SupplierCatalogEnrichmentListenerTest {
                 ordered.addAll(highScoring);
                 vendorHasPriced(ordered.toArray(new ProductEntity[0]));
 
-                listener.onSupplierEvent(enrichmentEvent("e-43", "VAR-1", "hash-43", false));
+                handle(enrichmentEvent("e-43", "VAR-1", "hash-43", false));
 
                 ArgumentCaptor<TreadDesignMatchCandidateEntity> candidateCaptor =
                         ArgumentCaptor.forClass(TreadDesignMatchCandidateEntity.class);
@@ -735,38 +731,12 @@ class SupplierCatalogEnrichmentListenerTest {
     }
 
     @Nested
-    @DisplayName("the shared consumer contract")
+    @DisplayName("failure handling")
     class Contract {
 
         @Test
-        void skipsAnUnrelatedEventTypeWithoutRecordingIt() {
-            listener.onSupplierEvent("""
-                    {"eventId":"e-9","eventType":"supplier.pricecatalog.updated","aggregateVersion":1,"payload":{}}
-                    """);
-
-            verify(treadDesignRepository, never()).save(any());
-            verify(processedEventRepository, never()).save(any());
-        }
-
-        @Test
-        void ignoresAnEventWithoutAnEventId() {
-            listener.onSupplierEvent("""
-                    {"eventType":"supplier.catalog.updated","payload":{}}
-                    """);
-
-            verify(processedEventRepository, never()).save(any());
-        }
-
-        @Test
-        void ignoresAnUnparsableMessage() {
-            listener.onSupplierEvent("not json");
-
-            verify(processedEventRepository, never()).save(any());
-        }
-
-        @Test
         void swallowsAMalformedPayloadButLeavesItUnrecorded() {
-            listener.onSupplierEvent("""
+            handle("""
                     {"eventId":"e-10","eventType":"supplier.catalog.updated","aggregateVersion":0,
                      "payload":{"vendorVariantId":"VAR-1"}}
                     """);
@@ -780,7 +750,7 @@ class SupplierCatalogEnrichmentListenerTest {
             when(treadDesignRepository.findByVendorProfileIdAndVendorVariantId(any(), any()))
                     .thenThrow(new QueryTimeoutException("db busy"));
 
-            assertThatThrownBy(() -> listener.onSupplierEvent(enrichmentEvent("e-11", "VAR-1", "hash-1", false)))
+            assertThatThrownBy(() -> handle(enrichmentEvent("e-11", "VAR-1", "hash-1", false)))
                     .isInstanceOf(QueryTimeoutException.class);
 
             verify(processedEventRepository, never()).save(any());

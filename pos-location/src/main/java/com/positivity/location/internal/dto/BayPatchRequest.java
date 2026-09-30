@@ -2,7 +2,10 @@ package com.positivity.location.internal.dto;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonSetter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -21,11 +24,16 @@ import lombok.NoArgsConstructor;
  * Issue: CAP-136 #77
  */
 @Data
-@NoArgsConstructor
+// Jackson 3 treats the all-args constructor as a property-based creator, which would bypass the
+// maxDutyClass setter (and so the present flag); naming the no-args constructor as the creator
+// makes it bind through the setters instead.
+@NoArgsConstructor(onConstructor_ = @JsonCreator)
 @AllArgsConstructor
 @Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
-@Schema(description = "Partial update payload for a service bay; null fields are left unchanged")
+@Schema(
+        description = "Partial update payload for a service bay; absent fields are left unchanged. maxDutyClass is"
+                + " the exception: an absent key leaves it unchanged, while an explicit JSON null clears it.")
 public class BayPatchRequest {
 
     @Schema(description = "Display name of the bay", example = "Bay A1", requiredMode = NOT_REQUIRED)
@@ -106,7 +114,8 @@ public class BayPatchRequest {
     private List<String> serviceCapabilityCodes;
 
     @Schema(
-            description = "Heaviest GVWR class (1–8) the bay accepts (CAP-325 D13). Null leaves unchanged.",
+            description = "Heaviest GVWR class (1–8) the bay accepts (CAP-325 D13). Omit the field to leave the "
+                    + "current value unchanged; send JSON null to clear it back to no limit; send 1–8 to set it.",
             example = "3",
             minimum = "1",
             maximum = "8",
@@ -115,10 +124,37 @@ public class BayPatchRequest {
     @Max(8)
     private Integer maxDutyClass;
 
+    /**
+     * True once the request body carried a {@code maxDutyClass} key, including an explicit JSON
+     * {@code null}. Null is the only value meaning "no limit", so it cannot also mean "unchanged":
+     * this flag tells the two apart (issue #2251).
+     */
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean maxDutyClassPresent;
+
+    /** Records that the key was sent, so a JSON {@code null} clears the ceiling instead of being ignored. */
+    @JsonSetter("maxDutyClass")
+    public void setMaxDutyClass(Integer maxDutyClass) {
+        this.maxDutyClass = maxDutyClass;
+        this.maxDutyClassPresent = true;
+    }
+
     @Schema(
             description = "Sort key for bay lists and the dispatch board; null leaves the current value unchanged, "
                     + "the same as every other nullable field on this patch.",
             example = "10",
             requiredMode = NOT_REQUIRED)
     private Integer displayOrder;
+
+    /** Lombok fills in the rest; this override keeps the builder consistent with the JSON setter. */
+    public static class BayPatchRequestBuilder {
+
+        /** Sending a value, including null, states the intent: a null clears the ceiling. */
+        public BayPatchRequestBuilder maxDutyClass(Integer maxDutyClass) {
+            this.maxDutyClass = maxDutyClass;
+            this.maxDutyClassPresent = true;
+            return this;
+        }
+    }
 }

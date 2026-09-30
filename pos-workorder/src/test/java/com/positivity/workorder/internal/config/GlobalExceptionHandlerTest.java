@@ -32,6 +32,7 @@ import com.positivity.workorder.internal.exception.ServicePositionOccupiedExcept
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
+import com.positivity.workorder.internal.exception.TechnicianNotActiveException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotStaffedAtSiteException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
@@ -243,6 +244,9 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleTechnicianNotAssigned", (HandlerInvocation)
                             request -> handler.handleTechnicianNotAssigned(
                                     new TechnicianNotAssignedException("none assigned"), request)),
+                    Named.of("handleTechnicianNotActive", (HandlerInvocation)
+                            request -> handler.handleTechnicianNotActive(
+                                    new TechnicianNotActiveException(SOME_ID, "TERMINATED"), request)),
                     Named.of("handleTechnicianNotStaffedAtSite", (HandlerInvocation)
                             request -> handler.handleTechnicianNotStaffedAtSite(
                                     new TechnicianNotStaffedAtSiteException(SOME_ID, OTHER_ID), request)),

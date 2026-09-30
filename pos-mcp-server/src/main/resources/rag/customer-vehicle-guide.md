@@ -3,7 +3,7 @@
 ## Purpose
 RAG id: `crm.customer-vehicle`  
 RAG scope: `customer`  
-Required permissions: `crm:party:view`, `crm:party:search`, `crm:vehicle:view`, `crm:vehicle:search`, `crm:contact:view`  
+Required permissions: `crm:party:view`, `crm:party:search`, `crm:vehicle:view`, `vehicle-inventory:search:view`, `crm:contact:view`  
 Audience: internal staff.  
 This document is reference context only and grants no access; access is enforced by permission codes at request time.
 

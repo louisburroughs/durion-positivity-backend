@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -27,10 +28,12 @@ import lombok.NoArgsConstructor;
 public class TravelBufferPolicyRequest {
 
     @Schema(
-            description = "Display name of the travel buffer policy",
+            description = "Display name of the travel buffer policy; unique per tenant, at most 255 characters",
             example = "Standard Metro Buffer",
+            maxLength = 255,
             requiredMode = REQUIRED)
     @NotBlank
+    @Size(min = 1, max = 255)
     private String name;
 
     @Schema(
@@ -52,8 +55,10 @@ public class TravelBufferPolicyRequest {
     private BigDecimal bufferValue;
 
     @Schema(
-            description = "Free-text notes about the policy",
+            description = "Free-text notes about the policy; at most 255 characters",
             example = "Applies during peak hours only",
+            maxLength = 255,
             requiredMode = NOT_REQUIRED)
+    @Size(max = 255)
     private String notes;
 }

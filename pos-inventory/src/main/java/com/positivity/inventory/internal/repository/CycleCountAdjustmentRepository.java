@@ -5,11 +5,13 @@ import com.positivity.inventory.internal.enums.AdjustmentStatus;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 /**
  * Repository for {@link CycleCountAdjustment} entities.
  */
-public interface CycleCountAdjustmentRepository extends JpaRepository<CycleCountAdjustment, UUID> {
+public interface CycleCountAdjustmentRepository
+        extends JpaRepository<CycleCountAdjustment, UUID>, JpaSpecificationExecutor<CycleCountAdjustment> {
 
     /**
      * Find all adjustments with a specific status.

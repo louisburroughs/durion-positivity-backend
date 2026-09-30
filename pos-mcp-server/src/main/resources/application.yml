@@ -114,6 +114,20 @@ mcp:
   write-plan:
     # Gate 6 (#1193): minutes a previewed write plan stays confirmable before it expires.
     ttl-minutes: ${MCP_WRITE_PLAN_TTL_MINUTES:10}
+  # ADR-0069: scope graph for pre-LLM narrowing. Off by default: nothing is built, read or logged.
+  scope-graph:
+    # off | shadow | enforce. shadow builds the graph and records the resolved scope; no consumer
+    # acts on it. A literal value must be quoted ("off"): bare off is the YAML boolean false.
+    mode: ${MCP_SCOPE_GRAPH_MODE:off}
+    # Consumers that act on the scope when mode is enforce: any of rag, tools, card (comma-separated).
+    # Each is promoted separately (ADR-0069 section 9); enforce with an empty list behaves as shadow.
+    enforce: ${MCP_SCOPE_GRAPH_ENFORCE:}
+    # Cap on the nodes of one expanded scope (two hops from the seed entities).
+    max-nodes: 60
+    # Cap on the tools the scope may add on top of the ranked cuts, facade and discovered together.
+    added-tool-slots: 8
+    # Token budget of the scope card appended to the system prompt.
+    card-token-budget: 400
   rag:
     table-name: mcp_document_embedding
     # G5.4 #1194 cutover complete + #1207 (V33): the embedding column is 1024-dim bge-m3; the 768
@@ -142,13 +156,18 @@ mcp:
       # Cap on detected sub-queries eligible for a reserved slot.
       max-sub-queries: 3
     preload:
+      # ADR-0069: every entry declares `entities:` (scope-graph entity keys from scope-graph/entities.yaml,
+      # or [none] for a platform-wide document). The alpha profile list replaces this one wholesale, so
+      # both lists carry the same entries (RagPreloadProfileParityTest).
       docs:
         - id: "accounting.de-bookkeeping"
           source-path: "classpath:rag/de-bookkeeping-rag.md"
           rag-scope: "accounting"
+          entities: [gl-account, journal-entry, financial-report]
         - id: "accounting.journal-entries"
           source-path: "classpath:rag/accounting-journal-entries-rag.md"
           rag-scope: "accounting"
+          entities: [journal-entry]
           # #1525: dual-listed — accounting:je:view keeps the ACCOUNTING_ASSOCIATE audience on the
           # direct JE endpoints; reporting:view:financial-statements covers facade callers, whose JE
           # surface was reshaped to the general-ledger report (#1519 Wave 4, V37).
@@ -156,14 +175,17 @@ mcp:
         - id: "accounting.financial-statements"
           source-path: "classpath:rag/accounting-financial-statements-rag.md"
           rag-scope: "accounting"
+          entities: [financial-report, gl-account]
           required-permissions: ["reporting:view:financial-statements"]
         - id: "accounting.report-export"
           source-path: "classpath:rag/accounting-report-export-rag.md"
           rag-scope: "accounting"
+          entities: [financial-report]
           required-permissions: ["accounting:report:export"]
         - id: "accounting.codes"
           source-path: "classpath:rag/accounting-codes-rag.md"
           rag-scope: "accounting"
+          entities: [journal-entry, gl-account, financial-report]
           # #1525: dual-listed — accounting:je:view keeps the ACCOUNTING_ASSOCIATE audience on the
           # direct JE endpoints; reporting:view:financial-statements covers facade callers, whose JE
           # surface was reshaped to the general-ledger report (#1519 Wave 4, V37).
@@ -171,38 +193,47 @@ mcp:
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"
+          entities: [stock-item, stock-transfer, stock-adjustment]
         - id: "inventory.purchase-orders"
           source-path: "classpath:rag/inventory-purchase-orders-rag.md"
           rag-scope: "inventory"
+          entities: [purchase-order]
           # #1525: retargeted from inventory:purchase_order:view, whose grants were retired by the
           # #1499 sweep (pos-security-service V28) — purchase orders live in pos-order now.
           required-permissions: ["order:purchase_order:view"]
         - id: "inventory.receiving"
           source-path: "classpath:rag/inventory-receiving-rag.md"
           rag-scope: "inventory"
+          entities: [asn, purchase-order]
           required-permissions: ["inventory:receiving:view"]
         - id: "inventory.transfers-adjustments"
           source-path: "classpath:rag/inventory-transfers-adjustments-rag.md"
           rag-scope: "inventory"
+          entities: [stock-transfer, stock-adjustment]
           required-permissions: ["inventory:transfer:view"]
         - id: "inventory.codes"
           source-path: "classpath:rag/inventory-codes-rag.md"
           rag-scope: "inventory"
+          entities: [purchase-order, asn, stock-item, stock-transfer, stock-adjustment]
           # #1525: retargeted from inventory:purchase_order:view, whose grants were retired by the
           # #1499 sweep (pos-security-service V28) — purchase orders live in pos-order now.
           required-permissions: ["order:purchase_order:view"]
         - id: "people.human-resources"
           source-path: "classpath:rag/hr-functions-guide.md"
           rag-scope: "hr"
+          entities: [employee]
         - id: "shop.management"
           source-path: "classpath:rag/shop-management-rag.md"
           rag-scope: "shopmanager"
+          entities: [location, appointment, estimate, workorder]
         - id: "shop.management.guidelines"
           source-path: "classpath:rag/shop-management-guidelines.md"
           rag-scope: "shopmanager"
+          entities: [appointment, estimate, workorder, invoice, payment]
         - id: "security.guide"
           source-path: "classpath:rag/security-service-guide.md"
           rag-scope: "master"
+          entities: [user, role]
           required-permissions: ["security:permission:view", "security:role:view"]
         # Gate 5 documents. `required-permissions` is bound by StaticDocEntry (G5.2) and enforced by
         # the permission-aware RAG filter (G5.1). Permission codes verified against the service
@@ -210,38 +241,47 @@ mcp:
         - id: "platform.capability-catalog"
           source-path: "classpath:rag/capability-catalog.md"
           rag-scope: "master"
+          entities: [none]
           required-permissions: ["AUTHENTICATED"]
         - id: "workflow.cross-domain-playbooks"
           source-path: "classpath:rag/cross-domain-playbooks.md"
           rag-scope: "master"
+          entities: [estimate, workorder, invoice, payment, purchase-order, asn, warranty-claim]
           required-permissions: ["AUTHENTICATED"]
         - id: "glossary.identifiers"
           source-path: "classpath:rag/glossary-identifiers.md"
           rag-scope: "master"
+          entities: [none]
           required-permissions: ["AUTHENTICATED"]
         - id: "order.guide"
           source-path: "classpath:rag/order-guide.md"
           rag-scope: "order"
+          entities: [order, purchase-order]
           required-permissions: ["order:order:view"]
         - id: "order.lifecycle"
           source-path: "classpath:rag/order-lifecycle-rag.md"
           rag-scope: "order"
+          entities: [order]
           required-permissions: ["order:order:view"]
         - id: "order.price-override"
           source-path: "classpath:rag/order-price-override-rag.md"
           rag-scope: "order"
+          entities: [order]
           required-permissions: ["order:price_override:view"]
         - id: "order.codes"
           source-path: "classpath:rag/order-codes-rag.md"
           rag-scope: "order"
+          entities: [order]
           required-permissions: ["order:order:view"]
         - id: "order.returns-refunds"
           source-path: "classpath:rag/returns-refunds-rag.md"
           rag-scope: "order"
+          entities: [return, order]
           required-permissions: ["order:order:view"]
         - id: "pricing.guide"
           source-path: "classpath:rag/pricing-guide.md"
           rag-scope: "pricing"
+          entities: [price]
           # #1525: pricing:price_book:view dropped (grants retired by #1499/V28; no PriceBook
           # resource exists in pos-price). Price books moved to catalog per ADR-0054, so the doc's
           # price-book half is covered by catalog:price_book:read.
@@ -249,26 +289,32 @@ mcp:
         - id: "pricing.promotions"
           source-path: "classpath:rag/pricing-promotions-rag.md"
           rag-scope: "pricing"
+          entities: [promotion]
           required-permissions: ["pricing:promotion:view"]
         - id: "pricing.restrictions"
           source-path: "classpath:rag/pricing-restrictions-rag.md"
           rag-scope: "pricing"
+          entities: [price]
           required-permissions: ["AUTHENTICATED"]
         - id: "pricing.codes"
           source-path: "classpath:rag/pricing-codes-rag.md"
           rag-scope: "pricing"
+          entities: [price, promotion]
           required-permissions: ["pricing:promotion:view"]
         - id: "warranty.guide"
           source-path: "classpath:rag/warranty-guide.md"
           rag-scope: "warranty"
+          entities: [warranty-claim]
           required-permissions: ["warranty:claim:view"]
         - id: "tax.guide"
           source-path: "classpath:rag/tax-guide.md"
           rag-scope: "tax"
+          entities: [tax]
           required-permissions: ["tax:mode:view"]
         - id: "crm.customer-vehicle"
           source-path: "classpath:rag/customer-vehicle-guide.md"
           rag-scope: "customer"
+          entities: [customer, vehicle]
           # #1525: crm:vehicle:search replaced with vehicle-inventory:search:view — the vehicle
           # search surface moved to pos-vehicle-inventory and the crm code's grants were retired by
           # the #1499 sweep (V28); the successor keeps the doc visible to SERVICE_ADVISOR.
@@ -276,42 +322,52 @@ mcp:
         - id: "crm.party-account-model"
           source-path: "classpath:rag/crm-party-account-model-rag.md"
           rag-scope: "customer"
+          entities: [customer]
           required-permissions: ["crm:party:view"]
         - id: "crm.codes"
           source-path: "classpath:rag/crm-codes-rag.md"
           rag-scope: "customer"
+          entities: [customer]
           required-permissions: ["crm:party:view"]
         - id: "reporting.metrics"
           source-path: "classpath:rag/reporting-metrics.md"
           rag-scope: "reporting"
+          entities: [workorder, financial-report]
           required-permissions: ["accounting:report:export", "workorder:dashboard:view"]
         - id: "admin.governance"
           source-path: "classpath:rag/admin-governance.md"
           rag-scope: "admin"
+          entities: [none]
           required-permissions: ["security:permission:view", "workorder:approval_config:view"]
         - id: "events.observability"
           source-path: "classpath:rag/events-observability.md"
           rag-scope: "events"
+          entities: [none]
           required-permissions: ["nlti:audit:read"]
         - id: "security.role-permission-matrix"
           source-path: "classpath:rag/role-permission-matrix.md"
           rag-scope: "security"
+          entities: [role]
           required-permissions: ["security:role:view", "security:permission:view"]
         - id: "workorder.estimate-promotion"
           source-path: "classpath:rag/workorder-estimate-promotion-rag.md"
           rag-scope: "workorder"
+          entities: [estimate, workorder]
           required-permissions: ["workorder:estimate:view"]
         - id: "workorder.status-lifecycle"
           source-path: "classpath:rag/workorder-status-lifecycle-rag.md"
           rag-scope: "workorder"
+          entities: [workorder]
           required-permissions: ["workorder:workorder:view"]
         - id: "workorder.approval-config"
           source-path: "classpath:rag/workorder-approval-config-rag.md"
           rag-scope: "workorder"
+          entities: [estimate, workorder]
           required-permissions: ["workorder:approval_config:view"]
         - id: "workorder.codes"
           source-path: "classpath:rag/workorder-codes-rag.md"
           rag-scope: "workorder"
+          entities: [estimate, workorder]
           required-permissions: ["workorder:estimate:view"]
     chunking:
       enabled: ${MCP_RAG_CHUNKING_ENABLED:true}

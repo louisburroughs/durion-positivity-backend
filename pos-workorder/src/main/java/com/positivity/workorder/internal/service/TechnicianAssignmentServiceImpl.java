@@ -10,6 +10,7 @@ import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.ReplicationPendingCodes;
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
+import com.positivity.workorder.internal.exception.TechnicianNotActiveException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotStaffedAtSiteException;
 import com.positivity.workorder.internal.exception.WorkorderClosedException;
@@ -130,6 +131,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         // a canned reason and nobody was told. Changing hands is reassignTechnician, which takes a
         // reason; here a held workorder is a 409 naming its current technician.
         requireKnownTechnician(technicianId);
+        requireEmployedTechnician(technicianId);
 
         Optional<TechnicianAssignment> existingAssignment =
                 assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
@@ -213,6 +215,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         // (#1985): a caller that believed the workorder was held and gets a 200 has learned nothing
         // about its view being stale, which is the same ambiguity assign's new 409 removes.
         requireKnownTechnician(newTechnicianId);
+        requireEmployedTechnician(newTechnicianId);
 
         TechnicianAssignment currentAssignment = assignmentRepository
                 .findCurrentForUpdate(workorderId)
@@ -391,6 +394,22 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                     "The technician has not replicated from People yet; retry shortly",
                     technicianId);
         }
+    }
+
+    /**
+     * Refuse a technician who is no longer employed (#2120).
+     *
+     * <p>Read from the {@code ext_people_employee} replica through {@link
+     * PeopleAvailabilityLocalService#inactiveEmploymentStatus}, the same definition that keeps the
+     * person off the dispatch roster: TERMINATED, DISABLED and SUSPENDED refuse; ACTIVE, ON_LEAVE
+     * and a person with no employee row pass, because replica lag must not take a shop offline.
+     * Like {@link #requireKnownTechnician} this runs first, ahead of the conflict guards: who the
+     * technician is comes before where they would work.
+     */
+    private void requireEmployedTechnician(@NonNull UUID technicianId) {
+        peopleAvailabilityLocalService.inactiveEmploymentStatus(technicianId).ifPresent(status -> {
+            throw new TechnicianNotActiveException(technicianId, status);
+        });
     }
 
     /**

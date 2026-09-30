@@ -176,6 +176,42 @@ replica (#1994, the same fault as #1987 for staffing assignments):
 | `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
 | `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
 
+### Offboarding retry worker (#2121)
+
+Disabling an employee ends their staffing assignments per `assignmentPolicy`: `IMMEDIATE` ends every
+active assignment now; `GRACE_PERIOD` (which requires `assignmentEndDate`, today or later) caps their
+`effectiveTo` at that date and leaves them `ACTIVE`.
+
+**Why it runs after commit.** `disableEmployee` only saves the status change and publishes an
+`EmployeeOffboardedEvent`; `OffboardingEventListener` (`@TransactionalEventListener(AFTER_COMMIT)`) applies
+the policy in its own `REQUIRES_NEW` transaction once the disable is durable. A Spring Data call that
+throws inside the disable's transaction would mark it rollback-only, and the retry row written in that same
+transaction would roll back with it, on exactly the failure the queue exists for. Run after commit, a
+failure is caught and the row goes into `employee_offboarding_retry_queue` through a second independent
+transaction. `EmployeeOffboardingRetryWorker` re-applies the policy for due rows and deletes them on
+success; a failing row backs off five minutes x 2^attempts (capped at a day). At the attempt limit the
+worker logs at error and leaves the row for an operator. A crash between the commit and the handler leaves
+no row, so the same sweep also ends `ACTIVE` assignments of `DISABLED`/`TERMINATED` employees that are
+past their `effectiveTo` (a grace period that ran out) or open-ended, and publishes
+`people.staffing-assignment.updated` for each. The open-ended case only applies once the status change is
+five minutes old and no retry row is pending, so it cannot beat the handler or the queue; if the process
+died before a GRACE_PERIOD was dated, those assignments end at that point rather than at the requested
+date. A row that has used up its attempts no longer counts as pending, so the same sweep takes over the
+assignments of an employee whose retry gave up. The sweep reads the candidate ids in one query and ends
+each assignment in a `REQUIRES_NEW` transaction of its own, so one assignment that cannot be ended does not
+roll back the others. It runs per tenant. There is no scheduler lock: with several instances a row may be
+worked twice, which is safe because applying a policy is idempotent.
+
+| Property                                    | Env override                               | Default | Description                                   |
+| ------------------------------------------- | ------------------------------------------ | ------- | --------------------------------------------- |
+| `pos.people.offboarding-retry.enabled`      | `POS_PEOPLE_OFFBOARDING_RETRY_ENABLED`      | `true`  | Set `false` to turn the worker off            |
+| `pos.people.offboarding-retry.interval`     | `POS_PEOPLE_OFFBOARDING_RETRY_INTERVAL`     | `PT60S` | Delay between sweeps (ISO-8601 duration)      |
+| `pos.people.offboarding-retry.max-attempts` | `POS_PEOPLE_OFFBOARDING_RETRY_MAX_ATTEMPTS` | `10`    | Attempts before a row is left for an operator |
+
+Metric: `people.offboarding.retry.exhausted` (gauge) is the number of queue rows across all tenants that
+have reached `max-attempts` and wait for an operator, refreshed by each scheduled pass; alert on it being
+non-zero.
+
 ## Multitenancy (ADR-0062, WS3 wave 9)
 
 This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, every scoped entity

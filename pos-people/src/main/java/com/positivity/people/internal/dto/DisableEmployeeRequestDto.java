@@ -22,7 +22,9 @@ public class DisableEmployeeRequestDto {
     private AssignmentTerminationPolicy assignmentPolicy = AssignmentTerminationPolicy.IMMEDIATE;
 
     @Schema(
-            description = "End date to apply to assignments when the policy is GRACE_PERIOD",
+            description =
+                    "Date the staffing assignments run to when the policy is GRACE_PERIOD; required then, today or later,"
+                            + " and ignored for IMMEDIATE",
             example = "2026-03-31",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private LocalDate assignmentEndDate;

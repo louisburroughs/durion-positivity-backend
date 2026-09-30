@@ -24,6 +24,7 @@ import com.positivity.location.internal.entity.ExtCatalogServiceReplica;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.enums.BayType;
 import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.InvalidFieldException;
 import com.positivity.location.internal.exception.InvalidServiceCapabilityCodesException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.BayRepository;
@@ -817,6 +818,83 @@ class BayServiceTest {
                 .bayType(BayType.GENERAL_SERVICE.name())
                 .capacity(BayCapacityRequest.builder().maxConcurrentVehicles(2).build())
                 .build();
+    }
+
+    private BayEntity existingBayWithDutyClass(UUID locationId, UUID bayId, Integer dutyClass) {
+        BayEntity existing = defaultBay(locationId);
+        existing.setId(bayId);
+        existing.setMaxDutyClass(dutyClass);
+        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(existing));
+        return existing;
+    }
+
+    @Test
+    @DisplayName("#2251 - patchBay with maxDutyClass present and null clears the ceiling to no limit")
+    void patchBay_maxDutyClassPresentNull_clearsToNoLimit() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+        BayEntity existing = existingBayWithDutyClass(locationId, bayId, 5);
+        when(bayRepository.save(any(BayEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0, BayEntity.class));
+
+        BayPatchRequest patch = new BayPatchRequest();
+        patch.setMaxDutyClass(null);
+
+        BayResponse response = bayService.patchBay(locationId, bayId, patch);
+
+        assertThat(existing.getMaxDutyClass()).isNull();
+        assertThat(response.getMaxDutyClass()).isNull();
+        verify(bayRepository).save(existing);
+    }
+
+    @Test
+    @DisplayName("#2251 - patchBay without the maxDutyClass key leaves an existing ceiling unchanged")
+    void patchBay_maxDutyClassAbsent_leavesUnchanged() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000b2");
+        BayEntity existing = existingBayWithDutyClass(locationId, bayId, 5);
+        when(bayRepository.save(any(BayEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0, BayEntity.class));
+
+        BayResponse response = bayService.patchBay(
+                locationId, bayId, BayPatchRequest.builder().displayOrder(3).build());
+
+        assertThat(existing.getMaxDutyClass()).isEqualTo(5);
+        assertThat(response.getMaxDutyClass()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("#2251 - patchBay sets a maxDutyClass inside 1..8")
+    void patchBay_maxDutyClassValue_sets() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000b3");
+        BayEntity existing = existingBayWithDutyClass(locationId, bayId, null);
+        when(bayRepository.save(any(BayEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0, BayEntity.class));
+
+        BayResponse response = bayService.patchBay(
+                locationId, bayId, BayPatchRequest.builder().maxDutyClass(8).build());
+
+        assertThat(existing.getMaxDutyClass()).isEqualTo(8);
+        assertThat(response.getMaxDutyClass()).isEqualTo(8);
+    }
+
+    @Test
+    @DisplayName("#2251 - patchBay refuses a maxDutyClass of 9 and saves nothing")
+    void patchBay_maxDutyClassNine_isRefused() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000b4");
+        BayEntity existing = existingBayWithDutyClass(locationId, bayId, 5);
+
+        assertThatThrownBy(() -> bayService.patchBay(
+                        locationId,
+                        bayId,
+                        BayPatchRequest.builder().maxDutyClass(9).build()))
+                .isInstanceOf(InvalidFieldException.class);
+
+        assertThat(existing.getMaxDutyClass()).isEqualTo(5);
+        verify(bayRepository, never()).save(any(BayEntity.class));
     }
 
     private BayEntity defaultBay(UUID locationId) {

@@ -69,12 +69,22 @@ request field also carries `fieldErrors[0].field` naming it (`name`, `baseLocati
 | `MOBILE_UNIT_NAME_TAKEN` | 409 | Another mobile unit at the same base location has the name (ignoring case), **including a retired unit's name** (#2264) |
 | `MOBILE_UNIT_IDENTITY_TAKEN` | 409 | Another mobile unit in the tenant already has this `unitNumber`, `vin`, or `licensePlate`+`plateRegion` pair (DECISION-LOCATION-029, #2267); `fieldErrors` names the field |
 | `BAY_NAME_TAKEN` | 409 | Another bay at the same location has the name, **including a retired bay's name** (#2264) |
+| `SERVICE_AREA_NAME_TAKEN` | 409 | Another service area in the tenant has the name, on create or when `PATCH` renames an area (#2256) |
+| `SERVICE_AREA_CONFLICT` | 409 | A write to a service area (or its postal codes) hit a stored-row conflict other than the name (fallback, #2256) |
 | `TRAVEL_BUFFER_POLICY_NAME_TAKEN` | 409 | Another travel buffer policy has the name |
+| `TRAVEL_BUFFER_POLICY_CONFLICT` | 409 | A write to a travel buffer policy hit a stored-row conflict other than the name (fallback, #2256) |
 | `OPTIMISTIC_LOCK_FAILED` | 409 | A concurrent update to the same bay or mobile unit won the version race |
 | `NOT_FOUND` | 404 | The resource addressed by the path does not exist |
 
-A `DuplicateResourceException` answers its own code (`*_NAME_TAKEN`), not the generic `CONFLICT`
-(#2252). A mobile unit's name is unique at its base location ignoring case, held in the database by
+A `DuplicateResourceException` answers its own code (`*_NAME_TAKEN`, or the `*_CONFLICT` fallback for
+any other constraint), not the generic `CONFLICT` (#2252). Service area and travel buffer policy writes
+flush inside the service (`saveAndFlush`), so a duplicate name is mapped to that code rather than
+surfacing at commit as a 500; the name code is chosen only for the `(tenant_id, name)` unique
+constraint (`service_areas_name_key`, `travel_buffer_policies_name_key`). A travel buffer policy's
+name is fixed at create by design. `PATCH /v1/service-areas/{id}` reads `name` (non-blank text),
+`description` (text, or `null` to clear) and `active` (a JSON boolean only); any other type is a
+`VALIDATION_ERROR` naming the field. A bay's `maxDutyClass` on `PATCH` follows the same absent-versus-null
+rule: omit it to keep the limit, send `null` to clear it, or send 1–8 to set it (#2251). A mobile unit's name is unique at its base location ignoring case, held in the database by
 `uq_mobile_unit_base_location_lower_name` (V6) so concurrent writes cannot both commit; a bay's name
 is unique per location by `uq_bays_location_normalized_name`. Neither uniqueness check excludes
 `RETIRED` rows, so a retired resource's name stays reserved and reactivation can never collide

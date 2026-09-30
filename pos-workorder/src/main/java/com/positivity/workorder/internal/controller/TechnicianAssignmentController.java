@@ -78,7 +78,8 @@ public class TechnicianAssignmentController {
                     workorder's status cannot take a technician yet, which includes a reopened COMPLETED one, \
                     409 WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — 409 \
                     TECHNICIAN_ALREADY_ASSIGNED when the workorder already has a current technician, which \
-                    reassignTechnician changes, and 422 TECHNICIAN_NOT_STAFFED_AT_SITE when the technician has \
+                    reassignTechnician changes, 422 TECHNICIAN_NOT_ACTIVE when the technician's latest employment status is TERMINATED, \
+                    DISABLED or SUSPENDED, and 422 TECHNICIAN_NOT_STAFFED_AT_SITE when the technician has \
                     one or more ACTIVE staffing assignments effective today and none of them is at the \
                     workorder's site — there is no override; have the technician staffed at this site in People, \
                     effective today, and retry. A technician the People feed has not delivered yet is 503 \
@@ -109,10 +110,13 @@ public class TechnicianAssignmentController {
                         content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "422",
-                        description = "The technician has ACTIVE staffing effective today at one or more sites "
-                                + "but not this workorder's site (ApiError.code TECHNICIAN_NOT_STAFFED_AT_SITE, "
+                        description = "The technician is no longer employed (ApiError.code TECHNICIAN_NOT_ACTIVE: "
+                                + "latest employment status TERMINATED, DISABLED or SUSPENDED, with a fieldErrors "
+                                + "entry on technicianId), or has ACTIVE staffing effective today at one or more "
+                                + "sites but not this workorder's site (ApiError.code TECHNICIAN_NOT_STAFFED_AT_SITE, "
                                 + "with the workorder's site id as referenceId and a fieldErrors entry on "
-                                + "technicianId). No override exists for it; a technician with no ACTIVE "
+                                + "technicianId). No override exists for TECHNICIAN_NOT_STAFFED_AT_SITE; a "
+                                + "technician with no ACTIVE "
                                 + "staffing rows at all is allowed.",
                         content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
@@ -221,7 +225,8 @@ public class TechnicianAssignmentController {
                     status cannot take a technician yet, which includes a reopened COMPLETED one, 409 \
                     WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — 409 \
                     TECHNICIAN_NOT_ASSIGNED when the workorder has no current technician to reassign from, \
-                    which assignTechnician creates, and 422 TECHNICIAN_NOT_STAFFED_AT_SITE when the new \
+                    which assignTechnician creates, 422 TECHNICIAN_NOT_ACTIVE when the new technician's latest employment status is \
+                    TERMINATED, DISABLED or SUSPENDED, and 422 TECHNICIAN_NOT_STAFFED_AT_SITE when the new \
                     technician has one or more ACTIVE staffing assignments effective today and none of them is \
                     at the workorder's site — there is no override; have the technician staffed at this site in \
                     People, effective today, and retry. A technician the People feed has not delivered yet is \
@@ -251,11 +256,14 @@ public class TechnicianAssignmentController {
                         content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "422",
-                        description = "The new technician has ACTIVE staffing effective today at one or more "
-                                + "sites but not this workorder's site (ApiError.code "
-                                + "TECHNICIAN_NOT_STAFFED_AT_SITE, with the workorder's site id as referenceId "
-                                + "and a fieldErrors entry on technicianId). No override exists for it; a "
-                                + "technician with no ACTIVE staffing rows at all is allowed.",
+                        description = "The new technician is no longer employed (ApiError.code "
+                                + "TECHNICIAN_NOT_ACTIVE: latest employment status TERMINATED, DISABLED or "
+                                + "SUSPENDED, with a fieldErrors entry on technicianId), or has ACTIVE staffing "
+                                + "effective today at one or more sites but not this workorder's site (ApiError.code "
+                                + "TECHNICIAN_NOT_STAFFED_AT_SITE, with the workorder's site id as referenceId and a "
+                                + "fieldErrors entry on technicianId). No override exists for "
+                                + "TECHNICIAN_NOT_STAFFED_AT_SITE; a technician with no ACTIVE staffing rows at all "
+                                + "is allowed.",
                         content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "503",

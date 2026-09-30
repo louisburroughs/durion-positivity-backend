@@ -163,13 +163,12 @@ class RolePermissionBaselineTest {
      * ended an accelerated run on virtual day 7.
      *
      * <p>LOCATION_MANAGER carries {@code LOCATION} reach on {@code roles.location_scope}
-     * (ADR-0061 §1), the same classification as INVENTORY_MANAGER. Note that this bounds the role,
-     * not this particular path: {@code StockMovementController.approveAdjustmentRequest} is a
-     * recorded location-scope decision, but {@code CycleCountAdjustmentController.approveAdjustment}
-     * is not scoped in {@code pos-inventory/location-scope.yaml} nor in
-     * {@code CycleCountAdjustmentServiceImpl}, so approval on that endpoint is not confined to the
-     * caller's site. That asymmetry predates #2149 — it is how INVENTORY_MANAGER already holds the
-     * grant — and widening the set here does not change it.
+     * (ADR-0061 §1), the same classification as INVENTORY_MANAGER. That reach is enforced on both
+     * adjustment-approval paths: {@code StockMovementController.approveAdjustmentRequest} and
+     * {@code CycleCountAdjustmentController.approveAdjustment} (#2151, closed) are recorded
+     * location-scope decisions in {@code pos-inventory/location-scope.yaml} and gate on the
+     * adjustment's own location, so a site-scoped approver cannot approve, reject or read another
+     * site's write-off. Widening the set here therefore widens the role, not its reach.
      */
     private static final Set<String> ADJUSTMENT_APPROVERS =
             Set.of("ADMIN", "INVENTORY_CONTROLLER", "INVENTORY_MANAGER", "LOCATION_MANAGER");

@@ -60,7 +60,8 @@ public class BankImportRowResponse {
 
     @Schema(
             description = "Why the row is REJECTED: DATE_UNPARSEABLE, AMOUNT_UNPARSEABLE, AMOUNT_ZERO,"
-                    + " AMOUNT_AND_DEBIT_CREDIT_BOTH, REQUIRED_COLUMN_MISSING or DATE_OUTSIDE_STATEMENT",
+                    + " AMOUNT_AND_DEBIT_CREDIT_BOTH, REQUIRED_COLUMN_MISSING, DATE_OUTSIDE_STATEMENT"
+                    + " or AMOUNT_PRECISION_EXCEEDS_CURRENCY",
             example = "DATE_UNPARSEABLE")
     private String rejectionCode;
 

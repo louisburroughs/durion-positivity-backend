@@ -40,11 +40,11 @@ public class ArchitectureTest {
             .and()
             .haveSimpleNameNotEndingWith("SupplierPriceEntryServiceImpl")
             .and()
-            .haveSimpleNameNotEndingWith("SupplierPriceCatalogEventsListener")
+            .haveSimpleNameNotEndingWith("SupplierPriceCatalogEventHandler")
             .and()
             // Reads only findDistinctProductIdsByVendorProfileId to scope tread-design matching
             // candidates (CAP-324 #1352) — never a price or cost value, and never a sell-price input.
-            .haveSimpleNameNotEndingWith("SupplierCatalogEnrichmentListener")
+            .haveSimpleNameNotEndingWith("SupplierCatalogEnrichmentHandler")
             .should()
             .dependOnClassesThat()
             .haveSimpleName("SupplierPriceEntryRepository")

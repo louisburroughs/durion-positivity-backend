@@ -217,8 +217,9 @@ public class BayServiceImpl implements BayService {
         if (patch.getServiceCapabilityCodes() != null) {
             existing.setServiceCapabilityCodes(validateServiceCapabilityCodes(patch.getServiceCapabilityCodes()));
         }
-        if (patch.getMaxDutyClass() != null) {
-            existing.setMaxDutyClass(patch.getMaxDutyClass());
+        // Absent key leaves the ceiling alone; an explicit null clears it to "no limit" (issue #2251).
+        if (patch.isMaxDutyClassPresent()) {
+            existing.setMaxDutyClass(MobileUnitIdentitySupport.requireMaxDutyClass(patch.getMaxDutyClass()));
         }
         if (patch.getDisplayOrder() != null) {
             existing.setDisplayOrder(patch.getDisplayOrder());

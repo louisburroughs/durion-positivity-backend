@@ -1388,6 +1388,8 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
+        Location scope (ADR-0061, #2151): the result is narrowed to the caller''s location reach; a location-scoped caller sees only adjustments at a reachable site, and never one that records no location, while a globally granted caller sees every match.
+
         Returns 200 with an empty array when no adjustments match, so an empty result is not an error condition.
 
         '
@@ -1414,7 +1416,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/AdjustmentResponse'
                 type: array
-          description: Adjustments retrieved
+          description: Adjustments retrieved, within the caller's location reach
       security:
       - bearerAuth:
         - inventory:adjustment:view
@@ -1509,6 +1511,8 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
+        Location scope (ADR-0061, #2151): the queue is narrowed to the caller''s location reach; a location-scoped caller sees only adjustments at a reachable site, and never one that records no location, while a globally granted caller sees every pending adjustment.
+
         Returns 200 with an empty array when nothing awaits approval, so an empty result is not an error condition.
 
         '
@@ -1521,7 +1525,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/AdjustmentResponse'
                 type: array
-          description: Pending adjustments retrieved
+          description: Pending adjustments retrieved, within the caller's location reach
       security:
       - bearerAuth:
         - inventory:adjustment:view
@@ -1544,6 +1548,8 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
+        Location scope (ADR-0061, #2151): counts only the adjustments within the caller''s location reach, the same rows listPendingCycleCountAdjustments returns for that caller.
+
         Returns 200 with 0 when nothing awaits approval, so zero is not an error condition.
 
         '
@@ -1555,7 +1561,7 @@ paths:
               schema:
                 format: int64
                 type: integer
-          description: Count retrieved
+          description: Count retrieved, within the caller's location reach
       security:
       - bearerAuth:
         - inventory:adjustment:view
@@ -1578,7 +1584,9 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 400 when no adjustment exists for the supplied id — the module maps the unknown-id lookup to a validation error rather than 404.
+        Location scope (ADR-0061, #2151): the adjustment''s own location must lie within the caller''s reach; an adjustment with no recorded location is refused to a location-scoped caller.
+
+        Returns 400 when no adjustment exists for the supplied id — the module maps the unknown-id lookup to a validation error rather than 404 — and 403 with LOCATION_SCOPE_DENIED when the adjustment is outside the caller''s location reach.
 
         '
       operationId: getCycleCountAdjustment
@@ -1597,6 +1605,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdjustmentResponse'
           description: Adjustment found
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller holds neither inventory:adjustment:view nor inventory:adjustment:approve; LOCATION_SCOPE_DENIED when the token scopes the held grant to locations that do not cover the adjustment's locationId, or the adjustment records none (ADR-0061)
         '404':
           content:
             application/json:
@@ -1625,7 +1639,9 @@ paths:
 
         Emits an INVENTORY_CYCLE_COUNT_ADJUSTMENT_APPROVE event plus a MovementAdjusted audit event, and the posting changes on-hand immediately.
 
-        Returns 400 when no adjustment exists for the id (the unknown id maps to a validation error, not 404), 409 when the adjustment is not PENDING_APPROVAL or FAILED or the conflict gate rejects the first approval (CYCLE_COUNT_CONFLICT), and 500 (ADJUSTMENT_LEDGER_POST_FAILED) when the posting fails unexpectedly, which leaves the adjustment FAILED with the cause in errorMessage.
+        Location scope (ADR-0061, #2151): the adjustment''s own location must lie within the caller''s reach; an adjustment with no recorded location is refused to a location-scoped caller.
+
+        Returns 400 when no adjustment exists for the id (the unknown id maps to a validation error, not 404), 403 with LOCATION_SCOPE_DENIED when the adjustment is outside the caller''s location reach, 409 when the adjustment is not PENDING_APPROVAL or FAILED or the conflict gate rejects the first approval (CYCLE_COUNT_CONFLICT), and 500 (ADJUSTMENT_LEDGER_POST_FAILED) when the posting fails unexpectedly, which leaves the adjustment FAILED with the cause in errorMessage.
 
         '
       operationId: approveCycleCountAdjustment
@@ -1672,7 +1688,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User lacks required approval permission
+          description: FORBIDDEN when the caller lacks inventory:adjustment:approve; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover the adjustment's locationId, or the adjustment records none (ADR-0061)
         '409':
           content:
             application/json:
@@ -1705,7 +1721,9 @@ paths:
 
         Emits an INVENTORY_CYCLE_COUNT_ADJUSTMENT_REJECT event; the adjustment moves to REJECTED and its linked task is left untouched.
 
-        Returns 400 when no adjustment exists for the id (mapped to a validation error, not 404), and 409 when the adjustment is not PENDING_APPROVAL.
+        Location scope (ADR-0061, #2151): the adjustment''s own location must lie within the caller''s reach; an adjustment with no recorded location is refused to a location-scoped caller.
+
+        Returns 400 when no adjustment exists for the id (mapped to a validation error, not 404), 403 with LOCATION_SCOPE_DENIED when the adjustment is outside the caller''s location reach, and 409 when the adjustment is not PENDING_APPROVAL.
 
         '
       operationId: rejectCycleCountAdjustment
@@ -1748,7 +1766,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User lacks required approval permission
+          description: FORBIDDEN when the caller lacks inventory:adjustment:approve; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover the adjustment's locationId, or the adjustment records none (ADR-0061)
         '409':
           content:
             application/json:

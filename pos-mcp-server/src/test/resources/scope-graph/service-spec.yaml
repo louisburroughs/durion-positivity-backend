@@ -1,0 +1,165 @@
+# Hand-written service spec for the scope-graph schema-index tests (ADR-0069, spec 2.2). Paths are
+# service-internal, as a module's own openapi.yaml has them; the routing prefix is added by discovery.
+openapi: 3.1.0
+info:
+  title: Workorder Service
+  version: v1
+paths:
+  /v1/workorders:
+    get:
+      operationId: listWorkorders
+      responses:
+        "200":
+          description: page envelope whose content is an array of a $ref
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageWorkorderResponse'
+    post:
+      operationId: createWorkorder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkorderCreateRequest'
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderResponse'
+  /v1/workorders/{id}:
+    get:
+      operationId: getWorkorder
+      responses:
+        "200":
+          description: plain $ref
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderResponse'
+    delete:
+      operationId: cancelWorkorder
+      responses:
+        "204":
+          description: no body
+  /v1/workorders/{id}/parts:
+    get:
+      operationId: listWorkorderParts
+      responses:
+        "200":
+          description: array of a $ref
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkorderPartResponse'
+  /v1/estimates/{id}:
+    get:
+      operationId: getEstimate
+      responses:
+        "200":
+          description: inline oneOf, one level
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/EstimateResponse'
+                  - $ref: '#/components/schemas/EstimateSummaryResponse'
+    put:
+      operationId: updateEstimate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EstimateUpdateRequest'
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstimateResponse'
+  /v1/technicians:
+    get:
+      operationId: listTechnicians
+      responses:
+        "200":
+          description: a schema no lexicon entity names
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianResponse'
+components:
+  schemas:
+    PageWorkorderResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkorderResponse'
+        totalElements:
+          type: integer
+    WorkorderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [DRAFT, APPROVED, IN_PROGRESS, COMPLETED]
+        paymentState:
+          $ref: '#/components/schemas/PaymentState'
+        priority:
+          type: string
+          enum: [LOW, HIGH]
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkorderPartResponse'
+    PaymentState:
+      type: string
+      enum: [UNPAID, PAID]
+    WorkorderCreateRequest:
+      type: object
+      properties:
+        customerId:
+          type: string
+    WorkorderPartResponse:
+      type: object
+      properties:
+        sku:
+          type: string
+    EstimateBase:
+      type: object
+      properties:
+        number:
+          type: string
+    EstimateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [DRAFT, OPEN, APPROVED, DECLINED]
+    EstimateSummaryResponse:
+      type: object
+      properties:
+        number:
+          type: string
+    EstimateUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/EstimateBase'
+        - type: object
+          properties:
+            note:
+              type: string
+    TechnicianResponse:
+      type: object
+      properties:
+        name:
+          type: string

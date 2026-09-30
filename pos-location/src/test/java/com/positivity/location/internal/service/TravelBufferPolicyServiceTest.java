@@ -15,11 +15,14 @@ import com.positivity.location.internal.exception.InvalidFieldException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import org.hibernate.exception.ConstraintViolationException;
+import org.hibernate.exception.DataException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -64,7 +67,7 @@ class TravelBufferPolicyServiceTest {
                 .createdAt(Instant.now(TEST_CLOCK))
                 .updatedAt(Instant.now(TEST_CLOCK))
                 .build();
-        when(repository.save(any(TravelBufferPolicyEntity.class))).thenReturn(persisted);
+        when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class))).thenReturn(persisted);
 
         Map<String, Object> request = Map.of(
                 "name", "Standard Buffer",
@@ -83,8 +86,8 @@ class TravelBufferPolicyServiceTest {
     @Test
     @DisplayName("#76 - create duplicate travel buffer policy name maps to conflict code")
     void shouldMapDuplicateNameConstraintToConflictCode() {
-        when(repository.save(any(TravelBufferPolicyEntity.class)))
-                .thenThrow(new DataIntegrityViolationException("violates travel_buffer_policies_name_key"));
+        when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class)))
+                .thenThrow(constraintViolation("violates travel_buffer_policies_name_key"));
 
         Map<String, Object> request = Map.of(
                 "name", "Standard Buffer",
@@ -138,7 +141,7 @@ class TravelBufferPolicyServiceTest {
                 .notes("old")
                 .build();
         when(repository.findById(policyId)).thenReturn(java.util.Optional.of(existing));
-        when(repository.save(existing)).thenReturn(existing);
+        when(repository.saveAndFlush(existing)).thenReturn(existing);
 
         Map<String, Object> patch = Map.of("bufferValue", new BigDecimal("20"), "notes", "rush-hour policy");
 
@@ -186,7 +189,7 @@ class TravelBufferPolicyServiceTest {
                     assertThat(e.getField()).isEqualTo("bufferType");
                     assertThat(e.getReason()).isEqualTo("bufferType must be FIXED_MINUTES or DISTANCE_TIER");
                 });
-        verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
+        verify(repository, never()).saveAndFlush(any(TravelBufferPolicyEntity.class));
     }
 
     @Test
@@ -195,7 +198,7 @@ class TravelBufferPolicyServiceTest {
         assertThatThrownBy(() -> service.patch("not-a-uuid", Map.of("bufferType", "FIXED_MINUTES", "bufferValue", 12)))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400 BAD_REQUEST");
-        verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
+        verify(repository, never()).saveAndFlush(any(TravelBufferPolicyEntity.class));
     }
 
     @Test
@@ -208,7 +211,7 @@ class TravelBufferPolicyServiceTest {
                         service.patch(policyId.toString(), Map.of("bufferType", "FIXED_MINUTES", "bufferValue", 12)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Travel buffer policy not found");
-        verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
+        verify(repository, never()).saveAndFlush(any(TravelBufferPolicyEntity.class));
     }
 
     @Test
@@ -249,7 +252,7 @@ class TravelBufferPolicyServiceTest {
                 .bufferType("FIXED_MINUTES")
                 .bufferValue(null)
                 .build();
-        when(repository.save(any(TravelBufferPolicyEntity.class))).thenReturn(persisted);
+        when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class))).thenReturn(persisted);
 
         TravelBufferPolicyResponse created = service.create(request);
 
@@ -275,7 +278,7 @@ class TravelBufferPolicyServiceTest {
                         InvalidFieldException.class,
                         e -> assertThat(e.getField()).isEqualTo("bufferType"));
         assertThat(existing.getBufferType()).isEqualTo("FIXED_MINUTES");
-        verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
+        verify(repository, never()).saveAndFlush(any(TravelBufferPolicyEntity.class));
     }
 
     @Test
@@ -295,7 +298,7 @@ class TravelBufferPolicyServiceTest {
                         InvalidFieldException.class,
                         e -> assertThat(e.getField()).isEqualTo("bufferValue"));
         assertThat(existing.getBufferValue()).isEqualByComparingTo("15");
-        verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
+        verify(repository, never()).saveAndFlush(any(TravelBufferPolicyEntity.class));
     }
 
     @Test
@@ -306,7 +309,7 @@ class TravelBufferPolicyServiceTest {
                 .name("Tiered")
                 .bufferType("DISTANCE_TIER")
                 .build();
-        when(repository.save(any(TravelBufferPolicyEntity.class))).thenReturn(persisted);
+        when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class))).thenReturn(persisted);
 
         TravelBufferPolicyResponse created = service.create(TravelBufferPolicyRequest.builder()
                 .name("Tiered")
@@ -366,7 +369,7 @@ class TravelBufferPolicyServiceTest {
                 .bufferType("FIXED_MINUTES")
                 .bufferValue(new BigDecimal("30.00"))
                 .build();
-        when(repository.save(any(TravelBufferPolicyEntity.class))).thenReturn(persisted);
+        when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class))).thenReturn(persisted);
 
         TravelBufferPolicyResponse created = service.create(TravelBufferPolicyRequest.builder()
                 .name("Whole")
@@ -396,7 +399,7 @@ class TravelBufferPolicyServiceTest {
                 .isInstanceOfSatisfying(
                         InvalidFieldException.class,
                         e -> assertThat(e.getField()).isEqualTo("bufferValue"));
-        verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
+        verify(repository, never()).saveAndFlush(any(TravelBufferPolicyEntity.class));
     }
 
     @Test
@@ -411,6 +414,144 @@ class TravelBufferPolicyServiceTest {
                 .isInstanceOfSatisfying(
                         InvalidFieldException.class,
                         e -> assertThat(e.getField()).isEqualTo("name"));
+        verify(repository, never()).saveAndFlush(any(TravelBufferPolicyEntity.class));
+    }
+
+    // ---------------------------------------------------------------- #2256
+
+    @Test
+    @DisplayName("#2256 - create flushes, so a duplicate name is mapped here and not lost to the commit")
+    void shouldFlushOnCreate() {
+        when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class))).thenAnswer(call -> call.getArgument(0));
+
+        service.create(TravelBufferPolicyRequest.builder()
+                .name("  Padded ")
+                .bufferType("FIXED_MINUTES")
+                .bufferValue(new BigDecimal("10"))
+                .build());
+
+        verify(repository).saveAndFlush(any(TravelBufferPolicyEntity.class));
         verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
+    }
+
+    @Test
+    @DisplayName("#2256 - a real Postgres unique-violation message on the name key maps to NAME_TAKEN")
+    void shouldMapPostgresNameKeyMessage() {
+        when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class)))
+                .thenThrow(constraintViolation("ERROR: duplicate key value violates unique constraint"
+                        + " \"travel_buffer_policies_name_key\""));
+
+        TravelBufferPolicyRequest request = TravelBufferPolicyRequest.builder()
+                .name("Standard Buffer")
+                .bufferType("FIXED_MINUTES")
+                .build();
+
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessage("TRAVEL_BUFFER_POLICY_NAME_TAKEN");
+    }
+
+    @Test
+    @DisplayName("#2256 - another constraint on the same table is TRAVEL_BUFFER_POLICY_CONFLICT, not a name clash")
+    void shouldNotReportOtherConstraintsAsNameTaken() {
+        when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class)))
+                .thenThrow(constraintViolation("violates check constraint"
+                        + " \"travel_buffer_policies_buffer_type_check\" on table travel_buffer_policies, name"
+                        + " Standard"));
+
+        TravelBufferPolicyRequest request = TravelBufferPolicyRequest.builder()
+                .name("Standard Buffer")
+                .bufferType("FIXED_MINUTES")
+                .build();
+
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessage("TRAVEL_BUFFER_POLICY_CONFLICT");
+    }
+
+    @Test
+    @DisplayName("#2256 - patch flushes and maps a violation instead of deferring it")
+    void shouldFlushAndMapOnPatch() {
+        java.util.UUID policyId = java.util.UUID.fromString("00000000-0000-0000-0000-000000000031");
+        TravelBufferPolicyEntity existing = TravelBufferPolicyEntity.builder()
+                .id(policyId)
+                .name("Standard Buffer")
+                .bufferType("FIXED_MINUTES")
+                .bufferValue(new BigDecimal("10"))
+                .build();
+        when(repository.findById(policyId)).thenReturn(java.util.Optional.of(existing));
+        when(repository.saveAndFlush(existing)).thenThrow(constraintViolation("some other rule"));
+        String id = policyId.toString();
+        Map<String, Object> patch = Map.of("bufferValue", new BigDecimal("20"));
+
+        assertThatThrownBy(() -> service.patch(id, patch))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessage("TRAVEL_BUFFER_POLICY_CONFLICT");
+    }
+
+    @Test
+    @DisplayName("#2350 - a length overflow (Hibernate DataException) is rethrown, not rendered as a conflict")
+    void shouldRethrowNonConstraintIntegrityViolation() {
+        DataIntegrityViolationException overflow = new DataIntegrityViolationException(
+                "could not execute statement",
+                new DataException(
+                        "could not execute statement",
+                        new SQLException("ERROR: value too long for type character varying(255)", "22001")));
+        when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class))).thenThrow(overflow);
+
+        TravelBufferPolicyRequest request = TravelBufferPolicyRequest.builder()
+                .name("Standard Buffer")
+                .bufferType("FIXED_MINUTES")
+                .build();
+
+        assertThatThrownBy(() -> service.create(request)).isSameAs(overflow);
+    }
+
+    @Test
+    @DisplayName("#2350 - over-long name or notes are 400 on the field before any write")
+    void shouldRefuseOverLongTextBeforeWriting() {
+        TravelBufferPolicyRequest longName = TravelBufferPolicyRequest.builder()
+                .name("n".repeat(256))
+                .bufferType("FIXED_MINUTES")
+                .build();
+        assertThatThrownBy(() -> service.create(longName))
+                .isInstanceOfSatisfying(
+                        InvalidFieldException.class,
+                        e -> assertThat(e.getField()).isEqualTo("name"));
+
+        TravelBufferPolicyRequest longNotes = TravelBufferPolicyRequest.builder()
+                .name("Standard Buffer")
+                .bufferType("FIXED_MINUTES")
+                .notes("x".repeat(256))
+                .build();
+        assertThatThrownBy(() -> service.create(longNotes))
+                .isInstanceOfSatisfying(
+                        InvalidFieldException.class,
+                        e -> assertThat(e.getField()).isEqualTo("notes"));
+
+        java.util.UUID policyId = java.util.UUID.fromString("00000000-0000-0000-0000-000000000032");
+        TravelBufferPolicyEntity existing = TravelBufferPolicyEntity.builder()
+                .id(policyId)
+                .name("Standard Buffer")
+                .bufferType("FIXED_MINUTES")
+                .notes("old")
+                .build();
+        when(repository.findById(policyId)).thenReturn(java.util.Optional.of(existing));
+        String id = policyId.toString();
+        Map<String, Object> patch = Map.of("notes", "x".repeat(256));
+        assertThatThrownBy(() -> service.patch(id, patch))
+                .isInstanceOfSatisfying(
+                        InvalidFieldException.class,
+                        e -> assertThat(e.getField()).isEqualTo("notes"));
+        assertThat(existing.getNotes()).isEqualTo("old");
+
+        verify(repository, never()).saveAndFlush(any(TravelBufferPolicyEntity.class));
+    }
+
+    /** What Spring's Hibernate exception translation raises for a constraint violation. */
+    private static DataIntegrityViolationException constraintViolation(String message) {
+        return new DataIntegrityViolationException(
+                "could not execute statement",
+                new ConstraintViolationException(message, new SQLException(message, "23505"), null));
     }
 }

@@ -6,9 +6,9 @@ import com.positivity.location.internal.dto.ServiceAreaResponse;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
 import com.positivity.location.internal.entity.ServiceAreaPostalCodeValue;
 import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.InvalidFieldException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.hibernate.exception.ConstraintViolationException;
 import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -33,23 +34,20 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
 
     private static final String SERVICE_AREA_NAME_TAKEN = "SERVICE_AREA_NAME_TAKEN";
     private static final String SERVICE_AREA_CONFLICT = "SERVICE_AREA_CONFLICT";
+    private static final String NAME = "name";
     private static final String ACTIVE = "active";
     private static final String DESCRIPTION = "description";
+
+    /** {@code service_areas.name} and {@code .description} are {@code varchar(255)}. */
+    private static final int TEXT_COLUMN_MAX_LENGTH = 255;
+
+    /** The unique constraint on {@code (tenant_id, name)} in {@code V1__baseline_location.sql}. */
+    private static final String NAME_UNIQUE_CONSTRAINT = "service_areas_name_key";
+
     protected final ServiceAreaRepository serviceAreaRepository;
 
     public ServiceAreaServiceImpl(ServiceAreaRepository serviceAreaRepository) {
         this.serviceAreaRepository = serviceAreaRepository;
-    }
-
-    /**
-     * Creates a service area from a map payload.
-     *
-     * @param request story #76 payload
-     * @return created service area response
-     */
-    @Transactional
-    public ServiceAreaResponse create(Map<String, Object> request) {
-        return create(toRequest(request));
     }
 
     /**
@@ -63,23 +61,24 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
         validatePostalCodes(request.getPostalCodes());
 
         ServiceAreaEntity entity = ServiceAreaEntity.builder()
-                .name(request.getName())
+                .name(requireName(request.getName()))
                 .description(request.getDescription())
                 .active(request.getActive() == null ? Boolean.TRUE : request.getActive())
                 .postalCodes(toPostalValues(request.getPostalCodes()))
                 .build();
 
-        ServiceAreaEntity saved;
-        try {
-            saved = serviceAreaRepository.save(entity);
-        } catch (DataIntegrityViolationException exception) {
-            throw toServiceAreaConflictException(exception);
-        }
-        return toResponse(saved);
+        return toResponse(saveAndFlush(entity));
     }
 
     /**
      * Patches a service area.
+     *
+     * <p>Reads three keys, each strictly typed so a malformed value is a 400 naming the field and
+     * never a silent coercion or a ClassCastException: {@code name} (non-blank text, renames the
+     * area, 409 {@code SERVICE_AREA_NAME_TAKEN} when another area holds it), {@code description}
+     * (text, or JSON null to clear it) and {@code active} (a JSON boolean only). An absent key
+     * leaves that field unchanged; other keys are ignored. Every key is validated before any is
+     * applied, so a refused patch changes nothing.
      *
      * @param id    service area identifier
      * @param patch map payload
@@ -92,20 +91,21 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
                 .findById(areaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Service area not found"));
 
-        if (patch.containsKey(DESCRIPTION)) {
-            entity.setDescription((String) patch.get(DESCRIPTION));
-        }
-        if (patch.containsKey(ACTIVE)) {
-            entity.setActive(Boolean.valueOf(String.valueOf(patch.get(ACTIVE))));
-        }
+        String name = patch.containsKey(NAME) ? requireName(patch.get(NAME)) : null;
+        boolean hasDescription = patch.containsKey(DESCRIPTION);
+        String description = hasDescription ? requireDescription(patch.get(DESCRIPTION)) : null;
+        Boolean active = patch.containsKey(ACTIVE) ? requireActive(patch.get(ACTIVE)) : null;
 
-        ServiceAreaEntity saved;
-        try {
-            saved = serviceAreaRepository.save(entity);
-        } catch (DataIntegrityViolationException exception) {
-            throw toServiceAreaConflictException(exception);
+        if (name != null) {
+            entity.setName(name);
         }
-        return toResponse(saved);
+        if (hasDescription) {
+            entity.setDescription(description);
+        }
+        if (active != null) {
+            entity.setActive(active);
+        }
+        return toResponse(saveAndFlush(entity));
     }
 
     /**
@@ -162,33 +162,52 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
             current.addAll(toPostalValues(replacement));
         }
 
-        ServiceAreaEntity saved;
+        return toResponse(saveAndFlush(entity));
+    }
+
+    /**
+     * Writes the area and forces the INSERT/UPDATE now. A plain {@code save} defers the statement to
+     * commit, after this method has returned, so a unique-name violation surfaced as an unmapped 500
+     * instead of the {@code SERVICE_AREA_NAME_TAKEN} the catch below builds.
+     */
+    private ServiceAreaEntity saveAndFlush(ServiceAreaEntity entity) {
         try {
-            saved = serviceAreaRepository.save(entity);
+            return serviceAreaRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException exception) {
             throw toServiceAreaConflictException(exception);
         }
-        return toResponse(saved);
     }
 
-    private ServiceAreaRequest toRequest(Map<String, Object> map) {
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> rawPostalCodes =
-                (List<Map<String, Object>>) map.getOrDefault("postalCodes", List.of());
-        List<ServiceAreaRequest.PostalCodeEntry> postalCodes = new ArrayList<>();
-        for (Map<String, Object> rawPostalCode : rawPostalCodes) {
-            postalCodes.add(ServiceAreaRequest.PostalCodeEntry.builder()
-                    .postalCode((String) rawPostalCode.get("postalCode"))
-                    .countryCode((String) rawPostalCode.get("countryCode"))
-                    .build());
+    private static String requireName(Object value) {
+        if (!(value instanceof String text) || text.isBlank()) {
+            throw InvalidFieldException.invalid(NAME, "name must be non-blank text");
         }
+        String trimmed = text.trim();
+        if (trimmed.length() > TEXT_COLUMN_MAX_LENGTH) {
+            throw InvalidFieldException.invalid(NAME, "name must be at most " + TEXT_COLUMN_MAX_LENGTH + " characters");
+        }
+        return trimmed;
+    }
 
-        return ServiceAreaRequest.builder()
-                .name((String) map.get("name"))
-                .description((String) map.get(DESCRIPTION))
-                .active(map.get(ACTIVE) == null ? null : Boolean.valueOf(String.valueOf(map.get(ACTIVE))))
-                .postalCodes(postalCodes)
-                .build();
+    private static String requireDescription(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof String text)) {
+            throw InvalidFieldException.invalid(DESCRIPTION, "description must be text or null");
+        }
+        if (text.length() > TEXT_COLUMN_MAX_LENGTH) {
+            throw InvalidFieldException.invalid(
+                    DESCRIPTION, "description must be at most " + TEXT_COLUMN_MAX_LENGTH + " characters");
+        }
+        return text;
+    }
+
+    private static Boolean requireActive(Object value) {
+        if (value instanceof Boolean flag) {
+            return flag;
+        }
+        throw InvalidFieldException.invalid(ACTIVE, "active must be true or false");
     }
 
     private void validatePostalCodes(List<ServiceAreaRequest.PostalCodeEntry> postalCodes) {
@@ -261,18 +280,28 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
         }
     }
 
-    private DuplicateResourceException toServiceAreaConflictException(DataIntegrityViolationException exception) {
+    /**
+     * A 409 only for a constraint violation. Spring translates every integrity failure, a value too
+     * long for its column (Postgres 22001, Hibernate {@code DataException}) included, to
+     * DataIntegrityViolationException; only one whose cause chain holds a Hibernate {@link
+     * ConstraintViolationException} is a conflict, so anything else is rethrown untouched.
+     */
+    private RuntimeException toServiceAreaConflictException(DataIntegrityViolationException exception) {
+        if (!exception.contains(ConstraintViolationException.class)) {
+            return exception;
+        }
         if (isNameConstraintViolation(exception)) {
             return new DuplicateResourceException(SERVICE_AREA_NAME_TAKEN);
         }
         return new DuplicateResourceException(SERVICE_AREA_CONFLICT);
     }
 
+    /**
+     * True only for the {@code (tenant_id, name)} unique constraint. Matching the table name or a
+     * loose " name " would report any other violation on {@code service_areas} as a name clash.
+     */
     private boolean isNameConstraintViolation(Throwable throwable) {
-        String details = lowerCaseMessages(throwable);
-        return details.contains("service_areas_name_key")
-                || details.contains("service_areas")
-                || details.contains(" name ");
+        return lowerCaseMessages(throwable).contains(NAME_UNIQUE_CONSTRAINT);
     }
 
     private String lowerCaseMessages(Throwable throwable) {
