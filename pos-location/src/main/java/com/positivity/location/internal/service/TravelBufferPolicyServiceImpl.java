@@ -41,6 +41,9 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
     private static final String TRAVEL_BUFFER_POLICY_NAME_TAKEN = "TRAVEL_BUFFER_POLICY_NAME_TAKEN";
     private static final String TRAVEL_BUFFER_POLICY_CONFLICT = "TRAVEL_BUFFER_POLICY_CONFLICT";
 
+    /** The unique constraint on {@code (tenant_id, name)} in {@code V1__baseline_location.sql}. */
+    private static final String NAME_UNIQUE_CONSTRAINT = "travel_buffer_policies_name_key";
+
     /**
      * DECISION-LOCATION-028 rule 5 / DECISION-LOCATION-015: the code's former {@code FLAT_MINUTES}
      * is renamed to {@code FIXED_MINUTES}; {@code PERCENTAGE_OF_TRAVEL} and {@code
@@ -89,9 +92,9 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         TravelBufferPolicyEntity saved = entity;
         if (repository != null) {
             try {
-                TravelBufferPolicyEntity persisted = repository.save(entity);
-                saved = persisted;
-
+                // saveAndFlush, not save: save defers the INSERT to commit, past this catch, so a
+                // duplicate name surfaced as an unmapped 500 instead of TRAVEL_BUFFER_POLICY_NAME_TAKEN.
+                saved = repository.saveAndFlush(entity);
             } catch (DataIntegrityViolationException exception) {
                 throw toTravelBufferPolicyConflictException(exception);
             }
@@ -141,7 +144,7 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         TravelBufferPolicyEntity saved = entity;
         if (repository != null) {
             try {
-                saved = repository.save(entity);
+                saved = repository.saveAndFlush(entity);
             } catch (DataIntegrityViolationException exception) {
                 throw toTravelBufferPolicyConflictException(exception);
             }
@@ -233,11 +236,13 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         return new DuplicateResourceException(TRAVEL_BUFFER_POLICY_CONFLICT);
     }
 
+    /**
+     * True only for the {@code (tenant_id, name)} unique constraint. Matching the table name or a
+     * loose " name " would report any other violation on {@code travel_buffer_policies} (a bufferType
+     * check, say) as a name clash.
+     */
     private boolean isNameConstraintViolation(Throwable throwable) {
-        String details = lowerCaseMessages(throwable);
-        return details.contains("travel_buffer_policies_name_key")
-                || details.contains("travel_buffer_policies")
-                || details.contains(" name ");
+        return lowerCaseMessages(throwable).contains(NAME_UNIQUE_CONSTRAINT);
     }
 
     private String lowerCaseMessages(Throwable throwable) {

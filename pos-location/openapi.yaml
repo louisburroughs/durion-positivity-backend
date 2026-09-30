@@ -1129,7 +1129,7 @@ paths:
       x-required-permissions:
       - location:bay:read
     patch:
-      description: 'Applies a partial update to a bay, changing only the supplied fields: name, bayType, status, the out-of-service reason/note/expected-return fields, displayOrder, capacity and the capability or skill requirement lists.
+      description: 'Applies a partial update to a bay, changing only the supplied fields: name, bayType, status, the out-of-service reason/note/expected-return fields, displayOrder, capacity and the capability or skill requirement lists, and maxDutyClass. A field left out or sent as null is unchanged, except maxDutyClass: omit it to leave the limit alone, send JSON null to clear it back to no limit, or send a class from 1 to 8 to set it.
 
         Use this tool for status transitions among ACTIVE, OUT_OF_SERVICE and RETIRED and for capacity changes; do not use createBay, which adds a new bay, and do not use this tool to retire a bay for good — use deleteBay, which also sets RETIRED.
 
@@ -1139,7 +1139,7 @@ paths:
 
         Emits a LOCATION_BAY_UPDATE event; no other records are touched.
 
-        Returns 400 when either id does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when the location or bay does not exist, 409 when the new name is already taken at that location, and 422 OUT_OF_SERVICE_REASON_REQUIRED when the resulting status is OUT_OF_SERVICE without a reason, or with OTHER and no note.
+        Returns 400 when either id does not parse as a UUID or a field fails validation (maxDutyClass outside 1-8, outOfServiceNote over 255 characters), 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when the location or bay does not exist, 409 when the new name is already taken at that location, and 422 OUT_OF_SERVICE_REASON_REQUIRED when the resulting status is OUT_OF_SERVICE without a reason, or with OTHER and no note.
 
         '
       operationId: patchBay
@@ -1164,7 +1164,7 @@ paths:
                   status: OUT_OF_SERVICE
             schema:
               $ref: '#/components/schemas/BayPatchRequest'
-        description: Partial bay payload; only non-null fields are applied and all others are left unchanged.
+        description: 'Partial bay payload; only non-null fields are applied and all others are left unchanged, except maxDutyClass: omit it to leave it unchanged, send null to clear it to no limit, or 1-8 to set it.'
         required: true
       responses:
         '200':
@@ -1178,7 +1178,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: locationId or bayId is not a UUID.
+          description: locationId or bayId is not a UUID, or a field fails validation (for example maxDutyClass outside 1-8 or outOfServiceNote over 255 characters).
         '403':
           content:
             application/json:
@@ -2509,13 +2509,13 @@ paths:
 
         Use this tool before wiring coverage rules that reference the area; do not use patchServiceArea, which edits an existing area.
 
-        Preconditions: at least one postal code entry must be supplied and every entry must carry a countryCode; the name must not collide with an existing service area.
+        Preconditions: at least one postal code entry must be supplied and every entry must carry a countryCode (at most 2 characters) and a postalCode (at most 20 characters); the name must not collide with an existing service area.
 
         Required inputs: name and postalCodes, each entry with postalCode and countryCode; description is optional and active defaults to true.
 
         Emits a LOCATION_SERVICE_AREA_CREATE event.
 
-        Returns 201 with the created area and 409 when the name is already taken.
+        Returns 201 with the created area, 400 VALIDATION_ERROR with fieldErrors for a blank name, an empty postal code set or an entry that is blank or too long, and 409 SERVICE_AREA_NAME_TAKEN when the name is already taken (SERVICE_AREA_CONFLICT for any other uniqueness conflict). Nothing is stored on a refusal.
 
         '
       operationId: createServiceArea
@@ -2550,13 +2550,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Empty postal code set, or an entry missing its countryCode
+          description: 'VALIDATION_ERROR: blank or over-long name, an empty postal code set, or an entry with a blank or over-long postalCode (max 20) or countryCode (max 2)'
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Service area name already taken
+          description: 'SERVICE_AREA_NAME_TAKEN: the name is already taken (or SERVICE_AREA_CONFLICT for another uniqueness conflict)'
       security:
       - bearerAuth:
         - location:service-area:manage
@@ -2567,17 +2567,17 @@ paths:
       - location:service-area:manage
   /v1/service-areas/{id}:
     patch:
-      description: 'Applies a partial update to a service area, accepting only the keys description and active.
+      description: 'Applies a partial update to a service area, accepting the keys name, description and active; a key that is absent leaves that field unchanged.
 
-        Use this tool to retire an area with active=false or amend its description; do not use it to change which postal codes an area covers, use replaceServiceAreaPostalCodes instead. An area cannot be renamed.
+        Use this tool to rename an area, retire it with active=false or amend its description; do not use it to change which postal codes an area covers, use replaceServiceAreaPostalCodes instead.
 
-        Preconditions: the service area must exist.
+        Preconditions: the service area must exist; a new name must not collide with another service area.
 
-        Required inputs: id (UUID) as a path parameter and a JSON object; keys other than description and active are silently ignored.
+        Required inputs: id (UUID) as a path parameter and a JSON object where name is non-blank text, description is text or null (which clears it) and active is a JSON boolean, so null, "yes" or 1 are refused rather than read as false; keys other than these are silently ignored.
 
         Emits a LOCATION_SERVICE_AREA_PATCH event.
 
-        Returns 400 when the id is not a valid UUID and 404 when no service area exists for it.
+        Returns 400 when the id is not a valid UUID, 400 VALIDATION_ERROR with fieldErrors when name, description or active has the wrong type, 404 when no service area exists for the id and 409 SERVICE_AREA_NAME_TAKEN when another area already holds the new name; a refused patch changes nothing.
 
         '
       operationId: patchServiceArea
@@ -2598,7 +2598,7 @@ paths:
                   description: Retired winter zone
             schema:
               type: object
-        description: Free-form patch object; only the keys description and active are recognized.
+        description: Free-form patch object; only the keys name, description and active are recognized. Omit a key to leave it unchanged; description null clears it; active must be a JSON boolean.
         required: true
       responses:
         '200':
@@ -2612,13 +2612,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Invalid service area id
+          description: 'Invalid service area id, or VALIDATION_ERROR: name is blank or not text, description is not text or null, or active is not a JSON boolean (fieldErrors names the field)'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Service area not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'SERVICE_AREA_NAME_TAKEN: the new name is already held by another service area'
       security:
       - bearerAuth:
         - location:service-area:manage
@@ -2639,7 +2645,7 @@ paths:
 
         Emits a LOCATION_SERVICE_AREA_POSTAL_CODES_REPLACE event.
 
-        Returns 200 with the area as it stands afterwards, 400 when the id is not a valid UUID or the set is empty or missing a countryCode, and 404 when no service area exists for the id.
+        Returns 200 with the area as it stands afterwards, 400 when the id is not a valid UUID or the set is empty or has an entry with a blank or over-long postalCode (max 20) or countryCode (max 2), and 404 when no service area exists for the id.
 
         Coverage resolution reads these rows directly: findEligibleMobileUnits matches an address through them, so removing a code stops every mobile unit covering that address.
 
@@ -2681,7 +2687,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Invalid service area id, or an empty or incomplete set
+          description: Invalid service area id, or an empty, incomplete or over-long set
         '404':
           content:
             application/json:
@@ -2749,7 +2755,7 @@ paths:
       - location:read
   /v1/travel-buffer-policies:
     get:
-      description: 'Lists all travel buffer policies with their buffer type, value and notes.
+      description: 'Lists all travel buffer policies with their buffer type, value and notes. A policy''s name is fixed at creation and cannot be changed afterwards.
 
         Use this tool to discover policy ids for createMobileUnit or patchMobileUnit; use patchTravelBufferPolicy instead to change one.
 
@@ -2785,13 +2791,13 @@ paths:
 
         Use this tool before assigning the policy to mobile units via createMobileUnit or patchMobileUnit; do not use patchTravelBufferPolicy, which edits an existing policy.
 
-        Preconditions: the name must not collide with an existing policy.
+        Preconditions: the name must not collide with an existing policy. The name is fixed at creation and cannot be changed afterwards.
 
         Required inputs: name and bufferType, one of FIXED_MINUTES or DISTANCE_TIER (DECISION-LOCATION-015); bufferValue is optional, must be non-negative, and for FIXED_MINUTES must be a whole number of minutes.
 
         Emits a LOCATION_TRAVEL_BUFFER_POLICY_CREATE event.
 
-        Returns 201 with the created policy, 400 VALIDATION_ERROR with fieldErrors for a blank name, an unknown bufferType, a negative bufferValue or a fractional FIXED_MINUTES bufferValue, and 409 TRAVEL_BUFFER_POLICY_NAME_TAKEN when the name is already taken.
+        Returns 201 with the created policy, 400 VALIDATION_ERROR with fieldErrors for a blank name, a missing or unknown bufferType, a negative bufferValue or a fractional FIXED_MINUTES bufferValue, and 409 TRAVEL_BUFFER_POLICY_NAME_TAKEN when the name is already taken (TRAVEL_BUFFER_POLICY_CONFLICT for any other uniqueness conflict). Nothing is stored on a refusal.
 
         '
       operationId: createTravelBufferPolicy
@@ -2822,13 +2828,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VALIDATION_ERROR: blank name, a bufferType other than FIXED_MINUTES or DISTANCE_TIER, a negative bufferValue, or a fractional bufferValue on a FIXED_MINUTES policy. fieldErrors names the field.'
+          description: 'VALIDATION_ERROR: blank name, a missing bufferType or one other than FIXED_MINUTES or DISTANCE_TIER, a negative bufferValue, or a fractional bufferValue on a FIXED_MINUTES policy. fieldErrors names the field.'
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'TRAVEL_BUFFER_POLICY_NAME_TAKEN: the name is already taken'
+          description: 'TRAVEL_BUFFER_POLICY_NAME_TAKEN: the name is already taken (or TRAVEL_BUFFER_POLICY_CONFLICT for another uniqueness conflict)'
       security:
       - bearerAuth:
         - location:travel-buffer-policy:manage
@@ -2841,7 +2847,7 @@ paths:
     patch:
       description: 'Applies a partial update to a travel buffer policy, accepting the keys bufferType, bufferValue and notes.
 
-        Use this tool to tune buffer behavior; do not use it to rename a policy, whose name is immutable after createTravelBufferPolicy.
+        Use this tool to tune buffer behavior; do not use it to rename a policy, because the name is fixed at createTravelBufferPolicy and a name key here is ignored (this is intended).
 
         Preconditions: the policy must exist; the resulting bufferType must remain FIXED_MINUTES or DISTANCE_TIER, the resulting bufferValue non-negative, and a FIXED_MINUTES bufferValue a whole number of minutes.
 
@@ -2849,7 +2855,7 @@ paths:
 
         Emits a LOCATION_TRAVEL_BUFFER_POLICY_PATCH event.
 
-        Returns 200 with the patched policy, 400 VALIDATION_ERROR when the id is not a valid UUID or (with fieldErrors) when bufferType is not a supported value, bufferValue is not a non-negative number, a FIXED_MINUTES bufferValue is fractional, or notes is not text, and 404 when no policy exists for the id.
+        Returns 200 with the patched policy, 400 VALIDATION_ERROR when the id is not a valid UUID or (with fieldErrors) when bufferType is null or not a supported value, bufferValue is not a non-negative number, a FIXED_MINUTES bufferValue is fractional, or notes is not text, 404 when no policy exists for the id, and 409 TRAVEL_BUFFER_POLICY_CONFLICT if the write collides with a stored row. A refused patch changes nothing.
 
         '
       operationId: patchTravelBufferPolicy
@@ -2869,7 +2875,7 @@ paths:
                   bufferValue: 45
             schema:
               type: object
-        description: Free-form patch object; only the keys bufferType, bufferValue and notes are recognized.
+        description: Free-form patch object; only the keys bufferType, bufferValue and notes are recognized. name cannot be changed after create.
         required: true
       responses:
         '200':
@@ -2890,6 +2896,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Travel buffer policy not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'TRAVEL_BUFFER_POLICY_CONFLICT: the write collides with a stored row'
       security:
       - bearerAuth:
         - location:travel-buffer-policy:manage
@@ -3036,7 +3048,7 @@ components:
           minimum: 1
           type: integer
         maxDutyClass:
-          description: Heaviest GVWR class (1–8) the bay accepts (CAP-325 D13). Null leaves unchanged.
+          description: Heaviest GVWR class (1–8) the bay accepts (CAP-325 D13). Omit the field to leave the current value unchanged; send JSON null to clear it back to no limit; send 1–8 to set it.
           example: 3
           format: int32
           maximum: 8
@@ -4529,13 +4541,15 @@ components:
       description: A postal code entry within a service area
       properties:
         countryCode:
-          description: ISO 3166-1 alpha-2 country code
+          description: ISO 3166-1 alpha-2 country code, at most 2 characters
           example: US
+          maxLength: 2
           minLength: 1
           type: string
         postalCode:
-          description: Postal or ZIP code
+          description: Postal or ZIP code, at most 20 characters
           example: '62704'
+          maxLength: 20
           minLength: 1
           type: string
       required:
@@ -4564,10 +4578,13 @@ components:
         description:
           description: Description of the service area
           example: Northern metropolitan coverage zone
+          maxLength: 255
+          minLength: 0
           type: string
         name:
-          description: Display name of the service area
+          description: Display name of the service area; unique per tenant, at most 255 characters
           example: North Metro
+          maxLength: 255
           minLength: 1
           type: string
         postalCodes:
