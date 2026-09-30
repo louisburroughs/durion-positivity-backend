@@ -38,11 +38,15 @@ public record ReportExportArtifact(
         return result;
     }
 
+    /**
+     * Names the content by size only. The bytes are a rendered financial report, which must never reach a log
+     * line or exception message through string conversion, and a PDF runs to megabytes.
+     */
     @Override
     public String toString() {
         return "ReportExportArtifact[content="
-                + Arrays.toString(content)
-                + ", contentType="
+                + content.length
+                + " bytes, contentType="
                 + contentType
                 + ", filename="
                 + filename
