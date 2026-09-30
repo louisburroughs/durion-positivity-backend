@@ -1,14 +1,17 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.domainevents.people.EmployeeUpdatedV1;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonDeletedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkRemovedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkUpdatedV1;
+import com.positivity.workorder.internal.entity.ExtEmployeeReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.workorder.internal.entity.ExtUserLinkReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
+import com.positivity.workorder.internal.repository.ExtEmployeeReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtUserLinkReplicaRepository;
@@ -34,7 +37,7 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Consumes people-domain facts into this module's scheduling replicas (ADR-0044 §6, #877):
  * {@code people-contact.events.v1} feeds person names + user links, {@code people.events.v1}
- * feeds staffing assignments. Same consumer contract as the pos-customer vehicle listener:
+ * feeds staffing assignments and employment status (#2119). Same consumer contract as the pos-customer vehicle listener:
  * idempotent via {@code processed_events}, strictly-below stale guard (the producers'
  * aggregateVersion is an emission-timestamp LWW hint), transient errors rethrown for retry/DLQ.
  *
@@ -60,6 +63,7 @@ public class PeopleReplicaEventsListener {
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final ExtUserLinkReplicaRepository extUserLinkReplicaRepository;
     private final ExtStaffingAssignmentReplicaRepository extStaffingAssignmentReplicaRepository;
+    private final ExtEmployeeReplicaRepository extEmployeeReplicaRepository;
     private final Counter payloadRejectedCounterPeopleContact;
     private final Counter payloadRejectedCounterPeople;
 
@@ -73,6 +77,7 @@ public class PeopleReplicaEventsListener {
             ExtPersonReplicaRepository extPersonReplicaRepository,
             ExtUserLinkReplicaRepository extUserLinkReplicaRepository,
             ExtStaffingAssignmentReplicaRepository extStaffingAssignmentReplicaRepository,
+            ExtEmployeeReplicaRepository extEmployeeReplicaRepository,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
@@ -81,6 +86,7 @@ public class PeopleReplicaEventsListener {
         this.extPersonReplicaRepository = extPersonReplicaRepository;
         this.extUserLinkReplicaRepository = extUserLinkReplicaRepository;
         this.extStaffingAssignmentReplicaRepository = extStaffingAssignmentReplicaRepository;
+        this.extEmployeeReplicaRepository = extEmployeeReplicaRepository;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounterPeopleContact = registry == null
                 ? null
@@ -142,6 +148,7 @@ public class PeopleReplicaEventsListener {
                     case UserPersonLinkUpdatedV1.EVENT_TYPE -> applyLinkUpdated(envelope);
                     case UserPersonLinkRemovedV1.EVENT_TYPE -> applyLinkRemoved(envelope);
                     case StaffingAssignmentUpdatedV1.EVENT_TYPE -> applyAssignmentUpdated(envelope);
+                    case EmployeeUpdatedV1.EVENT_TYPE -> applyEmployeeUpdated(envelope);
                     default ->
                         // Ignored types still fall through to the processed_events insert below: the
                         // owner's manifest counts every fact in the window, so skipping the insert
@@ -247,6 +254,30 @@ public class PeopleReplicaEventsListener {
                 .status(payload.status())
                 .effectiveFrom(payload.effectiveFrom())
                 .effectiveTo(payload.effectiveTo())
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
+    }
+
+    /**
+     * Upserts the employment-status row by employeeId (#2119). Same strictly-below stale guard as
+     * the other handlers: a stored version greater than the incoming one is skipped, an equal one
+     * is re-applied ({@code EmployeeUpdatedV1} documents {@code >=}, which this matches).
+     */
+    private void applyEmployeeUpdated(JsonNode envelope) {
+        EmployeeUpdatedV1 payload = objectMapper.treeToValue(envelope.path(PAYLOAD), EmployeeUpdatedV1.class);
+        long aggregateVersion = envelope.path(AGGREGATE_VERSION).longValue(0);
+        ExtEmployeeReplica existing =
+                extEmployeeReplicaRepository.findById(payload.employeeId()).orElse(null);
+        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+            return;
+        }
+        extEmployeeReplicaRepository.save(ExtEmployeeReplica.builder()
+                .employeeId(payload.employeeId())
+                .personId(payload.personId())
+                .status(payload.status())
+                .statusEffectiveAt(payload.statusEffectiveAt())
+                .terminationDate(payload.terminationDate())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

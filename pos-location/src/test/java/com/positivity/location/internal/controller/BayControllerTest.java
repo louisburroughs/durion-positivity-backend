@@ -8,6 +8,7 @@ import static com.positivity.location.config.LocationScopeTestSupport.clearCalle
 import static com.positivity.location.config.LocationScopeTestSupport.globalWithClaims;
 import static com.positivity.location.config.LocationScopeTestSupport.preRollout;
 import static com.positivity.location.config.LocationScopeTestSupport.scopedOn;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -314,6 +316,68 @@ class BayControllerTest {
                             .content(PATCH_BODY))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
+
+            verify(bayService, never()).patchBay(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("#2251 - a JSON null maxDutyClass binds as present-and-null so the service clears it")
+        void nullMaxDutyClassBindsAsPresent() throws Exception {
+            stubBaysAt(SITE_IN_REACH);
+            as(scopedOn(LocationPermissions.BAY_MANAGE));
+
+            mockMvc.perform(patch(BAY_URL, SITE_IN_REACH, BAY_ID)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"maxDutyClass\":null}"))
+                    .andExpect(status().isOk());
+
+            ArgumentCaptor<BayPatchRequest> bound = ArgumentCaptor.forClass(BayPatchRequest.class);
+            verify(bayService).patchBay(eq(SITE_IN_REACH), eq(BAY_ID), bound.capture());
+            assertThat(bound.getValue().isMaxDutyClassPresent()).isTrue();
+            assertThat(bound.getValue().getMaxDutyClass()).isNull();
+        }
+
+        @Test
+        @DisplayName("#2251 - a body without maxDutyClass binds as not present")
+        void absentMaxDutyClassBindsAsNotPresent() throws Exception {
+            stubBaysAt(SITE_IN_REACH);
+            as(scopedOn(LocationPermissions.BAY_MANAGE));
+
+            mockMvc.perform(patch(BAY_URL, SITE_IN_REACH, BAY_ID)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(PATCH_BODY))
+                    .andExpect(status().isOk());
+
+            ArgumentCaptor<BayPatchRequest> bound = ArgumentCaptor.forClass(BayPatchRequest.class);
+            verify(bayService).patchBay(eq(SITE_IN_REACH), eq(BAY_ID), bound.capture());
+            assertThat(bound.getValue().isMaxDutyClassPresent()).isFalse();
+        }
+
+        @Test
+        @DisplayName("#2251 - maxDutyClass 9 is a 400 VALIDATION_ERROR before the service runs")
+        void maxDutyClassNineIsRefused() throws Exception {
+            as(scopedOn(LocationPermissions.BAY_MANAGE));
+
+            mockMvc.perform(patch(BAY_URL, SITE_IN_REACH, BAY_ID)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"maxDutyClass\":9}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("maxDutyClass"));
+
+            verify(bayService, never()).patchBay(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("#2251 - an over-long outOfServiceNote is a 400 on PATCH, as it is on create")
+        void overLongNoteIsRefused() throws Exception {
+            as(scopedOn(LocationPermissions.BAY_MANAGE));
+
+            mockMvc.perform(patch(BAY_URL, SITE_IN_REACH, BAY_ID)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"outOfServiceNote\":\"" + "x".repeat(256) + "\"}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
             verify(bayService, never()).patchBay(any(), any(), any());
         }

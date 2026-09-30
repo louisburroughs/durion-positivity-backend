@@ -49,25 +49,29 @@ public class TravelBufferPolicyController {
                     decisions.
                     Use this tool before assigning the policy to mobile units via createMobileUnit or \
                     patchMobileUnit; do not use patchTravelBufferPolicy, which edits an existing policy.
-                    Preconditions: the name must not collide with an existing policy.
+                    Preconditions: the name must not collide with an existing policy. The name is fixed at \
+                    creation and cannot be changed afterwards.
                     Required inputs: name and bufferType, one of FIXED_MINUTES or DISTANCE_TIER \
                     (DECISION-LOCATION-015); bufferValue is optional, must be non-negative, and for FIXED_MINUTES \
                     must be a whole number of minutes.
                     Emits a LOCATION_TRAVEL_BUFFER_POLICY_CREATE event.
                     Returns 201 with the created policy, 400 VALIDATION_ERROR with fieldErrors for a blank name, \
-                    an unknown bufferType, a negative bufferValue or a fractional FIXED_MINUTES bufferValue, and \
-                    409 TRAVEL_BUFFER_POLICY_NAME_TAKEN when the name is already taken.
+                    a missing or unknown bufferType, a negative bufferValue or a fractional FIXED_MINUTES \
+                    bufferValue, and 409 TRAVEL_BUFFER_POLICY_NAME_TAKEN when the name is already taken \
+                    (TRAVEL_BUFFER_POLICY_CONFLICT for any other uniqueness conflict). Nothing is stored on a \
+                    refusal.
                     """)
     @ApiResponse(responseCode = "201", description = "Travel buffer policy created")
     @ApiResponse(
             responseCode = "400",
-            description = "VALIDATION_ERROR: blank name, a bufferType other than FIXED_MINUTES or DISTANCE_TIER, a"
-                    + " negative bufferValue, or a fractional bufferValue on a FIXED_MINUTES policy. fieldErrors"
+            description = "VALIDATION_ERROR: blank name, a missing bufferType or one other than FIXED_MINUTES or"
+                    + " DISTANCE_TIER, a negative bufferValue, or a fractional bufferValue on a FIXED_MINUTES policy. fieldErrors"
                     + " names the field.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "TRAVEL_BUFFER_POLICY_NAME_TAKEN: the name is already taken",
+            description = "TRAVEL_BUFFER_POLICY_NAME_TAKEN: the name is already taken (or"
+                    + " TRAVEL_BUFFER_POLICY_CONFLICT for another uniqueness conflict)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_TRAVEL_BUFFER_POLICY_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.TRAVEL_BUFFER_POLICY_MANAGE + "')")
@@ -96,7 +100,8 @@ public class TravelBufferPolicyController {
     }
 
     @Operation(operationId = "listTravelBufferPolicies", summary = "List All Travel Buffer Policies", description = """
-                    Lists all travel buffer policies with their buffer type, value and notes.
+                    Lists all travel buffer policies with their buffer type, value and notes. A policy's name is \
+                    fixed at creation and cannot be changed afterwards.
                     Use this tool to discover policy ids for createMobileUnit or patchMobileUnit; use \
                     patchTravelBufferPolicy instead to change one.
                     Preconditions: none beyond the location:travel-buffer-policy:read authority.
@@ -120,8 +125,8 @@ public class TravelBufferPolicyController {
             description = """
                     Applies a partial update to a travel buffer policy, accepting the keys bufferType, \
                     bufferValue and notes.
-                    Use this tool to tune buffer behavior; do not use it to rename a policy, whose name is \
-                    immutable after createTravelBufferPolicy.
+                    Use this tool to tune buffer behavior; do not use it to rename a policy, because the name is \
+                    fixed at createTravelBufferPolicy and a name key here is ignored (this is intended).
                     Preconditions: the policy must exist; the resulting bufferType must remain FIXED_MINUTES or \
                     DISTANCE_TIER, the resulting bufferValue non-negative, and a FIXED_MINUTES bufferValue a whole \
                     number of minutes.
@@ -129,9 +134,10 @@ public class TravelBufferPolicyController {
                     keys other than bufferType, bufferValue and notes are silently ignored.
                     Emits a LOCATION_TRAVEL_BUFFER_POLICY_PATCH event.
                     Returns 200 with the patched policy, 400 VALIDATION_ERROR when the id is not a valid UUID or \
-                    (with fieldErrors) when bufferType is not a supported value, bufferValue is not a \
-                    non-negative number, a FIXED_MINUTES bufferValue is fractional, or notes is not text, and 404 \
-                    when no policy exists for the id.
+                    (with fieldErrors) when bufferType is null or not a supported value, bufferValue is not a \
+                    non-negative number, a FIXED_MINUTES bufferValue is fractional, or notes is not text, 404 \
+                    when no policy exists for the id, and 409 TRAVEL_BUFFER_POLICY_CONFLICT if the write collides \
+                    with a stored row. A refused patch changes nothing.
                     """)
     @ApiResponse(responseCode = "200", description = "Travel buffer policy patched")
     @ApiResponse(
@@ -143,6 +149,10 @@ public class TravelBufferPolicyController {
             responseCode = "404",
             description = "Travel buffer policy not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "TRAVEL_BUFFER_POLICY_CONFLICT: the write collides with a stored row",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.TRAVEL_BUFFER_POLICY_MANAGE + "')")
     @EmitEvent(id = "LOCATION_TRAVEL_BUFFER_POLICY_PATCH", apiVersion = "1")
     @SecurityRequirement(
@@ -153,7 +163,7 @@ public class TravelBufferPolicyController {
             @PathVariable String id,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Free-form patch object; only the keys bufferType, bufferValue and"
-                                    + " notes are recognized.",
+                                    + " notes are recognized. name cannot be changed after create.",
                             required = true,
                             content =
                                     @Content(

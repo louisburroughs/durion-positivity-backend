@@ -17,20 +17,19 @@ import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
-import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.JobRole;
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.DuplicatePolicy;
 import com.positivity.people.internal.enums.EmployeeSearchInclude;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.event.EmployeeOffboardedEvent;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
-import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.JobRoleRepository;
@@ -59,6 +58,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,8 +83,6 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     private final EmployeeRepository employeeRepository;
 
-    private final EmployeeOffboardingRetryRepository offboardingRetryRepository;
-
     private final PeopleEventPublisher peopleEventPublisher;
 
     private final JobRoleRepository jobRoleRepository;
@@ -102,6 +100,10 @@ public class EmployeeServiceImpl implements EmployeeService {
     // ── Rendering-hint action flags (durion#2159) -- see EmployeeActionPolicy's javadoc ──
 
     private final EmployeeActionPolicy employeeActionPolicy;
+
+    // ── Offboarding (#2121) ──
+
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -253,22 +255,23 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (currentStatus != EmployeeStatus.ACTIVE) {
             throw new ResourceStateConflictException("Only ACTIVE employees can be disabled");
         }
+        validateAssignmentPolicy(request);
 
         employee.setStatus(EmployeeStatus.DISABLED);
         employee.setStatusEffectiveAt(Instant.now(clock));
         Employee savedEmployee = employeeRepository.save(employee);
         peopleEventPublisher.publishEmployeeUpdated(savedEmployee);
 
-        String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
-        try {
-            applyAssignmentPolicy(employeeId, request, actorId);
-        } catch (Exception exception) {
-            log.warn(
-                    "Offboarding downstream action failed for employee {}. Queuing retry. Reason: {}",
-                    employeeId,
-                    exception.getMessage());
-            queueOffboardingRetry(employeeId, request, actorId, exception.getMessage());
-        }
+        // Ending the assignments happens after this transaction commits (OffboardingEventListener):
+        // a failure there must neither undo the disable nor take the retry-queue write with it.
+        applicationEventPublisher.publishEvent(new EmployeeOffboardedEvent(
+                employeeId,
+                request.getAssignmentPolicy() != null
+                        ? request.getAssignmentPolicy()
+                        : AssignmentTerminationPolicy.IMMEDIATE,
+                request.getAssignmentEndDate(),
+                request.getDisableReason(),
+                SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR)));
 
         ExtPersonReplica person =
                 extPersonReplicaRepository.findById(employeeId).orElse(null);
@@ -963,38 +966,22 @@ public class EmployeeServiceImpl implements EmployeeService {
         return dto;
     }
 
-    private void applyAssignmentPolicy(UUID employeeId, DisableEmployeeRequestDto request, String actorId) {
-        AssignmentTerminationPolicy policy = request.getAssignmentPolicy() != null
-                ? request.getAssignmentPolicy()
-                : AssignmentTerminationPolicy.IMMEDIATE;
-
-        switch (policy) {
-            case IMMEDIATE ->
-                log.info("Applying IMMEDIATE assignment offboarding for employee {} by actor {}", employeeId, actorId);
-            case GRACE_PERIOD ->
-                log.info(
-                        "Applying GRACE_PERIOD assignment offboarding for employee {} with assignmentEndDate {} by actor {}",
-                        employeeId,
-                        request.getAssignmentEndDate(),
-                        actorId);
-            default -> throw new IllegalStateException("Unsupported assignment policy");
+    /**
+     * GRACE_PERIOD needs the date the assignments run to, and a date already behind us would end
+     * them as an IMMEDIATE policy would while claiming otherwise. Checked before the employee is
+     * touched so a bad request changes nothing.
+     */
+    private void validateAssignmentPolicy(DisableEmployeeRequestDto request) {
+        if (request.getAssignmentPolicy() != AssignmentTerminationPolicy.GRACE_PERIOD) {
+            return;
         }
-    }
-
-    private void queueOffboardingRetry(
-            UUID employeeId, DisableEmployeeRequestDto request, String actorId, String failureReason) {
-        EmployeeOffboardingRetry retry = new EmployeeOffboardingRetry();
-        retry.setEmployeeId(employeeId);
-        retry.setAssignmentPolicy(
-                request.getAssignmentPolicy() != null
-                        ? request.getAssignmentPolicy()
-                        : AssignmentTerminationPolicy.IMMEDIATE);
-        retry.setDisableReason(request.getDisableReason());
-        retry.setActorId(actorId);
-        retry.setFailureReason(failureReason != null ? failureReason : "unknown");
-        retry.setAttempts(0);
-        retry.setNextAttemptAt(Instant.now(clock).plusSeconds(300));
-        offboardingRetryRepository.save(retry);
+        LocalDate assignmentEndDate = request.getAssignmentEndDate();
+        if (assignmentEndDate == null) {
+            throw new RequestValidationException("assignmentEndDate is required when assignmentPolicy is GRACE_PERIOD");
+        }
+        if (assignmentEndDate.isBefore(LocalDate.now(clock))) {
+            throw new SemanticValidationException("assignmentEndDate must not be before today");
+        }
     }
 
     private String normalize(String value) {

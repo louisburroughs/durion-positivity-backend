@@ -102,12 +102,68 @@ mcp:
       docs:
         - id: "accounting.de-bookkeeping"
           source-path: "classpath:rag/de-bookkeeping-rag.md"
+          rag-scope: "accounting"
+          entities: [gl-account, journal-entry, financial-report]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
+          rag-scope: "inventory"
+          entities: [stock-item, stock-transfer, stock-adjustment]
 ```
 
 Each entry has a stable `id` (used for supersede semantics) and a classpath `source-path`. Adding an entry is all
-that is needed to include a new static document.
+that is needed to include a new static document, together with the metadata below.
+
+**Document metadata contract.** Every entry of `mcp.rag.preload.docs` declares:
+
+| Key                    | Meaning                                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `rag-scope`            | The retrieval scope (`accounting`, `inventory`, `shopmanager`, `hr`, `master`, ...).                                                 |
+| `required-permissions` | Permission codes that gate the document; omit for none, `AUTHENTICATED` for any signed-in user.                                      |
+| `entities`             | ADR-0069: the `scope-graph/entities.yaml` keys the document substantively explains, or `[none]` for a platform-wide document.        |
+
+The `alpha` profile's list replaces the base list wholesale, so **both** `application.yml` and `application-alpha.yml`
+carry every entry with the same values, `entities` included. A document header (YAML front matter or the inline
+`RAG id:` / `RAG scope:` / `Required permissions:` lines), where present, must agree with its entry on id, scope and
+permissions; headers do not carry `entities`. `RagPreloadProfileParityTest` and `RagDocumentHeaderAgreementTest` enforce
+both rules.
+
+## Scope graph (ADR-0069)
+
+A generated, in-memory graph of entities, tools, RAG documents, screens and permissions that narrows retrieval and
+tool selection before the model runs. It holds platform definitions only, never a tenant's records. **`mode: off` is
+the default: nothing is built, read or logged.**
+
+| Property                                   | Env / Default                      | Description                                                                                                             |
+| ------------------------------------------ | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `mcp.scope-graph.mode`                     | `MCP_SCOPE_GRAPH_MODE` `off`       | `off` builds nothing; `shadow` builds the graph and records the resolved scope, no consumer acts on it; `enforce` acts. |
+| `mcp.scope-graph.enforce`                  | `MCP_SCOPE_GRAPH_ENFORCE` _(empty)_ | Consumers that act when `mode` is `enforce`: any of `rag`, `tools`, `card`. Empty behaves as `shadow`.                  |
+| `mcp.scope-graph.max-nodes`                | `60`                               | Cap on the nodes of one expanded scope (two hops from the seed entities).                                               |
+| `mcp.scope-graph.added-tool-slots`         | `8`                                | Cap on the tools the scope may add on top of the ranked cuts, facade and discovered together.                           |
+| `mcp.scope-graph.card-token-budget`        | `400`                              | Token budget of the scope card appended to the system prompt.                                                           |
+
+Quote a literal mode in YAML (`"off"`): bare `off` is the boolean `false`.
+
+The curated input is `src/main/resources/scope-graph/entities.yaml` (entity lexicon: terms in en/fr/es, identifier
+patterns, relations, OpenAPI schema names, facade tools, screens; the field-by-field contract is in its header). The rest
+of the graph is derived from the tool catalog, `mcp.rag.preload.docs`, the module OpenAPI specs and the screen registry.
+`ScopeGraphRealConfigValidationTest` builds the real inputs under the default and `alpha` profiles and fails on any strict
+finding; it reads the `openapi.yaml` files of the sibling modules, so run it from a full reactor checkout.
+
+**Adding an entity**
+
+1. Add it to `entities.yaml`: lower-case hyphenated `key`, `domain` (tool-catalog spelling), at least one singular term in each of en, fr (fr-CA) and es.
+2. Attach its DTOs with `schemas` (`domain:SchemaName`, the canonical response first) and tight whole-string `schema_patterns`; list the facade tools that act on it under `facade_tools` (`reads` or `writes`).
+3. Add `identifiers` only for formats documented in `rag/glossary-identifiers.md`, and `relates_to` only for relationships a RAG document states.
+4. Point the RAG documents that explain it at the new key in **both** preload lists.
+5. Run `./mvnw -pl pos-mcp-server -am test`; the real-config test names every unresolved reference.
+
+**Adding a RAG document**
+
+1. Put the file under `src/main/resources/rag/` with a header that matches the entry (or none).
+2. Add the entry to **both** `application.yml` and `application-alpha.yml`: `id`, `source-path`, `rag-scope`, `required-permissions`, `entities`.
+3. Use entity keys from `entities.yaml`, or `[none]` only for a platform-wide document; list what the document substantively explains, not everything it mentions.
+4. A new `rag-scope` spelled differently from a tool domain needs a `domain_scopes` line in `entities.yaml`.
+5. Run the module tests: the parity, header-agreement and real-config tests cover the rest.
 
 ## Startup Behaviour
 

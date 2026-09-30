@@ -3,6 +3,7 @@ rag_id: accounting.journal-entries
 rag_scope: accounting
 required_permissions:
   - accounting:je:view
+  - reporting:view:financial-statements
 ---
 
 ## Purpose

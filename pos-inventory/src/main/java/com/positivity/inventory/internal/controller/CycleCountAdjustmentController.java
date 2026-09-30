@@ -178,8 +178,11 @@ public class CycleCountAdjustmentController {
                     optional X-Correlation-Id header is propagated to the audit event.
                     Emits an INVENTORY_CYCLE_COUNT_ADJUSTMENT_APPROVE event plus a MovementAdjusted audit event, \
                     and the posting changes on-hand immediately.
+                    Location scope (ADR-0061, #2151): the adjustment's own location must lie within the caller's \
+                    reach; an adjustment with no recorded location is refused to a location-scoped caller.
                     Returns 400 when no adjustment exists for the id (the unknown id maps to a validation error, \
-                    not 404), 409 when the adjustment is not PENDING_APPROVAL or FAILED or the conflict gate \
+                    not 404), 403 with LOCATION_SCOPE_DENIED when the adjustment is outside the caller's location \
+                    reach, 409 when the adjustment is not PENDING_APPROVAL or FAILED or the conflict gate \
                     rejects the first approval (CYCLE_COUNT_CONFLICT), and 500 (ADJUSTMENT_LEDGER_POST_FAILED) when \
                     the posting fails unexpectedly, which leaves the adjustment FAILED with the cause in errorMessage.
                     """,
@@ -191,7 +194,9 @@ public class CycleCountAdjustmentController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required approval permission",
+            description = "FORBIDDEN when the caller lacks inventory:adjustment:approve; LOCATION_SCOPE_DENIED when"
+                    + " the caller holds it but the token scopes it to locations that do not cover the"
+                    + " adjustment's locationId, or the adjustment records none (ADR-0061)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
@@ -255,7 +260,10 @@ public class CycleCountAdjustmentController {
                     the body, both non-blank.
                     Emits an INVENTORY_CYCLE_COUNT_ADJUSTMENT_REJECT event; the adjustment moves to REJECTED and \
                     its linked task is left untouched.
-                    Returns 400 when no adjustment exists for the id (mapped to a validation error, not 404), and \
+                    Location scope (ADR-0061, #2151): the adjustment's own location must lie within the caller's \
+                    reach; an adjustment with no recorded location is refused to a location-scoped caller.
+                    Returns 400 when no adjustment exists for the id (mapped to a validation error, not 404), 403 \
+                    with LOCATION_SCOPE_DENIED when the adjustment is outside the caller's location reach, and \
                     409 when the adjustment is not PENDING_APPROVAL.
                     """,
             tags = {"Cycle Count Adjustments"})
@@ -266,7 +274,9 @@ public class CycleCountAdjustmentController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required approval permission",
+            description = "FORBIDDEN when the caller lacks inventory:adjustment:approve; LOCATION_SCOPE_DENIED when"
+                    + " the caller holds it but the token scopes it to locations that do not cover the"
+                    + " adjustment's locationId, or the adjustment records none (ADR-0061)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
@@ -315,11 +325,21 @@ public class CycleCountAdjustmentController {
                     Preconditions: the adjustment must exist.
                     Required inputs: adjustmentId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
+                    Location scope (ADR-0061, #2151): the adjustment's own location must lie within the caller's \
+                    reach; an adjustment with no recorded location is refused to a location-scoped caller.
                     Returns 400 when no adjustment exists for the supplied id — the module maps the unknown-id \
-                    lookup to a validation error rather than 404.
+                    lookup to a validation error rather than 404 — and 403 with LOCATION_SCOPE_DENIED when the \
+                    adjustment is outside the caller's location reach.
                     """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "200", description = "Adjustment found")
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller holds neither inventory:adjustment:view nor"
+                    + " inventory:adjustment:approve; LOCATION_SCOPE_DENIED when the token scopes the held grant to"
+                    + " locations that do not cover the adjustment's locationId, or the adjustment records none"
+                    + " (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Adjustment not found",
@@ -355,11 +375,14 @@ public class CycleCountAdjustmentController {
                     APPROVED, POSTED, REJECTED or FAILED) and defaults to PENDING_APPROVAL when omitted; there is \
                     no paging.
                     No events are emitted and no state changes; this is a read-only projection.
+                    Location scope (ADR-0061, #2151): the result is narrowed to the caller's location reach; a \
+                    location-scoped caller sees only adjustments at a reachable site, and never one that records no \
+                    location, while a globally granted caller sees every match.
                     Returns 200 with an empty array when no adjustments match, so an empty result is not an error \
                     condition.
                     """,
             tags = {"Cycle Count Adjustments"})
-    @ApiResponse(responseCode = "200", description = "Adjustments retrieved")
+    @ApiResponse(responseCode = "200", description = "Adjustments retrieved, within the caller's location reach")
     public ResponseEntity<List<AdjustmentResponse>> listAdjustments(
             @Parameter(description = "Filter by adjustment status") @RequestParam(required = false)
                     AdjustmentStatus status) {
@@ -390,11 +413,16 @@ public class CycleCountAdjustmentController {
                     Preconditions: none.
                     Required inputs: none; there is no request body, paging or filtering.
                     No events are emitted and no state changes; this is a read-only projection.
+                    Location scope (ADR-0061, #2151): the queue is narrowed to the caller's location reach; a \
+                    location-scoped caller sees only adjustments at a reachable site, and never one that records no \
+                    location, while a globally granted caller sees every pending adjustment.
                     Returns 200 with an empty array when nothing awaits approval, so an empty result is not an \
                     error condition.
                     """,
             tags = {"Cycle Count Adjustments"})
-    @ApiResponse(responseCode = "200", description = "Pending adjustments retrieved")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Pending adjustments retrieved, within the caller's location reach")
     public ResponseEntity<List<AdjustmentResponse>> listPendingApprovals() {
         List<AdjustmentResponse> response =
                 adjustmentService.listAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
@@ -422,10 +450,12 @@ public class CycleCountAdjustmentController {
                     Preconditions: none.
                     Required inputs: none; there is no request body or filtering.
                     No events are emitted and no state changes; this is a read-only projection.
+                    Location scope (ADR-0061, #2151): counts only the adjustments within the caller's location \
+                    reach, the same rows listPendingCycleCountAdjustments returns for that caller.
                     Returns 200 with 0 when nothing awaits approval, so zero is not an error condition.
                     """,
             tags = {"Cycle Count Adjustments"})
-    @ApiResponse(responseCode = "200", description = "Count retrieved")
+    @ApiResponse(responseCode = "200", description = "Count retrieved, within the caller's location reach")
     public ResponseEntity<Long> countPendingApprovals() {
         long count = adjustmentService.countAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
         return ResponseEntity.ok(count);

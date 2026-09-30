@@ -18,6 +18,7 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
+import com.positivity.workorder.internal.exception.TechnicianNotActiveException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
 import com.positivity.workorder.internal.exception.TechnicianNotStaffedAtSiteException;
@@ -41,6 +42,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -111,6 +114,9 @@ class TechnicianAssignmentServiceImplTest {
         // that does set a site safe by default unless it deliberately overrides this.
         when(peopleAvailabilityLocalService.isEligibleAtSite(any(), any(), any()))
                 .thenReturn(true);
+
+        // #2120: employed by default (no inactive employment status on the replica).
+        when(peopleAvailabilityLocalService.inactiveEmploymentStatus(any())).thenReturn(Optional.empty());
 
         when(assignmentRepository.save(any())).thenAnswer(TechnicianAssignmentServiceImplTest::stampId);
         // Assign and reassign write the new current row through saveAndFlush so a lost race against
@@ -655,6 +661,72 @@ class TechnicianAssignmentServiceImplTest {
             when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.empty());
             assertThatThrownBy(() -> service.getWorkorderStatus(WORKORDER_ID))
                     .isInstanceOf(WorkorderNotFoundException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("#2120: a technician must still be employed")
+    class EmployedTechnician {
+
+        @ParameterizedTest
+        @ValueSource(strings = {"TERMINATED", "DISABLED", "SUSPENDED"})
+        @DisplayName("assign refuses an offboarded technician, naming the status")
+        void assignRefusesInactive(String status) {
+            givenWorkorder(WorkorderStatus.APPROVED);
+            when(peopleAvailabilityLocalService.inactiveEmploymentStatus(TECHNICIAN_ID))
+                    .thenReturn(Optional.of(status));
+
+            assertThatThrownBy(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .isInstanceOf(TechnicianNotActiveException.class)
+                    .hasMessageContaining(status)
+                    .satisfies(ex -> {
+                        TechnicianNotActiveException typed = (TechnicianNotActiveException) ex;
+                        assertThat(typed.getTechnicianId()).isEqualTo(TECHNICIAN_ID);
+                        assertThat(typed.getEmploymentStatus()).isEqualTo(status);
+                    });
+            verify(assignmentRepository, never()).saveAndFlush(any());
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"TERMINATED", "DISABLED", "SUSPENDED"})
+        @DisplayName("reassign refuses an offboarded replacement before touching the incumbent")
+        void reassignRefusesInactive(String status) {
+            givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
+            when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
+                    .thenReturn(Optional.of(existing));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
+            when(peopleAvailabilityLocalService.inactiveEmploymentStatus(TECHNICIAN_ID))
+                    .thenReturn(Optional.of(status));
+
+            assertThatThrownBy(
+                            () -> service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", "reason", null))
+                    .isInstanceOf(TechnicianNotActiveException.class);
+
+            assertThat(existing.getCurrent()).isTrue();
+            verify(assignmentRepository, never()).saveAndFlush(existing);
+        }
+
+        @Test
+        @DisplayName("an ACTIVE or ON_LEAVE technician, or one with no employee row, is assigned and reassigned")
+        void employedTechnicianPasses() {
+            givenWorkorder(WorkorderStatus.APPROVED);
+
+            // The default stub (no inactive status) is what ACTIVE, ON_LEAVE and no row all reduce to.
+            assertThatCode(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .doesNotThrowAnyException();
+            verify(peopleAvailabilityLocalService).inactiveEmploymentStatus(TECHNICIAN_ID);
+        }
+
+        @Test
+        @DisplayName("an unknown technician is still TECHNICIAN_NOT_FOUND, ahead of the employment check")
+        void unknownWinsOverEmployment() {
+            givenWorkorder(WorkorderStatus.APPROVED);
+            when(extPersonReplicaRepository.existsById(TECHNICIAN_ID)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .isInstanceOf(TechnicianNotFoundException.class);
+            verify(peopleAvailabilityLocalService, never()).inactiveEmploymentStatus(any());
         }
     }
 

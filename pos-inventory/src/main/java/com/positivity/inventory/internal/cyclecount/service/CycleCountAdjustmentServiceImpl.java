@@ -42,12 +42,14 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -147,11 +149,18 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     }
 
     /**
-     * The storage location the adjustment's variance posts against (#2167). A task whose bin holds a
-     * location UUID decides it; a task-less adjustment takes the request's {@code locationId}. A
-     * request location that contradicts its task's bin is refused rather than silently overridden:
-     * one of the two names the wrong shelf. {@code null} only when neither names one, and then the
-     * variance posts against the SKU's location-less balance, as before.
+     * The storage location the adjustment's variance posts against, and the location every later
+     * scope decision is taken on (#2167, #2151). Resolution order:
+     * <ol>
+     *   <li>a task whose bin holds a location UUID decides it; a request location that contradicts
+     *       that bin is refused rather than silently overridden, since one of the two names the
+     *       wrong shelf;</li>
+     *   <li>otherwise the request's {@code locationId}, when it names one.</li>
+     * </ol>
+     * {@code null} only when neither names one, and then the variance posts against the SKU's
+     * location-less balance, as before. The task's plan is deliberately not consulted: a plan names
+     * a site, and posting a bin's count against the site row would judge the floor against a
+     * balance that is held in the bins beneath it, not at the site itself.
      */
     private @Nullable UUID resolveLocation(CreateAdjustmentRequest request) {
         UUID requested = request.getLocationId();
@@ -161,15 +170,15 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         CycleCountTask task = taskRepository
                 .findById(request.getTaskId())
                 .orElseThrow(() -> new TaskNotFoundException(request.getTaskId()));
-        Optional<UUID> taskLocation = CycleCountConflictDetector.locationIdOf(task);
-        if (taskLocation.isEmpty()) {
+        Optional<UUID> binLocation = CycleCountConflictDetector.locationIdOf(task);
+        if (binLocation.isEmpty()) {
             return requested;
         }
-        if (requested != null && !requested.equals(taskLocation.get())) {
+        if (requested != null && !requested.equals(binLocation.get())) {
             throw new IllegalArgumentException("locationId " + requested + " does not match task " + request.getTaskId()
-                    + " bin location " + taskLocation.get());
+                    + " bin location " + binLocation.get());
         }
-        return taskLocation.get();
+        return binLocation.get();
     }
 
     @Override
@@ -184,6 +193,12 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         CycleCountAdjustment adjustment = adjustmentRepository
                 .findById(adjustmentId)
                 .orElseThrow(() -> new IllegalArgumentException(ADJUSTMENT_NOT_FOUND + adjustmentId));
+
+        // ADR-0061 gate (#2151): after the not-found lookup, so ids cannot be probed, and before
+        // any state change. Gated on the location the posting concerns (postingLocationOf: the
+        // stored locationId, else a legacy row's task bin), so a row with neither denies a scoped
+        // approver (fail closed).
+        locationScopeService.require(postingLocationOf(adjustment), InventoryPermissionRegistry.ADJUSTMENT_APPROVE);
 
         // FAILED is approvable: an unexpected posting failure is the retryable case (#2170), and
         // approving again is how it is retried.
@@ -224,6 +239,10 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                 .findById(adjustmentId)
                 .orElseThrow(() -> new IllegalArgumentException(ADJUSTMENT_NOT_FOUND + adjustmentId));
 
+        // ADR-0061 gate (#2151): as in approveAdjustment, after the lookup and before any change,
+        // on the location the posting would concern.
+        locationScopeService.require(postingLocationOf(adjustment), InventoryPermissionRegistry.ADJUSTMENT_APPROVE);
+
         if (adjustment.getStatus() != AdjustmentStatus.PENDING_APPROVAL) {
             throw new IllegalStateException("Cannot reject adjustment in status: " + adjustment.getStatus());
         }
@@ -244,13 +263,29 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         CycleCountAdjustment adjustment = adjustmentRepository
                 .findById(adjustmentId)
                 .orElseThrow(() -> new IllegalArgumentException(ADJUSTMENT_NOT_FOUND + adjustmentId));
+        // ADR-0061 §3 (#2151): the lists are narrowed by location, so the by-id read is gated on
+        // the location the loaded row concerns (postingLocationOf) — after the not-found lookup,
+        // so ids cannot be probed.
+        locationScopeService.require(
+                postingLocationOf(adjustment),
+                InventoryPermissionRegistry.ADJUSTMENT_VIEW,
+                InventoryPermissionRegistry.ADJUSTMENT_APPROVE);
         return toResponse(adjustment);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<AdjustmentResponse> listAdjustmentsByStatus(AdjustmentStatus status) {
-        return adjustmentRepository.findByStatus(status).stream()
+        Optional<Set<UUID>> reach = reachOfReader();
+        if (reach.isEmpty()) {
+            return adjustmentRepository.findByStatus(status).stream()
+                    .map(this::toResponse)
+                    .toList();
+        }
+        if (reach.get().isEmpty()) {
+            return List.of();
+        }
+        return adjustmentRepository.findAll(statusWithin(status, reach.get())).stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -258,7 +293,25 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     @Override
     @Transactional(readOnly = true)
     public long countAdjustmentsByStatus(AdjustmentStatus status) {
-        return adjustmentRepository.countByStatus(status);
+        Optional<Set<UUID>> reach = reachOfReader();
+        if (reach.isEmpty()) {
+            return adjustmentRepository.countByStatus(status);
+        }
+        if (reach.get().isEmpty()) {
+            return 0L;
+        }
+        return adjustmentRepository.count(statusWithin(status, reach.get()));
+    }
+
+    /** The caller's reach for the adjustment lists: empty for a global caller, else the sites to restrict to. */
+    private Optional<Set<UUID>> reachOfReader() {
+        return locationScopeService.reachOf(
+                InventoryPermissionRegistry.ADJUSTMENT_VIEW, InventoryPermissionRegistry.ADJUSTMENT_APPROVE);
+    }
+
+    private static Specification<CycleCountAdjustment> statusWithin(AdjustmentStatus status, Set<UUID> reach) {
+        Specification<CycleCountAdjustment> byStatus = (root, query, cb) -> cb.equal(root.get("status"), status);
+        return byStatus.and(LocationScopeService.withinLocations("locationId", reach));
     }
 
     /**
@@ -445,10 +498,12 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     }
 
     /**
-     * The storage location an adjustment's variance posts against: the location resolved at create
-     * time ({@link #resolveLocation}), else — for adjustments recorded before #2167 — the linked
-     * task's bin when it holds a location UUID (the form plan-driven task generation writes),
-     * {@code null} for task-less adjustments with no location and free-text bins. Carrying this onto the posted
+     * The storage location an adjustment's variance posts against, and the location the by-id
+     * scope gates of {@code approve}, {@code reject} and {@code get} are taken on (#2151): the
+     * location resolved at create time ({@link #resolveLocation}), else — for adjustments recorded
+     * before #2167 — the linked task's bin when it holds a location UUID (the form plan-driven task
+     * generation writes), {@code null} for task-less adjustments with no location and free-text
+     * bins. The status lists narrow on the stored column alone. Carrying this onto the posted
      * {@code COUNT_VARIANCE_*} entry is what makes a bin-scoped expected-quantity snapshot
      * converge: without it, the correction lands on the NULL-location key and the same shrinkage
      * is re-detected by every subsequent plan for that bin.

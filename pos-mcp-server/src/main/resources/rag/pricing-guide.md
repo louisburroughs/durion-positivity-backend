@@ -3,7 +3,7 @@
 ## Purpose
 RAG id: `pricing.guide`  
 RAG scope: `pricing`  
-Required permissions: `pricing:price_book:view`, `pricing:rule:view`  
+Required permissions: `pricing:rule:view`, `catalog:price_book:read`
 Audience: internal staff.  
 This document is reference context only and grants no access; access is enforced by permission codes at request time.
 

@@ -26,3 +26,7 @@ spring:
 eureka:
   client:
     enabled: false
+# ADR-0069: the scope graph stays off in tests except the graph's own (quoted: bare off is YAML false).
+mcp:
+  scope-graph:
+    mode: "off"

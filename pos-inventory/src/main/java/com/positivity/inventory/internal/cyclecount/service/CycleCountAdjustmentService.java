@@ -44,6 +44,14 @@ public interface CycleCountAdjustmentService {
      * Only adjustments in PENDING_APPROVAL status can be approved.
      * After approval, the adjustment is posted to the inventory ledger.
      *
+     * <p>
+     * Location scope (ADR-0061, #2151): gated on the location the adjustment concerns — its stored
+     * {@code locationId}, else (a legacy row from before #2167) the linked task's bin when it holds
+     * a location UUID, the same resolution the ledger posting uses — after the not-found lookup and
+     * before any state change, against {@code inventory:adjustment:approve}. Only a row with
+     * neither is <strong>denied</strong> to a caller whose grant is location-scoped (fail closed);
+     * a globally granted caller is unaffected.
+     *
      * @param adjustmentId the adjustment ID
      * @param request      the approval request
      * @return the updated adjustment response
@@ -58,6 +66,14 @@ public interface CycleCountAdjustmentService {
      * Only adjustments in PENDING_APPROVAL status can be rejected.
      * Rejection is final - no ledger entry is created and on-hand is not changed.
      *
+     * <p>
+     * Location scope (ADR-0061, #2151): gated on the location the adjustment concerns — its stored
+     * {@code locationId}, else (a legacy row from before #2167) the linked task's bin when it holds
+     * a location UUID, the same resolution the ledger posting uses — after the not-found lookup and
+     * before any state change, against {@code inventory:adjustment:approve}. Only a row with
+     * neither is <strong>denied</strong> to a caller whose grant is location-scoped (fail closed);
+     * a globally granted caller is unaffected.
+     *
      * @param adjustmentId the adjustment ID
      * @param request      the rejection request
      * @return the updated adjustment response
@@ -67,6 +83,13 @@ public interface CycleCountAdjustmentService {
     /**
      * Retrieves a specific adjustment by ID.
      *
+     * <p>
+     * Location scope (ADR-0061, #2151): gated on the location the adjustment concerns — its stored
+     * {@code locationId}, else (a legacy row from before #2167) the linked task's bin when it holds
+     * a location UUID — after the not-found lookup, against {@code inventory:adjustment:view} or
+     * {@code inventory:adjustment:approve}. Only a row with neither is <strong>denied</strong> to a
+     * caller whose grant is location-scoped (fail closed); a globally granted caller is unaffected.
+     *
      * @param adjustmentId the adjustment ID
      * @return the adjustment response
      */
@@ -75,13 +98,21 @@ public interface CycleCountAdjustmentService {
     /**
      * Lists all adjustments with a specific status.
      *
+     * <p>
+     * Narrowed to the caller's location reach (ADR-0061, #2151) against {@code inventory:adjustment:view}
+     * or {@code inventory:adjustment:approve}, on the stored {@code locationId} column alone: a
+     * location-scoped caller sees only adjustments whose column names a reachable site, so legacy
+     * rows with no {@code locationId} are excluded for them even when the by-id reads would admit
+     * the row through its task's bin; a globally granted caller sees every row.
+     *
      * @param status the adjustment status
      * @return list of matching adjustments
      */
     List<AdjustmentResponse> listAdjustmentsByStatus(AdjustmentStatus status);
 
     /**
-     * Gets the count of adjustments with a specific status.
+     * Gets the count of adjustments with a specific status, narrowed to the caller's reach exactly
+     * like {@link #listAdjustmentsByStatus}.
      *
      * @param status the adjustment status
      * @return count of adjustments with the specified status

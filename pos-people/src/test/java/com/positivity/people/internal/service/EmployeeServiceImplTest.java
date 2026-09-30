@@ -24,7 +24,6 @@ import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
-import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.JobRole;
 import com.positivity.people.internal.enums.AllowedAction;
@@ -33,13 +32,13 @@ import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.DuplicatePolicy;
 import com.positivity.people.internal.enums.EmployeeSearchInclude;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.event.EmployeeOffboardedEvent;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
-import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.JobRoleRepository;
@@ -70,6 +69,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -94,10 +94,11 @@ class EmployeeServiceImplTest {
     private EmployeeRepository employeeRepository;
 
     @Mock
-    private EmployeeOffboardingRetryRepository offboardingRetryRepository;
-
-    @Mock
     private PeopleEventPublisher peopleEventPublisher;
+
+    /** Records what {@code disableEmployee} hands to the after-commit offboarding listener. */
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @Mock
     private JobRoleRepository jobRoleRepository;
@@ -133,14 +134,14 @@ class EmployeeServiceImplTest {
                 CLOCK,
                 extPersonReplicaRepository,
                 employeeRepository,
-                offboardingRetryRepository,
                 peopleEventPublisher,
                 jobRoleRepository,
                 personUsernameService,
                 roleAssignmentReplicaService,
                 employeeLocationAssignmentRepository,
                 locationReferenceService,
-                employeeActionPolicy);
+                employeeActionPolicy,
+                applicationEventPublisher);
         when(employeeRepository.save(any(Employee.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -675,6 +676,12 @@ class EmployeeServiceImplTest {
             return request;
         }
 
+        private EmployeeOffboardedEvent publishedEvent() {
+            ArgumentCaptor<EmployeeOffboardedEvent> event = ArgumentCaptor.forClass(EmployeeOffboardedEvent.class);
+            verify(applicationEventPublisher).publishEvent(event.capture());
+            return event.getValue();
+        }
+
         @Test
         void movesAnActiveEmployeeToDisabledAndPublishesTheFact() {
             when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
@@ -688,13 +695,39 @@ class EmployeeServiceImplTest {
             assertThat(saved.getValue().getStatus()).isEqualTo(EmployeeStatus.DISABLED);
             assertThat(saved.getValue().getStatusEffectiveAt()).isEqualTo(NOW);
             verify(peopleEventPublisher).publishEmployeeUpdated(saved.getValue());
-            verifyNoInteractions(offboardingRetryRepository);
             assertThat(profile.getStatus()).isEqualTo(EmployeeStatus.DISABLED);
             assertThat(profile.getFirstName()).isEqualTo("Jane");
         }
 
         @Test
-        void acceptsTheGracePeriodPolicy() {
+        void handsTheImmediatePolicyToTheAfterCommitListener() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
+            when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.empty());
+
+            service.disableEmployee(PERSON_ID, disableRequest(AssignmentTerminationPolicy.IMMEDIATE));
+
+            EmployeeOffboardedEvent event = publishedEvent();
+            assertThat(event.personId()).isEqualTo(PERSON_ID);
+            assertThat(event.policy()).isEqualTo(AssignmentTerminationPolicy.IMMEDIATE);
+            assertThat(event.disableReason()).isEqualTo("Voluntary resignation");
+            assertThat(event.actorId()).isEqualTo("system");
+            // The assignments are the listener's job, after commit; the service touches none.
+            verifyNoInteractions(employeeLocationAssignmentRepository);
+        }
+
+        @Test
+        void aNullPolicyIsHandedOverAsImmediate() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
+            DisableEmployeeRequestDto request = new DisableEmployeeRequestDto();
+            request.setAssignmentPolicy(null);
+
+            service.disableEmployee(PERSON_ID, request);
+
+            assertThat(publishedEvent().policy()).isEqualTo(AssignmentTerminationPolicy.IMMEDIATE);
+        }
+
+        @Test
+        void handsTheGracePeriodPolicyAndItsEndDateToTheAfterCommitListener() {
             when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
             when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.empty());
 
@@ -702,35 +735,48 @@ class EmployeeServiceImplTest {
                     service.disableEmployee(PERSON_ID, disableRequest(AssignmentTerminationPolicy.GRACE_PERIOD));
 
             assertThat(profile.getStatus()).isEqualTo(EmployeeStatus.DISABLED);
-            verifyNoInteractions(offboardingRetryRepository);
+            EmployeeOffboardedEvent event = publishedEvent();
+            assertThat(event.policy()).isEqualTo(AssignmentTerminationPolicy.GRACE_PERIOD);
+            assertThat(event.assignmentEndDate()).isEqualTo(LocalDate.of(2026, 3, 31));
         }
 
         @Test
-        void queuesARetryWhenTheDownstreamOffboardingActionFails() {
+        void gracePeriodEndingTodayIsAccepted() {
             when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
-            when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.empty());
+            DisableEmployeeRequestDto request = disableRequest(AssignmentTerminationPolicy.GRACE_PERIOD);
+            request.setAssignmentEndDate(LocalDate.of(2026, 3, 1));
 
-            // The downstream action reads the end date; a failure there must not undo the disable.
-            DisableEmployeeRequestDto request = new DisableEmployeeRequestDto() {
-                @Override
-                public LocalDate getAssignmentEndDate() {
-                    throw new IllegalStateException("assignment service unavailable");
-                }
-            };
-            request.setAssignmentPolicy(AssignmentTerminationPolicy.GRACE_PERIOD);
-            request.setDisableReason("Voluntary resignation");
+            service.disableEmployee(PERSON_ID, request);
 
-            EmployeeProfileDto profile = service.disableEmployee(PERSON_ID, request);
+            assertThat(publishedEvent().assignmentEndDate()).isEqualTo(LocalDate.of(2026, 3, 1));
+        }
 
-            assertThat(profile.getStatus()).isEqualTo(EmployeeStatus.DISABLED);
-            ArgumentCaptor<EmployeeOffboardingRetry> retry = ArgumentCaptor.forClass(EmployeeOffboardingRetry.class);
-            verify(offboardingRetryRepository).save(retry.capture());
-            assertThat(retry.getValue().getEmployeeId()).isEqualTo(PERSON_ID);
-            assertThat(retry.getValue().getAssignmentPolicy()).isEqualTo(AssignmentTerminationPolicy.GRACE_PERIOD);
-            assertThat(retry.getValue().getFailureReason()).contains("assignment service unavailable");
-            assertThat(retry.getValue().getAttempts()).isZero();
-            assertThat(retry.getValue().getNextAttemptAt()).isEqualTo(NOW.plusSeconds(300));
-            assertThat(retry.getValue().getActorId()).isEqualTo("system");
+        @Test
+        void gracePeriodWithoutAnEndDateIsRefusedBeforeAnythingChanges() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
+            DisableEmployeeRequestDto request = disableRequest(AssignmentTerminationPolicy.GRACE_PERIOD);
+            request.setAssignmentEndDate(null);
+
+            assertThatThrownBy(() -> service.disableEmployee(PERSON_ID, request))
+                    .isInstanceOf(RequestValidationException.class)
+                    .hasMessageContaining("assignmentEndDate");
+
+            verify(employeeRepository, never()).save(any());
+            verifyNoInteractions(peopleEventPublisher, applicationEventPublisher);
+        }
+
+        @Test
+        void gracePeriodWithAPastEndDateIsRefusedBeforeAnythingChanges() {
+            when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.ACTIVE)));
+            DisableEmployeeRequestDto request = disableRequest(AssignmentTerminationPolicy.GRACE_PERIOD);
+            request.setAssignmentEndDate(LocalDate.of(2026, 2, 28));
+
+            assertThatThrownBy(() -> service.disableEmployee(PERSON_ID, request))
+                    .isInstanceOf(SemanticValidationException.class)
+                    .hasMessageContaining("before today");
+
+            verify(employeeRepository, never()).save(any());
+            verifyNoInteractions(peopleEventPublisher, applicationEventPublisher);
         }
 
         @Test

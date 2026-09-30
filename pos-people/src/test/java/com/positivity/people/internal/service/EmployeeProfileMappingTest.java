@@ -12,7 +12,6 @@ import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
-import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.JobRoleRepository;
@@ -28,6 +27,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * Unit tests for {@link EmployeeServiceImpl} under the ADR-0044 Phase 3.2 split (#875): identity
@@ -45,9 +45,6 @@ class EmployeeProfileMappingTest {
 
     @Mock
     private EmployeeRepository employeeRepository;
-
-    @Mock
-    private EmployeeOffboardingRetryRepository offboardingRetryRepository;
 
     @Mock
     private PeopleEventPublisher peopleEventPublisher;
@@ -75,19 +72,22 @@ class EmployeeProfileMappingTest {
      */
     private final EmployeeActionPolicy employeeActionPolicy = new EmployeeActionPolicy();
 
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
+
     private EmployeeServiceImpl service() {
         return new EmployeeServiceImpl(
                 TEST_CLOCK,
                 extPersonReplicaRepository,
                 employeeRepository,
-                offboardingRetryRepository,
                 peopleEventPublisher,
                 jobRoleRepository,
                 personUsernameService,
                 roleAssignmentReplicaService,
                 employeeLocationAssignmentRepository,
                 locationReferenceService,
-                employeeActionPolicy);
+                employeeActionPolicy,
+                applicationEventPublisher);
     }
 
     private ExtPersonReplica person() {

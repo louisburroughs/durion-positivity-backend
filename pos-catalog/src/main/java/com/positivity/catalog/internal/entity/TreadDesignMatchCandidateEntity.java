@@ -43,7 +43,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  *
  * <h2>No {@code updatedAt} (ADR-0024 §5 {@code @Immutable} exemption)</h2>
  *
- * A row is never updated in place: {@code SupplierCatalogEnrichmentListener#recordCandidates}
+ * A row is never updated in place: {@code SupplierCatalogEnrichmentHandler#recordCandidates}
  * deletes a design's whole candidate set and re-inserts it wholesale on every rematch. Lifecycle
  * update semantics — and the audit column that would track them — do not apply to a row that is
  * only ever created or deleted, never modified, so {@code updatedAt} is intentionally absent and

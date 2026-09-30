@@ -43,12 +43,13 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("supplier.events.v1 → append-only supplier price entries (#1308)")
-class SupplierPriceCatalogEventsListenerTest {
+class SupplierPriceCatalogEventHandlerTest {
 
     private static final UUID MANIFEST_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");
     private static final UUID PROFILE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c");
@@ -76,11 +77,11 @@ class SupplierPriceCatalogEventsListenerTest {
     @Mock
     private OutboxEventWriter outboxEventWriter;
 
-    private SupplierPriceCatalogEventsListener listener;
+    private SupplierPriceCatalogEventHandler handler;
 
     @BeforeEach
     void setUp() {
-        listener = new SupplierPriceCatalogEventsListener(
+        handler = new SupplierPriceCatalogEventHandler(
                 CLOCK,
                 new ObjectMapper(),
                 processedEventRepository,
@@ -100,6 +101,11 @@ class SupplierPriceCatalogEventsListenerTest {
                 .thenReturn(Optional.empty());
         when(supplierArticleCodeRepository.save(any(SupplierArticleCodeEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    private void handle(String json) {
+        JsonNode envelope = new ObjectMapper().readTree(json);
+        handler.handle(envelope, envelope.path("eventId").stringValue(null));
     }
 
     private static String chunkEvent(String eventId, int sequence, int chunkCount, int lines) {
@@ -158,7 +164,7 @@ class SupplierPriceCatalogEventsListenerTest {
 
         @Test
         void writesOnePriceEntryPerLineWithItsMarketScopeAndSource() {
-            listener.onSupplierEvent(chunkEvent("e-1", 1, 1, 2));
+            handle(chunkEvent("e-1", 1, 1, 2));
 
             ArgumentCaptor<SupplierPriceEntryEntity> captor = ArgumentCaptor.forClass(SupplierPriceEntryEntity.class);
             verify(priceEntryRepository, times(2)).save(captor.capture());
@@ -176,7 +182,7 @@ class SupplierPriceCatalogEventsListenerTest {
 
         @Test
         void countsChunksAndLinesOnTheImportTracker() {
-            listener.onSupplierEvent(chunkEvent("e-1", 1, 3, 2));
+            handle(chunkEvent("e-1", 1, 3, 2));
 
             SupplierPriceImportEntity tracker = capturedTracker();
             assertThat(tracker.getChunksApplied()).isEqualTo(1);
@@ -186,18 +192,8 @@ class SupplierPriceCatalogEventsListenerTest {
         }
 
         @Test
-        void appliesAChunkOnlyOnceWhenItIsRedelivered() {
-            when(processedEventRepository.existsById("e-1")).thenReturn(true);
-
-            listener.onSupplierEvent(chunkEvent("e-1", 1, 1, 2));
-
-            verify(priceEntryRepository, never()).save(any());
-            verify(processedEventRepository, never()).save(any());
-        }
-
-        @Test
         void recordsEveryAppliedEventForTheOwnersManifest() {
-            listener.onSupplierEvent(chunkEvent("e-1", 1, 1, 1));
+            handle(chunkEvent("e-1", 1, 1, 1));
 
             verify(processedEventRepository).save(any(ProcessedEvent.class));
         }
@@ -209,7 +205,7 @@ class SupplierPriceCatalogEventsListenerTest {
 
         @Test
         void upsertsAndPublishesWhenALineStatesACode() {
-            listener.onSupplierEvent(chunkEvent("e-1", 1, 1, 1));
+            handle(chunkEvent("e-1", 1, 1, 1));
 
             ArgumentCaptor<SupplierArticleCodeEntity> captor = ArgumentCaptor.forClass(SupplierArticleCodeEntity.class);
             verify(supplierArticleCodeRepository).save(captor.capture());
@@ -232,7 +228,7 @@ class SupplierPriceCatalogEventsListenerTest {
                             .supplierArticleCode("999900")
                             .build()));
 
-            listener.onSupplierEvent(chunkEvent("e-1", 1, 1, 1));
+            handle(chunkEvent("e-1", 1, 1, 1));
 
             verify(supplierArticleCodeRepository, never()).save(any());
             verify(catalogFactPublisher, never()).publishSupplierArticleCodeUpdated(any());
@@ -249,7 +245,7 @@ class SupplierPriceCatalogEventsListenerTest {
                             .supplierArticleCode("OLD-CODE")
                             .build()));
 
-            listener.onSupplierEvent(chunkEvent("e-1", 1, 1, 1));
+            handle(chunkEvent("e-1", 1, 1, 1));
 
             ArgumentCaptor<SupplierArticleCodeEntity> captor = ArgumentCaptor.forClass(SupplierArticleCodeEntity.class);
             verify(supplierArticleCodeRepository).save(captor.capture());
@@ -272,7 +268,7 @@ class SupplierPriceCatalogEventsListenerTest {
                           "taxRate":"25","recyclingFee":"3.50","effectiveFrom":"2026-02-01","positionNumber":1}]}}
                     """.formatted(MANIFEST_ID, MANIFEST_ID, PROFILE_ID, PRODUCT_ID);
 
-            listener.onSupplierEvent(body);
+            handle(body);
 
             verify(supplierArticleCodeRepository, never()).save(any());
             verify(catalogFactPublisher, never()).publishSupplierArticleCodeUpdated(any());
@@ -294,7 +290,7 @@ class SupplierPriceCatalogEventsListenerTest {
                             .status(SupplierPriceImportEntity.STATUS_APPLYING)
                             .build()));
 
-            listener.onSupplierEvent(completionEvent("e-done", 2, 4, "COMPLETED"));
+            handle(completionEvent("e-done", 2, 4, "COMPLETED"));
 
             assertThat(capturedTracker().getStatus()).isEqualTo(SupplierPriceImportEntity.STATUS_COMPLETE);
             verify(outboxEventWriter, never()).publish(any(), any());
@@ -311,7 +307,7 @@ class SupplierPriceCatalogEventsListenerTest {
                             .status(SupplierPriceImportEntity.STATUS_APPLYING)
                             .build()));
 
-            listener.onSupplierEvent(completionEvent("e-done", 3, 6, "COMPLETED"));
+            handle(completionEvent("e-done", 3, 6, "COMPLETED"));
 
             assertThat(capturedTracker().getStatus()).isEqualTo(SupplierPriceImportEntity.STATUS_INCOMPLETE);
 
@@ -341,7 +337,7 @@ class SupplierPriceCatalogEventsListenerTest {
                             .status(SupplierPriceImportEntity.STATUS_INCOMPLETE)
                             .build()));
 
-            listener.onSupplierEvent(chunkEvent("e-replay", 3, 3, 2));
+            handle(chunkEvent("e-replay", 3, 3, 2));
 
             assertThat(capturedTracker().getStatus()).isEqualTo(SupplierPriceImportEntity.STATUS_COMPLETE);
             assertThat(capturedTracker().getChunksApplied()).isEqualTo(3);
@@ -364,7 +360,7 @@ class SupplierPriceCatalogEventsListenerTest {
             when(priceImportChunkRepository.existsByImportManifestIdAndChunkSequence(MANIFEST_ID, 1))
                     .thenReturn(true);
 
-            listener.onSupplierEvent(chunkEvent("e-different-id", 1, 3, 2));
+            handle(chunkEvent("e-different-id", 1, 3, 2));
 
             verify(priceEntryRepository, never()).save(any());
             verify(priceImportChunkRepository, never()).save(any());
@@ -375,7 +371,7 @@ class SupplierPriceCatalogEventsListenerTest {
 
         @Test
         void recordsEachAppliedChunkSoARedeliveryCanBeRecognised() {
-            listener.onSupplierEvent(chunkEvent("e-1", 2, 3, 2));
+            handle(chunkEvent("e-1", 2, 3, 2));
 
             ArgumentCaptor<SupplierPriceImportChunkEntity> captor =
                     ArgumentCaptor.forClass(SupplierPriceImportChunkEntity.class);
@@ -387,7 +383,7 @@ class SupplierPriceCatalogEventsListenerTest {
 
         @Test
         void appliesNothingAndRemovesNothingForAnEmptyImport() {
-            listener.onSupplierEvent(completionEvent("e-empty", 0, 0, "EMPTY"));
+            handle(completionEvent("e-empty", 0, 0, "EMPTY"));
 
             verify(priceEntryRepository, never()).save(any());
             assertThat(capturedTracker().getStatus()).isEqualTo(SupplierPriceImportEntity.STATUS_COMPLETE);
@@ -400,8 +396,8 @@ class SupplierPriceCatalogEventsListenerTest {
     class Robustness {
 
         @Test
-        void ignoresUnrelatedSupplierEventsButRecordsThem() {
-            listener.onSupplierEvent("""
+        void recordsAnUnexpectedTypeSoItIsNotRedelivered() {
+            handle("""
                     {"eventId":"e-other","eventType":"supplier.order.confirmed","aggregateVersion":1,"payload":{}}
                     """);
 
@@ -410,19 +406,18 @@ class SupplierPriceCatalogEventsListenerTest {
         }
 
         @Test
-        void ignoresAnEventWithoutAnEventId() {
-            listener.onSupplierEvent("""
-                    {"eventType":"supplier.pricecatalog.updated","payload":{}}
-                    """);
+        void recordsAMalformedChunkAsProcessedWithoutApplyingIt() {
+            handle("""
+                    {"eventId":"e-bad","eventType":"supplier.pricecatalog.updated","aggregateVersion":1,
+                     "payload":{"importManifestId":"%s","vendorProfileId":"%s","chunkSequence":1,"chunkCount":1,
+                       "lines":"not-an-array"}}
+                    """.formatted(MANIFEST_ID, PROFILE_ID));
 
-            verify(processedEventRepository, never()).save(any());
-        }
-
-        @Test
-        void ignoresAnUnparsableMessage() {
-            listener.onSupplierEvent("not json");
-
-            verify(processedEventRepository, never()).save(any());
+            verify(priceEntryRepository, never()).save(any());
+            verify(priceImportChunkRepository, never()).save(any());
+            ArgumentCaptor<ProcessedEvent> mark = ArgumentCaptor.forClass(ProcessedEvent.class);
+            verify(processedEventRepository).save(mark.capture());
+            assertThat(mark.getValue().getEventId()).isEqualTo("e-bad");
         }
 
         @Test
@@ -430,8 +425,7 @@ class SupplierPriceCatalogEventsListenerTest {
             when(priceEntryRepository.save(any(SupplierPriceEntryEntity.class)))
                     .thenThrow(new QueryTimeoutException("db busy"));
 
-            assertThatThrownBy(() -> listener.onSupplierEvent(chunkEvent("e-1", 1, 1, 1)))
-                    .isInstanceOf(QueryTimeoutException.class);
+            assertThatThrownBy(() -> handle(chunkEvent("e-1", 1, 1, 1))).isInstanceOf(QueryTimeoutException.class);
 
             verify(processedEventRepository, never()).save(any());
         }
