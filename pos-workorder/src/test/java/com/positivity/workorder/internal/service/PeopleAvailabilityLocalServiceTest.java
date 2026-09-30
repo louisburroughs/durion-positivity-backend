@@ -191,12 +191,17 @@ class PeopleAvailabilityLocalServiceTest {
     }
 
     private static ExtEmployeeReplica employee(String status, Instant statusEffectiveAt, Instant updatedAt) {
+        return employee(status, statusEffectiveAt, 1L, updatedAt);
+    }
+
+    private static ExtEmployeeReplica employee(
+            String status, Instant statusEffectiveAt, long aggregateVersion, Instant updatedAt) {
         return ExtEmployeeReplica.builder()
                 .employeeId(UUID.randomUUID())
                 .personId(PERSON_ID)
                 .status(status)
                 .statusEffectiveAt(statusEffectiveAt)
-                .aggregateVersion(1L)
+                .aggregateVersion(aggregateVersion)
                 .updatedAt(updatedAt)
                 .build();
     }
@@ -251,14 +256,43 @@ class PeopleAvailabilityLocalServiceTest {
         }
 
         @Test
-        @DisplayName("statusEffectiveAt falls back to updatedAt when the fact carried none")
-        void fallsBackToUpdatedAt() {
+        @DisplayName("statusEffectiveAt falls back to the fact's emission time when it carried none")
+        void fallsBackToEmissionTime() {
             when(employeeReplicaRepository.findByPersonId(PERSON_ID))
                     .thenReturn(List.of(
-                            employee("ACTIVE", null, Instant.parse("2025-06-01T00:00:00Z")),
-                            employee("DISABLED", null, Instant.parse("2026-01-01T00:00:00Z"))));
+                            employee(
+                                    "ACTIVE",
+                                    null,
+                                    Instant.parse("2025-06-01T00:00:00Z").toEpochMilli(),
+                                    Instant.EPOCH),
+                            employee(
+                                    "DISABLED",
+                                    null,
+                                    Instant.parse("2026-01-01T00:00:00Z").toEpochMilli(),
+                                    Instant.EPOCH)));
 
             assertThat(service.inactiveEmploymentStatus(PERSON_ID)).contains("DISABLED");
+        }
+
+        @Test
+        @DisplayName("a replayed TERMINATED fact without statusEffectiveAt does not outrank a dated ACTIVE rehire")
+        void replayedUndatedTerminationDoesNotOutrankADatedRehire() {
+            // The replica's updatedAt is stamped at ingest, so the replayed row is the freshest by that
+            // column; ordering on it would lock the person out until pos-people re-emitted ACTIVE.
+            when(employeeReplicaRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(List.of(
+                            employee(
+                                    "ACTIVE",
+                                    Instant.parse("2026-01-01T00:00:00Z"),
+                                    Instant.parse("2026-01-01T00:00:00Z").toEpochMilli(),
+                                    Instant.EPOCH),
+                            employee(
+                                    "TERMINATED",
+                                    null,
+                                    Instant.parse("2025-06-01T00:00:00Z").toEpochMilli(),
+                                    Instant.parse("2026-09-30T00:00:00Z"))));
+
+            assertThat(service.inactiveEmploymentStatus(PERSON_ID)).isEmpty();
         }
     }
 

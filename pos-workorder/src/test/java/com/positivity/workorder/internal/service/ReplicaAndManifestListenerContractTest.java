@@ -328,7 +328,7 @@ class ReplicaAndManifestListenerContractTest {
         @DisplayName("records an ignored type under the entry point's owner, keeping both manifests honest")
         void ignoredTypeRecordedPerEntryPoint() {
             peopleListener.onPeopleEvent("""
-                    {"eventId":"evt-5","eventType":"people.time-off.updated","payload":{}}""");
+                    {"eventId":"evt-5","eventType":"people.skill.updated","payload":{}}""");
 
             assertThat(capturedProcessedEvent().getOwner()).isEqualTo(PeopleReplicaEventsListener.OWNER_PEOPLE);
         }

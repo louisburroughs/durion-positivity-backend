@@ -409,6 +409,16 @@ still resolves a name. `applyBayDeleted` / `applyMobileUnitDeleted` remain only 
 replayed pre-#2264 delivery of the retired facts safely — marking the row inactive if it still
 exists, never calling `deleteById`.
 
+**Employment status replica (#2119).** `people.employee.updated` on `people.events.v1` is applied by
+`PeopleReplicaEventsListener` into `ext_people_employee`, one row per employee id (a person may hold
+several over time: rehire), with the same strictly-greater `aggregate_version` stale guard and
+`processed_events` mark as the staffing replica. A person's current employment is the latest row by
+`status_effective_at`, falling back to the fact's emission time (`aggregate_version`), never this
+replica's ingest time, so a replayed undated TERMINATED fact cannot outrank a dated ACTIVE rehire.
+A person whose latest row is TERMINATED, DISABLED or SUSPENDED is dropped from the availability
+roster and refused by technician assign/reassign (`TECHNICIAN_NOT_ACTIVE`, #2120); a person with no
+row is treated as employed, so replica lag or a stalled DLQ cannot take a shop offline.
+
 **Bay specialty map replica (#2261, DECISION-LOCATION-025).** `location.bay-specialty-map.updated`
 carries a tenant's *whole* bay-type specialty map — one entry per `BayType`, never a delta — so this
 module reads the same specialty definition pos-shop-manager does, without a synchronous cross-domain
@@ -675,6 +685,8 @@ never reflected and answers the generic code for its status instead (#1720).
 | `workorder.kafka.catalog-events-consumer-group` | `pos-workorder-catalog-events` | Consumer group for the catalog fact topic |
 | `workorder.kafka.location-events-topic` | `location.events.v1` | Location fact topic feeding the `ext_location`, `ext_bay`, `ext_mobile_unit`, `ext_bay_type` and `ext_bay_specialty_map` replicas |
 | `workorder.kafka.location-events-consumer-group` | `pos-workorder-location-events` | Consumer group for the location fact topic |
+| `workorder.kafka.people-events-topic` | `people.events.v1` | People fact topic feeding the `ext_people_staffing_assignment` and `ext_people_employee` replicas (#2119) |
+| `workorder.kafka.people-events-consumer-group` | `pos-workorder-people-events` | Consumer group for the people fact topic |
 | `pos.workorder.fact-backfill.page-size` | `500` | Rows per transaction when backfilling actual-time workorder facts |
 | `pos.workorder.fact-backfill.max-rows-per-run` | `20000` | Rows per backfill command before it stops and reports a resume cursor |
 
