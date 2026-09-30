@@ -165,6 +165,27 @@ finding; it reads the `openapi.yaml` files of the sibling modules, so run it fro
 4. A new `rag-scope` spelled differently from a tool domain needs a `domain_scopes` line in `entities.yaml`.
 5. Run the module tests: the parity, header-agreement and real-config tests cover the rest.
 
+### Per-turn resolution and shadow recording
+
+With `mode: shadow` or `enforce`, `ToolSelectionEngine.selectRoleTools` resolves a `ScopeSet` for every agent-path turn
+(never for simple chat): entities seeded from the message by lexicon terms and identifier patterns, expanded two hops,
+capped at `max-nodes`, then filtered to what the caller may see. Seeds carry the entity key and the match kind only, never
+the matched text. The scope is published on `RequestScopedUserContext` beside the caller for the duration of the agent
+call and cleared with it. Until a consumer is listed in `enforce`, selection, retrieval and the prompt are unchanged.
+
+**Recording.** The alpha eval turn trace gains a nullable `scope` (`mode`, `enforced`, `graphHash`, `graphBuiltAt`,
+`confidence`, `seeds[{entity, matchKind}]`, entity/tool/document/screen counts, `addedTools`, `ragFilterApplied`, and at
+completion `calledToolsInScope/calledTools` and `retrievedDocsInScope/retrievedDocs`). Older payloads read `scope: null`.
+
+**Telemetry.** `nlti.request.telemetry` is `schemaVersion` 2: eight additive, nullable fields (`scopeMode`,
+`scopeGraphHash`, `scopeConfidence`, `scopeEntityCount`, `scopeToolCount`, `scopeDocCount`, `scopeAddedToolCount`,
+`scopeRagFilterApplied`), present only when a scope was resolved. Every version 1 field is unchanged.
+
+**Metrics** (registered only when the mode is not `off`): `mcp.scope.resolved{confidence}`,
+`mcp.scope.size{kind=entities|tools|documents|screens}`, `mcp.scope.called_tool{in_scope}`,
+`mcp.scope.retrieved_doc{in_scope}`, `mcp.scope.errors`. The two `in_scope` shares are counted when the eval turn trace
+completes, so they need `mcp.eval.turn-trace.enabled`.
+
 ## Startup Behaviour
 
 | Runner                             | Profile | Behaviour                                                                                         |
