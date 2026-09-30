@@ -473,8 +473,14 @@ services:
       - pos-network
 
   ollama:
-    image: ollama/ollama:latest
+    # Pinned, not :latest: the tagging model is served through /v1/systemone, which needs
+    # Ollama 0.35+ (ADR-0068 section 5). Keep ollama and ollama-init on the same tag.
+    image: ollama/ollama:0.35.0
     container_name: ollama
+    environment:
+      # Embedding model + tagging model stay resident together (ADR-0068 section 5); the
+      # default of one loaded model would evict and reload one of them on every turn.
+      OLLAMA_MAX_LOADED_MODELS: "2"
     ports:
       - "11434:11434"
     volumes:
@@ -495,14 +501,20 @@ services:
       - pos-network
 
   ollama-init:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.35.0 # same pin as ollama above (/v1/systemone needs 0.35+, ADR-0068 section 5)
     depends_on:
       ollama:
         condition: service_healthy
     entrypoint: [ "/bin/sh", "-c" ]
-    command: >
-      OLLAMA_HOST=http://ollama:11434 ollama pull
-      ${OLLAMA_EMBEDDING_MODEL:-bge-m3}
+    # Embedding pull first; its exit code is the container's. A failed tagging-model pull is
+    # logged but never fails init, so tagging stays optional (MCP_TAGGING_MODE=off by default).
+    command:
+      - |
+        OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_EMBEDDING_MODEL:-bge-m3}
+        rc=$$?
+        OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_TAGGING_MODEL:-tev1:0.8b} \
+          || echo "tagging model pull failed (non-fatal)"
+        exit $$rc
     restart: "no"
     volumes:
       - ollama-data:/root/.ollama
@@ -1088,6 +1100,13 @@ services:
       OLLAMA_CHAT_THINK: ${OLLAMA_CHAT_THINK:-}
       OLLAMA_EMBEDDING_TIMEOUT: ${OLLAMA_EMBEDDING_TIMEOUT:-30s}
       OLLAMA_FALLBACK_TIMEOUT: ${OLLAMA_FALLBACK_TIMEOUT:-180s}
+      # Pre-LLM question tagging (ADR-0068). The tagging endpoint is the in-cell Ollama
+      # container (/v1/systemone, Ollama 0.35+), never OLLAMA_CHAT_BASE_URL: question text must
+      # not leave the cell to be tagged (section 5). off = no tagging call; shadow = tag and
+      # record only; enforce = tags drive routing for the configured enforced-tags.
+      MCP_TAGGING_MODE: ${MCP_TAGGING_MODE:-off}
+      MCP_TAGGING_PROVIDER_BASE_URL: ${MCP_TAGGING_PROVIDER_BASE_URL:-http://ollama:11434}
+      MCP_TAGGING_PROVIDER_MODEL: ${OLLAMA_TAGGING_MODEL:-tev1:0.8b}
       MCP_RAG_CHUNKING_ENABLED: ${MCP_RAG_CHUNKING_ENABLED:-true}
       MCP_RAG_MAX_SEGMENT_SIZE: ${MCP_RAG_MAX_SEGMENT_SIZE:-2000}
       MCP_RAG_MAX_OVERLAP_SIZE: ${MCP_RAG_MAX_OVERLAP_SIZE:-200}

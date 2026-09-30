@@ -343,3 +343,49 @@ groups:
         annotations:
           summary: Write intents detected in the last 15m but no write plan was created — the confirmation gate is not engaging.
           runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/confirmation-gate-mismatch.md
+
+  - name: nlti-tagging
+    interval: 1m
+    rules:
+      # ADR-0068 Monitoring. Share of tagged turns (telemetry schema 3, tagging block present,
+      # i.e. mode shadow or enforce) that fell back to the heuristic for any tagging.fallbackReason
+      # (timeout, error, rate_limited, malformed, low_confidence, ...). Turns with mode off carry
+      # no tagging block and are excluded from both sides. The >20 minimum-volume clause stops a
+      # quiet hour from flapping the ratio.
+      - alert: NltiTaggingFallbackRateHigh
+        expr: |
+          (
+              sum(count_over_time(
+                {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                  | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                  | line_format "{{.telemetry}}"
+                  | json tagging_mode="tagging.mode", tagging_fallbackReason="tagging.fallbackReason"
+                  | __error__=""
+                  | tagging_mode != ""
+                  | tagging_fallbackReason != "" [15m]
+              ))
+            /
+              sum(count_over_time(
+                {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                  | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                  | line_format "{{.telemetry}}"
+                  | json tagging_mode="tagging.mode"
+                  | __error__=""
+                  | tagging_mode != "" [15m]
+              ))
+          ) > 0.2
+          and on ()
+          sum(count_over_time(
+            {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+              | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+              | line_format "{{.telemetry}}"
+              | json tagging_mode="tagging.mode"
+              | __error__=""
+              | tagging_mode != "" [15m]
+          )) > 20
+        for: 15m
+        labels:
+          severity: P2
+        annotations:
+          summary: More than 20% of tagged NLTI turns fell back to the heuristic over 15m (tagging.fallbackReason) — the tagging model is slow, failing or below its confidence floor.
+          runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/downstream-timeout.md

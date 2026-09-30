@@ -152,6 +152,13 @@ jobs:
         run: |
           python3 -m unittest scripts.test_analytics_gate_run
 
+      - name: Tagging shadow report unit tests (test_tagging_shadow_report.py)
+        # ADR-0068 §6: the bake-off that chooses the tagging model and its thresholds reads this
+        # report, so a wrong percentile or agreement rate would pick the wrong model. Stdlib only,
+        # no build, no network, no database.
+        run: |
+          python3 -m unittest scripts.test_tagging_shadow_report
+
       - name: Permission generator unit tests (test_generate_permissions_*.py)
         # The generator now writes the two grant sources as well as the catalogs (#1848), so its
         # seed/CSV rewriting is the thing standing between a new @PreAuthorize and two red CI
