@@ -3,6 +3,7 @@ package com.positivity.people.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -20,6 +21,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,6 +38,7 @@ class OffboardingAssignmentEnderTest {
     private static final UUID PERSON_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01");
     private static final LocalDate TODAY = LocalDate.of(2026, 3, 1);
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-03-01T12:00:00Z"), ZoneOffset.UTC);
+    private static final int MAX_ATTEMPTS = 7;
 
     @Mock
     private EmployeeLocationAssignmentRepository repository;
@@ -53,7 +56,10 @@ class OffboardingAssignmentEnderTest {
     private EmployeeLocationAssignment assignment(LocalDate to, AssignmentStatus status) {
         return EmployeeLocationAssignment.builder()
                 .id(UUID.randomUUID())
-                .employee(Employee.builder().personId(PERSON_ID).build())
+                .employee(Employee.builder()
+                        .personId(PERSON_ID)
+                        .status(EmployeeStatus.DISABLED)
+                        .build())
                 .locationId(UUID.randomUUID())
                 .role("TECHNICIAN")
                 .effectiveFrom(LocalDate.of(2026, 1, 1))
@@ -167,7 +173,8 @@ class OffboardingAssignmentEnderTest {
         EmployeeLocationAssignment expired = assignment(TODAY.minusDays(1), AssignmentStatus.ACTIVE);
         givenSweepFinds(expired);
 
-        assertThat(ender.endLingeringAssignments()).isEqualTo(1);
+        assertThat(ender.findLingeringAssignmentIds(MAX_ATTEMPTS)).containsExactly(expired.getId());
+        assertThat(ender.endLingeringAssignment(expired.getId())).isTrue();
 
         assertThat(expired.getStatus()).isEqualTo(AssignmentStatus.ENDED);
         assertThat(expired.getEffectiveTo()).isEqualTo(TODAY.minusDays(1));
@@ -180,7 +187,8 @@ class OffboardingAssignmentEnderTest {
         EmployeeLocationAssignment open = assignment(null, AssignmentStatus.ACTIVE);
         givenSweepFinds(open);
 
-        assertThat(ender.endLingeringAssignments()).isEqualTo(1);
+        assertThat(ender.findLingeringAssignmentIds(MAX_ATTEMPTS)).containsExactly(open.getId());
+        assertThat(ender.endLingeringAssignment(open.getId())).isTrue();
 
         assertThat(open.getStatus()).isEqualTo(AssignmentStatus.ENDED);
         assertThat(open.getEffectiveTo()).isEqualTo(TODAY);
@@ -190,22 +198,56 @@ class OffboardingAssignmentEnderTest {
     }
 
     @Test
-    @DisplayName("the sweep leaves a just-changed status to the after-commit handler: cutoff is five minutes back")
-    void sweepUsesTheSettleCutoff() {
+    @DisplayName("ending a lingering assignment is idempotent: one already ended, or gone, changes nothing")
+    void endingALingeringAssignmentIsIdempotent() {
+        EmployeeLocationAssignment ended = assignment(TODAY.minusDays(1), AssignmentStatus.ENDED);
+        when(repository.findById(ended.getId())).thenReturn(Optional.of(ended));
+        UUID missing = UUID.randomUUID();
+        when(repository.findById(missing)).thenReturn(Optional.empty());
+
+        assertThat(ender.endLingeringAssignment(ended.getId())).isFalse();
+        assertThat(ender.endLingeringAssignment(missing)).isFalse();
+
+        verify(repository, never()).save(any());
+        verify(publisher, never()).publishStaffingAssignmentUpdated(any());
+    }
+
+    @Test
+    @DisplayName("an employee re-enabled between the read and the end keeps the assignment")
+    void reEnabledEmployeeKeepsTheAssignment() {
+        EmployeeLocationAssignment open = assignment(null, AssignmentStatus.ACTIVE);
+        open.getEmployee().setStatus(EmployeeStatus.ACTIVE);
+        when(repository.findById(open.getId())).thenReturn(Optional.of(open));
+
+        assertThat(ender.endLingeringAssignment(open.getId())).isFalse();
+
+        assertThat(open.getStatus()).isEqualTo(AssignmentStatus.ACTIVE);
+        verify(repository, never()).save(any());
+        verify(publisher, never()).publishStaffingAssignmentUpdated(any());
+    }
+
+    @Test
+    @DisplayName("the sweep leaves a just-changed status to the after-commit handler and a pending retry to the queue")
+    void sweepUsesTheSettleCutoffAndTheAttemptCap() {
         givenSweepFinds();
 
-        assertThat(ender.endLingeringAssignments()).isZero();
+        assertThat(ender.findLingeringAssignmentIds(MAX_ATTEMPTS)).isEmpty();
 
         verify(repository)
                 .findOpenForOffboardedEmployees(
                         TODAY,
                         Instant.parse("2026-03-01T12:00:00Z").minusSeconds(300),
-                        OffboardingAssignmentEnder.OFFBOARDED_STATUSES);
+                        OffboardingAssignmentEnder.OFFBOARDED_STATUSES,
+                        MAX_ATTEMPTS);
         verify(publisher, never()).publishStaffingAssignmentUpdated(any());
     }
 
     private void givenSweepFinds(EmployeeLocationAssignment... found) {
-        when(repository.findOpenForOffboardedEmployees(any(), any(), any())).thenReturn(List.of(found));
+        when(repository.findOpenForOffboardedEmployees(any(), any(), any(), anyInt()))
+                .thenReturn(List.of(found));
+        for (EmployeeLocationAssignment assignment : found) {
+            when(repository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        }
         if (found.length > 0) {
             when(repository.save(any(EmployeeLocationAssignment.class))).thenAnswer(i -> i.getArgument(0));
         }

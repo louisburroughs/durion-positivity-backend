@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.positivity.people.PostgresSliceTestBase;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
+import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
 import com.positivity.people.internal.enums.AssignmentStatus;
+import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -50,6 +52,9 @@ class EmployeeLocationAssignmentRepositoryTest extends PostgresSliceTestBase {
 
     @Autowired
     private EmployeeRepository employees;
+
+    @Autowired
+    private EmployeeOffboardingRetryRepository retries;
 
     private Employee employee() {
         return employees.saveAndFlush(
@@ -277,9 +282,37 @@ class EmployeeLocationAssignmentRepositoryTest extends PostgresSliceTestBase {
             assignments.saveAndFlush(alreadyEnded);
 
             assertThat(assignments.findOpenForOffboardedEmployees(
-                            today, settledBefore, List.of(EmployeeStatus.DISABLED, EmployeeStatus.TERMINATED)))
+                            today, settledBefore, List.of(EmployeeStatus.DISABLED, EmployeeStatus.TERMINATED), 10))
                     .extracting(EmployeeLocationAssignment::getId)
                     .containsExactlyInAnyOrder(expired.getId(), openSettled.getId());
+        }
+
+        @Test
+        @DisplayName("a pending retry row keeps an open-ended assignment out; an exhausted one does not")
+        void onlyAPendingRetryRowHoldsAnOpenEndedAssignmentBack() {
+            Instant longAgo = now.minusSeconds(3600);
+            Employee queued = employeeWithStatus(EmployeeStatus.DISABLED, longAgo);
+            assignment(queued, UUID.randomUUID(), WINDOW_START, null);
+            retryRow(queued, 3);
+            Employee givenUp = employeeWithStatus(EmployeeStatus.DISABLED, longAgo);
+            EmployeeLocationAssignment abandoned = assignment(givenUp, UUID.randomUUID(), WINDOW_START, null);
+            retryRow(givenUp, 10);
+
+            assertThat(assignments.findOpenForOffboardedEmployees(
+                            today, settledBefore, List.of(EmployeeStatus.DISABLED, EmployeeStatus.TERMINATED), 10))
+                    .extracting(EmployeeLocationAssignment::getId)
+                    .containsExactly(abandoned.getId());
+        }
+
+        private void retryRow(Employee employee, int attempts) {
+            EmployeeOffboardingRetry retry = new EmployeeOffboardingRetry();
+            retry.setEmployeeId(employee.getPersonId());
+            retry.setAssignmentPolicy(AssignmentTerminationPolicy.IMMEDIATE);
+            retry.setActorId("system");
+            retry.setFailureReason("boom");
+            retry.setAttempts(attempts);
+            retry.setNextAttemptAt(now.plusSeconds(300));
+            retries.saveAndFlush(retry);
         }
     }
 }

@@ -52,13 +52,15 @@ public interface EmployeeLocationAssignmentRepository
      * ACTIVE assignments an offboarding should already have ended, held by employees in one of the
      * given statuses (#2121): those whose {@code effectiveTo} is before {@code date} (a GRACE_PERIOD
      * that has run out), and those with no {@code effectiveTo} at all whose employee's status changed
-     * before {@code settledBefore} and who has no offboarding retry pending (an IMMEDIATE that
+     * before {@code settledBefore} and who has no offboarding retry still pending (an IMMEDIATE that
      * never ran because the process died after the disable committed).
      *
      * <p>The open-ended branch is deliberately conservative. Right after a disable the assignments
      * of a GRACE_PERIOD employee are also open-ended until the after-commit handler dates them, so
      * the status-change cutoff keeps the sweep from beating the handler, and a pending retry row
-     * (which will apply the request's own policy) keeps it from beating the retry.
+     * (which will apply the request's own policy) keeps it from beating the retry. Only a row with
+     * attempts left counts as pending: one that has reached {@code maxAttempts} is never worked
+     * again, so it must not hold the employee's assignments open forever.
      */
     @Query("""
             SELECT a FROM EmployeeLocationAssignment a
@@ -69,14 +71,16 @@ public interface EmployeeLocationAssignmentRepository
                        AND a.employee.statusEffectiveAt < :settledBefore
                        AND NOT EXISTS (
                             SELECT 1 FROM EmployeeOffboardingRetry r
-                            WHERE r.employeeId = a.employee.personId)))
+                            WHERE r.employeeId = a.employee.personId
+                              AND r.attempts < :maxAttempts)))
             ORDER BY a.effectiveFrom, a.id
             """)
     @NonNull
     List<EmployeeLocationAssignment> findOpenForOffboardedEmployees(
             @Param("date") @NonNull LocalDate date,
             @Param("settledBefore") @NonNull Instant settledBefore,
-            @Param("employeeStatuses") @NonNull Collection<EmployeeStatus> employeeStatuses);
+            @Param("employeeStatuses") @NonNull Collection<EmployeeStatus> employeeStatuses,
+            @Param("maxAttempts") int maxAttempts);
 
     /**
      * {@link #findActiveByPersonIdAndDate} batched across several people in one query

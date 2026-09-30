@@ -18,6 +18,8 @@ import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.service.OffboardingAssignmentEnder;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @DisplayName("Employee Offboarding ContractBehaviorIT")
 class EmployeeOffboardingContractBehaviorIT extends BaseContractIntegrationTest {
+
+    /** The worker's attempt cap; a retry row at it is exhausted and no longer holds assignments open. */
+    private static final int MAX_ATTEMPTS = 10;
 
     @Autowired
     private EmployeeRepository employeeRepository;
@@ -67,7 +72,7 @@ class EmployeeOffboardingContractBehaviorIT extends BaseContractIntegrationTest 
         EmployeeLocationAssignment ended =
                 assignmentRepository.findById(assignmentId).orElseThrow();
         assertThat(ended.getStatus()).isEqualTo(AssignmentStatus.ENDED);
-        assertThat(ended.getEffectiveTo()).isEqualTo(LocalDate.now());
+        assertThat(ended.getEffectiveTo()).isEqualTo(today());
     }
 
     @Test
@@ -101,7 +106,7 @@ class EmployeeOffboardingContractBehaviorIT extends BaseContractIntegrationTest 
     void lc117010_disableTerminatesAssignmentsPerPolicy_returns200() throws Exception {
         UUID employeeId = createEmployee("EMP-117-012", "employee.117.012@example.com");
         UUID assignmentId = createAssignment(employeeId);
-        LocalDate graceEnd = LocalDate.now().plusDays(14);
+        LocalDate graceEnd = today().plusDays(14);
 
         String payload = """
 				{
@@ -139,8 +144,9 @@ class EmployeeOffboardingContractBehaviorIT extends BaseContractIntegrationTest 
         mockMvc.perform(withAuth(post("/v1/people/employees/{employeeId}/disable", employeeId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"assignmentPolicy\": \"GRACE_PERIOD\", \"assignmentEndDate\": \"%s\"}"
-                                .formatted(LocalDate.now().minusDays(1)))))
-                .andExpect(status().isUnprocessableEntity());
+                                .formatted(today().minusDays(1)))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SEMANTIC_VALIDATION_ERROR"));
 
         assertThat(assignmentRepository.findById(assignmentId).orElseThrow().getStatus())
                 .isEqualTo(AssignmentStatus.ACTIVE);
@@ -159,29 +165,50 @@ class EmployeeOffboardingContractBehaviorIT extends BaseContractIntegrationTest 
         UUID queued = offboardedEmployee(
                 "EMP-117-021", "employee.117.021@example.com", Instant.now().minusSeconds(3600));
         UUID queuedAssignment = createAssignment(queued);
-        EmployeeOffboardingRetry retry = new EmployeeOffboardingRetry();
-        retry.setEmployeeId(queued);
-        retry.setAssignmentPolicy(AssignmentTerminationPolicy.IMMEDIATE);
-        retry.setActorId("system");
-        retry.setFailureReason("boom");
-        retry.setNextAttemptAt(Instant.now().plusSeconds(300));
-        retryRepository.saveAndFlush(retry);
+        retryRow(queued, 0);
         // Disabled a moment ago: the after-commit handler has not necessarily run yet.
         UUID fresh = offboardedEmployee("EMP-117-022", "employee.117.022@example.com", Instant.now());
         UUID freshAssignment = createAssignment(fresh);
+        // The retry gave up: its row is exhausted, so it must not hold this one open forever.
+        UUID givenUp = offboardedEmployee(
+                "EMP-117-023", "employee.117.023@example.com", Instant.now().minusSeconds(3600));
+        UUID givenUpAssignment = createAssignment(givenUp);
+        retryRow(givenUp, MAX_ATTEMPTS);
 
-        int ended = new TransactionTemplate(transactionManager)
-                .execute(status -> assignmentEnder.endLingeringAssignments());
+        List<UUID> lingering = assignmentEnder.findLingeringAssignmentIds(MAX_ATTEMPTS);
+        assertThat(lingering).containsExactlyInAnyOrder(strandedAssignment, givenUpAssignment);
+        TransactionTemplate requiresNew = new TransactionTemplate(transactionManager);
+        for (UUID assignmentId : lingering) {
+            Boolean ended = requiresNew.execute(status -> assignmentEnder.endLingeringAssignment(assignmentId));
+            assertThat(ended).isTrue();
+        }
 
-        assertThat(ended).isEqualTo(1);
-        EmployeeLocationAssignment swept =
-                assignmentRepository.findById(strandedAssignment).orElseThrow();
-        assertThat(swept.getStatus()).isEqualTo(AssignmentStatus.ENDED);
-        assertThat(swept.getEffectiveTo()).isEqualTo(LocalDate.now());
+        for (UUID assignmentId : List.of(strandedAssignment, givenUpAssignment)) {
+            EmployeeLocationAssignment swept =
+                    assignmentRepository.findById(assignmentId).orElseThrow();
+            assertThat(swept.getStatus()).isEqualTo(AssignmentStatus.ENDED);
+            assertThat(swept.getEffectiveTo()).isEqualTo(today());
+        }
         assertThat(assignmentRepository.findById(queuedAssignment).orElseThrow().getStatus())
                 .isEqualTo(AssignmentStatus.ACTIVE);
         assertThat(assignmentRepository.findById(freshAssignment).orElseThrow().getStatus())
                 .isEqualTo(AssignmentStatus.ACTIVE);
+    }
+
+    /** The service and the sweep date from the UTC {@code Clock} bean, so compare in UTC too. */
+    private static LocalDate today() {
+        return LocalDate.now(ZoneOffset.UTC);
+    }
+
+    private void retryRow(UUID employeeId, int attempts) {
+        EmployeeOffboardingRetry retry = new EmployeeOffboardingRetry();
+        retry.setEmployeeId(employeeId);
+        retry.setAssignmentPolicy(AssignmentTerminationPolicy.IMMEDIATE);
+        retry.setActorId("system");
+        retry.setFailureReason("boom");
+        retry.setAttempts(attempts);
+        retry.setNextAttemptAt(Instant.now().plusSeconds(300));
+        retryRepository.saveAndFlush(retry);
     }
 
     private UUID offboardedEmployee(String employeeNumber, String email, Instant statusEffectiveAt) throws Exception {
@@ -200,7 +227,7 @@ class EmployeeOffboardingContractBehaviorIT extends BaseContractIntegrationTest 
                         .employee(employee)
                         .locationId(UUID.randomUUID())
                         .role("TECHNICIAN")
-                        .effectiveFrom(LocalDate.now().minusDays(30))
+                        .effectiveFrom(today().minusDays(30))
                         .status(AssignmentStatus.ACTIVE)
                         .build())
                 .getId();

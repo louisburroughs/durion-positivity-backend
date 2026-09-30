@@ -66,7 +66,8 @@ public class OffboardingAssignmentEnder {
      *       ends earlier.
      *   <li>{@code GRACE_PERIOD}: {@code effectiveTo} becomes {@code assignmentEndDate} (unless it
      *       already ends on or before it) and the assignment stays ACTIVE until that date has
-     *       passed; {@link #endLingeringAssignments()} then ends it.
+     *       passed; the retry worker's sweep ({@link #findLingeringAssignmentIds(int)}) then ends
+     *       it.
      * </ul>
      *
      * An assignment that has not started yet and would start after the cut-off date can never be
@@ -113,28 +114,54 @@ public class OffboardingAssignmentEnder {
     }
 
     /**
-     * Finish offboarding that nothing else will: ACTIVE assignments of DISABLED or TERMINATED
-     * employees that are past their {@code effectiveTo} (a GRACE_PERIOD that has run out; nothing
-     * flips the status when the date passes, and status-keyed consumers such as pos-shop-manager's
-     * mechanic projection would keep treating the person as staffed), or open-ended ones that
-     * survived because the process died between the disable's commit and its after-commit handler.
-     * They become ENDED, an open end date becoming today, and each is published.
+     * Assignments that an offboarding should already have ended and nothing else will: ACTIVE
+     * assignments of DISABLED or TERMINATED employees that are past their {@code effectiveTo} (a
+     * GRACE_PERIOD that has run out; nothing flips the status when the date passes, and
+     * status-keyed consumers such as pos-shop-manager's mechanic projection would keep treating the
+     * person as staffed), or open-ended ones that survived because the process died between the
+     * disable's commit and its after-commit handler, or whose retry row gave up. The caller ends
+     * each through {@link #endLingeringAssignment(UUID)} in a transaction of its own, so one bad row
+     * cannot roll back the rest.
      *
-     * @return how many assignments were ended (and published)
+     * @param maxAttempts the retry worker's attempt cap; a retry row at or past it no longer counts
+     *     as pending
+     * @return the assignment ids, in a stable order
      */
-    public int endLingeringAssignments() {
+    public @NonNull List<UUID> findLingeringAssignmentIds(int maxAttempts) {
         LocalDate today = LocalDate.now(clock);
         Instant settledBefore = Instant.now(clock).minusSeconds(SETTLE_SECONDS);
-        List<EmployeeLocationAssignment> lingering =
-                assignmentRepository.findOpenForOffboardedEmployees(today, settledBefore, OFFBOARDED_STATUSES);
-        for (EmployeeLocationAssignment assignment : lingering) {
-            endAt(assignment, today, true);
-            peopleEventPublisher.publishStaffingAssignmentUpdated(assignmentRepository.save(assignment));
+        return assignmentRepository
+                .findOpenForOffboardedEmployees(today, settledBefore, OFFBOARDED_STATUSES, maxAttempts)
+                .stream()
+                .map(EmployeeLocationAssignment::getId)
+                .toList();
+    }
+
+    /**
+     * End one assignment found by {@link #findLingeringAssignmentIds(int)}: it becomes ENDED, an
+     * open end date becoming today, and it is published. The row is re-read here, inside the
+     * caller's transaction, so an assignment another instance already ended, or whose employee was
+     * re-enabled in the meantime, is left alone.
+     *
+     * @return whether the assignment was ended (and published)
+     */
+    public boolean endLingeringAssignment(@NonNull UUID assignmentId) {
+        EmployeeLocationAssignment assignment =
+                assignmentRepository.findById(assignmentId).orElse(null);
+        if (assignment == null || assignment.getStatus() != AssignmentStatus.ACTIVE) {
+            return false;
         }
-        if (!lingering.isEmpty()) {
-            log.info("Ended {} staffing assignment(s) left open by an offboarding", lingering.size());
+        EmployeeStatus employeeStatus = assignment.getEmployee().getStatus();
+        if (employeeStatus == null || !OFFBOARDED_STATUSES.contains(employeeStatus)) {
+            return false;
         }
-        return lingering.size();
+        endAt(assignment, LocalDate.now(clock), true);
+        peopleEventPublisher.publishStaffingAssignmentUpdated(assignmentRepository.save(assignment));
+        log.info(
+                "Ended staffing assignment {} of offboarded employee {} left open by an offboarding",
+                assignmentId,
+                assignment.getEmployee().getPersonId());
+        return true;
     }
 
     /**

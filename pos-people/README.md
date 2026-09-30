@@ -165,14 +165,21 @@ past their `effectiveTo` (a grace period that ran out) or open-ended, and publis
 `people.staffing-assignment.updated` for each. The open-ended case only applies once the status change is
 five minutes old and no retry row is pending, so it cannot beat the handler or the queue; if the process
 died before a GRACE_PERIOD was dated, those assignments end at that point rather than at the requested
-date. It runs per tenant. There is no scheduler lock: with several instances a row may be worked twice,
-which is safe because applying a policy is idempotent.
+date. A row that has used up its attempts no longer counts as pending, so the same sweep takes over the
+assignments of an employee whose retry gave up. The sweep reads the candidate ids in one query and ends
+each assignment in a `REQUIRES_NEW` transaction of its own, so one assignment that cannot be ended does not
+roll back the others. It runs per tenant. There is no scheduler lock: with several instances a row may be
+worked twice, which is safe because applying a policy is idempotent.
 
-| Property                                      | Default | Description                                     |
-| --------------------------------------------- | ------- | ----------------------------------------------- |
-| `pos.people.offboarding-retry.enabled`        | `true`  | Set `false` to turn the worker off              |
-| `pos.people.offboarding-retry.interval`       | `PT60S` | Delay between sweeps (ISO-8601 duration)        |
-| `pos.people.offboarding-retry.max-attempts`   | `10`    | Attempts before a row is left for an operator   |
+| Property                                    | Env override                               | Default | Description                                   |
+| ------------------------------------------- | ------------------------------------------ | ------- | --------------------------------------------- |
+| `pos.people.offboarding-retry.enabled`      | `POS_PEOPLE_OFFBOARDING_RETRY_ENABLED`      | `true`  | Set `false` to turn the worker off            |
+| `pos.people.offboarding-retry.interval`     | `POS_PEOPLE_OFFBOARDING_RETRY_INTERVAL`     | `PT60S` | Delay between sweeps (ISO-8601 duration)      |
+| `pos.people.offboarding-retry.max-attempts` | `POS_PEOPLE_OFFBOARDING_RETRY_MAX_ATTEMPTS` | `10`    | Attempts before a row is left for an operator |
+
+Metric: `people.offboarding.retry.exhausted` (gauge) is the number of queue rows across all tenants that
+have reached `max-attempts` and wait for an operator, refreshed by each scheduled pass; alert on it being
+non-zero.
 
 ## Multitenancy (ADR-0062, WS3 wave 9)
 

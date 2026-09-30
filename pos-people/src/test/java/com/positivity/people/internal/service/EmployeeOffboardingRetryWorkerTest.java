@@ -5,7 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -19,6 +21,8 @@ import com.positivity.tenancy.StaticTenantRegistry;
 import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantIterator;
 import com.positivity.tenancy.testing.TenantTestSupport;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -30,10 +34,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /** Offboarding retry queue worker (#2121). */
@@ -59,21 +66,31 @@ class EmployeeOffboardingRetryWorkerTest {
     @Mock
     private PlatformTransactionManager transactionManager;
 
+    private SimpleMeterRegistry meterRegistry;
     private EmployeeOffboardingRetryWorker worker;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        worker = newWorker(meterRegistry);
+        when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.DISABLED)));
+    }
+
+    @SuppressWarnings("unchecked")
+    private EmployeeOffboardingRetryWorker newWorker(MeterRegistry registry) {
         TenancyProperties tenancy = new TenancyProperties();
         tenancy.setDefaultTenantId(TenantTestSupport.TENANT_A);
-        worker = new EmployeeOffboardingRetryWorker(
+        ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(registry);
+        return new EmployeeOffboardingRetryWorker(
                 retryRepository,
                 employeeRepository,
                 assignmentEnder,
                 new TenantIterator(new StaticTenantRegistry(tenancy)),
                 CLOCK,
                 transactionManager,
-                MAX_ATTEMPTS);
-        when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee(EmployeeStatus.DISABLED)));
+                MAX_ATTEMPTS,
+                provider);
     }
 
     private static Employee employee(EmployeeStatus status) {
@@ -150,7 +167,7 @@ class EmployeeOffboardingRetryWorkerTest {
         verify(retryRepository).delete(healthy);
         verify(retryRepository, never()).delete(failing);
         assertThat(failing.getAttempts()).isEqualTo(1);
-        verify(assignmentEnder).endLingeringAssignments();
+        verify(assignmentEnder).findLingeringAssignmentIds(MAX_ATTEMPTS);
     }
 
     @Test
@@ -164,13 +181,44 @@ class EmployeeOffboardingRetryWorkerTest {
         verify(retryRepository).save(row);
         verify(retryRepository, never()).delete(any(EmployeeOffboardingRetry.class));
         assertThat(row.getAttempts()).isEqualTo(MAX_ATTEMPTS);
+        assertThat(row.getNextAttemptAt()).isEqualTo(NOW.plusSeconds(300L << MAX_ATTEMPTS));
+    }
 
-        // The next pass asks only for rows still under the cap, so the exhausted row is never returned.
+    @Test
+    @DisplayName("each scheduled pass publishes the number of exhausted rows across tenants as a gauge")
+    void exhaustedRowsAreGauged() {
         when(retryRepository.findByNextAttemptAtLessThanEqualAndAttemptsLessThanOrderByNextAttemptAtAsc(
-                        any(), eq(MAX_ATTEMPTS)))
+                        any(), anyInt()))
                 .thenReturn(List.of());
-        worker.sweepTenant();
-        verify(assignmentEnder).apply(any(), any(), any(), any());
+        when(retryRepository.countByAttemptsGreaterThanEqual(MAX_ATTEMPTS)).thenReturn(2L);
+
+        worker.runScheduledSweep();
+
+        assertThat(meterRegistry
+                        .get(EmployeeOffboardingRetryWorker.EXHAUSTED_GAUGE)
+                        .gauge()
+                        .value())
+                .isEqualTo(2.0);
+
+        when(retryRepository.countByAttemptsGreaterThanEqual(MAX_ATTEMPTS)).thenReturn(0L);
+        worker.runScheduledSweep();
+        assertThat(meterRegistry
+                        .get(EmployeeOffboardingRetryWorker.EXHAUSTED_GAUGE)
+                        .gauge()
+                        .value())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("without a MeterRegistry the worker still runs")
+    void runsWithoutAMeterRegistry() {
+        when(retryRepository.findByNextAttemptAtLessThanEqualAndAttemptsLessThanOrderByNextAttemptAtAsc(
+                        any(), anyInt()))
+                .thenReturn(List.of());
+
+        newWorker(null).runScheduledSweep();
+
+        verify(assignmentEnder).findLingeringAssignmentIds(MAX_ATTEMPTS);
     }
 
     @Test
@@ -230,28 +278,61 @@ class EmployeeOffboardingRetryWorkerTest {
     }
 
     @Test
-    @DisplayName("every pass also ends the assignments an offboarding left open (expired or open-ended)")
-    void sweepEndsExpiredGracePeriodAssignments() {
+    @DisplayName("every pass also ends the assignments an offboarding left open, each in its own transaction")
+    void sweepEndsLingeringAssignmentsOneTransactionEach() {
         when(retryRepository.findByNextAttemptAtLessThanEqualAndAttemptsLessThanOrderByNextAttemptAtAsc(
                         any(), anyInt()))
                 .thenReturn(List.of());
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        when(assignmentEnder.findLingeringAssignmentIds(MAX_ATTEMPTS)).thenReturn(List.of(first, second));
+        when(assignmentEnder.endLingeringAssignment(any())).thenReturn(true);
 
         worker.runScheduledSweep();
 
-        verify(assignmentEnder).endLingeringAssignments();
+        verify(assignmentEnder).endLingeringAssignment(first);
+        verify(assignmentEnder).endLingeringAssignment(second);
+        verify(transactionManager, times(2)).getTransaction(any());
+        verify(transactionManager, times(2)).commit(any());
+        verify(transactionManager, never()).rollback(any());
     }
 
     @Test
-    @DisplayName("a failing expiry pass is swallowed so the next scheduled run still happens")
-    void expiryFailureIsSwallowed() {
+    @DisplayName("one lingering assignment that cannot be ended does not roll back the others")
+    void aLingeringAssignmentFailureDoesNotStopTheOthers() {
         when(retryRepository.findByNextAttemptAtLessThanEqualAndAttemptsLessThanOrderByNextAttemptAtAsc(
                         any(), anyInt()))
                 .thenReturn(List.of());
-        when(assignmentEnder.endLingeringAssignments()).thenThrow(new IllegalStateException("db down"));
+        UUID broken = UUID.randomUUID();
+        UUID healthy = UUID.randomUUID();
+        when(assignmentEnder.findLingeringAssignmentIds(MAX_ATTEMPTS)).thenReturn(List.of(broken, healthy));
+        when(assignmentEnder.endLingeringAssignment(broken)).thenThrow(new IllegalStateException("outbox full"));
+        when(assignmentEnder.endLingeringAssignment(healthy)).thenReturn(true);
+
+        worker.sweepTenant();
+
+        verify(assignmentEnder).endLingeringAssignment(broken);
+        verify(assignmentEnder).endLingeringAssignment(healthy);
+        // The broken one rolled back its own transaction; the healthy one committed its own.
+        InOrder order = Mockito.inOrder(transactionManager);
+        order.verify(transactionManager).getTransaction(any());
+        order.verify(transactionManager).rollback(any());
+        order.verify(transactionManager).getTransaction(any());
+        order.verify(transactionManager).commit(any());
+    }
+
+    @Test
+    @DisplayName("a failing candidate read is swallowed so the next scheduled run still happens")
+    void lingeringReadFailureIsSwallowed() {
+        when(retryRepository.findByNextAttemptAtLessThanEqualAndAttemptsLessThanOrderByNextAttemptAtAsc(
+                        any(), anyInt()))
+                .thenReturn(List.of());
+        when(assignmentEnder.findLingeringAssignmentIds(MAX_ATTEMPTS)).thenThrow(new IllegalStateException("db down"));
 
         worker.runScheduledSweep();
 
-        verify(assignmentEnder).endLingeringAssignments();
+        verify(assignmentEnder).findLingeringAssignmentIds(MAX_ATTEMPTS);
+        verify(assignmentEnder, never()).endLingeringAssignment(any());
     }
 
     @Test

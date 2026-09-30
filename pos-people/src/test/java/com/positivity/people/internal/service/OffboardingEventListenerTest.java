@@ -1,6 +1,7 @@
 package com.positivity.people.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -103,6 +104,23 @@ class OffboardingEventListenerTest {
         order.verify(transactionManager).rollback(any());
         order.verify(transactionManager).getTransaction(any());
         order.verify(transactionManager).commit(any());
+    }
+
+    @Test
+    @DisplayName("a failing queue write is swallowed too: the committed disable must not surface as a 500")
+    void failingQueueWriteDoesNotEscapeTheAfterCommitCallback() {
+        doThrow(new IllegalStateException("outbox unavailable"))
+                .when(assignmentEnder)
+                .apply(any(), any(), any(), any());
+        when(retryRepository.save(any(EmployeeOffboardingRetry.class))).thenThrow(new IllegalStateException("db down"));
+
+        assertThatCode(() -> listener.onEmployeeOffboarded(event(AssignmentTerminationPolicy.IMMEDIATE, null)))
+                .doesNotThrowAnyException();
+
+        verify(retryRepository).save(any(EmployeeOffboardingRetry.class));
+        // Both transactions rolled back; nothing was committed.
+        verify(transactionManager, Mockito.times(2)).rollback(any());
+        verify(transactionManager, never()).commit(any());
     }
 
     @Test

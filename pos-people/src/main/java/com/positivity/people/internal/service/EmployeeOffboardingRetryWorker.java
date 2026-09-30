@@ -6,13 +6,17 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.tenancy.TenantIterator;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -35,7 +39,13 @@ import org.springframework.transaction.support.TransactionTemplate;
  * transaction is rollback-only and cannot also carry the attempt count. A row that keeps failing
  * backs off exponentially (five minutes doubling per attempt, capped at a day) and, at
  * {@code pos.people.offboarding-retry.max-attempts}, is left in the table for an operator with an
- * error logged; it is not picked up again.
+ * error logged; it is not picked up again. The number of such rows across all tenants, as of the
+ * last pass, is the {@value #EXHAUSTED_GAUGE} gauge. An exhausted row no longer counts as pending
+ * either, so the sweep of open assignments below takes the employee's assignments over.
+ *
+ * <p>The lingering-assignment sweep reads the candidate ids in one query and then ends each
+ * assignment in a {@code REQUIRES_NEW} transaction of its own, like a retry row: one assignment
+ * whose end cannot commit must not roll back every other assignment's end on every pass.
  *
  * <p>There is no scheduler lock: two instances may work the same row at once. That is safe because
  * applying a policy is idempotent and each row is re-read inside its own transaction, but the
@@ -60,6 +70,12 @@ public class EmployeeOffboardingRetryWorker {
     /** {@code failure_reason} is a varchar(255) column. */
     private static final int FAILURE_REASON_MAX_LENGTH = 255;
 
+    /**
+     * Gauge: retry rows at {@code max-attempts} across all tenants, waiting for an operator, as of
+     * the last scheduled pass.
+     */
+    static final String EXHAUSTED_GAUGE = "people.offboarding.retry.exhausted";
+
     private final EmployeeOffboardingRetryRepository retryRepository;
     private final EmployeeRepository employeeRepository;
     private final OffboardingAssignmentEnder assignmentEnder;
@@ -68,6 +84,12 @@ public class EmployeeOffboardingRetryWorker {
     private final TransactionTemplate requiresNew;
     private final int maxAttempts;
 
+    /**
+     * Refreshed by each scheduled pass rather than read on scrape: the queue is tenant-scoped, and
+     * a scrape-time query would see one tenant at most.
+     */
+    private final AtomicLong exhaustedRows = new AtomicLong();
+
     public EmployeeOffboardingRetryWorker(
             EmployeeOffboardingRetryRepository retryRepository,
             EmployeeRepository employeeRepository,
@@ -75,7 +97,8 @@ public class EmployeeOffboardingRetryWorker {
             TenantIterator tenantIterator,
             Clock clock,
             PlatformTransactionManager transactionManager,
-            @Value("${pos.people.offboarding-retry.max-attempts:10}") int maxAttempts) {
+            @Value("${pos.people.offboarding-retry.max-attempts:10}") int maxAttempts,
+            ObjectProvider<MeterRegistry> meterRegistry) {
         this.retryRepository = retryRepository;
         this.employeeRepository = employeeRepository;
         this.assignmentEnder = assignmentEnder;
@@ -84,26 +107,60 @@ public class EmployeeOffboardingRetryWorker {
         this.requiresNew = new TransactionTemplate(transactionManager);
         this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.maxAttempts = maxAttempts;
+        MeterRegistry registry = meterRegistry.getIfAvailable();
+        if (registry != null) {
+            Gauge.builder(EXHAUSTED_GAUGE, exhaustedRows, AtomicLong::get)
+                    .description("Offboarding retry rows that used up their attempts and await an operator")
+                    .register(registry);
+        }
     }
 
     @Scheduled(fixedDelayString = "${pos.people.offboarding-retry.interval:PT60S}")
     public void runScheduledSweep() {
-        tenantIterator.forEachActiveTenant(tenantId -> sweepTenant());
+        AtomicLong exhausted = new AtomicLong();
+        tenantIterator.forEachActiveTenant(tenantId -> exhausted.addAndGet(sweepTenant()));
+        exhaustedRows.set(exhausted.get());
     }
 
-    /** One pass for the tenant bound on the calling thread. */
-    void sweepTenant() {
+    /**
+     * One pass for the tenant bound on the calling thread.
+     *
+     * @return how many of the tenant's rows have used up their attempts
+     */
+    long sweepTenant() {
         List<EmployeeOffboardingRetry> due =
                 retryRepository.findByNextAttemptAtLessThanEqualAndAttemptsLessThanOrderByNextAttemptAtAsc(
                         Instant.now(clock), maxAttempts);
         for (EmployeeOffboardingRetry row : due) {
             retry(row.getId());
         }
+        endLingeringAssignments();
+        return retryRepository.countByAttemptsGreaterThanEqual(maxAttempts);
+    }
+
+    private void endLingeringAssignments() {
+        List<UUID> lingering;
         try {
-            requiresNew.executeWithoutResult(status -> assignmentEnder.endLingeringAssignments());
+            lingering = assignmentEnder.findLingeringAssignmentIds(maxAttempts);
         } catch (RuntimeException e) {
             // Next pass retries; the sweep is a pure function of the data.
-            log.warn("Ending lingering staffing assignments of offboarded employees failed: {}", e.getMessage());
+            log.warn("Finding lingering staffing assignments of offboarded employees failed: {}", e.getMessage());
+            return;
+        }
+        int ended = 0;
+        for (UUID assignmentId : lingering) {
+            try {
+                Boolean changed = requiresNew.execute(status -> assignmentEnder.endLingeringAssignment(assignmentId));
+                if (Boolean.TRUE.equals(changed)) {
+                    ended++;
+                }
+            } catch (RuntimeException e) {
+                // Every other assignment still gets its own transaction; this one waits for the next pass.
+                log.warn("Ending lingering staffing assignment {} failed: {}", assignmentId, e.getMessage());
+            }
+        }
+        if (ended > 0) {
+            log.info("Ended {} staffing assignment(s) left open by an offboarding", ended);
         }
     }
 

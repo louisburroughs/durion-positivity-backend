@@ -16,4 +16,10 @@ public interface EmployeeOffboardingRetryRepository extends JpaRepository<Employ
     @NonNull
     List<EmployeeOffboardingRetry> findByNextAttemptAtLessThanEqualAndAttemptsLessThanOrderByNextAttemptAtAsc(
             @NonNull Instant now, int maxAttempts);
+
+    /**
+     * Rows that have used up their attempts and wait for an operator; drives the
+     * {@code people.offboarding.retry.exhausted} gauge.
+     */
+    long countByAttemptsGreaterThanEqual(int maxAttempts);
 }

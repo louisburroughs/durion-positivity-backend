@@ -22,7 +22,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * transaction marks it rollback-only, and the retry row written in that same transaction would
  * roll back with it, on exactly the failure the queue exists for. Here the disable is already
  * durable, the policy runs in its own {@code REQUIRES_NEW} transaction, and a failure is caught
- * and queued through a second {@code REQUIRES_NEW} transaction that commits regardless.
+ * and queued through a second {@code REQUIRES_NEW} transaction that commits regardless. Nothing
+ * thrown here reaches the caller: the disable is durable by now, and an exception out of an
+ * after-commit callback would report it as a 500.
  *
  * <p>Both transactions are explicit {@link TransactionTemplate}s rather than
  * {@code @Transactional} on this method: a {@code @Transactional} proxy around a method that
@@ -80,8 +82,20 @@ public class OffboardingEventListener {
         retry.setFailureReason(EmployeeOffboardingRetryWorker.failureReason(failureReason));
         retry.setAttempts(0);
         retry.setNextAttemptAt(Instant.now(clock).plusSeconds(EmployeeOffboardingRetryWorker.BASE_DELAY_SECONDS));
-        // If even this write fails the exception propagates out of the after-commit callback (the
-        // disable stays committed) and the worker's sweep of still-open assignments takes over.
-        requiresNew.executeWithoutResult(status -> retryRepository.save(retry));
+        try {
+            requiresNew.executeWithoutResult(status -> retryRepository.save(retry));
+        } catch (RuntimeException queueFailure) {
+            // Swallowed on purpose: the disable is already committed, and an exception out of an
+            // after-commit callback would turn that committed disable into a 500 for the caller.
+            // Without a queue row the worker's sweep of still-open assignments of offboarded
+            // employees converges on the same result (at today's date rather than a grace date).
+            log.error(
+                    "Offboarding retry for employee {} (policy {}) could not be queued after the downstream"
+                            + " action failed ({}); the sweep of open assignments will end them instead",
+                    event.personId(),
+                    event.policy(),
+                    failureReason,
+                    queueFailure);
+        }
     }
 }
