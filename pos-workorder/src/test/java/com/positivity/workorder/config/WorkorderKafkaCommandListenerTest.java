@@ -1,5 +1,6 @@
 package com.positivity.workorder.config;
 
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
 class WorkorderKafkaCommandListenerTest {
@@ -275,6 +277,45 @@ class WorkorderKafkaCommandListenerTest {
                 """.formatted(workorderId));
 
         verify(workorderInvoiceService).generateInvoice(workorderId, null);
+    }
+
+    @Test
+    @DisplayName("#2178 - a transient DB error during regeneration propagates so the container retries")
+    void regenerationTransientFailurePropagates() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000004");
+        org.mockito.Mockito.when(workorderInvoiceService.generateInvoice(workorderId, null))
+                .thenThrow(new QueryTimeoutException("lock timeout"));
+
+        assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onCommand("""
+                        {"commandType":"workorder.invoice.regenerate-requested",
+                         "payload":{"workorderId":"%s"}}
+                        """.formatted(workorderId)));
+    }
+
+    @Test
+    @DisplayName("#2178 - a transient DB error while applying an assignment update propagates so the container retries")
+    void assignmentUpdateTransientFailurePropagates() {
+        // WorkorderAssignmentEventListener is a synchronous @EventListener, so a DB failure inside
+        // it surfaces through publishEvent and must reach the container's error handler
+        // (ADR-0044 §4) rather than the log-and-drop catch.
+        org.mockito.Mockito.doThrow(new QueryTimeoutException("lock wait timeout"))
+                .when(eventPublisher)
+                .publishEvent(any(AssignmentUpdatedEvent.class));
+
+        assertThatExceptionOfType(QueryTimeoutException.class).isThrownBy(() -> listener.onCommand("""
+                        {
+                          "commandType":"ASSIGNMENT_UPDATED",
+                          "payload":{
+                            "workorderId":"00000000-0000-0000-0000-000000000005",
+                            "payload":{
+                              "locationId":"00000000-0000-0000-0000-000000000001",
+                              "resourceId":"00000000-0000-0000-0000-000000000001",
+                              "mechanicIds":[]
+                            }
+                          }
+                        }
+                        """));
     }
 
     // -----------------------------------------------------------------------

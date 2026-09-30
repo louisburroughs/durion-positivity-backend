@@ -32,7 +32,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -44,11 +43,9 @@ import tools.jackson.databind.ObjectMapper;
  * Applies MKCAT tread-design enrichment from {@code supplier.events.v1} (CAP-324 #1352,
  * ADR-0044 §6, R1).
  *
- * <h2>A separate consumer group from the PRICAT listener, on the same topic</h2>
- *
- * {@link SupplierPriceCatalogEventsListener} already consumes {@code supplier.events.v1} for a
- * different event type. Two independent listeners on one topic each need their own Kafka consumer
- * group, or one would silently steal deliveries meant for the other's filter.
+ * <p>This class is not a Kafka consumer: {@link SupplierEventsListener} is the single consumer of
+ * {@code supplier.events.v1} and routes {@code supplier.catalog.updated} here after its
+ * {@code processed_events} guard (#2177).
  *
  * <h2>Content-hash staleness, not a version counter</h2>
  *
@@ -81,17 +78,17 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <h2>Transaction shape (#2146)</h2>
  *
- * The listener method is not {@code @Transactional}: the apply and its {@code processed_events}
+ * The handler method is not {@code @Transactional}: the apply and its {@code processed_events}
  * mark run together in a transaction of their own ({@code REQUIRES_NEW}), so a permanent failure
  * rolls back only this event's work instead of poisoning a shared transaction whose commit the
- * container would retry to the DLQ. Unlike the sibling listeners the mark stays inside that
+ * container would retry to the DLQ. Unlike the PRICAT handler the mark stays inside that
  * transaction — a failed apply has never recorded its eventId here — so there is no window between
  * two commits. Transient failures still propagate for container retry.
  */
 @Slf4j
 @Component
 @ConditionalOnProperty(prefix = "pos.catalog.kafka", name = "enabled", havingValue = "true")
-public class SupplierCatalogEnrichmentListener {
+public class SupplierCatalogEnrichmentHandler {
 
     /** Producing domain, per the repo-wide processed_events convention. */
     static final String OWNER = "supplier";
@@ -128,7 +125,7 @@ public class SupplierCatalogEnrichmentListener {
     /** The apply and its processed mark, in one transaction of their own; see the class doc. */
     private final TransactionTemplate handlerTransaction;
 
-    public SupplierCatalogEnrichmentListener(
+    public SupplierCatalogEnrichmentHandler(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
@@ -154,31 +151,14 @@ public class SupplierCatalogEnrichmentListener {
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    @KafkaListener(
-            topics = "${pos.catalog.kafka.supplier-events-topic:supplier.events.v1}",
-            groupId =
-                    "${pos.catalog.kafka.supplier-catalog-enrichment-consumer-group:pos-catalog-supplier-catalog-enrichment}")
-    public void onSupplierEvent(@NonNull String message) {
-        JsonNode envelope;
-        try {
-            envelope = objectMapper.readTree(message);
-        } catch (Exception e) {
-            log.warn("Skipping unparsable supplier event", e);
-            return;
-        }
-        if (!SupplierCatalogUpdatedV1.EVENT_TYPE.equals(
-                envelope.path("eventType").stringValue(null))) {
-            return;
-        }
-        String eventId = envelope.path("eventId").stringValue(null);
-        if (eventId == null || eventId.isBlank()) {
-            log.warn("Skipping supplier event without eventId");
-            return;
-        }
-        if (processedEventRepository.existsById(eventId)) {
-            return;
-        }
-
+    /**
+     * Applies one {@code supplier.catalog.updated} event and marks it processed in the same
+     * transaction.
+     *
+     * @param envelope the parsed event envelope, already de-duplicated by the dispatcher
+     * @param eventId the envelope's non-blank {@code eventId}
+     */
+    public void handle(@NonNull JsonNode envelope, @NonNull String eventId) {
         try {
             handlerTransaction.executeWithoutResult(_ -> {
                 applyUpdate(envelope);

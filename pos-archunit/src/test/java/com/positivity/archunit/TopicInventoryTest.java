@@ -64,7 +64,7 @@ import org.junit.jupiter.api.Test;
  *       = "literal";} field declared in the <em>same file</em> — every such call site in the repo
  *       defines its domain constant locally, so a same-file lookup is sufficient and doesn't risk
  *       resolving the wrong file's constant of the same name. (At the time of writing this is five
- *       call sites over three same-file constants: {@code SupplierPriceCatalogEventsListener.OWNER}
+ *       call sites over three same-file constants: {@code SupplierPriceCatalogEventHandler.OWNER}
  *       and {@code SettlementEventPublisher.PAYMENT_DOMAIN} used once each, plus {@code
  *       OrderDomainEventPublisher.ORDER_DOMAIN} used three times in that one file. That count is
  *       illustrative, not an invariant this test checks — the same-file convention is what new call
