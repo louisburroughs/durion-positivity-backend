@@ -31,8 +31,6 @@ import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
 import com.positivity.shopmanager.internal.event.AppointmentCreatedEvent;
 import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
-import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
-import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.KeylessDuplicateReplayException;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
@@ -44,6 +42,7 @@ import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -409,11 +408,12 @@ class AppointmentsServiceNewBehaviorsTest {
         assertThat(captor.getValue().workorderLinkRef()).isEqualTo("WO-789");
     }
 
-    // PRCR-104: CRM customer 404 must surface as CrmCustomerNotFoundException
+    // PRCR-104, #1994: a customer not yet replicated must surface as ReplicationPendingException (503)
     @Test
-    void createAppointment_throwsCrmCustomerNotFound_when404() {
+    void createAppointment_propagatesReplicationPending_whenCustomerNotReplicated() {
         UUID customerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(crmSnapshotService.getCustomerById(any())).thenThrow(new CrmCustomerNotFoundException(customerId));
+        when(crmSnapshotService.getCustomerById(any()))
+                .thenThrow(new ReplicationPendingException("CRM_REPLICATION_PENDING", "customer pending", customerId));
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -424,15 +424,16 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
 
         assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
-                .isInstanceOf(CrmCustomerNotFoundException.class);
+                .isInstanceOf(ReplicationPendingException.class);
     }
 
-    // PRCR-104: CRM vehicle 404 must surface as CrmVehicleNotFoundException
+    // PRCR-104, #1994: a vehicle not yet replicated must surface as ReplicationPendingException (503)
     @Test
-    void createAppointment_throwsCrmVehicleNotFound_when404() {
+    void createAppointment_propagatesReplicationPending_whenVehicleNotReplicated() {
         UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         // customer call succeeds; vehicle call throws 404
-        when(crmSnapshotService.getVehicleById(any())).thenThrow(new CrmVehicleNotFoundException(vehicleId));
+        when(crmSnapshotService.getVehicleById(any()))
+                .thenThrow(new ReplicationPendingException("CRM_REPLICATION_PENDING", "vehicle pending", vehicleId));
 
         AppointmentCreateRequest request = new AppointmentCreateRequest();
         request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -443,7 +444,7 @@ class AppointmentsServiceNewBehaviorsTest {
         request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
 
         assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
-                .isInstanceOf(CrmVehicleNotFoundException.class);
+                .isInstanceOf(ReplicationPendingException.class);
     }
 
     // ── CAP-326: the submit-time tier (DECISION-SHOPMGMT-002) ──────────────────────────────────

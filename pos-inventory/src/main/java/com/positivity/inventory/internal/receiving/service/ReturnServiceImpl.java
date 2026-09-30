@@ -14,7 +14,7 @@ import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryReturnEntity;
 import com.positivity.inventory.internal.entity.InventoryReturnLineEntity;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
-import com.positivity.inventory.internal.exception.ResourceNotFoundException;
+import com.positivity.inventory.internal.exception.ReplicationPendingCodes;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
 import com.positivity.inventory.internal.exception.WorkorderNotReturnableException;
 import com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository;
@@ -31,6 +31,7 @@ import com.positivity.inventory.internal.service.Quantities;
 import com.positivity.inventory.internal.service.QuantityScaleGuard;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.web.common.ReplicationPendingException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -208,22 +209,32 @@ public class ReturnServiceImpl implements ReturnService {
         Map<UUID, ExtWorkorderPartReplica> partLinesById =
                 extWorkorderPartReplicaRepository.findAllById(workorderLineIds).stream()
                         .collect(Collectors.toMap(ExtWorkorderPartReplica::getWorkorderLineId, line -> line));
-        Map<UUID, BigDecimal> consumedByLine = sumConsumedByLine(workorderId, workorderLineIds);
+        ConsumptionLedger consumption = consumptionLedger(workorderId, workorderLineIds);
+        Map<UUID, BigDecimal> consumedByLine = consumption.quantityByLine();
         Map<UUID, BigDecimal> returnedByLine = sumReturnedByLine(workorderLineIds);
 
         // Validate every line before writing anything: a quantity that exceeds what remains
         // returnable must leave no state change (422 RETURN_QUANTITY_EXCEEDED).
+        //
+        // #1994: the ext_workorder_part row is not what proves a line exists — the consumption
+        // ledger this module owns is, and it is what returnable is computed from. A line the
+        // replica has not caught up with is therefore not a 404: it is returnable to the extent it
+        // was consumed, and the replica is consulted only for the product id (falling back to the
+        // ledger's own record of it, then to the line id in the refusal message).
         BigDecimal totalReturned = BigDecimal.ZERO;
+        Map<UUID, UUID> productByLine = new HashMap<>();
         for (ReturnLineDto line : lines) {
             UUID workorderLineId = line.getItemId();
             ExtWorkorderPartReplica partLine = partLinesById.get(workorderLineId);
-            if (partLine == null) {
-                throw new ResourceNotFoundException("WorkorderLine", String.valueOf(workorderLineId));
+            UUID productId = productFor(partLine, consumption, workorderLineId);
+            if (productId != null) {
+                productByLine.put(workorderLineId, productId);
             }
             BigDecimal returnable = returnableQuantity(consumedByLine, returnedByLine, workorderLineId);
             BigDecimal requested = BigDecimal.valueOf(line.getQuantity());
             if (requested.compareTo(returnable) > 0) {
-                throw new ReturnQuantityExceededException(partLine.getProductEntityId(), requested, returnable);
+                throw new ReturnQuantityExceededException(
+                        productId != null ? productId : workorderLineId, requested, returnable);
             }
             totalReturned = totalReturned.add(requested);
         }
@@ -242,7 +253,11 @@ public class ReturnServiceImpl implements ReturnService {
         List<InventoryLedgerEntry> ledgerEntries = new ArrayList<>(lines.size());
         for (ReturnLineDto line : lines) {
             UUID workorderLineId = line.getItemId();
-            UUID productId = partLinesById.get(workorderLineId).getProductEntityId();
+            UUID productId = productByLine.get(workorderLineId);
+            if (productId == null) {
+                throw new IllegalStateException(
+                        "No product recorded for workorder line " + workorderLineId + " on workorder " + workorderId);
+            }
             BigDecimal quantity = BigDecimal.valueOf(line.getQuantity());
 
             returnLines.add(InventoryReturnLineEntity.builder()
@@ -255,7 +270,7 @@ public class ReturnServiceImpl implements ReturnService {
             UUID destinationLocationId =
                     line.getStorageLocationId() != null ? line.getStorageLocationId() : line.getLocationId();
             ledgerEntries.add(InventoryLedgerEntry.builder()
-                    .stockItemId(productId == null ? "" : productId.toString())
+                    .stockItemId(productId.toString())
                     .eventType(InventoryLedgerEventType.RETURN_TO_STOCK)
                     .changeInQuantity(quantity.abs())
                     .quantityAfter(BigDecimal.ZERO)
@@ -288,13 +303,17 @@ public class ReturnServiceImpl implements ReturnService {
     /**
      * CAP-218 Story #177 (PR #2227 review item 5): a return may only be submitted once the
      * workorder is COMPLETED or CLOSED — parts are handed back once the job is done, not
-     * mid-repair. 404 when the replica has no row for the workorder at all (nothing to check
-     * against), 422 {@code WORKORDER_NOT_RETURNABLE} for any other status.
+     * mid-repair. 503 {@code WORKORDER_REPLICATION_PENDING} when the replica has no row for the
+     * workorder yet (nothing to check against, and the workorder may simply not have replicated,
+     * #1994), 422 {@code WORKORDER_NOT_RETURNABLE} for any other status.
      */
     private void requireReturnableWorkorder(UUID workorderId) {
         ExtWorkorderReplica workorder = extWorkorderReplicaRepository
                 .findById(workorderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Workorder", workorderId.toString()));
+                .orElseThrow(() -> new ReplicationPendingException(
+                        ReplicationPendingCodes.WORKORDER_REPLICATION_PENDING,
+                        "The workorder has not replicated from Workorder yet; retry shortly",
+                        workorderId));
         String status = workorder.getStatus() == null
                 ? ""
                 : workorder.getStatus().trim().toUpperCase(Locale.ROOT);
@@ -305,20 +324,56 @@ public class ReturnServiceImpl implements ReturnService {
 
     /** Consumed (WORKORDER_CONSUMPTION) quantity for a work order, summed per work order line. */
     private Map<UUID, BigDecimal> sumConsumedByLine(UUID workorderId, Collection<UUID> lineIds) {
+        return consumptionLedger(workorderId, lineIds).quantityByLine();
+    }
+
+    /**
+     * The work order's consumption ledger, read once: the quantity consumed per work order line
+     * and the product each line consumed (the entry's {@code stockItemId}), which is what lets a
+     * return name the product without depending on the {@code ext_workorder_part} replica.
+     */
+    private ConsumptionLedger consumptionLedger(UUID workorderId, Collection<UUID> lineIds) {
         if (lineIds.isEmpty()) {
-            return Map.of();
+            return new ConsumptionLedger(Map.of(), Map.of());
         }
-        Map<UUID, BigDecimal> result = new HashMap<>();
+        Map<UUID, BigDecimal> quantityByLine = new HashMap<>();
+        Map<UUID, UUID> productByLine = new HashMap<>();
         for (InventoryLedgerEntry entry : inventoryLedgerEntryRepository.findByWorkorderIdAndEventType(
                 workorderId, InventoryLedgerEventType.WORKORDER_CONSUMPTION)) {
             UUID lineId = entry.getWorkorderLineId();
             if (lineId == null) {
                 continue;
             }
-            result.merge(lineId, Quantities.nz(entry.getChangeInQuantity()).abs(), BigDecimal::add);
+            quantityByLine.merge(
+                    lineId, Quantities.nz(entry.getChangeInQuantity()).abs(), BigDecimal::add);
+            UUID productId = parseProductId(entry.getStockItemId());
+            if (productId != null) {
+                productByLine.putIfAbsent(lineId, productId);
+            }
         }
-        return result;
+        return new ConsumptionLedger(quantityByLine, productByLine);
     }
+
+    /** The replica's product for the line when it has one, else the one the consumption ledger recorded. */
+    private static @Nullable UUID productFor(
+            @Nullable ExtWorkorderPartReplica partLine, ConsumptionLedger consumption, UUID workorderLineId) {
+        UUID replicated = partLine == null ? null : partLine.getProductEntityId();
+        return replicated != null ? replicated : consumption.productByLine().get(workorderLineId);
+    }
+
+    private static @Nullable UUID parseProductId(@Nullable String stockItemId) {
+        if (stockItemId == null || stockItemId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(stockItemId.trim());
+        } catch (IllegalArgumentException notAUuid) {
+            return null;
+        }
+    }
+
+    /** Consumption per work order line and the product each line consumed. */
+    private record ConsumptionLedger(Map<UUID, BigDecimal> quantityByLine, Map<UUID, UUID> productByLine) {}
 
     /** Quantity already returned against each named work order line. */
     private Map<UUID, BigDecimal> sumReturnedByLine(Collection<UUID> lineIds) {

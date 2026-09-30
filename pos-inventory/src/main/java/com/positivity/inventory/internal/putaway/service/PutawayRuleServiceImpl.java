@@ -6,10 +6,11 @@ import com.positivity.inventory.internal.entity.PutawayRule;
 import com.positivity.inventory.internal.enums.PutawayDestinationStrategy;
 import com.positivity.inventory.internal.enums.PutawayRuleMatchType;
 import com.positivity.inventory.internal.exception.DuplicateEnabledAnyPutawayRuleException;
-import com.positivity.inventory.internal.exception.InventoryValidationException;
+import com.positivity.inventory.internal.exception.ReplicationPendingCodes;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -191,9 +192,10 @@ public class PutawayRuleServiceImpl implements PutawayRuleService {
      * stands down: on a freshly provisioned environment pos-location's facts may not have arrived
      * yet, and refusing every rule until they do would turn a hydration lag into a configuration
      * outage. That window is advisory-covered by {@code PutawayRuleDestinationStartupCheck}. A
-     * partially hydrated replica does refuse an unseen bin — by then absence is the best available
-     * evidence the id is wrong, and the error names the replica so a race with a just-created
-     * location is recognisable for what it is.
+     * partially hydrated replica does refuse an unseen bin, but as {@code 503
+     * STORAGE_LOCATION_REPLICATION_PENDING} rather than a 400 (#1994): absence is still the best
+     * available evidence, yet it cannot distinguish a wrong id from a race with a just-created
+     * location, and only the 503 lets a caller retry the second.
      */
     private void requireResolvableDestination(@Nullable UUID destinationLocationId, boolean enabled) {
         if (!enabled || destinationLocationId == null) {
@@ -205,8 +207,14 @@ public class PutawayRuleServiceImpl implements PutawayRuleService {
         if (extStorageLocationReplicaRepository.count() == 0) {
             return;
         }
-        throw new InventoryValidationException("Destination storage location " + destinationLocationId
-                + " does not exist in the storage-location replica");
+        // #1994: a bin pos-location created a moment ago is absent here too, and the caller cannot
+        // tell that from a typo on a 400. Answer "not yet" (503 + Retry-After); the message names
+        // the other reading so a persistent 503 still sends the author to check the id.
+        throw new ReplicationPendingException(
+                ReplicationPendingCodes.STORAGE_LOCATION_REPLICATION_PENDING,
+                "The destination storage location is not in the storage-location replica yet; retry shortly, and"
+                        + " if this persists check that the id is a real storage location",
+                destinationLocationId);
     }
 
     /**

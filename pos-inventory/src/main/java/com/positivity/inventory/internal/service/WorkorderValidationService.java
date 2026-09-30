@@ -2,8 +2,10 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.entity.ExtWorkorderPartReplica;
 import com.positivity.inventory.internal.entity.ExtWorkorderReplica;
+import com.positivity.inventory.internal.exception.ReplicationPendingCodes;
 import com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtWorkorderReplicaRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Workorder line validation served from the {@code ext_workorder} / {@code ext_workorder_part}
  * replicas (ADR-0044 §6, #897). Replaces the retired synchronous
- * {@code WorkorderValidationClient}; the verdict shape and failure semantics are unchanged.
+ * {@code WorkorderValidationClient}; the verdict shape is unchanged. A workorder or part row the
+ * replica does not hold yet is {@code 503 WORKORDER_REPLICATION_PENDING} (#1994), not a conflict or
+ * a bad argument: the row arrives by event, so absence may only mean "not yet". A present line that
+ * belongs to another workorder, or lacks a product, keeps its status.
  */
 @Service
 @RequiredArgsConstructor
@@ -36,17 +41,22 @@ public class WorkorderValidationService {
 
         ExtWorkorderReplica workorder = extWorkorderReplicaRepository
                 .findById(workorderUuid)
-                .orElseThrow(() -> new IllegalStateException("No workorder replica row for workorderId " + workorderId
-                        + " — verify the workorder.events.v1 feed is consumed"));
+                .orElseThrow(() -> workorderReplicationPending(
+                        "The workorder has not replicated from Workorder yet; retry shortly", workorderUuid));
         if (workorder.getStatus() == null || workorder.getStatus().isBlank()) {
             throw new IllegalStateException("Workorder replica has no status for workorderId " + workorderId);
         }
 
         ExtWorkorderPartReplica matchedLine = extWorkorderPartReplicaRepository
                 .findById(workorderLineUuid)
-                .filter(line -> workorderUuid.equals(line.getWorkorderId()))
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "workorderLineId " + workorderLineId + " not found on workorder " + workorderId));
+                .orElseThrow(() -> workorderReplicationPending(
+                        "The workorder line has not replicated from Workorder yet; retry shortly", workorderLineUuid));
+        // The replicated workorder is present, so a line that belongs to some other workorder is
+        // not lag but a wrong id: it keeps the 400 it always had.
+        if (!workorderUuid.equals(matchedLine.getWorkorderId())) {
+            throw new IllegalArgumentException(
+                    "workorderLineId " + workorderLineId + " not found on workorder " + workorderId);
+        }
 
         if (matchedLine.getProductEntityId() == null) {
             throw new IllegalStateException(
@@ -70,6 +80,12 @@ public class WorkorderValidationService {
         return "COMPLETED".equals(normalizedStatus)
                 || "CANCELLED".equals(normalizedStatus)
                 || "CLOSED".equals(normalizedStatus);
+    }
+
+    /** The workorder or part row is not in the replica: not-yet rather than not-found (#1994). */
+    private static ReplicationPendingException workorderReplicationPending(String message, UUID awaitedId) {
+        return new ReplicationPendingException(
+                ReplicationPendingCodes.WORKORDER_REPLICATION_PENDING, message, awaitedId);
     }
 
     private UUID parseUuid(String value, String fieldName) {

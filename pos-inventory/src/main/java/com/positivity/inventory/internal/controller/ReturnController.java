@@ -12,6 +12,7 @@ import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -129,16 +130,21 @@ public class ReturnController {
                     status.
                     Use this tool to hand back unused workorder parts; do not use receiveItemsIntoStaging or \
                     createGoodsReceipt, which receive vendor shipments rather than workorder returns.
-                    Preconditions: each line's itemId must name a real work order part line, and its quantity may \
-                    not exceed that line's returnable quantity (parts consumed minus parts already returned).
+                    Preconditions: the workorder must be replicated from pos-workorder and COMPLETED or CLOSED, \
+                    and each line's quantity may not exceed that line's returnable quantity (parts consumed \
+                    minus parts already returned); the consumption ledger, not the work order part replica, is \
+                    what proves a line exists, so a line not yet replicated is returnable to the extent it was \
+                    consumed.
                     Required inputs: workorderId (UUID) and lines (non-empty), each naming itemId (UUID, the work \
                     order line), a positive quantity, a reasonCode from the closed set NOT_NEEDED, WRONG_PART or \
                     CUSTOMER_REFUSED, and a locationId; storageLocationId is optional.
                     Emits an INVENTORY_RETURN_SUBMIT_TO_STOCK event; the 202 response signals the posting completed.
                     Returns 400 when workorderId is missing, lines is empty, a quantity is not positive or a \
-                    reasonCode is not one of the closed set, 404 when a line's itemId does not name a work order \
-                    part line, and 422 RETURN_QUANTITY_EXCEEDED when a line's quantity exceeds what remains \
-                    returnable.
+                    reasonCode is not one of the closed set, 503 with a Retry-After header and \
+                    WORKORDER_REPLICATION_PENDING when the workorder has not replicated from pos-workorder yet, \
+                    and 422 RETURN_QUANTITY_EXCEEDED when a line's quantity exceeds what remains returnable \
+                    (including a line nothing was consumed against) or WORKORDER_NOT_RETURNABLE when the \
+                    workorder is not COMPLETED or CLOSED.
                     """,
             tags = {"Returns"})
     @ApiResponse(
@@ -159,12 +165,18 @@ public class ReturnController {
                     + " locations that do not cover every line's locationId (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
-            responseCode = "404",
-            description = "A line's itemId does not name a work order part line",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
             responseCode = "422",
             description = "Return submission violates business policy",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description =
+                    "WORKORDER_REPLICATION_PENDING: the workorder has not replicated from pos-workorder yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReturnSubmissionResultDto> submitToStock(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

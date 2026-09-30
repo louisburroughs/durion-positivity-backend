@@ -8,9 +8,7 @@ import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
 import com.positivity.shopmanager.internal.exception.BookingHorizonExceededException;
 import com.positivity.shopmanager.internal.exception.ConflictOverrideStateException;
-import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
-import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.OpeningSearchPolicyException;
 import com.positivity.shopmanager.internal.exception.RescheduleApprovalReasonRequiredException;
@@ -51,20 +49,6 @@ public class GlobalExceptionHandler {
 
     public GlobalExceptionHandler(@NonNull Clock clock) {
         this.clock = clock;
-    }
-
-    @ExceptionHandler(CrmCustomerNotFoundException.class)
-    public ResponseEntity<ApiError> handleCustomerNotFound(
-            CrmCustomerNotFoundException exception, HttpServletRequest request) {
-        UUID correlationId = resolveCorrelationId(request);
-        return respond(HttpStatus.NOT_FOUND, "CUSTOMER_NOT_FOUND", exception.getMessage(), correlationId);
-    }
-
-    @ExceptionHandler(CrmVehicleNotFoundException.class)
-    public ResponseEntity<ApiError> handleVehicleNotFound(
-            CrmVehicleNotFoundException exception, HttpServletRequest request) {
-        UUID correlationId = resolveCorrelationId(request);
-        return respond(HttpStatus.NOT_FOUND, "VEHICLE_NOT_FOUND", exception.getMessage(), correlationId);
     }
 
     @ExceptionHandler(VehicleCustomerMismatchException.class)
@@ -387,11 +371,7 @@ public class GlobalExceptionHandler {
 
     private int resolveStatus(String code) {
         return switch (code) {
-            case "CUSTOMER_NOT_FOUND",
-                    "VEHICLE_NOT_FOUND",
-                    "APPOINTMENT_NOT_FOUND",
-                    "LOCATION_NOT_FOUND",
-                    "RESOURCE_NOT_FOUND" -> HttpStatus.NOT_FOUND.value();
+            case "APPOINTMENT_NOT_FOUND", "LOCATION_NOT_FOUND", "RESOURCE_NOT_FOUND" -> HttpStatus.NOT_FOUND.value();
             case "VEHICLE_CUSTOMER_MISMATCH", "INVALID_APPOINTMENT_STATE", ConflictOverrideStateException.CODE ->
                 HttpStatus.CONFLICT.value();
             case CODE_CRM_UNAVAILABLE, CODE_HR_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE.value();

@@ -17,6 +17,7 @@ import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.InvoiceFinalizationService;
 import com.positivity.invoice.internal.service.OrderInvoiceService;
 import com.positivity.security.common.GatewaySecurityConfig;
+import com.positivity.web.common.ReplicationPendingException;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -188,5 +189,32 @@ class InvoiceControllerErrorHandlingTest {
                 .getContentAsString();
 
         assertThat(body).doesNotContain(leakCanary).doesNotContain("UnknownPathException");
+    }
+
+    /**
+     * #1994: an invoice whose location row has not replicated yet is not a conflict. The exception
+     * passes through this module's advice (which maps no RuntimeException) to pos-web-common's,
+     * which answers 503 with Retry-After.
+     */
+    @Test
+    @DisplayName("a location not yet replicated answers 503 LOCATION_REPLICATION_PENDING with Retry-After (#1994)")
+    void locationNotYetReplicatedAnswers503WithRetryAfter() throws Exception {
+        UUID locationId = UUID.randomUUID();
+        when(invoiceFinalizationService.completeInvoice(any(), any()))
+                .thenThrow(new ReplicationPendingException(
+                        "LOCATION_REPLICATION_PENDING", "The invoice's location has not replicated yet", locationId));
+
+        mockMvc.perform(withAuth(
+                        post("/v1/invoices/{invoiceId}/finalize", INVOICE_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"),
+                        InvoicePermissions.FINALIZE))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "5"))
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(jsonPath("$.code").value("LOCATION_REPLICATION_PENDING"))
+                .andExpect(jsonPath("$.status").value(503))
+                .andExpect(jsonPath("$.referenceId").value(locationId.toString()))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 }

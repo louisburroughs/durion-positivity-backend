@@ -17,6 +17,7 @@ import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import com.positivity.shared.dto.OrderInvoiceResponse;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -66,6 +67,13 @@ public class InvoiceController {
             "Caller holds invoice:invoice:view but its location scope does not cover the invoice's location"
                     + " (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
+    private static final String LOCATION_REPLICATION_PENDING_DESCRIPTION =
+            "The invoice's location has not replicated from Location yet, so the tax jurisdiction cannot be"
+                    + " resolved (ApiError.code LOCATION_REPLICATION_PENDING). Not-yet, not no: retry after the"
+                    + " Retry-After interval.";
+
+    private static final String RETRY_AFTER_DESCRIPTION = "Seconds to wait before retrying";
+
     private final InvoiceService invoiceService;
     private final InvoiceFinalizationService invoiceFinalizationService;
     private final OrderInvoiceService orderInvoiceService;
@@ -97,13 +105,24 @@ public class InvoiceController {
                     optional, and a missing lineItems list produces an empty zero-subtotal draft.
                     Emits an INVOICE_CREATE event, persists the per-line tax breakdown, and publishes an \
                     invoice-updated notification.
-                    Returns 201 with the invoice (existing or new), 400 when workorderId is missing, and 403 \
-                    LOCATION_SCOPE_DENIED when the caller's location scope does not cover locationId.
+                    Returns 201 with the invoice (existing or new), 400 when workorderId is missing, 403 \
+                    LOCATION_SCOPE_DENIED when the caller's location scope does not cover locationId, and 503 \
+                    with a Retry-After header and LOCATION_REPLICATION_PENDING when the location has not \
+                    replicated yet.
                     """)
     @ApiResponse(responseCode = "201", description = "Invoice created")
     @ApiResponse(
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = LOCATION_REPLICATION_PENDING_DESCRIPTION,
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = RETRY_AFTER_DESCRIPTION,
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
@@ -154,14 +173,24 @@ public class InvoiceController {
                     reported as depositApplied.
                     Returns 201 when a new invoice is created, 200 when an existing invoice is returned (orderId \
                     replay or workorder dedupe), 400 when totals are missing or negative, lines are empty, or \
-                    deposit fields are inconsistent, and 403 LOCATION_SCOPE_DENIED when the caller's location \
-                    scope does not cover locationId.
+                    deposit fields are inconsistent, 403 LOCATION_SCOPE_DENIED when the caller's location \
+                    scope does not cover locationId, and 503 with a Retry-After header and \
+                    LOCATION_REPLICATION_PENDING when the location has not replicated yet.
                     """)
     @ApiResponse(responseCode = "201", description = "Invoice created")
     @ApiResponse(responseCode = "200", description = "Existing invoice returned (replay or workorder dedupe)")
     @ApiResponse(
             responseCode = "403",
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = LOCATION_REPLICATION_PENDING_DESCRIPTION,
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = RETRY_AFTER_DESCRIPTION,
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
@@ -302,13 +331,23 @@ public class InvoiceController {
                     publishes an invoice-updated notification.
                     Returns 200 with the recalculated invoice, 404 when the invoice does not exist, 409 when the \
                     invoice has left DRAFT, 400 when the amount is not positive (type, reason and authorizedBy are \
-                    enforced by request validation), and 422 when the adjustment would drive the invoice total \
-                    negative (a credit memo is required instead).
+                    enforced by request validation), 422 when the adjustment would drive the invoice total \
+                    negative (a credit memo is required instead), and 503 with a Retry-After header and \
+                    LOCATION_REPLICATION_PENDING when the invoice's location has not replicated yet.
                     """)
     @ApiResponse(responseCode = "200", description = "Adjustment applied")
     @ApiResponse(
             responseCode = "422",
             description = "The adjustment would drive the invoice total negative",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = LOCATION_REPLICATION_PENDING_DESCRIPTION,
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = RETRY_AFTER_DESCRIPTION,
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
@@ -354,13 +393,24 @@ public class InvoiceController {
                     Returns 200 with the finalized invoice, 404 when the invoice does not exist, 409 when the \
                     invoice is not DRAFT or tax has not been calculated, and 403 with MANAGER_APPROVAL_REQUIRED or \
                     MANAGER_APPROVAL_INVALID when a required managerApprovalCode is missing, invalid, or expired \
-                    (a step-up credential the caller lacks; nextAction points at elevateManagerApproval).
+                    (a step-up credential the caller lacks; nextAction points at elevateManagerApproval), and 503 \
+                    with a Retry-After header and LOCATION_REPLICATION_PENDING when the invoice's location has \
+                    not replicated yet (the invoice stays DRAFT; retry).
                     """)
     @ApiResponse(responseCode = "200", description = "Invoice finalized")
     @ApiResponse(
             responseCode = "403",
             description = "MANAGER_APPROVAL_REQUIRED or MANAGER_APPROVAL_INVALID: a required managerApprovalCode is "
                     + "missing, invalid, or expired",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = LOCATION_REPLICATION_PENDING_DESCRIPTION,
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = RETRY_AFTER_DESCRIPTION,
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",

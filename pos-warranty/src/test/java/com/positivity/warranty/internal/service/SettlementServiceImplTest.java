@@ -28,13 +28,13 @@ import com.positivity.warranty.internal.enums.SettlementType;
 import com.positivity.warranty.internal.exception.IllegalClaimStateException;
 import com.positivity.warranty.internal.exception.WarrantyIntegrationException;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
-import com.positivity.warranty.internal.exception.WarrantyUnprocessableException;
 import com.positivity.warranty.internal.exception.WarrantyValidationException;
 import com.positivity.warranty.internal.repository.ClaimNoteRepository;
 import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
 import com.positivity.warranty.internal.repository.ClaimStatusHistoryRepository;
 import com.positivity.warranty.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -238,13 +238,16 @@ class SettlementServiceImplTest {
         }
 
         @Test
-        void unresolvableWorkorderIs422AndNothingIsPersisted() {
+        void workorderNotYetReplicatedIs503AndNothingIsPersisted() {
             stubClaim(ClaimStatus.APPROVED);
             when(extWorkorderReplicaRepository.existsById(WORKORDER_ID)).thenReturn(false);
 
             assertThatThrownBy(() -> service.create(CLAIM_ID, request(SettlementType.REPLACEMENT_WORKORDER)))
-                    .isInstanceOf(WarrantyUnprocessableException.class)
-                    .hasFieldOrPropertyWithValue("code", SettlementServiceImpl.WORKORDER_NOT_FOUND_CODE);
+                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo(SettlementServiceImpl.WORKORDER_REPLICATION_PENDING_CODE);
+                        assertThat(e.getCode()).isEqualTo("WORKORDER_REPLICATION_PENDING");
+                        assertThat(e.getReferenceId()).isEqualTo(WORKORDER_ID);
+                    });
             verifyNoInteractions(settlementRepository, statusHistoryRepository);
             verify(claimRepository, never()).save(any());
         }

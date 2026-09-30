@@ -8,6 +8,7 @@ import com.positivity.shopmanager.internal.service.dto.AssignmentResponse;
 import com.positivity.shopmanager.internal.service.dto.CreateAssignmentRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -65,9 +66,11 @@ public class AssignmentController {
                     Each mechanic in the response is identified by mechanicPersonId, the same People-domain \
                     person id the request supplied; mechanicRecordId is an internal shop-manager record id and \
                     not a cross-service identifier.
-                    Returns 400 when a mechanic cannot be resolved, the LEAD constraint is violated, or \
-                    overrideReason is blank with override=true, 404 when the appointment cannot be resolved, and \
-                    403 when override is requested without the shop:schedule:edit authority.
+                    Returns 400 when a mechanicPersonId is malformed, the LEAD constraint is violated, or \
+                    overrideReason is blank with override=true, 404 when the appointment cannot be resolved, \
+                    403 when override is requested without the shop:schedule:edit authority, and 503 with a \
+                    Retry-After header and MECHANIC_REPLICATION_PENDING when a mechanic has not been projected \
+                    from staffing events yet.
                     """)
     @ApiResponse(
             responseCode = "201",
@@ -80,6 +83,16 @@ public class AssignmentController {
     @ApiResponse(
             responseCode = "404",
             description = "Appointment not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "A mechanic has not been projected from staffing events yet (ApiError.code"
+                    + " MECHANIC_REPLICATION_PENDING). Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public @NonNull AssignmentResponse createAssignment(
             @Parameter(description = "Appointment identifier", required = true) @PathVariable UUID appointmentId,

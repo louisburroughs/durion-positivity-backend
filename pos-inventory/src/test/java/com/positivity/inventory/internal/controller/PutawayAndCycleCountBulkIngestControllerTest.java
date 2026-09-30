@@ -27,6 +27,7 @@ import com.positivity.inventory.internal.enums.PutawayRuleMatchType;
 import com.positivity.inventory.internal.exception.DuplicateEnabledAnyPutawayRuleException;
 import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.putaway.service.PutawayRuleService;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -179,6 +180,28 @@ class PutawayAndCycleCountBulkIngestControllerTest {
                 .andExpect(jsonPath("$.results[0].errorMessage")
                         .value("Destination storage location " + BIN_ID
                                 + " does not exist in the storage-location replica"));
+    }
+
+    /**
+     * #1994: a destination bin the storage-location replica has not received yet is "not yet", not
+     * a bad row — the bulk-ingest classifier reads the exception's self-declared 503 and reports the
+     * row {@code REPLICATION_PENDING} so the caller resubmits it instead of fixing a valid id.
+     */
+    @Test
+    void putawayRules_destinationNotYetReplicated_isReportedReplicationPending() throws Exception {
+        when(putawayRuleService.createRule(any()))
+                .thenThrow(new ReplicationPendingException(
+                        "STORAGE_LOCATION_REPLICATION_PENDING",
+                        "The destination storage location is not in the storage-location replica yet",
+                        BIN_ID));
+
+        mockMvc.perform(post("/v1/inventory/putaway/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                request(List.of(rule(PutawayRuleMatchType.CATEGORY, UUID.randomUUID()))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("REPLICATION_PENDING"));
     }
 
     // ─── cycle count plans ───────────────────────────────────────────────────

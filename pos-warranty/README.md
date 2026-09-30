@@ -3,6 +3,17 @@
 Warranty registrations, claims, settlements, vendor reimbursements and part returns
 (`docs/PRD-warranty-claims-module.md`). Conventions and commands: `AGENTS.md` at the repository root.
 
+## Error codes
+
+Every non-2xx response carries the platform `ApiError` envelope (see
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md)).
+This table lists only the replica-lag code; the module's other codes are defined beside the
+`WarrantyExceptionHandler` that mints them.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `WORKORDER_REPLICATION_PENDING` | 503 | `POST /v1/warranty/claims/{id}/settlements` with `REPLACEMENT_WORKORDER`: the replacement workorder is not in the `ext_workorder` replica yet (it arrives by `workorder.events.v1`). Nothing is recorded. Carries `Retry-After` and `referenceId` = the workorder id; not-yet, not no, so retry (#1994). Replaces the former `422 WARRANTY_SETTLEMENT_WORKORDER_NOT_FOUND` |
+
 ## Multitenancy (ADR-0062, WS3 wave 8)
 
 This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, every scoped entity

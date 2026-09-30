@@ -22,6 +22,7 @@ import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.service.CatalogService;
 import com.positivity.catalog.internal.service.ServiceLaborStandardService;
 import com.positivity.catalog.internal.service.ServicePackageService;
+import com.positivity.web.common.ReplicationPendingException;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -134,6 +135,36 @@ class Tier0BulkIngestControllerTest {
                 .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
                 .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
                 .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("insert into service"))));
+    }
+
+    /**
+     * #1994: the bulk classifier reads an exception's self-declared 503, so a row the service could
+     * not judge yet — for example one that names a skill not yet replicated from pos-people (the
+     * {@code SKILL_REPLICATION_PENDING} the requirement service raises) — comes back
+     * {@code REPLICATION_PENDING} with the module's own message, not {@code INTERNAL_ERROR}, and the
+     * rest of the batch is unaffected.
+     */
+    @Test
+    @DisplayName("services: a row that awaits a replica is REPLICATION_PENDING, not INTERNAL_ERROR (#1994)")
+    void servicesRowAwaitingAReplicaIsReplicationPending() throws Exception {
+        CatalogItemResponseDto created = new CatalogItemResponseDto();
+        created.setId(ENTITY_ID);
+        when(catalogService.upsertServiceByOperationCode(any()))
+                .thenReturn(created)
+                .thenThrow(new ReplicationPendingException(
+                        "SKILL_REPLICATION_PENDING",
+                        "A declared skill has not replicated from the skill registry yet; retry shortly",
+                        ENTITY_ID));
+
+        mockMvc.perform(post("/v1/catalog/services/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(batch(
+                                List.of(serviceRecord("TPMS-SENSOR-SERVICE"), serviceRecord("LUG-TORQUE-RECHECK"))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(1))
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[1].errorCode").value("REPLICATION_PENDING"))
+                .andExpect(jsonPath("$.results[1].errorMessage", containsString("not replicated")));
     }
 
     @Test

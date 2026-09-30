@@ -14,6 +14,7 @@ import com.positivity.shopmanager.internal.service.OpeningSearchService;
 import com.positivity.shopmanager.internal.service.ScheduleCapacityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -222,7 +223,8 @@ public class ScheduleController {
                     openings rather than as a noOpeningReason, which names only NO_ELIGIBLE_BAY_AT_LOCATION or \
                     ALL_ELIGIBLE_BAYS_BOOKED.
                     Returns 400 for a malformed or out-of-range value, 403 LOCATION_SCOPE_DENIED when the caller's \
-                    location scope does not cover locationId, 404 when the location or a service is unknown, and 422 \
+                    location scope does not cover locationId, 503 with a Retry-After header and LOCATION_REPLICATION_PENDING or \
+                    CATALOG_REPLICATION_PENDING when the location or a service has not replicated yet, and 422 \
                     OPENING_HORIZON_EXCEEDED, OPENING_LIMIT_EXCEEDED, OPENING_TOO_MANY_SERVICES or \
                     LOCATION_HOURS_UNKNOWN when a policy bound or a facility fact is not met.
                     """)
@@ -238,14 +240,21 @@ public class ScheduleController {
             description = LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
-            responseCode = "404",
-            description = "Location or catalog service unknown to shop management",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
             responseCode = "422",
             description = "A policy bound exceeded or the location's hours unpublished (ApiError.code"
                     + " OPENING_HORIZON_EXCEEDED, OPENING_LIMIT_EXCEEDED, OPENING_TOO_MANY_SERVICES,"
                     + " LOCATION_HOURS_UNKNOWN).",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "The location or a requested catalog service has not replicated yet (ApiError.code"
+                    + " LOCATION_REPLICATION_PENDING or CATALOG_REPLICATION_PENDING). Not-yet, not no: retry after"
+                    + " the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/schedules/openings")
     @EmitEvent(id = "SHOPMGR_SCHEDULE_OPENING_SEARCH", apiVersion = "1")

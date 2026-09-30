@@ -37,13 +37,13 @@ paths:
 
         Preconditions: the customer and vehicle must exist in the local CRM replicas and the vehicle must belong to the customer; the requested window must not overlap another SCHEDULED appointment on the same resource at the location; when sourceType (ESTIMATE or WORK_ORDER) is set, sourceId is required, the source must be eligible for scheduling, and no appointment may already exist for that source; when resourceType is BAY or MOBILE_UNIT (stated or inferred, see below), resourceId must resolve to an ACTIVE resource at locationId that is eligible for the appointment''s services and vehicle (DECISION-SHOPMGMT-021) — a BAY must claim every specialty operation on the appointment (or take no general work, per its bay type''s specialty map) and accommodate the vehicle''s GVWR class.
 
-        Required inputs: crmCustomerId, crmVehicleId and locationId (UUIDs), startAt and endAt (UTC instants, startAt before endAt) and at least one serviceRequestIds entry; an optional Idempotency-Key header (non-blank, max 128 characters) makes retries safe and replays the original response only when the retried request matches the stored appointment''s scheduling fields. resourceType (BAY, MOBILE_UNIT or UNASSIGNED) is optional but is never a way to skip eligibility on a real resourceId: omit both to book UNASSIGNED; name a resourceId with resourceType omitted and it is inferred as BAY or MOBILE_UNIT from whichever replica holds that id (400 if resourceId is set with resourceType UNASSIGNED, or unset with BAY/MOBILE_UNIT; 422 SERVICE_POSITION_INVALID if it matches neither replica).
+        Required inputs: crmCustomerId, crmVehicleId and locationId (UUIDs), startAt and endAt (UTC instants, startAt before endAt) and at least one serviceRequestIds entry; an optional Idempotency-Key header (non-blank, max 128 characters) makes retries safe and replays the original response only when the retried request matches the stored appointment''s scheduling fields. resourceType (BAY, MOBILE_UNIT or UNASSIGNED) is optional but is never a way to skip eligibility on a real resourceId: omit both to book UNASSIGNED; name a resourceId with resourceType omitted and it is inferred as BAY or MOBILE_UNIT from whichever replica holds that id (400 if resourceId is set with resourceType UNASSIGNED, or unset with BAY/MOBILE_UNIT; 503 LOCATION_REPLICATION_PENDING if a well-formed id matches neither replica yet).
 
         Emits a SHOPMGR_APPOINTMENT_CREATE event and persists customer and vehicle snapshots on the appointment, which is created in SCHEDULED status with resourceType stored verbatim.
 
         A caller whose appointments:create or shop:schedule:edit grant is location-scoped must have locationId within reach (ADR-0061).
 
-        Returns 400 when the slot is already booked, the idempotency key was reused with a different request, or sourceId is missing for a supplied sourceType; 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId; 404 when the customer or vehicle is unknown; 409 when the vehicle does not belong to the customer; and 422 when the source estimate or work order is not eligible for scheduling, the start lies beyond the booking horizon, or the named resource fails DECISION-SHOPMGMT-021 eligibility (SERVICE_POSITION_INVALID, SERVICE_POSITION_INACTIVE, SERVICE_POSITION_NOT_EQUIPPED, SERVICE_POSITION_DUTY_CLASS_EXCEEDED — none of these are overridable).
+        Returns 400 when the slot is already booked, the idempotency key was reused with a different request, or sourceId is missing for a supplied sourceType; 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId; 409 when the vehicle does not belong to the customer; 503 with a Retry-After header and CRM_REPLICATION_PENDING when the customer or vehicle has not replicated from CRM yet, or LOCATION_REPLICATION_PENDING when the named bay or mobile unit has not replicated from Location yet (retry, do not treat as unknown); and 422 when the source estimate or work order is not eligible for scheduling, the start lies beyond the booking horizon, or the named resource fails DECISION-SHOPMGMT-021 eligibility (SERVICE_POSITION_INVALID, SERVICE_POSITION_INACTIVE, SERVICE_POSITION_NOT_EQUIPPED, SERVICE_POSITION_DUTY_CLASS_EXCEEDED — none of these are overridable).
 
         '
       operationId: createAppointment
@@ -108,12 +108,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Caller holds appointments:create or shop:schedule:edit but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Customer or vehicle not found in the local CRM replicas.
         '409':
           content:
             application/json:
@@ -125,13 +119,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Policy failure, never overridable. SOURCE_NOT_ELIGIBLE when the estimate or work order cannot be scheduled (ineligible status); BOOKING_HORIZON_EXCEEDED when startAt lies beyond the configured booking horizon (DECISION-SHOPMGMT-019; 180 facility-local days by default); or, for a resourceType of BAY or MOBILE_UNIT (DECISION-SHOPMGMT-021, fieldErrors names resourceId), SERVICE_POSITION_INVALID (resourceId unknown, or at another location), SERVICE_POSITION_INACTIVE (not ACTIVE), SERVICE_POSITION_NOT_EQUIPPED (a BAY does not claim a specialty operation on the appointment, or takes no general work) or SERVICE_POSITION_DUTY_CLASS_EXCEEDED (the vehicle's GVWR class exceeds the bay's maxDutyClass).
+          description: Policy failure, never overridable. SOURCE_NOT_ELIGIBLE when the estimate or work order cannot be scheduled (ineligible status); BOOKING_HORIZON_EXCEEDED when startAt lies beyond the configured booking horizon (DECISION-SHOPMGMT-019; 180 facility-local days by default); or, for a resourceType of BAY or MOBILE_UNIT (DECISION-SHOPMGMT-021, fieldErrors names resourceId), SERVICE_POSITION_INVALID (resourceId malformed, of the other resource kind, or at another location), SERVICE_POSITION_INACTIVE (not ACTIVE), SERVICE_POSITION_NOT_EQUIPPED (a BAY does not claim a specialty operation on the appointment, or takes no general work) or SERVICE_POSITION_DUTY_CLASS_EXCEEDED (the vehicle's GVWR class exceeds the bay's maxDutyClass).
         '501':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Not implemented.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'A record this service replicates from another domain has not arrived yet (ApiError.code CRM_REPLICATION_PENDING for the customer or vehicle, LOCATION_REPLICATION_PENDING for the bay or mobile unit). This is not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - appointments:create
@@ -278,7 +284,7 @@ paths:
 
         Each mechanic in the response is identified by mechanicPersonId, the same People-domain person id the request supplied; mechanicRecordId is an internal shop-manager record id and not a cross-service identifier.
 
-        Returns 400 when a mechanic cannot be resolved, the LEAD constraint is violated, or overrideReason is blank with override=true, 404 when the appointment cannot be resolved, and 403 when override is requested without the shop:schedule:edit authority.
+        Returns 400 when a mechanicPersonId is malformed, the LEAD constraint is violated, or overrideReason is blank with override=true, 404 when the appointment cannot be resolved, 403 when override is requested without the shop:schedule:edit authority, and 503 with a Retry-After header and MECHANIC_REPLICATION_PENDING when a mechanic has not been projected from staffing events yet.
 
         '
       operationId: createAssignment
@@ -327,6 +333,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Appointment not found.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'A mechanic has not been projected from staffing events yet (ApiError.code MECHANIC_REPLICATION_PENDING). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - shop:bay:assign
@@ -499,7 +517,7 @@ paths:
 
         A caller whose appointments:reschedule grant is location-scoped must have the appointment''s location within reach (ADR-0061).
 
-        Returns 400 when the time window is invalid or notes are missing for reason OTHER, 404 when the appointment does not exist, 403 LOCATION_SCOPE_DENIED (location out of reach) or FORBIDDEN (approval required but appointments:reschedule:approve is not held), 409 when the appointment status does not permit rescheduling, and 422 for BOOKING_HORIZON_EXCEEDED, a SERVICE_POSITION_INVALID/INACTIVE/NOT_EQUIPPED/DUTY_CLASS_EXCEEDED failure on the resource the appointment ends up on (DECISION-SHOPMGMT-021, none overridable), or RESCHEDULE_APPROVAL_REASON_REQUIRED when approval is needed but approvalReason is missing or blank.
+        Returns 400 when the time window is invalid or notes are missing for reason OTHER, 404 when the appointment does not exist, 403 LOCATION_SCOPE_DENIED (location out of reach) or FORBIDDEN (approval required but appointments:reschedule:approve is not held), 409 when the appointment status does not permit rescheduling, and 422 for BOOKING_HORIZON_EXCEEDED, a SERVICE_POSITION_INVALID/INACTIVE/NOT_EQUIPPED/DUTY_CLASS_EXCEEDED failure on the resource the appointment ends up on (DECISION-SHOPMGMT-021, none overridable), or RESCHEDULE_APPROVAL_REASON_REQUIRED when approval is needed but approvalReason is missing or blank, and 503 with a Retry-After header and LOCATION_REPLICATION_PENDING when the target bay or mobile unit has not replicated from Location yet.
 
         '
       operationId: rescheduleAppointment
@@ -562,7 +580,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'Policy failure, never overridable; the appointment keeps its previous window and no reschedule is recorded. BOOKING_HORIZON_EXCEEDED — newStartAt lies beyond the configured booking horizon (DECISION-SHOPMGMT-019; 180 facility-local days by default). Or, for the BAY or MOBILE_UNIT resource the appointment ends up on (DECISION-SHOPMGMT-021, fieldErrors names resourceId): SERVICE_POSITION_INVALID (unknown, or at another location), SERVICE_POSITION_INACTIVE (not ACTIVE), SERVICE_POSITION_NOT_EQUIPPED (a BAY no longer claims a specialty operation on the appointment, or takes no general work) or SERVICE_POSITION_DUTY_CLASS_EXCEEDED (the vehicle''s GVWR class exceeds the bay''s maxDutyClass). Or RESCHEDULE_APPROVAL_REASON_REQUIRED (fieldErrors names approvalReason) when the caller holds appointments:reschedule:approve for a 3rd-or-later non-exempt reschedule but sent no non-blank approvalReason (DECISION-SHOPMGMT-004).'
+          description: 'Policy failure, never overridable; the appointment keeps its previous window and no reschedule is recorded. BOOKING_HORIZON_EXCEEDED — newStartAt lies beyond the configured booking horizon (DECISION-SHOPMGMT-019; 180 facility-local days by default). Or, for the BAY or MOBILE_UNIT resource the appointment ends up on (DECISION-SHOPMGMT-021, fieldErrors names resourceId): SERVICE_POSITION_INVALID (malformed, of the other resource kind, or at another location), SERVICE_POSITION_INACTIVE (not ACTIVE), SERVICE_POSITION_NOT_EQUIPPED (a BAY no longer claims a specialty operation on the appointment, or takes no general work) or SERVICE_POSITION_DUTY_CLASS_EXCEEDED (the vehicle''s GVWR class exceeds the bay''s maxDutyClass). Or RESCHEDULE_APPROVAL_REASON_REQUIRED (fieldErrors names approvalReason) when the caller holds appointments:reschedule:approve for a 3rd-or-later non-exempt reschedule but sent no non-blank approvalReason (DECISION-SHOPMGMT-004).'
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: LOCATION_REPLICATION_PENDING — the bay or mobile unit the appointment ends up on has not replicated from Location yet. Retry after the Retry-After interval; the appointment is unchanged.
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - appointments:reschedule
@@ -665,7 +695,7 @@ paths:
 
         Skill never withholds an opening: a technician lacking a required skill makes the opening AWAITING, and nobody competent rostered in the horizon is reported once as staffingAdvisory alongside the openings rather than as a noOpeningReason, which names only NO_ELIGIBLE_BAY_AT_LOCATION or ALL_ELIGIBLE_BAYS_BOOKED.
 
-        Returns 400 for a malformed or out-of-range value, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, 404 when the location or a service is unknown, and 422 OPENING_HORIZON_EXCEEDED, OPENING_LIMIT_EXCEEDED, OPENING_TOO_MANY_SERVICES or LOCATION_HOURS_UNKNOWN when a policy bound or a facility fact is not met.
+        Returns 400 for a malformed or out-of-range value, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, 503 with a Retry-After header and LOCATION_REPLICATION_PENDING or CATALOG_REPLICATION_PENDING when the location or a service has not replicated yet, and 422 OPENING_HORIZON_EXCEEDED, OPENING_LIMIT_EXCEEDED, OPENING_TOO_MANY_SERVICES or LOCATION_HOURS_UNKNOWN when a policy bound or a facility fact is not met.
 
         '
       operationId: searchOpenings
@@ -756,18 +786,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Caller holds shop:schedule:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Location or catalog service unknown to shop management
         '422':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: A policy bound exceeded or the location's hours unpublished (ApiError.code OPENING_HORIZON_EXCEEDED, OPENING_LIMIT_EXCEEDED, OPENING_TOO_MANY_SERVICES, LOCATION_HOURS_UNKNOWN).
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The location or a requested catalog service has not replicated yet (ApiError.code LOCATION_REPLICATION_PENDING or CATALOG_REPLICATION_PENDING). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - shop:schedule:view

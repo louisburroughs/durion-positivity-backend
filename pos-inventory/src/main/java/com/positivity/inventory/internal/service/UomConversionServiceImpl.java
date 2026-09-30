@@ -84,6 +84,8 @@ public class UomConversionServiceImpl implements UomConversionService {
     }
 
     private BigDecimal convert(UUID productId, String uomCode, BigDecimal quantity, RoundingMode roundingMode) {
+        // #1994: a missing product or UoM row stays a 422 (UomConversionUndefinedException), not a 503 — the
+        // rows are catalog configuration authored ahead of use, so absence is a data problem to fix, not a lag.
         ExtProductReplica product = extProductReplicaRepository
                 .findById(productId)
                 .orElseThrow(() -> UomConversionUndefinedException.unknownProduct(productId, uomCode));

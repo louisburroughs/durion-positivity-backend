@@ -7,6 +7,7 @@ import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -104,13 +105,14 @@ public class CrmVehiclesController {
                     the named customer through the party's VIN association.
                     Use this tool when both the customer and vehicle ids are known; use \
                     listVehiclesForCustomer instead to discover which vehicles a customer owns.
-                    Preconditions: the customer must exist, the vehicle must exist in the replica, and the \
-                    vehicle must be associated with that customer.
+                    Preconditions: the customer must exist, the vehicle must have replicated into the \
+                    replica from the vehicle registry, and the vehicle must be associated with that customer.
                     Required inputs: customerId and vehicleId (UUIDs) as path parameters; there is no \
                     request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when the customer, the vehicle, or the ownership association cannot be \
-                    resolved.
+                    Returns 404 when the customer cannot be found or the vehicle is not associated with that \
+                    customer, and 503 with a Retry-After header and VEHICLE_REPLICATION_PENDING when the \
+                    vehicle has not replicated yet.
                     """)
     @ApiResponses(
             value = {
@@ -127,7 +129,20 @@ public class CrmVehiclesController {
                                         schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "404",
-                        description = "Customer or vehicle not found",
+                        description = "Customer not found, or the vehicle is not associated with that customer",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "503",
+                        description = "VEHICLE_REPLICATION_PENDING: the vehicle has not replicated from the vehicle"
+                                + " registry yet. Not-yet, not no: retry after the Retry-After interval.",
+                        headers =
+                                @Header(
+                                        name = "Retry-After",
+                                        description = "Seconds to wait before retrying",
+                                        schema = @Schema(type = "integer")),
                         content =
                                 @Content(
                                         mediaType = "application/json",

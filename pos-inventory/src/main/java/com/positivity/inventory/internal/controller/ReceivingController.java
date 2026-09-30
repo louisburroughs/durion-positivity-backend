@@ -14,6 +14,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -288,8 +289,10 @@ public class ReceivingController {
                     Emits an INVENTORY_RECEIVING_CROSSDOCK event, stamps the workorder reference on the line, \
                     updates the line to RECEIVED, RECEIVED_SHORT or RECEIVED_OVER, and completes the session when \
                     every line is settled.
-                    Returns 404 when the session or line is not found, 400 when the workorder is closed or the \
-                    quantity exceeds the expected quantity, 403 when the product mismatches the workorder demand \
+                    Returns 404 when the session or line is not found, 400 when the workorder is closed, the \
+                    workorder line belongs to another workorder, or the quantity exceeds the expected quantity, \
+                    503 with a Retry-After header and WORKORDER_REPLICATION_PENDING when the workorder or its \
+                    part line has not replicated from pos-workorder yet, 403 when the product mismatches the workorder demand \
                     without the override permission, and 422 when a LOT-tracked product resolves no lot number.
                     """,
             tags = {"Receiving"})
@@ -311,6 +314,16 @@ public class ReceivingController {
     @ApiResponse(
             responseCode = "404",
             description = "Receiving session or line not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description =
+                    "WORKORDER_REPLICATION_PENDING: the workorder or its part line has not replicated from pos-workorder yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CrossDockResponse> crossDockLineToWorkorder(
             @Parameter(description = "Receiving session identifier", required = true) @PathVariable UUID sessionId,

@@ -3,14 +3,13 @@ package com.positivity.shopmanager.contract;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.shopmanager.BaseContractIntegrationTest;
 import com.positivity.shopmanager.PosShopManagerApplication;
 import com.positivity.shopmanager.SchedulingWorldFixture;
-import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
-import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
@@ -19,6 +18,7 @@ import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.SchedulingConflictRepository;
 import com.positivity.shopmanager.internal.service.CrmSnapshotService;
+import com.positivity.web.common.ReplicationPendingException;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -133,14 +133,20 @@ class AppointmentCreateContractBehaviorIT extends BaseContractIntegrationTest {
     private void setupCrmStubs() {
         when(crmSnapshotService.getCustomerById(VALID_CRM_CUSTOMER_ID)).thenReturn(validCustomerSnapshot());
         when(crmSnapshotService.getCustomerById(UNKNOWN_CRM_CUSTOMER_ID))
-                .thenThrow(new CrmCustomerNotFoundException(UNKNOWN_CRM_CUSTOMER_ID));
+                .thenThrow(new ReplicationPendingException(
+                        "CRM_REPLICATION_PENDING",
+                        "The customer has not replicated from CRM yet",
+                        UNKNOWN_CRM_CUSTOMER_ID));
         when(crmSnapshotService.getCustomerById(CRM_TIMEOUT_CUSTOMER_ID))
                 .thenThrow(new ResourceAccessException("Connection timeout"));
 
         when(crmSnapshotService.getVehicleById(VALID_CRM_VEHICLE_ID))
                 .thenReturn(validVehicleSnapshot(VALID_CRM_CUSTOMER_ID));
         when(crmSnapshotService.getVehicleById(UNKNOWN_CRM_VEHICLE_ID))
-                .thenThrow(new CrmVehicleNotFoundException(UNKNOWN_CRM_VEHICLE_ID));
+                .thenThrow(new ReplicationPendingException(
+                        "CRM_REPLICATION_PENDING",
+                        "The vehicle has not replicated from CRM yet",
+                        UNKNOWN_CRM_VEHICLE_ID));
         when(crmSnapshotService.getVehicleById(MISMATCHED_VEHICLE_ID))
                 .thenReturn(validVehicleSnapshot(DIFFERENT_CUSTOMER_ID));
     }
@@ -197,25 +203,27 @@ class AppointmentCreateContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("S4: should_return_404_CUSTOMER_NOT_FOUND_when_crmCustomerId_does_not_exist_in_crm")
-    void should_return_404_CUSTOMER_NOT_FOUND_when_crmCustomerId_does_not_exist_in_crm() throws Exception {
+    @DisplayName("S4: should_return_503_CRM_REPLICATION_PENDING_when_crmCustomerId_has_not_replicated_yet")
+    void should_return_503_CRM_REPLICATION_PENDING_when_crmCustomerId_has_not_replicated_yet() throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(buildValidCreateRequest(UNKNOWN_CRM_CUSTOMER_ID, VALID_CRM_VEHICLE_ID))))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("CUSTOMER_NOT_FOUND"))
-                .andExpect(jsonPath("$.status").value(404));
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(jsonPath("$.code").value("CRM_REPLICATION_PENDING"))
+                .andExpect(jsonPath("$.status").value(503));
     }
 
     @Test
-    @DisplayName("S5: should_return_404_VEHICLE_NOT_FOUND_when_crmVehicleId_does_not_exist_in_crm")
-    void should_return_404_VEHICLE_NOT_FOUND_when_crmVehicleId_does_not_exist_in_crm() throws Exception {
+    @DisplayName("S5: should_return_503_CRM_REPLICATION_PENDING_when_crmVehicleId_has_not_replicated_yet")
+    void should_return_503_CRM_REPLICATION_PENDING_when_crmVehicleId_has_not_replicated_yet() throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(buildValidCreateRequest(VALID_CRM_CUSTOMER_ID, UNKNOWN_CRM_VEHICLE_ID))))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("VEHICLE_NOT_FOUND"))
-                .andExpect(jsonPath("$.status").value(404));
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(jsonPath("$.code").value("CRM_REPLICATION_PENDING"))
+                .andExpect(jsonPath("$.status").value(503));
     }
 
     @Test

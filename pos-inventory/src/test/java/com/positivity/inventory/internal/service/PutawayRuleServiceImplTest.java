@@ -17,6 +17,7 @@ import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.putaway.service.PutawayRuleServiceImpl;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -198,22 +199,25 @@ class PutawayRuleServiceImplTest {
     class DestinationValidation {
 
         @Test
-        @DisplayName("refuses creating an enabled rule aimed at a bin the replica has never seen")
+        @DisplayName(
+                "answers 503 STORAGE_LOCATION_REPLICATION_PENDING for an enabled rule aimed at a bin the replica has"
+                        + " not seen (#1994)")
         void refusesAnUnknownDestinationOnCreate() {
             when(extStorageLocationReplicaRepository.existsById(DESTINATION)).thenReturn(false);
             when(extStorageLocationReplicaRepository.count()).thenReturn(5L);
             PutawayRuleRequest request = request(PutawayRuleMatchType.ANY, null);
 
             assertThatThrownBy(() -> service.createRule(request))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining(DESTINATION.toString())
-                    .hasMessageContaining("does not exist");
+                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("STORAGE_LOCATION_REPLICATION_PENDING");
+                        assertThat(e.getReferenceId()).isEqualTo(DESTINATION);
+                    });
 
             verify(putawayRuleRepository, never()).saveAndFlush(any(PutawayRule.class));
         }
 
         @Test
-        @DisplayName("refuses retargeting an enabled rule at a bin the replica has never seen")
+        @DisplayName("answers 503 when retargeting an enabled rule at a bin the replica has not seen (#1994)")
         void refusesAnUnknownDestinationOnUpdate() {
             when(putawayRuleRepository.findById(RULE_ID))
                     .thenReturn(Optional.of(entity(RULE_ID, PutawayRuleMatchType.CATEGORY, 10)));
@@ -223,8 +227,10 @@ class PutawayRuleServiceImplTest {
             String ruleId = RULE_ID.toString();
 
             assertThatThrownBy(() -> service.updateRule(ruleId, request))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining(DESTINATION.toString());
+                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("STORAGE_LOCATION_REPLICATION_PENDING");
+                        assertThat(e.getReferenceId()).isEqualTo(DESTINATION);
+                    });
 
             verify(putawayRuleRepository, never()).saveAndFlush(any(PutawayRule.class));
         }

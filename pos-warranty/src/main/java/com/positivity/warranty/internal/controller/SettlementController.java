@@ -10,6 +10,7 @@ import com.positivity.warranty.internal.service.SettlementReconciliationService;
 import com.positivity.warranty.internal.service.SettlementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -70,8 +71,9 @@ public class SettlementController {
                     the first successful settlement moves the claim APPROVED to SETTLED, and a failed pos-invoice \
                     write keeps a durable FAILED settlement row for the reconciliation worklist.
                     Returns 400 when the type-specific reference id is missing, 404 when the claim does not \
-                    exist, 409 when the claim is not settleable, 422 when the replacement workorder cannot be \
-                    resolved, and 502 when the pos-invoice write fails (the settlement is recorded FAILED and \
+                    exist, 409 when the claim is not settleable, 503 with a Retry-After header and \
+                    WORKORDER_REPLICATION_PENDING when the replacement workorder has not replicated from \
+                    pos-workorder yet (nothing is recorded; retry), and 502 when the pos-invoice write fails (the settlement is recorded FAILED and \
                     staff retry with a fresh settlement after checking reconcileSettlements).
                     """)
     @ApiResponse(responseCode = "201", description = "Settlement executed.")
@@ -84,8 +86,14 @@ public class SettlementController {
             description = "Claim is not in a settleable state.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
-            responseCode = "422",
-            description = "Referenced replacement workorder could not be resolved.",
+            responseCode = "503",
+            description = "WORKORDER_REPLICATION_PENDING: the replacement workorder has not replicated from"
+                    + " pos-workorder yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "502",

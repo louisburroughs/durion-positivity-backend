@@ -20,6 +20,7 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
 import com.positivity.inventory.internal.exception.InvalidPoReferenceException;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
+import com.positivity.inventory.internal.exception.ReplicationPendingCodes;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.AsnLineRepository;
 import com.positivity.inventory.internal.repository.AsnRepository;
@@ -38,6 +39,7 @@ import com.positivity.inventory.internal.service.ReceiptCostCurrencyPolicy;
 import com.positivity.inventory.internal.service.ReceiptUnitCosts;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.web.common.ReplicationPendingException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -85,16 +87,13 @@ public class AsnServiceImpl implements AsnService {
     @Transactional
     public @NonNull AsnResponse createAsn(@NonNull CreateAsnRequest request, @NonNull String actorId) {
         for (UUID poId : request.getRelatedPoIds()) {
-            ExtPurchaseOrderReplica purchaseOrder = purchaseOrderRepository
-                    .findById(poId)
-                    .orElseThrow(() -> new InvalidPoReferenceException(
-                            "INVALID_PO_REFERENCE: PO " + poId + " is unknown or not APPROVED"));
+            ExtPurchaseOrderReplica purchaseOrder =
+                    purchaseOrderRepository.findById(poId).orElseThrow(() -> purchaseOrderReplicationPending(poId));
             // A shipping notice may only be raised against an order that has been committed to.
             // PARTIALLY_RECEIVED is deliberately excluded here: a second ASN against a part
             // delivered order is a different case from the first, and is not what this creates.
             if (!"APPROVED".equals(purchaseOrder.getStatus())) {
-                throw new InvalidPoReferenceException(
-                        "INVALID_PO_REFERENCE: PO " + poId + " is unknown or not APPROVED");
+                throw new InvalidPoReferenceException("INVALID_PO_REFERENCE: PO " + poId + " is not APPROVED");
             }
         }
 
@@ -609,19 +608,26 @@ public class AsnServiceImpl implements AsnService {
      * The order an ASN or receipt may be raised against, read from the projection (CAP-320 #1334).
      *
      * <p>pos-order owns the order now, so this asks the replica rather than a table here or a call
-     * there (ADR-0044 R1/R3). An order the projection has not caught up with is treated as unknown:
-     * refusing a receipt that is merely early is recoverable, while accepting one against an order
-     * that was never approved is not.
+     * there (ADR-0044 R1/R3). An order the projection has not caught up with is refused, not
+     * accepted — a receipt against an order that was never approved is not recoverable — but it is
+     * refused as "not yet" (503 {@code PURCHASE_ORDER_REPLICATION_PENDING} with {@code Retry-After}),
+     * not as an invalid reference: the caller cannot tell an early order from a wrong id otherwise
+     * (#1994). An order that is present but not open for receiving stays 400.
      */
     private @NonNull ExtPurchaseOrderReplica requireApprovedPurchaseOrder(@NonNull UUID poId) {
-        ExtPurchaseOrderReplica purchaseOrder = purchaseOrderRepository
-                .findById(poId)
-                .orElseThrow(() -> new InvalidPoReferenceException(
-                        "INVALID_PO_REFERENCE: PO " + poId + " is unknown or not APPROVED"));
+        ExtPurchaseOrderReplica purchaseOrder =
+                purchaseOrderRepository.findById(poId).orElseThrow(() -> purchaseOrderReplicationPending(poId));
         if (!PurchaseOrderUpdatedV1.OPEN_SUPPLY_STATUSES.contains(purchaseOrder.getStatus())) {
-            throw new InvalidPoReferenceException("INVALID_PO_REFERENCE: PO " + poId + " is unknown or not APPROVED");
+            throw new InvalidPoReferenceException("INVALID_PO_REFERENCE: PO " + poId + " is not APPROVED");
         }
         return purchaseOrder;
+    }
+
+    private static ReplicationPendingException purchaseOrderReplicationPending(UUID poId) {
+        return new ReplicationPendingException(
+                ReplicationPendingCodes.PURCHASE_ORDER_REPLICATION_PENDING,
+                "The purchase order has not replicated from pos-order yet; retry shortly",
+                poId);
     }
 
     private ExtPurchaseOrderLineReplica resolvePurchaseOrderLine(UUID poLineId) {
@@ -630,6 +636,9 @@ public class AsnServiceImpl implements AsnService {
         }
         return purchaseOrderLineRepository
                 .findById(poLineId)
-                .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrderLine", poLineId.toString()));
+                .orElseThrow(() -> new ReplicationPendingException(
+                        ReplicationPendingCodes.PURCHASE_ORDER_REPLICATION_PENDING,
+                        "The purchase order line has not replicated from pos-order yet; retry shortly",
+                        poLineId));
     }
 }

@@ -39,7 +39,8 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
   `400 VALIDATION_ERROR`, field `resourceId`); a `resourceId` with `resourceType` explicitly
   `UNASSIGNED` is refused the same way (contradictory); a `resourceId` with `resourceType` omitted
   is **inferred** — an `ext_bay` row for that id makes it `BAY`, else an `ext_mobile_unit` row makes
-  it `MOBILE_UNIT`, else `422 SERVICE_POSITION_INVALID` — and validated exactly as if the caller had
+  it `MOBILE_UNIT`, else `503 LOCATION_REPLICATION_PENDING` (`422 SERVICE_POSITION_INVALID` when the id is not a
+  UUID) — and validated exactly as if the caller had
   stated it. A stated `BAY`/`MOBILE_UNIT` is validated against DECISION-SHOPMGMT-021 (below); a
   failure is `422` with one of the `SERVICE_POSITION_*` codes, never overridable.
 - `POST /v1/appointments/{appointmentId}/conflict-override` — a manager accepts SOFT conflicts by id
@@ -220,7 +221,9 @@ authoritative). No `resourceId` resolves to `UNASSIGNED` (no resource checks); a
 `resourceType` explicitly `UNASSIGNED` is refused as contradictory (`400 VALIDATION_ERROR`, field
 `resourceId`), as is a stated `BAY`/`MOBILE_UNIT` with no `resourceId`. A `resourceId` with
 `resourceType` omitted is **inferred**: an `ext_bay` row for that id makes it `BAY`, else an
-`ext_mobile_unit` row makes it `MOBILE_UNIT`; matching neither is `422 SERVICE_POSITION_INVALID`.
+`ext_mobile_unit` row makes it `MOBILE_UNIT`; a well-formed id matching neither is
+`503 LOCATION_REPLICATION_PENDING` (it may not have replicated yet), and a malformed one is
+`422 SERVICE_POSITION_INVALID`.
 Reschedule applies the same resolution to the appointment's own (stored) `resourceType`/`resourceId`
 — a `NULL` or otherwise unrecognised stored `resourceType` beside a real `resourceId` is inferred
 and validated exactly as a fresh submit would, not silently skipped; the one exception is a stored
@@ -232,7 +235,7 @@ mechanic-busy tracking (never written by this service), which stays skipped.
 
 | Condition | Code |
 | --- | --- |
-| `resourceId` unknown to the stated/inferred kind, at another location, or (when inferred) matching neither `ext_bay` nor `ext_mobile_unit` | `SERVICE_POSITION_INVALID` |
+| `resourceId` malformed, of the other resource kind, or at another location | `SERVICE_POSITION_INVALID` |
 | Resource not `ACTIVE` (out of service or retired) | `SERVICE_POSITION_INACTIVE` |
 | A `BAY` does not claim a specialty operation on the appointment, or takes no general work and the appointment has general operations | `SERVICE_POSITION_NOT_EQUIPPED` |
 | Vehicle GVWR class above the bay's `maxDutyClass` | `SERVICE_POSITION_DUTY_CLASS_EXCEEDED` |
@@ -394,6 +397,22 @@ but the event consumer writes them, and no synchronous call crosses a domain wal
 | `ext_bay`, `ext_mobile_unit` | `location.events.v1` | `LocationEventsListener` |
 | `ext_location`, `ext_location_parent` | `location.events.v1` | `LocationEventsListener` |
 | `ext_bay_type`, `ext_bay_specialty_map` | `location.events.v1` | `LocationEventsListener` (#2261) |
+
+### Not yet replicated is `503`, not `404` (#1994)
+
+A replica row arrives by event, so an id with no row is either wrong or not here yet, and a `404`
+(or a `400`/`422` worded as one) cannot tell the caller which. Where this module has nothing else
+that proves the entity exists, a replica miss answers `503 Service Unavailable` with a
+`Retry-After` header and a `<X>_REPLICATION_PENDING` code (`ApiError.referenceId` carries the
+awaited id). Bulk ingest classifies the same exception as `REPLICATION_PENDING`. A row that is
+present but in the wrong state keeps its own status.
+
+| Code | Replica miss | Endpoint |
+| --- | --- | --- |
+| `CRM_REPLICATION_PENDING` | `ext_customer_party`, `ext_vehicle` | `POST /v1/appointments` |
+| `LOCATION_REPLICATION_PENDING` | `ext_location` (opening search); `ext_bay` / `ext_mobile_unit` for a well-formed `resourceId` (submit, reschedule) | `GET /v1/schedules/openings`, `POST /v1/appointments`, `PUT /v1/appointments/{id}/reschedule` |
+| `CATALOG_REPLICATION_PENDING` | `ext_catalog_service` | `GET /v1/schedules/openings` |
+| `MECHANIC_REPLICATION_PENDING` | the mechanic projection built from staffing events | `POST /v1/appointments/{id}/assignments` |
 
 **Bay/mobile-unit topology is event-sourced, not read live.** A synchronous `RestClient` into
 pos-location would work today but is a domain→domain call that ADR-0044 R1 forbids, and no standing

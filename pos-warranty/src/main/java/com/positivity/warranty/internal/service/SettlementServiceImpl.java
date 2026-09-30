@@ -18,13 +18,13 @@ import com.positivity.warranty.internal.enums.SettlementStatus;
 import com.positivity.warranty.internal.exception.IllegalClaimStateException;
 import com.positivity.warranty.internal.exception.WarrantyIntegrationException;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
-import com.positivity.warranty.internal.exception.WarrantyUnprocessableException;
 import com.positivity.warranty.internal.exception.WarrantyValidationException;
 import com.positivity.warranty.internal.repository.ClaimNoteRepository;
 import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
 import com.positivity.warranty.internal.repository.ClaimStatusHistoryRepository;
 import com.positivity.warranty.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.time.Clock;
@@ -59,7 +59,7 @@ public class SettlementServiceImpl implements SettlementService {
 
     static final String CLAIM_NOT_FOUND_CODE = "WARRANTY_CLAIM_NOT_FOUND";
     static final String CLAIM_STATE_CODE = "WARRANTY_SETTLEMENT_CLAIM_STATE";
-    static final String WORKORDER_NOT_FOUND_CODE = "WARRANTY_SETTLEMENT_WORKORDER_NOT_FOUND";
+    static final String WORKORDER_REPLICATION_PENDING_CODE = "WORKORDER_REPLICATION_PENDING";
 
     private static final String SYSTEM = "system";
 
@@ -145,13 +145,15 @@ public class SettlementServiceImpl implements SettlementService {
                 request.replacementWorkorderId(),
                 "replacementWorkorderId is required for REPLACEMENT_WORKORDER settlements");
         // Existence check via the event-fed ext_workorder replica (ADR-0044 §6, #924). The replica
-        // is eventually consistent: a workorder created moments earlier may not have arrived yet, in
-        // which case the clerk retries once the fact lands — the same manual-fallback posture the
-        // other candidate-line reads take.
+        // is eventually consistent: a workorder created moments earlier may not have arrived yet.
+        // That is "not yet", not "no" (#1994): it answers 503 WORKORDER_REPLICATION_PENDING with
+        // Retry-After, so the clerk (or a caller) retries once the fact lands instead of reading a
+        // 422 as a wrong workorder id. Nothing has been persisted at this point.
         if (!extWorkorderReplicaRepository.existsById(workorderId)) {
-            throw new WarrantyUnprocessableException(
-                    WORKORDER_NOT_FOUND_CODE,
-                    "Replacement workorder '" + workorderId + "' could not be resolved in pos-workorder");
+            throw new ReplicationPendingException(
+                    WORKORDER_REPLICATION_PENDING_CODE,
+                    "The replacement workorder has not replicated from pos-workorder yet; retry shortly",
+                    workorderId);
         }
         settlement.setReplacementWorkorderId(workorderId);
         settlement.setStatus(SettlementStatus.COMPLETED);

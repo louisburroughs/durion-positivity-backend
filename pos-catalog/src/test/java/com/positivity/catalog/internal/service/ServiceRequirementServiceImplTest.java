@@ -24,6 +24,7 @@ import com.positivity.catalog.internal.repository.ExtSkillReplicaRepository;
 import com.positivity.catalog.internal.repository.ServiceRepository;
 import com.positivity.catalog.internal.repository.ServiceRequirementProfileRepository;
 import com.positivity.catalog.internal.repository.ServiceSkillRequirementRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.time.Clock;
@@ -219,16 +220,16 @@ class ServiceRequirementServiceImplTest {
     }
 
     @Test
-    @DisplayName(
-            "a skill id the registry replica does not hold is refused, naming it — never stored as a skill nobody has")
-    void unknownSkillIs422() {
+    @DisplayName("a skill id the registry replica does not hold yet is 503 SKILL_REPLICATION_PENDING, never stored as a"
+            + " skill nobody has (#1994)")
+    void skillNotYetReplicatedIs503() {
         UUID unknown = UUID.fromString("01960011-0000-7000-8000-0000000000ff");
 
         assertThatThrownBy(() -> service.setRequirements(SERVICE_ID, request(required(unknown, null, null)), "maya"))
-                .isInstanceOf(CatalogUnprocessableException.class)
-                .satisfies(e -> assertThat(((CatalogUnprocessableException) e).getCode())
-                        .isEqualTo(ServiceRequirementServiceImpl.SKILL_UNKNOWN))
-                .hasMessageContaining(unknown.toString());
+                .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo(ServiceRequirementServiceImpl.SKILL_REPLICATION_PENDING);
+                    assertThat(e.getReferenceId()).isEqualTo(unknown);
+                });
         verify(profileRepository, never()).save(any());
         verify(catalogFactPublisher, never()).publishServiceUpdated(any());
     }

@@ -36,6 +36,7 @@ import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.web.common.ReplicationPendingException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -215,8 +216,8 @@ class AsnServiceImplTest {
     }
 
     @Test
-    @DisplayName("createAsn throws InvalidPoReferenceException for non-existent PO")
-    void createAsn_throwsInvalidPoReferenceException_forNonExistentPO() {
+    @DisplayName("createAsn answers 503 PURCHASE_ORDER_REPLICATION_PENDING for a PO the replica lacks (#1994)")
+    void createAsn_throwsReplicationPending_forPoNotYetReplicated() {
         UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CreateAsnRequest request = new CreateAsnRequest();
         request.setVendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -225,6 +226,26 @@ class AsnServiceImplTest {
         request.setLineItems(Collections.emptyList());
 
         when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.empty());
+
+        ReplicationPendingException pending = assertThrows(ReplicationPendingException.class, () -> {
+            asnService.createAsn(request, "test-user");
+        });
+        assertEquals("PURCHASE_ORDER_REPLICATION_PENDING", pending.getCode());
+        assertEquals(poId, pending.getReferenceId());
+    }
+
+    @Test
+    @DisplayName("createAsn keeps 400 InvalidPoReferenceException for a replicated PO that is not APPROVED (#1994)")
+    void createAsn_throwsInvalidPoReferenceException_forPresentButNotApprovedPO() {
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        CreateAsnRequest request = new CreateAsnRequest();
+        request.setVendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setAsnReferenceNumber("ASN-DRAFT-PO");
+        request.setRelatedPoIds(List.of(poId));
+        request.setLineItems(Collections.emptyList());
+        ExtPurchaseOrderReplica draft = new ExtPurchaseOrderReplica();
+        draft.setStatus("DRAFT");
+        when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.of(draft));
 
         assertThrows(InvalidPoReferenceException.class, () -> {
             asnService.createAsn(request, "test-user");
@@ -273,6 +294,53 @@ class AsnServiceImplTest {
         assertThrows(ResourceNotFoundException.class, () -> {
             asnService.getAsn(asnId);
         });
+    }
+
+    @Test
+    @DisplayName("createGoodsReceipt answers 503 PURCHASE_ORDER_REPLICATION_PENDING for a PO the replica lacks (#1994)")
+    void createGoodsReceipt_throwsReplicationPending_forPoNotYetReplicated() {
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        CreateGoodsReceiptRequest request = new CreateGoodsReceiptRequest();
+        request.setPoId(poId);
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setLines(List.of());
+        when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.empty());
+
+        ReplicationPendingException pending = assertThrows(
+                ReplicationPendingException.class, () -> asnService.createGoodsReceipt(request, "test-user"));
+
+        assertEquals("PURCHASE_ORDER_REPLICATION_PENDING", pending.getCode());
+        assertEquals(poId, pending.getReferenceId());
+        verify(goodsReceiptRepository, org.mockito.Mockito.never()).save(any(GoodsReceiptEntity.class));
+    }
+
+    @Test
+    @DisplayName("createGoodsReceipt answers 503 for a PO line the replica lacks yet, on an approved PO (#1994)")
+    void createGoodsReceipt_throwsReplicationPending_forPoLineNotYetReplicated() {
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000004");
+        UUID poLineId = UUID.fromString("00000000-0000-0000-0000-000000000005");
+        CreateGoodsReceiptLineRequest line = new CreateGoodsReceiptLineRequest();
+        line.setPoLineId(poLineId);
+        line.setSku("SKU-TEST-001");
+        line.setQuantityReceived(BigDecimal.ONE);
+        line.setUnitCostMinor(5_000L);
+        CreateGoodsReceiptRequest request = new CreateGoodsReceiptRequest();
+        request.setPoId(poId);
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setLines(List.of(line));
+        when(purchaseOrderRepository.findById(poId))
+                .thenReturn(Optional.of(ExtPurchaseOrderReplica.builder()
+                        .purchaseOrderId(poId)
+                        .status("APPROVED")
+                        .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                        .build()));
+        when(purchaseOrderLineRepository.findById(poLineId)).thenReturn(Optional.empty());
+
+        ReplicationPendingException pending = assertThrows(
+                ReplicationPendingException.class, () -> asnService.createGoodsReceipt(request, "test-user"));
+
+        assertEquals("PURCHASE_ORDER_REPLICATION_PENDING", pending.getCode());
+        assertEquals(poLineId, pending.getReferenceId());
     }
 
     @Test

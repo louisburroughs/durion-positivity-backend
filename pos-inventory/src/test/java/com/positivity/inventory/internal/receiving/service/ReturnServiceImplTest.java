@@ -25,6 +25,7 @@ import com.positivity.inventory.internal.repository.InventoryReturnLineRepositor
 import com.positivity.inventory.internal.repository.InventoryReturnRepository;
 import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
 import com.positivity.inventory.internal.service.LedgerPostingService;
+import com.positivity.web.common.ReplicationPendingException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -617,8 +618,10 @@ class ReturnServiceImplTest {
     }
 
     @Test
-    @DisplayName("submitToStock 404s when a line's itemId does not name a work order part line")
-    void submitToStock_unknownWorkorderLine_throwsResourceNotFound() {
+    @DisplayName(
+            "submitToStock: a line nothing was consumed against and the replica lacks is 422 RETURN_QUANTITY_EXCEEDED,"
+                    + " not a 404 (#1994), and the message falls back to the line id")
+    void submitToStock_lineWithNoConsumptionAndNoReplicaRow_isQuantityExceededNamingTheLine() {
         UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000050");
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000051");
         when(extWorkorderPartReplicaRepository.findAllById(List.of(workorderLineId)))
@@ -636,7 +639,48 @@ class ReturnServiceImplTest {
                         .build();
 
         assertThatThrownBy(() -> service().submitToStock(request))
-                .isInstanceOf(com.positivity.inventory.internal.exception.ResourceNotFoundException.class);
+                .isInstanceOf(ReturnQuantityExceededException.class)
+                .hasMessageContaining(workorderLineId.toString());
+        verify(ledgerPostingService, org.mockito.Mockito.never()).postAll(any());
+    }
+
+    @Test
+    @DisplayName(
+            "submitToStock: a consumed line the ext_workorder_part replica has not caught up with is still returnable,"
+                    + " its product taken from the consumption ledger (#1994)")
+    void submitToStock_consumedLineMissingFromReplica_isReturnedUsingTheLedgerProduct() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000053");
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000054");
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000055");
+        when(extWorkorderPartReplicaRepository.findAllById(List.of(workorderLineId)))
+                .thenReturn(List.of());
+        when(inventoryLedgerEntryRepository.findByWorkorderIdAndEventType(
+                        workorderId, InventoryLedgerEventType.WORKORDER_CONSUMPTION))
+                .thenReturn(List.of(InventoryLedgerEntry.builder()
+                        .stockItemId(productId.toString())
+                        .workorderId(workorderId)
+                        .workorderLineId(workorderLineId)
+                        .changeInQuantity(new BigDecimal("-3"))
+                        .build()));
+        when(inventoryReturnLineRepository.findByWorkorderLineIdIn(List.of(workorderLineId)))
+                .thenReturn(List.of());
+        when(ledgerPostingService.postAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        com.positivity.inventory.internal.dto.returns.ReturnSubmitRequest request =
+                com.positivity.inventory.internal.dto.returns.ReturnSubmitRequest.builder()
+                        .workorderId(workorderId)
+                        .lines(List.of(com.positivity.inventory.internal.dto.returns.ReturnLineDto.builder()
+                                .itemId(workorderLineId)
+                                .quantity(2)
+                                .reasonCode("NOT_NEEDED")
+                                .locationId(UUID.fromString("00000000-0000-0000-0000-000000000056"))
+                                .build()))
+                        .build();
+
+        assertThat(service().submitToStock(request).getStatus()).isEqualTo("SUBMITTED");
+
+        verify(inventoryReturnRepository).save(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getLines().get(0).getSkuId()).isEqualTo(productId);
     }
 
     // ─── PR #2227 review item 5: only a COMPLETED/CLOSED workorder is returnable ────
@@ -670,8 +714,9 @@ class ReturnServiceImplTest {
     }
 
     @Test
-    @DisplayName("submitToStock 404s when the workorder replica has no row at all")
-    void submitToStock_unknownWorkorder_throwsResourceNotFound() {
+    @DisplayName(
+            "submitToStock answers 503 WORKORDER_REPLICATION_PENDING when the workorder replica has no row yet (#1994)")
+    void submitToStock_workorderNotYetReplicated_throwsReplicationPending() {
         UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000073");
         when(extWorkorderReplicaRepository.findById(workorderId)).thenReturn(java.util.Optional.empty());
 
@@ -687,7 +732,11 @@ class ReturnServiceImplTest {
                         .build();
 
         assertThatThrownBy(() -> service().submitToStock(request))
-                .isInstanceOf(com.positivity.inventory.internal.exception.ResourceNotFoundException.class);
+                .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo("WORKORDER_REPLICATION_PENDING");
+                    assertThat(e.getReferenceId()).isEqualTo(workorderId);
+                });
+        verify(extWorkorderPartReplicaRepository, org.mockito.Mockito.never()).findAllById(any());
     }
 
     @Test

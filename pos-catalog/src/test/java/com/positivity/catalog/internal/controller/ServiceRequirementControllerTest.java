@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -17,6 +18,8 @@ import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.exception.CatalogUnprocessableException;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.ServiceRequirementService;
+import com.positivity.web.common.ReplicationPendingException;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -32,7 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** CAP-329: PUT /v1/products/services/{serviceId}/requirements — gate, body, and the 404/422 envelopes. */
 @WebMvcTest(ServiceRequirementController.class)
-@Import({TestSecurityConfig.class, CatalogExceptionHandler.class})
+@Import({TestSecurityConfig.class, CatalogExceptionHandler.class, WebCommonErrorAutoConfiguration.class})
 @ActiveProfiles("test")
 @SuppressWarnings({"java:S6813", "java:S100"})
 class ServiceRequirementControllerTest {
@@ -122,17 +125,38 @@ class ServiceRequirementControllerTest {
     }
 
     @Test
-    void unknownSkillIs422WithItsCode() throws Exception {
+    void retiredSkillIs422WithItsCode() throws Exception {
         when(serviceRequirementService.setRequirements(eq(SERVICE_ID), any(), any()))
-                .thenThrow(new CatalogUnprocessableException("SKILL_UNKNOWN", "Skill x is not in the skill registry"));
+                .thenThrow(new CatalogUnprocessableException("SKILL_RETIRED", "Skill x has been retired"));
 
         mockMvc.perform(put("/v1/products/services/{id}/requirements", SERVICE_ID)
                         .header(AUTHORITIES, CatalogPermissions.SERVICE_REQUIREMENT_MANAGE)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.code").value("SKILL_UNKNOWN"))
-                .andExpect(jsonPath("$.message").value("Skill x is not in the skill registry"));
+                .andExpect(jsonPath("$.code").value("SKILL_RETIRED"))
+                .andExpect(jsonPath("$.message").value("Skill x has been retired"));
+    }
+
+    /**
+     * #1994: a skill the registry replica has not received is 503 with Retry-After, rendered by
+     * pos-web-common's advice — CatalogExceptionHandler maps no RuntimeException, so nothing here
+     * swallows it.
+     */
+    @Test
+    void skillNotYetReplicatedIs503WithRetryAfterAndItsCode() throws Exception {
+        when(serviceRequirementService.setRequirements(eq(SERVICE_ID), any(), any()))
+                .thenThrow(new ReplicationPendingException(
+                        "SKILL_REPLICATION_PENDING", "A declared skill has not replicated yet", SERVICE_ID));
+
+        mockMvc.perform(put("/v1/products/services/{id}/requirements", SERVICE_ID)
+                        .header(AUTHORITIES, CatalogPermissions.SERVICE_REQUIREMENT_MANAGE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "5"))
+                .andExpect(jsonPath("$.code").value("SKILL_REPLICATION_PENDING"))
+                .andExpect(jsonPath("$.status").value(503));
     }
 
     @Test

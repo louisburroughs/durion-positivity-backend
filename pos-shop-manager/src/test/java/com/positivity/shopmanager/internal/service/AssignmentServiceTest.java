@@ -27,6 +27,7 @@ import com.positivity.shopmanager.internal.service.dto.AssignmentResponse;
 import com.positivity.shopmanager.internal.service.dto.CreateAssignmentRequest;
 import com.positivity.shopmanager.internal.service.dto.MechanicAssignmentItem;
 import com.positivity.shopmanager.internal.service.enums.MechanicRole;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -222,7 +223,7 @@ class AssignmentServiceTest {
     // --- AC-1: happy-path single LEAD mechanic ---
 
     @Test
-    void ac7_mechanicNotFound_throwsValidationException() {
+    void ac7_mechanicNotYetProjected_isReplicationPending503_notAValidationError() {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         var request = buildSingleLeadRequest(appointmentId, "01960011-0000-7000-8000-0000000000ff");
@@ -232,8 +233,10 @@ class AssignmentServiceTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(ShopManagerValidationException.class)
-                .hasMessageContaining("personId");
+                .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo("MECHANIC_REPLICATION_PENDING");
+                    assertThat(e.getReferenceId()).isEqualTo(UUID.fromString("01960011-0000-7000-8000-0000000000ff"));
+                });
 
         verify(assignmentRepository, never()).save(any());
     }
