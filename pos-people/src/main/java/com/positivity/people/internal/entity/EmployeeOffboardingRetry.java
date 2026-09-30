@@ -12,6 +12,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
@@ -40,6 +41,10 @@ public class EmployeeOffboardingRetry extends TenantScopedEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "assignment_policy", nullable = false)
     private AssignmentTerminationPolicy assignmentPolicy;
+
+    /** The request's {@code assignmentEndDate}; only meaningful for the GRACE_PERIOD policy. */
+    @Column(name = "assignment_end_date")
+    private LocalDate assignmentEndDate;
 
     @Column(name = "disable_reason")
     private String disableReason;

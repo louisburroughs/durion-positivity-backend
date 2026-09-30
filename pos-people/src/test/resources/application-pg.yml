@@ -49,3 +49,6 @@ pos:
 # initializer at a loopback port that refuses instantly. Same arrangement as pos-mcp-server's test profile.
 pos.security.permission-registration.enabled: false
 pos.events.base-url: http://127.0.0.1:1
+
+# The offboarding retry worker (#2121) sweeps the queue on a timer; no test context needs it running.
+pos.people.offboarding-retry.enabled: false

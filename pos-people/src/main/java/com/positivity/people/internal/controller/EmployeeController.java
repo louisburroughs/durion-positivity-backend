@@ -363,17 +363,23 @@ public class EmployeeController {
                     the requested staffing-assignment offboarding policy.
                     Use this tool for offboarding; do not use updateEmployee to force the status field, which skips \
                     offboarding, and do not use endStaffingAssignment, which ends a single assignment only.
-                    Preconditions: the employee must exist and be in ACTIVE status; ON_LEAVE or SUSPENDED employees \
-                    are rejected, as are already DISABLED or TERMINATED ones.
-                    Required inputs: employeeId (UUID) path parameter; the body is optional, assignmentPolicy \
-                    defaults to IMMEDIATE, and assignmentEndDate applies only with GRACE_PERIOD.
-                    Emits a PEOPLE_EMPLOYEE_DISABLE event and publishes a people.employee.updated fact; when the \
-                    downstream assignment action fails, a retry is queued with a five-minute delay instead of \
-                    failing the request.
-                    Returns 404 when the employee does not exist, and 409 when the employee is not currently ACTIVE \
-                    (an already DISABLED, TERMINATED, ON_LEAVE, or SUSPENDED employee cannot be disabled again).
+                    Preconditions: the employee must exist and be ACTIVE; ON_LEAVE, SUSPENDED, DISABLED and TERMINATED \
+                    employees are rejected.
+                    Required inputs: employeeId (UUID) path parameter; the body is optional and assignmentPolicy \
+                    defaults to IMMEDIATE, which ends every ACTIVE assignment now, at every location whatever the \
+                    caller's reach; GRACE_PERIOD requires assignmentEndDate (today or later), keeps assignments ACTIVE \
+                    until that date and lets a background job end them afterwards.
+                    Emits a PEOPLE_EMPLOYEE_DISABLE event, a people.employee.updated fact and one \
+                    people.staffing-assignment.updated fact per changed assignment; if the assignment step fails the \
+                    disable still succeeds and a background worker retries it with backoff.
+                    Returns 400 when GRACE_PERIOD has no assignmentEndDate, 404 when the employee does not exist, 409 \
+                    when the employee is not ACTIVE, and 422 when assignmentEndDate is before today.
                     """)
     @ApiResponse(responseCode = "200", description = "Employee disabled")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Employee not found",
@@ -381,6 +387,10 @@ public class EmployeeController {
     @ApiResponse(
             responseCode = "409",
             description = "Employee is not currently ACTIVE",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Semantic validation failure",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
