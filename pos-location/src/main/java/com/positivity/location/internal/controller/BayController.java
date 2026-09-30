@@ -224,7 +224,9 @@ public class BayController {
     @Operation(operationId = "patchBay", summary = "Patch Fields of a Service Bay", description = """
                     Applies a partial update to a bay, changing only the supplied fields: name, bayType, status, \
                     the out-of-service reason/note/expected-return fields, displayOrder, capacity and the \
-                    capability or skill requirement lists.
+                    capability or skill requirement lists, and maxDutyClass. A field left out or sent as null is \
+                    unchanged, except maxDutyClass: omit it to leave the limit alone, send JSON null to clear it \
+                    back to no limit, or send a class from 1 to 8 to set it.
                     Use this tool for status transitions among ACTIVE, OUT_OF_SERVICE and RETIRED and for \
                     capacity changes; do not use createBay, which adds a new bay, and do not use this tool to \
                     retire a bay for good — use deleteBay, which also sets RETIRED.
@@ -235,16 +237,19 @@ public class BayController {
                     Required inputs: locationId and bayId (UUIDs) as path parameters and a body with at least one \
                     field; capacity.maxConcurrentVehicles, when supplied, must be at least 1.
                     Emits a LOCATION_BAY_UPDATE event; no other records are touched.
-                    Returns 400 when either id does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a \
-                    location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when \
-                    the location or bay does not exist, 409 when the new name is already taken at that location, \
+                    Returns 400 when either id does not parse as a UUID or a field fails validation \
+                    (maxDutyClass outside 1-8, outOfServiceNote over 255 characters), 403 LOCATION_SCOPE_DENIED \
+                    when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 \
+                    when the location or bay does not exist, 409 when the new name is already taken at that location, \
                     and 422 OUT_OF_SERVICE_REASON_REQUIRED when the resulting status is OUT_OF_SERVICE without a \
                     reason, or with OTHER and no note.
                     """)
     @ApiResponse(responseCode = "200", description = "Bay updated successfully.")
     @ApiResponse(
             responseCode = "400",
-            description = "locationId or bayId is not a UUID.",
+            description =
+                    "locationId or bayId is not a UUID, or a field fails validation (for example maxDutyClass outside 1-8"
+                            + " or outOfServiceNote over 255 characters).",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -274,7 +279,8 @@ public class BayController {
             @PathVariable String bayId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Partial bay payload; only non-null fields are applied and all others"
-                                    + " are left unchanged.",
+                                    + " are left unchanged, except maxDutyClass: omit it to leave it unchanged,"
+                                    + " send null to clear it to no limit, or 1-8 to set it.",
                             required = true,
                             content =
                                     @Content(
@@ -283,6 +289,7 @@ public class BayController {
                                                     @ExampleObject(
                                                             name = "Take bay out of service",
                                                             value = "{\"status\":\"OUT_OF_SERVICE\"}")))
+                    @Valid
                     @RequestBody
                     BayPatchRequest patchRequest) {
         UUID location = requireInScope(locationId, LocationPermissions.BAY_MANAGE);

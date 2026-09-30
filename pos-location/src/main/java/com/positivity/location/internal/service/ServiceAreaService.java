@@ -9,8 +9,6 @@ import org.jspecify.annotations.NonNull;
 
 public interface ServiceAreaService {
 
-    ServiceAreaResponse create(Map<String, Object> request);
-
     ServiceAreaResponse create(ServiceAreaRequest request);
 
     ServiceAreaResponse patch(String id, Map<String, Object> patch);
