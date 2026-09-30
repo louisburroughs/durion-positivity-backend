@@ -44,6 +44,7 @@ import com.positivity.accounting.internal.bankrec.repository.BankStatementReposi
 import com.positivity.accounting.internal.bankrec.repository.BankTransactionRepository;
 import com.positivity.accounting.internal.bankrec.repository.StatementCounts;
 import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankCashAccount;
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.BankTransactionObserved;
 import com.positivity.domainevents.bankfeed.BankTransactionsObservedV1.Change;
@@ -366,13 +367,25 @@ class BankStatementServiceImplTest {
             request.setCurrency(null);
             when(profiles.findById(ACCOUNT_ID)).thenReturn(Optional.empty());
             when(intake.accept(any(), any())).thenReturn(committed(1, 0));
+            // A non-USD ledger, so a hardcoded "USD" fallback cannot pass for the functional currency.
+            BankStatementServiceImpl eurLedger = new BankStatementServiceImpl(
+                    intake,
+                    bankCashAccounts,
+                    new FunctionalCurrency(new LedgerCurrency("EUR")),
+                    statements,
+                    transactions,
+                    profiles,
+                    reconciliations,
+                    audit,
+                    clock,
+                    reconciliationStarter);
 
-            service.createManualStatement(request);
+            eurLedger.createManualStatement(request);
 
             ArgumentCaptor<BankTransactionsObservedV1> batch =
                     ArgumentCaptor.forClass(BankTransactionsObservedV1.class);
             verify(intake).accept(batch.capture(), any());
-            assertThat(batch.getValue().currency()).isEqualTo("USD");
+            assertThat(batch.getValue().currency()).isEqualTo("EUR");
         }
 
         @Test

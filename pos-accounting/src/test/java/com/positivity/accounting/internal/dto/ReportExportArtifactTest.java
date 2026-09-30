@@ -7,7 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@link ReportExportArtifact} overrides the record-generated equals/hashCode/toString
+ * {@link ReportExportArtifact} overrides the record-generated equals/hashCode
  * so the byte[] content is compared by value rather than by array identity.
  */
 @DisplayName("ReportExportArtifact")
@@ -57,7 +57,6 @@ class ReportExportArtifactTest {
         ReportExportArtifact b = csv("a,b\n1,3\n");
 
         assertThat(a).isNotEqualTo(b);
-        assertThat(a.hashCode()).isNotEqualTo(b.hashCode());
     }
 
     @Test
@@ -67,7 +66,6 @@ class ReportExportArtifactTest {
         ReportExportArtifact b = new ReportExportArtifact(bytes("x"), "application/pdf", "report.csv");
 
         assertThat(a).isNotEqualTo(b);
-        assertThat(a.hashCode()).isNotEqualTo(b.hashCode());
     }
 
     @Test
@@ -77,15 +75,5 @@ class ReportExportArtifactTest {
         ReportExportArtifact b = new ReportExportArtifact(bytes("x"), "text/csv", "other.csv");
 
         assertThat(a).isNotEqualTo(b);
-        assertThat(a.hashCode()).isNotEqualTo(b.hashCode());
-    }
-
-    @Test
-    @DisplayName("toString renders the content bytes by value alongside type and filename")
-    void toString_rendersContentByValue() {
-        ReportExportArtifact a = new ReportExportArtifact(new byte[] {1, 2, 3}, "text/csv", "r.csv");
-
-        assertThat(a.toString())
-                .isEqualTo("ReportExportArtifact[content=[1, 2, 3], contentType=text/csv, filename=r.csv]");
     }
 }

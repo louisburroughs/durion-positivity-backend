@@ -569,7 +569,7 @@ class BankTransactionServiceImplTest {
             BankTransaction b = possibleDuplicate(null);
             when(transactions.findById(a.getBankTransactionId())).thenReturn(Optional.of(a));
             when(transactions.findById(b.getBankTransactionId())).thenReturn(Optional.of(b));
-            DuplicateReviewRequest request = request(DuplicateReviewDecision.DISTINCT, null, WHY, 99L);
+            DuplicateReviewRequest request = request(DuplicateReviewDecision.DISTINCT, null, WHY, null);
             request.setIds(List.of(b.getBankTransactionId(), a.getBankTransactionId(), b.getBankTransactionId()));
 
             BankTransactionBatchResponse response = service.reviewDuplicates(request);

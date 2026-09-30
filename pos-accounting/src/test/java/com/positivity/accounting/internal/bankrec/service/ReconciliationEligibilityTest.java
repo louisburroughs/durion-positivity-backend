@@ -358,6 +358,17 @@ class ReconciliationEligibilityTest {
                             () -> eligibility.lockLedger(recon, List.of(known.getLineId(), UUIDv7Generator.generate())))
                     .isInstanceOf(ReconciliationNotFoundException.class)
                     .hasMessageContaining("were not found");
+        }
+
+        @Test
+        @DisplayName("lockLedgerForMatch 404s on an unknown line before looking up active GL matches")
+        void unknownLineForMatch_failsBeforeMatchLookup() {
+            JournalEntryLine known = postedLine("25.0000", END);
+            when(lines.lockByIds(anyCollection())).thenReturn(List.of(known));
+
+            assertThatThrownBy(() -> eligibility.lockLedgerForMatch(
+                            recon, List.of(known.getLineId(), UUIDv7Generator.generate()), null))
+                    .isInstanceOf(ReconciliationNotFoundException.class);
             verifyNoInteractions(glMatches);
         }
 
