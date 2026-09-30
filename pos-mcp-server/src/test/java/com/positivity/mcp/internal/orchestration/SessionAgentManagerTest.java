@@ -23,6 +23,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.config.ScopeGraphProperties;
+import com.positivity.mcp.internal.config.ScopeGraphProperties.Consumer;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
@@ -35,6 +36,7 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.scopegraph.ScopeConsumers;
 import com.positivity.mcp.internal.scopegraph.ScopeResolver;
 import com.positivity.mcp.internal.scopegraph.ScopeResolverFixtures;
 import com.positivity.mcp.internal.scopegraph.ScopeSet;
@@ -71,6 +73,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.ai.tool.ToolCallback;
@@ -248,7 +251,9 @@ class SessionAgentManagerTest {
                 50,
                 100,
                 0.6,
-                0.55);
+                0.55,
+                null // scopeConsumers (ADR-0069)
+                );
         clearInvocations(toolRegistry);
         clearInvocations(toolRegistryService);
         clearInvocations(toolSelectionEngine);
@@ -614,7 +619,9 @@ class SessionAgentManagerTest {
                 50,
                 100,
                 0.6,
-                0.55);
+                0.55,
+                null // scopeConsumers (ADR-0069)
+                );
         clearInvocations(toolRegistry);
 
         expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
@@ -785,7 +792,9 @@ class SessionAgentManagerTest {
                 50,
                 100,
                 0.6,
-                0.55);
+                0.55,
+                null // scopeConsumers (ADR-0069)
+                );
     }
 
     private ToolSelectionEngine realToolSelectionEngine() {
@@ -852,7 +861,8 @@ class SessionAgentManagerTest {
             ToolSelectionEngine selectionEngine,
             SharedOrchestrationSupport support,
             RequestScopedUserContext requestContext,
-            ToolInvocationRecorder recorder) {
+            ToolInvocationRecorder recorder,
+            ScopeConsumers scopeConsumers) {
         return new SessionAgentManager(
                 chatModel,
                 embeddingModel,
@@ -882,7 +892,8 @@ class SessionAgentManagerTest {
                 50,
                 100,
                 0.6,
-                0.55);
+                0.55,
+                scopeConsumers);
     }
 
     /** What the agent saw in the request-scoped holder while it ran. */
@@ -924,9 +935,12 @@ class SessionAgentManagerTest {
                 .thenReturn(
                         new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.IDLE, scope));
         RequestScopedUserContext requestContext = new RequestScopedUserContext();
-        SessionAgentManager scoped =
-                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, toolInvocationRecorder);
-        scoped.setScopeGraphProperties(ScopeResolverFixtures.shadow(60));
+        SessionAgentManager scoped = scopeManager(
+                toolSelectionEngine,
+                sharedOrchestrationSupport,
+                requestContext,
+                toolInvocationRecorder,
+                ScopeResolverFixtures.consumers(ScopeResolverFixtures.shadow(60), new SimpleMeterRegistry()));
         java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
                 seedObservingAgent(scoped, requestContext, "ROLE_ADMIN", null);
         CurrentUserContext caller = userContext("user-1", USER_ID, "ROLE_ADMIN");
@@ -965,9 +979,12 @@ class SessionAgentManagerTest {
     @DisplayName("ADR-0069: in mode off (no scope on the selection) nothing is recorded, published or reported")
     void chat_off_recordsAndPublishesNoScope() {
         RequestScopedUserContext requestContext = new RequestScopedUserContext();
-        SessionAgentManager off =
-                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, toolInvocationRecorder);
-        off.setScopeGraphProperties(ScopeGraphProperties.off());
+        SessionAgentManager off = scopeManager(
+                toolSelectionEngine,
+                sharedOrchestrationSupport,
+                requestContext,
+                toolInvocationRecorder,
+                ScopeResolverFixtures.consumers(ScopeGraphProperties.off(), new SimpleMeterRegistry()));
         java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
                 seedObservingAgent(off, requestContext, "ROLE_ADMIN", null);
 
@@ -992,8 +1009,8 @@ class SessionAgentManagerTest {
                 .thenReturn(
                         new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.IDLE, scope));
         RequestScopedUserContext requestContext = new RequestScopedUserContext();
-        SessionAgentManager scoped =
-                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, toolInvocationRecorder);
+        SessionAgentManager scoped = scopeManager(
+                toolSelectionEngine, sharedOrchestrationSupport, requestContext, toolInvocationRecorder, null);
         java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen = seedObservingAgent(
                 scoped, requestContext, "ROLE_ADMIN", new IllegalStateException("model unavailable"));
 
@@ -1017,9 +1034,12 @@ class SessionAgentManagerTest {
     void chat_simpleChat_resolvesNoScope() {
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Hello!"));
         RequestScopedUserContext requestContext = org.mockito.Mockito.spy(new RequestScopedUserContext());
-        SessionAgentManager scoped =
-                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, toolInvocationRecorder);
-        scoped.setScopeGraphProperties(ScopeResolverFixtures.shadow(60));
+        SessionAgentManager scoped = scopeManager(
+                toolSelectionEngine,
+                sharedOrchestrationSupport,
+                requestContext,
+                toolInvocationRecorder,
+                ScopeResolverFixtures.consumers(ScopeResolverFixtures.shadow(60), new SimpleMeterRegistry()));
         clearInvocations(toolSelectionEngine);
 
         scoped.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "hello");
@@ -1034,6 +1054,11 @@ class SessionAgentManagerTest {
 
     /** One full agent turn with a real selection engine; returns everything a scope could have changed. */
     private List<Object> observableTurn(ScopeResolver resolver) {
+        return observableTurn(resolver, null);
+    }
+
+    /** As above, with a consumer switch wired into the engine and the manager. */
+    private List<Object> observableTurn(ScopeResolver resolver, ScopeConsumers consumers) {
         clearInvocations(chatModel, scopedContentRetrieverFactory, rolePromptResolver, toolRegistryService);
         SharedOrchestrationSupport fixedClockSupport = new SharedOrchestrationSupport(FIXED_CLOCK);
         ToolSelectionEngine engine = new ToolSelectionEngine(
@@ -1047,8 +1072,9 @@ class SessionAgentManagerTest {
                 fixedClockSupport,
                 3);
         engine.setScopeResolver(resolver);
+        engine.setScopeConsumers(consumers);
         RequestScopedUserContext requestContext = new RequestScopedUserContext();
-        SessionAgentManager target = scopeManager(engine, fixedClockSupport, requestContext, null);
+        SessionAgentManager target = scopeManager(engine, fixedClockSupport, requestContext, null, consumers);
         clearInvocations(scopedContentRetrieverFactory, rolePromptResolver, toolRegistryService);
 
         String response = target.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), SCOPE_MESSAGE);
@@ -1114,5 +1140,285 @@ class SessionAgentManagerTest {
         assertThat(off.get(5).toString()).contains("checkStock");
         assertThat(off.get(6).toString()).contains("scopedContentRetrieverFactory.create");
         assertThat(shadow).isEqualTo(off);
+    }
+
+    // ── ADR-0069 §6 / §7: the consumers, each behind its own switch ──
+
+    private static final String WORKORDER_ONLY_MESSAGE = "what is the status of work order WO-20391?";
+
+    /** "ticket" denotes two entities (LOW); long enough to stay off the simple-chat fast path; names no other term. */
+    private static final String LOW_MESSAGE =
+            "can you please open the ticket for me and tell me everything that is going on with it right now";
+
+    private static Document chunk(String documentId, String ragScope, String text) {
+        return new Document(text, java.util.Map.of("document_id", documentId, "rag_scope", ragScope));
+    }
+
+    /** A real engine over the fixture graph, wired to {@code consumers}, ranking to the order facade alone. */
+    private ToolSelectionEngine orderRankingEngine(ScopeConsumers consumers, SimpleMeterRegistry meters) {
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of(orderToolMetadata()));
+        when(toolRegistry.resolveToolsByName(List.of("orderFacadeTool")))
+                .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool)));
+        ToolSelectionEngine engine = realToolSelectionEngine();
+        engine.setScopeResolver(ScopeResolverFixtures.resolver(consumers.properties(), meters));
+        engine.setScopeConsumers(consumers);
+        return engine;
+    }
+
+    private static ToolMetadata orderToolMetadata() {
+        return new ToolMetadata(
+                UUID.randomUUID(),
+                "orderFacadeTool",
+                "Orders",
+                "Order lookup",
+                "orders",
+                1.0,
+                "low",
+                200,
+                true,
+                "orderFacadeTool");
+    }
+
+    private static List<String> systemPrompts(ChatModel model) {
+        ArgumentCaptor<Prompt> prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(model, org.mockito.Mockito.atLeastOnce()).call(prompts.capture());
+        return prompts.getAllValues().stream()
+                .map(prompt -> prompt.getSystemMessage().getText())
+                .toList();
+    }
+
+    @Test
+    @DisplayName("ADR-0069 §9: mode enforce with an empty consumer list is exactly shadow (and shadow is exactly off)")
+    void chat_enforceWithoutConsumers_isIdenticalToShadow() {
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
+                .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool")))
+                .thenAnswer(invocation -> new ArrayList<>(List.of(inventoryFacadeTool)));
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
+        ScopeGraphProperties enforceNothing = ScopeResolverFixtures.enforce(60);
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+
+        List<Object> off = observableTurn(null);
+        List<Object> shadow = observableTurn(ScopeResolverFixtures.resolver(ScopeResolverFixtures.shadow(60), meters));
+        List<Object> enforce = observableTurn(
+                ScopeResolverFixtures.resolver(enforceNothing, meters),
+                ScopeResolverFixtures.consumers(enforceNothing, meters));
+
+        assertThat(enforce).isEqualTo(shadow);
+        assertThat(shadow).isEqualTo(off);
+        assertThat(meters.get("mcp.scope.resolved")
+                        .tag("confidence", "HIGH")
+                        .counter()
+                        .count())
+                .isEqualTo(2.0);
+        assertThat(meters.find("mcp.scope.fallback").counters().stream()
+                        .mapToDouble(counter -> counter.count())
+                        .sum())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069 §6 rag: the retrievers cover all scopes and the hook narrows to the scope plus master before the top-K cut")
+    void chat_ragEnforced_buildsAllScopeRetrieversAndNarrowsBeforeTheTopKCut() {
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        ScopeConsumers consumers =
+                ScopeResolverFixtures.consumers(ScopeResolverFixtures.enforce(60, Consumer.RAG), meters);
+        // Five out-of-scope chunks ahead of the two eligible ones: without the hook before the cut,
+        // the top-5 would be all inventory and the workorder document would never reach the prompt.
+        List<Document> pool = List.of(
+                chunk("inventory.a", "inventory", "Inventory alpha"),
+                chunk("inventory.b", "inventory", "Inventory beta"),
+                chunk("inventory.c", "inventory", "Inventory gamma"),
+                chunk("inventory.d", "inventory", "Inventory delta"),
+                chunk("inventory.e", "inventory", "Inventory epsilon"),
+                chunk("workorder.status-lifecycle", "workorder", "Workorder lifecycle states"),
+                chunk("glossary", "master", "Glossary of terms"),
+                chunk("orders.faq", "orders", "Orders FAQ"));
+        when(scopedContentRetrieverFactory.create(anyString(), anyInt(), anyDouble()))
+                .thenReturn(query -> pool);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("In progress"));
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        SessionAgentManager target = scopeManager(
+                orderRankingEngine(consumers, meters),
+                sharedOrchestrationSupport,
+                requestContext,
+                toolInvocationRecorder,
+                consumers);
+        clearInvocations(scopedContentRetrieverFactory, telemetryEmitter);
+
+        target.chat(
+                new CurrentUserContext(
+                        "user-1",
+                        USER_ID,
+                        "ROLE_ADMIN",
+                        Set.of("ROLE_ADMIN"),
+                        Set.of("ROLE_ADMIN"),
+                        Set.of("AUTHENTICATED", ScopeResolverFixtures.WORKORDER_VIEW)),
+                WORKORDER_ONLY_MESSAGE);
+
+        // The agent's own scope is "orders" (the order facade alone), but every retriever was built
+        // over all scopes, the factory's unfiltered case.
+        verify(scopedContentRetrieverFactory, org.mockito.Mockito.times(2)).create(eq("master"), anyInt(), anyDouble());
+        verify(scopedContentRetrieverFactory).createLexical("master");
+        verify(scopedContentRetrieverFactory, never()).create(eq("orders"), anyInt(), anyDouble());
+        String systemPrompt = systemPrompts(chatModel).getLast();
+        assertThat(systemPrompt).contains("Workorder lifecycle states", "Glossary of terms");
+        assertThat(systemPrompt).doesNotContain("Inventory", "Orders FAQ");
+        verify(toolInvocationRecorder).recordScopeConsumers(List.of(), true);
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter).emit(event.capture());
+        assertThat(event.getValue().scopeMode()).isEqualTo("ENFORCE");
+        assertThat(event.getValue().scopeRagFilterApplied()).isTrue();
+        assertThat(event.getValue().scopeAddedToolCount()).isZero();
+        assertThat(event.getValue().rag().promptLayers()).doesNotContain(NltiRequestTelemetry.PromptLayer.SCOPE_CARD);
+        assertThat(meters.get("mcp.scope.fallback")
+                        .tag("consumer", "rag")
+                        .counter()
+                        .count())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("ADR-0069 §6 rag, LOW turn: the hook re-applies the agent's own eligibility and counts a fallback")
+    void chat_ragEnforced_lowConfidence_fallsBackToTodaysEligibility() {
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        ScopeConsumers consumers =
+                ScopeResolverFixtures.consumers(ScopeResolverFixtures.enforce(60, Consumer.RAG), meters);
+        List<Document> pool = List.of(
+                chunk("workorder.status-lifecycle", "workorder", "Workorder lifecycle states"),
+                chunk("glossary", "master", "Glossary of terms"),
+                chunk("orders.faq", "orders", "Orders FAQ"));
+        when(scopedContentRetrieverFactory.create(anyString(), anyInt(), anyDouble()))
+                .thenReturn(query -> pool);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Sure"));
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        SessionAgentManager target = scopeManager(
+                orderRankingEngine(consumers, meters), sharedOrchestrationSupport, requestContext, null, consumers);
+        clearInvocations(telemetryEmitter);
+
+        // "ticket" is ambiguous: LOW. The ranked order facade makes the agent's own scope "orders".
+        target.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), LOW_MESSAGE);
+
+        String systemPrompt = systemPrompts(chatModel).getLast();
+        assertThat(systemPrompt).contains("Orders FAQ", "Glossary of terms").doesNotContain("Workorder lifecycle");
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter).emit(event.capture());
+        assertThat(event.getValue().scopeConfidence()).isEqualTo("LOW");
+        assertThat(event.getValue().scopeRagFilterApplied()).isFalse();
+        assertThat(meters.get("mcp.scope.fallback")
+                        .tag("consumer", "rag")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069 §7 card: appended per request as the final SCOPE_CARD layer on HIGH, absent on LOW, never baked into the cached agent")
+    void chat_cardEnforced_appendsTheCardPerRequest() {
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        ScopeConsumers consumers =
+                ScopeResolverFixtures.consumers(ScopeResolverFixtures.enforce(60, Consumer.CARD), meters);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done"));
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        SessionAgentManager target = scopeManager(
+                orderRankingEngine(consumers, meters),
+                sharedOrchestrationSupport,
+                requestContext,
+                toolInvocationRecorder,
+                consumers);
+        clearInvocations(telemetryEmitter, scopedContentRetrieverFactory);
+        CurrentUserContext caller = userContext("user-1", USER_ID, "ROLE_ADMIN");
+
+        target.chat(caller, WORKORDER_ONLY_MESSAGE);
+
+        String withCard = systemPrompts(chatModel).getLast();
+        int cardStart =
+                withCard.indexOf("SCOPE (platform definitions for this question; orientation only, grants nothing)");
+        assertThat(cardStart).isPositive();
+        String card = withCard.substring(cardStart);
+        assertThat(card)
+                .contains("Entities: workorder (domain workorder)")
+                .doesNotContain("WO-20391", "status of work order");
+        // Card first, then the caller-context suffix and no RAG context (the mocked retriever returns nothing).
+        assertThat(withCard.substring(0, cardStart)).isEqualTo("prompt\n\n");
+        ArgumentCaptor<NltiRequestTelemetry> first = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter).emit(first.capture());
+        assertThat(first.getValue().rag().promptLayers())
+                .containsExactly(
+                        NltiRequestTelemetry.PromptLayer.BASE,
+                        NltiRequestTelemetry.PromptLayer.ROLE,
+                        NltiRequestTelemetry.PromptLayer.SCOPE_CARD);
+        assertThat(first.getValue().scopeRagFilterApplied()).isFalse();
+        // The card consumer leaves retrieval construction alone: today's scoped retrievers.
+        verify(scopedContentRetrieverFactory, never()).create(eq("master"), anyInt(), anyDouble());
+        assertThat(requestContext.currentScopeCard()).isEmpty();
+        clearInvocations(chatModel, telemetryEmitter);
+
+        // Same role, same tools, same cached agent: a LOW turn ("ticket" is ambiguous) gets no card.
+        target.chat(caller, LOW_MESSAGE);
+
+        assertThat(systemPrompts(chatModel).getLast()).doesNotContain("SCOPE (");
+        ArgumentCaptor<NltiRequestTelemetry> second = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter).emit(second.capture());
+        assertThat(second.getValue().rag().promptLayers())
+                .containsExactly(NltiRequestTelemetry.PromptLayer.BASE, NltiRequestTelemetry.PromptLayer.ROLE);
+        assertThat(second.getValue().scopeConfidence()).isEqualTo("LOW");
+        assertThat(meters.get("mcp.scope.fallback")
+                        .tag("consumer", "card")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(roleAgentCacheKeys(target).stream()
+                        .filter(key -> key.startsWith("ROLE_ADMIN::"))
+                        .count())
+                .as("both turns selected the same tools and shared one cached agent")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("ADR-0069 §6 tools: the facades the scope added are selected, cached by and reported for the turn")
+    void chat_toolsEnforced_reportsTheAddedFacades() {
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        ScopeConsumers consumers =
+                ScopeResolverFixtures.consumers(ScopeResolverFixtures.enforce(60, Consumer.TOOLS), meters);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Done"));
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        // The engine is mocked here: the slot arithmetic has its own tests; this is the manager's side.
+        ScopeSet scope = ScopeResolverFixtures.resolver(consumers.properties(), meters)
+                .resolve(
+                        WORKORDER_ONLY_MESSAGE,
+                        Set.of("AUTHENTICATED", ScopeResolverFixtures.WORKORDER_VIEW),
+                        WorkflowState.IDLE);
+        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
+                .thenReturn(new ToolSelectionEngine.ToolSelectionResult(
+                        List.of(orderFacadeTool, inventoryFacadeTool),
+                        List.of(),
+                        WorkflowState.IDLE,
+                        scope,
+                        List.of("InventoryFacadeTool")));
+        SessionAgentManager target = scopeManager(
+                toolSelectionEngine, sharedOrchestrationSupport, requestContext, toolInvocationRecorder, consumers);
+        clearInvocations(telemetryEmitter);
+
+        target.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), WORKORDER_ONLY_MESSAGE);
+
+        verify(toolInvocationRecorder).recordSelectedTools(List.of("OrderFacadeTool", "InventoryFacadeTool"));
+        verify(toolInvocationRecorder).recordScopeConsumers(List.of("InventoryFacadeTool"), false);
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter).emit(event.capture());
+        assertThat(event.getValue().scopeAddedToolCount()).isEqualTo(1);
+        assertThat(event.getValue().tools().selected()).containsExactly("OrderFacadeTool", "InventoryFacadeTool");
+        assertThat(roleAgentCacheKeys(target)).contains("ROLE_ADMIN::InventoryFacadeTool+OrderFacadeTool");
+        assertThat(meters.get("mcp.scope.fallback")
+                        .tag("consumer", "tools")
+                        .counter()
+                        .count())
+                .isZero();
+        assertThat(requestContext.currentScopeAddedToolNames()).isEmpty();
     }
 }

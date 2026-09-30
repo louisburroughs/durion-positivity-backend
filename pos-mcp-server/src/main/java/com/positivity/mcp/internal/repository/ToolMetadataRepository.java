@@ -17,6 +17,18 @@ public interface ToolMetadataRepository {
      * permission ∩ workflow gating as {@link #findTopKByEmbeddingForPermissions}; empty
      * {@code permissionCodes} short-circuits to an empty result.
      */
+    /**
+     * ADR-0069 §6: the OpenAPI-discovered operations among {@code names} the caller may use, gated
+     * by the same enabled / {@code source = 'openapi'} / workflow / permission (OR) predicates as
+     * {@link #findDiscoveredCandidatesForPermissions}, without the embedding ranking (and without
+     * requiring an embedding: a scope-added operation is chosen by the graph, not by similarity).
+     * Ordered by name; the caller re-orders. Empty {@code names} or {@code permissionCodes}
+     * short-circuits to an empty result. This query, not the scope, is what admits a tool.
+     */
+    @NonNull
+    List<DiscoveredOperation> findDiscoveredByNamesForPermissions(
+            @NonNull Collection<String> names, @NonNull Set<String> permissionCodes, @NonNull String workflowState);
+
     @NonNull
     List<DiscoveredOperation> findDiscoveredCandidatesForPermissions(
             float @NonNull [] embedding,

@@ -28,6 +28,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.config.ScopeGraphProperties;
+import com.positivity.mcp.internal.config.ScopeGraphProperties.Consumer;
 import com.positivity.mcp.internal.domain.EvalTurnTrace;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
@@ -42,6 +43,7 @@ import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.repository.EvalTurnTraceRepository;
+import com.positivity.mcp.internal.scopegraph.ScopeConsumers;
 import com.positivity.mcp.internal.scopegraph.ScopeResolver;
 import com.positivity.mcp.internal.scopegraph.ScopeResolverFixtures;
 import com.positivity.mcp.internal.scopegraph.ScopeSet;
@@ -234,7 +236,9 @@ class StreamingSessionAgentManagerTest {
                 50,
                 100,
                 0.6,
-                0.55);
+                0.55,
+                null // scopeConsumers (ADR-0069)
+                );
         clearInvocations(toolRegistry);
         clearInvocations(toolSelectionEngine);
         clearInvocations(scopedContentRetrieverFactory);
@@ -462,7 +466,9 @@ class StreamingSessionAgentManagerTest {
                 50,
                 100,
                 0.6,
-                0.55);
+                0.55,
+                null // scopeConsumers (ADR-0069)
+                );
 
         ArgumentCaptor<List<Object>> fallbackToolsCaptor = listCaptor();
         verify(sharedSupportSpy, atLeastOnce()).mergeTools(argThat(Collection::isEmpty), fallbackToolsCaptor.capture());
@@ -505,7 +511,9 @@ class StreamingSessionAgentManagerTest {
                 50,
                 100,
                 0.42,
-                0.37);
+                0.37,
+                null // scopeConsumers (ADR-0069)
+                );
 
         verify(scopedContentRetrieverFactory, atLeastOnce()).create("master", 10, 0.42);
         verify(scopedContentRetrieverFactory, atLeastOnce()).create("master", 20, 0.37);
@@ -573,7 +581,9 @@ class StreamingSessionAgentManagerTest {
                 50,
                 100,
                 0.6,
-                0.55);
+                0.55,
+                null // scopeConsumers (ADR-0069)
+                );
         clearInvocations(toolRegistry);
 
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");
@@ -627,7 +637,9 @@ class StreamingSessionAgentManagerTest {
                 50,
                 100,
                 0.6,
-                0.55);
+                0.55,
+                null // scopeConsumers (ADR-0069)
+                );
     }
 
     private ToolSelectionEngine realToolSelectionEngine() {
@@ -699,7 +711,9 @@ class StreamingSessionAgentManagerTest {
                 50,
                 100,
                 0.6,
-                0.55);
+                0.55,
+                null // scopeConsumers (ADR-0069)
+                );
 
         Flux<String> result =
                 providerManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show open invoices");
@@ -986,7 +1000,9 @@ class StreamingSessionAgentManagerTest {
                 50,
                 100,
                 0.6,
-                0.55);
+                0.55,
+                null // scopeConsumers (ADR-0069)
+                );
     }
 
     // ── ADR-0069 §5 / §9: transport parity with the blocking manager ────────
@@ -1002,7 +1018,8 @@ class StreamingSessionAgentManagerTest {
             ToolSelectionEngine selectionEngine,
             SharedOrchestrationSupport support,
             RequestScopedUserContext requestContext,
-            ToolInvocationRecorder recorder) {
+            ToolInvocationRecorder recorder,
+            ScopeConsumers scopeConsumers) {
         return new StreamingSessionAgentManager(
                 streamingChatModel,
                 toolRegistry,
@@ -1028,7 +1045,8 @@ class StreamingSessionAgentManagerTest {
                 50,
                 100,
                 0.6,
-                0.55);
+                0.55,
+                scopeConsumers);
     }
 
     /** What the agent saw in the request-scoped holder while it ran, and on which thread. */
@@ -1067,9 +1085,12 @@ class StreamingSessionAgentManagerTest {
                         new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.IDLE, scope));
         ToolInvocationRecorder recorder = recorderRunningBoundActions();
         RequestScopedUserContext requestContext = new RequestScopedUserContext();
-        StreamingSessionAgentManager scoped =
-                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, recorder);
-        scoped.setScopeGraphProperties(ScopeResolverFixtures.shadow(60));
+        StreamingSessionAgentManager scoped = scopeManager(
+                toolSelectionEngine,
+                sharedOrchestrationSupport,
+                requestContext,
+                recorder,
+                ScopeResolverFixtures.consumers(ScopeResolverFixtures.shadow(60), new SimpleMeterRegistry()));
         java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
                 seedObservingAgent(scoped, requestContext, "ROLE_CASHIER", Flux.just("42 ", "open"));
         CurrentUserContext caller = userContext("user-1", USER_ID, "ROLE_CASHIER");
@@ -1128,9 +1149,12 @@ class StreamingSessionAgentManagerTest {
     void streamChat_off_recordsAndPublishesNoScope() {
         ToolInvocationRecorder recorder = recorderRunningBoundActions();
         RequestScopedUserContext requestContext = new RequestScopedUserContext();
-        StreamingSessionAgentManager off =
-                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, recorder);
-        off.setScopeGraphProperties(ScopeGraphProperties.off());
+        StreamingSessionAgentManager off = scopeManager(
+                toolSelectionEngine,
+                sharedOrchestrationSupport,
+                requestContext,
+                recorder,
+                ScopeResolverFixtures.consumers(ScopeGraphProperties.off(), new SimpleMeterRegistry()));
         java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
                 seedObservingAgent(off, requestContext, "ROLE_CASHIER", Flux.just("ok"));
 
@@ -1159,7 +1183,7 @@ class StreamingSessionAgentManagerTest {
         ToolInvocationRecorder recorder = recorderRunningBoundActions();
         RequestScopedUserContext requestContext = new RequestScopedUserContext();
         StreamingSessionAgentManager scoped =
-                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, recorder);
+                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, recorder, null);
         java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen = seedObservingAgent(
                 scoped, requestContext, "ROLE_CASHIER", Flux.error(new IllegalStateException("model unavailable")));
 
@@ -1186,9 +1210,12 @@ class StreamingSessionAgentManagerTest {
                 .thenReturn(Flux.just(streamedChunk("Hi")));
         ToolInvocationRecorder recorder = recorderRunningBoundActions();
         RequestScopedUserContext requestContext = spy(new RequestScopedUserContext());
-        StreamingSessionAgentManager scoped =
-                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, recorder);
-        scoped.setScopeGraphProperties(ScopeResolverFixtures.shadow(60));
+        StreamingSessionAgentManager scoped = scopeManager(
+                toolSelectionEngine,
+                sharedOrchestrationSupport,
+                requestContext,
+                recorder,
+                ScopeResolverFixtures.consumers(ScopeResolverFixtures.shadow(60), new SimpleMeterRegistry()));
         clearInvocations(toolSelectionEngine);
 
         scoped.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "hello")
@@ -1205,6 +1232,11 @@ class StreamingSessionAgentManagerTest {
 
     /** One full streamed agent turn with a real selection engine; returns everything a scope could have changed. */
     private List<Object> observableTurn(ScopeResolver resolver) {
+        return observableTurn(resolver, null);
+    }
+
+    /** As above, with a consumer switch wired into the engine and the manager. */
+    private List<Object> observableTurn(ScopeResolver resolver, ScopeConsumers consumers) {
         clearInvocations(streamingChatModel, scopedContentRetrieverFactory, rolePromptResolver, toolRegistryService);
         SharedOrchestrationSupport fixedClockSupport = new SharedOrchestrationSupport(FIXED_CLOCK);
         ToolSelectionEngine engine = new ToolSelectionEngine(
@@ -1218,8 +1250,9 @@ class StreamingSessionAgentManagerTest {
                 fixedClockSupport,
                 3);
         engine.setScopeResolver(resolver);
+        engine.setScopeConsumers(consumers);
         RequestScopedUserContext requestContext = new RequestScopedUserContext();
-        StreamingSessionAgentManager target = scopeManager(engine, fixedClockSupport, requestContext, null);
+        StreamingSessionAgentManager target = scopeManager(engine, fixedClockSupport, requestContext, null, consumers);
         clearInvocations(scopedContentRetrieverFactory, rolePromptResolver, toolRegistryService);
 
         List<String> tokens = target.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), SCOPE_MESSAGE)
@@ -1295,5 +1328,243 @@ class StreamingSessionAgentManagerTest {
         assertThat(off.get(5).toString()).contains("checkStock");
         assertThat(off.get(6).toString()).contains("scopedContentRetrieverFactory.create");
         assertThat(shadow).isEqualTo(off);
+    }
+
+    // ── ADR-0069 §6 / §7: the consumers on the streaming transport ──
+
+    private static final String WORKORDER_ONLY_MESSAGE = "what is the status of work order WO-20391?";
+
+    /** "ticket" denotes two entities (LOW); long enough to stay off the simple-chat fast path; names no other term. */
+    private static final String LOW_MESSAGE =
+            "can you please open the ticket for me and tell me everything that is going on with it right now";
+
+    private static org.springframework.ai.document.Document chunk(String documentId, String ragScope, String text) {
+        return new org.springframework.ai.document.Document(
+                text, java.util.Map.of("document_id", documentId, "rag_scope", ragScope));
+    }
+
+    private void streamingModelAnswers(String text) {
+        when(((org.springframework.ai.chat.model.ChatModel) streamingChatModel).getOptions())
+                .thenReturn(org.springframework.ai.ollama.api.OllamaChatOptions.builder()
+                        .model("test-model")
+                        .build());
+        when(streamingChatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenAnswer(invocation -> Flux.just(streamedChunk(text)));
+    }
+
+    /** A real engine over the fixture graph, wired to {@code consumers}, ranking to the order facade alone. */
+    private ToolSelectionEngine orderRankingEngine(ScopeConsumers consumers, SimpleMeterRegistry meters) {
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of(new ToolMetadata(
+                        UUID.randomUUID(),
+                        "orderFacadeTool",
+                        "Orders",
+                        "Order lookup",
+                        "orders",
+                        1.0,
+                        "low",
+                        200,
+                        true,
+                        "orderFacadeTool")));
+        when(toolRegistry.resolveToolsByName(List.of("orderFacadeTool")))
+                .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool)));
+        ToolSelectionEngine engine = realToolSelectionEngine();
+        engine.setScopeResolver(ScopeResolverFixtures.resolver(consumers.properties(), meters));
+        engine.setScopeConsumers(consumers);
+        return engine;
+    }
+
+    /** A bound-action recorder whose {@code wrap} hands the facade callbacks back unwrapped. */
+    private static ToolInvocationRecorder recorderPassingCallbacks() {
+        ToolInvocationRecorder recorder = recorderRunningBoundActions();
+        lenient()
+                .when(recorder.wrap(any(org.springframework.ai.tool.ToolCallback.class), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        return recorder;
+    }
+
+    private List<String> streamedSystemPrompts() {
+        ArgumentCaptor<org.springframework.ai.chat.prompt.Prompt> prompts =
+                ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
+        verify(streamingChatModel, atLeastOnce()).stream(prompts.capture());
+        return prompts.getAllValues().stream()
+                .map(prompt -> prompt.getSystemMessage().getText())
+                .toList();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069 §9: a streamed turn in mode enforce with an empty consumer list is exactly shadow (and shadow is exactly off)")
+    void streamChat_enforceWithoutConsumers_isIdenticalToShadow() {
+        streamingModelAnswers("Stock found");
+        when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
+                .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool")))
+                .thenAnswer(invocation -> new ArrayList<>(List.of(inventoryFacadeTool)));
+        ScopeGraphProperties enforceNothing = ScopeResolverFixtures.enforce(60);
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+
+        List<Object> off = observableTurn(null);
+        List<Object> shadow = observableTurn(ScopeResolverFixtures.resolver(ScopeResolverFixtures.shadow(60), meters));
+        List<Object> enforce = observableTurn(
+                ScopeResolverFixtures.resolver(enforceNothing, meters),
+                ScopeResolverFixtures.consumers(enforceNothing, meters));
+
+        assertThat(enforce).isEqualTo(shadow);
+        assertThat(shadow).isEqualTo(off);
+        assertThat(meters.find("mcp.scope.fallback").counters().stream()
+                        .mapToDouble(counter -> counter.count())
+                        .sum())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069 §6 rag, streamed: all-scope retrievers, narrowed to the scope plus master before the top-K cut")
+    void streamChat_ragEnforced_buildsAllScopeRetrieversAndNarrowsBeforeTheTopKCut() {
+        streamingModelAnswers("In progress");
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        ScopeConsumers consumers =
+                ScopeResolverFixtures.consumers(ScopeResolverFixtures.enforce(60, Consumer.RAG), meters);
+        List<org.springframework.ai.document.Document> pool = List.of(
+                chunk("inventory.a", "inventory", "Inventory alpha"),
+                chunk("inventory.b", "inventory", "Inventory beta"),
+                chunk("inventory.c", "inventory", "Inventory gamma"),
+                chunk("inventory.d", "inventory", "Inventory delta"),
+                chunk("inventory.e", "inventory", "Inventory epsilon"),
+                chunk("workorder.status-lifecycle", "workorder", "Workorder lifecycle states"),
+                chunk("glossary", "master", "Glossary of terms"),
+                chunk("orders.faq", "orders", "Orders FAQ"));
+        when(scopedContentRetrieverFactory.create(anyString(), anyInt(), anyDouble()))
+                .thenReturn(query -> pool);
+        ToolInvocationRecorder recorder = recorderPassingCallbacks();
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        StreamingSessionAgentManager target = scopeManager(
+                orderRankingEngine(consumers, meters), sharedOrchestrationSupport, requestContext, recorder, consumers);
+        clearInvocations(scopedContentRetrieverFactory, telemetryEmitter);
+
+        // ROLE_ADMIN is not warmed up, so the agent is built by this turn, after the mocks were cleared.
+        List<String> tokens = target.streamChat(
+                        new CurrentUserContext(
+                                "user-1",
+                                USER_ID,
+                                "ROLE_ADMIN",
+                                Set.of("ROLE_ADMIN"),
+                                Set.of("ROLE_ADMIN"),
+                                Set.of("AUTHENTICATED", ScopeResolverFixtures.WORKORDER_VIEW)),
+                        WORKORDER_ONLY_MESSAGE)
+                .collectList()
+                .block(java.time.Duration.ofSeconds(5));
+
+        assertThat(tokens).containsExactly("In progress");
+        verify(scopedContentRetrieverFactory, org.mockito.Mockito.times(2)).create(eq("master"), anyInt(), anyDouble());
+        verify(scopedContentRetrieverFactory).createLexical("master");
+        verify(scopedContentRetrieverFactory, never()).create(eq("orders"), anyInt(), anyDouble());
+        String systemPrompt = streamedSystemPrompts().getLast();
+        assertThat(systemPrompt).contains("Workorder lifecycle states", "Glossary of terms");
+        assertThat(systemPrompt).doesNotContain("Inventory", "Orders FAQ");
+        verify(recorder).recordScopeConsumers(List.of(), true);
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter, timeout(5_000)).emit(event.capture());
+        assertThat(event.getValue().scopeMode()).isEqualTo("ENFORCE");
+        assertThat(event.getValue().scopeRagFilterApplied()).isTrue();
+        assertThat(event.getValue().scopeAddedToolCount()).isZero();
+        assertThat(event.getValue().rag().promptLayers()).doesNotContain(NltiRequestTelemetry.PromptLayer.SCOPE_CARD);
+        assertThat(requestContext.currentScopeRagFilterApplied()).isFalse();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069 §7 card, streamed: the final SCOPE_CARD layer per request on HIGH, absent on LOW, never baked in")
+    void streamChat_cardEnforced_appendsTheCardPerRequest() {
+        streamingModelAnswers("Done");
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        ScopeConsumers consumers =
+                ScopeResolverFixtures.consumers(ScopeResolverFixtures.enforce(60, Consumer.CARD), meters);
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        StreamingSessionAgentManager target = scopeManager(
+                orderRankingEngine(consumers, meters), sharedOrchestrationSupport, requestContext, null, consumers);
+        clearInvocations(telemetryEmitter, scopedContentRetrieverFactory);
+        CurrentUserContext caller = userContext("user-1", USER_ID, "ROLE_CASHIER");
+
+        target.streamChat(caller, WORKORDER_ONLY_MESSAGE).collectList().block(java.time.Duration.ofSeconds(5));
+
+        String withCard = streamedSystemPrompts().getLast();
+        int cardStart =
+                withCard.indexOf("SCOPE (platform definitions for this question; orientation only, grants nothing)");
+        assertThat(cardStart).isPositive();
+        assertThat(withCard.substring(cardStart))
+                .contains("Entities: workorder (domain workorder)")
+                .doesNotContain("WO-20391", "status of work order");
+        ArgumentCaptor<NltiRequestTelemetry> first = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter, timeout(5_000)).emit(first.capture());
+        assertThat(first.getValue().rag().promptLayers())
+                .containsExactly(
+                        NltiRequestTelemetry.PromptLayer.BASE,
+                        NltiRequestTelemetry.PromptLayer.ROLE,
+                        NltiRequestTelemetry.PromptLayer.SCOPE_CARD);
+        verify(scopedContentRetrieverFactory, never()).create(eq("master"), anyInt(), anyDouble());
+        assertThat(requestContext.currentScopeCard()).isEmpty();
+        clearInvocations(streamingChatModel, telemetryEmitter);
+
+        target.streamChat(caller, LOW_MESSAGE).collectList().block(java.time.Duration.ofSeconds(5));
+
+        assertThat(streamedSystemPrompts().getLast()).doesNotContain("SCOPE (");
+        ArgumentCaptor<NltiRequestTelemetry> second = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter, timeout(5_000)).emit(second.capture());
+        assertThat(second.getValue().rag().promptLayers())
+                .containsExactly(NltiRequestTelemetry.PromptLayer.BASE, NltiRequestTelemetry.PromptLayer.ROLE);
+        assertThat(second.getValue().scopeConfidence()).isEqualTo("LOW");
+        assertThat(meters.get("mcp.scope.fallback")
+                        .tag("consumer", "card")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("ADR-0069 §6 tools, streamed: the added facades are selected, cached by and reported for the turn")
+    void streamChat_toolsEnforced_reportsTheAddedFacades() {
+        streamingModelAnswers("Done");
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        ScopeConsumers consumers =
+                ScopeResolverFixtures.consumers(ScopeResolverFixtures.enforce(60, Consumer.TOOLS), meters);
+        ScopeSet scope = ScopeResolverFixtures.resolver(consumers.properties(), meters)
+                .resolve(
+                        WORKORDER_ONLY_MESSAGE,
+                        Set.of("AUTHENTICATED", ScopeResolverFixtures.WORKORDER_VIEW),
+                        WorkflowState.IDLE);
+        when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
+                .thenReturn(new ToolSelectionEngine.ToolSelectionResult(
+                        List.of(orderFacadeTool, inventoryFacadeTool),
+                        List.of(),
+                        WorkflowState.IDLE,
+                        scope,
+                        List.of("InventoryFacadeTool")));
+        ToolInvocationRecorder recorder = recorderPassingCallbacks();
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        StreamingSessionAgentManager target =
+                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, recorder, consumers);
+        clearInvocations(telemetryEmitter);
+
+        target.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), WORKORDER_ONLY_MESSAGE)
+                .collectList()
+                .block(java.time.Duration.ofSeconds(5));
+
+        verify(recorder).recordSelectedTools(List.of("OrderFacadeTool", "InventoryFacadeTool"));
+        verify(recorder).recordScopeConsumers(List.of("InventoryFacadeTool"), false);
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter, timeout(5_000)).emit(event.capture());
+        assertThat(event.getValue().scopeAddedToolCount()).isEqualTo(1);
+        assertThat(event.getValue().tools().selected()).containsExactly("OrderFacadeTool", "InventoryFacadeTool");
+        assertThat(roleAgentCacheKeys(target)).contains("ROLE_CASHIER::InventoryFacadeTool+OrderFacadeTool");
+        assertThat(meters.get("mcp.scope.fallback")
+                        .tag("consumer", "tools")
+                        .counter()
+                        .count())
+                .isZero();
+        assertThat(requestContext.currentScopeAddedToolNames()).isEmpty();
     }
 }

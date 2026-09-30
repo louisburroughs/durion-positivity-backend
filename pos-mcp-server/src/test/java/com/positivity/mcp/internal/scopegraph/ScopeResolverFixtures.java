@@ -31,6 +31,30 @@ public final class ScopeResolverFixtures {
         return new ScopeGraphProperties(ScopeGraphProperties.Mode.SHADOW, List.of(), maxNodes, 0, 0);
     }
 
+    /** Mode {@code enforce} with exactly {@code consumers} listed; the caps keep their defaults. */
+    public static ScopeGraphProperties enforce(int maxNodes, ScopeGraphProperties.Consumer... consumers) {
+        return enforce(maxNodes, 0, 0, consumers);
+    }
+
+    /** Mode {@code enforce} with the given slot cap and card budget (0 means the default). */
+    public static ScopeGraphProperties enforce(
+            int maxNodes, int addedToolSlots, int cardTokenBudget, ScopeGraphProperties.Consumer... consumers) {
+        return new ScopeGraphProperties(
+                ScopeGraphProperties.Mode.ENFORCE, List.of(consumers), maxNodes, addedToolSlots, cardTokenBudget);
+    }
+
+    /** The consumer switch over the fixture graph in {@code properties}' mode. */
+    public static ScopeConsumers consumers(ScopeGraphProperties properties, MeterRegistry meters) {
+        return new ScopeConsumers(
+                properties, holderOf(graph(), properties, meters), new ScopeMetrics(properties, meters));
+    }
+
+    /** The consumer switch over {@code graph}. */
+    public static ScopeConsumers consumers(ScopeGraph graph, ScopeGraphProperties properties, MeterRegistry meters) {
+        return new ScopeConsumers(
+                properties, holderOf(graph, properties, meters), new ScopeMetrics(properties, meters));
+    }
+
     /** A holder whose current snapshot is {@code graph}, built on the caller's thread. */
     public static ScopeGraphHolder holderOf(ScopeGraph graph, ScopeGraphProperties properties, MeterRegistry meters) {
         ScopeGraphHolder holder = new ScopeGraphHolder(

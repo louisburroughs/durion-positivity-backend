@@ -138,6 +138,14 @@ public class AlphaEvalTurnTraceRecorder {
         current(builder -> builder.scope = scope);
     }
 
+    /** ADR-0069 §6: the tools the scope added this turn, and whether the RAG hook narrowed retrieval. */
+    public void recordScopeConsumers(@NonNull List<String> addedTools, boolean ragFilterApplied) {
+        current(builder -> {
+            builder.scopeAddedTools = List.copyOf(addedTools);
+            builder.scopeRagFilterApplied = ragFilterApplied;
+        });
+    }
+
     /**
      * ADR-0069 §9: the {@code document_id}s of the final top-K a retrieval handed to the model.
      * A turn may retrieve more than once; the documents accumulate, each counted once.
@@ -308,6 +316,8 @@ public class AlphaEvalTurnTraceRecorder {
         private final List<String> calledCatalogTools = new ArrayList<>();
 
         private ScopeSet scope;
+        private List<String> scopeAddedTools = List.of();
+        private boolean scopeRagFilterApplied;
         /** Null until a retrieval was observed for the turn. */
         private Set<String> retrievedDocuments;
 
@@ -384,9 +394,8 @@ public class AlphaEvalTurnTraceRecorder {
                     scope.tools().size(),
                     scope.documentIds().size(),
                     scope.screenKeys().size(),
-                    // No consumer acts on the scope yet: nothing is added and retrieval is not narrowed.
-                    0,
-                    false,
+                    scopeAddedTools.size(),
+                    scopeRagFilterApplied,
                     calledInScope,
                     toolCalls.size(),
                     retrievedInScope,

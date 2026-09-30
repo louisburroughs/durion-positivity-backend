@@ -319,7 +319,7 @@ class AlphaEvalTurnTraceRecorderTest {
         assertThat(traced.toolCount()).isEqualTo(2);
         assertThat(traced.documentCount()).isEqualTo(2);
         assertThat(traced.screenCount()).isEqualTo(1);
-        // No consumer acts on the scope in this wave.
+        // Nothing recorded for the consumers: shadow adds nothing and narrows nothing.
         assertThat(traced.addedTools()).isZero();
         assertThat(traced.ragFilterApplied()).isFalse();
         assertThat(traced.calledTools()).isEqualTo(3);
@@ -364,6 +364,27 @@ class AlphaEvalTurnTraceRecorderTest {
         assertThat(traced.retrievedDocsInScope()).isNull();
         assertThat(traced.calledTools()).isZero();
         assertThat(traced.calledToolsInScope()).isZero();
+    }
+
+    @Test
+    @DisplayName("ADR-0069 §6: what the consumers did is traced as the added-tool count and the RAG filter flag")
+    void consumerOutcomeIsTraced() {
+        AlphaEvalTurnTraceRecorder enforce = scopeRecorder(
+                mode(
+                        ScopeGraphProperties.Mode.ENFORCE,
+                        ScopeGraphProperties.Consumer.RAG,
+                        ScopeGraphProperties.Consumer.TOOLS),
+                new SimpleMeterRegistry());
+
+        enforce.begin(USER, "the work order WO-20391");
+        enforce.recordScope(scope());
+        enforce.recordScopeConsumers(List.of("WorkorderFacadeTool", "workorder_getworkorder"), true);
+        enforce.complete("ok");
+
+        ScopeTrace traced = savedTrace().scope();
+        assertThat(traced.enforced()).containsExactly("RAG", "TOOLS");
+        assertThat(traced.addedTools()).isEqualTo(2);
+        assertThat(traced.ragFilterApplied()).isTrue();
     }
 
     @Test

@@ -5,18 +5,22 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.client.RoleDefaultPermissionsClient;
 import com.positivity.mcp.internal.config.CurrentUserContext;
-import com.positivity.mcp.internal.config.ScopeGraphProperties;
+import com.positivity.mcp.internal.config.ScopeGraphProperties.Consumer;
 import com.positivity.mcp.internal.config.StreamingAgentOrchestrationService;
 import com.positivity.mcp.internal.config.StreamingSessionAgentCacheMetrics;
 import com.positivity.mcp.internal.config.TieredChatModelResolver;
 import com.positivity.mcp.internal.domain.ModelTier;
+import com.positivity.mcp.internal.domain.RagScope;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
+import com.positivity.mcp.internal.orchestration.ScopeShadowSupport.ScopeOutcome;
+import com.positivity.mcp.internal.orchestration.ScopeShadowSupport.ScopePublication;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.retrieval.PermissionAwareMetadataFilter;
+import com.positivity.mcp.internal.scopegraph.ScopeConsumers;
 import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import com.positivity.mcp.internal.security.PermissionCodes;
 import com.positivity.mcp.internal.service.NltiRouter;
@@ -54,7 +58,6 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -127,8 +130,12 @@ public class StreamingSessionAgentManager
     private final int memoryMaxMessages;
     private final int rateLimitPerSession;
 
-    /** ADR-0069: the scope-graph rollout switches; absent in hand-built constructions. */
-    private volatile @Nullable ScopeGraphProperties scopeGraphProperties;
+    /**
+     * ADR-0069 §6: the consumer switch. A constructor argument for the reason given in {@code
+     * SessionAgentManager}: the warm-up builds agents in the constructor and the RAG consumer decides
+     * at build time which scopes the retrievers cover. Null in hand-built constructions.
+     */
+    private final @Nullable ScopeConsumers scopeConsumers;
 
     public StreamingSessionAgentManager(
             @Qualifier("streamingChatModel") @NonNull StreamingChatModel streamingChatModel,
@@ -155,7 +162,8 @@ public class StreamingSessionAgentManager
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
             @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession,
             @Value("${mcp.rag.min-score:0.45}") double ragMinScore,
-            @Value("${mcp.rag.tier2-min-score:0.40}") double ragTier2MinScore) {
+            @Value("${mcp.rag.tier2-min-score:0.40}") double ragTier2MinScore,
+            @Nullable ScopeConsumers scopeConsumers) {
         this.streamingChatModel = streamingChatModel;
         this.toolRegistry = toolRegistry;
         this.sharedOrchestrationSupport = sharedOrchestrationSupport;
@@ -177,6 +185,7 @@ public class StreamingSessionAgentManager
         this.clock = clock;
         this.ragMinScore = ragMinScore;
         this.ragTier2MinScore = ragTier2MinScore;
+        this.scopeConsumers = scopeConsumers;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
         int sanitizedMaxCachedAgents = Math.max(1, maxCachedAgents);
@@ -193,16 +202,6 @@ public class StreamingSessionAgentManager
                 .expireAfterWrite(Duration.ofMinutes(cacheTtlMinutes))
                 .build();
         prebuildRoleAgents();
-    }
-
-    /**
-     * ADR-0069 §9: the scope-graph rollout switches, read only to stamp the mode on telemetry.
-     * Setter-injected and optional so existing constructions keep working; nothing in this class
-     * changes behaviour on them.
-     */
-    @Autowired(required = false)
-    public void setScopeGraphProperties(@Nullable ScopeGraphProperties scopeGraphProperties) {
-        this.scopeGraphProperties = scopeGraphProperties;
     }
 
     @Override
@@ -320,9 +319,13 @@ public class StreamingSessionAgentManager
                 toolInvocationRecorder.recordScope(selection.scope());
             }
         }
+        // ADR-0069 §6/§7: the scope, the facades it added and the card it renders, built on the
+        // request thread (the card needs the caller's codes) and published where the caller is.
+        ScopePublication publication =
+                ScopeShadowSupport.publicationFor(selection, scopeConsumers, currentUserContext.permissionCodes());
         String ragScope = toolRegistry.resolveRagScopeForTools(allTools);
         AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope, false);
-        List<String> promptLayers = assembled.layers();
+        List<String> promptLayers = publication.withCardLayer(assembled.layers());
         String correlationId = resolveCorrelationId();
         String workflowState = selection.workflowState().name();
         TierRouting tierRouting = tierRoutingOf(routingDecision);
@@ -330,6 +333,8 @@ public class StreamingSessionAgentManager
         // tools inside streamTokens (on the subscribing thread); captured there, read by the
         // completion signals after the thread-local holder has been cleared.
         AtomicBoolean writeCapableToolsPresent = new AtomicBoolean(false);
+        // ADR-0069 §6: likewise for what the consumers did; captured in streamTokens, read on completion.
+        AtomicReference<ScopeOutcome> scopeOutcome = new AtomicReference<>(ScopeOutcome.NONE);
 
         String userContext = formatUserContext(currentUserContext);
         // Capture the caller's Authorization on the request thread; the Flux is subscribed later on a
@@ -357,8 +362,9 @@ public class StreamingSessionAgentManager
                                         userContext,
                                         currentUserContext,
                                         authorizationHeader,
-                                        scope,
+                                        publication,
                                         writeCapableToolsPresent,
+                                        scopeOutcome,
                                         turnHandle,
                                         emitter))),
                         turnHandle,
@@ -388,7 +394,8 @@ public class StreamingSessionAgentManager
                             false,
                             tierRouting,
                             writeCapable,
-                            scope);
+                            scope,
+                            scopeOutcome.get());
                 }))
                 .doOnError(exception -> TenantContext.runAs(tenantId, () -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -419,7 +426,8 @@ public class StreamingSessionAgentManager
                             false,
                             tierRouting,
                             writeCapableToolsPresent.get(),
-                            null);
+                            null,
+                            ScopeOutcome.NONE);
                 }));
         return streamed;
     }
@@ -487,7 +495,8 @@ public class StreamingSessionAgentManager
                             null,
                             false,
                             // The fast path resolves no scope (ADR-0069).
-                            null);
+                            null,
+                            ScopeOutcome.NONE);
                 }))
                 .doOnError(exception -> TenantContext.runAs(tenantId, () -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -518,7 +527,8 @@ public class StreamingSessionAgentManager
                             null,
                             false,
                             // The fast path resolves no scope (ADR-0069).
-                            null);
+                            null,
+                            ScopeOutcome.NONE);
                 }));
     }
 
@@ -605,25 +615,38 @@ public class StreamingSessionAgentManager
         long startNanos = System.nanoTime();
         String ragScope = toolRegistry.resolveRagScopeForTools(tools);
         String promptName = SystemPromptDefaults.promptNameForRagScope(ragScope);
-        QueryDocumentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, ragMinScore);
+        // ADR-0069 §6: with the RAG consumer in enforce the retrievers cover ALL scopes (the master
+        // scope is the factory's unfiltered case) and the request-scoped ScopeRagFilter below narrows
+        // per request; otherwise this is today's scoped construction and no hook is installed. Mirrors
+        // SessionAgentManager#buildAgent.
+        boolean scopeRagEnforced =
+                scopeConsumers != null && requestScopedUserContext != null && scopeConsumers.enforces(Consumer.RAG);
+        String retrieverScope = scopeRagEnforced ? RagScope.MASTER : ragScope;
+        QueryDocumentRetriever semanticRetriever =
+                scopedContentRetrieverFactory.create(retrieverScope, 10, ragMinScore);
         QueryDocumentRetriever broadSemanticRetriever =
-                scopedContentRetrieverFactory.create(ragScope, TIER2_RETRIEVAL_CANDIDATES, ragTier2MinScore);
+                scopedContentRetrieverFactory.create(retrieverScope, TIER2_RETRIEVAL_CANDIDATES, ragTier2MinScore);
         QueryDocumentRetriever expandedRetriever = new QueryExpansionContentRetriever(
                 broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
         // #784: dense + query-expansion, plus the lexical (FTS) source when enabled. RRF fusion when
         // lexical is present; otherwise the original insertion-order merge, so the dense-only path is
         // byte-for-byte unchanged when the feature flag is off.
         List<QueryDocumentRetriever> hybridSources = new ArrayList<>(List.of(semanticRetriever, expandedRetriever));
-        Optional<QueryDocumentRetriever> lexicalRetriever = scopedContentRetrieverFactory.createLexical(ragScope);
+        Optional<QueryDocumentRetriever> lexicalRetriever = scopedContentRetrieverFactory.createLexical(retrieverScope);
         lexicalRetriever.ifPresent(hybridSources::add);
         QueryDocumentRetriever hybridRetriever = lexicalRetriever.isPresent()
                 ? HybridContentRetriever.reciprocalRankFusion(
                         hybridSources, TIER2_RETRIEVAL_CANDIDATES, scopedContentRetrieverFactory.rrfK())
                 : new HybridContentRetriever(hybridSources, TIER2_RETRIEVAL_CANDIDATES);
+        // ADR-0069 §6: the scope hook sits after fusion and before the top-K cut, beside the
+        // permission filter, so the top-K is chosen from in-scope (and visible) survivors.
+        QueryDocumentRetriever scopeFilteredRetriever = scopeRagEnforced
+                ? new ScopeRagFilter(hybridRetriever, ragScope, requestScopedUserContext, scopeConsumers)
+                : hybridRetriever;
         // #1124 item 4: permission-gate candidates BEFORE the top-K re-rank (see SessionAgentManager),
         // so the top-K is chosen from caller-visible docs and the broadened master scope cannot leak
         // gated docs. Codes are read per request from the thread-local caller context.
-        QueryDocumentRetriever permissionFilteredRetriever = permissionFiltered(hybridRetriever);
+        QueryDocumentRetriever permissionFilteredRetriever = permissionFiltered(scopeFilteredRetriever);
         QueryDocumentRetriever rerankedRetriever =
                 new RerankedContentRetriever(permissionFilteredRetriever, TIER2_FINAL_TOP_K);
         // ADR-0069 §9: observes the final top-K for the scope trace and returns it untouched; a plain
@@ -634,12 +657,14 @@ public class StreamingSessionAgentManager
 
         // #1193 cache safety: the WRITE-GATE layer is applied per request (the supplier reads the
         // request-scoped write-capability signal, resolved the same way tools are), so a cached
-        // agent can never bake a WRITE_GATE prompt into requests without write-capable tools.
+        // agent can never bake a WRITE_GATE prompt into requests without write-capable tools. The
+        // ADR-0069 §7 scope card is appended the same way, as the final SCOPE_CARD layer, from the
+        // card published for this request; a cached agent never bakes one in.
         StreamingPosAssistant agent = new SpringAiStreamingPosAssistant(
                 executorStreamingChatModel(tier),
-                () -> rolePromptResolver
+                () -> withScopeCard(rolePromptResolver
                         .assemble(role, ragScope, currentWriteCapableToolsPresent())
-                        .text(),
+                        .text()),
                 tools,
                 resilientContentRetriever,
                 this::chatMemoryFor,
@@ -675,6 +700,13 @@ public class StreamingSessionAgentManager
 
     private boolean currentWriteCapableToolsPresent() {
         return requestScopedUserContext != null && requestScopedUserContext.currentWriteCapableToolsPresent();
+    }
+
+    /** ADR-0069 §7: the assembled prompt with this request's scope card as its final layer, if one was rendered. */
+    private @NonNull String withScopeCard(@NonNull String assembledPrompt) {
+        return ScopeShadowSupport.currentCard(requestScopedUserContext)
+                .map(card -> assembledPrompt + "\n\n" + card)
+                .orElse(assembledPrompt);
     }
 
     /**
@@ -752,8 +784,9 @@ public class StreamingSessionAgentManager
             @NonNull String userContext,
             @NonNull CurrentUserContext currentUserContext,
             @Nullable String authorizationHeader,
-            @Nullable ScopeSet scope,
+            @NonNull ScopePublication publication,
             @NonNull AtomicBoolean writeCapableToolsPresent,
+            @NonNull AtomicReference<ScopeOutcome> scopeOutcome,
             @Nullable Object turnHandle,
             @NonNull FluxSink<String> emitter) {
         if (toolInvocationRecorder != null) {
@@ -770,8 +803,9 @@ public class StreamingSessionAgentManager
                             userContext,
                             currentUserContext,
                             authorizationHeader,
-                            scope,
+                            publication,
                             writeCapableToolsPresent,
+                            scopeOutcome,
                             emitter));
             return;
         }
@@ -782,8 +816,9 @@ public class StreamingSessionAgentManager
                 userContext,
                 currentUserContext,
                 authorizationHeader,
-                scope,
+                publication,
                 writeCapableToolsPresent,
+                scopeOutcome,
                 emitter);
     }
 
@@ -794,8 +829,9 @@ public class StreamingSessionAgentManager
             @NonNull String userContext,
             @NonNull CurrentUserContext currentUserContext,
             @Nullable String authorizationHeader,
-            @Nullable ScopeSet scope,
+            @NonNull ScopePublication publication,
             @NonNull AtomicBoolean writeCapableToolsPresent,
+            @NonNull AtomicReference<ScopeOutcome> scopeOutcome,
             @NonNull FluxSink<String> emitter) {
         // Publish the caller for OpenApiToolProvider.provideTools, which the tool callback resolver invokes
         // synchronously while building the request context inside start(). Cleared in finally on this
@@ -809,9 +845,7 @@ public class StreamingSessionAgentManager
             requestScopedUserContext.recordUserMessage(message);
             // ADR-0069 §5: published next to the caller, for the same window, and cleared by the same
             // clear() in the finally below.
-            if (scope != null) {
-                requestScopedUserContext.recordScope(scope);
-            }
+            publication.publish(requestScopedUserContext);
         }
         try {
             // agent.chat resolves this request's tools synchronously at Flux-assembly time, so the
@@ -819,6 +853,10 @@ public class StreamingSessionAgentManager
             // capture it for the completion-signal telemetry before the finally-clear below.
             Flux<String> tokens = agent.chat(memoryId, message, userContext);
             writeCapableToolsPresent.set(currentWriteCapableToolsPresent());
+            // ADR-0069 §6: tools and retrieval are resolved in the same synchronous window, so what
+            // the consumers did is known here too; the turn is bound, so the trace gets it now.
+            scopeOutcome.set(ScopeShadowSupport.recordOutcome(
+                    publication.scope(), scopeConsumers, requestScopedUserContext, toolInvocationRecorder));
             tokens.doOnNext(token -> {
                         if (!emitter.isCancelled()) {
                             emitter.next(token);
@@ -927,7 +965,8 @@ public class StreamingSessionAgentManager
             boolean simpleChat,
             @Nullable TierRouting tierRouting,
             boolean writeCapableToolsPresent,
-            @Nullable ScopeSet scope) {
+            @Nullable ScopeSet scope,
+            @NonNull ScopeOutcome scopeOutcome) {
         if (telemetryEmitter == null) {
             return;
         }
@@ -949,7 +988,8 @@ public class StreamingSessionAgentManager
                     errorCode,
                     tierRouting,
                     writeCapableToolsPresent,
-                    ScopeShadowSupport.telemetrySignal(scope, scopeGraphProperties)));
+                    ScopeShadowSupport.telemetrySignal(
+                            scope, ScopeShadowSupport.propertiesOf(scopeConsumers), scopeOutcome)));
         } catch (RuntimeException telemetryFailure) {
             LOGGER.warn(
                     "MCP streaming telemetry emission failed role={} status={}",

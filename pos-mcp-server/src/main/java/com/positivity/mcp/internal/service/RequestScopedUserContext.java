@@ -62,6 +62,19 @@ public class RequestScopedUserContext {
      */
     private static final ThreadLocal<ScopeSet> SCOPE = new ThreadLocal<>();
 
+    /**
+     * ADR-0069 §6: what the consumers did with this turn's scope. The tools added on top of the
+     * ranked cuts, in the order they were added (facades by the selection engine before the agent
+     * runs, discovered operations by {@code OpenApiToolProvider} inside it; together they share one
+     * cap, so the provider reads this to know how many slots are left); whether the RAG hook
+     * narrowed retrieval to the scope; and the rendered scope card the per-request prompt supplier
+     * appends. All cleared with the caller.
+     */
+    private static final ThreadLocal<List<String>> SCOPE_ADDED_TOOLS = new ThreadLocal<>();
+
+    private static final ThreadLocal<Boolean> SCOPE_RAG_FILTER_APPLIED = new ThreadLocal<>();
+    private static final ThreadLocal<String> SCOPE_CARD = new ThreadLocal<>();
+
     public void set(@NonNull CurrentUserContext context) {
         set(context, null);
     }
@@ -109,8 +122,47 @@ public class RequestScopedUserContext {
         return Optional.ofNullable(SCOPE.get());
     }
 
+    /** Appends the tools a consumer added on top of a ranked cut this turn (ADR-0069 §6). */
+    public void recordScopeAddedTools(@NonNull List<String> toolNames) {
+        if (toolNames.isEmpty()) {
+            return;
+        }
+        List<String> added = new java.util.ArrayList<>(currentScopeAddedToolNames());
+        added.addAll(toolNames);
+        SCOPE_ADDED_TOOLS.set(List.copyOf(added));
+    }
+
+    /** The tools added on top of the ranked cuts so far this turn, facades first; empty when none. */
+    public @NonNull List<String> currentScopeAddedToolNames() {
+        List<String> names = SCOPE_ADDED_TOOLS.get();
+        return names == null ? List.of() : names;
+    }
+
+    /** Records whether the RAG hook narrowed this turn's retrieval to the scope (ADR-0069 §6). */
+    public void recordScopeRagFilterApplied(boolean applied) {
+        SCOPE_RAG_FILTER_APPLIED.set(applied);
+    }
+
+    /** True when the RAG hook narrowed this turn's retrieval to the scope; false when unrecorded. */
+    public boolean currentScopeRagFilterApplied() {
+        return Boolean.TRUE.equals(SCOPE_RAG_FILTER_APPLIED.get());
+    }
+
+    /** Publishes this turn's rendered scope card for the per-request prompt supplier (ADR-0069 §7). */
+    public void recordScopeCard(@NonNull String card) {
+        SCOPE_CARD.set(card);
+    }
+
+    /** This turn's scope card, or empty when none was rendered for it. */
+    public @NonNull Optional<String> currentScopeCard() {
+        return Optional.ofNullable(SCOPE_CARD.get());
+    }
+
     public void clear() {
         SCOPE.remove();
+        SCOPE_ADDED_TOOLS.remove();
+        SCOPE_RAG_FILTER_APPLIED.remove();
+        SCOPE_CARD.remove();
         HOLDER.remove();
         DISCOVERED_OPENAPI_TOOLS.remove();
         WRITE_CAPABLE_TOOLS_PRESENT.remove();

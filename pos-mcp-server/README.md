@@ -173,6 +173,27 @@ capped at `max-nodes`, then filtered to what the caller may see. Seeds carry the
 the matched text. The scope is published on `RequestScopedUserContext` beside the caller for the duration of the agent
 call and cleared with it. Until a consumer is listed in `enforce`, selection, retrieval and the prompt are unchanged.
 
+### Consumers
+
+A consumer acts only when `mode` is `enforce` **and** it is listed in `mcp.scope-graph.enforce`; `mode: enforce` with an
+empty list behaves exactly as `shadow`. Each consumer falls back to today's behaviour when the turn's confidence is
+below what it acts on, and every such turn is counted under `mcp.scope.fallback{consumer}`.
+
+| Consumer | Acts on      | When enforced                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rag`    | `HIGH`       | Both session managers build the dense, expanded and lexical retrievers over **all** scopes (as for the `master` agent today) and install `ScopeRagFilter` after fusion, before the top-5 cut: keep a chunk whose `document_id` is in the scope or whose `rag_scope` is `master`. On `LOW`/`NONE` the hook re-applies today's eligibility (`rag_scope IN (agent scope, master)`; everything for a `master` agent). Read once at startup: changing it needs a restart. |
+| `tools`  | `HIGH`, `LOW` | At most `added-tool-slots` tools per turn are **added** on top of the ranked cuts, never displacing a ranked tool: the scope's facades first (`ToolSelectionEngine`, intersected with the caller's gated set from the same SQL that gates the ranking), then discovered operations with the slots left (`OpenApiToolProvider`, admitted by `findDiscoveredByNamesForPermissions`, the ANN gate's predicates by name). Ordered by hop, reads before writes, name. Nothing is added on the fail-closed paths, on the admin fast path or at warm-up. |
+| `card`   | `HIGH`       | A plain-text scope card (`ScopeCardRenderer`, budget `card-token-budget`) is appended per request as the final system-prompt layer `SCOPE_CARD`, from graph definitions only: qualifying entities, relations, lifecycle states, permitted actions with the codes the caller holds, screens with their URL. Never message text, never a node the caller lacks permission for. Cached agents never bake it in.                                                        |
+
+`addedTools` and `ragFilterApplied` on the eval trace, and `scopeAddedToolCount` / `scopeRagFilterApplied` on the
+telemetry event, record what the consumers did on a turn; `SCOPE_CARD` appears in the telemetry `promptLayers` only
+when a card was rendered.
+
+**Promotion (ADR-0069 §9).** Consumers are promoted one at a time — RAG filter first, then tool slots, then the card —
+and only after a recorded gate run against the same run in `shadow` shows no regression in RAG hit@5, MRR and recall@k,
+no increase in forbidden-document violations, and a tool-selection hit rate at least equal. The promotion and its
+evidence are recorded in the ADR's changelog.
+
 **Recording.** The alpha eval turn trace gains a nullable `scope` (`mode`, `enforced`, `graphHash`, `graphBuiltAt`,
 `confidence`, `seeds[{entity, matchKind}]`, entity/tool/document/screen counts, `addedTools`, `ragFilterApplied`, and at
 completion `calledToolsInScope/calledTools` and `retrievedDocsInScope/retrievedDocs`). Older payloads read `scope: null`.
@@ -183,8 +204,8 @@ completion `calledToolsInScope/calledTools` and `retrievedDocsInScope/retrievedD
 
 **Metrics** (registered only when the mode is not `off`): `mcp.scope.resolved{confidence}`,
 `mcp.scope.size{kind=entities|tools|documents|screens}`, `mcp.scope.called_tool{in_scope}`,
-`mcp.scope.retrieved_doc{in_scope}`, `mcp.scope.errors`. The two `in_scope` shares are counted when the eval turn trace
-completes, so they need `mcp.eval.turn-trace.enabled`.
+`mcp.scope.retrieved_doc{in_scope}`, `mcp.scope.fallback{consumer=rag|tools|card}`, `mcp.scope.errors`. The two
+`in_scope` shares are counted when the eval turn trace completes, so they need `mcp.eval.turn-trace.enabled`.
 
 ## Startup Behaviour
 

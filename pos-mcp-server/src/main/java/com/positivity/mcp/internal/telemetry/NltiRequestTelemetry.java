@@ -98,7 +98,9 @@ public record NltiRequestTelemetry(
         ROLE,
         DOMAIN,
         TOOL_USE,
-        WRITE_GATE
+        WRITE_GATE,
+        /** ADR-0069 §7: the scope card, appended per request when the {@code card} consumer acts. */
+        SCOPE_CARD
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
