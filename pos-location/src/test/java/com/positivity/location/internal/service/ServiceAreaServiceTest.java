@@ -17,6 +17,7 @@ import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.InvalidFieldException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -26,6 +27,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.hibernate.exception.ConstraintViolationException;
+import org.hibernate.exception.DataException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -99,7 +102,7 @@ class ServiceAreaServiceTest {
     @DisplayName("#76 - create duplicate service area name maps to conflict code")
     void shouldMapDuplicateNameConstraintToConflictCode() {
         when(serviceAreaRepository.saveAndFlush(any(ServiceAreaEntity.class)))
-                .thenThrow(new DataIntegrityViolationException("violates service_areas_name_key"));
+                .thenThrow(constraintViolation("violates service_areas_name_key"));
 
         ServiceAreaRequest request = ServiceAreaRequest.builder()
                 .name(DOWNTOWN_AREA)
@@ -431,7 +434,7 @@ class ServiceAreaServiceTest {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000021");
         stubExistingArea(id);
         when(serviceAreaRepository.saveAndFlush(any(ServiceAreaEntity.class)))
-                .thenThrow(new DataIntegrityViolationException(
+                .thenThrow(constraintViolation(
                         "duplicate key value violates unique constraint \"service_areas_name_key\""));
 
         assertThatThrownBy(() -> service.patch(id.toString(), Map.of("name", "Taken")))
@@ -558,7 +561,7 @@ class ServiceAreaServiceTest {
     @DisplayName("#2256 - a violation of a different constraint on service_areas is a plain conflict, not a name clash")
     void shouldNotReportOtherConstraintsAsNameTaken() {
         when(serviceAreaRepository.saveAndFlush(any(ServiceAreaEntity.class)))
-                .thenThrow(new DataIntegrityViolationException(
+                .thenThrow(constraintViolation(
                         "duplicate key value violates unique constraint \"service_areas_tenant_key\""
                                 + " on table service_areas, column name mentioned in detail"));
 
@@ -578,7 +581,7 @@ class ServiceAreaServiceTest {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000028");
         when(serviceAreaRepository.findById(id)).thenReturn(Optional.of(areaWith(id, "94107")));
         when(serviceAreaRepository.saveAndFlush(any(ServiceAreaEntity.class)))
-                .thenThrow(new DataIntegrityViolationException("something else"));
+                .thenThrow(constraintViolation("something else"));
 
         ServiceAreaPostalCodesRequest request = replacementOf("94112");
         String idText = id.toString();
@@ -586,5 +589,30 @@ class ServiceAreaServiceTest {
         assertThatThrownBy(() -> service.replacePostalCodes(idText, request))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessage("SERVICE_AREA_CONFLICT");
+    }
+
+    @Test
+    @DisplayName("#2350 - a length overflow (Hibernate DataException) is rethrown, not rendered as a conflict")
+    void shouldRethrowNonConstraintIntegrityViolation() {
+        DataIntegrityViolationException overflow = new DataIntegrityViolationException(
+                "could not execute statement",
+                new DataException(
+                        "could not execute statement",
+                        new SQLException("ERROR: value too long for type character varying(255)", "22001")));
+        when(serviceAreaRepository.saveAndFlush(any(ServiceAreaEntity.class))).thenThrow(overflow);
+
+        ServiceAreaRequest request = ServiceAreaRequest.builder()
+                .name("Whatever")
+                .postalCodes(List.of(entry("94107", "US")))
+                .build();
+
+        assertThatThrownBy(() -> service.create(request)).isSameAs(overflow);
+    }
+
+    /** What Spring's Hibernate exception translation raises for a constraint violation. */
+    private static DataIntegrityViolationException constraintViolation(String message) {
+        return new DataIntegrityViolationException(
+                "could not execute statement",
+                new ConstraintViolationException(message, new SQLException(message, "23505"), null));
     }
 }

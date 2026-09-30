@@ -22,8 +22,10 @@ import com.positivity.location.internal.service.TravelBufferPolicyServiceImpl;
 import com.positivity.security.common.LocationScopeAutoConfiguration;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.Optional;
 import java.util.UUID;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -100,10 +102,17 @@ class TravelBufferPolicyControllerTest {
                 .andExpect(jsonPath("$.fieldErrors[*].field").value(hasItem(field)));
     }
 
+    /** What Spring's Hibernate exception translation raises for a Postgres unique violation. */
     private static DataIntegrityViolationException uniqueViolation(String constraint) {
+        SQLException sql = new SQLException(
+                "ERROR: duplicate key value violates unique constraint \"" + constraint + "\"", "23505");
         return new DataIntegrityViolationException(
                 "could not execute statement",
-                new RuntimeException("ERROR: duplicate key value violates unique constraint \"" + constraint + "\""));
+                new ConstraintViolationException(
+                        "could not execute statement",
+                        sql,
+                        ConstraintViolationException.ConstraintKind.UNIQUE,
+                        constraint));
     }
 
     // ------------------------------------------------------------------ create
@@ -126,6 +135,26 @@ class TravelBufferPolicyControllerTest {
     @DisplayName("POST a blank name answers 400 VALIDATION_ERROR on name before the service runs")
     void createBlankName() throws Exception {
         postRefused("{\"name\":\"  \",\"bufferType\":\"FIXED_MINUTES\",\"bufferValue\":30}", "name");
+
+        nothingPersisted();
+    }
+
+    @Test
+    @DisplayName("POST a 256-character name answers 400 VALIDATION_ERROR on name, not 409")
+    void createOverLongName() throws Exception {
+        postRefused(
+                "{\"name\":\"" + "n".repeat(256) + "\",\"bufferType\":\"FIXED_MINUTES\",\"bufferValue\":30}", "name");
+
+        nothingPersisted();
+    }
+
+    @Test
+    @DisplayName("POST 256-character notes answers 400 VALIDATION_ERROR on notes, not 409")
+    void createOverLongNotes() throws Exception {
+        postRefused(
+                "{\"name\":\"Metro\",\"bufferType\":\"FIXED_MINUTES\",\"bufferValue\":30,\"notes\":\"" + "x".repeat(256)
+                        + "\"}",
+                "notes");
 
         nothingPersisted();
     }
@@ -223,6 +252,22 @@ class TravelBufferPolicyControllerTest {
         }
 
         nothingPersisted();
+    }
+
+    @Test
+    @DisplayName("PATCH 256-character notes answers 400 VALIDATION_ERROR on notes and changes nothing")
+    void patchOverLongNotes() throws Exception {
+        policyExists();
+
+        mockMvc.perform(patch(POLICY_URL, POLICY_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"notes\":\"" + "x".repeat(256) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(VALIDATION_ERROR))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("notes"));
+
+        nothingPersisted();
+        assertThat(existing.getNotes()).isEqualTo("old");
     }
 
     @Test

@@ -31,7 +31,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
-@Schema(description = "Partial update payload for a service bay; null fields are left unchanged")
+@Schema(
+        description = "Partial update payload for a service bay; absent fields are left unchanged. maxDutyClass is"
+                + " the exception: an absent key leaves it unchanged, while an explicit JSON null clears it.")
 public class BayPatchRequest {
 
     @Schema(description = "Display name of the bay", example = "Bay A1", requiredMode = NOT_REQUIRED)

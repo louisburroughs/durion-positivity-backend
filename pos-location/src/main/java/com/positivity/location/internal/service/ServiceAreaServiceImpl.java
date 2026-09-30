@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.hibernate.exception.ConstraintViolationException;
 import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -279,7 +280,16 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
         }
     }
 
-    private DuplicateResourceException toServiceAreaConflictException(DataIntegrityViolationException exception) {
+    /**
+     * A 409 only for a constraint violation. Spring translates every integrity failure, a value too
+     * long for its column (Postgres 22001, Hibernate {@code DataException}) included, to
+     * DataIntegrityViolationException; only one whose cause chain holds a Hibernate {@link
+     * ConstraintViolationException} is a conflict, so anything else is rethrown untouched.
+     */
+    private RuntimeException toServiceAreaConflictException(DataIntegrityViolationException exception) {
+        if (!exception.contains(ConstraintViolationException.class)) {
+            return exception;
+        }
         if (isNameConstraintViolation(exception)) {
             return new DuplicateResourceException(SERVICE_AREA_NAME_TAKEN);
         }

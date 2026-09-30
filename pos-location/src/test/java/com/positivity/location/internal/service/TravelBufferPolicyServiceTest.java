@@ -15,11 +15,14 @@ import com.positivity.location.internal.exception.InvalidFieldException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import org.hibernate.exception.ConstraintViolationException;
+import org.hibernate.exception.DataException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -84,7 +87,7 @@ class TravelBufferPolicyServiceTest {
     @DisplayName("#76 - create duplicate travel buffer policy name maps to conflict code")
     void shouldMapDuplicateNameConstraintToConflictCode() {
         when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class)))
-                .thenThrow(new DataIntegrityViolationException("violates travel_buffer_policies_name_key"));
+                .thenThrow(constraintViolation("violates travel_buffer_policies_name_key"));
 
         Map<String, Object> request = Map.of(
                 "name", "Standard Buffer",
@@ -435,10 +438,8 @@ class TravelBufferPolicyServiceTest {
     @DisplayName("#2256 - a real Postgres unique-violation message on the name key maps to NAME_TAKEN")
     void shouldMapPostgresNameKeyMessage() {
         when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class)))
-                .thenThrow(new DataIntegrityViolationException(
-                        "could not execute statement",
-                        new RuntimeException("ERROR: duplicate key value violates unique constraint"
-                                + " \"travel_buffer_policies_name_key\"")));
+                .thenThrow(constraintViolation("ERROR: duplicate key value violates unique constraint"
+                        + " \"travel_buffer_policies_name_key\""));
 
         TravelBufferPolicyRequest request = TravelBufferPolicyRequest.builder()
                 .name("Standard Buffer")
@@ -454,7 +455,7 @@ class TravelBufferPolicyServiceTest {
     @DisplayName("#2256 - another constraint on the same table is TRAVEL_BUFFER_POLICY_CONFLICT, not a name clash")
     void shouldNotReportOtherConstraintsAsNameTaken() {
         when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class)))
-                .thenThrow(new DataIntegrityViolationException("violates check constraint"
+                .thenThrow(constraintViolation("violates check constraint"
                         + " \"travel_buffer_policies_buffer_type_check\" on table travel_buffer_policies, name"
                         + " Standard"));
 
@@ -479,12 +480,78 @@ class TravelBufferPolicyServiceTest {
                 .bufferValue(new BigDecimal("10"))
                 .build();
         when(repository.findById(policyId)).thenReturn(java.util.Optional.of(existing));
-        when(repository.saveAndFlush(existing)).thenThrow(new DataIntegrityViolationException("some other rule"));
+        when(repository.saveAndFlush(existing)).thenThrow(constraintViolation("some other rule"));
         String id = policyId.toString();
         Map<String, Object> patch = Map.of("bufferValue", new BigDecimal("20"));
 
         assertThatThrownBy(() -> service.patch(id, patch))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessage("TRAVEL_BUFFER_POLICY_CONFLICT");
+    }
+
+    @Test
+    @DisplayName("#2350 - a length overflow (Hibernate DataException) is rethrown, not rendered as a conflict")
+    void shouldRethrowNonConstraintIntegrityViolation() {
+        DataIntegrityViolationException overflow = new DataIntegrityViolationException(
+                "could not execute statement",
+                new DataException(
+                        "could not execute statement",
+                        new SQLException("ERROR: value too long for type character varying(255)", "22001")));
+        when(repository.saveAndFlush(any(TravelBufferPolicyEntity.class))).thenThrow(overflow);
+
+        TravelBufferPolicyRequest request = TravelBufferPolicyRequest.builder()
+                .name("Standard Buffer")
+                .bufferType("FIXED_MINUTES")
+                .build();
+
+        assertThatThrownBy(() -> service.create(request)).isSameAs(overflow);
+    }
+
+    @Test
+    @DisplayName("#2350 - over-long name or notes are 400 on the field before any write")
+    void shouldRefuseOverLongTextBeforeWriting() {
+        TravelBufferPolicyRequest longName = TravelBufferPolicyRequest.builder()
+                .name("n".repeat(256))
+                .bufferType("FIXED_MINUTES")
+                .build();
+        assertThatThrownBy(() -> service.create(longName))
+                .isInstanceOfSatisfying(
+                        InvalidFieldException.class,
+                        e -> assertThat(e.getField()).isEqualTo("name"));
+
+        TravelBufferPolicyRequest longNotes = TravelBufferPolicyRequest.builder()
+                .name("Standard Buffer")
+                .bufferType("FIXED_MINUTES")
+                .notes("x".repeat(256))
+                .build();
+        assertThatThrownBy(() -> service.create(longNotes))
+                .isInstanceOfSatisfying(
+                        InvalidFieldException.class,
+                        e -> assertThat(e.getField()).isEqualTo("notes"));
+
+        java.util.UUID policyId = java.util.UUID.fromString("00000000-0000-0000-0000-000000000032");
+        TravelBufferPolicyEntity existing = TravelBufferPolicyEntity.builder()
+                .id(policyId)
+                .name("Standard Buffer")
+                .bufferType("FIXED_MINUTES")
+                .notes("old")
+                .build();
+        when(repository.findById(policyId)).thenReturn(java.util.Optional.of(existing));
+        String id = policyId.toString();
+        Map<String, Object> patch = Map.of("notes", "x".repeat(256));
+        assertThatThrownBy(() -> service.patch(id, patch))
+                .isInstanceOfSatisfying(
+                        InvalidFieldException.class,
+                        e -> assertThat(e.getField()).isEqualTo("notes"));
+        assertThat(existing.getNotes()).isEqualTo("old");
+
+        verify(repository, never()).saveAndFlush(any(TravelBufferPolicyEntity.class));
+    }
+
+    /** What Spring's Hibernate exception translation raises for a constraint violation. */
+    private static DataIntegrityViolationException constraintViolation(String message) {
+        return new DataIntegrityViolationException(
+                "could not execute statement",
+                new ConstraintViolationException(message, new SQLException(message, "23505"), null));
     }
 }

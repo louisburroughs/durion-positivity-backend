@@ -138,8 +138,8 @@ public class ServiceAreaController {
                     Emits a LOCATION_SERVICE_AREA_PATCH event.
                     Returns 400 when the id is not a valid UUID, 400 VALIDATION_ERROR with fieldErrors when name, \
                     description or active has the wrong type, 404 when no service area exists for the id and 409 \
-                    SERVICE_AREA_NAME_TAKEN when another area already holds the new name; a refused patch changes \
-                    nothing.
+                    SERVICE_AREA_NAME_TAKEN when another area already holds the new name (SERVICE_AREA_CONFLICT for \
+                    any other uniqueness conflict); a refused patch changes nothing.
                     """)
     @ApiResponse(responseCode = "200", description = "Service area patched")
     @ApiResponse(
@@ -153,7 +153,8 @@ public class ServiceAreaController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "SERVICE_AREA_NAME_TAKEN: the new name is already held by another service area",
+            description = "SERVICE_AREA_NAME_TAKEN: the new name is already held by another service area (or"
+                    + " SERVICE_AREA_CONFLICT for another uniqueness conflict)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_PATCH", apiVersion = "1")
@@ -198,7 +199,8 @@ public class ServiceAreaController {
                     Emits a LOCATION_SERVICE_AREA_POSTAL_CODES_REPLACE event.
                     Returns 200 with the area as it stands afterwards, 400 when the id is not a valid UUID or \
                     the set is empty or has an entry with a blank or over-long postalCode (max 20) or countryCode \
-                    (max 2), and 404 when no service area exists for the id.
+                    (max 2), 404 when no service area exists for the id and 409 SERVICE_AREA_CONFLICT when the \
+                    replacement trips a uniqueness constraint.
                     Coverage resolution reads these rows directly: findEligibleMobileUnits matches an address \
                     through them, so removing a code stops every mobile unit covering that address.
                     """)
@@ -210,6 +212,10 @@ public class ServiceAreaController {
     @ApiResponse(
             responseCode = "404",
             description = "Service area not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "SERVICE_AREA_CONFLICT: the replacement trips a uniqueness constraint",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_POSTAL_CODES_REPLACE", apiVersion = "1")

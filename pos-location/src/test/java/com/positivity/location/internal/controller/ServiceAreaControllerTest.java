@@ -23,10 +23,12 @@ import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.ServiceAreaServiceImpl;
 import com.positivity.security.common.LocationScopeAutoConfiguration;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
+import java.sql.SQLException;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -103,10 +105,17 @@ class ServiceAreaControllerTest {
         verify(repository, never()).save(any(ServiceAreaEntity.class));
     }
 
+    /** What Spring's Hibernate exception translation raises for a Postgres unique violation. */
     private static DataIntegrityViolationException uniqueViolation(String constraint) {
+        SQLException sql = new SQLException(
+                "ERROR: duplicate key value violates unique constraint \"" + constraint + "\"", "23505");
         return new DataIntegrityViolationException(
                 "could not execute statement",
-                new RuntimeException("ERROR: duplicate key value violates unique constraint \"" + constraint + "\""));
+                new ConstraintViolationException(
+                        "could not execute statement",
+                        sql,
+                        ConstraintViolationException.ConstraintKind.UNIQUE,
+                        constraint));
     }
 
     // ------------------------------------------------------------------ create

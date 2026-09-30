@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,9 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
 
     /** The unique constraint on {@code (tenant_id, name)} in {@code V1__baseline_location.sql}. */
     private static final String NAME_UNIQUE_CONSTRAINT = "travel_buffer_policies_name_key";
+
+    /** {@code travel_buffer_policies.name} and {@code .notes} are {@code varchar(255)}. */
+    private static final int TEXT_COLUMN_MAX_LENGTH = 255;
 
     /**
      * DECISION-LOCATION-028 rule 5 / DECISION-LOCATION-015: the code's former {@code FLAT_MINUTES}
@@ -80,13 +84,18 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         if (request.getName() == null || request.getName().isBlank()) {
             throw InvalidFieldException.invalid("name", "name is required and must not be blank");
         }
+        String name = request.getName().trim();
+        if (name.length() > TEXT_COLUMN_MAX_LENGTH) {
+            throw InvalidFieldException.invalid(
+                    "name", "name must be at most " + TEXT_COLUMN_MAX_LENGTH + " characters");
+        }
         validateRequest(request.getBufferType(), request.getBufferValue(), true);
 
         TravelBufferPolicyEntity entity = TravelBufferPolicyEntity.builder()
-                .name(request.getName().trim())
+                .name(name)
                 .bufferType(request.getBufferType())
                 .bufferValue(request.getBufferValue())
-                .notes(request.getNotes())
+                .notes(requireNotes(request.getNotes()))
                 .build();
 
         TravelBufferPolicyEntity saved = entity;
@@ -132,11 +141,7 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
             entity.setBufferValue(parsed);
         }
         if (patch.containsKey(NOTES)) {
-            Object notes = patch.get(NOTES);
-            if (notes != null && !(notes instanceof String)) {
-                throw InvalidFieldException.invalid(NOTES, "notes must be text or null");
-            }
-            entity.setNotes((String) notes);
+            entity.setNotes(requireNotes(patch.get(NOTES)));
         }
 
         validateRequest(entity.getBufferType(), entity.getBufferValue(), false);
@@ -185,6 +190,25 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         }
     }
 
+    /**
+     * Text of at most the column width, or null to clear. The column is {@code varchar(255)}, so a
+     * longer value would fail at flush as a Postgres 22001, which is a length error and not a
+     * conflict: refuse it here as a 400 naming the field instead.
+     */
+    private static String requireNotes(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof String text)) {
+            throw InvalidFieldException.invalid(NOTES, "notes must be text or null");
+        }
+        if (text.length() > TEXT_COLUMN_MAX_LENGTH) {
+            throw InvalidFieldException.invalid(
+                    NOTES, "notes must be at most " + TEXT_COLUMN_MAX_LENGTH + " characters");
+        }
+        return text;
+    }
+
     private TravelBufferPolicyRequest toRequest(Map<String, Object> map) {
         return TravelBufferPolicyRequest.builder()
                 .name((String) map.get("name"))
@@ -228,8 +252,16 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         }
     }
 
-    private DuplicateResourceException toTravelBufferPolicyConflictException(
-            DataIntegrityViolationException exception) {
+    /**
+     * A 409 only for a constraint violation. Spring translates every integrity failure, a value too
+     * long for its column (Postgres 22001, Hibernate {@code DataException}) included, to
+     * DataIntegrityViolationException; only one whose cause chain holds a Hibernate {@link
+     * ConstraintViolationException} is a conflict, so anything else is rethrown untouched.
+     */
+    private RuntimeException toTravelBufferPolicyConflictException(DataIntegrityViolationException exception) {
+        if (!exception.contains(ConstraintViolationException.class)) {
+            return exception;
+        }
         if (isNameConstraintViolation(exception)) {
             return new DuplicateResourceException(TRAVEL_BUFFER_POLICY_NAME_TAKEN);
         }
