@@ -447,6 +447,46 @@ class CycleCountAdjustmentServiceImplTest {
     }
 
     @Test
+    void createAdjustment_freeTextBinWithRequestLocation_recordsTheRequestLocation() {
+        // A free-text bin names no location, so the request's locationId is the posting location.
+        UUID taskId = UUID.fromString("01960003-0000-7000-8000-000000000009");
+        UUID requested = UUID.fromString("01960003-0000-7000-8000-000000000012");
+        CreateAdjustmentRequest request = createRequest(5, 10);
+        request.setTaskId(taskId);
+        request.setLocationId(requested);
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task(taskId, "AISLE-3-SHELF-B")));
+        when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
+                .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.createAdjustment(request).getLocationId()).isEqualTo(requested);
+        verify(locationScopeService)
+                .require(
+                        requested,
+                        com.positivity.inventory.internal.security.InventoryPermissionRegistry.ADJUSTMENT_CREATE);
+    }
+
+    @Test
+    void createAdjustment_freeTextBinWithoutRequestLocation_hasNoLocation() {
+        // Neither the bin nor the request names a location: the adjustment is location-less and
+        // not gated. The task's plan is never consulted (its site is not where the stock sits).
+        UUID taskId = UUID.fromString("01960003-0000-7000-8000-000000000009");
+        CreateAdjustmentRequest request = createRequest(5, 10);
+        request.setTaskId(taskId);
+        CycleCountTask task = task(taskId, "AISLE-3-SHELF-B");
+        task.setPlanId(UUID.fromString("01960003-0000-7000-8000-0000000000a1"));
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
+                .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
+        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.createAdjustment(request).getLocationId()).isNull();
+        verifyNoInteractions(locationScopeService);
+    }
+
+    @Test
     void createAdjustment_unknownTask_throwsTaskNotFound() {
         UUID taskId = UUID.fromString("01960003-0000-7000-8000-000000000009");
         CreateAdjustmentRequest request = createRequest(5, 10);
