@@ -6,7 +6,10 @@ import com.positivity.people.PostgresSliceTestBase;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.enums.AssignmentStatus;
+import com.positivity.people.internal.enums.EmployeeStatus;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -226,6 +229,57 @@ class EmployeeLocationAssignmentRepositoryTest extends PostgresSliceTestBase {
 
             assertThat(assignments.findActiveByPersonIdAndDate(employee.getPersonId(), INSIDE_WINDOW))
                     .containsExactly(covering);
+        }
+    }
+
+    @Nested
+    @DisplayName("findOpenForOffboardedEmployees — the offboarding sweep (#2121)")
+    class OpenForOffboardedEmployees {
+
+        private final Instant now = Instant.parse("2026-04-01T12:00:00Z");
+        private final Instant settledBefore = now.minusSeconds(300);
+        private final LocalDate today = LocalDate.of(2026, 4, 1);
+
+        private Employee employeeWithStatus(EmployeeStatus status, Instant statusEffectiveAt) {
+            return employees.saveAndFlush(Employee.builder()
+                    .personId(UUID.randomUUID())
+                    .status(status)
+                    .statusEffectiveAt(statusEffectiveAt)
+                    .build());
+        }
+
+        @Test
+        @DisplayName("returns expired and settled open-ended ACTIVE assignments of offboarded employees only")
+        void returnsOnlyWhatAnOffboardingShouldHaveEnded() {
+            Instant longAgo = now.minusSeconds(3600);
+            EmployeeLocationAssignment expired = assignment(
+                    employeeWithStatus(EmployeeStatus.DISABLED, longAgo),
+                    UUID.randomUUID(),
+                    WINDOW_START,
+                    today.minusDays(1));
+            EmployeeLocationAssignment openSettled = assignment(
+                    employeeWithStatus(EmployeeStatus.TERMINATED, longAgo), UUID.randomUUID(), WINDOW_START, null);
+            // Excluded: still inside its grace period, open-ended but just disabled, employee still working.
+            assignment(employeeWithStatus(EmployeeStatus.DISABLED, longAgo), UUID.randomUUID(), WINDOW_START, today);
+            assignment(employeeWithStatus(EmployeeStatus.DISABLED, now), UUID.randomUUID(), WINDOW_START, null);
+            assignment(employeeWithStatus(EmployeeStatus.ACTIVE, longAgo), UUID.randomUUID(), WINDOW_START, null);
+            assignment(
+                    employeeWithStatus(EmployeeStatus.ACTIVE, longAgo),
+                    UUID.randomUUID(),
+                    WINDOW_START,
+                    today.minusDays(1));
+            EmployeeLocationAssignment alreadyEnded = assignment(
+                    employeeWithStatus(EmployeeStatus.DISABLED, longAgo),
+                    UUID.randomUUID(),
+                    WINDOW_START,
+                    today.minusDays(1));
+            alreadyEnded.setStatus(AssignmentStatus.ENDED);
+            assignments.saveAndFlush(alreadyEnded);
+
+            assertThat(assignments.findOpenForOffboardedEmployees(
+                            today, settledBefore, List.of(EmployeeStatus.DISABLED, EmployeeStatus.TERMINATED)))
+                    .extracting(EmployeeLocationAssignment::getId)
+                    .containsExactlyInAnyOrder(expired.getId(), openSettled.getId());
         }
     }
 }

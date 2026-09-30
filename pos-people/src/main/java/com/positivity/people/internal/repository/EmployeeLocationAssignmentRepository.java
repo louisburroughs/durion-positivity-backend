@@ -2,6 +2,8 @@ package com.positivity.people.internal.repository;
 
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.enums.AssignmentStatus;
+import com.positivity.people.internal.enums.EmployeeStatus;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -45,6 +47,36 @@ public interface EmployeeLocationAssignmentRepository
     @NonNull
     List<EmployeeLocationAssignment> findActiveByPersonIdAndDate(
             @Param("personId") @NonNull UUID personId, @Param("date") @NonNull LocalDate date);
+
+    /**
+     * ACTIVE assignments an offboarding should already have ended, held by employees in one of the
+     * given statuses (#2121): those whose {@code effectiveTo} is before {@code date} (a GRACE_PERIOD
+     * that has run out), and those with no {@code effectiveTo} at all whose employee's status changed
+     * before {@code settledBefore} and who has no offboarding retry pending (an IMMEDIATE that
+     * never ran because the process died after the disable committed).
+     *
+     * <p>The open-ended branch is deliberately conservative. Right after a disable the assignments
+     * of a GRACE_PERIOD employee are also open-ended until the after-commit handler dates them, so
+     * the status-change cutoff keeps the sweep from beating the handler, and a pending retry row
+     * (which will apply the request's own policy) keeps it from beating the retry.
+     */
+    @Query("""
+            SELECT a FROM EmployeeLocationAssignment a
+            WHERE a.status = 'ACTIVE'
+              AND a.employee.status IN :employeeStatuses
+              AND (a.effectiveTo < :date
+                   OR (a.effectiveTo IS NULL
+                       AND a.employee.statusEffectiveAt < :settledBefore
+                       AND NOT EXISTS (
+                            SELECT 1 FROM EmployeeOffboardingRetry r
+                            WHERE r.employeeId = a.employee.personId)))
+            ORDER BY a.effectiveFrom, a.id
+            """)
+    @NonNull
+    List<EmployeeLocationAssignment> findOpenForOffboardedEmployees(
+            @Param("date") @NonNull LocalDate date,
+            @Param("settledBefore") @NonNull Instant settledBefore,
+            @Param("employeeStatuses") @NonNull Collection<EmployeeStatus> employeeStatuses);
 
     /**
      * {@link #findActiveByPersonIdAndDate} batched across several people in one query
