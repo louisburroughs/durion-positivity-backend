@@ -21,6 +21,7 @@ import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.domainevents.location.MobileUnitDeletedV1;
 import com.positivity.domainevents.location.MobileUnitUpdatedV1;
 import com.positivity.domainevents.people.EmployeeUpdatedV1;
+import com.positivity.domainevents.people.PersonCredentialUpdatedV1;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkRemovedV1;
@@ -33,6 +34,7 @@ import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
 import com.positivity.workorder.internal.entity.ExtEmployeeReplica;
 import com.positivity.workorder.internal.entity.ExtLocationReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
+import com.positivity.workorder.internal.entity.ExtPersonCredentialReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.workorder.internal.entity.ExtUserLinkReplica;
@@ -43,6 +45,7 @@ import com.positivity.workorder.internal.repository.ExtEmployeeReplicaRepository
 import com.positivity.workorder.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtUserLinkReplicaRepository;
@@ -118,6 +121,9 @@ class ReplicaAndManifestListenerContractTest {
     private ExtEmployeeReplicaRepository employeeRepository;
 
     @Mock
+    private ExtPersonCredentialReplicaRepository credentialRepository;
+
+    @Mock
     private ExtCustomerPartyReplicaRepository customerRepository;
 
     @Mock
@@ -161,6 +167,7 @@ class ReplicaAndManifestListenerContractTest {
         when(userLinkRepository.findById(any())).thenReturn(Optional.empty());
         when(assignmentRepository.findById(any())).thenReturn(Optional.empty());
         when(employeeRepository.findById(any())).thenReturn(Optional.empty());
+        when(credentialRepository.findById(any())).thenReturn(Optional.empty());
         when(customerRepository.findById(any())).thenReturn(Optional.empty());
         when(bayRepository.findById(any())).thenReturn(Optional.empty());
         when(mobileUnitRepository.findById(any())).thenReturn(Optional.empty());
@@ -173,6 +180,7 @@ class ReplicaAndManifestListenerContractTest {
                 userLinkRepository,
                 assignmentRepository,
                 employeeRepository,
+                credentialRepository,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 org.mockito.Mockito.mock(PlatformTransactionManager.class));
         customerListener = new CustomerEventsListener(
@@ -221,6 +229,15 @@ class ReplicaAndManifestListenerContractTest {
                 {"employeeId":"%s","personId":"%s","employeeNumber":"E-100","status":"%s",
                  "hireDate":"2024-01-02","terminationDate":"2026-08-14",
                  "statusEffectiveAt":"2026-08-15T00:00:00Z"}""".formatted(ID, OTHER_ID, status);
+    }
+
+    private static String credentialPayload(String status) {
+        return """
+                {"credentialId":"%s","personId":"%s","skillId":"%s","skillCode":"BRAKES-LIGHT",
+                 "competenceCode":"BRAKES","minGvwrClass":1,"maxGvwrClass":3,"issuer":"ASE",
+                 "sourceCode":"ASE","sourceCredentialCode":"A5-BRAKES","issuedOn":"2024-01-02",
+                 "expiresOn":"2029-01-02","proficiency":4,"status":"%s","evidenceRef":null,
+                 "supersededBy":null}""".formatted(ID, OTHER_ID, ID, status);
     }
 
     private ProcessedEvent capturedProcessedEvent() {
@@ -303,6 +320,53 @@ class ReplicaAndManifestListenerContractTest {
             ArgumentCaptor<ExtEmployeeReplica> captor = ArgumentCaptor.forClass(ExtEmployeeReplica.class);
             verify(employeeRepository).save(captor.capture());
             assertThat(captor.getValue().getStatus()).isEqualTo("SUSPENDED");
+        }
+
+        @Test
+        @DisplayName("#2122 credential: upserts the credential replica and writes the processed mark")
+        void credentialUpdatedUpserts() {
+            peopleListener.onPeopleEvent(
+                    envelope("evt-9", PersonCredentialUpdatedV1.EVENT_TYPE, credentialPayload("ACTIVE")));
+
+            ArgumentCaptor<ExtPersonCredentialReplica> captor =
+                    ArgumentCaptor.forClass(ExtPersonCredentialReplica.class);
+            verify(credentialRepository).save(captor.capture());
+            ExtPersonCredentialReplica saved = captor.getValue();
+            assertThat(saved.getCredentialId()).isEqualTo(ID);
+            assertThat(saved.getPersonId()).isEqualTo(OTHER_ID);
+            assertThat(saved.getSkillCode()).isEqualTo("BRAKES-LIGHT");
+            assertThat(saved.getCompetenceCode()).isEqualTo("BRAKES");
+            assertThat(saved.getExpiresOn()).isEqualTo(java.time.LocalDate.parse("2029-01-02"));
+            assertThat(saved.getStatus()).isEqualTo("ACTIVE");
+            assertThat(saved.getAggregateVersion()).isEqualTo(3);
+            ProcessedEvent mark = capturedProcessedEvent();
+            assertThat(mark.getEventId()).isEqualTo("evt-9");
+            assertThat(mark.getOwner()).isEqualTo(PeopleReplicaEventsListener.OWNER_PEOPLE);
+        }
+
+        @Test
+        @DisplayName("#2122 credential: skips a strictly stale version, applies an equal one, still writes the mark")
+        void credentialUpdatedStaleGuard() {
+            when(credentialRepository.findById(ID))
+                    .thenReturn(Optional.of(ExtPersonCredentialReplica.builder()
+                            .credentialId(ID)
+                            .personId(OTHER_ID)
+                            .status("ACTIVE")
+                            .aggregateVersion(5)
+                            .build()));
+
+            peopleListener.onPeopleEvent(
+                    envelope("evt-10", PersonCredentialUpdatedV1.EVENT_TYPE, credentialPayload("REVOKED")));
+
+            verify(credentialRepository, never()).save(any());
+            assertThat(capturedProcessedEvent().getEventId()).isEqualTo("evt-10");
+
+            peopleListener.onPeopleEvent(
+                    envelope("evt-11", PersonCredentialUpdatedV1.EVENT_TYPE, 5, credentialPayload("REVOKED")));
+            ArgumentCaptor<ExtPersonCredentialReplica> captor =
+                    ArgumentCaptor.forClass(ExtPersonCredentialReplica.class);
+            verify(credentialRepository).save(captor.capture());
+            assertThat(captor.getValue().getStatus()).isEqualTo("REVOKED");
         }
 
         @Test

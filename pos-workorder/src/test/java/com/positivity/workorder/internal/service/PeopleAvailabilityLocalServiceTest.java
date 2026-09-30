@@ -6,9 +6,11 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse;
 import com.positivity.workorder.internal.entity.ExtEmployeeReplica;
+import com.positivity.workorder.internal.entity.ExtPersonCredentialReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.workorder.internal.repository.ExtEmployeeReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtUserLinkReplicaRepository;
@@ -56,6 +58,9 @@ class PeopleAvailabilityLocalServiceTest {
     @Mock
     private ExtEmployeeReplicaRepository employeeReplicaRepository;
 
+    @Mock
+    private ExtPersonCredentialReplicaRepository credentialReplicaRepository;
+
     private PeopleAvailabilityLocalService service;
 
     @BeforeEach
@@ -65,7 +70,8 @@ class PeopleAvailabilityLocalServiceTest {
                 assignmentReplicaRepository,
                 personReplicaRepository,
                 linkReplicaRepository,
-                employeeReplicaRepository);
+                employeeReplicaRepository,
+                credentialReplicaRepository);
     }
 
     private static ExtStaffingAssignmentReplica row(UUID locationId, boolean primary, LocalDate from, LocalDate to) {
@@ -354,6 +360,113 @@ class PeopleAvailabilityLocalServiceTest {
             assertThat(service.fetchAvailability(SITE_ID.toString(), TODAY).getPeople())
                     .isEmpty();
             org.mockito.Mockito.verifyNoInteractions(employeeReplicaRepository);
+        }
+    }
+
+    @Nested
+    @DisplayName("#2122: certifications from the credential replica")
+    class Certifications {
+
+        private void rosterOfOne() {
+            ExtStaffingAssignmentReplica a = row(SITE_ID, true, null, null);
+            when(assignmentReplicaRepository.findByLocationIdAndStatus(SITE_ID, ACTIVE))
+                    .thenReturn(List.of(a));
+            when(personReplicaRepository.findByPersonIdIn(any())).thenReturn(List.of());
+        }
+
+        private ExtPersonCredentialReplica credential(
+                String skillCode, String competenceCode, String status, LocalDate expiresOn) {
+            return credential(skillCode, competenceCode, status, LocalDate.parse("2024-01-01"), expiresOn);
+        }
+
+        private ExtPersonCredentialReplica credential(
+                String skillCode, String competenceCode, String status, LocalDate issuedOn, LocalDate expiresOn) {
+            return ExtPersonCredentialReplica.builder()
+                    .credentialId(UUID.randomUUID())
+                    .personId(PERSON_ID)
+                    .skillId(UUID.randomUUID())
+                    .skillCode(skillCode)
+                    .competenceCode(competenceCode)
+                    .issuedOn(issuedOn)
+                    .expiresOn(expiresOn)
+                    .status(status)
+                    .aggregateVersion(1L)
+                    .updatedAt(Instant.EPOCH)
+                    .build();
+        }
+
+        private List<String> certificationsOfOnlyPerson() {
+            return service.fetchAvailability(SITE_ID.toString(), TODAY)
+                    .getPeople()
+                    .getFirst()
+                    .getCertifications();
+        }
+
+        @Test
+        @DisplayName("no credential rows at all leaves certifications null (no data)")
+        void noRowsIsNull() {
+            rosterOfOne();
+
+            assertThat(certificationsOfOnlyPerson()).isNull();
+        }
+
+        @Test
+        @DisplayName("lists skill and competence codes of ACTIVE, unexpired credentials")
+        void activeUnexpiredHeld() {
+            rosterOfOne();
+            when(credentialReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(
+                            credential("BRAKES-LIGHT", "BRAKES", ACTIVE, null),
+                            credential("HVAC-LIGHT", "HVAC", ACTIVE, TODAY)));
+
+            assertThat(certificationsOfOnlyPerson())
+                    .containsExactlyInAnyOrder("BRAKES-LIGHT", "BRAKES", "HVAC-LIGHT", "HVAC");
+        }
+
+        @Test
+        @DisplayName("expired, revoked and superseded credentials are not held; the list is empty, not null")
+        void notHeldIsEmptyNotNull() {
+            rosterOfOne();
+            when(credentialReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(
+                            credential("BRAKES-LIGHT", "BRAKES", ACTIVE, TODAY.minusDays(1)),
+                            credential("HVAC-LIGHT", "HVAC", "REVOKED", null),
+                            credential("A5-BRAKES", "BRAKES", "SUPERSEDED", null)));
+
+            assertThat(certificationsOfOnlyPerson()).isNotNull().isEmpty();
+        }
+
+        @Test
+        @DisplayName("the feed's EXPIRED is not trusted: a credential expiring on the date asked about is still held")
+        void feedExpiredOnExpiryDayIsHeld() {
+            // pos-people stamps status from its own clock, so EXPIRED arrives once its UTC day has
+            // passed expiresOn even though the expiry day still counts for the facility.
+            rosterOfOne();
+            when(credentialReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(credential("BRAKES-LIGHT", "BRAKES", "EXPIRED", TODAY)));
+
+            assertThat(certificationsOfOnlyPerson()).containsExactlyInAnyOrder("BRAKES-LIGHT", "BRAKES");
+        }
+
+        @Test
+        @DisplayName("a credential issued after the date asked about is not held yet")
+        void issuedAfterDateIsNotHeld() {
+            rosterOfOne();
+            when(credentialReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(credential("BRAKES-LIGHT", "BRAKES", ACTIVE, TODAY.plusDays(1), null)));
+
+            assertThat(certificationsOfOnlyPerson()).isNotNull().isEmpty();
+        }
+
+        @Test
+        @DisplayName("REVOKED stands as received even when the dates would say held")
+        void revokedWithValidDatesIsNotHeld() {
+            rosterOfOne();
+            when(credentialReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(
+                            credential("BRAKES-LIGHT", "BRAKES", "REVOKED", TODAY.minusYears(1), TODAY.plusYears(1))));
+
+            assertThat(certificationsOfOnlyPerson()).isNotNull().isEmpty();
         }
     }
 }

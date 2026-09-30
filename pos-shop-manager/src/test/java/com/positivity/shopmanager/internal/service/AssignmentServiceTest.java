@@ -257,7 +257,7 @@ class AssignmentServiceTest {
         var savedMechLink = AssignmentMechanic.builder()
                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .assignment(savedAssignment)
-                .mechanic(Mechanic.builder().mechanicId(mechanicId).build())
+                .mechanic(buildMechanic(mechanicId, MECHANIC_PERSON_ID))
                 .role(MechanicRoleEnum.LEAD)
                 .build();
 
@@ -278,7 +278,12 @@ class AssignmentServiceTest {
         assertThat(response.getAppointmentId()).isEqualTo(appointmentId);
         assertThat(response.getMechanics()).hasSize(1);
         assertThat(response.getMechanics().get(0).getRole()).isEqualTo(MechanicRole.LEAD);
-        assertThat(response.getMechanics().get(0).getMechanicId()).isEqualTo(mechanicId);
+        // #2123: the response names the mechanic by the People personId the request used, and the
+        // shop-manager surrogate is a separate, internal field.
+        assertThat(response.getMechanics().get(0).getMechanicPersonId()).isEqualTo(UUID.fromString(MECHANIC_PERSON_ID));
+        assertThat(response.getMechanics().get(0).getMechanicRecordId()).isEqualTo(mechanicId);
+        assertThat(response.getMechanics().get(0).getMechanicPersonId())
+                .isNotEqualTo(response.getMechanics().get(0).getMechanicRecordId());
     }
 
     // --- AC-5: override field round-trip ---
@@ -302,7 +307,7 @@ class AssignmentServiceTest {
         var savedMechLink = AssignmentMechanic.builder()
                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .assignment(savedAssignment)
-                .mechanic(Mechanic.builder().mechanicId(mechanicId).build())
+                .mechanic(buildMechanic(mechanicId, MECHANIC_PERSON_ID))
                 .role(MechanicRoleEnum.LEAD)
                 .build();
 
@@ -351,7 +356,7 @@ class AssignmentServiceTest {
         var mechLink = AssignmentMechanic.builder()
                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .assignment(assignment)
-                .mechanic(Mechanic.builder().mechanicId(mechanicId).build())
+                .mechanic(buildMechanic(mechanicId, MECHANIC_PERSON_ID))
                 .role(MechanicRoleEnum.LEAD)
                 .build();
 
@@ -365,7 +370,9 @@ class AssignmentServiceTest {
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getStatus()).isEqualTo(AssignmentStatusEnum.ASSIGNED);
         assertThat(results.get(0).getMechanics()).hasSize(1);
-        assertThat(results.get(0).getMechanics().get(0).getMechanicId()).isEqualTo(mechanicId);
+        assertThat(results.get(0).getMechanics().get(0).getMechanicPersonId())
+                .isEqualTo(UUID.fromString(MECHANIC_PERSON_ID));
+        assertThat(results.get(0).getMechanics().get(0).getMechanicRecordId()).isEqualTo(mechanicId);
     }
 
     // --- helpers ---
@@ -475,6 +482,9 @@ class AssignmentServiceTest {
                 .build();
     }
 
+    /** The People-domain id the fixtures give every mechanic; deliberately not equal to any surrogate id. */
+    private static final String MECHANIC_PERSON_ID = "01960011-0000-7000-8000-000000000101";
+
     private static Mechanic buildMechanic(UUID mechanicId, String personId) {
         return Mechanic.builder()
                 .mechanicId(mechanicId)
@@ -508,7 +518,7 @@ class AssignmentServiceTest {
         return AssignmentMechanic.builder()
                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .assignment(assignment)
-                .mechanic(Mechanic.builder().mechanicId(mechanicId).build())
+                .mechanic(buildMechanic(mechanicId, MECHANIC_PERSON_ID))
                 .role(role)
                 .build();
     }

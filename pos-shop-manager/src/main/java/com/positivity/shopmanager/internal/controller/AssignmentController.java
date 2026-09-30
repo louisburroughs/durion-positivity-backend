@@ -62,6 +62,9 @@ public class AssignmentController {
                     defaults to LEAD); resourceId and resourceType are optional, and override=true requires the \
                     shop:schedule:edit authority plus a non-blank overrideReason.
                     Emits a SHOPMGR_ASSIGNMENT_CREATED event and persists the assignment and its mechanic links.
+                    Each mechanic in the response is identified by mechanicPersonId, the same People-domain \
+                    person id the request supplied; mechanicRecordId is an internal shop-manager record id and \
+                    not a cross-service identifier.
                     Returns 400 when a mechanic cannot be resolved, the LEAD constraint is violated, or \
                     overrideReason is blank with override=true, 404 when the appointment cannot be resolved, and \
                     403 when override is requested without the shop:schedule:edit authority.
@@ -120,7 +123,8 @@ public class AssignmentController {
             "hasAnyAuthority('" + ShopPermissions.APPOINTMENTS_VIEW + "', '" + ShopPermissions.SCHEDULE_VIEW + "')")
     @EmitEvent(id = "SHOPMGR_ASSIGNMENT_LIST_FETCHED", apiVersion = "1")
     @Operation(operationId = "listAssignments", summary = "List Assignments for an Appointment", description = """
-                    Returns all assignments recorded for an appointment, including each mechanic's role, the \
+                    Returns all assignments recorded for an appointment, including each mechanic's role and \
+                    People-domain person id (mechanicPersonId; mechanicRecordId is an internal record id), the \
                     reserved resource, status and override flag.
                     Use this tool when reading the staffing of a known appointment; do not use createAssignment, \
                     which creates a new assignment, and use searchShopAudit for the historical change trail.

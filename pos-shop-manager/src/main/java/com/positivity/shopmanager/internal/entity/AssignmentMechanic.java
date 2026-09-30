@@ -47,8 +47,14 @@ public class AssignmentMechanic extends TenantScopedEntity {
     @JoinColumn(name = "mechanic_id", nullable = false)
     private Mechanic mechanic;
 
+    /** The shop-manager surrogate key of the linked mechanic (internal; not a person id). */
     public UUID getMechanicId() {
         return mechanic != null ? mechanic.getMechanicId() : null;
+    }
+
+    /** The People-domain person id of the linked mechanic (#2123). */
+    public UUID getMechanicPersonId() {
+        return mechanic != null ? mechanic.getPersonId() : null;
     }
 
     @Enumerated(EnumType.STRING)

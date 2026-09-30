@@ -151,8 +151,8 @@ public class DashboardServiceImpl implements DashboardService {
         // includes the carryover job in bay 3. A mechanic put on a new job this morning while still
         // owning yesterday's unfinished one is double-booked today whatever the second job's
         // scheduledDate says.
-        List<ConflictEntry> conflicts =
-                detectAllConflicts(workorders, resourceHolders, people, date, mechanicsByWorkorder);
+        List<ConflictEntry> conflicts = detectAllConflicts(
+                workorders, resourceHolders, people, date, mechanicsByWorkorder, currentTechnicianByWorkorder);
 
         return DashboardResponse.builder()
                 .date(date)
@@ -805,10 +805,12 @@ public class DashboardServiceImpl implements DashboardService {
             List<Workorder> resourceHolders,
             List<PersonAvailability> people,
             LocalDate date,
-            Map<Workorder, List<String>> mechanicsByWorkorder) {
+            Map<Workorder, List<String>> mechanicsByWorkorder,
+            Map<Workorder, String> currentTechnicianByWorkorder) {
         List<ConflictEntry> conflicts = new ArrayList<>();
         detectResourceDoubleBooking(resourceHolders, conflicts);
-        detectMechanicDoubleBookingFromWorkorders(workorders, mechanicsByWorkorder, conflicts);
+        detectMechanicDoubleBookingFromWorkorders(
+                workorders, mechanicsByWorkorder, currentTechnicianByWorkorder, conflicts);
         detectMechanicStatusConflicts(workorders, people, date, mechanicsByWorkorder, conflicts);
         detectLocationMismatch(workorders, people, mechanicsByWorkorder, conflicts);
         detectMechanicSkillMismatch(workorders, people, mechanicsByWorkorder, conflicts);
@@ -911,23 +913,67 @@ public class DashboardServiceImpl implements DashboardService {
         return resourceType == ResourceType.MOBILE_UNIT ? "Mobile unit " : "Bay ";
     }
 
+    /**
+     * Flags a mechanic named on more than one roster workorder (#2124). The detection reads both
+     * sources (see {@link #assignedMechanics}); the severity reflects which one supplied each
+     * claim. {@code BLOCKING} only when the person holds a current {@code technician_assignment}
+     * on two or more of the workorders: that is custody, and one person cannot hold two jobs. Any
+     * collision that involves a planned-only claim (two planned, or one planned plus one
+     * assignment) is a {@code WARNING} worded as a plan: the legacy {@code mechanic_ids} column is
+     * scheduling intention and may simply be stale, so it must not block a dispatcher.
+     */
     private void detectMechanicDoubleBookingFromWorkorders(
             List<Workorder> workorders,
             Map<Workorder, List<String>> mechanicsByWorkorder,
+            Map<Workorder, String> currentTechnicianByWorkorder,
             List<ConflictEntry> conflicts) {
-        Map<String, Long> mechanicCounts = workorders.stream()
-                .flatMap(wo -> mechanicsOf(wo, mechanicsByWorkorder).stream())
-                .collect(Collectors.groupingBy(id -> id, Collectors.counting()));
-        for (Map.Entry<String, Long> entry : mechanicCounts.entrySet()) {
-            if (entry.getValue() > 1) {
-                conflicts.add(ConflictEntry.builder()
-                        .conflictType("DOUBLE_BOOKED_MECHANIC")
-                        .severity(BLOCKING)
-                        .message(MECHANIC_PREFIX + entry.getKey() + " is assigned to multiple workorders")
-                        .affectedResourceId(entry.getKey())
-                        .build());
+        Map<String, Set<Workorder>> claimedBy = new LinkedHashMap<>();
+        Map<String, Integer> assignedCounts = new HashMap<>();
+        for (Workorder wo : workorders) {
+            String holder = currentTechnicianByWorkorder.get(wo);
+            for (String mechanicId : mechanicsOf(wo, mechanicsByWorkorder)) {
+                // Identity set: two rows without an id are still two workorders.
+                claimedBy
+                        .computeIfAbsent(mechanicId, _ -> Collections.newSetFromMap(new IdentityHashMap<>()))
+                        .add(wo);
+                if (mechanicId.equals(holder)) {
+                    assignedCounts.merge(mechanicId, 1, Integer::sum);
+                }
             }
         }
+        for (Map.Entry<String, Set<Workorder>> entry : claimedBy.entrySet()) {
+            int claims = entry.getValue().size();
+            if (claims <= 1) {
+                continue;
+            }
+            String mechanicId = entry.getKey();
+            int assigned = assignedCounts.getOrDefault(mechanicId, 0);
+            boolean custodyCollision = assigned > 1;
+            conflicts.add(ConflictEntry.builder()
+                    .conflictType("DOUBLE_BOOKED_MECHANIC")
+                    .severity(custodyCollision ? BLOCKING : WARNING)
+                    .message(
+                            custodyCollision
+                                    ? MECHANIC_PREFIX + mechanicId + " is assigned to multiple workorders"
+                                    : plannedCollisionMessage(mechanicId, claims, assigned))
+                    .affectedResourceId(mechanicId)
+                    .build());
+        }
+    }
+
+    /**
+     * Wording for a non-custody collision (#2124). {@code claims} counts every workorder naming
+     * the person, held or merely planned, so a held job must not be reported as "planned": one
+     * current assignment plus planned claims reads as holding one and planned onto the rest, while
+     * planned-only claims read as a plan alone.
+     */
+    private static String plannedCollisionMessage(String mechanicId, int claims, int assigned) {
+        int planned = claims - assigned;
+        if (assigned == 0) {
+            return MECHANIC_PREFIX + mechanicId + " is planned onto " + planned + " workorders";
+        }
+        return MECHANIC_PREFIX + mechanicId + " holds " + assigned + " workorder and is planned onto " + planned
+                + " more";
     }
 
     private void detectMechanicStatusConflicts(
@@ -1103,10 +1149,18 @@ public class DashboardServiceImpl implements DashboardService {
         }
     }
 
-    /** First required certification the mechanic's profile does not list, or {@code null} if it holds them all. */
+    /**
+     * First required certification the mechanic does not hold, or {@code null} if they hold them
+     * all or nothing is known about them (#2122). A null list means the credential replica has no
+     * row for this person, so there is no data to judge by and the check stays silent rather than
+     * warn falsely; an empty list means the person has credentials and none is currently held.
+     */
     private String firstMissingCertification(
             PeopleAvailabilityResponse.PersonAvailability pa, List<String> requiredCerts) {
-        List<String> mechanicCerts = pa.getCertifications() != null ? pa.getCertifications() : List.of();
+        List<String> mechanicCerts = pa.getCertifications();
+        if (mechanicCerts == null) {
+            return null;
+        }
         for (String required : requiredCerts) {
             if (!mechanicCerts.contains(required)) {
                 return required;
