@@ -31,15 +31,15 @@ decisions:
   - operation: CycleCountAdjustmentController.approveAdjustment
     shape: gate
     permission: inventory:adjustment:approve
-    reason: Gated in the service on the persisted adjustment's locationId after the not-found lookup and before any state change (#2151). A location-less legacy row is denied to a scoped caller (fail closed); global callers are unaffected.
+    reason: Gated in the service on the location the adjustment concerns, the stored locationId or else a legacy (pre-#2167) row's task bin when it holds a location UUID, the same resolution the ledger posting uses, after the not-found lookup and before any state change (#2151). A row with neither is denied to a scoped caller (fail closed); global callers are unaffected.
   - operation: CycleCountAdjustmentController.rejectAdjustment
     shape: gate
     permission: inventory:adjustment:approve
-    reason: Sibling of approveAdjustment; gated on the persisted adjustment's locationId after the not-found lookup (#2151). A location-less legacy row is denied to a scoped caller.
+    reason: Sibling of approveAdjustment; gated on the stored locationId or else the task's bin after the not-found lookup (#2151). A row with neither is denied to a scoped caller.
   - operation: CycleCountAdjustmentController.getAdjustment
     shape: gate
     permission: inventory:adjustment:view
-    reason: By-id sibling of the narrowed lists; gated on the loaded adjustment's locationId after the not-found lookup against view or approve, the alternates its PreAuthorize accepts (#2151). A location-less legacy row is denied to a scoped caller.
+    reason: By-id sibling of the narrowed lists; gated on the loaded adjustment's stored locationId or else its task's bin after the not-found lookup against view or approve, the alternates its PreAuthorize accepts (#2151). A row with neither is denied to a scoped caller; the lists narrow on the stored column alone.
   - operation: CycleCountAdjustmentController.listAdjustments
     shape: narrow
     permission: inventory:adjustment:view

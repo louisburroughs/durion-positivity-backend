@@ -63,9 +63,6 @@ class CycleCountAdjustmentServiceImplTest {
     private com.positivity.inventory.internal.repository.CycleCountTaskRepository taskRepository;
 
     @Mock
-    private com.positivity.inventory.internal.repository.CycleCountPlanRepository planRepository;
-
-    @Mock
     private CycleCountConflictDetector conflictDetector;
 
     @Mock
@@ -99,7 +96,6 @@ class CycleCountAdjustmentServiceImplTest {
                 eventPublisher,
                 fixedClock,
                 taskRepository,
-                planRepository,
                 conflictDetector,
                 costStateRepository,
                 methodResolver,

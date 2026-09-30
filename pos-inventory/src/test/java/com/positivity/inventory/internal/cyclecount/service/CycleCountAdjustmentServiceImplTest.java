@@ -80,9 +80,6 @@ class CycleCountAdjustmentServiceImplTest {
     private com.positivity.inventory.internal.repository.CycleCountTaskRepository taskRepository;
 
     @Mock
-    private com.positivity.inventory.internal.repository.CycleCountPlanRepository planRepository;
-
-    @Mock
     private com.positivity.inventory.internal.service.CycleCountConflictDetector conflictDetector;
 
     @Mock
@@ -120,7 +117,6 @@ class CycleCountAdjustmentServiceImplTest {
                 eventPublisher,
                 clock,
                 taskRepository,
-                planRepository,
                 conflictDetector,
                 costStateRepository,
                 methodResolver,
@@ -451,90 +447,41 @@ class CycleCountAdjustmentServiceImplTest {
     }
 
     @Test
-    void createAdjustment_freeTextBinWithPlan_fallsBackToThePlanLocationAndGatesOnIt() {
-        // #2151: a plan-driven task whose bin names no location takes its plan's site, so the
-        // adjustment is never location-less and stays reachable to a scoped approver.
+    void createAdjustment_freeTextBinWithRequestLocation_recordsTheRequestLocation() {
+        // A free-text bin names no location, so the request's locationId is the posting location.
         UUID taskId = UUID.fromString("01960003-0000-7000-8000-000000000009");
-        UUID planId = UUID.fromString("01960003-0000-7000-8000-0000000000a1");
-        UUID planLocation = UUID.fromString("01960003-0000-7000-8000-000000000011");
-        CreateAdjustmentRequest request = createRequest(5, 10);
-        request.setTaskId(taskId);
-        CycleCountTask task = task(taskId, "AISLE-3-SHELF-B");
-        task.setPlanId(planId);
-
-        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
-        when(planRepository.findById(planId)).thenReturn(Optional.of(plan(planId, planLocation)));
-        when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
-                .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
-        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        AdjustmentResponse response = service.createAdjustment(request);
-
-        assertThat(response.getLocationId()).isEqualTo(planLocation);
-        verify(locationScopeService)
-                .require(
-                        planLocation,
-                        com.positivity.inventory.internal.security.InventoryPermissionRegistry.ADJUSTMENT_CREATE);
-    }
-
-    @Test
-    void createAdjustment_uuidBinWithPlan_keepsTheBinAndNeverConsultsThePlan() {
-        // The posting location of a task whose bin is a location UUID is unchanged by #2151.
-        UUID taskId = UUID.fromString("01960003-0000-7000-8000-000000000009");
-        UUID planId = UUID.fromString("01960003-0000-7000-8000-0000000000a1");
-        UUID bin = UUID.fromString("01960003-0000-7000-8000-000000000012");
-        CreateAdjustmentRequest request = createRequest(5, 10);
-        request.setTaskId(taskId);
-        CycleCountTask task = task(taskId, bin.toString());
-        task.setPlanId(planId);
-
-        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
-        when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
-                .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
-        when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        assertThat(service.createAdjustment(request).getLocationId()).isEqualTo(bin);
-        verifyNoInteractions(planRepository);
-    }
-
-    @Test
-    void createAdjustment_freeTextBinWithRequestLocation_keepsTheRequestLocationOverThePlan() {
-        UUID taskId = UUID.fromString("01960003-0000-7000-8000-000000000009");
-        UUID planId = UUID.fromString("01960003-0000-7000-8000-0000000000a1");
         UUID requested = UUID.fromString("01960003-0000-7000-8000-000000000012");
         CreateAdjustmentRequest request = createRequest(5, 10);
         request.setTaskId(taskId);
         request.setLocationId(requested);
-        CycleCountTask task = task(taskId, "AISLE-3-SHELF-B");
-        task.setPlanId(planId);
 
-        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task(taskId, "AISLE-3-SHELF-B")));
         when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
                 .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
         when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         assertThat(service.createAdjustment(request).getLocationId()).isEqualTo(requested);
-        verifyNoInteractions(planRepository);
+        verify(locationScopeService)
+                .require(
+                        requested,
+                        com.positivity.inventory.internal.security.InventoryPermissionRegistry.ADJUSTMENT_CREATE);
     }
 
     @Test
-    void createAdjustment_freeTextBinWithMissingOrNoPlan_stillHasNoLocation() {
+    void createAdjustment_freeTextBinWithoutRequestLocation_hasNoLocation() {
+        // Neither the bin nor the request names a location: the adjustment is location-less and
+        // not gated. The task's plan is never consulted (its site is not where the stock sits).
         UUID taskId = UUID.fromString("01960003-0000-7000-8000-000000000009");
-        UUID planId = UUID.fromString("01960003-0000-7000-8000-0000000000a1");
         CreateAdjustmentRequest request = createRequest(5, 10);
         request.setTaskId(taskId);
-        CycleCountTask withMissingPlan = task(taskId, "AISLE-3-SHELF-B");
-        withMissingPlan.setPlanId(planId);
+        CycleCountTask task = task(taskId, "AISLE-3-SHELF-B");
+        task.setPlanId(UUID.fromString("01960003-0000-7000-8000-0000000000a1"));
 
-        when(taskRepository.findById(taskId))
-                .thenReturn(Optional.of(withMissingPlan))
-                .thenReturn(Optional.of(task(taskId, "AISLE-3-SHELF-B")));
-        when(planRepository.findById(planId)).thenReturn(Optional.empty());
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
                 .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
         when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(service.createAdjustment(request).getLocationId()).isNull();
         assertThat(service.createAdjustment(request).getLocationId()).isNull();
         verifyNoInteractions(locationScopeService);
     }
@@ -767,13 +714,6 @@ class CycleCountAdjustmentServiceImplTest {
                 .countedQuantity(new BigDecimal("8"))
                 .createdByUserId("counter-user-1")
                 .status(AdjustmentStatus.PENDING_APPROVAL)
-                .build();
-    }
-
-    private static com.positivity.inventory.internal.entity.CycleCountPlan plan(UUID planId, UUID locationId) {
-        return com.positivity.inventory.internal.entity.CycleCountPlan.builder()
-                .planId(planId)
-                .locationId(locationId)
                 .build();
     }
 

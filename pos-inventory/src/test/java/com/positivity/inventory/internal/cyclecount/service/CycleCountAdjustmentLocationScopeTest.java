@@ -15,10 +15,11 @@ import com.positivity.inventory.internal.dto.cyclecount.AdjustmentResponse;
 import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest;
 import com.positivity.inventory.internal.entity.CycleCountAdjustment;
+import com.positivity.inventory.internal.entity.CycleCountTask;
 import com.positivity.inventory.internal.entity.ExtStorageLocationReplica;
 import com.positivity.inventory.internal.enums.AdjustmentStatus;
+import com.positivity.inventory.internal.enums.TaskStatus;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
-import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
@@ -63,8 +64,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 /**
  * ADR-0061 location scope on the cycle count adjustment approval path (#2151), against the real
  * {@link LocationScopeService}: {@code approve}, {@code reject} and the by-id read are gates on the
- * adjustment's own location, the lists are narrowed to the caller's reach, and an adjustment with no
- * location is denied to a scoped caller and open to a global one.
+ * location the adjustment concerns (its stored location, else a legacy row's task bin), the lists
+ * are narrowed to the caller's reach on the stored column, and an adjustment with neither a
+ * location nor a task bin naming one is denied to a scoped caller and open to a global one.
  */
 @DisplayName("CycleCountAdjustmentServiceImpl location scope (#2151)")
 class CycleCountAdjustmentLocationScopeTest {
@@ -76,6 +78,7 @@ class CycleCountAdjustmentLocationScopeTest {
     private static final UUID BIN = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a30");
     private static final UUID OTHER_SITE = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a32");
     private static final UUID ADJUSTMENT_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a40");
+    private static final UUID TASK_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a50");
 
     /** BIN sits under SITE; OTHER_SITE is unrelated. */
     private static final LocationAncestorResolver RESOLVER = locationId -> {
@@ -95,6 +98,7 @@ class CycleCountAdjustmentLocationScopeTest {
     private final LocationHierarchyService hierarchy = mock(LocationHierarchyService.class);
     private final InventoryLedgerEntryRepository ledgerRepository = mock(InventoryLedgerEntryRepository.class);
     private final LedgerPostingService ledgerPostingService = mock(LedgerPostingService.class);
+    private final CycleCountTaskRepository taskRepository = mock(CycleCountTaskRepository.class);
     private CycleCountAdjustmentServiceImpl service;
 
     @BeforeEach
@@ -108,8 +112,7 @@ class CycleCountAdjustmentLocationScopeTest {
                 mock(ApprovalThresholdEvaluator.class),
                 mock(ApplicationEventPublisher.class),
                 Clock.systemUTC(),
-                mock(CycleCountTaskRepository.class),
-                mock(CycleCountPlanRepository.class),
+                taskRepository,
                 mock(CycleCountConflictDetector.class),
                 mock(SkuCostStateRepository.class),
                 mock(CostingMethodResolver.class),
@@ -164,6 +167,24 @@ class CycleCountAdjustmentLocationScopeTest {
                 .build();
     }
 
+    /** A legacy (pre-#2167) row: no stored location, but a task whose bin is BIN under SITE. */
+    private static CycleCountAdjustment legacyPendingWithTaskBin() {
+        CycleCountAdjustment adjustment = pending(null);
+        adjustment.setTaskId(TASK_ID);
+        return adjustment;
+    }
+
+    private void taskWithBin(UUID bin) {
+        when(taskRepository.findById(TASK_ID))
+                .thenReturn(Optional.of(CycleCountTask.builder()
+                        .taskId(TASK_ID)
+                        .binLocation(bin.toString())
+                        .itemSku("SKU-1")
+                        .expectedQuantity(BigDecimal.TEN)
+                        .status(TaskStatus.COUNTED_PENDING_REVIEW)
+                        .build()));
+    }
+
     private static RejectAdjustmentRequest rejection() {
         return RejectAdjustmentRequest.builder()
                 .rejectorUserId("mgr")
@@ -216,7 +237,45 @@ class CycleCountAdjustmentLocationScopeTest {
         }
 
         @Test
-        @DisplayName("a legacy adjustment with no location is denied to a scoped caller")
+        @DisplayName("a legacy row with no location resolves through its task's bin: the bin's site approves it")
+        void legacyRowTaskBinSameSiteAllowed() {
+            found(legacyPendingWithTaskBin());
+            taskWithBin(BIN);
+            when(ledgerRepository.calculateOnHandQuantityAtLocation("SKU-1", BIN))
+                    .thenReturn(new BigDecimal("10"));
+            when(ledgerPostingService.post(any())).thenAnswer(inv -> {
+                var entry = (com.positivity.inventory.internal.entity.InventoryLedgerEntry) inv.getArgument(0);
+                entry.setLedgerEntryId(UUID.randomUUID());
+                return entry;
+            });
+            scopedApprover(SITE);
+
+            AdjustmentResponse response = service.approveAdjustment(
+                    ADJUSTMENT_ID, ApproveAdjustmentRequest.builder().build(), null);
+
+            assertThat(response.getStatus()).isEqualTo(AdjustmentStatus.POSTED);
+            verify(ledgerRepository, never()).calculateOnHandQuantity("SKU-1");
+        }
+
+        @Test
+        @DisplayName("a legacy row with no location resolves through its task's bin: another site is refused")
+        void legacyRowTaskBinOtherSiteDenied() {
+            CycleCountAdjustment adjustment = legacyPendingWithTaskBin();
+            found(adjustment);
+            taskWithBin(BIN);
+            scopedApprover(OTHER_SITE);
+
+            assertThatThrownBy(() -> service.approveAdjustment(
+                            ADJUSTMENT_ID, ApproveAdjustmentRequest.builder().build(), null))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+
+            assertThat(adjustment.getStatus()).isEqualTo(AdjustmentStatus.PENDING_APPROVAL);
+            verify(adjustmentRepository, never()).save(any());
+            Mockito.verifyNoInteractions(ledgerPostingService);
+        }
+
+        @Test
+        @DisplayName("a legacy adjustment with no location and no task is denied to a scoped caller")
         void nullLocationDeniedWhenScoped() {
             CycleCountAdjustment adjustment = pending(null);
             found(adjustment);
@@ -231,7 +290,7 @@ class CycleCountAdjustmentLocationScopeTest {
         }
 
         @Test
-        @DisplayName("a legacy adjustment with no location is approved by a global caller")
+        @DisplayName("a legacy adjustment with no location and no task is approved by a global caller")
         void nullLocationAllowedWhenGlobal() {
             found(pending(null));
             when(ledgerRepository.calculateOnHandQuantity("SKU-1")).thenReturn(new BigDecimal("10"));

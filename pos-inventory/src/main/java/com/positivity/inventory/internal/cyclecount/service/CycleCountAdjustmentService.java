@@ -45,10 +45,12 @@ public interface CycleCountAdjustmentService {
      * After approval, the adjustment is posted to the inventory ledger.
      *
      * <p>
-     * Location scope (ADR-0061, #2151): gated on the adjustment's own {@code locationId}, after the
-     * not-found lookup and before any state change, against {@code inventory:adjustment:approve}. A
-     * legacy row with no {@code locationId} is <strong>denied</strong> to a caller whose grant is
-     * location-scoped (fail closed); a globally granted caller is unaffected.
+     * Location scope (ADR-0061, #2151): gated on the location the adjustment concerns — its stored
+     * {@code locationId}, else (a legacy row from before #2167) the linked task's bin when it holds
+     * a location UUID, the same resolution the ledger posting uses — after the not-found lookup and
+     * before any state change, against {@code inventory:adjustment:approve}. Only a row with
+     * neither is <strong>denied</strong> to a caller whose grant is location-scoped (fail closed);
+     * a globally granted caller is unaffected.
      *
      * @param adjustmentId the adjustment ID
      * @param request      the approval request
@@ -65,10 +67,12 @@ public interface CycleCountAdjustmentService {
      * Rejection is final - no ledger entry is created and on-hand is not changed.
      *
      * <p>
-     * Location scope (ADR-0061, #2151): gated on the adjustment's own {@code locationId}, after the
-     * not-found lookup and before any state change, against {@code inventory:adjustment:approve}. A
-     * legacy row with no {@code locationId} is <strong>denied</strong> to a caller whose grant is
-     * location-scoped (fail closed); a globally granted caller is unaffected.
+     * Location scope (ADR-0061, #2151): gated on the location the adjustment concerns — its stored
+     * {@code locationId}, else (a legacy row from before #2167) the linked task's bin when it holds
+     * a location UUID, the same resolution the ledger posting uses — after the not-found lookup and
+     * before any state change, against {@code inventory:adjustment:approve}. Only a row with
+     * neither is <strong>denied</strong> to a caller whose grant is location-scoped (fail closed);
+     * a globally granted caller is unaffected.
      *
      * @param adjustmentId the adjustment ID
      * @param request      the rejection request
@@ -80,10 +84,11 @@ public interface CycleCountAdjustmentService {
      * Retrieves a specific adjustment by ID.
      *
      * <p>
-     * Location scope (ADR-0061, #2151): gated on the adjustment's own {@code locationId}, after the
-     * not-found lookup and before any state change, against {@code inventory:adjustment:view} or {@code inventory:adjustment:approve}. A
-     * legacy row with no {@code locationId} is <strong>denied</strong> to a caller whose grant is
-     * location-scoped (fail closed); a globally granted caller is unaffected.
+     * Location scope (ADR-0061, #2151): gated on the location the adjustment concerns — its stored
+     * {@code locationId}, else (a legacy row from before #2167) the linked task's bin when it holds
+     * a location UUID — after the not-found lookup, against {@code inventory:adjustment:view} or
+     * {@code inventory:adjustment:approve}. Only a row with neither is <strong>denied</strong> to a
+     * caller whose grant is location-scoped (fail closed); a globally granted caller is unaffected.
      *
      * @param adjustmentId the adjustment ID
      * @return the adjustment response
@@ -95,9 +100,10 @@ public interface CycleCountAdjustmentService {
      *
      * <p>
      * Narrowed to the caller's location reach (ADR-0061, #2151) against {@code inventory:adjustment:view}
-     * or {@code inventory:adjustment:approve}: a location-scoped caller sees only adjustments at a
-     * reachable site, so legacy rows with no {@code locationId} are excluded for them (the deny
-     * decision applied to a list); a globally granted caller sees every row.
+     * or {@code inventory:adjustment:approve}, on the stored {@code locationId} column alone: a
+     * location-scoped caller sees only adjustments whose column names a reachable site, so legacy
+     * rows with no {@code locationId} are excluded for them even when the by-id reads would admit
+     * the row through its task's bin; a globally granted caller sees every row.
      *
      * @param status the adjustment status
      * @return list of matching adjustments
