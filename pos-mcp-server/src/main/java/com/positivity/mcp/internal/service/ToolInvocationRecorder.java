@@ -109,6 +109,14 @@ public class ToolInvocationRecorder {
         recordTrace(recorder -> recorder.recordScope(scope), "record scope");
     }
 
+    /**
+     * ADR-0069 §6: what the consumers did with this turn's scope: the tools added on top of the
+     * ranked cuts, and whether the RAG hook narrowed retrieval to the scope.
+     */
+    public void recordScopeConsumers(@NonNull List<String> addedTools, boolean ragFilterApplied) {
+        recordTrace(recorder -> recorder.recordScopeConsumers(addedTools, ragFilterApplied), "record scope consumers");
+    }
+
     /** ADR-0069 §9: the {@code document_id}s of the final top-K one retrieval handed to the model. */
     public void recordRetrievedDocuments(@NonNull Collection<String> documentIds) {
         recordTrace(recorder -> recorder.recordRetrievedDocuments(documentIds), "record retrieved documents");

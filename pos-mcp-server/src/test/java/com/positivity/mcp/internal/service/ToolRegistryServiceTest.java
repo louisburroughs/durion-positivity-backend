@@ -221,6 +221,38 @@ class ToolRegistryServiceTest {
     }
 
     @Test
+    @DisplayName(
+            "ADR-0069 §6: resolveCandidateSelection returns the same ranked cut plus the whole gated set and the fast-path flag")
+    void resolveCandidateSelection_exposesTheGatedSetAndTheFastPath() {
+        float[] vector = new float[] {0.1f, 0.2f, 0.3f};
+        when(embeddingModel.embed(anyString())).thenReturn(vector);
+        when(repository.findEnabledByPermissionsAndWorkflow(ADMIN_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of(ADMIN_TOOL, SAMPLE_TOOL));
+        when(repository.findTopKByEmbeddingForPermissions(eq(vector), anyInt(), eq(ADMIN_PERMISSIONS), eq("IDLE")))
+                .thenReturn(List.of(SAMPLE_TOOL));
+
+        ToolRegistryService.CandidateSelection ranked = service.resolveCandidateSelection(
+                new ToolSelectionContext("look up customer", "ROLE_ADMIN", "IDLE", ADMIN_PERMISSIONS), 2);
+        assertThat(ranked.candidates()).containsExactly(SAMPLE_TOOL);
+        assertThat(ranked.gatedToolNames()).containsExactlyInAnyOrder(ADMIN_TOOL.name(), SAMPLE_TOOL.name());
+        assertThat(ranked.adminFastPath()).isFalse();
+
+        ToolRegistryService.CandidateSelection fastPath = service.resolveCandidateSelection(
+                new ToolSelectionContext(
+                        "How many users do I have in the system?", "ROLE_ADMIN", "IDLE", ADMIN_PERMISSIONS),
+                2);
+        assertThat(fastPath.candidates()).containsExactly(ADMIN_TOOL);
+        assertThat(fastPath.gatedToolNames()).containsExactlyInAnyOrder(ADMIN_TOOL.name(), SAMPLE_TOOL.name());
+        assertThat(fastPath.adminFastPath()).isTrue();
+
+        when(repository.findEnabledByPermissionsAndWorkflow(CASHIER_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of());
+        assertThat(service.resolveCandidateSelection(
+                        new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE", CASHIER_PERMISSIONS), 2))
+                .isSameAs(ToolRegistryService.CandidateSelection.EMPTY);
+    }
+
+    @Test
     @DisplayName("resolveCandidateTools uses admin fast-path for audit and account-governance questions")
     void resolveCandidateTools_adminAuditQuery_usesAdminFastPath() {
         ToolSelectionContext context = new ToolSelectionContext(

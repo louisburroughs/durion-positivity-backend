@@ -9,10 +9,14 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.scopegraph.ScopeConsumers;
 import com.positivity.mcp.internal.scopegraph.ScopeResolver;
 import com.positivity.mcp.internal.scopegraph.ScopeSet;
+import com.positivity.mcp.internal.scopegraph.ScopeSet.ScopeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
+import com.positivity.mcp.internal.service.ToolRegistryService.CandidateSelection;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -155,6 +159,10 @@ public class ToolSelectionEngine {
     @Nullable
     private volatile ScopeResolver scopeResolver;
 
+    /** ADR-0069 §6: the consumer switch; absent means no consumer acts, whatever the scope says. */
+    @Nullable
+    private volatile ScopeConsumers scopeConsumers;
+
     public ToolSelectionEngine(
             @NonNull MasterAgentRegistry toolRegistry,
             @NonNull DateWindowFacadeTool dateWindowFacadeTool,
@@ -193,23 +201,24 @@ public class ToolSelectionEngine {
             @NonNull String message,
             @NonNull WorkflowState workflowState) {
         // ADR-0069 §5: the scope is resolved here, once the workflow state is known and before tool
-        // ranking, because this is the one selection entry point both session managers call. Nothing
-        // below reads it in this wave: selection is what it is without a scope.
+        // ranking, because this is the one selection entry point both session managers call. The
+        // only consumer that reads it here is the facade slot step (§6), and only when enforced.
         ScopeSet scope = resolveScope(message, permissionCodes, workflowState);
-        List<Object> roleTools = roleToolsForMessage(role, permissionCodes, message, workflowState);
+        RankedRoleTools ranked = roleToolsForMessage(role, permissionCodes, message, workflowState, scope);
         List<Object> fallbackTools = sharedOrchestrationSupport.mergeTools(
                 toolRegistry.resolveMasterTools(), fallbackToolsForMessage(message));
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
-                    "MCP shared tool selection role={} permissionCodes={} workflowState={} roleTools={} fallbackTools={} queryPreview=\"{}\"",
+                    "MCP shared tool selection role={} permissionCodes={} workflowState={} roleTools={} scopeAddedTools={} fallbackTools={} queryPreview=\"{}\"",
                     role,
                     permissionCodes,
                     workflowState,
-                    sharedOrchestrationSupport.toolNames(roleTools),
+                    sharedOrchestrationSupport.toolNames(ranked.tools()),
+                    ranked.scopeAddedTools(),
                     sharedOrchestrationSupport.toolNames(fallbackTools),
                     sharedOrchestrationSupport.preview(message));
         }
-        return new ToolSelectionResult(roleTools, fallbackTools, workflowState, scope);
+        return new ToolSelectionResult(ranked.tools(), fallbackTools, workflowState, scope, ranked.scopeAddedTools());
     }
 
     /**
@@ -219,6 +228,15 @@ public class ToolSelectionEngine {
     @Autowired(required = false)
     public void setScopeResolver(@Nullable ScopeResolver scopeResolver) {
         this.scopeResolver = scopeResolver;
+    }
+
+    /**
+     * ADR-0069 §6: wires the consumer switch. Setter-injected and optional for the same reason as
+     * the resolver; without it the facade slot step never runs.
+     */
+    @Autowired(required = false)
+    public void setScopeConsumers(@Nullable ScopeConsumers scopeConsumers) {
+        this.scopeConsumers = scopeConsumers;
     }
 
     /** Null when no resolver is wired or the mode is {@code off}: the turn has no scope at all. */
@@ -260,20 +278,43 @@ public class ToolSelectionEngine {
                         orderFacadeTool));
     }
 
-    private @NonNull List<Object> roleToolsForMessage(
+    /**
+     * @param tools the ranked cut's beans, with the scope-added facades (if any) appended after them
+     * @param scopeAddedTools the {@code mcp_tool.name}s the scope added, in slot order; empty unless
+     *     the {@code tools} consumer acted
+     */
+    private record RankedRoleTools(
+            @NonNull List<Object> tools, @NonNull List<String> scopeAddedTools) {
+        private static RankedRoleTools of(List<Object> tools) {
+            return new RankedRoleTools(tools, List.of());
+        }
+    }
+
+    private @NonNull RankedRoleTools roleToolsForMessage(
             @NonNull String role,
             @NonNull Set<String> permissionCodes,
             @NonNull String message,
-            @NonNull WorkflowState workflowState) {
+            @NonNull WorkflowState workflowState,
+            @Nullable ScopeSet scope) {
         List<Object> fullRoleTools = toolRegistry.resolveDomainTools(role);
         if (toolRegistryService == null) {
             logToolSelectorUnavailable(role, permissionCodes, message, fullRoleTools);
-            return fullRoleTools;
+            return RankedRoleTools.of(fullRoleTools);
         }
+        ScopeConsumers consumers = scopeConsumers;
+        boolean scopeToolsActive = consumers != null && consumers.toolsActOn(scope);
         try {
             logWorkflowState(message, workflowState.name());
-            List<ToolMetadata> candidates = toolRegistryService.resolveCandidateTools(
-                    new ToolSelectionContext(message, role, workflowState.name(), permissionCodes), candidateToolLimit);
+            ToolSelectionContext context =
+                    new ToolSelectionContext(message, role, workflowState.name(), permissionCodes);
+            // ADR-0069 §6: the slot step needs the caller's gated set, which the ranking fetches
+            // anyway, so it asks for the wider answer. When the consumer is not enforced the call
+            // is exactly today's, so nothing on the ranked path changes in off or shadow.
+            CandidateSelection selection = scopeToolsActive
+                    ? toolRegistryService.resolveCandidateSelection(context, candidateToolLimit)
+                    : new CandidateSelection(
+                            toolRegistryService.resolveCandidateTools(context, candidateToolLimit), Set.of(), false);
+            List<ToolMetadata> candidates = selection.candidates();
             logCandidates(role, permissionCodes, workflowState.name(), candidates);
             List<String> selectedNames =
                     candidates.stream().map(ToolMetadata::name).toList();
@@ -286,7 +327,7 @@ public class ToolSelectionEngine {
                 // V40's purpose: a caller holding only a code V40 strips from the gate matched
                 // nothing, fell through here, and received the entire domain tool set.
                 logNoCandidates(role, permissionCodes, message, fullRoleTools);
-                return List.of();
+                return RankedRoleTools.of(List.of());
             }
             // Resolve names across the full registered tool set (not role-scoped): permission gating
             // + scoring already ran in ToolRegistryService, and tools are bucketed by domain. The
@@ -298,10 +339,18 @@ public class ToolSelectionEngine {
                 // not authorise the domain set, so returning it would be a wider answer than
                 // success would have produced.
                 logResolvedToZeroTools(role, permissionCodes, message, selectedNames, fullRoleTools);
-                return List.of();
+                return RankedRoleTools.of(List.of());
             }
             logResolvedCandidates(role, permissionCodes, message, selectedNames, resolvedTools);
-            return resolvedTools;
+            if (!scopeToolsActive || selection.adminFastPath()) {
+                // ADR-0069 §6: the admin fast path returns AdminFacadeTool ALONE by design (see
+                // ToolRegistryService): an administration question is answered by that tool and
+                // nothing else, and the fast path exists so no other tool competes for the prompt.
+                // Adding scope tools there would undo that decision, so the slot step treats it like
+                // the ranked cut it replaces and adds nothing.
+                return RankedRoleTools.of(resolvedTools);
+            }
+            return withScopeFacades(scope, selection.gatedToolNames(), selectedNames, resolvedTools, consumers);
         } catch (RuntimeException exception) {
             // #1608: fail CLOSED. The previous behaviour returned fullRoleTools — an ungated,
             // domain-bucketed set — so any error on the gating path silently degraded
@@ -317,8 +366,59 @@ public class ToolSelectionEngine {
                     sharedOrchestrationSupport.preview(message),
                     exception.getClass().getSimpleName(),
                     exception);
-            return List.of();
+            // ADR-0069 §6: a gate that could not be evaluated adds nothing either.
+            return RankedRoleTools.of(List.of());
         }
+    }
+
+    /**
+     * ADR-0069 §6, facade slots: the scope's facade tools that are in the caller's gated set and
+     * not already selected, in slot order (hop, reads before writes, name), up to {@code
+     * added-tool-slots}, appended AFTER the ranked cut. The ranked cut is never reordered, trimmed
+     * or displaced; the gated set, fetched by the same SQL that gates the ranking, decides what may
+     * be added, so a forged scope cannot add a tool the caller may not use.
+     */
+    private @NonNull RankedRoleTools withScopeFacades(
+            @NonNull ScopeSet scope,
+            @NonNull Set<String> gatedToolNames,
+            @NonNull List<String> selectedNames,
+            @NonNull List<Object> resolvedTools,
+            @NonNull ScopeConsumers consumers) {
+        Set<String> alreadySelected = new HashSet<>();
+        selectedNames.forEach(name -> alreadySelected.add(name.toLowerCase(Locale.ROOT)));
+        sharedOrchestrationSupport
+                .toolNames(resolvedTools)
+                .forEach(name -> alreadySelected.add(name.toLowerCase(Locale.ROOT)));
+        List<String> addedNames = scope.facadeTools().stream()
+                .sorted(ScopeTool.SLOT_ORDER)
+                .map(ScopeTool::name)
+                .filter(gatedToolNames::contains)
+                .filter(name -> !alreadySelected.contains(name.toLowerCase(Locale.ROOT)))
+                .distinct()
+                .limit(consumers.remainingSlots(0))
+                .toList();
+        if (addedNames.isEmpty()) {
+            return RankedRoleTools.of(resolvedTools);
+        }
+        List<Object> addedTools = toolRegistry.resolveToolsByName(addedNames);
+        List<Object> tools = new ArrayList<>(resolvedTools);
+        for (Object tool : addedTools) {
+            if (tools.stream().noneMatch(existing -> existing == tool)) {
+                tools.add(tool);
+            }
+        }
+        // Only names that resolved to a bean count as added: a name without a bean took no slot.
+        Set<String> resolvedNames = new HashSet<>();
+        sharedOrchestrationSupport
+                .toolNames(addedTools)
+                .forEach(name -> resolvedNames.add(name.toLowerCase(Locale.ROOT)));
+        List<String> added = addedNames.stream()
+                .filter(name -> resolvedNames.contains(name.toLowerCase(Locale.ROOT)))
+                .toList();
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("MCP scope facade slots added={} confidence={}", added, scope.confidence());
+        }
+        return new RankedRoleTools(tools, added);
     }
 
     private void logToolSelectorUnavailable(
@@ -552,26 +652,42 @@ public class ToolSelectionEngine {
 
     /**
      * @param scope ADR-0069 §5: this turn's resolved scope, or null when none was resolved (mode
-     *     {@code off}, or no resolver wired). Recorded and published by the session managers; no
-     *     consumer acts on it yet.
+     *     {@code off}, or no resolver wired). Recorded and published by the session managers.
+     * @param scopeAddedTools ADR-0069 §6: the facade tools the scope added on top of the ranked
+     *     cut (already inside {@code roleTools}), by {@code mcp_tool.name}; empty unless the {@code
+     *     tools} consumer acted. They take the first of the turn's shared added-tool slots.
      */
     public record ToolSelectionResult(
             @NonNull List<Object> roleTools,
             @NonNull List<Object> fallbackTools,
             @NonNull WorkflowState workflowState,
-            @Nullable ScopeSet scope) {
+            @Nullable ScopeSet scope,
+            @NonNull List<String> scopeAddedTools) {
+
+        public ToolSelectionResult {
+            scopeAddedTools = List.copyOf(scopeAddedTools);
+        }
+
+        /** A scope without added tools (mode {@code shadow}, or the {@code tools} consumer not enforced). */
+        public ToolSelectionResult(
+                @NonNull List<Object> roleTools,
+                @NonNull List<Object> fallbackTools,
+                @NonNull WorkflowState workflowState,
+                @Nullable ScopeSet scope) {
+            this(roleTools, fallbackTools, workflowState, scope, List.of());
+        }
 
         /** The pre-ADR-0069 shape: no scope. */
         public ToolSelectionResult(
                 @NonNull List<Object> roleTools,
                 @NonNull List<Object> fallbackTools,
                 @NonNull WorkflowState workflowState) {
-            this(roleTools, fallbackTools, workflowState, null);
+            this(roleTools, fallbackTools, workflowState, null, List.of());
         }
 
         /** Backward-compatible constructor defaulting to {@link WorkflowState#IDLE}. */
         public ToolSelectionResult(@NonNull List<Object> roleTools, @NonNull List<Object> fallbackTools) {
-            this(roleTools, fallbackTools, WorkflowState.IDLE, null);
+            this(roleTools, fallbackTools, WorkflowState.IDLE, null, List.of());
         }
     }
 }

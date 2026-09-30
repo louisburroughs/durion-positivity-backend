@@ -60,6 +60,31 @@ class RequestScopedUserContextTest {
     }
 
     @Test
+    @DisplayName("ADR-0069 §6: the consumers' outcome accumulates for the turn and is cleared with the caller")
+    void consumerOutcomeAccumulatesAndClears() {
+        assertThat(holder.currentScopeAddedToolNames()).isEmpty();
+        assertThat(holder.currentScopeRagFilterApplied()).isFalse();
+        assertThat(holder.currentScopeCard()).isEmpty();
+
+        // Facades first (the selection engine), then the discovered operations (the provider).
+        holder.recordScopeAddedTools(java.util.List.of("WorkorderFacadeTool"));
+        holder.recordScopeAddedTools(java.util.List.of());
+        holder.recordScopeAddedTools(java.util.List.of("workorder_getworkorder"));
+        holder.recordScopeRagFilterApplied(true);
+        holder.recordScopeCard("SCOPE (...)");
+
+        assertThat(holder.currentScopeAddedToolNames())
+                .containsExactly("WorkorderFacadeTool", "workorder_getworkorder");
+        assertThat(holder.currentScopeRagFilterApplied()).isTrue();
+        assertThat(holder.currentScopeCard()).contains("SCOPE (...)");
+
+        holder.clear();
+        assertThat(holder.currentScopeAddedToolNames()).isEmpty();
+        assertThat(holder.currentScopeRagFilterApplied()).isFalse();
+        assertThat(holder.currentScopeCard()).isEmpty();
+    }
+
+    @Test
     @DisplayName("ADR-0069: a scope published on one thread is not visible on another")
     void scopeIsThreadBound() throws Exception {
         holder.recordScope(ScopeSet.empty());

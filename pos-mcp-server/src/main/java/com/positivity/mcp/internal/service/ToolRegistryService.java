@@ -104,6 +104,17 @@ public class ToolRegistryService {
     }
 
     public @NonNull List<ToolMetadata> resolveCandidateTools(@NonNull ToolSelectionContext context, int topK) {
+        return resolveCandidateSelection(context, topK).candidates();
+    }
+
+    /**
+     * ADR-0069 §6: the ranked cut of {@link #resolveCandidateTools} together with the caller's whole
+     * gated set, which this resolution fetches anyway ({@code findEnabledByPermissionsAndWorkflow}),
+     * and whether the admin fast path answered. The scope's additive tool slots are intersected with
+     * that gated set, so exposing it here saves them a second query; nothing about the ranking
+     * changes.
+     */
+    public @NonNull CandidateSelection resolveCandidateSelection(@NonNull ToolSelectionContext context, int topK) {
         if (topK <= 0) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
@@ -114,7 +125,7 @@ public class ToolRegistryService {
                         topK,
                         preview(context.userInput()));
             }
-            return List.of();
+            return CandidateSelection.EMPTY;
         }
 
         // ADR-0062 plan WS6: the catalog rows carry the global priority; the bound tenant's overlay
@@ -144,8 +155,10 @@ public class ToolRegistryService {
                         context.workflowState(),
                         preview(context.userInput()));
             }
-            return List.of();
+            return CandidateSelection.EMPTY;
         }
+        Set<String> gatedToolNames =
+                gatedTools.stream().map(ToolMetadata::name).collect(java.util.stream.Collectors.toUnmodifiableSet());
 
         List<ToolMetadata> adminFastPathSelection = adminFastPathSelection(context, gatedTools);
         if (!adminFastPathSelection.isEmpty()) {
@@ -158,7 +171,7 @@ public class ToolRegistryService {
                         toolNames(adminFastPathSelection),
                         preview(context.userInput()));
             }
-            return adminFastPathSelection;
+            return new CandidateSelection(adminFastPathSelection, gatedToolNames, true);
         }
 
         float[] embedding = embeddingModel.embed(context.userInput());
@@ -181,12 +194,15 @@ public class ToolRegistryService {
                         gatedTools.size(),
                         topK);
             }
-            return gatedTools.stream()
-                    .sorted(Comparator.comparingDouble(ToolMetadata::priority)
-                            .reversed()
-                            .thenComparing(ToolMetadata::name))
-                    .limit(topK)
-                    .toList();
+            return new CandidateSelection(
+                    gatedTools.stream()
+                            .sorted(Comparator.comparingDouble(ToolMetadata::priority)
+                                    .reversed()
+                                    .thenComparing(ToolMetadata::name))
+                            .limit(topK)
+                            .toList(),
+                    gatedToolNames,
+                    false);
         }
 
         List<ScoredTool> scoredCandidates = IntStream.range(0, semanticCandidates.size())
@@ -225,7 +241,28 @@ public class ToolRegistryService {
                     toolNames(selectedTools),
                     preview(context.userInput()));
         }
-        return selectedTools;
+        return new CandidateSelection(selectedTools, gatedToolNames, false);
+    }
+
+    /**
+     * One resolution's ranked cut plus what it learnt on the way (ADR-0069 §6).
+     *
+     * @param candidates the ranked cut, exactly what {@link #resolveCandidateTools} returns
+     * @param gatedToolNames every tool the caller may use in this workflow state, by {@code
+     *     mcp_tool.name}; empty when the caller has none
+     * @param adminFastPath true when {@code AdminFacadeTool} was returned alone by the admin fast
+     *     path rather than by ranking
+     */
+    public record CandidateSelection(
+            @NonNull List<ToolMetadata> candidates, @NonNull Set<String> gatedToolNames, boolean adminFastPath) {
+
+        /** No candidates and no gated set: the caller holds no permission group for any tool. */
+        public static final CandidateSelection EMPTY = new CandidateSelection(List.of(), Set.of(), false);
+
+        public CandidateSelection {
+            candidates = List.copyOf(candidates);
+            gatedToolNames = Set.copyOf(gatedToolNames);
+        }
     }
 
     /**

@@ -340,7 +340,7 @@ class ScopeResolverTest {
                         .filter(meter -> meter.getId().getName().startsWith("mcp.scope."))
                         .flatMap(meter -> meter.getId().getTags().stream())
                         .map(io.micrometer.core.instrument.Tag::getKey))
-                .containsOnly("confidence", "kind", "in_scope");
+                .containsOnly("confidence", "kind", "in_scope", "consumer");
     }
 
     @Test

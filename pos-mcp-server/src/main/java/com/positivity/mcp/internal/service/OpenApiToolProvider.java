@@ -9,12 +9,17 @@ import com.positivity.mcp.internal.discovery.OperationProxyFactory;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
+import com.positivity.mcp.internal.scopegraph.ScopeConsumers;
+import com.positivity.mcp.internal.scopegraph.ScopeSet;
+import com.positivity.mcp.internal.scopegraph.ScopeSet.ScopeTool;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
@@ -27,6 +32,7 @@ import org.springframework.ai.tool.definition.DefaultToolDefinition;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.DefaultToolMetadata;
 import org.springframework.ai.tool.metadata.ToolMetadata;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -184,6 +190,9 @@ public class OpenApiToolProvider {
     private final Duration executionTimeout;
     private final @Nullable ToolInvocationRecorder invocationRecorder;
 
+    /** ADR-0069 §6: the consumer switch; absent means the discovered slot step never runs. */
+    private volatile @Nullable ScopeConsumers scopeConsumers;
+
     public OpenApiToolProvider(
             @NonNull ToolMetadataRepository repository,
             @NonNull EmbeddingModel embeddingModel,
@@ -203,6 +212,15 @@ public class OpenApiToolProvider {
         this.invocationRecorder = invocationRecorder;
     }
 
+    /**
+     * ADR-0069 §6: wires the consumer switch. Setter-injected and optional so the hand-built
+     * constructions of this class keep resolving exactly the ANN cut.
+     */
+    @Autowired(required = false)
+    public void setScopeConsumers(@Nullable ScopeConsumers scopeConsumers) {
+        this.scopeConsumers = scopeConsumers;
+    }
+
     public @NonNull List<ToolCallback> resolveToolCallbacks(@Nullable String userMessage) {
         Optional<CurrentUserContext> maybe = userContext.current();
         if (maybe.isEmpty()) {
@@ -220,6 +238,19 @@ public class OpenApiToolProvider {
         // NLTI-session path (Gate 2C). Permission gating still applies inside the query.
         List<DiscoveredOperation> ops = repository.findDiscoveredCandidatesForPermissions(
                 embedding, candidateLimit, caller.permissionCodes(), WorkflowState.DEFAULT.name());
+        // ADR-0069 §6, discovered slots: the scope's operations are appended AFTER the ANN cut, so
+        // nothing ranked is removed or displaced; write-capability is computed over the union below.
+        List<String> scopeAdded = scopeDiscoveredAdditions(ops, caller.permissionCodes());
+        if (!scopeAdded.isEmpty()) {
+            ops = new ArrayList<>(ops);
+            // The gate answers by name; the slot order (hop, reads before writes, name) is restored here.
+            ops.addAll(repository
+                    .findDiscoveredByNamesForPermissions(
+                            scopeAdded, caller.permissionCodes(), WorkflowState.DEFAULT.name())
+                    .stream()
+                    .sorted(java.util.Comparator.comparingInt(op -> scopeAdded.indexOf(op.name())))
+                    .toList());
+        }
 
         List<ToolCallback> tools = new ArrayList<>();
         boolean writeCapableToolsPresent = false;
@@ -241,9 +272,17 @@ public class OpenApiToolProvider {
             // #1422: per-execution invocation logging; discovered names match mcp_tool.name exactly.
             tools.add(invocationRecorder != null ? invocationRecorder.wrap(callback, op.name()) : callback);
         }
-        userContext.recordDiscoveredOpenapiTools(tools.stream()
+        List<String> exposedNames = tools.stream()
                 .map(callback -> callback.getToolDefinition().name())
-                .toList());
+                .toList();
+        userContext.recordDiscoveredOpenapiTools(exposedNames);
+        // Only what the gate actually returned counts as added: a scope name the SQL rejected, or an
+        // operation without execution coordinates, took no slot.
+        List<String> added = scopeAdded.stream().filter(exposedNames::contains).toList();
+        if (!added.isEmpty()) {
+            userContext.recordScopeAddedTools(added);
+            LOGGER.debug("MCP scope discovered slots added={}", added);
+        }
         // #1193: recorded BEFORE the assistant assembles the system prompt (tools are resolved
         // first), so the per-request prompt supplier can append the WRITE-GATE layer exactly when a
         // write-capable tool is in this request's candidate set. Facade tools are read-only (GET
@@ -255,6 +294,39 @@ public class OpenApiToolProvider {
                 caller.permissionCodes().size(),
                 tools.size());
         return List.copyOf(tools);
+    }
+
+    /**
+     * ADR-0069 §6: the scope's discovered operations not already in the ANN cut, in slot order
+     * (hop, reads before writes, name), cut to the slots the facade step left. The facade and the
+     * discovered step share ONE cap per turn: the facades the selection engine added are already on
+     * the request-scoped holder, so what is left is the cap minus their count. The result is only
+     * a list of names to ask the gate about; {@code findDiscoveredByNamesForPermissions} decides.
+     */
+    private @NonNull List<String> scopeDiscoveredAdditions(
+            @NonNull List<DiscoveredOperation> ranked, @NonNull Set<String> permissionCodes) {
+        ScopeConsumers consumers = scopeConsumers;
+        Optional<ScopeSet> published = userContext.currentScope();
+        if (consumers == null || published.isEmpty() || !consumers.toolsActOn(published.get())) {
+            return List.of();
+        }
+        if (permissionCodes.isEmpty()) {
+            return List.of();
+        }
+        int remaining = consumers.remainingSlots(
+                userContext.currentScopeAddedToolNames().size());
+        if (remaining <= 0) {
+            return List.of();
+        }
+        Set<String> present = new HashSet<>();
+        ranked.forEach(op -> present.add(op.name()));
+        return published.get().discoveredTools().stream()
+                .sorted(ScopeTool.SLOT_ORDER)
+                .map(ScopeTool::name)
+                .filter(name -> !present.contains(name))
+                .distinct()
+                .limit(remaining)
+                .toList();
     }
 
     private static final class OpenApiSpringAiToolCallback implements ToolCallback {

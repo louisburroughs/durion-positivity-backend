@@ -6,21 +6,25 @@ import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.client.RoleDefaultPermissionsClient;
 import com.positivity.mcp.internal.config.AgentOrchestrationService;
 import com.positivity.mcp.internal.config.CurrentUserContext;
-import com.positivity.mcp.internal.config.ScopeGraphProperties;
+import com.positivity.mcp.internal.config.ScopeGraphProperties.Consumer;
 import com.positivity.mcp.internal.config.SessionAgentCacheMetrics;
 import com.positivity.mcp.internal.config.TieredChatModelResolver;
 import com.positivity.mcp.internal.domain.ChatOutcome;
 import com.positivity.mcp.internal.domain.ModelTier;
+import com.positivity.mcp.internal.domain.RagScope;
 import com.positivity.mcp.internal.domain.TurnSummary;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
+import com.positivity.mcp.internal.orchestration.ScopeShadowSupport.ScopeOutcome;
+import com.positivity.mcp.internal.orchestration.ScopeShadowSupport.ScopePublication;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
 import com.positivity.mcp.internal.orchestration.memory.SessionSummary;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.retrieval.PermissionAwareMetadataFilter;
+import com.positivity.mcp.internal.scopegraph.ScopeConsumers;
 import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import com.positivity.mcp.internal.security.PermissionCodes;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder;
@@ -127,8 +131,13 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     /** #2073: reloads a persisted conversation's memory window on a cache miss; absent → fresh memory. */
     private @Nullable ConversationMemoryHistory conversationMemoryHistory;
 
-    /** ADR-0069: the scope-graph rollout switches; absent in hand-built constructions. */
-    private volatile @Nullable ScopeGraphProperties scopeGraphProperties;
+    /**
+     * ADR-0069 §6: the consumer switch. A constructor argument, not setter-injected, because the
+     * warm-up in the constructor already builds agents and the RAG consumer decides at build time
+     * which scopes the retrievers cover (spec §2.10: the mode is read once at startup). Null in
+     * hand-built constructions: nothing is enforced and the mode reported is {@code shadow}.
+     */
+    private final @Nullable ScopeConsumers scopeConsumers;
 
     public SessionAgentManager(
             @Qualifier("chatModel") @NonNull ChatModel chatModel,
@@ -159,7 +168,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
             @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession,
             @Value("${mcp.rag.min-score:0.45}") double ragMinScore,
-            @Value("${mcp.rag.tier2-min-score:0.40}") double ragTier2MinScore) {
+            @Value("${mcp.rag.tier2-min-score:0.40}") double ragTier2MinScore,
+            @Nullable ScopeConsumers scopeConsumers) {
         this.chatModel = chatModel;
         this.embeddingModel = embeddingModel;
         this.embeddingStore = embeddingStore;
@@ -185,6 +195,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.clock = clock;
         this.ragMinScore = ragMinScore;
         this.ragTier2MinScore = ragTier2MinScore;
+        this.scopeConsumers = scopeConsumers;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
         this.requestCountCache = Caffeine.newBuilder()
@@ -211,16 +222,6 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     @Autowired(required = false)
     public void setConversationMemoryHistory(@Nullable ConversationMemoryHistory conversationMemoryHistory) {
         this.conversationMemoryHistory = conversationMemoryHistory;
-    }
-
-    /**
-     * ADR-0069 §9: the scope-graph rollout switches, read only to stamp the mode on telemetry.
-     * Setter-injected and optional so existing constructions keep working; nothing in this class
-     * changes behaviour on them.
-     */
-    @Autowired(required = false)
-    public void setScopeGraphProperties(@Nullable ScopeGraphProperties scopeGraphProperties) {
-        this.scopeGraphProperties = scopeGraphProperties;
     }
 
     /**
@@ -349,6 +350,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     toolInvocationRecorder.recordScope(selection.scope());
                 }
             }
+            // ADR-0069 §6/§7: the scope, the facades it added and the card it renders, published
+            // for the consumers that run inside the cached agent. Rendered per request, never baked in.
+            ScopePublication publication =
+                    ScopeShadowSupport.publicationFor(selection, scopeConsumers, currentUserContext.permissionCodes());
             String cacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
             if (LOGGER.isDebugEnabled()) {
                 String messagePreview = sharedOrchestrationSupport.preview(message);
@@ -380,9 +385,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 requestScopedUserContext.recordUserMessage(message);
                 // ADR-0069 §5: published next to the caller, for the same window, and cleared by the
                 // same clear() in the finally below.
-                if (selection.scope() != null) {
-                    requestScopedUserContext.recordScope(selection.scope());
-                }
+                publication.publish(requestScopedUserContext);
             }
             long agentStartNanos = System.nanoTime();
             PosAssistant.Reply reply = agent.reply(
@@ -407,8 +410,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             // during agent.chat, before the finally-clear below) so the telemetry prompt layers
             // match what the per-request prompt supplier actually assembled.
             boolean writeCapableToolsPresent = currentWriteCapableToolsPresent();
+            // ADR-0069 §6: what the consumers did, read before the finally-clear like the write signal.
+            ScopeOutcome scopeOutcome = ScopeShadowSupport.recordOutcome(
+                    selection.scope(), scopeConsumers, requestScopedUserContext, toolInvocationRecorder);
             AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope, writeCapableToolsPresent);
-            List<String> promptLayers = assembled != null ? assembled.layers() : List.of();
+            List<String> promptLayers = publication.withCardLayer(assembled != null ? assembled.layers() : List.of());
             emitChatTelemetry(
                     currentUserContext,
                     selectedToolNames,
@@ -421,7 +427,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     null,
                     tierRoutingOf(routingDecision),
                     writeCapableToolsPresent,
-                    selection.scope());
+                    selection.scope(),
+                    scopeOutcome);
             if (toolInvocationRecorder != null) {
                 toolInvocationRecorder.completeTurn(reply.text());
             }
@@ -454,7 +461,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     exception.getClass().getSimpleName(),
                     tierRoutingOf(routingDecision),
                     currentWriteCapableToolsPresent(),
-                    null);
+                    null,
+                    ScopeOutcome.NONE);
             throw new IllegalStateException(
                     "MCP chat failed role=%s elapsedMs=%d errorName=%s"
                             .formatted(role, elapsedMs, exception.getClass().getSimpleName()),
@@ -496,30 +504,43 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         List<Object> tools = sharedOrchestrationSupport.mergeTools(roleTools, fallbackTools);
         String ragScope = toolRegistry.resolveRagScopeForTools(tools);
         String promptName = SystemPromptDefaults.promptNameForRagScope(ragScope);
+        // ADR-0069 §6: where the RAG consumer is in enforce, the retrievers are built over ALL scopes
+        // (the master scope is the factory's unfiltered case) so a second domain's documents can be
+        // fetched at all, and the request-scoped ScopeRagFilter below narrows per request. Where it
+        // is not, this is exactly today's scoped construction and no hook is installed.
+        boolean scopeRagEnforced =
+                scopeConsumers != null && requestScopedUserContext != null && scopeConsumers.enforces(Consumer.RAG);
+        String retrieverScope = scopeRagEnforced ? RagScope.MASTER : ragScope;
 
         // 2. Tier 2 retrieval pipeline: semantic + expanded + hybrid + re-ranking.
-        QueryDocumentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, ragMinScore);
+        QueryDocumentRetriever semanticRetriever =
+                scopedContentRetrieverFactory.create(retrieverScope, 10, ragMinScore);
         QueryDocumentRetriever broadSemanticRetriever =
-                scopedContentRetrieverFactory.create(ragScope, TIER2_RETRIEVAL_CANDIDATES, ragTier2MinScore);
+                scopedContentRetrieverFactory.create(retrieverScope, TIER2_RETRIEVAL_CANDIDATES, ragTier2MinScore);
         QueryDocumentRetriever expandedRetriever = new QueryExpansionContentRetriever(
                 broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
         // #784: dense + query-expansion, plus the lexical (FTS) source when enabled. RRF fusion when
         // lexical is present; otherwise the original insertion-order merge, so the dense-only path is
         // byte-for-byte unchanged when the feature flag is off.
         List<QueryDocumentRetriever> hybridSources = new ArrayList<>(List.of(semanticRetriever, expandedRetriever));
-        Optional<QueryDocumentRetriever> lexicalRetriever = scopedContentRetrieverFactory.createLexical(ragScope);
+        Optional<QueryDocumentRetriever> lexicalRetriever = scopedContentRetrieverFactory.createLexical(retrieverScope);
         lexicalRetriever.ifPresent(hybridSources::add);
         QueryDocumentRetriever hybridRetriever = lexicalRetriever.isPresent()
                 ? HybridContentRetriever.reciprocalRankFusion(
                         hybridSources, TIER2_RETRIEVAL_CANDIDATES, scopedContentRetrieverFactory.rrfK())
                 : new HybridContentRetriever(hybridSources, TIER2_RETRIEVAL_CANDIDATES);
+        // ADR-0069 §6: the scope hook sits after fusion and before the top-K cut, beside the
+        // permission filter, so the top-K is chosen from in-scope (and visible) survivors.
+        QueryDocumentRetriever scopeFilteredRetriever = scopeRagEnforced
+                ? new ScopeRagFilter(hybridRetriever, ragScope, requestScopedUserContext, scopeConsumers)
+                : hybridRetriever;
         // #1124 item 4: permission-gate the candidates BEFORE re-ranking to the final top-K, so the
         // top-K is chosen from docs the caller may actually see and a gated doc can neither leak nor
         // displace a visible one. This must run before the top-K cut, not after. Codes are read per
         // request from the thread-local caller context (the agent is cached per role, the caller is
         // not), fail-closed to public-only when absent. Broadening the master scope above makes this
         // gating load-bearing: without it, master-scope queries would surface gated domain docs.
-        QueryDocumentRetriever permissionFilteredRetriever = permissionFiltered(hybridRetriever);
+        QueryDocumentRetriever permissionFilteredRetriever = permissionFiltered(scopeFilteredRetriever);
         QueryDocumentRetriever rerankedRetriever =
                 new RerankedContentRetriever(permissionFilteredRetriever, TIER2_FINAL_TOP_K);
         // ADR-0069 §9: observes the final top-K for the scope trace and returns it untouched; a plain
@@ -530,12 +551,14 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
         // #1193 cache safety: the WRITE-GATE layer is applied per request (the supplier reads the
         // request-scoped write-capability signal, resolved the same way tools are), so a cached
-        // agent can never bake a WRITE_GATE prompt into requests without write-capable tools.
+        // agent can never bake a WRITE_GATE prompt into requests without write-capable tools. The
+        // ADR-0069 §7 scope card is appended the same way, as the final SCOPE_CARD layer, from the
+        // card published for this request; a cached agent never bakes one in.
         PosAssistant agent = new SpringAiPosAssistant(
                 executorChatModel(tier),
-                () -> rolePromptResolver
+                () -> withScopeCard(rolePromptResolver
                         .assemble(role, ragScope, currentWriteCapableToolsPresent())
-                        .text(),
+                        .text()),
                 tools,
                 resilientContentRetriever,
                 this::chatMemoryFor,
@@ -603,6 +626,13 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     private boolean currentWriteCapableToolsPresent() {
         return requestScopedUserContext != null && requestScopedUserContext.currentWriteCapableToolsPresent();
+    }
+
+    /** ADR-0069 §7: the assembled prompt with this request's scope card as its final layer, if one was rendered. */
+    private @NonNull String withScopeCard(@NonNull String assembledPrompt) {
+        return ScopeShadowSupport.currentCard(requestScopedUserContext)
+                .map(card -> assembledPrompt + "\n\n" + card)
+                .orElse(assembledPrompt);
     }
 
     /**
@@ -826,7 +856,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 null,
                 false,
                 // The fast path resolves no scope (ADR-0069).
-                null);
+                null,
+                ScopeOutcome.NONE);
         // The fast path offers no tools; its answer source is the raw extraction source (#1816).
         return new SimpleChatReply(
                 new PosAssistant.Reply(response, extracted.source().name(), List.of()),
@@ -851,7 +882,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Nullable String errorCode,
             @Nullable TierRouting tierRouting,
             boolean writeCapableToolsPresent,
-            @Nullable ScopeSet scope) {
+            @Nullable ScopeSet scope,
+            @NonNull ScopeOutcome scopeOutcome) {
         if (telemetryEmitter == null) {
             return;
         }
@@ -879,7 +911,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     errorCode,
                     tierRouting,
                     writeCapableToolsPresent,
-                    ScopeShadowSupport.telemetrySignal(scope, scopeGraphProperties)));
+                    ScopeShadowSupport.telemetrySignal(
+                            scope, ScopeShadowSupport.propertiesOf(scopeConsumers), scopeOutcome)));
         } catch (RuntimeException telemetryFailure) {
             LOGGER.warn(
                     "MCP telemetry emission failed role={} status={}",

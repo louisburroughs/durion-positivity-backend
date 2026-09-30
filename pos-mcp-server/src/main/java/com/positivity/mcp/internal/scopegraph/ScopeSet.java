@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.scopegraph;
 import com.positivity.mcp.internal.scopegraph.NodeAttributes.ToolSource;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -61,7 +62,16 @@ public record ScopeSet(
             @NonNull String name,
             @NonNull ToolSource source,
             int hop,
-            @NonNull Access access) {}
+            @NonNull Access access) {
+
+        /**
+         * ADR-0069 §6 (spec §2.10): the order in which scope tools take the added slots: nearer
+         * hop first, then {@code reads} before {@code writes}, then name.
+         */
+        public static final Comparator<ScopeTool> SLOT_ORDER = Comparator.comparingInt(ScopeTool::hop)
+                .thenComparing(ScopeTool::access)
+                .thenComparing(ScopeTool::name);
+    }
 
     /** One {@code RELATES_TO} edge between two in-scope entities. */
     public record Relation(

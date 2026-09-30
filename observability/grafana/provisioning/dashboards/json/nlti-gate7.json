@@ -234,7 +234,7 @@
       "id": 14,
       "type": "timeseries",
       "title": "Prompt-layer composition rate by layer",
-      "description": "rag.promptLayers is a JSON array, which Loki's bare `| json` skips; each series therefore uses `| json prompt_layers=\"rag.promptLayers\"` plus a quoted-token label filter. Layers are BASE, ROLE, DOMAIN, TOOL_USE, WRITE_GATE (NltiRequestTelemetry.PromptLayer). This is the Gate 1 (#1213) evidence panel.",
+      "description": "rag.promptLayers is a JSON array, which Loki's bare `| json` skips; each series therefore uses `| json prompt_layers=\"rag.promptLayers\"` plus a quoted-token label filter. Layers are BASE, ROLE, DOMAIN, TOOL_USE, WRITE_GATE, SCOPE_CARD (NltiRequestTelemetry.PromptLayer). This is the Gate 1 (#1213) evidence panel.",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 16, "x": 0, "y": 24 },
       "targets": [

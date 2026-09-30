@@ -177,6 +177,38 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
     }
 
     @Override
+    public @NonNull List<DiscoveredOperation> findDiscoveredByNamesForPermissions(
+            @NonNull Collection<String> names, @NonNull Set<String> permissionCodes, @NonNull String workflowState) {
+        if (names.isEmpty() || permissionCodes.isEmpty()) {
+            return List.of();
+        }
+        // ADR-0069 §6: the gate of findDiscoveredCandidatesForPermissions above, predicate for
+        // predicate (enabled, openapi, workflow, any one permission code), applied to a fixed set of
+        // names instead of an embedding neighbourhood. No embedding clause: the scope graph chose
+        // these operations, so an operation still waiting for its embedding is as usable as any.
+        String sql = """
+                SELECT t.name, t.description, t.http_method, t.http_path, t.service_id, t.input_schema
+                FROM mcp_tool t
+                JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
+                JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
+                WHERE t.enabled = true
+                  AND t.source = 'openapi'
+                  AND ws.name = ?
+                  AND t.name = ANY(?)
+                  AND t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(?))
+                ORDER BY t.name
+                """;
+        return jdbcTemplate.query(
+                sql,
+                ps -> {
+                    ps.setString(1, workflowState);
+                    ps.setArray(2, ps.getConnection().createArrayOf(VARCHAR, new HashSet<>(names).toArray()));
+                    ps.setArray(3, ps.getConnection().createArrayOf(VARCHAR, permissionCodes.toArray()));
+                },
+                this::mapDiscovered);
+    }
+
+    @Override
     public @NonNull UUID upsertDiscoveredOperation(@NonNull DiscoveredOperation operation, @NonNull String domain) {
         // Embedding is intentionally NOT written here: it is owned by
         // ToolEmbeddingInitializer, which

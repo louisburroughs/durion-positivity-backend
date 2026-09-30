@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.scopegraph;
 
 import com.positivity.mcp.internal.config.ScopeGraphProperties;
+import com.positivity.mcp.internal.config.ScopeGraphProperties.Consumer;
 import com.positivity.mcp.internal.scopegraph.ScopeSet.Confidence;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -26,6 +27,7 @@ public class ScopeMetrics {
     static final String CALLED_TOOL = "mcp.scope.called_tool";
     static final String RETRIEVED_DOC = "mcp.scope.retrieved_doc";
     static final String ERRORS = "mcp.scope.errors";
+    static final String FALLBACK = "mcp.scope.fallback";
 
     private static final String IN_SCOPE = "in_scope";
 
@@ -53,6 +55,16 @@ public class ScopeMetrics {
     public void recordError() {
         if (meters != null) {
             meters.errors.increment();
+        }
+    }
+
+    /**
+     * ADR-0069 §6: {@code consumer} is in {@code enforce} but fell back to today's behaviour on this
+     * turn (confidence below what it acts on, or nothing to add).
+     */
+    public void recordFallback(@NonNull Consumer consumer) {
+        if (meters != null) {
+            meters.fallback.get(consumer).increment();
         }
     }
 
@@ -84,8 +96,18 @@ public class ScopeMetrics {
         private final Counter retrievedDocInScope;
         private final Counter retrievedDocOutOfScope;
         private final Counter errors;
+        private final Map<Consumer, Counter> fallback = new EnumMap<>(Consumer.class);
 
         private Meters(MeterRegistry registry) {
+            for (Consumer consumer : Consumer.values()) {
+                fallback.put(
+                        consumer,
+                        Counter.builder(FALLBACK)
+                                .description(
+                                        "Turns on which an enforced consumer fell back to today's behaviour (ADR-0069 §6)")
+                                .tag("consumer", consumer.name().toLowerCase(java.util.Locale.ROOT))
+                                .register(registry));
+            }
             for (Confidence confidence : Confidence.values()) {
                 resolved.put(
                         confidence,

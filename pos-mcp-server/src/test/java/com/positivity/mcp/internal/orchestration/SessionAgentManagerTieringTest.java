@@ -301,7 +301,9 @@ class SessionAgentManagerTieringTest {
                 50,
                 100,
                 0.6,
-                0.55);
+                0.55,
+                null // scopeConsumers (ADR-0069)
+                );
     }
 
     private static CurrentUserContext userContext(String username) {

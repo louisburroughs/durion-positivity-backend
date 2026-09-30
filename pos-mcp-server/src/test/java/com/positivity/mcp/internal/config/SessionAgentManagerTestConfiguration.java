@@ -87,6 +87,15 @@ public class SessionAgentManagerTestConfiguration {
             }
 
             @Override
+            public java.util.List<com.positivity.mcp.internal.domain.DiscoveredOperation>
+                    findDiscoveredByNamesForPermissions(
+                            java.util.Collection<String> names,
+                            java.util.Set<String> permissionCodes,
+                            String workflowState) {
+                return List.of();
+            }
+
+            @Override
             public java.util.UUID upsertDiscoveredOperation(
                     com.positivity.mcp.internal.domain.DiscoveredOperation operation, String domain) {
                 return java.util.UUID.fromString("00000000-0000-0000-0000-000000000000");

@@ -76,7 +76,8 @@ class ScopeResolverWiringTest {
                             "mcp.scope.size",
                             "mcp.scope.called_tool",
                             "mcp.scope.retrieved_doc",
-                            "mcp.scope.errors");
+                            "mcp.scope.errors",
+                            "mcp.scope.fallback");
             assertThat(meters.get("mcp.scope.resolved")
                             .tag("confidence", "NONE")
                             .counter()
@@ -86,15 +87,50 @@ class ScopeResolverWiringTest {
             assertThat(meters.get("mcp.scope.size").summaries()).hasSize(4);
             assertThat(meters.get("mcp.scope.called_tool").counters()).hasSize(2);
             assertThat(meters.get("mcp.scope.errors").counter().count()).isZero();
+            // ADR-0069 §6: one fallback counter per consumer, registered up front, none incremented.
+            assertThat(meters.get("mcp.scope.fallback").counters()).hasSize(3);
+            assertThat(meters.get("mcp.scope.fallback").counters().stream()
+                            .map(counter -> counter.getId().getTag("consumer")))
+                    .containsExactlyInAnyOrder("rag", "tools", "card");
         });
     }
 
     @Test
-    @DisplayName("mode enforce resolves exactly as shadow does")
+    @DisplayName("mode enforce resolves exactly as shadow does, and the listed consumers are the ones that act")
     void enforceResolvesLikeShadow() {
         runner.withPropertyValues("mcp.scope-graph.mode=enforce", "mcp.scope-graph.enforce=rag,tools,card")
-                .run(context -> assertThat(context.getBean(ScopeResolver.class).enabled())
-                        .isTrue());
+                .run(context -> {
+                    assertThat(context.getBean(ScopeResolver.class).enabled()).isTrue();
+                    ScopeConsumers consumers = context.getBean(ScopeConsumers.class);
+                    for (ScopeGraphProperties.Consumer consumer : ScopeGraphProperties.Consumer.values()) {
+                        assertThat(consumers.enforces(consumer)).isTrue();
+                    }
+                    assertThat(consumers.addedToolSlots()).isEqualTo(8);
+                });
+        // ADR-0069 §9 / spec §2.1: enforce with an empty list is shadow; a listed consumer acts alone.
+        runner.withPropertyValues("mcp.scope-graph.mode=enforce").run(context -> {
+            ScopeConsumers consumers = context.getBean(ScopeConsumers.class);
+            for (ScopeGraphProperties.Consumer consumer : ScopeGraphProperties.Consumer.values()) {
+                assertThat(consumers.enforces(consumer)).isFalse();
+            }
+        });
+        runner.withPropertyValues("mcp.scope-graph.mode=enforce", "mcp.scope-graph.enforce=rag")
+                .run(context -> {
+                    ScopeConsumers consumers = context.getBean(ScopeConsumers.class);
+                    assertThat(consumers.enforces(ScopeGraphProperties.Consumer.RAG))
+                            .isTrue();
+                    assertThat(consumers.enforces(ScopeGraphProperties.Consumer.TOOLS))
+                            .isFalse();
+                    assertThat(consumers.enforces(ScopeGraphProperties.Consumer.CARD))
+                            .isFalse();
+                });
+        runner.withPropertyValues("mcp.scope-graph.mode=shadow", "mcp.scope-graph.enforce=rag,tools,card")
+                .run(context -> {
+                    ScopeConsumers consumers = context.getBean(ScopeConsumers.class);
+                    for (ScopeGraphProperties.Consumer consumer : ScopeGraphProperties.Consumer.values()) {
+                        assertThat(consumers.enforces(consumer)).isFalse();
+                    }
+                });
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -104,7 +140,8 @@ class ScopeResolverWiringTest {
         ScopeGraphSourceLoader.class,
         OpenApiSchemaIndexHolder.class,
         ScopeMetrics.class,
-        ScopeResolver.class
+        ScopeResolver.class,
+        ScopeConsumers.class
     })
     static class Wiring {
 
