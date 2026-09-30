@@ -51,6 +51,18 @@ class LedgerPostingConcurrencyTest {
     void concurrentPostingsToSameKey_finalSummaryEqualsLedgerSum() throws Exception {
         String sku = "SKU-CONC-" + UUID.randomUUID();
         UUID location = UUID.randomUUID();
+        // Create the summary row before the race. First-use creation of a lot-agnostic key is only
+        // race-safe on Postgres (NULLS NOT DISTINCT + ON CONFLICT DO NOTHING); H2 cannot reject a
+        // NULL-lot duplicate, so that race is proven by FirstUseRowCreationConcurrencyIT instead.
+        // This test covers concurrent updates to an existing row (#2344).
+        ledgerPostingService.post(InventoryLedgerEntry.builder()
+                .stockItemId(sku)
+                .locationId(location)
+                .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
+                .changeInQuantity(BigDecimal.ONE)
+                .quantityAfter(new BigDecimal("0"))
+                .transactionUserId("concurrency-test")
+                .build());
 
         CountDownLatch startGate = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(THREADS);
@@ -96,7 +108,7 @@ class LedgerPostingConcurrencyTest {
         assertThat(summary.getOnHand())
                 .as("summary on-hand must equal SUM(ledger) — no lost updates")
                 .isEqualByComparingTo(BigDecimal.valueOf(ledgerSum));
-        // Exactly one summary row despite the first-post creation race.
+        // Exactly one summary row for the key.
         assertThat(summaryRepository.findByStockItemId(sku)).hasSize(1);
     }
 }

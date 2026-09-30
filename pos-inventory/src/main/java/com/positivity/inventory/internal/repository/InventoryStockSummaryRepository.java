@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.tenancy.TenantAudited;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.HashMap;
@@ -13,6 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -550,4 +552,35 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
     }
 
     record LocationQuantityMaps(Map<UUID, BigDecimal> onHand, Map<UUID, BigDecimal> allocated) {}
+
+    /**
+     * Insert-if-absent of the zero-quantity summary row for a (stockItemId, locationId, lotId) key, run inside the
+     * caller's posting transaction (one connection, no {@code REQUIRES_NEW}). Target-less {@code ON CONFLICT DO
+     * NOTHING} is portable to H2 (PostgreSQL mode) and, on Postgres, arbitrates the
+     * {@code NULLS NOT DISTINCT} {@code uq_inventory_stock_summary_key} index, so a lot-agnostic (NULL {@code lot_id})
+     * duplicate is refused without raising a constraint violation (no rollback-only mark). A concurrent inserter of the
+     * same key makes this statement wait until that transaction commits or aborts; the caller's locked re-read then
+     * sees the winner's row. H2's schema cannot reject a NULL-lot duplicate, so that case is proven on Postgres only.
+     *
+     * @return 1 if this call inserted the row, 0 if the key already existed
+     */
+    @TenantAudited(
+            reason = "names the tenant explicitly (the caller's resolved tenant), so the row is the bound tenant's on"
+                    + " Postgres and on the H2 slices alike; the policy's WITH CHECK still refuses any other tenant")
+    @Modifying
+    @Query(value = """
+                    INSERT INTO inventory_stock_summary
+                        (tenant_id, summary_id, stock_item_id, location_id, lot_id,
+                         on_hand, allocated, reserved, atp, in_transit_qty, created_at, updated_at)
+                    VALUES (:tenantId, :id, :stockItemId, CAST(:locationId AS uuid), CAST(:lotId AS uuid),
+                            0, 0, 0, 0, 0, :now, :now)
+                    ON CONFLICT DO NOTHING
+                    """, nativeQuery = true)
+    int insertIfAbsent(
+            @Param("tenantId") UUID tenantId,
+            @Param("id") UUID id,
+            @Param("stockItemId") String stockItemId,
+            @Param("locationId") UUID locationId,
+            @Param("lotId") UUID lotId,
+            @Param("now") Instant now);
 }

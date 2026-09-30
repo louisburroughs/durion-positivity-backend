@@ -18,6 +18,14 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Per-line idempotency: because a listener retry after partial success would replay already
  * committed REQUIRES_NEW postings, each post first checks the ledger for an entry with the same
  * event type and {@code sourceTransactionId} (the order line id) and skips duplicates.
+ *
+ * <p>Connection budget (#2344): this transaction nests inside {@code OrderEventsListener}'s own
+ * {@code REQUIRES_NEW} handler transaction, so each consumer thread holds two Hikari connections
+ * at once. That is safe only while the listener's consumer concurrency stays below the pool size
+ * ({@code spring.datasource.hikari.maximum-pool-size}); today it runs the default single consumer
+ * thread. Raising the concurrency to the pool size or beyond lets every consumer hold its first
+ * connection while waiting for a second, and the pool deadlocks until the connection timeout.
+ * Nothing below this call may open a further {@code REQUIRES_NEW} transaction.
  */
 @Slf4j
 @Component

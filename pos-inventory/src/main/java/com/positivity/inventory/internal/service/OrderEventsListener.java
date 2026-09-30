@@ -87,6 +87,8 @@ public class OrderEventsListener {
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
+    // Two connections per consumer thread (handler + CounterSaleIssuePoster, both REQUIRES_NEW):
+    // keep consumer concurrency below the Hikari pool size (#2344).
     @KafkaListener(
             topics = "${pos.inventory.kafka.order-events-topic:order.events.v1}",
             groupId = "${pos.inventory.kafka.order-events-consumer-group:pos-inventory-order-events}")
