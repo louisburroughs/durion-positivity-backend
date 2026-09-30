@@ -241,4 +241,100 @@ class EvalTurnTraceJsonCompatibilityTest {
                 // The identifier the user typed is in the trace's userMessage, never in its scope.
                 .doesNotContain("WO-20391");
     }
+
+    @Test
+    @DisplayName("ADR-0068: every payload written before tagging existed reads back with null tags")
+    void aPayloadWrittenBeforeTagsExistedReadsBackWithNullTags() throws Exception {
+        assertThat(mapper.readValue(LEGACY_PAYLOAD, EvalTurnTrace.class).tags()).isNull();
+        assertThat(mapper.readValue(PRE_1806_PAYLOAD, EvalTurnTrace.class).tags())
+                .isNull();
+        assertThat(mapper.readValue(PRE_SCOPE_PAYLOAD, EvalTurnTrace.class).tags())
+                .isNull();
+        // The ADR-0069 shape (a scope, no tags) reads back the same way.
+        EvalTurnTrace legacy = mapper.readValue(PRE_SCOPE_PAYLOAD, EvalTurnTrace.class);
+        String withScope = mapper.writeValueAsString(new EvalTurnTrace(
+                legacy.turnId(),
+                legacy.startedAt(),
+                legacy.completedAt(),
+                legacy.expiresAt(),
+                legacy.userId(),
+                legacy.username(),
+                legacy.role(),
+                legacy.userMessage(),
+                legacy.simpleChat(),
+                legacy.intent(),
+                legacy.modelTier(),
+                legacy.workflowState(),
+                legacy.selectedTools(),
+                legacy.systemPrompt(),
+                legacy.offeredTools(),
+                legacy.toolCalls(),
+                legacy.finalResponse(),
+                legacy.error(),
+                legacy.serverBuild(),
+                legacy.answerSource(),
+                legacy.conversationId(),
+                legacy.messageId(),
+                null));
+        assertThat(mapper.readValue(withScope, EvalTurnTrace.class).tags()).isNull();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0068: a current payload round-trips its tags, which hold names, values and confidences and no text")
+    void aCurrentPayloadRoundTripsItsTags() throws Exception {
+        EvalTurnTrace legacy = mapper.readValue(PRE_SCOPE_PAYLOAD, EvalTurnTrace.class);
+        TagTrace tags = new TagTrace(
+                "SHADOW",
+                java.util.List.of(),
+                "tev1:0.8b",
+                212L,
+                null,
+                false,
+                java.util.List.of(
+                        new TagTrace.TagEntry("simple_chat", "false", "HEURISTIC", "false", "false", 0.93, true),
+                        new TagTrace.TagEntry(
+                                "workflow_state", "IDLE", "HEURISTIC", "IDLE", "CREATING_PO", 0.81, false),
+                        new TagTrace.TagEntry("entity_1", null, null, null, "work-order", 0.88, null)));
+        EvalTurnTrace stamped = new EvalTurnTrace(
+                legacy.turnId(),
+                legacy.startedAt(),
+                legacy.completedAt(),
+                legacy.expiresAt(),
+                legacy.userId(),
+                legacy.username(),
+                legacy.role(),
+                legacy.userMessage(),
+                legacy.simpleChat(),
+                legacy.intent(),
+                legacy.modelTier(),
+                legacy.workflowState(),
+                legacy.selectedTools(),
+                legacy.systemPrompt(),
+                legacy.offeredTools(),
+                legacy.toolCalls(),
+                legacy.finalResponse(),
+                legacy.error(),
+                legacy.serverBuild(),
+                legacy.answerSource(),
+                legacy.conversationId(),
+                legacy.messageId(),
+                null,
+                tags);
+
+        String json = mapper.writeValueAsString(stamped);
+        EvalTurnTrace roundTripped = mapper.readValue(json, EvalTurnTrace.class);
+
+        assertThat(roundTripped.tags()).isEqualTo(tags);
+        assertThat(roundTripped).isEqualTo(stamped);
+        String tagsJson = mapper.writeValueAsString(tags);
+        assertThat(tagsJson)
+                .contains("\"mode\":\"SHADOW\"")
+                .contains("\"providerModel\":\"tev1:0.8b\"")
+                .contains("\"name\":\"workflow_state\"")
+                .contains("\"modelValue\":\"CREATING_PO\"")
+                .contains("\"agree\":false")
+                // The identifier the user typed is in the trace's userMessage, never in its tags.
+                .doesNotContain("WO-20391");
+    }
 }

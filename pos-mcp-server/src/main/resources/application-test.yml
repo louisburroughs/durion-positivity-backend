@@ -30,3 +30,6 @@ eureka:
 mcp:
   scope-graph:
     mode: "off"
+  # ADR-0068: no test context calls the tagging provider (quoted for the same reason).
+  tagging:
+    mode: "off"

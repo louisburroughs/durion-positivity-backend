@@ -16,6 +16,10 @@ import org.jspecify.annotations.Nullable;
  * <p>{@code scope} (ADR-0069 §9) is the turn's scope resolution in {@code shadow} and {@code
  * enforce}; it is null in mode {@code off}, on the simple-chat path, and in every payload written
  * before it existed.
+ *
+ * <p>{@code tags} (ADR-0068 §6) is the turn's question tagging: both taggers' answers and their
+ * agreement in {@code shadow} and {@code enforce}, the heuristic answers alone in {@code off}; null in
+ * every payload written before it existed.
  */
 public record EvalTurnTrace(
         @NonNull UUID turnId,
@@ -40,12 +44,65 @@ public record EvalTurnTrace(
         @Nullable String answerSource,
         @Nullable UUID conversationId,
         @Nullable UUID messageId,
-        @Nullable ScopeTrace scope) {
+        @Nullable ScopeTrace scope,
+        @Nullable TagTrace tags) {
 
     public EvalTurnTrace {
         selectedTools = List.copyOf(selectedTools);
         offeredTools = List.copyOf(offeredTools);
         toolCalls = List.copyOf(toolCalls);
+    }
+
+    /** The pre-ADR-0068 shape: a scope, no tags. */
+    public EvalTurnTrace(
+            @NonNull UUID turnId,
+            @NonNull Instant startedAt,
+            @NonNull Instant completedAt,
+            @NonNull Instant expiresAt,
+            @NonNull UUID userId,
+            @NonNull String username,
+            @NonNull String role,
+            @NonNull String userMessage,
+            @Nullable Boolean simpleChat,
+            @Nullable String intent,
+            @Nullable String modelTier,
+            @Nullable String workflowState,
+            @NonNull List<String> selectedTools,
+            @Nullable String systemPrompt,
+            @NonNull List<ToolDefinitionTrace> offeredTools,
+            @NonNull List<ToolCallTrace> toolCalls,
+            @Nullable String finalResponse,
+            @Nullable String error,
+            @Nullable String serverBuild,
+            @Nullable String answerSource,
+            @Nullable UUID conversationId,
+            @Nullable UUID messageId,
+            @Nullable ScopeTrace scope) {
+        this(
+                turnId,
+                startedAt,
+                completedAt,
+                expiresAt,
+                userId,
+                username,
+                role,
+                userMessage,
+                simpleChat,
+                intent,
+                modelTier,
+                workflowState,
+                selectedTools,
+                systemPrompt,
+                offeredTools,
+                toolCalls,
+                finalResponse,
+                error,
+                serverBuild,
+                answerSource,
+                conversationId,
+                messageId,
+                scope,
+                null);
     }
 
     /** The pre-ADR-0069 shape: no scope. */
@@ -95,6 +152,7 @@ public record EvalTurnTrace(
                 answerSource,
                 conversationId,
                 messageId,
+                null,
                 null);
     }
 
@@ -141,6 +199,7 @@ public record EvalTurnTrace(
                 error,
                 serverBuild,
                 answerSource,
+                null,
                 null,
                 null,
                 null);

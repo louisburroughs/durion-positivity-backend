@@ -32,6 +32,9 @@ mcp:
     # false).
     scope-graph:
         mode: "off"
+    # ADR-0068: no test context calls the tagging provider (quoted for the same reason).
+    tagging:
+        mode: "off"
 
 pos:
     # Point the event-type initializer at an unroutable loopback port: the test profile has no

@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.telemetry;
 
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Actor;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Latency;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Model;
@@ -7,6 +8,7 @@ import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Outcome;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.PromptLayer;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Rag;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Routing;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Tagging;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Tier;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Tools;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Write;
@@ -81,6 +83,43 @@ public final class NltiRequestTelemetryFactory {
             int docCount,
             int addedToolCount,
             boolean ragFilterApplied) {}
+
+    /**
+     * The ADR-0068 tagging of one chat request (schema version 3), built from the turn's record.
+     * Never built from {@link QuestionTags#none()}: a turn that did not tag carries no block.
+     */
+    public record TaggingSignal(
+            @NonNull String mode,
+            @Nullable String providerModel,
+            @Nullable Long latencyMs,
+            @Nullable String fallbackReason,
+            @Nullable Double agreementRate,
+            @NonNull String intent,
+            @NonNull String risk,
+            @NonNull String complexity,
+            @NonNull String domain,
+            @NonNull String workflowState,
+            boolean simpleChat) {
+
+        /** The signal of {@code tags}, or null for {@link QuestionTags#none()}. */
+        public static @Nullable TaggingSignal of(@Nullable QuestionTags tags) {
+            if (tags == null || tags.isNone()) {
+                return null;
+            }
+            return new TaggingSignal(
+                    tags.mode().name(),
+                    tags.providerModel(),
+                    tags.latencyMs(),
+                    tags.fallbackReason() == null ? null : tags.fallbackReason().wireName(),
+                    tags.agreementRate().isPresent() ? tags.agreementRate().getAsDouble() : null,
+                    tags.intent().name(),
+                    tags.risk().name(),
+                    tags.complexity().name(),
+                    tags.domain(),
+                    tags.workflowState().name(),
+                    tags.simpleChat());
+        }
+    }
 
     /** As the full overload, without Gate 4 tier routing or Gate 6 write signals. */
     public static @NonNull NltiRequestTelemetry forChatRequest(
@@ -162,7 +201,7 @@ public final class NltiRequestTelemetryFactory {
     /**
      * As above, with the request's ADR-0069 scope resolution. {@code scope} is null whenever no scope
      * was resolved (mode {@code off}, simple chat, a failed request), and the eight {@code scope*}
-     * fields are then absent from the event rather than zero-filled.
+     * fields are then absent from the event rather than zero-filled. Pre-ADR-0068 shape: no tagging.
      */
     public static @NonNull NltiRequestTelemetry forChatRequest(
             @NonNull String correlationId,
@@ -181,26 +220,76 @@ public final class NltiRequestTelemetryFactory {
             @Nullable TierRouting tierRouting,
             boolean writeCapableToolsPresent,
             @Nullable ScopeSignal scope) {
+        return forChatRequest(
+                correlationId,
+                timestamp,
+                primaryRole,
+                permissionCodeCount,
+                selectedToolNames,
+                discoveredOpenapiTools,
+                promptLayers,
+                simpleChat,
+                simpleChatRule,
+                workflowState,
+                totalMs,
+                status,
+                errorCode,
+                tierRouting,
+                writeCapableToolsPresent,
+                scope,
+                null);
+    }
+
+    /**
+     * As above, with the request's ADR-0068 tagging (schema version 3). {@code tagging} is null when
+     * the turn did not tag (a failure before tagging, {@link QuestionTags#none()}); the {@code
+     * tagging} block is then absent. When present, the {@link Routing} block's classification fields
+     * are filled from the acting tag values unless the Gate 4 router ran, whose decision wins (§7:
+     * in Wave 2 the router itself reads the tags, so the two agree).
+     */
+    public static @NonNull NltiRequestTelemetry forChatRequest(
+            @NonNull String correlationId,
+            @NonNull String timestamp,
+            @NonNull String primaryRole,
+            int permissionCodeCount,
+            @NonNull List<String> selectedToolNames,
+            @NonNull List<String> discoveredOpenapiTools,
+            @NonNull List<String> promptLayers,
+            boolean simpleChat,
+            @Nullable String simpleChatRule,
+            @Nullable String workflowState,
+            long totalMs,
+            @NonNull String status,
+            @Nullable String errorCode,
+            @Nullable TierRouting tierRouting,
+            boolean writeCapableToolsPresent,
+            @Nullable ScopeSignal scope,
+            @Nullable TaggingSignal tagging) {
 
         Actor actor = new Actor(primaryRole, permissionCodeCount);
 
         // Tier-0 rule path short-circuits before the Gate 4 router; the tool path carries the router
-        // decision (when it ran) and the resolved workflow state (Gate 2C). Routing is omitted only
-        // when none of the signals apply.
+        // decision (when it ran) and the resolved workflow state (Gate 2C). Since ADR-0068 the acting
+        // tag values fill the classification fields whenever the turn tagged; routing is omitted
+        // only when none of the signals apply.
+        String intentType =
+                tierRouting != null ? tierRouting.intentType() : (tagging != null ? tagging.intent() : null);
+        String riskLevel = tierRouting != null ? tierRouting.riskLevel() : (tagging != null ? tagging.risk() : null);
+        String domain = tierRouting != null ? tierRouting.domain() : (tagging != null ? tagging.domain() : null);
+        String complexity =
+                tierRouting != null ? tierRouting.complexity() : (tagging != null ? tagging.complexity() : null);
+        String routedWorkflowState = workflowState != null
+                ? workflowState
+                : (tagging != null && !simpleChat ? tagging.workflowState() : null);
         Routing routing;
         if (simpleChat) {
-            routing = new Routing(null, null, null, null, Tier.T0_RULE, simpleChatRule, workflowState);
+            routing =
+                    new Routing(intentType, riskLevel, domain, complexity, Tier.T0_RULE, simpleChatRule, workflowState);
         } else if (tierRouting != null) {
             routing = new Routing(
-                    tierRouting.intentType(),
-                    tierRouting.riskLevel(),
-                    tierRouting.domain(),
-                    tierRouting.complexity(),
-                    tierRouting.tier(),
-                    null,
-                    workflowState);
-        } else if (workflowState != null) {
-            routing = new Routing(null, null, null, null, null, null, workflowState);
+                    intentType, riskLevel, domain, complexity, tierRouting.tier(), null, routedWorkflowState);
+        } else if (routedWorkflowState != null || tagging != null) {
+            routing = new Routing(intentType, riskLevel, domain, complexity, null, null, routedWorkflowState);
         } else {
             routing = null;
         }
@@ -259,7 +348,21 @@ public final class NltiRequestTelemetryFactory {
                 scope == null ? null : scope.toolCount(),
                 scope == null ? null : scope.docCount(),
                 scope == null ? null : scope.addedToolCount(),
-                scope == null ? null : scope.ragFilterApplied());
+                scope == null ? null : scope.ragFilterApplied(),
+                tagging == null
+                        ? null
+                        : new Tagging(
+                                tagging.mode(),
+                                tagging.providerModel(),
+                                tagging.latencyMs(),
+                                tagging.fallbackReason(),
+                                tagging.agreementRate(),
+                                tagging.intent(),
+                                tagging.risk(),
+                                tagging.complexity(),
+                                tagging.domain(),
+                                tagging.workflowState(),
+                                tagging.simpleChat()));
     }
 
     /**
@@ -324,6 +427,8 @@ public final class NltiRequestTelemetryFactory {
                 null,
                 null,
                 null,
+                null,
+                // Nor does it tag (ADR-0068).
                 null);
     }
 

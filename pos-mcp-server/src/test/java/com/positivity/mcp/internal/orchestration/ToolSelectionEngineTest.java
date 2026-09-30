@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.config.ScopeGraphProperties;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
@@ -20,6 +21,7 @@ import com.positivity.mcp.internal.scopegraph.ScopeResolver;
 import com.positivity.mcp.internal.scopegraph.ScopeResolverFixtures;
 import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import com.positivity.mcp.internal.service.ToolRegistryService;
+import com.positivity.mcp.internal.service.ToolRegistryService.CandidateSelection;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -106,8 +108,8 @@ class ToolSelectionEngineTest {
                 "inventoryFacadeTool");
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(inventoryTool));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of(inventoryTool)));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
 
         ToolSelectionEngine.ToolSelectionResult result =
@@ -117,7 +119,7 @@ class ToolSelectionEngineTest {
         assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, glossaryFacadeTool, inventoryFacadeTool);
 
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3));
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
         assertThat(contextCaptor.getValue().permissionCodes()).isEqualTo(PERMISSION_CODES);
     }
@@ -137,8 +139,8 @@ class ToolSelectionEngineTest {
     void selectRoleTools_alwaysOffersTheDateWindowToolForADatedQuestion() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of());
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
 
         ToolSelectionEngine.ToolSelectionResult result = toolSelectionEngine.selectRoleTools(
                 "ROLE_ADMIN",
@@ -158,8 +160,8 @@ class ToolSelectionEngineTest {
     void selectRoleTools_offersTheDateWindowToolAcrossCalendarVocabulary() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of());
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
 
         for (String question : List.of(
                 "revenue over the last twelve months",
@@ -193,8 +195,8 @@ class ToolSelectionEngineTest {
     void selectRoleTools_offersTheDateWindowToolForAWindowlessMetricQuestion() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of());
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
 
         for (String question : List.of(
                 "Who are our ten largest customers by revenue?",
@@ -220,8 +222,8 @@ class ToolSelectionEngineTest {
     void selectRoleTools_withholdsTheDateWindowToolWhenNoWindowIsAsked() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of());
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
 
         // Near misses, not just an obviously undated question: each of these was pulled in by a
         // token the set used to carry. "recent"/"recently"/"lately" are the very phrases the
@@ -260,35 +262,103 @@ class ToolSelectionEngineTest {
     void selectRoleTools_derivesCreatingPoWorkflow() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of());
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
 
         toolSelectionEngine.selectRoleTools(
                 "ROLE_ADMIN", PERMISSION_CODES, "create PO for vendor NAPA with two line items");
 
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3));
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("CREATING_PO");
     }
 
     @Test
-    @DisplayName("empty gated set keeps keyword fallbacks but no role tools (#1606)")
-    void selectRoleTools_emptyGatedSet_keepsKeywordFallbacksOnly() {
+    @DisplayName("empty gated set keeps the master and glossary fallbacks but no role tools (#1606, ADR-0068 §2)")
+    void selectRoleTools_emptyGatedSet_keepsUngatedFallbacksOnly() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of());
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(CandidateSelection.EMPTY);
 
         ToolSelectionEngine.ToolSelectionResult result =
                 toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "latest internet sales report");
 
-        // #1606: roleTools now fail closed on an empty gated set — the ungated domain set is no
-        // longer substituted. Keyword fallbacks are a separate list and still populate, so the
-        // assistant keeps web search rather than going mute.
+        // #1606: roleTools fail closed on an empty gated set — the ungated domain set is no longer
+        // substituted. ADR-0068 §2: the keyword tags fire (web, orders, date window) but a caller who
+        // holds no permission group for any tool is offered none of the tag-added facades either; the
+        // master tools and the glossary (no permission row, no HTTP call) still populate.
         assertThat(result.roleTools()).isEmpty();
-        // #1840: "sales report" is a metric question, so the date-window resolver is pinned too.
+        assertThat(result.fallbackTools()).containsExactlyInAnyOrder(exaWebSearchTool, glossaryFacadeTool);
+    }
+
+    @Test
+    @DisplayName("ADR-0068 §2: a tag-added facade the caller's gated set lacks is withheld")
+    void selectRoleTools_withholdsTagAddedFacadesOutsideTheGatedSet() {
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
+                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        // The caller may use the inventory tool but not the order or date-window facades.
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(new CandidateSelection(List.of(), Set.of("InventoryFacadeTool"), false));
+
+        ToolSelectionEngine.ToolSelectionResult result = toolSelectionEngine.selectRoleTools(
+                "ROLE_ADMIN", PERMISSION_CODES, "how many sales orders for sku 4411 did we ship last month");
+
         assertThat(result.fallbackTools())
-                .containsExactlyInAnyOrder(exaWebSearchTool, glossaryFacadeTool, dateWindowFacadeTool, orderFacadeTool);
+                .containsExactlyInAnyOrder(exaWebSearchTool, glossaryFacadeTool, inventoryFacadeTool)
+                .doesNotContain(orderFacadeTool, dateWindowFacadeTool);
+    }
+
+    @Test
+    @DisplayName("ADR-0068 §2: without a ToolRegistryService the gated set is unknown and only the glossary is added")
+    void selectRoleTools_noRegistryService_addsOnlyTheGlossary() {
+        ToolSelectionEngine unwired = new ToolSelectionEngine(
+                toolRegistry,
+                dateWindowFacadeTool,
+                glossaryFacadeTool,
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                null,
+                sharedOrchestrationSupport,
+                3);
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN")).thenReturn(new ArrayList<>(List.of(orderFacadeTool)));
+
+        ToolSelectionEngine.ToolSelectionResult result =
+                unwired.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "sales revenue last month by store");
+
+        assertThat(result.fallbackTools()).containsExactlyInAnyOrder(exaWebSearchTool, glossaryFacadeTool);
+    }
+
+    @Test
+    @DisplayName("ADR-0068 §2: when the ranked path fails closed nothing tag-driven is added")
+    void selectRoleTools_gatingQueryThrows_addsOnlyTheGlossary() {
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN")).thenReturn(new ArrayList<>(List.of(orderFacadeTool)));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenThrow(new IllegalStateException("bad SQL grammar [permission_group]"));
+
+        ToolSelectionEngine.ToolSelectionResult result = toolSelectionEngine.selectRoleTools(
+                "ROLE_ADMIN", PERMISSION_CODES, "sales revenue last month by store");
+
+        assertThat(result.roleTools()).isEmpty();
+        assertThat(result.fallbackTools()).containsExactlyInAnyOrder(exaWebSearchTool, glossaryFacadeTool);
+    }
+
+    @Test
+    @DisplayName("ADR-0068 spec §2.5: QuestionTags.none() selects on IDLE and adds only the glossary")
+    void selectRoleTools_noneTags_isTheWarmUpShape() {
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN")).thenReturn(new ArrayList<>(List.of(orderFacadeTool)));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
+
+        ToolSelectionEngine.ToolSelectionResult result = toolSelectionEngine.selectRoleTools(
+                "ROLE_ADMIN", PERMISSION_CODES, "create po for sales last month", QuestionTags.none());
+
+        assertThat(result.workflowState()).isEqualTo(WorkflowState.IDLE);
+        assertThat(result.fallbackTools()).containsExactlyInAnyOrder(exaWebSearchTool, glossaryFacadeTool);
+        ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
+        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3));
+        assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
     }
 
     @Test
@@ -300,8 +370,8 @@ class ToolSelectionEngineTest {
         // gate now matches no permission group.
         when(toolRegistry.resolveDomainTools("ROLE_TECHNICIAN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of());
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
 
         ToolSelectionEngine.ToolSelectionResult result =
                 toolSelectionEngine.selectRoleTools("ROLE_TECHNICIAN", PERMISSION_CODES, "show me customer history");
@@ -317,7 +387,7 @@ class ToolSelectionEngineTest {
         // would silently revert authorisation from perm_bits to roles.
         when(toolRegistry.resolveDomainTools("ROLE_TECHNICIAN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
                 .thenThrow(new IllegalStateException("bad SQL grammar [permission_group]"));
 
         ToolSelectionEngine.ToolSelectionResult result =
@@ -342,8 +412,8 @@ class ToolSelectionEngineTest {
                 "ghostFacadeTool");
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(ghost));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of(ghost)));
         when(toolRegistry.resolveToolsByName(List.of("ghostFacadeTool"))).thenReturn(List.of());
 
         ToolSelectionEngine.ToolSelectionResult result =
@@ -378,6 +448,8 @@ class ToolSelectionEngineTest {
         // and ReportingPeriods now rejects a missing range by telling the model to call
         // resolveNamedPeriod. If the tool is not offered for exactly this wording, that instruction
         // names a tool the model does not have and the turn dead-ends.
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
         ToolSelectionEngine.ToolSelectionResult result =
                 toolSelectionEngine.selectRoleTools("ROLE_USER", Set.of(), message);
 
@@ -415,9 +487,21 @@ class ToolSelectionEngineTest {
                 "inventoryFacadeTool");
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(inventoryTool));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of(inventoryTool)));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
+    }
+
+    /** Every facade this engine may add is in the caller's gated set, beside the ranked candidates. */
+    private static CandidateSelection gated(List<ToolMetadata> candidates) {
+        Set<String> names = new java.util.HashSet<>(Set.of(
+                "DateWindowFacadeTool",
+                "ExaWebSearchTool",
+                "GlossaryFacadeTool",
+                "InventoryFacadeTool",
+                "OrderFacadeTool"));
+        candidates.forEach(candidate -> names.add(candidate.name()));
+        return new CandidateSelection(candidates, names, false);
     }
 
     private static ScopeResolver scopeResolver(ScopeGraphProperties properties) {
@@ -471,7 +555,7 @@ class ToolSelectionEngineTest {
         assertThat(result.scope().facadeTools()).isEmpty();
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(shadow, toolRegistryService);
         order.verify(shadow).resolve(SCOPE_MESSAGE, SCOPE_CODES, WorkflowState.CREATING_PO);
-        order.verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
+        order.verify(toolRegistryService).resolveCandidateSelection(any(ToolSelectionContext.class), eq(3));
     }
 
     @Test
@@ -515,7 +599,7 @@ class ToolSelectionEngineTest {
                         sharedOrchestrationSupport.mergeTools(off.roleTools(), off.fallbackTools())));
         // The ranking was asked the same question both times.
         ArgumentCaptor<ToolSelectionContext> contexts = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService, org.mockito.Mockito.times(2)).resolveCandidateTools(contexts.capture(), eq(3));
+        verify(toolRegistryService, org.mockito.Mockito.times(2)).resolveCandidateSelection(contexts.capture(), eq(3));
         assertThat(contexts.getAllValues().get(1))
                 .isEqualTo(contexts.getAllValues().get(0));
     }

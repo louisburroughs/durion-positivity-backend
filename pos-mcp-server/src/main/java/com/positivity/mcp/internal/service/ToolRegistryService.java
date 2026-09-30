@@ -321,7 +321,18 @@ public class ToolRegistryService {
         return adminTools;
     }
 
-    private @NonNull Set<String> matchedAdminQueryTerms(@NonNull String userInput) {
+    /**
+     * ADR-0068 §1, {@code admin_account_question}: the heuristic value the fast path fires on, an
+     * admin keyword or phrase matched and no veto term, read here by {@code HeuristicQuestionTagger}
+     * so the three lists stay in this class (ADR-0068 §1 placement). The fast path itself is
+     * unchanged in Wave 1 and still decides from the same lists.
+     */
+    public static boolean isAdminAccountQuestion(@NonNull String userInput) {
+        return !matchedAdminQueryTerms(userInput).isEmpty()
+                && matchedVetoTerms(userInput).isEmpty();
+    }
+
+    private static @NonNull Set<String> matchedAdminQueryTerms(@NonNull String userInput) {
         String normalized = userInput.toLowerCase(Locale.ROOT);
         Set<String> matches = new TreeSet<>();
         for (String keyword : ADMIN_QUERY_KEYWORDS) {
@@ -337,7 +348,7 @@ public class ToolRegistryService {
         return matches;
     }
 
-    private @NonNull Set<String> matchedVetoTerms(@NonNull String userInput) {
+    private static @NonNull Set<String> matchedVetoTerms(@NonNull String userInput) {
         String normalized = userInput.toLowerCase(Locale.ROOT);
         Set<String> matches = new TreeSet<>();
         for (String term : FAST_PATH_VETO_TERMS) {

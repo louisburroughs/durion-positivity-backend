@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
@@ -20,7 +21,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -33,114 +33,6 @@ import org.springframework.stereotype.Component;
 public class ToolSelectionEngine {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolSelectionEngine.class);
-
-    /**
-     * Vocabulary that makes a question a dated one, and so makes {@code resolveDateWindow}
-     * mandatory rather than merely likely (#1684). Broad on purpose: the tool is additive to the
-     * semantic top-K rather than competing for a slot in it, so a false positive costs one tool
-     * schema in the prompt while a false negative costs the whole date-window contract — the
-     * DATE_WINDOW layer would be instructing the model to call a tool it cannot see, leaving it to
-     * compute the dates itself, which is the failure #1675 and #1684 exist to remove.
-     *
-     * <p>Broad is not unbounded, and the schema is not free: this tool's description and parameters
-     * are roughly 440 tokens, more than the ~305 the #1684 prompt-layer shrink saves. On a question
-     * that matches a token but needs no window the assembled prompt is therefore <em>larger</em>
-     * than before, which is the opposite of what the shrink was for. So a token earns its place only
-     * by naming a window the resolver can actually resolve. Four were cut on that test: {@code
-     * recent}, {@code recently} and {@code lately} are the phrases the layer itself singles out as
-     * having no conventional reading and tells the model to ask about, so offering a resolver for
-     * them is incoherent (and {@code recent} already pulls in the web-search tool below, making two
-     * extra schemas); {@code period} is accounting vocabulary far more often than it is a window,
-     * and it names the {@code period} shortcut that is a shape bypass rather than a resolver call.
-     */
-    private static final List<Pattern> DATE_WINDOW_WORD_PATTERNS = compileWordPatterns(Set.of(
-            "annual",
-            "daily",
-            "day",
-            "days",
-            "month",
-            "monthly",
-            "months",
-            "mtd",
-            "quarter",
-            "quarterly",
-            "quarters",
-            "qtd",
-            "since",
-            "today",
-            "week",
-            "weekly",
-            "weeks",
-            "year",
-            "yearly",
-            "years",
-            "yesterday",
-            "ytd"));
-
-    /**
-     * Vocabulary of a metric question that names no window at all (#1840). The DATE_WINDOW layer
-     * tells the model that a windowless report question still has a window — the contract's default
-     * — and to resolve it, so "who are our ten largest customers by revenue?" is a dated question
-     * even though it contains none of the words above. On the 2026-09-06 sequences run that exact
-     * question lost {@code resolveDateWindow} to the candidate cut and the model called the tool it
-     * could not see. A metric word earns its place here when the prompt would send the model to the
-     * resolver for it; the near misses guarded by the test suite ("phone number for NAPA", "recent
-     * notes on this vehicle") name no metric and stay out.
-     */
-    private static final List<Pattern> IMPLIED_WINDOW_WORD_PATTERNS = compileWordPatterns(Set.of(
-            "average",
-            "avg",
-            "billed",
-            "biggest",
-            "collected",
-            "count",
-            "growth",
-            "invoiced",
-            "largest",
-            "least",
-            "margin",
-            "most",
-            "payables",
-            "profit",
-            "rank",
-            "ranking",
-            "receivables",
-            "revenue",
-            "sales",
-            "spend",
-            "spending",
-            "spent",
-            "top",
-            "total",
-            "totals",
-            "trend"));
-
-    /**
-     * Vocabulary that names an ABSOLUTE period rather than a relative one — a four-digit year, a
-     * calendar quarter, or a month name (#1684).
-     *
-     * <p>These were not in {@link #DATE_WINDOW_WORD_PATTERNS} because when that list was written the
-     * only resolver expressed relative shapes, so a bare "2025" named no window it could resolve —
-     * which is the exact test that list applies. {@code resolveNamedPeriod} changed that: "in 2025",
-     * "Q3 2026" and "July 2026" are now resolvable, so the tokens earn their place under the same
-     * rule rather than in spite of it.
-     *
-     * <p>Adding them is load-bearing, not tidying. Removing the {@code period} shortcut made a
-     * resolver call mandatory before any dated report call, and {@code ReportingPeriods} now hard
-     * rejects a missing range with a message telling the model to call {@code resolveNamedPeriod}.
-     * Without these tokens "what did we spend with Michelin in 2025?" matches nothing here, the
-     * resolver is left to compete in the embedding ranking (which this class already documents it
-     * can lose), and the turn can dead-end being told to call a tool it was never offered — in
-     * precisely the case {@code resolveNamedPeriod} exists to serve.
-     */
-    private static final List<Pattern> NAMED_PERIOD_PATTERNS = List.of(
-            Pattern.compile("\\b(?:19|20)\\d{2}\\b"),
-            Pattern.compile("\\bq[1-4]\\b"),
-            Pattern.compile("\\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)"
-                    + "(?:uary|ruary|ch|il|e|y|ust|tember|ober|ember)?\\b"));
-
-    /** Multi-word date vocabulary, matched as plain substrings rather than on word boundaries. */
-    private static final Set<String> DATE_WINDOW_PHRASES = Set.of("to date", "so far this");
 
     private final MasterAgentRegistry toolRegistry;
     private final DateWindowFacadeTool dateWindowFacadeTool;
@@ -163,6 +55,16 @@ public class ToolSelectionEngine {
     @Nullable
     private volatile ScopeConsumers scopeConsumers;
 
+    /**
+     * ADR-0068 §1: the per-turn tagging step. Absent in hand-built constructions, where {@link #tag}
+     * answers with the heuristic tagger below (no provider is ever called).
+     */
+    @Nullable
+    private volatile TaggingService taggingService;
+
+    /** ADR-0068 §2: the heuristic tagger the legacy overloads and the unwired engine tag with. */
+    private volatile HeuristicQuestionTagger heuristicTagger = HeuristicQuestionTagger.withDefaultCatalog();
+
     public ToolSelectionEngine(
             @NonNull MasterAgentRegistry toolRegistry,
             @NonNull DateWindowFacadeTool dateWindowFacadeTool,
@@ -184,29 +86,78 @@ public class ToolSelectionEngine {
         this.candidateToolLimit = Math.max(1, candidateToolLimit);
     }
 
+    /**
+     * ADR-0068 §1: the one tagging call of a chat turn. Both session managers call it once, ahead of
+     * {@code isSimpleChat} and {@code routeTier}, and pass the record on to every consumer; nothing
+     * downstream re-derives a tag from the message. Without a wired {@link TaggingService} (hand-built
+     * engines, contexts without the tagging beans) the heuristic tagger answers and no provider is
+     * called.
+     */
+    public @NonNull QuestionTags tag(@NonNull String message) {
+        TaggingService service = taggingService;
+        return service == null ? heuristicTagger.tag(message) : service.tag(message);
+    }
+
+    /** The heuristic record alone, for the overloads that predate the seam: never a provider call. */
+    private @NonNull QuestionTags heuristicTags(@NonNull String message) {
+        TaggingService service = taggingService;
+        return service == null ? heuristicTagger.tag(message) : service.heuristicOnly(message);
+    }
+
+    /**
+     * The pre-ADR-0068 session-less entry point: tags with the heuristics alone and selects on them.
+     * Kept for callers and tests that never tagged; the managers call {@link #tag} and the {@link
+     * QuestionTags} overloads.
+     */
     public @NonNull ToolSelectionResult selectRoleTools(
             @NonNull String role, @NonNull Set<String> permissionCodes, @NonNull String message) {
-        // Session-less callers (e.g. /v1/mcp/chat) fall back to message-heuristic derivation.
-        return selectRoleTools(role, permissionCodes, message, deriveWorkflowState(message));
+        return selectRoleTools(role, permissionCodes, message, heuristicTags(message));
     }
 
     /**
      * Gate 2C: workflow-state-aware selection. {@code workflowState} is an explicit input so a
      * session-bearing caller can supply the persisted {@code NltiSession} state rather than relying
-     * on message-text heuristics.
+     * on message-text heuristics. Pre-ADR-0068 shape: tags with the heuristics alone.
      */
     public @NonNull ToolSelectionResult selectRoleTools(
             @NonNull String role,
             @NonNull Set<String> permissionCodes,
             @NonNull String message,
             @NonNull WorkflowState workflowState) {
+        return selectRoleTools(role, permissionCodes, message, workflowState, heuristicTags(message));
+    }
+
+    /**
+     * ADR-0068 §3.3: a session-less caller's workflow state is the {@code workflow_state} tag's acting
+     * value ({@link WorkflowState#DEFAULT} for {@link QuestionTags#none()}); a persisted {@code
+     * NltiSession} state goes through the {@link WorkflowState} overload and is never overridden.
+     */
+    public @NonNull ToolSelectionResult selectRoleTools(
+            @NonNull String role,
+            @NonNull Set<String> permissionCodes,
+            @NonNull String message,
+            @NonNull QuestionTags tags) {
+        return selectRoleTools(role, permissionCodes, message, tags.workflowState(), tags);
+    }
+
+    /**
+     * The selection every path ends in. {@code tags} is the turn's record from {@link #tag}; every
+     * decision this class used to take from the message (workflow state for session-less callers,
+     * keyword-added facades) is read from it (ADR-0068 §1).
+     */
+    public @NonNull ToolSelectionResult selectRoleTools(
+            @NonNull String role,
+            @NonNull Set<String> permissionCodes,
+            @NonNull String message,
+            @NonNull WorkflowState workflowState,
+            @NonNull QuestionTags tags) {
         // ADR-0069 §5: the scope is resolved here, once the workflow state is known and before tool
         // ranking, because this is the one selection entry point both session managers call. The
         // only consumer that reads it here is the facade slot step (§6), and only when enforced.
         ScopeSet scope = resolveScope(message, permissionCodes, workflowState);
         RankedRoleTools ranked = roleToolsForMessage(role, permissionCodes, message, workflowState, scope);
         List<Object> fallbackTools = sharedOrchestrationSupport.mergeTools(
-                toolRegistry.resolveMasterTools(), fallbackToolsForMessage(message));
+                toolRegistry.resolveMasterTools(), fallbackToolsForTags(tags, ranked.gatedToolNames()));
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
                     "MCP shared tool selection role={} permissionCodes={} workflowState={} roleTools={} scopeAddedTools={} fallbackTools={} queryPreview=\"{}\"",
@@ -239,6 +190,26 @@ public class ToolSelectionEngine {
         this.scopeConsumers = scopeConsumers;
     }
 
+    /**
+     * ADR-0068 §1: wires the tagging step. Setter-injected and optional for the same reason as the
+     * scope resolver; without it {@link #tag} answers with the heuristic tagger.
+     */
+    @Autowired(required = false)
+    public void setTaggingService(@Nullable TaggingService taggingService) {
+        this.taggingService = taggingService;
+    }
+
+    /**
+     * The heuristic tagger of this context (its simple-chat classifier reads the live rule catalog);
+     * a hand-built engine keeps the one over the shipped catalog.
+     */
+    @Autowired(required = false)
+    public void setHeuristicTagger(@Nullable HeuristicQuestionTagger heuristicTagger) {
+        if (heuristicTagger != null) {
+            this.heuristicTagger = heuristicTagger;
+        }
+    }
+
     /** Null when no resolver is wired or the mode is {@code off}: the turn has no scope at all. */
     private @Nullable ScopeSet resolveScope(
             @NonNull String message, @NonNull Set<String> permissionCodes, @NonNull WorkflowState workflowState) {
@@ -258,7 +229,7 @@ public class ToolSelectionEngine {
     }
 
     /**
-     * The message-independent superset of {@link #fallbackToolsForMessage}, for the role-level agent
+     * The message-independent superset of {@link #fallbackToolsForTags}, for the role-level agent
      * paths that build before a question exists (cache warm-up, {@code getOrCreateAgent}). Every
      * keyword-addable tool belongs here precisely because there is no keyword to match on yet —
      * omitting {@code dateWindowFacadeTool} would leave those agents unable to resolve a window at
@@ -282,11 +253,21 @@ public class ToolSelectionEngine {
      * @param tools the ranked cut's beans, with the scope-added facades (if any) appended after them
      * @param scopeAddedTools the {@code mcp_tool.name}s the scope added, in slot order; empty unless
      *     the {@code tools} consumer acted
+     * @param gatedToolNames ADR-0068 §2: the caller's permission-gated set by {@code mcp_tool.name},
+     *     which the tag-added facades are intersected with; null when it is unavailable (no {@code
+     *     ToolRegistryService}, or the ranked path failed closed), in which case nothing tag-driven is
+     *     added
      */
     private record RankedRoleTools(
-            @NonNull List<Object> tools, @NonNull List<String> scopeAddedTools) {
-        private static RankedRoleTools of(List<Object> tools) {
-            return new RankedRoleTools(tools, List.of());
+            @NonNull List<Object> tools,
+            @NonNull List<String> scopeAddedTools,
+            @Nullable Set<String> gatedToolNames) {
+        private static RankedRoleTools unavailable(List<Object> tools) {
+            return new RankedRoleTools(tools, List.of(), null);
+        }
+
+        private static RankedRoleTools of(List<Object> tools, Set<String> gatedToolNames) {
+            return new RankedRoleTools(tools, List.of(), gatedToolNames);
         }
     }
 
@@ -299,7 +280,7 @@ public class ToolSelectionEngine {
         List<Object> fullRoleTools = toolRegistry.resolveDomainTools(role);
         if (toolRegistryService == null) {
             logToolSelectorUnavailable(role, permissionCodes, message, fullRoleTools);
-            return RankedRoleTools.of(fullRoleTools);
+            return RankedRoleTools.unavailable(fullRoleTools);
         }
         ScopeConsumers consumers = scopeConsumers;
         boolean scopeToolsActive = consumers != null && consumers.toolsActOn(scope);
@@ -307,13 +288,10 @@ public class ToolSelectionEngine {
             logWorkflowState(message, workflowState.name());
             ToolSelectionContext context =
                     new ToolSelectionContext(message, role, workflowState.name(), permissionCodes);
-            // ADR-0069 §6: the slot step needs the caller's gated set, which the ranking fetches
-            // anyway, so it asks for the wider answer. When the consumer is not enforced the call
-            // is exactly today's, so nothing on the ranked path changes in off or shadow.
-            CandidateSelection selection = scopeToolsActive
-                    ? toolRegistryService.resolveCandidateSelection(context, candidateToolLimit)
-                    : new CandidateSelection(
-                            toolRegistryService.resolveCandidateTools(context, candidateToolLimit), Set.of(), false);
+            // ADR-0069 §6 and ADR-0068 §2: both the scope's slot step and the tag-added facades are
+            // intersected with the caller's gated set, which the ranking fetches anyway, so the
+            // resolution always returns the wider answer. The ranked cut itself is unchanged.
+            CandidateSelection selection = toolRegistryService.resolveCandidateSelection(context, candidateToolLimit);
             List<ToolMetadata> candidates = selection.candidates();
             logCandidates(role, permissionCodes, workflowState.name(), candidates);
             List<String> selectedNames =
@@ -327,7 +305,7 @@ public class ToolSelectionEngine {
                 // V40's purpose: a caller holding only a code V40 strips from the gate matched
                 // nothing, fell through here, and received the entire domain tool set.
                 logNoCandidates(role, permissionCodes, message, fullRoleTools);
-                return RankedRoleTools.of(List.of());
+                return RankedRoleTools.of(List.of(), selection.gatedToolNames());
             }
             // Resolve names across the full registered tool set (not role-scoped): permission gating
             // + scoring already ran in ToolRegistryService, and tools are bucketed by domain. The
@@ -339,7 +317,7 @@ public class ToolSelectionEngine {
                 // not authorise the domain set, so returning it would be a wider answer than
                 // success would have produced.
                 logResolvedToZeroTools(role, permissionCodes, message, selectedNames, fullRoleTools);
-                return RankedRoleTools.of(List.of());
+                return RankedRoleTools.unavailable(List.of());
             }
             logResolvedCandidates(role, permissionCodes, message, selectedNames, resolvedTools);
             if (!scopeToolsActive || selection.adminFastPath()) {
@@ -348,7 +326,7 @@ public class ToolSelectionEngine {
                 // nothing else, and the fast path exists so no other tool competes for the prompt.
                 // Adding scope tools there would undo that decision, so the slot step treats it like
                 // the ranked cut it replaces and adds nothing.
-                return RankedRoleTools.of(resolvedTools);
+                return RankedRoleTools.of(resolvedTools, selection.gatedToolNames());
             }
             return withScopeFacades(scope, selection.gatedToolNames(), selectedNames, resolvedTools, consumers);
         } catch (RuntimeException exception) {
@@ -366,8 +344,8 @@ public class ToolSelectionEngine {
                     sharedOrchestrationSupport.preview(message),
                     exception.getClass().getSimpleName(),
                     exception);
-            // ADR-0069 §6: a gate that could not be evaluated adds nothing either.
-            return RankedRoleTools.of(List.of());
+            // ADR-0069 §6 / ADR-0068 §2: a gate that could not be evaluated adds nothing either.
+            return RankedRoleTools.unavailable(List.of());
         }
     }
 
@@ -398,7 +376,7 @@ public class ToolSelectionEngine {
                 .limit(consumers.remainingSlots(0))
                 .toList();
         if (addedNames.isEmpty()) {
-            return RankedRoleTools.of(resolvedTools);
+            return RankedRoleTools.of(resolvedTools, gatedToolNames);
         }
         List<Object> addedTools = toolRegistry.resolveToolsByName(addedNames);
         List<Object> tools = new ArrayList<>(resolvedTools);
@@ -418,7 +396,7 @@ public class ToolSelectionEngine {
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("MCP scope facade slots added={} confidence={}", added, scope.confidence());
         }
-        return new RankedRoleTools(tools, added);
+        return new RankedRoleTools(tools, added, gatedToolNames);
     }
 
     private void logToolSelectorUnavailable(
@@ -518,44 +496,21 @@ public class ToolSelectionEngine {
     }
 
     /**
-     * Heuristic workflow-state derivation from message text. Used only as a fallback for
-     * session-less callers; the authoritative state is the persisted {@code NltiSession} value
-     * supplied to the {@code WorkflowState} overload of {@link #selectRoleTools}.
-     */
-    private @NonNull WorkflowState deriveWorkflowState(@NonNull String message) {
-        String lower = message.toLowerCase(Locale.ROOT);
-        if (containsAny(lower, Set.of("purchase order", "create po", "new po", "po for vendor"))) {
-            return WorkflowState.CREATING_PO;
-        } else if (containsAny(
-                lower,
-                Set.of(
-                        "receiving asn",
-                        "receive asn",
-                        "receive shipment",
-                        "receive order",
-                        "receiving shipment",
-                        "advanced shipment notice",
-                        "asn"))) {
-            return WorkflowState.RECEIVING_ASN;
-        } else if (containsAny(
-                lower,
-                Set.of(
-                        "inventory recon",
-                        "inventory reconciliation",
-                        "reconcile inventory",
-                        "stock reconciliation",
-                        "cycle count"))) {
-            return WorkflowState.INVENTORY_RECON;
-        }
-        return WorkflowState.IDLE;
-    }
-
-    /**
      * Tools added on top of the semantic top-K rather than selected within it, so nothing here can
-     * displace a tool the embedding ranking chose.
+     * displace a tool the embedding ranking chose (ADR-0068 §3.2). Each addition is read from the
+     * turn's tag record ({@code implies_date_window}, {@code needs_web_search}, {@code
+     * about_inventory}, {@code about_orders}); the heuristics that used to match the message here
+     * live in {@link HeuristicQuestionTagger} and answer those tags.
+     *
+     * <p>ADR-0068 §2, §3.1 (a deliberate change): every tag-added facade is offered only if it is in
+     * the caller's permission-gated set. Before, these additions bypassed {@code mcp_tool_permission}
+     * at selection and relied on the downstream {@code @PreAuthorize}. When the gated set is
+     * unavailable (no {@code ToolRegistryService}, or the ranked path failed closed) nothing
+     * tag-driven is added. The glossary tool is the one exception and is unchanged: it makes no HTTP
+     * call and has no permission row.
      */
-    private @NonNull List<Object> fallbackToolsForMessage(@NonNull String message) {
-        String text = message.toLowerCase(Locale.ROOT);
+    private @NonNull List<Object> fallbackToolsForTags(
+            @NonNull QuestionTags tags, @Nullable Set<String> gatedToolNames) {
         List<Object> selected = new ArrayList<>();
         // #1688: always offered, with no keyword guard. Every other entry here is gated on wording
         // that names its domain, but the glossary's job is to answer "is this metric defined?" — and
@@ -565,6 +520,14 @@ public class ToolSelectionEngine {
         // undefined ones, inverting the tool's purpose. It makes no HTTP call and carries one small
         // schema, so offering it unconditionally costs a few prompt tokens and nothing else.
         selected.add(glossaryFacadeTool);
+        if (gatedToolNames == null) {
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug(
+                        "MCP shared fallback tool matches tools={} (gated set unavailable: tag-added facades withheld)",
+                        sharedOrchestrationSupport.toolNames(selected));
+            }
+            return selected;
+        }
         // #1684: a dated question must always be able to reach resolveDateWindow. Its mcp_tool row
         // (V43) carries domain 'date-window', and no ROLE resolves to that domain agent —
         // resolveDomainTools is keyed on the domain string — so its only route into the candidate
@@ -572,18 +535,17 @@ public class ToolSelectionEngine {
         // competes with every other gated tool on description similarity and can lose. Nothing about
         // "which customers haven't bought in the last 90 days" reads as a date-arithmetic request,
         // which is exactly the question whose window shape the gate keeps getting wrong.
-        if (mentionsDateWindow(text)) {
-            selected.add(dateWindowFacadeTool);
+        if (tags.impliesDateWindow()) {
+            addIfGated(selected, dateWindowFacadeTool, gatedToolNames);
         }
-        if (containsAny(text, Set.of("current", "internet", "news", "online", "recent", "web"))) {
-            selected.add(exaWebSearchTool);
+        if (tags.needsWebSearch()) {
+            addIfGated(selected, exaWebSearchTool, gatedToolNames);
         }
-        if (containsAny(
-                text, Set.of("availability", "inventory", "location", "part", "product", "sku", "stock", "store"))) {
-            selected.add(inventoryFacadeTool);
+        if (tags.aboutInventory()) {
+            addIfGated(selected, inventoryFacadeTool, gatedToolNames);
         }
-        if (containsAny(text, Set.of("order", "po", "purchase", "sale", "sales"))) {
-            selected.add(orderFacadeTool);
+        if (tags.aboutOrders()) {
+            addIfGated(selected, orderFacadeTool, gatedToolNames);
         }
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("MCP shared fallback tool matches tools={}", sharedOrchestrationSupport.toolNames(selected));
@@ -592,57 +554,20 @@ public class ToolSelectionEngine {
     }
 
     /**
-     * Whether {@code text} names a date window.
-     *
-     * <p>Deliberately not {@link #containsAny}: that builds {@code ".*\\btoken\\b.*"} and calls
-     * {@link String#matches}, which anchors the whole input and — without {@code DOTALL} — has
-     * {@code .} exclude {@code \n}, so no single-word token matches a message containing a line
-     * break at all. A pasted or multi-paragraph question is ordinary in a chat surface, and this
-     * guard is the one whose false negative costs the whole date-window contract, so it uses
-     * {@code Matcher.find} on precompiled patterns instead. Precompiling also keeps the added
-     * vocabulary off the per-request regex-compilation path.
+     * ADR-0068 §2: adds {@code tool} only when the gated set names it. The gated set is keyed by
+     * {@code mcp_tool.name}, the facade's class simple name (some rows and tests spell it bean-style),
+     * matched the way {@code MasterAgentRegistry.resolveToolsByName} matches.
      */
-    private static boolean mentionsDateWindow(@NonNull String text) {
-        for (String phrase : DATE_WINDOW_PHRASES) {
-            if (text.contains(phrase)) {
-                return true;
-            }
+    private void addIfGated(@NonNull List<Object> selected, @NonNull Object tool, @NonNull Set<String> gatedToolNames) {
+        String className = sharedOrchestrationSupport.toolName(tool);
+        String beanStyle = java.beans.Introspector.decapitalize(className);
+        boolean gated = gatedToolNames.stream()
+                .anyMatch(name -> name.equalsIgnoreCase(className) || name.equalsIgnoreCase(beanStyle));
+        if (gated) {
+            selected.add(tool);
+        } else if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("MCP shared fallback tool withheld: {} is not in the caller's gated set", className);
         }
-        for (Pattern pattern : DATE_WINDOW_WORD_PATTERNS) {
-            if (pattern.matcher(text).find()) {
-                return true;
-            }
-        }
-        for (Pattern pattern : IMPLIED_WINDOW_WORD_PATTERNS) {
-            if (pattern.matcher(text).find()) {
-                return true;
-            }
-        }
-        for (Pattern pattern : NAMED_PERIOD_PATTERNS) {
-            if (pattern.matcher(text).find()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static @NonNull List<Pattern> compileWordPatterns(@NonNull Set<String> words) {
-        return words.stream()
-                .map(word -> Pattern.compile("\\b" + Pattern.quote(word) + "\\b"))
-                .toList();
-    }
-
-    private static boolean containsAny(@NonNull String text, @NonNull Set<String> tokens) {
-        for (String token : tokens) {
-            if (token.contains(" ")) {
-                if (text.contains(token)) {
-                    return true;
-                }
-            } else if (text.matches(".*\\b" + token + "\\b.*")) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static double confidenceScore(int rankIndex, double priority) {

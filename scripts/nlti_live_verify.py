@@ -288,7 +288,7 @@ def redact_body(body):
 def extract_json_objects(line):
     """Yield every balanced JSON object embedded in a log line.
 
-    The telemetry line is `<logback prefix> nlti.telemetry : {"schemaVersion":2,...}`, so the JSON
+    The telemetry line is `<logback prefix> nlti.telemetry : {"schemaVersion":3,...}`, so the JSON
     has to be carved out of the formatted line rather than parsed whole.
     """
     depth = 0

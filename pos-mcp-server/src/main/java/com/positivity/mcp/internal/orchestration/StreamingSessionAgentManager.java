@@ -10,6 +10,7 @@ import com.positivity.mcp.internal.config.StreamingAgentOrchestrationService;
 import com.positivity.mcp.internal.config.StreamingSessionAgentCacheMetrics;
 import com.positivity.mcp.internal.config.TieredChatModelResolver;
 import com.positivity.mcp.internal.domain.ModelTier;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.RagScope;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
@@ -33,6 +34,7 @@ import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.TaggingSignal;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.TierRouting;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.tenancy.TenantContext;
@@ -262,9 +264,15 @@ public class StreamingSessionAgentManager
             @NonNull String messagePreview,
             long startMs,
             @NonNull UUID tenantId) {
+        // ADR-0068 §1: the one tagging call of the turn, at the same point as the blocking manager:
+        // ahead of the simple-chat decision, the tier routing and the tool selection.
+        QuestionTags tags = toolSelectionEngine.tag(message);
+        if (toolInvocationRecorder != null && !tags.isNone()) {
+            toolInvocationRecorder.recordTags(tags);
+        }
         // Gate 4 / Gate 2A closure: shared T0 rule fast-path (previously blocking-only) — pure
         // social chat streams straight from the default model with no tool selection or RAG.
-        if (simpleChatFastPath.isSimpleChat(message)) {
+        if (simpleChatFastPath.isSimpleChat(message, tags)) {
             LOGGER.debug(
                     "MCP streaming simple chat dispatch username={} role={} preview=\"{}\"",
                     username,
@@ -273,22 +281,22 @@ public class StreamingSessionAgentManager
             if (toolInvocationRecorder != null) {
                 toolInvocationRecorder.recordSimpleChat(true);
             }
-            return simpleStreamChat(currentUserContext, message, startMs, tenantId);
+            return simpleStreamChat(currentUserContext, message, startMs, tenantId, tags);
         }
 
         // Gate 4 (#1192): classify with the T1 router (temperature 0) and select the executor tier.
         // Null when tiering is disabled or the router is not wired — default model (rollback path).
-        NltiRouter.RoutingDecision routingDecision = routeTier(message);
+        NltiRouter.RoutingDecision routingDecision = routeTier(message, tags);
         ModelTier tier = routingDecision == null ? null : routingDecision.tier();
 
         // #778: gate tool selection by the subject's persisted session workflow state when they have
-        // one; otherwise fall back to message-heuristic derivation (session-less callers).
+        // one; otherwise the workflow_state tag decides (session-less callers, ADR-0068 §3.3).
         Optional<WorkflowState> persistedState = workflowStateService.resolveActiveState(username);
         ToolSelectionEngine.ToolSelectionResult selection = persistedState
-                .map(state ->
-                        toolSelectionEngine.selectRoleTools(role, currentUserContext.permissionCodes(), message, state))
-                .orElseGet(
-                        () -> toolSelectionEngine.selectRoleTools(role, currentUserContext.permissionCodes(), message));
+                .map(state -> toolSelectionEngine.selectRoleTools(
+                        role, currentUserContext.permissionCodes(), message, state, tags))
+                .orElseGet(() ->
+                        toolSelectionEngine.selectRoleTools(role, currentUserContext.permissionCodes(), message, tags));
         List<Object> allTools = sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
         String cacheKey = sharedOrchestrationSupport.toolCacheKey(allTools);
         LOGGER.debug(
@@ -346,8 +354,10 @@ public class StreamingSessionAgentManager
         Object turnHandle = toolInvocationRecorder == null ? null : toolInvocationRecorder.currentTurnHandle();
         // ADR-0069 §5: resolved on the request thread, but the agent runs where the Flux is
         // subscribed. The scope travels the way the caller and the Authorization header do: captured
-        // here, handed to streamTokens, and published there next to the caller.
+        // here, handed to streamTokens, and published there next to the caller. ADR-0068 §1: the tag
+        // record travels the same way.
         ScopeSet scope = selection.scope();
+        TaggingSignal taggingSignal = TaggingSignal.of(tags);
         StringBuilder streamedText = new StringBuilder();
         // ADR-0062 plan WS6: only the request thread carries the tenant; the Flux is subscribed and
         // completes on Reactor threads, so every callback that writes tenant-scoped data (the audit
@@ -363,6 +373,7 @@ public class StreamingSessionAgentManager
                                         currentUserContext,
                                         authorizationHeader,
                                         publication,
+                                        tags,
                                         writeCapableToolsPresent,
                                         scopeOutcome,
                                         turnHandle,
@@ -395,7 +406,8 @@ public class StreamingSessionAgentManager
                             tierRouting,
                             writeCapable,
                             scope,
-                            scopeOutcome.get());
+                            scopeOutcome.get(),
+                            taggingSignal);
                 }))
                 .doOnError(exception -> TenantContext.runAs(tenantId, () -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -427,7 +439,8 @@ public class StreamingSessionAgentManager
                             tierRouting,
                             writeCapableToolsPresent.get(),
                             null,
-                            ScopeOutcome.NONE);
+                            ScopeOutcome.NONE,
+                            taggingSignal);
                 }));
         return streamed;
     }
@@ -440,10 +453,12 @@ public class StreamingSessionAgentManager
             @NonNull CurrentUserContext currentUserContext,
             @NonNull String message,
             long startMs,
-            @NonNull UUID tenantId) {
+            @NonNull UUID tenantId,
+            @NonNull QuestionTags tags) {
         String username = currentUserContext.username();
         String role = currentUserContext.primaryRole();
         String correlationId = resolveCorrelationId();
+        TaggingSignal taggingSignal = TaggingSignal.of(tags);
         Prompt prompt = simpleChatFastPath.prompt(currentUserContext, message);
         // #1850: the turn was opened on the request thread; bind it here, inside the deferred
         // subscription, so the model call and the answer-source record below land on it.
@@ -496,7 +511,8 @@ public class StreamingSessionAgentManager
                             false,
                             // The fast path resolves no scope (ADR-0069).
                             null,
-                            ScopeOutcome.NONE);
+                            ScopeOutcome.NONE,
+                            taggingSignal);
                 }))
                 .doOnError(exception -> TenantContext.runAs(tenantId, () -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -528,7 +544,8 @@ public class StreamingSessionAgentManager
                             false,
                             // The fast path resolves no scope (ADR-0069).
                             null,
-                            ScopeOutcome.NONE);
+                            ScopeOutcome.NONE,
+                            taggingSignal);
                 }));
     }
 
@@ -538,11 +555,12 @@ public class StreamingSessionAgentManager
      * the router is not wired. Never throws — router failures safe-default inside
      * {@link NltiRouter#classify}.
      */
-    private NltiRouter.@Nullable RoutingDecision routeTier(@NonNull String message) {
+    private NltiRouter.@Nullable RoutingDecision routeTier(@NonNull String message, @NonNull QuestionTags tags) {
         if (!tieringEnabled || nltiRouter == null) {
             return null;
         }
-        return nltiRouter.classify(message);
+        // ADR-0068 §7: the router receives the turn's tags (it maps them in Wave 2).
+        return nltiRouter.classify(message, tags);
     }
 
     private @Nullable TierRouting tierRoutingOf(NltiRouter.@Nullable RoutingDecision decision) {
@@ -785,6 +803,7 @@ public class StreamingSessionAgentManager
             @NonNull CurrentUserContext currentUserContext,
             @Nullable String authorizationHeader,
             @NonNull ScopePublication publication,
+            @NonNull QuestionTags tags,
             @NonNull AtomicBoolean writeCapableToolsPresent,
             @NonNull AtomicReference<ScopeOutcome> scopeOutcome,
             @Nullable Object turnHandle,
@@ -804,6 +823,7 @@ public class StreamingSessionAgentManager
                             currentUserContext,
                             authorizationHeader,
                             publication,
+                            tags,
                             writeCapableToolsPresent,
                             scopeOutcome,
                             emitter));
@@ -817,6 +837,7 @@ public class StreamingSessionAgentManager
                 currentUserContext,
                 authorizationHeader,
                 publication,
+                tags,
                 writeCapableToolsPresent,
                 scopeOutcome,
                 emitter);
@@ -830,6 +851,7 @@ public class StreamingSessionAgentManager
             @NonNull CurrentUserContext currentUserContext,
             @Nullable String authorizationHeader,
             @NonNull ScopePublication publication,
+            @NonNull QuestionTags tags,
             @NonNull AtomicBoolean writeCapableToolsPresent,
             @NonNull AtomicReference<ScopeOutcome> scopeOutcome,
             @NonNull FluxSink<String> emitter) {
@@ -843,6 +865,8 @@ public class StreamingSessionAgentManager
             // wording from here rather than the model's normalised copy, and the streaming path
             // needs it for the same reason the blocking one does.
             requestScopedUserContext.recordUserMessage(message);
+            // ADR-0068 §1: the tag record, carried across the subscribe hop like the scope.
+            requestScopedUserContext.recordTags(tags);
             // ADR-0069 §5: published next to the caller, for the same window, and cleared by the same
             // clear() in the finally below.
             publication.publish(requestScopedUserContext);
@@ -886,8 +910,9 @@ public class StreamingSessionAgentManager
                 // the warm cache matches the role's actual gated tool set; always include AUTHENTICATED.
                 // Callers whose actual permissionCodes still differ get a cache miss and build on
                 // demand (its key already varies with toolCacheKey).
-                ToolSelectionEngine.ToolSelectionResult selection =
-                        toolSelectionEngine.selectRoleTools(role, prebuildPermissionCodes(role), role);
+                // ADR-0068 spec §2.5: warm-up does not tag (the role name is not a question).
+                ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(
+                        role, prebuildPermissionCodes(role), role, QuestionTags.none());
                 List<Object> selectedTools =
                         sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
                 String warmCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
@@ -966,7 +991,8 @@ public class StreamingSessionAgentManager
             @Nullable TierRouting tierRouting,
             boolean writeCapableToolsPresent,
             @Nullable ScopeSet scope,
-            @NonNull ScopeOutcome scopeOutcome) {
+            @NonNull ScopeOutcome scopeOutcome,
+            @Nullable TaggingSignal tagging) {
         if (telemetryEmitter == null) {
             return;
         }
@@ -989,7 +1015,8 @@ public class StreamingSessionAgentManager
                     tierRouting,
                     writeCapableToolsPresent,
                     ScopeShadowSupport.telemetrySignal(
-                            scope, ScopeShadowSupport.propertiesOf(scopeConsumers), scopeOutcome)));
+                            scope, ScopeShadowSupport.propertiesOf(scopeConsumers), scopeOutcome),
+                    tagging));
         } catch (RuntimeException telemetryFailure) {
             LOGGER.warn(
                     "MCP streaming telemetry emission failed role={} status={}",

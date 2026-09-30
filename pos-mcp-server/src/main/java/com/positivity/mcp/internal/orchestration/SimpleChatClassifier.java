@@ -70,6 +70,16 @@ final class SimpleChatClassifier {
         this.catalogSupplier = catalogSupplier;
     }
 
+    /**
+     * ADR-0068 §1, {@code follows_previous_turn}: whether any normalised token of {@code message} is a
+     * continuation cue. The same check {@link #isSimpleChat} applies as a strong task signal, exposed
+     * so the heuristic tagger answers the tag from the one list.
+     */
+    static boolean followsPreviousTurn(@NonNull String message) {
+        String text = SimpleChatRuleCatalog.normalize(message);
+        return MessageFeatures.from(text).tokenSet().stream().anyMatch(CONTINUATION_CUES::contains);
+    }
+
     boolean isSimpleChat(@NonNull String message) {
         String text = SimpleChatRuleCatalog.normalize(message);
         if (text.isBlank() || text.length() > MAX_SIMPLE_CHAT_CHAR_LENGTH) {

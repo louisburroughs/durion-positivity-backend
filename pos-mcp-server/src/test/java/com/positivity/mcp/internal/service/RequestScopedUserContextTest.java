@@ -3,7 +3,11 @@ package com.positivity.mcp.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.domain.QuestionTags;
+import com.positivity.mcp.internal.domain.TagAnswer;
+import com.positivity.mcp.internal.domain.TagName;
 import com.positivity.mcp.internal.scopegraph.ScopeSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -95,5 +99,19 @@ class RequestScopedUserContextTest {
         other.join();
 
         assertThat(seen).isFalse();
+    }
+
+    @Test
+    @DisplayName("ADR-0068: the tag record is none() by default, present once recorded, and cleared with the caller")
+    void tagsArePublishedAndClearedWithTheCaller() {
+        assertThat(holder.currentTags().isNone()).isTrue();
+
+        QuestionTags tags = QuestionTags.heuristic(Map.of(TagName.SIMPLE_CHAT.wireName(), TagAnswer.heuristic(true)));
+        holder.recordTags(tags);
+        assertThat(holder.currentTags()).isSameAs(tags);
+        assertThat(holder.currentTags().simpleChat()).isTrue();
+
+        holder.clear();
+        assertThat(holder.currentTags().isNone()).isTrue();
     }
 }

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.config.ScopeGraphProperties;
 import com.positivity.mcp.internal.config.ScopeGraphProperties.Consumer;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
@@ -218,18 +219,18 @@ class ToolSelectionEngineScopeSlotsTest {
     @DisplayName("warm-up (the role name as the message) resolves NONE and adds nothing")
     void nothingOnWarmUp() {
         enforceTools(8);
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(inventory()));
+        rankedCut(Set.of("inventoryFacadeTool"), false, inventory());
 
-        ToolSelectionEngine.ToolSelectionResult result = engine.selectRoleTools("ROLE_ADMIN", CALLER, "ROLE_ADMIN");
+        ToolSelectionEngine.ToolSelectionResult result =
+                engine.selectRoleTools("ROLE_ADMIN", CALLER, "ROLE_ADMIN", QuestionTags.none());
 
         assertThat(result.scope()).isNotNull();
         assertThat(result.scope().confidence()).isEqualTo(ScopeSet.Confidence.NONE);
         assertThat(result.roleTools()).containsExactly(inventoryFacadeTool);
         assertThat(result.scopeAddedTools()).isEmpty();
-        // A NONE scope never reaches the wider query: the ranked path is exactly today's.
-        verify(toolRegistryService, never()).resolveCandidateSelection(any(), eq(3));
-        verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
+        // ADR-0068 §2: the one resolution always returns the gated set (the same SQL as before); a
+        // NONE scope adds nothing to it.
+        verify(toolRegistryService).resolveCandidateSelection(any(ToolSelectionContext.class), eq(3));
     }
 
     @Test
@@ -254,8 +255,7 @@ class ToolSelectionEngineScopeSlotsTest {
             SimpleMeterRegistry own = new SimpleMeterRegistry();
             engine.setScopeResolver(ScopeResolverFixtures.resolver(properties, own));
             engine.setScopeConsumers(ScopeResolverFixtures.consumers(properties, own));
-            when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                    .thenReturn(List.of(inventory()));
+            rankedCut(Set.of("inventoryFacadeTool", "WorkorderFacadeTool", "InvoiceFacadeTool"), false, inventory());
 
             ToolSelectionEngine.ToolSelectionResult result = engine.selectRoleTools("ROLE_ADMIN", CALLER, MESSAGE);
 
@@ -264,7 +264,9 @@ class ToolSelectionEngineScopeSlotsTest {
             assertThat(result.roleTools()).containsExactly(inventoryFacadeTool);
             assertThat(result.scopeAddedTools()).isEmpty();
         }
-        verify(toolRegistryService, never()).resolveCandidateSelection(any(), eq(3));
+        // ADR-0068 §2: the gated set is fetched by the one resolution in every mode; not enforced
+        // means the scope's slot step never runs on it.
+        verify(toolRegistryService, never()).resolveCandidateTools(any(), eq(3));
     }
 
     private static ToolMetadata inventory() {

@@ -2,6 +2,9 @@ package com.positivity.mcp.internal.telemetry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.mcp.internal.domain.QuestionTags;
+import com.positivity.mcp.internal.domain.TagAnswer;
+import com.positivity.mcp.internal.domain.TagName;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.PromptLayer;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Tier;
 import java.util.List;
@@ -258,7 +261,7 @@ class NltiRequestTelemetryFactoryTest {
         assertThat(event.outcome().errorCode()).isEqualTo("RateLimitExceededException");
     }
 
-    // ── ADR-0069: schema version 2 ──────────────────────────────────────────
+    // ── ADR-0069: schema version 2 (the scope fields; the event is version 3 since ADR-0068) ──
 
     private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER =
             new com.fasterxml.jackson.databind.ObjectMapper();
@@ -284,9 +287,10 @@ class NltiRequestTelemetryFactoryTest {
     }
 
     @Test
-    void schemaVersionIsTwo() {
-        assertThat(NltiRequestTelemetry.SCHEMA_VERSION).isEqualTo(2);
-        assertThat(chatEvent(null).schemaVersion()).isEqualTo(2);
+    void schemaVersionIsThree() {
+        // ADR-0069 took 2; ADR-0068 takes 3 (the nullable tagging block, spec §2.8).
+        assertThat(NltiRequestTelemetry.SCHEMA_VERSION).isEqualTo(3);
+        assertThat(chatEvent(null).schemaVersion()).isEqualTo(3);
     }
 
     @Test
@@ -304,7 +308,7 @@ class NltiRequestTelemetryFactoryTest {
         assertThat(event.scopeRagFilterApplied()).isFalse();
 
         com.fasterxml.jackson.databind.JsonNode json = MAPPER.readTree(MAPPER.writeValueAsString(event));
-        assertThat(json.get("schemaVersion").intValue()).isEqualTo(2);
+        assertThat(json.get("schemaVersion").intValue()).isEqualTo(3);
         assertThat(json.get("scopeMode").textValue()).isEqualTo("SHADOW");
         assertThat(json.get("scopeGraphHash").textValue()).isEqualTo("c878c7206d2ed660");
         assertThat(json.get("scopeConfidence").textValue()).isEqualTo("HIGH");
@@ -322,7 +326,7 @@ class NltiRequestTelemetryFactoryTest {
         // Mode off, simple chat and failed requests resolve no scope: the fields are absent, not zero.
         assertThat(json).doesNotContain("\"scope");
         // The Loki queries carve the event out of the log line by this exact prefix.
-        assertThat(json).startsWith("{\"schemaVersion\":2,");
+        assertThat(json).startsWith("{\"schemaVersion\":3,");
     }
 
     @Test
@@ -357,8 +361,138 @@ class NltiRequestTelemetryFactoryTest {
 
         assertThat(chat.scopeMode()).isNull();
         assertThat(MAPPER.writeValueAsString(chat)).doesNotContain("\"scope");
-        assertThat(nlti.schemaVersion()).isEqualTo(2);
+        assertThat(nlti.schemaVersion()).isEqualTo(3);
         assertThat(MAPPER.writeValueAsString(nlti)).doesNotContain("\"scope");
+    }
+
+    // ── ADR-0068: schema version 3 ──────────────────────────────────────────
+
+    private static NltiRequestTelemetry chatEvent(
+            boolean simpleChat,
+            NltiRequestTelemetryFactory.TierRouting tierRouting,
+            NltiRequestTelemetryFactory.TaggingSignal tagging) {
+        return NltiRequestTelemetryFactory.forChatRequest(
+                "corr-tags",
+                "2026-09-30T12:00:00Z",
+                "ROLE_ADMIN",
+                12,
+                simpleChat ? List.of() : List.of("WorkorderFacadeTool"),
+                List.of(),
+                List.of("BASE", "ROLE"),
+                simpleChat,
+                null,
+                simpleChat ? null : "IDLE",
+                321L,
+                "SUCCESS",
+                null,
+                tierRouting,
+                false,
+                null,
+                tagging);
+    }
+
+    private static NltiRequestTelemetryFactory.TaggingSignal shadowSignal() {
+        return new NltiRequestTelemetryFactory.TaggingSignal(
+                "SHADOW",
+                "tev1:0.8b",
+                212L,
+                null,
+                0.75,
+                "UNKNOWN",
+                "HIGH",
+                "MULTI_DOMAIN",
+                "master",
+                "CREATING_PO",
+                false);
+    }
+
+    @Test
+    void forChatRequest_withTagging_carriesTheBlockAndFillsRoutingFromTheActingValues() throws Exception {
+        NltiRequestTelemetry event = chatEvent(false, null, shadowSignal());
+
+        assertThat(event.tagging()).isNotNull();
+        assertThat(event.tagging().mode()).isEqualTo("SHADOW");
+        assertThat(event.tagging().providerModel()).isEqualTo("tev1:0.8b");
+        assertThat(event.tagging().latencyMs()).isEqualTo(212L);
+        assertThat(event.tagging().fallbackReason()).isNull();
+        assertThat(event.tagging().agreementRate()).isEqualTo(0.75);
+        assertThat(event.tagging().workflowState()).isEqualTo("CREATING_PO");
+        assertThat(event.tagging().simpleChat()).isFalse();
+        // Spec §2.8: the Routing block keeps its shape and is filled from the tags while the Gate 4
+        // router stays dormant.
+        assertThat(event.routing()).isNotNull();
+        assertThat(event.routing().intentType()).isEqualTo("UNKNOWN");
+        assertThat(event.routing().riskLevel()).isEqualTo("HIGH");
+        assertThat(event.routing().complexity()).isEqualTo("MULTI_DOMAIN");
+        assertThat(event.routing().domain()).isEqualTo("master");
+        assertThat(event.routing().tier()).isNull();
+        // The selection's workflow state (passed by the manager) wins over the tag's.
+        assertThat(event.routing().workflowState()).isEqualTo("IDLE");
+
+        com.fasterxml.jackson.databind.JsonNode json = MAPPER.readTree(MAPPER.writeValueAsString(event));
+        assertThat(json.get("schemaVersion").intValue()).isEqualTo(3);
+        assertThat(json.get("tagging").get("mode").textValue()).isEqualTo("SHADOW");
+        assertThat(json.get("tagging").get("agreementRate").doubleValue()).isEqualTo(0.75);
+        assertThat(json.get("tagging").has("fallbackReason")).isFalse();
+        assertThat(MAPPER.writeValueAsString(event)).doesNotContain("\"scope");
+    }
+
+    @Test
+    void forChatRequest_withTagging_theRouterDecisionWinsOverTheTagValues() {
+        NltiRequestTelemetry event = chatEvent(
+                false,
+                new NltiRequestTelemetryFactory.TierRouting(
+                        "QUERY", "LOW", "inventory", "SINGLE_LOOKUP", NltiRequestTelemetry.Tier.T2_SIMPLE, "m", "r"),
+                shadowSignal());
+
+        assertThat(event.routing().intentType()).isEqualTo("QUERY");
+        assertThat(event.routing().riskLevel()).isEqualTo("LOW");
+        assertThat(event.routing().domain()).isEqualTo("inventory");
+        assertThat(event.routing().tier()).isEqualTo(NltiRequestTelemetry.Tier.T2_SIMPLE);
+        assertThat(event.tagging().risk()).isEqualTo("HIGH");
+    }
+
+    @Test
+    void forChatRequest_simpleChatWithTagging_keepsTheT0TierAndCarriesTheBlock() {
+        NltiRequestTelemetry event = chatEvent(true, null, shadowSignal());
+
+        assertThat(event.routing().tier()).isEqualTo(NltiRequestTelemetry.Tier.T0_RULE);
+        assertThat(event.routing().intentType()).isEqualTo("UNKNOWN");
+        assertThat(event.routing().workflowState()).isNull();
+        assertThat(event.tagging()).isNotNull();
+    }
+
+    @Test
+    void forChatRequest_withoutTagging_omitsTheBlockAndKeepsTheVersionTwoRouting() throws Exception {
+        NltiRequestTelemetry event = chatEvent(false, null, null);
+
+        assertThat(event.tagging()).isNull();
+        assertThat(event.routing().intentType()).isNull();
+        assertThat(event.routing().workflowState()).isEqualTo("IDLE");
+        assertThat(MAPPER.writeValueAsString(event)).doesNotContain("\"tagging\"");
+        assertThat(MAPPER.writeValueAsString(chatEvent(null))).doesNotContain("\"tagging\"");
+    }
+
+    @Test
+    void taggingSignal_ofNoneIsNull_andOfARecordCarriesTheActingValues() {
+        assertThat(NltiRequestTelemetryFactory.TaggingSignal.of(null)).isNull();
+        assertThat(NltiRequestTelemetryFactory.TaggingSignal.of(QuestionTags.none()))
+                .isNull();
+
+        QuestionTags heuristic = QuestionTags.heuristic(Map.of(
+                TagName.SIMPLE_CHAT.wireName(), TagAnswer.heuristic(true),
+                TagName.WORKFLOW_STATE.wireName(), TagAnswer.heuristic("RECEIVING_ASN")));
+        NltiRequestTelemetryFactory.TaggingSignal signal = NltiRequestTelemetryFactory.TaggingSignal.of(heuristic);
+
+        assertThat(signal.mode()).isEqualTo("OFF");
+        assertThat(signal.simpleChat()).isTrue();
+        assertThat(signal.workflowState()).isEqualTo("RECEIVING_ASN");
+        assertThat(signal.intent()).isEqualTo("UNKNOWN");
+        assertThat(signal.risk()).isEqualTo("HIGH");
+        assertThat(signal.complexity()).isEqualTo("MULTI_DOMAIN");
+        assertThat(signal.domain()).isEqualTo("master");
+        assertThat(signal.agreementRate()).isNull();
+        assertThat(signal.providerModel()).isNull();
     }
 
     @Test
