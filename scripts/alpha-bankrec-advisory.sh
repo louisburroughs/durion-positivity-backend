@@ -15,7 +15,7 @@ unset PASSWORD
 [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ] || { echo "login failed" >&2; exit 1; }
 
 H=(-H "Authorization: Bearer $TOKEN" -H 'X-API-Version: 1' -H 'Content-Type: application/json')
-URL="$BASE/accounting/periods/bank-reconciliation-policy"
+URL="$BASE/accounting/v1/accounting/periods/bank-reconciliation-policy"
 
 echo "Current policy:"
 CURRENT=$(curl -sf "${H[@]}" "$URL")
