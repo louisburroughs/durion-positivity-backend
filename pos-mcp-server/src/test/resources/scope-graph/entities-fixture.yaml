@@ -1,0 +1,32 @@
+# Hand-written lexicon for the scope-graph builder tests: two entities of one domain, every field used.
+domain_scopes:
+  shop-manager: shopmanager
+unscoped_tools: [DateWindowFacadeTool]
+entities:
+  - key: workorder
+    domain: workorder
+    terms:
+      en: [work order, workorder]
+      fr: [bon de travail]
+      es: [orden de trabajo]
+    identifiers:
+      - key: workorder-number
+        pattern: '\bWO-\d{4}-\d{4,}\b'
+    relates_to:
+      - {entity: estimate, label: promoted_from}
+    schemas: ['workorder:WorkorderResponse']
+    schema_patterns: ['workorder:Workorder(Create|Part).*']
+    facade_tools:
+      - {tool: WorkorderFacadeTool, access: reads}
+    screens: [workorders.list]
+  - key: estimate
+    domain: workorder
+    terms:
+      en: [estimate, quote]
+      fr: [devis]
+      es: [presupuesto]
+    relates_to:
+      - {entity: workorder, label: promotes_to}
+    schemas: ['workorder:EstimateResponse']
+    facade_tools:
+      - {tool: WorkorderFacadeTool, access: writes}

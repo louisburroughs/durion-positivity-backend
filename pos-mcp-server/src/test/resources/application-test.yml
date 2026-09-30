@@ -28,6 +28,10 @@ mcp:
               model: test-model
               base-url: http://localhost:9999/fake-llm
               api-key: ""
+    # ADR-0069: the scope graph stays off in tests except the graph's own (quoted: bare off is YAML
+    # false).
+    scope-graph:
+        mode: "off"
 
 pos:
     # Point the event-type initializer at an unroutable loopback port: the test profile has no

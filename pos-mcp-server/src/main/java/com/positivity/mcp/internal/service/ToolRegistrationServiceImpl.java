@@ -6,6 +6,7 @@ import com.positivity.mcp.internal.discovery.OpenApiToolMapper;
 import com.positivity.mcp.internal.discovery.service.ToolRegistrationService;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
+import com.positivity.mcp.internal.scopegraph.ScopeGraphHolder;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.modelcontextprotocol.server.McpAsyncServer;
@@ -17,8 +18,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -53,7 +57,32 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     private final Counter toolsPrunedTotal;
     // #1632: per-service spec fetches that failed during an aggregate cycle (partial discovery).
     private final Counter discoveryPartialTotal;
+    /** ADR-0069 §4: rebuilt after every registration cycle. Null where no holder is wired (unit tests). */
+    @Nullable
+    private final ScopeGraphHolder scopeGraphHolder;
 
+    public ToolRegistrationServiceImpl(
+            @NonNull McpServerProperties properties,
+            @NonNull OpenApiDocumentFetcher openApiDocumentFetcher,
+            @NonNull OpenApiToolMapper openApiToolMapper,
+            @NonNull McpAsyncServer mcpAsyncServer,
+            @NonNull ToolMetadataRepository toolMetadataRepository,
+            @NonNull String gatewayBaseUrl,
+            @NonNull MeterRegistry meterRegistry,
+            @NonNull List<String> prunableWhenUnseen) {
+        this(
+                properties,
+                openApiDocumentFetcher,
+                openApiToolMapper,
+                mcpAsyncServer,
+                toolMetadataRepository,
+                gatewayBaseUrl,
+                meterRegistry,
+                prunableWhenUnseen,
+                null);
+    }
+
+    @Autowired
     public ToolRegistrationServiceImpl(
             @NonNull McpServerProperties properties,
             @NonNull OpenApiDocumentFetcher openApiDocumentFetcher,
@@ -62,7 +91,9 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
             @NonNull ToolMetadataRepository toolMetadataRepository,
             @Value("${mcp.server.gateway-base-url:http://api-gateway:8080}") @NonNull String gatewayBaseUrl,
             @NonNull MeterRegistry meterRegistry,
-            @Value("${mcp.discovery.prunable-when-unseen:}") @NonNull List<String> prunableWhenUnseen) {
+            @Value("${mcp.discovery.prunable-when-unseen:}") @NonNull List<String> prunableWhenUnseen,
+            @Nullable ObjectProvider<ScopeGraphHolder> scopeGraphHolder) {
+        this.scopeGraphHolder = scopeGraphHolder == null ? null : scopeGraphHolder.getIfAvailable();
         this.properties = properties;
         this.openApiDocumentFetcher = openApiDocumentFetcher;
         this.openApiToolMapper = openApiToolMapper;
@@ -109,7 +140,28 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                             elapsedMs(totalStartNanos),
                             ex.getMessage());
                     return Mono.empty();
-                });
+                })
+                // ADR-0069 §4 (spec §2.6): the catalog may have changed, so the scope graph is rebuilt
+                // after every registration cycle — the startup bootstrap and each discovery refresh
+                // both end here. On any outcome, including a refresh cancelled by its timeout, because
+                // rows persisted before the failure are already in the catalog. The request is made
+                // before the terminal signal reaches the caller, so it is queued by the time a blocking
+                // caller returns; rebuild() only queues the work (off this thread) and is a no-op in
+                // mode off.
+                .doOnTerminate(this::requestScopeGraphRebuild)
+                .doOnCancel(this::requestScopeGraphRebuild);
+    }
+
+    private void requestScopeGraphRebuild() {
+        if (scopeGraphHolder == null) {
+            return;
+        }
+        try {
+            scopeGraphHolder.rebuild();
+        } catch (RuntimeException ex) {
+            // Never let the graph turn a finished registration into a failed one.
+            log.warn("Could not request a scope graph rebuild: {}", ex.toString());
+        }
     }
 
     /**
