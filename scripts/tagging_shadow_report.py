@@ -18,6 +18,15 @@ Language: EvalTurnTrace carries no language field, so a language split is one re
 (en, fr, es). --messages-file maps turnId -> language ({"<turnId>": "fr"} JSON) for a mixed
 export, and --language then filters on it.
 
+Ground truth (spec 2.9): --expected FIXTURE (repeatable, one per language) joins each trace to a gate
+utterance of pos-mcp-server/src/test/resources/eval/tagging-gate/*.json by its `userMessage` (exact
+text, else trim + collapse whitespace + casefold) and scores, per language and per tag, the
+heuristic's accuracy and the accuracy the merge rule would reach with the model at each candidate
+threshold (the model's `modelValue` when its confidence is at or above the threshold, the heuristic's
+value below it). Asymmetric tags also get the false-non-IDLE rate (workflow_state) and the
+model-true/heuristic-false rate with its precision (simple_chat, admin_account_question); `entity` is
+scored as a set (precision/recall over the entity_<key> answers). --verbose lists what did not join.
+
 Stdlib only, like scripts/nlti_live_verify.py.
 """
 
@@ -70,8 +79,13 @@ def _num(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
-def build_report(traces, language=None, languages=None):
-    """Aggregate traces into the report dict. Traces without a tagging block are counted and skipped."""
+def build_report(traces, language=None, languages=None, expected=None, verbose=False):
+    """Aggregate traces into the report dict. Traces without a tagging block are counted and skipped.
+
+    `expected` is a list of gate fixtures (dicts with `language` and `utterances`); when given, the
+    report gains a `groundTruth` section (see score_against_fixture).
+    """
+    tagged = []
     models = defaultdict(lambda: {"turns": 0, "latencies": [], "fallbacks": Counter(), "truncated": 0})
     tags = defaultdict(lambda: {"compared": 0, "agree": 0, "confidences": []})
     skipped = 0
@@ -82,6 +96,7 @@ def build_report(traces, language=None, languages=None):
         if not isinstance(tagging, dict):
             skipped += 1
             continue
+        tagged.append(trace)
         model = models[tagging.get("providerModel") or "unknown"]
         model["turns"] += 1
         latency = _num(tagging.get("latencyMs"))
@@ -130,7 +145,192 @@ def build_report(traces, language=None, languages=None):
             "confidenceDeciles": histogram,
             "atThreshold": at,
         }
+    if expected:
+        report["groundTruth"] = score_against_fixtures(tagged, expected, verbose)
     return report
+
+
+# ---------------------------------------------------------------------------------------------
+# Ground truth scoring (spec 2.9)
+
+ASYMMETRIC_PROMOTION_TAGS = ("simple_chat", "admin_account_question")
+ENTITY_PREFIXES = ("entity_", "entity.")
+
+
+def normalise_text(text):
+    """Trim, collapse whitespace, casefold: the fallback join key."""
+    return " ".join(str(text).split()).casefold()
+
+
+def _value(raw):
+    """A tag value as a comparable string: booleans 'true'/'false', everything else casefolded."""
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        return "true" if raw else "false"
+    return str(raw).strip().casefold()
+
+
+def _entity_key(name):
+    for prefix in ENTITY_PREFIXES:
+        if name.startswith(prefix):
+            return name[len(prefix):]
+    return None
+
+
+def join_traces(traces, fixture):
+    """Pair each trace with the fixture utterance it asked: exact userMessage, else normalised.
+
+    Returns (matches, unmatched_traces, unmatched_utterances) where matches is [(trace, utterance)].
+    """
+    exact, normalised = {}, {}
+    for utterance in fixture.get("utterances", []):
+        exact.setdefault(utterance["text"], utterance)
+        normalised.setdefault(normalise_text(utterance["text"]), utterance)
+    matches, unmatched = [], []
+    seen = set()
+    for trace in traces:
+        message = trace.get("userMessage")
+        utterance = None
+        if isinstance(message, str):
+            utterance = exact.get(message) or normalised.get(normalise_text(message))
+        if utterance is None:
+            unmatched.append(trace)
+        else:
+            matches.append((trace, utterance))
+            seen.add(utterance["id"])
+    missing = [u for u in fixture.get("utterances", []) if u["id"] not in seen]
+    return matches, unmatched, missing
+
+
+def _acting(heuristic, model, confidence, threshold):
+    """The merge rule: the model's answer at or above the threshold, the heuristic's below it."""
+    if model is not None and confidence is not None and confidence >= threshold:
+        return model
+    return heuristic
+
+
+def score_fixture_matches(matches):
+    """Score joined (trace, utterance) pairs: per tag, then the entity set. See the module docstring."""
+    tag_stats = {}
+    entity = {f"{t:.2f}": {"predicted": 0, "expected": 0, "hit": 0} for t in THRESHOLDS}
+    for trace, utterance in matches:
+        entries = {}
+        for entry in (trace.get("tagging") or {}).get("tags") or []:
+            entries[entry.get("name") or "unknown"] = entry
+        expected_tags = utterance.get("expected_tags") or {}
+        for tag, raw_expected in expected_tags.items():
+            if tag == "entity":
+                continue
+            entry = entries.get(tag)
+            stat = tag_stats.setdefault(tag, {
+                "samples": 0, "missing": 0, "heuristicN": 0, "heuristicCorrect": 0,
+                "idleN": 0, "heuristicNonIdle": 0,
+                "atThreshold": {f"{t:.2f}": {"n": 0, "correct": 0, "nonIdle": 0, "flip": 0, "flipTrue": 0}
+                                for t in THRESHOLDS},
+            })
+            stat["samples"] += 1
+            if entry is None:
+                stat["missing"] += 1
+                continue
+            want = _value(raw_expected)
+            heuristic = _value(entry.get("heuristicValue"))
+            model = _value(entry.get("modelValue"))
+            confidence = _num(entry.get("modelConfidence"))
+            if heuristic is not None:
+                stat["heuristicN"] += 1
+                stat["heuristicCorrect"] += 1 if heuristic == want else 0
+                if tag == "workflow_state" and want == "idle":
+                    stat["idleN"] += 1
+                    stat["heuristicNonIdle"] += 1 if heuristic != "idle" else 0
+            elif tag == "workflow_state" and want == "idle":
+                stat["idleN"] += 1
+            for threshold in THRESHOLDS:
+                at = stat["atThreshold"][f"{threshold:.2f}"]
+                acting = _acting(heuristic, model, confidence, threshold)
+                if acting is None:
+                    continue
+                at["n"] += 1
+                at["correct"] += 1 if acting == want else 0
+                if tag == "workflow_state" and want == "idle" and acting != "idle":
+                    at["nonIdle"] += 1
+                if tag in ASYMMETRIC_PROMOTION_TAGS and heuristic == "false" and acting == "true":
+                    at["flip"] += 1
+                    at["flipTrue"] += 1 if want == "true" else 0
+        want_entities = set(expected_tags.get("entity") or [])
+        for threshold in THRESHOLDS:
+            cell = entity[f"{threshold:.2f}"]
+            predicted = set()
+            for name, entry in entries.items():
+                key = _entity_key(name)
+                confidence = _num(entry.get("modelConfidence"))
+                if (key is not None and _value(entry.get("modelValue")) == "true"
+                        and confidence is not None and confidence >= threshold):
+                    predicted.add(key)
+            cell["predicted"] += len(predicted)
+            cell["expected"] += len(want_entities)
+            cell["hit"] += len(predicted & want_entities)
+
+    def ratio(a, b):
+        return a / b if b else None
+
+    tags = {}
+    for tag, stat in sorted(tag_stats.items()):
+        at = {}
+        for label, cell in stat["atThreshold"].items():
+            row = {"n": cell["n"], "modelAccuracy": ratio(cell["correct"], cell["n"])}
+            if tag == "workflow_state":
+                row["falseNonIdleRate"] = ratio(cell["nonIdle"], stat["idleN"])
+            if tag in ASYMMETRIC_PROMOTION_TAGS:
+                row["modelTrueHeuristicFalseRate"] = ratio(cell["flip"], cell["n"])
+                row["modelTrueHeuristicFalsePrecision"] = ratio(cell["flipTrue"], cell["flip"])
+            at[label] = row
+        entry = {
+            "samples": stat["samples"],
+            "missing": stat["missing"],
+            "heuristicN": stat["heuristicN"],
+            "heuristicAccuracy": ratio(stat["heuristicCorrect"], stat["heuristicN"]),
+            "atThreshold": at,
+        }
+        if tag == "workflow_state":
+            entry["heuristicFalseNonIdleRate"] = ratio(stat["heuristicNonIdle"], stat["idleN"])
+            entry["idleSamples"] = stat["idleN"]
+        tags[tag] = entry
+    entity_rows = {}
+    for label, cell in entity.items():
+        entity_rows[label] = {
+            "predicted": cell["predicted"],
+            "expected": cell["expected"],
+            "precision": ratio(cell["hit"], cell["predicted"]),
+            "recall": ratio(cell["hit"], cell["expected"]),
+        }
+    return {"samples": len(matches), "tags": tags, "entity": entity_rows}
+
+
+def score_against_fixtures(traces, fixtures, verbose=False):
+    """Join the traces to every fixture and score each language. A trace joins every fixture it matches."""
+    languages = {}
+    joined_anywhere = set()
+    for fixture in fixtures:
+        name = fixture.get("language") or "unknown"
+        matches, unmatched, missing = join_traces(traces, fixture)
+        for trace, _ in matches:
+            joined_anywhere.add(id(trace))
+        result = score_fixture_matches(matches)
+        result.update({
+            "matchedTraces": len(matches),
+            "matchedUtterances": len(fixture.get("utterances", [])) - len(missing),
+            "unmatchedUtterances": len(missing),
+            "reviewed": fixture.get("reviewed"),
+        })
+        if verbose:
+            result["unmatchedUtteranceIds"] = [u["id"] for u in missing]
+        languages[name] = result
+    unmatched_traces = [t for t in traces if id(t) not in joined_anywhere]
+    out = {"languages": languages, "unmatchedTraces": len(unmatched_traces)}
+    if verbose:
+        out["unmatchedTraceMessages"] = [str(t.get("userMessage")) for t in unmatched_traces]
+    return out
 
 
 def _pct(value):
@@ -158,6 +358,39 @@ def render_text(report):
         out.append("    thresh   " + " ".join(f"{k:>6}" for k in t["atThreshold"]))
         out.append("    agree    " + " ".join(f"{_pct(v['agreementRate']):>6}" for v in t["atThreshold"].values()))
         out.append("    answered " + " ".join(f"{v['answered']:>6}" for v in t["atThreshold"].values()))
+    if "groundTruth" in report:
+        out += ["", render_ground_truth(report["groundTruth"])]
+    return "\n".join(out)
+
+
+def render_ground_truth(truth):
+    out = [f"Ground truth: {truth['unmatchedTraces']} trace(s) joined no gate utterance"]
+    if truth.get("unmatchedTraceMessages"):
+        out += [f"    unmatched trace: {m}" for m in truth["unmatchedTraceMessages"]]
+    for language, lang in truth["languages"].items():
+        out.append("")
+        reviewed = "" if lang.get("reviewed") else "  (fixture NOT reviewed by a native reader)"
+        out.append(f"[{language}] traces joined={lang['matchedTraces']} utterances joined={lang['matchedUtterances']}"
+                   f" utterances without a trace={lang['unmatchedUtterances']}{reviewed}")
+        if lang.get("unmatchedUtteranceIds"):
+            out.append("    no trace for: " + ", ".join(lang["unmatchedUtteranceIds"]))
+        for tag, t in lang["tags"].items():
+            out.append(f"{tag:<24} samples={t['samples']:<4} heuristic={_pct(t['heuristicAccuracy'])}")
+            out.append("    thresh   " + " ".join(f"{k:>6}" for k in t["atThreshold"]))
+            out.append("    model    " + " ".join(f"{_pct(v['modelAccuracy']):>6}" for v in t["atThreshold"].values()))
+            if tag == "workflow_state":
+                out.append(f"    false-non-IDLE: heuristic {_pct(t['heuristicFalseNonIdleRate'])}; model+fallback "
+                           + " ".join(f"{_pct(v['falseNonIdleRate']):>6}" for v in t["atThreshold"].values()))
+            if tag in ASYMMETRIC_PROMOTION_TAGS:
+                out.append("    model-true/heuristic-false rate "
+                           + " ".join(f"{_pct(v['modelTrueHeuristicFalseRate']):>6}" for v in t["atThreshold"].values()))
+                out.append("    ... precision                   "
+                           + " ".join(f"{_pct(v['modelTrueHeuristicFalsePrecision']):>6}"
+                                      for v in t["atThreshold"].values()))
+        out.append("entity (set)")
+        out.append("    thresh   " + " ".join(f"{k:>6}" for k in lang["entity"]))
+        out.append("    precision " + " ".join(f"{_pct(v['precision']):>6}" for v in lang["entity"].values()))
+        out.append("    recall    " + " ".join(f"{_pct(v['recall']):>6}" for v in lang["entity"].values()))
     return "\n".join(out)
 
 
@@ -173,6 +406,10 @@ def main(argv=None):
     parser.add_argument("--limit", type=int, default=PAGE_LIMIT, help=f"max traces to fetch (server cap {PAGE_LIMIT})")
     parser.add_argument("--language", help="keep only turns mapped to this language by --messages-file")
     parser.add_argument("--messages-file", help="JSON {turnId: language} for --language")
+    parser.add_argument("--expected", action="append", metavar="FIXTURE",
+                        help="tagging-gate fixture (en.json, fr-CA.json, es.json; repeatable): score both taggers "
+                             "against its expected_tags, per language")
+    parser.add_argument("--verbose", action="store_true", help="with --expected, list the unmatched traces/utterances")
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
     args = parser.parse_args(argv)
 
@@ -201,7 +438,13 @@ def main(argv=None):
     if args.messages_file:
         with open(args.messages_file, encoding="utf-8") as handle:
             languages = json.load(handle)
-    report = build_report(traces, args.language, languages)
+    expected = None
+    if args.expected:
+        expected = []
+        for path in args.expected:
+            with open(path, encoding="utf-8") as handle:
+                expected.append(json.load(handle))
+    report = build_report(traces, args.language, languages, expected, args.verbose)
     print(json.dumps(report, indent=2) if args.json else render_text(report))
     return 0
 
