@@ -371,11 +371,7 @@ public class GlobalExceptionHandler {
 
     private int resolveStatus(String code) {
         return switch (code) {
-            case "CUSTOMER_NOT_FOUND",
-                    "VEHICLE_NOT_FOUND",
-                    "APPOINTMENT_NOT_FOUND",
-                    "LOCATION_NOT_FOUND",
-                    "RESOURCE_NOT_FOUND" -> HttpStatus.NOT_FOUND.value();
+            case "APPOINTMENT_NOT_FOUND", "LOCATION_NOT_FOUND", "RESOURCE_NOT_FOUND" -> HttpStatus.NOT_FOUND.value();
             case "VEHICLE_CUSTOMER_MISMATCH", "INVALID_APPOINTMENT_STATE", ConflictOverrideStateException.CODE ->
                 HttpStatus.CONFLICT.value();
             case CODE_CRM_UNAVAILABLE, CODE_HR_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE.value();

@@ -664,6 +664,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `SHORTAGE_RESOLVE_SUBSTITUTE_UNAVAILABLE` | 422 | The substitute named for the shortage is not available |
 | `SHORTAGE_RESOLVE_INVALID_IDENTIFIER` | 422 | The shortage resolution names an identifier that does not resolve |
 | `WORKORDER_NOT_RETURNABLE` | 422 | `submitReturnToStock` was called against a workorder whose status is not `COMPLETED` or `CLOSED` (CAP-218 Story #177) |
+| `CONFLICT` | 409 | `submitReturnToStock`: a consumed line whose `ext_workorder_part` row is absent and whose consumption ledger row recorded no product id (legacy rows written before the SKU became mandatory on consumption). The line itself never answers 503: the ledger this module owns proves it was consumed |
 | `SHORTAGE_DERIVED_QUANTITY_NOT_POSITIVE` | 422 | The allocation's reservation was used to derive `shortQuantity` (both omitted from the request) and the result is not positive — nothing is actually short |
 | `ADJUSTMENT_LEDGER_POST_FAILED` | 500 | Ledger post for adjustment failed unexpectedly; the adjustment is left `FAILED` with the cause in `errorMessage`, and approving it retries (#2170) |
 | `SCRAP_LEDGER_POST_FAILED` | 500 | Ledger post for scrap failed unexpectedly; the scrap is left `FAILED` with the cause in `errorMessage`, and approving it retries (#2170) |
