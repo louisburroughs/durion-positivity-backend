@@ -257,4 +257,121 @@ class NltiRequestTelemetryFactoryTest {
         assertThat(event.outcome().status()).isEqualTo("ERROR");
         assertThat(event.outcome().errorCode()).isEqualTo("RateLimitExceededException");
     }
+
+    // ── ADR-0069: schema version 2 ──────────────────────────────────────────
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
+    private static NltiRequestTelemetry chatEvent(NltiRequestTelemetryFactory.ScopeSignal scope) {
+        return NltiRequestTelemetryFactory.forChatRequest(
+                "corr-scope",
+                "2026-09-30T12:00:00Z",
+                "ROLE_ADMIN",
+                12,
+                List.of("WorkorderFacadeTool"),
+                List.of(),
+                List.of("BASE", "ROLE"),
+                false,
+                null,
+                "IDLE",
+                321L,
+                "SUCCESS",
+                null,
+                null,
+                false,
+                scope);
+    }
+
+    @Test
+    void schemaVersionIsTwo() {
+        assertThat(NltiRequestTelemetry.SCHEMA_VERSION).isEqualTo(2);
+        assertThat(chatEvent(null).schemaVersion()).isEqualTo(2);
+    }
+
+    @Test
+    void forChatRequest_withScope_carriesTheEightScopeFields() throws Exception {
+        NltiRequestTelemetry event = chatEvent(
+                new NltiRequestTelemetryFactory.ScopeSignal("SHADOW", "c878c7206d2ed660", "HIGH", 3, 5, 4, 0, false));
+
+        assertThat(event.scopeMode()).isEqualTo("SHADOW");
+        assertThat(event.scopeGraphHash()).isEqualTo("c878c7206d2ed660");
+        assertThat(event.scopeConfidence()).isEqualTo("HIGH");
+        assertThat(event.scopeEntityCount()).isEqualTo(3);
+        assertThat(event.scopeToolCount()).isEqualTo(5);
+        assertThat(event.scopeDocCount()).isEqualTo(4);
+        assertThat(event.scopeAddedToolCount()).isZero();
+        assertThat(event.scopeRagFilterApplied()).isFalse();
+
+        com.fasterxml.jackson.databind.JsonNode json = MAPPER.readTree(MAPPER.writeValueAsString(event));
+        assertThat(json.get("schemaVersion").intValue()).isEqualTo(2);
+        assertThat(json.get("scopeMode").textValue()).isEqualTo("SHADOW");
+        assertThat(json.get("scopeGraphHash").textValue()).isEqualTo("c878c7206d2ed660");
+        assertThat(json.get("scopeConfidence").textValue()).isEqualTo("HIGH");
+        assertThat(json.get("scopeEntityCount").intValue()).isEqualTo(3);
+        assertThat(json.get("scopeToolCount").intValue()).isEqualTo(5);
+        assertThat(json.get("scopeDocCount").intValue()).isEqualTo(4);
+        assertThat(json.get("scopeAddedToolCount").intValue()).isZero();
+        assertThat(json.get("scopeRagFilterApplied").booleanValue()).isFalse();
+    }
+
+    @Test
+    void forChatRequest_withoutScope_omitsEveryScopeFieldFromTheJson() throws Exception {
+        String json = MAPPER.writeValueAsString(chatEvent(null));
+
+        // Mode off, simple chat and failed requests resolve no scope: the fields are absent, not zero.
+        assertThat(json).doesNotContain("\"scope");
+        // The Loki queries carve the event out of the log line by this exact prefix.
+        assertThat(json).startsWith("{\"schemaVersion\":2,");
+    }
+
+    @Test
+    void theOlderChatOverloadsAndTheNltiPathCarryNoScope() throws Exception {
+        NltiRequestTelemetry chat = NltiRequestTelemetryFactory.forChatRequest(
+                "corr-1",
+                "2026-07-01T00:00:00Z",
+                "ROLE_ADMIN",
+                1,
+                List.of("WorkorderFacadeTool"),
+                List.of(),
+                List.of(),
+                false,
+                null,
+                null,
+                1L,
+                "SUCCESS",
+                null);
+        NltiRequestTelemetry nlti = NltiRequestTelemetryFactory.forNltiRequest(
+                "corr-2",
+                "2026-07-01T00:00:00Z",
+                SESSION_ID,
+                REQUEST_ID,
+                "ROLE_ADMIN",
+                1,
+                "ACTION",
+                "LOW",
+                null,
+                5L,
+                "SUCCESS",
+                null);
+
+        assertThat(chat.scopeMode()).isNull();
+        assertThat(MAPPER.writeValueAsString(chat)).doesNotContain("\"scope");
+        assertThat(nlti.schemaVersion()).isEqualTo(2);
+        assertThat(MAPPER.writeValueAsString(nlti)).doesNotContain("\"scope");
+    }
+
+    @Test
+    void aVersionOneReaderThatIgnoresUnknownFieldsStillReadsEveryOldField() throws Exception {
+        String json = MAPPER.writeValueAsString(chatEvent(
+                new NltiRequestTelemetryFactory.ScopeSignal("SHADOW", "c878c7206d2ed660", "LOW", 1, 0, 0, 0, false)));
+
+        com.fasterxml.jackson.databind.JsonNode event = MAPPER.readTree(json);
+        assertThat(event.get("eventType").textValue()).isEqualTo("nlti.request.telemetry");
+        assertThat(event.at("/actor/primaryRole").textValue()).isEqualTo("ROLE_ADMIN");
+        assertThat(event.at("/tools/selected/0").textValue()).isEqualTo("WorkorderFacadeTool");
+        assertThat(event.at("/routing/workflowState").textValue()).isEqualTo("IDLE");
+        assertThat(event.at("/latency/totalMs").longValue()).isEqualTo(321L);
+        assertThat(event.at("/outcome/status").textValue()).isEqualTo("SUCCESS");
+    }
 }

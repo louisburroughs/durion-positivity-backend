@@ -6,7 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Structured per-request telemetry event ({@code nlti.request.telemetry} v1).
+ * Structured per-request telemetry event ({@code nlti.request.telemetry} v2).
  *
  * <p>This is the evaluation / observability stream defined by the NL-interface design (Gate 0).
  * It is intentionally distinct from {@code nlti_audit_event} (compliance audit) and
@@ -47,6 +47,13 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>All three are retained rather than removed because v1 consumers already query them; see the GAP
  * notes on the Gate 7 dashboard panels.
+ *
+ * <p><strong>Schema version 2 (ADR-0069).</strong> Adds the eight top-level {@code scope*} fields:
+ * the turn's scope-graph resolution, as a mode, a graph hash, a confidence and counts. They are
+ * purely additive, all nullable, and <strong>absent</strong> unless a scope was resolved for the
+ * request: never in {@code mcp.scope-graph.mode: off}, never on the simple-chat path, never on the
+ * NLTI path and never on an {@code ERROR} event. Every v1 field keeps its name, type and meaning, so
+ * a v1 reader that ignores unknown fields reads a v2 event unchanged.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record NltiRequestTelemetry(
@@ -64,9 +71,17 @@ public record NltiRequestTelemetry(
         @Nullable Write write,
         @Nullable Quality quality,
         @Nullable Latency latency,
-        Outcome outcome) {
+        Outcome outcome,
+        @Nullable String scopeMode,
+        @Nullable String scopeGraphHash,
+        @Nullable String scopeConfidence,
+        @Nullable Integer scopeEntityCount,
+        @Nullable Integer scopeToolCount,
+        @Nullable Integer scopeDocCount,
+        @Nullable Integer scopeAddedToolCount,
+        @Nullable Boolean scopeRagFilterApplied) {
 
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
     public static final String EVENT_TYPE = "nlti.request.telemetry";
 
     /** Model routing tier the request was served by. */

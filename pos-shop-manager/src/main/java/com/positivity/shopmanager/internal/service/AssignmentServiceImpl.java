@@ -241,7 +241,8 @@ public class AssignmentServiceImpl implements AssignmentService {
     private static AssignmentResponse mapToResponse(Assignment assignment, List<AssignmentMechanic> mechLinks) {
         List<AssignedMechanicInfo> mechanicInfos = mechLinks.stream()
                 .map(link -> AssignedMechanicInfo.builder()
-                        .mechanicId(link.getMechanicId())
+                        .mechanicPersonId(link.getMechanicPersonId())
+                        .mechanicRecordId(link.getMechanicId())
                         .role(MechanicRole.valueOf(link.getRole().name()))
                         .build())
                 .toList();

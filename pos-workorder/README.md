@@ -333,6 +333,14 @@ other: double-booking is grouped by resource id **and** type, locked workorders 
 the conflict is reported as `BAY_DOUBLE_BOOKED` or `MOBILE_UNIT_DOUBLE_BOOKED` with a message
 naming the right kind of unit.
 
+A mechanic named on more than one roster workorder is reported as `DOUBLE_BOOKED_MECHANIC`, and its
+severity depends on which source supplied each claim (#2124). It is `BLOCKING` only when the person
+holds a **current `technician_assignment`** on two or more of the workorders — that is custody, and
+one person cannot hold two jobs. Any collision involving a planned-only claim (the legacy
+`mechanic_ids` column, which is scheduling intention and may simply be stale) is a `WARNING`, worded
+as a plan: "is planned onto N workorders" when no claim is held, or "holds 1 workorder and is
+planned onto N more" when one of them is.
+
 ### The roster: today's schedule plus carryover (#2002)
 
 `workorders[]` is **not** "rows whose `scheduledDate` is the requested date". It is that set unioned
@@ -418,6 +426,21 @@ replica's ingest time, so a replayed undated TERMINATED fact cannot outrank a da
 A person whose latest row is TERMINATED, DISABLED or SUSPENDED is dropped from the availability
 roster and refused by technician assign/reassign (`TECHNICIAN_NOT_ACTIVE`, #2120); a person with no
 row is treated as employed, so replica lag or a stalled DLQ cannot take a shop offline.
+
+**Credential replica (#2122).** `people.person-credential.updated` on `people.events.v1` is applied
+by `PeopleReplicaEventsListener` into `ext_person_credential`, one row per credential keyed by the
+owner's credential id (a renewal is a new credential, so a new row), with the same
+`aggregate_version` stale guard and `processed_events` mark. The feed's `status` is stored as
+received but is **not** trusted for expiry: pos-people stamps it from its own clock, so `EXPIRED`
+arrives once the owner's UTC day has passed `expiresOn` even though the expiry day still counts
+here. `ExtPersonCredentialReplica.isHeldOn(date)` therefore lets the dates decide — `issuedOn` on or
+before the date, `expiresOn` null or on/after it — and only `REVOKED` / `SUPERSEDED`, the owner's
+deliberate decisions, are excluded as received. `PersonAvailability.certifications` is `null` when
+the person has **no** credential rows at all (no data: the skill check stays silent) and an empty
+list when rows exist but none is held on the date (which is a real `MECHANIC_SKILL_MISMATCH`
+warning). A held credential contributes **both** its skill code (`BRAKES-MEDIUM_HEAVY`) and its
+competence code (`BRAKES`), because the vocabulary of `Workorder.requiredCertifications` is
+undefined and a workorder may name either.
 
 **Bay specialty map replica (#2261, DECISION-LOCATION-025).** `location.bay-specialty-map.updated`
 carries a tenant's *whole* bay-type specialty map — one entry per `BayType`, never a delta — so this
@@ -718,7 +741,7 @@ not replicated as `taxPending` and never blocks the estimate; the part-quantity 
 | `workorder.kafka.catalog-events-consumer-group` | `pos-workorder-catalog-events` | Consumer group for the catalog fact topic |
 | `workorder.kafka.location-events-topic` | `location.events.v1` | Location fact topic feeding the `ext_location`, `ext_bay`, `ext_mobile_unit`, `ext_bay_type` and `ext_bay_specialty_map` replicas |
 | `workorder.kafka.location-events-consumer-group` | `pos-workorder-location-events` | Consumer group for the location fact topic |
-| `workorder.kafka.people-events-topic` | `people.events.v1` | People fact topic feeding the `ext_people_staffing_assignment` and `ext_people_employee` replicas (#2119) |
+| `workorder.kafka.people-events-topic` | `people.events.v1` | People fact topic feeding the `ext_people_staffing_assignment`, `ext_people_employee` (#2119) and `ext_person_credential` (#2122) replicas |
 | `workorder.kafka.people-events-consumer-group` | `pos-workorder-people-events` | Consumer group for the people fact topic |
 | `pos.workorder.fact-backfill.page-size` | `500` | Rows per transaction when backfilling actual-time workorder facts |
 | `pos.workorder.fact-backfill.max-rows-per-run` | `20000` | Rows per backfill command before it stops and reports a resume cursor |

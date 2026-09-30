@@ -6,6 +6,7 @@ import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.client.RoleDefaultPermissionsClient;
 import com.positivity.mcp.internal.config.AgentOrchestrationService;
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.config.ScopeGraphProperties;
 import com.positivity.mcp.internal.config.SessionAgentCacheMetrics;
 import com.positivity.mcp.internal.config.TieredChatModelResolver;
 import com.positivity.mcp.internal.domain.ChatOutcome;
@@ -20,6 +21,7 @@ import com.positivity.mcp.internal.orchestration.memory.SessionSummary;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.retrieval.PermissionAwareMetadataFilter;
+import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import com.positivity.mcp.internal.security.PermissionCodes;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.ConversationIds;
@@ -125,6 +127,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     /** #2073: reloads a persisted conversation's memory window on a cache miss; absent → fresh memory. */
     private @Nullable ConversationMemoryHistory conversationMemoryHistory;
 
+    /** ADR-0069: the scope-graph rollout switches; absent in hand-built constructions. */
+    private volatile @Nullable ScopeGraphProperties scopeGraphProperties;
+
     public SessionAgentManager(
             @Qualifier("chatModel") @NonNull ChatModel chatModel,
             @NonNull EmbeddingModel embeddingModel,
@@ -206,6 +211,16 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     @Autowired(required = false)
     public void setConversationMemoryHistory(@Nullable ConversationMemoryHistory conversationMemoryHistory) {
         this.conversationMemoryHistory = conversationMemoryHistory;
+    }
+
+    /**
+     * ADR-0069 §9: the scope-graph rollout switches, read only to stamp the mode on telemetry.
+     * Setter-injected and optional so existing constructions keep working; nothing in this class
+     * changes behaviour on them.
+     */
+    @Autowired(required = false)
+    public void setScopeGraphProperties(@Nullable ScopeGraphProperties scopeGraphProperties) {
+        this.scopeGraphProperties = scopeGraphProperties;
     }
 
     /**
@@ -328,6 +343,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 toolInvocationRecorder.recordWorkflowState(
                         selection.workflowState().name());
                 toolInvocationRecorder.recordSelectedTools(selectedToolNames);
+                // ADR-0069 §9: the scope resolved by the shared selection step, recorded where the
+                // other selection stages are. Null in mode off: nothing is recorded.
+                if (selection.scope() != null) {
+                    toolInvocationRecorder.recordScope(selection.scope());
+                }
             }
             String cacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
             if (LOGGER.isDebugEnabled()) {
@@ -358,6 +378,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 // #1675: tools that need the caller's own wording read it from here rather than
                 // from a model-supplied copy, which arrives normalised with the preposition gone.
                 requestScopedUserContext.recordUserMessage(message);
+                // ADR-0069 §5: published next to the caller, for the same window, and cleared by the
+                // same clear() in the finally below.
+                if (selection.scope() != null) {
+                    requestScopedUserContext.recordScope(selection.scope());
+                }
             }
             long agentStartNanos = System.nanoTime();
             PosAssistant.Reply reply = agent.reply(
@@ -395,7 +420,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     "SUCCESS",
                     null,
                     tierRoutingOf(routingDecision),
-                    writeCapableToolsPresent);
+                    writeCapableToolsPresent,
+                    selection.scope());
             if (toolInvocationRecorder != null) {
                 toolInvocationRecorder.completeTurn(reply.text());
             }
@@ -427,7 +453,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     "ERROR",
                     exception.getClass().getSimpleName(),
                     tierRoutingOf(routingDecision),
-                    currentWriteCapableToolsPresent());
+                    currentWriteCapableToolsPresent(),
+                    null);
             throw new IllegalStateException(
                     "MCP chat failed role=%s elapsedMs=%d errorName=%s"
                             .formatted(role, elapsedMs, exception.getClass().getSimpleName()),
@@ -495,8 +522,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         QueryDocumentRetriever permissionFilteredRetriever = permissionFiltered(hybridRetriever);
         QueryDocumentRetriever rerankedRetriever =
                 new RerankedContentRetriever(permissionFilteredRetriever, TIER2_FINAL_TOP_K);
-        QueryDocumentRetriever resilientContentRetriever =
-                new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
+        // ADR-0069 §9: observes the final top-K for the scope trace and returns it untouched; a plain
+        // call-through unless a scope was published for the request.
+        QueryDocumentRetriever resilientContentRetriever = new ResilientContentRetriever(
+                new ScopeRetrievalObserver(rerankedRetriever, requestScopedUserContext, toolInvocationRecorder),
+                "tier2-hybrid-reranked-retriever");
 
         // #1193 cache safety: the WRITE-GATE layer is applied per request (the supplier reads the
         // request-scoped write-capability signal, resolved the same way tools are), so a cached
@@ -784,7 +814,19 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     null, currentUserContext.username(), true, false, elapsedMs, null);
         }
         emitChatTelemetry(
-                currentUserContext, List.of(), List.of(), true, null, null, elapsedMs, "SUCCESS", null, null, false);
+                currentUserContext,
+                List.of(),
+                List.of(),
+                true,
+                null,
+                null,
+                elapsedMs,
+                "SUCCESS",
+                null,
+                null,
+                false,
+                // The fast path resolves no scope (ADR-0069).
+                null);
         // The fast path offers no tools; its answer source is the raw extraction source (#1816).
         return new SimpleChatReply(
                 new PosAssistant.Reply(response, extracted.source().name(), List.of()),
@@ -808,7 +850,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @NonNull String status,
             @Nullable String errorCode,
             @Nullable TierRouting tierRouting,
-            boolean writeCapableToolsPresent) {
+            boolean writeCapableToolsPresent,
+            @Nullable ScopeSet scope) {
         if (telemetryEmitter == null) {
             return;
         }
@@ -835,7 +878,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     status,
                     errorCode,
                     tierRouting,
-                    writeCapableToolsPresent));
+                    writeCapableToolsPresent,
+                    ScopeShadowSupport.telemetrySignal(scope, scopeGraphProperties)));
         } catch (RuntimeException telemetryFailure) {
             LOGGER.warn(
                     "MCP telemetry emission failed role={} status={}",

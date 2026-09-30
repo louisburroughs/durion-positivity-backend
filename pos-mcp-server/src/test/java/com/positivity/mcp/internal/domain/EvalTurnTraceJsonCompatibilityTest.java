@@ -142,4 +142,103 @@ class EvalTurnTraceJsonCompatibilityTest {
         assertThat(roundTripped.conversationId()).isEqualTo(conversationId);
         assertThat(roundTripped.messageId()).isEqualTo(messageId);
     }
+
+    @Test
+    @DisplayName("ADR-0069: a payload written before scope existed reads back with a null scope")
+    void aPayloadWrittenBeforeScopeExistedReadsBackWithANullScope() throws Exception {
+        assertThat(mapper.readValue(LEGACY_PAYLOAD, EvalTurnTrace.class).scope())
+                .isNull();
+        assertThat(mapper.readValue(PRE_1806_PAYLOAD, EvalTurnTrace.class).scope())
+                .isNull();
+    }
+
+    /** A pre-ADR-0069 row: the #2075 shape, with the message link and no scope. */
+    private static final String PRE_SCOPE_PAYLOAD = """
+            {"turnId":"01991b8a-0000-7000-8000-000000000003",
+             "startedAt":"2026-09-28T10:00:00Z","completedAt":"2026-09-28T10:00:04Z",
+             "expiresAt":"2026-10-28T10:00:04Z",
+             "userId":"01960010-0000-7000-8000-000000000002","username":"admin.alpha","role":"ROLE_ADMIN",
+             "userMessage":"Is work order WO-20391 billed?",
+             "simpleChat":false,"intent":"LOOKUP","modelTier":"T2_SIMPLE","workflowState":"IDLE",
+             "selectedTools":["WorkorderFacadeTool"],"systemPrompt":"prompt",
+             "offeredTools":[{"name":"getWorkorder","description":"d","inputSchema":"{}"}],
+             "toolCalls":[{"sequence":1,"name":"getWorkorder","arguments":"{}","result":"{}","error":null,"elapsedMs":12}],
+             "finalResponse":"answer","error":null,"serverBuild":"sha-35b2f00","answerSource":"CONTENT",
+             "conversationId":"0199b1be-7080-7000-8000-000000000abc",
+             "messageId":"0199b1be-7080-7000-8000-000000000def"}
+            """;
+
+    @Test
+    @DisplayName("ADR-0069: the newest pre-scope payload, with every other field set, still reads back whole")
+    void theNewestPreScopePayloadStillReadsBack() throws Exception {
+        EvalTurnTrace read = mapper.readValue(PRE_SCOPE_PAYLOAD, EvalTurnTrace.class);
+
+        assertThat(read.scope()).isNull();
+        assertThat(read.toolCalls()).hasSize(1);
+        assertThat(read.serverBuild()).isEqualTo("sha-35b2f00");
+        assertThat(read.messageId()).hasToString("0199b1be-7080-7000-8000-000000000def");
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069: a current payload round-trips its scope, which holds keys, kinds and counts and no matched text")
+    void aCurrentPayloadRoundTripsItsScope() throws Exception {
+        EvalTurnTrace legacy = mapper.readValue(PRE_SCOPE_PAYLOAD, EvalTurnTrace.class);
+        ScopeTrace scope = new ScopeTrace(
+                "SHADOW",
+                java.util.List.of(),
+                "c878c7206d2ed660",
+                java.time.Instant.parse("2026-09-30T12:00:00Z"),
+                "HIGH",
+                java.util.List.of(new ScopeTrace.SeedTrace("workorder", "IDENTIFIER")),
+                3,
+                5,
+                4,
+                2,
+                0,
+                false,
+                1,
+                1,
+                2,
+                5);
+        EvalTurnTrace stamped = new EvalTurnTrace(
+                legacy.turnId(),
+                legacy.startedAt(),
+                legacy.completedAt(),
+                legacy.expiresAt(),
+                legacy.userId(),
+                legacy.username(),
+                legacy.role(),
+                legacy.userMessage(),
+                legacy.simpleChat(),
+                legacy.intent(),
+                legacy.modelTier(),
+                legacy.workflowState(),
+                legacy.selectedTools(),
+                legacy.systemPrompt(),
+                legacy.offeredTools(),
+                legacy.toolCalls(),
+                legacy.finalResponse(),
+                legacy.error(),
+                legacy.serverBuild(),
+                legacy.answerSource(),
+                legacy.conversationId(),
+                legacy.messageId(),
+                scope);
+
+        String json = mapper.writeValueAsString(stamped);
+        EvalTurnTrace roundTripped = mapper.readValue(json, EvalTurnTrace.class);
+
+        assertThat(roundTripped.scope()).isEqualTo(scope);
+        assertThat(roundTripped).isEqualTo(stamped);
+        String scopeJson = mapper.writeValueAsString(scope);
+        assertThat(scopeJson)
+                .contains("\"mode\":\"SHADOW\"")
+                .contains("\"graphHash\":\"c878c7206d2ed660\"")
+                .contains("\"seeds\":[{\"entity\":\"workorder\",\"matchKind\":\"IDENTIFIER\"}]")
+                .contains("\"calledToolsInScope\":1")
+                .contains("\"retrievedDocsInScope\":2")
+                // The identifier the user typed is in the trace's userMessage, never in its scope.
+                .doesNotContain("WO-20391");
+    }
 }

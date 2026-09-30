@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;
@@ -54,6 +55,13 @@ public class RequestScopedUserContext {
      */
     private static final ThreadLocal<String> USER_MESSAGE = new ThreadLocal<>();
 
+    /**
+     * This turn's resolved scope (ADR-0069 §5), published next to the caller and cleared with it.
+     * Unset in mode {@code off}, on the simple-chat path and outside a chat turn; a reader treats
+     * that as "no scope" and keeps today's behaviour.
+     */
+    private static final ThreadLocal<ScopeSet> SCOPE = new ThreadLocal<>();
+
     public void set(@NonNull CurrentUserContext context) {
         set(context, null);
     }
@@ -91,7 +99,18 @@ public class RequestScopedUserContext {
         return Optional.ofNullable(USER_MESSAGE.get());
     }
 
+    /** Publishes this turn's scope for the consumers that run inside the cached agent (ADR-0069 §6). */
+    public void recordScope(@NonNull ScopeSet scope) {
+        SCOPE.set(scope);
+    }
+
+    /** This turn's scope, or empty when none was resolved for it. */
+    public @NonNull Optional<ScopeSet> currentScope() {
+        return Optional.ofNullable(SCOPE.get());
+    }
+
     public void clear() {
+        SCOPE.remove();
         HOLDER.remove();
         DISCOVERED_OPENAPI_TOOLS.remove();
         WRITE_CAPABLE_TOOLS_PRESENT.remove();
