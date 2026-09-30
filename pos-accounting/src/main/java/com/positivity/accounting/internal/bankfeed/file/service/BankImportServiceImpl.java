@@ -246,7 +246,7 @@ public class BankImportServiceImpl implements BankImportService {
         file.setRetentionUntil(saved.getRetentionUntil());
         files.save(file);
 
-        List<BankImportRow> rows = ImportEvaluator.fromParse(saved.getImportId(), parsed.rows());
+        List<BankImportRow> rows = ImportEvaluator.fromParse(saved.getImportId(), parsed.rows(), currency);
         if (parsed.mappingResolved()) {
             evaluate(saved, rows);
         }
@@ -381,7 +381,7 @@ public class BankImportServiceImpl implements BankImportService {
         List<BankImportRow> old = rowRepository.findByImportIdOrderByRowNumberAsc(importId);
         rowRepository.deleteAll(old);
         rowRepository.flush();
-        List<BankImportRow> rows = ImportEvaluator.fromParse(importId, parsed.rows());
+        List<BankImportRow> rows = ImportEvaluator.fromParse(importId, parsed.rows(), found.getCurrency());
         if (parsed.mappingResolved()) {
             evaluate(found, rows);
         }

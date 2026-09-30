@@ -285,6 +285,57 @@ class BankImportServiceImplTest {
         }
 
         @Test
+        void aRowFinerThanTheImportCurrencyIsStagedRejectedAndCanBeCorrected() {
+            BankImportResponse response = service.create(
+                    upload(
+                            "date,description,amount\n2026-09-02,DEP,100.00\n2026-09-03,ODD,12.345\n"
+                                    + "2026-09-04,OK,12.340",
+                            "0",
+                            "124.34",
+                            ACK),
+                    null,
+                    null,
+                    null);
+
+            assertThat(response.getStatus()).isEqualTo(BankImportStatus.VALIDATED);
+            assertThat(response.getAcceptedCount()).isEqualTo(2);
+            assertThat(response.getRejectedCount()).isEqualTo(1);
+            BankImportRow odd = rowStore.get(1);
+            assertThat(odd.getRowStatus()).isEqualTo(BankImportRowStatus.REJECTED);
+            assertThat(odd.getRejectionCode()).isEqualTo("AMOUNT_PRECISION_EXCEEDS_CURRENCY");
+            assertThat(rowStore.get(0).getRowStatus()).isEqualTo(BankImportRowStatus.PARSED);
+            assertThat(rowStore.get(2).getRowStatus()).isEqualTo(BankImportRowStatus.PARSED);
+
+            BankImportRowResponse corrected = service.updateRow(
+                    response.getImportId(),
+                    odd.getRowId(),
+                    BankImportRowUpdateRequest.builder()
+                            .correctedValues(Map.of("signedAmount", "12.35"))
+                            .build());
+
+            assertThat(corrected.getRowStatus()).isEqualTo(BankImportRowStatus.CORRECTED);
+            assertThat(corrected.getRejectionCode()).isNull();
+            assertThat(importStore.get(response.getImportId()).getRejectedCount())
+                    .isZero();
+        }
+
+        @Test
+        void theUploadPassesTheImportCurrencyToTheRowCheck() {
+            when(lookup.requireAccount(ACCOUNT))
+                    .thenReturn(new BankAccountTerms(ACCOUNT, "1000", "Cash", "JPY", 0, null, false));
+
+            service.create(
+                    upload("date,description,amount\n2026-09-02,DEP,500.5\n2026-09-03,DEP,500", "0", "1000", ACK),
+                    null,
+                    null,
+                    null);
+
+            assertThat(rowStore.get(0).getRowStatus()).isEqualTo(BankImportRowStatus.REJECTED);
+            assertThat(rowStore.get(0).getRejectionCode()).isEqualTo("AMOUNT_PRECISION_EXCEEDS_CURRENCY");
+            assertThat(rowStore.get(1).getRowStatus()).isEqualTo(BankImportRowStatus.PARSED);
+        }
+
+        @Test
         void theChecksRunInOrderAccountCurrencyFileHeaderThenParse() {
             BankImportCreateRequest request = upload("\u0000binary", "0", "0", null);
             when(lookup.checkHeader(eq(ACCOUNT), any(), isNull()))
@@ -513,6 +564,26 @@ class BankImportServiceImplTest {
             verify(lookup)
                     .saveDefaultColumnMapping(
                             eq(ACCOUNT), eq(Map.of("date", "Posted", "description", "Payee", "amount", "Amt")), any());
+        }
+
+        @Test
+        void aMappingReparsePassesTheImportCurrencyToTheRowCheck() {
+            UUID id = service.create(
+                            upload("Posted,Payee,Amt\n2026-09-02,DEP,500.005", "0", "500", ACK), null, null, null)
+                    .getImportId();
+
+            BankImportResponse mapped = service.updateMapping(
+                    id,
+                    BankImportMappingRequest.builder()
+                            .columnMapping(Map.of("date", "Posted", "description", "Payee", "amount", "Amt"))
+                            .build());
+
+            assertThat(mapped.getStatus()).isEqualTo(BankImportStatus.VALIDATED);
+            assertThat(mapped.getAcceptedCount()).isZero();
+            assertThat(rowStore).singleElement().satisfies(row -> {
+                assertThat(row.getRowStatus()).isEqualTo(BankImportRowStatus.REJECTED);
+                assertThat(row.getRejectionCode()).isEqualTo("AMOUNT_PRECISION_EXCEEDS_CURRENCY");
+            });
         }
 
         @Test

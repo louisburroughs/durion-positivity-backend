@@ -36,10 +36,15 @@ class ImportEvaluatorTest {
     private final CsvStatementFileParser parser = new CsvStatementFileParser();
 
     private List<BankImportRow> rows(String csv) {
+        return rows(csv, "USD");
+    }
+
+    private List<BankImportRow> rows(String csv, String currency) {
         List<BankImportRow> rows = ImportEvaluator.fromParse(
                 IMPORT,
                 parser.parse(csv.getBytes(StandardCharsets.UTF_8), ParserOptions.defaults(), null)
-                        .rows());
+                        .rows(),
+                currency);
         List<BankImportRow> mutable = new ArrayList<>(rows);
         for (int i = 0; i < mutable.size(); i++) {
             mutable.get(i).setRowId(UUID.fromString(String.format("01990000-0000-7000-8000-%012d", i)));
@@ -53,6 +58,64 @@ class ImportEvaluatorTest {
 
     private static List<Segment> whole(String opening, String closing) {
         return ImportEvaluator.segments(START, END, new BigDecimal(opening), new BigDecimal(closing), List.of());
+    }
+
+    @Nested
+    @DisplayName("amount precision against the import currency (#2336)")
+    class AmountPrecision {
+
+        @Test
+        void aRowFinerThanTheMinorUnitIsRejectedAndTheOthersStayValid() {
+            List<BankImportRow> rows = rows("2026-09-02,DEP,100.00\n2026-09-03,ODD,12.345\n2026-09-04,FEE,-5.00");
+            evaluate(rows, Map.of());
+
+            assertThat(rows)
+                    .extracting(BankImportRow::getRowStatus)
+                    .containsExactly(
+                            BankImportRowStatus.PARSED, BankImportRowStatus.REJECTED, BankImportRowStatus.PARSED);
+            assertThat(rows.get(1).getRejectionCode()).isEqualTo("AMOUNT_PRECISION_EXCEEDS_CURRENCY");
+            assertThat(rows.get(1).getRejectionDetail()).contains("12.345").contains("at most 2 decimal places");
+            assertThat(rows.get(1).getSignedAmount()).isEqualByComparingTo("12.345");
+            assertThat(rows.get(0).getRejectionCode()).isNull();
+        }
+
+        @Test
+        void trailingZerosDoNotCount() {
+            List<BankImportRow> rows = rows("2026-09-02,DEP,12.340\n2026-09-03,DEP,10.0000");
+            evaluate(rows, Map.of());
+
+            assertThat(rows).extracting(BankImportRow::getRowStatus).containsOnly(BankImportRowStatus.PARSED);
+        }
+
+        @Test
+        void aZeroDecimalCurrencyRejectsAFraction() {
+            List<BankImportRow> rows = rows("2026-09-02,DEP,12.5\n2026-09-03,DEP,12", "JPY");
+            evaluate(rows, Map.of());
+
+            assertThat(rows.get(0).getRowStatus()).isEqualTo(BankImportRowStatus.REJECTED);
+            assertThat(rows.get(0).getRejectionCode()).isEqualTo("AMOUNT_PRECISION_EXCEEDS_CURRENCY");
+            assertThat(rows.get(0).getRejectionDetail()).contains("at most 0 decimal places for JPY");
+            assertThat(rows.get(1).getRowStatus()).isEqualTo(BankImportRowStatus.PARSED);
+        }
+
+        @Test
+        void aThreeDecimalCurrencyAcceptsThousandths() {
+            List<BankImportRow> rows = rows("2026-09-02,DEP,12.345\n2026-09-03,DEP,1.2345", "KWD");
+            evaluate(rows, Map.of());
+
+            assertThat(rows.get(0).getRowStatus()).isEqualTo(BankImportRowStatus.PARSED);
+            assertThat(rows.get(1).getRowStatus()).isEqualTo(BankImportRowStatus.REJECTED);
+        }
+
+        @Test
+        void evaluateDoesNotClearThePrecisionRejection() {
+            List<BankImportRow> rows = rows("2026-09-03,ODD,12.345");
+            evaluate(rows, Map.of());
+            evaluate(rows, Map.of());
+
+            assertThat(rows.get(0).getRowStatus()).isEqualTo(BankImportRowStatus.REJECTED);
+            assertThat(rows.get(0).getRejectionCode()).isEqualTo("AMOUNT_PRECISION_EXCEEDS_CURRENCY");
+        }
     }
 
     @Nested
@@ -228,7 +291,7 @@ class ImportEvaluatorTest {
             assertThat(ImportEvaluator.blockers(rows, whole("0", "100.00"), USD))
                     .isEmpty();
 
-            List<BankImportRow> beyond = rows("2026-09-02,A,99.9899");
+            List<BankImportRow> beyond = rows("2026-09-02,A,99.98");
             evaluate(beyond, Map.of());
             assertThat(ImportEvaluator.blockers(beyond, whole("0", "100.00"), USD))
                     .containsKey("activityTotal");
