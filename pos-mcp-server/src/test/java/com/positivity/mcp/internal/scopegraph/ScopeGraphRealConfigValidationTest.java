@@ -33,7 +33,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -81,7 +80,6 @@ class ScopeGraphRealConfigValidationTest {
     private static final Set<ScopeGraphFinding.Kind> COVERAGE_KINDS = EnumSet.of(
             ScopeGraphFinding.Kind.FACADE_TOOL_WITHOUT_ENTITY, ScopeGraphFinding.Kind.RAG_DOC_WITHOUT_ENTITIES);
 
-    @Disabled("until the full lexicon and RAG entities land in this wave")
     @ParameterizedTest(name = "profile {0}")
     @ValueSource(strings = {"default", "alpha"})
     @DisplayName("the real lexicon, RAG annotations, specs and seed build a graph with no strict finding")
@@ -163,7 +161,8 @@ class ScopeGraphRealConfigValidationTest {
 
     // ---- mcp.rag.preload.docs, as the runtime binds it --------------------------------------------
 
-    private static List<StaticDocEntry> ragDocs(String profile) {
+    /** Shared with the parity and header tests of this package: one binding, the runtime's own. */
+    static List<StaticDocEntry> ragDocs(String profile) {
         StandardEnvironment environment = new StandardEnvironment();
         addYaml(environment, "application.yml");
         if (!"default".equals(profile)) {

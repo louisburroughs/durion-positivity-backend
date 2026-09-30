@@ -51,12 +51,14 @@ domain_scopes:
 unscoped_tools:
   - DateWindowFacadeTool
   - GlossaryFacadeTool
+  - EventsFacadeTool
 
 entities:
+  # ---- workorder domain ------------------------------------------------------------------------
   - key: workorder
     domain: workorder
     terms:
-      en: [work order, workorder, repair order]
+      en: [work order, workorder, repair order, wo, ro]
       fr: [bon de travail, ordre de réparation]
       es: [orden de trabajo, orden de reparación]
     identifiers:
@@ -65,14 +67,19 @@ entities:
     relates_to:
       - {entity: estimate, label: promoted_from}
       - {entity: customer, label: belongs_to}
+      - {entity: vehicle, label: services}
+      - {entity: invoice, label: billed_by}
+      - {entity: employee, label: assigned_to}
     schemas:
       - 'workorder:WorkorderDetailResponse'
       - 'workorder:WorkorderResponse'
     schema_patterns:
-      - 'workorder:Workorder.*'
+      - 'workorder:(?!.*Estimate).*'
     facade_tools:
       - {tool: WorkorderFacadeTool, access: reads}
       - {tool: ShopManagerFacadeTool, access: reads}
+      - {tool: CustomerFacadeTool, access: reads}
+      - {tool: InvoiceFacadeTool, access: reads}
     screens: [workorders.list, workorders.wip]
 
   - key: estimate
@@ -87,21 +94,525 @@ entities:
     relates_to:
       - {entity: workorder, label: promotes_to}
       - {entity: customer, label: belongs_to}
+      - {entity: appointment, label: created_from}
+      - {entity: tax, label: taxed_by}
     schemas:
       - 'workorder:EstimateSummaryResponse'
       - 'workorder:EstimateResponse'
     schema_patterns:
-      - 'workorder:Estimate.*'
+      - 'workorder:.*Estimate.*'
 
+  - key: appointment
+    domain: shop-manager
+    terms:
+      en: [appointment, booking]
+      fr: [rendez-vous]
+      es: [cita]
+    relates_to:
+      - {entity: estimate, label: promotes_to}
+      - {entity: customer, label: belongs_to}
+      - {entity: vehicle, label: for}
+      - {entity: location, label: held_at}
+    schemas:
+      - 'shop-manager:AppointmentResponse'
+    schema_patterns:
+      - 'shop-manager:(Appointment.*|.*Assignment.*|CancelAppointmentRequest|RescheduleAppointmentRequest|Conflict.*|Schedule.*|Opening.*|DayCapacityView|BayCapacityView|BayEligibility|CarryOverView|OverrideEntry|StaffingAdvisory|AssignedMechanicInfo)'
+    facade_tools:
+      - {tool: ShopManagerFacadeTool, access: reads}
+
+  # ---- customer and vehicle --------------------------------------------------------------------
   - key: customer
     domain: customer
     terms:
-      en: [customer, client]
-      fr: [client, cliente]
-      es: [cliente]
+      en: [customer, client, customer account]
+      fr: [client, cliente, compte client]
+      es: [cliente, cuenta de cliente]
+    relates_to:
+      - {entity: vehicle, label: owns}
+      - {entity: invoice, label: billed_by}
     schemas:
       - 'customer:CustomerDTO'
     schema_patterns:
-      - 'customer:(Customer|Party).*'
+      - 'customer:(?!Vehicle|CreateVehicle|PromotionRedemption|RecordRedemption).*'
     facade_tools:
       - {tool: CustomerFacadeTool, access: reads}
+      - {tool: AccountingFacadeTool, access: reads}
+      - {tool: InvoiceFacadeTool, access: reads}
+      - {tool: WorkorderFacadeTool, access: reads}
+
+  - key: vehicle
+    domain: vehicle-inventory
+    terms:
+      en: [vehicle, automobile, vin, license plate]
+      fr: [véhicule, voiture, plaque d'immatriculation]
+      es: [vehículo, auto, placa]
+    identifiers:
+      - key: vin
+        pattern: '\b[A-HJ-NPR-Z0-9]{17}\b'
+    relates_to:
+      - {entity: customer, label: belongs_to}
+      - {entity: product, label: fitted_with}
+    schemas:
+      - 'vehicle-inventory:VehicleResponse'
+    schema_patterns:
+      - 'vehicle-inventory:.*'
+      - 'vehicle-fitment:.*'
+      - 'customer:(Vehicle.*|CreateVehicleForParty.*)'
+    facade_tools:
+      - {tool: VehicleFacadeTool, access: reads}
+
+  # ---- billing ---------------------------------------------------------------------------------
+  - key: invoice
+    domain: invoice
+    terms:
+      en: [invoice]
+      fr: [facture]
+      es: [factura]
+    identifiers:
+      - key: invoice-number
+        pattern: '\bINV-\d{13}-[0-9a-fA-F]{8}\b'
+    relates_to:
+      - {entity: workorder, label: bills}
+      - {entity: customer, label: belongs_to}
+      - {entity: payment, label: paid_by}
+      - {entity: journal-entry, label: posted_as}
+    schemas:
+      - 'invoice:InvoiceDetailsResponse'
+      - 'invoice:InvoiceSearchResult'
+      - 'workorder:InvoiceGenerationResponse'
+    schema_patterns:
+      - 'invoice:(Invoice(?!Refund).*|OrderInvoice.*|PageInvoiceSearchResult|FinalizationRequest|RevertRequest|AdjustmentRequest|BillingRulesDTO|Application|Email.*|Print.*|RevenueByCustomer.*|Invoicing.*|ArtifactDownloadToken|ElevateRe.*)'
+      - 'accounting:(Invoice(?!Application).*|BillingRuleRef.*|RegenerateInvoice.*)'
+    facade_tools:
+      - {tool: InvoiceFacadeTool, access: reads}
+      - {tool: CustomerFacadeTool, access: reads}
+    screens: [invoices.list]
+
+  - key: payment
+    domain: invoice
+    terms:
+      en: [payment, deposit, receipt]
+      fr: [paiement, dépôt, reçu]
+      es: [pago, depósito, recibo]
+    relates_to:
+      - {entity: invoice, label: applies_to}
+      - {entity: customer, label: made_by}
+    schemas:
+      - 'invoice:PaymentIntentResponse'
+    schema_patterns:
+      - 'invoice:(.*Payment.*|CaptureAmountRequest|.*Deposit.*|.*Receipt.*|.*Refund.*)'
+      - 'accounting:(PaymentApplication.*|PagePaymentApplication.*|InvoiceApplication|ApplicationDetail)'
+
+  # ---- sales orders and returns ----------------------------------------------------------------
+  - key: order
+    domain: order
+    terms:
+      en: [order, sales order, cart]
+      fr: [commande, commande de vente, panier]
+      es: [pedido, orden de venta, carrito]
+    relates_to:
+      - {entity: invoice, label: billed_by}
+      - {entity: return, label: returned_by}
+      - {entity: price, label: priced_by}
+      - {entity: tax, label: taxed_by}
+    schemas:
+      - 'order:SalesOrderResponse'
+    schema_patterns:
+      - 'order:(?!.*(PurchaseOrder|Return|Procurement)).*'
+    facade_tools:
+      - {tool: OrderFacadeTool, access: reads}
+
+  - key: return
+    domain: order
+    terms:
+      en: [return, refund, return order]
+      fr: [retour, remboursement, commande de retour]
+      es: [devolución, reembolso, orden de devolución]
+    relates_to:
+      - {entity: order, label: returns_from}
+      - {entity: stock-item, label: restocks}
+      - {entity: payment, label: refunded_by}
+    schemas:
+      - 'order:ReturnOrderResponse'
+    schema_patterns:
+      - 'order:.*Return.*'
+      - 'inventory:(ReturnLineDto|ReturnSubmissionResultDto|ReturnSubmitRequest|ReturnableItemDto)'
+
+  # ---- purchasing and inventory ----------------------------------------------------------------
+  - key: purchase-order
+    domain: order
+    terms:
+      en: [purchase order, po]
+      fr: [bon de commande, commande d'achat, commande fournisseur]
+      es: [orden de compra, pedido de compra]
+    relates_to:
+      - {entity: supplier, label: placed_with}
+      - {entity: asn, label: received_by}
+      - {entity: stock-item, label: replenishes}
+    schemas:
+      - 'order:PurchaseOrderResponse'
+    schema_patterns:
+      - 'order:(.*PurchaseOrder.*|Procurement.*)'
+      - 'inventory:.*PurchaseSuggestion.*'
+    facade_tools:
+      - {tool: OrderFacadeTool, access: reads}
+
+  - key: asn
+    domain: inventory
+    terms:
+      en: [asn, advance ship notice, advance shipping notice, goods receipt, receiving session]
+      fr: [avis d'expédition, avis d'expédition anticipé, bon de réception, réception de marchandises]
+      es: [aviso de envío anticipado, recepción de mercancía, nota de recepción]
+    identifiers:
+      - key: goods-receipt-number
+        pattern: '\bGR-[0-9a-fA-F]{8}\b'
+    relates_to:
+      - {entity: purchase-order, label: fulfills}
+      - {entity: stock-item, label: adds_to}
+    schemas:
+      - 'inventory:AsnResponse'
+      - 'inventory:GoodsReceiptResponse'
+    schema_patterns:
+      - 'inventory:(?!.*Transfer)(.*Asn.*|.*GoodsReceipt.*|.*Receiving.*|Receive.*|CrossDock.*)'
+
+  - key: stock-item
+    domain: inventory
+    terms:
+      en: [stock, inventory, stock level, on hand, inventory item]
+      fr: [stock, inventaire, niveau de stock, article en stock]
+      es: [existencias, inventario, nivel de existencias, artículo de inventario]
+    relates_to:
+      - {entity: product, label: stock_of}
+      - {entity: location, label: held_at}
+      - {entity: stock-transfer, label: moved_by}
+      - {entity: stock-adjustment, label: adjusted_by}
+    schemas:
+      - 'inventory:InventoryAvailabilityResponse'
+      - 'inventory:LocationInventoryInquiryResponse'
+    schema_patterns:
+      - 'inventory:(?!.*(Transfer|Adjustment|Asn|GoodsReceipt|Receiving|Receive|CrossDock|Scrap|Revaluation|PurchaseSuggestion|Return|MovedItem)).*'
+    facade_tools:
+      - {tool: InventoryFacadeTool, access: reads}
+      - {tool: LocationFacadeTool, access: reads}
+      - {tool: ReportingFacadeTool, access: reads}
+
+  - key: stock-transfer
+    domain: inventory
+    terms:
+      en: [stock transfer, inventory transfer, transfer order]
+      fr: [transfert de stock, transfert d'inventaire, ordre de transfert]
+      es: [transferencia de inventario, transferencia de stock, orden de transferencia]
+    relates_to:
+      - {entity: stock-item, label: moves}
+      - {entity: location, label: between}
+    schemas:
+      - 'inventory:TransferOrderResponse'
+    schema_patterns:
+      - 'inventory:(.*Transfer.*|MovedItem)'
+
+  - key: stock-adjustment
+    domain: inventory
+    terms:
+      en: [stock adjustment, inventory adjustment, scrap, revaluation]
+      fr: [ajustement de stock, ajustement d'inventaire, rebut]
+      es: [ajuste de inventario, ajuste de stock, desecho]
+    relates_to:
+      - {entity: stock-item, label: adjusts}
+      - {entity: journal-entry, label: posted_as}
+    schemas:
+      - 'inventory:AdjustmentResponse'
+      - 'inventory:AdjustmentRequestResponse'
+    schema_patterns:
+      - 'inventory:(.*Adjustment.*|.*Scrap.*|.*Revaluation.*)'
+
+  # ---- catalog, pricing, tax -------------------------------------------------------------------
+  - key: product
+    domain: catalog
+    terms:
+      en: [product, spare part, auto part, catalog item, sku]
+      fr: [produit, pièce, article du catalogue]
+      es: [producto, pieza, repuesto, artículo del catálogo]
+    relates_to:
+      - {entity: price, label: priced_by}
+      - {entity: stock-item, label: stocked_as}
+      - {entity: supplier, label: supplied_by}
+    schemas:
+      - 'catalog:ProductDto'
+      - 'catalog:ProductDetailView'
+    schema_patterns:
+      - 'catalog:(?!(PriceBook|.*Msrp|EffectiveLocationPrice|LocationPriceOverride|ResolvePrice|SupplierPrice|UpdateStandardCost|ItemCost|Pricing|GuardrailPolicy)).*'
+    facade_tools:
+      - {tool: CatalogFacadeTool, access: reads}
+      - {tool: PricingFacadeTool, access: reads}
+
+  - key: price
+    domain: price
+    terms:
+      en: [price, pricing, price book, msrp, labor rate]
+      fr: [prix, tarification, livre de prix, taux de main-d'œuvre]
+      es: [precio, libro de precios, tarifa de mano de obra]
+    relates_to:
+      - {entity: product, label: applies_to}
+      - {entity: promotion, label: adjusted_by}
+    schemas:
+      - 'price:PriceQuoteResponse'
+      - 'catalog:PriceBookDto'
+    schema_patterns:
+      - 'price:(?!.*(Promotion|Eligibility|EstimateContext|LineItemContext)).*'
+      - 'catalog:(PriceBook.*|.*Msrp.*|EffectiveLocationPrice.*|LocationPriceOverride.*|ResolvePrice.*|SupplierPrice.*|UpdateStandardCost.*|ItemCost.*|Pricing.*|GuardrailPolicy.*)'
+      - 'security-service:PricingSnapshot.*'
+      - 'security-service:PricingRuleTrace.*'
+    facade_tools:
+      - {tool: PricingFacadeTool, access: reads}
+
+  - key: promotion
+    domain: price
+    terms:
+      en: [promotion, promo, discount, promo code]
+      fr: [promotion, rabais, code promo]
+      es: [promoción, descuento, código promocional]
+    relates_to:
+      - {entity: price, label: adjusts}
+    schemas:
+      - 'price:PromotionOfferResponse'
+    schema_patterns:
+      - 'price:(.*Promotion.*|.*Eligibility.*|EstimateContext|LineItemContext)'
+      - 'customer:(PromotionRedemptionResponse|RecordRedemptionRequest)'
+    facade_tools:
+      - {tool: PricingFacadeTool, access: reads}
+
+  - key: tax
+    domain: tax
+    terms:
+      en: [tax, sales tax, gst, hst]
+      fr: [taxe, taxe de vente, tps, tvq]
+      es: [impuesto, impuesto sobre ventas, iva]
+    relates_to:
+      - {entity: estimate, label: applied_to}
+      - {entity: invoice, label: applied_to}
+      - {entity: location, label: determined_by}
+    schemas:
+      - 'tax:TaxCalculationResponse'
+    schema_patterns:
+      - 'tax:.*'
+      - 'accounting:TaxLiability.*'
+    facade_tools:
+      - {tool: TaxFacadeTool, access: reads}
+
+  # ---- places, suppliers, warranty, people -----------------------------------------------------
+  - key: location
+    domain: location
+    terms:
+      en: [location, store, branch, bay, service bay]
+      fr: [emplacement, succursale, magasin, baie de service]
+      es: [ubicación, sucursal, tienda, bahía de servicio]
+    relates_to:
+      - {entity: stock-item, label: holds}
+      - {entity: employee, label: staffed_by}
+    schemas:
+      - 'location:LocationResponseDTO'
+    schema_patterns:
+      - 'location:.*'
+      - 'shop-manager:Shop.*'
+    facade_tools:
+      - {tool: LocationFacadeTool, access: reads}
+      - {tool: ShopManagerFacadeTool, access: reads}
+      - {tool: TaxFacadeTool, access: reads}
+
+  - key: supplier
+    domain: supplier
+    terms:
+      en: [supplier, vendor]
+      fr: [fournisseur]
+      es: [proveedor]
+    relates_to:
+      - {entity: purchase-order, label: receives}
+      - {entity: product, label: supplies}
+    schemas:
+      - 'supplier:VendorProfileView'
+    schema_patterns:
+      - 'supplier:.*'
+      - 'accounting:VendorResponse'
+    facade_tools:
+      - {tool: AccountingFacadeTool, access: reads}
+
+  - key: warranty-claim
+    domain: warranty
+    terms:
+      en: [warranty claim, warranty]
+      fr: [réclamation de garantie, garantie]
+      es: [reclamo de garantía, garantía]
+    identifiers:
+      - key: claim-code
+        pattern: '\bWC-\d{4}-\d{6}\b'
+    relates_to:
+      - {entity: customer, label: belongs_to}
+      - {entity: vehicle, label: for}
+      - {entity: workorder, label: originates_from}
+      - {entity: invoice, label: settled_against}
+    schemas:
+      - 'warranty:ClaimResponse'
+      - 'warranty:ClaimSummaryResponse'
+    schema_patterns:
+      - 'warranty:.*'
+
+  - key: employee
+    domain: people
+    terms:
+      en: [employee, staff member, technician, mechanic]
+      fr: [employé, technicien, mécanicien]
+      es: [empleado, técnico, mecánico]
+    relates_to:
+      - {entity: location, label: assigned_to}
+      - {entity: user, label: linked_to}
+      - {entity: workorder, label: works_on}
+    schemas:
+      - 'people:EmployeeProfileDto'
+      - 'people:EmployeeSummaryDto'
+    schema_patterns:
+      - 'people:.*'
+      - 'people-contact:(Person.*|ResolvePerson.*|ContactPointDto|PostalAddressDto|LinkUserToPersonRequest|CreateUserLinkRequest|UserPersonLinkResponse)'
+      - 'shop-manager:(MechanicRoster.*|LocationTechnician.*|PagedModel.*|TechnicianCredentialResponse|PersonDTO)'
+    facade_tools:
+      - {tool: HrFacadeTool, access: reads}
+      - {tool: WorkorderFacadeTool, access: reads}
+
+  - key: user
+    domain: security-service
+    terms:
+      en: [user, user account, login]
+      fr: [utilisateur, compte utilisateur]
+      es: [usuario, cuenta de usuario]
+    relates_to:
+      - {entity: role, label: holds}
+      - {entity: employee, label: linked_to}
+    schemas:
+      - 'security-service:UserDto'
+    schema_patterns:
+      - 'security-service:BulkIngestRequestUser.*'
+      - 'security-service:(User.*|CreateUserRequest|LinkUserPersonRequest|SelfRegistration.*|ResolveSelfRegistration.*|Activat.*|LoginRequest|.*Token.*|AccountState.*|ValidateResponse|Tenant.*|Audit.*|PageAuditLogEventDto|CrmMatchSummaryDto)'
+    facade_tools:
+      - {tool: AdminFacadeTool, access: reads}
+
+  - key: role
+    domain: security-service
+    terms:
+      en: [role, permission, access right]
+      fr: [rôle, permission, droit d'accès]
+      es: [rol, permiso, derecho de acceso]
+    relates_to:
+      - {entity: user, label: assigned_to}
+    schemas:
+      - 'security-service:RoleDto'
+    schema_patterns:
+      - 'security-service:BulkIngestRequestRole.*'
+      - 'security-service:(Role.*|Permission.*|GrantAdded|AuthorizationDecisionResponse|CatalogVersionResponse)'
+      - 'people-contact:(RoleDto|UserRoleDto)'
+    facade_tools:
+      - {tool: AdminFacadeTool, access: reads}
+
+  # ---- accounting ------------------------------------------------------------------------------
+  - key: journal-entry
+    domain: accounting
+    terms:
+      en: [journal entry, ledger entry]
+      fr: [écriture de journal, écriture comptable]
+      es: [asiento contable, asiento de diario]
+    relates_to:
+      - {entity: gl-account, label: posts_to}
+    schemas:
+      - 'accounting:JournalEntryResponse'
+    schema_patterns:
+      - 'accounting:(JournalEntry.*|JournalLine.*|PagedResponseJournalEntryResponse|EntryNumberGapCheck|Accounting(Event|Period).*|PageAccountingEventResponse|Reprocess.*|EventProcessingLogEntry|Adjustment.*|HardLock.*|PeriodClose.*|CloseReadiness.*|AuditTrailResponse|CancellationRequest|PriceOverrideRequest|RefundRequest|.*Contract)'
+    facade_tools:
+      - {tool: AccountingFacadeTool, access: reads}
+
+  - key: gl-account
+    domain: accounting
+    terms:
+      en: [gl account, general ledger account, ledger account, chart of accounts]
+      fr: [compte du grand livre, compte comptable, plan comptable]
+      es: [cuenta contable, cuenta del libro mayor, plan de cuentas]
+    schemas:
+      - 'accounting:GLAccountResponse'
+    schema_patterns:
+      - 'accounting:(GLAccount.*|GLMapping.*|DefaultGLMapping.*|MappingKey.*|MappingResolution.*|PostingCategory.*|PostingRule.*|AccountDrilldownResponse)'
+    facade_tools:
+      - {tool: AccountingFacadeTool, access: reads}
+
+  - key: financial-report
+    domain: accounting
+    terms:
+      en: [financial report, financial statement, income statement, balance sheet, trial balance, aged receivables, aged payables]
+      fr: [rapport financier, état financier, état des résultats, bilan, balance de vérification]
+      es: [informe financiero, estado financiero, estado de resultados, balance general, balance de comprobación]
+    relates_to:
+      - {entity: journal-entry, label: derived_from}
+      - {entity: gl-account, label: summarizes}
+    schemas:
+      - 'accounting:IncomeStatementReport'
+      - 'accounting:BalanceSheetReport'
+      - 'accounting:TrialBalanceReport'
+    schema_patterns:
+      - 'accounting:(?!.*(Bank|Reconciliation|TaxLiability))(.*Report.*|Export.*|PageExportJobResponse|Aged.*|GeneralLedger.*|CollectionsAnalytics.*|PaymentLag.*|VendorSpend.*)'
+    facade_tools:
+      - {tool: ReportingFacadeTool, access: reads}
+      - {tool: AccountingFacadeTool, access: reads}
+
+  - key: bank-reconciliation
+    domain: accounting
+    terms:
+      en: [bank reconciliation, bank statement, bank import, bank account, bank transaction]
+      fr: [rapprochement bancaire, relevé bancaire, compte bancaire]
+      es: [conciliación bancaria, extracto bancario, cuenta bancaria]
+    relates_to:
+      - {entity: journal-entry, label: adjusts_via}
+    schemas:
+      - 'accounting:BankReconciliationResponse'
+      - 'accounting:BankStatementResponse'
+    schema_patterns:
+      - 'accounting:(Bank.*|Reconciliation.*|Outstanding.*|Settlement.*|AutoMatch.*|DuplicateReview.*|ClearingAdjustment|StatementSummary)'
+
+  - key: vendor-bill
+    domain: accounting
+    terms:
+      en: [vendor bill, supplier invoice, accounts payable, ap payment]
+      fr: [facture fournisseur, comptes fournisseurs, paiement fournisseur]
+      es: [factura de proveedor, cuentas por pagar, pago a proveedor]
+    relates_to:
+      - {entity: supplier, label: owed_to}
+      - {entity: asn, label: matched_to}
+    schemas:
+      - 'accounting:VendorBillResponse'
+      - 'accounting:APPaymentResponse'
+    schema_patterns:
+      - 'accounting:(VendorBill.*|PageVendorBill.*|APPayment.*|ExecuteAPPayment.*|GoodsReceivedEvent|VendorInvoiceReceivedEvent|CandidateSelectionRequest|ExceptionResolutionRequest|Candidate)'
+
+  - key: credit-memo
+    domain: accounting
+    terms:
+      en: [credit memo, customer credit, store credit]
+      fr: [note de crédit, crédit client, crédit en magasin]
+      es: [nota de crédito, crédito de cliente, crédito en tienda]
+    relates_to:
+      - {entity: customer, label: belongs_to}
+      - {entity: invoice, label: applied_to}
+    schemas:
+      - 'accounting:CreditMemoResponse'
+      - 'accounting:CustomerCreditResponse'
+    schema_patterns:
+      - 'accounting:(CreditMemo.*|CreateCreditMemoRequest|VoidCreditMemoRequest|PageCreditMemoResponse|CustomerCredit.*|PageCustomerCredit.*)'
+
+  # ---- marketing -------------------------------------------------------------------------------
+  - key: campaign
+    domain: marketing
+    terms:
+      en: [campaign, marketing campaign, message template]
+      fr: [campagne, campagne marketing, modèle de message]
+      es: [campaña, campaña de marketing, plantilla de mensaje]
+    relates_to:
+      - {entity: customer, label: targets}
+    schemas:
+      - 'marketing:CampaignResponse'
+    schema_patterns:
+      - 'marketing:.*'
