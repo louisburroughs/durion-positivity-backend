@@ -230,9 +230,9 @@ public class KafkaCommandListener {
                     response.getInvoiceId(),
                     response.getStatus());
         } catch (TransientDataAccessException e) {
-            // A connection blip or lock timeout is not a business failure: rethrow so the outer
-            // catch in onCommand propagates it for container retry (#2178). Dropping it here would
-            // lose a regeneration the caller already had acknowledged as accepted.
+            // A lock timeout or deadlock is not a business failure: rethrow so the outer catch in
+            // onCommand propagates it for container retry (#2178). Dropping it here would lose a
+            // regeneration the caller already had acknowledged as accepted.
             throw e;
         } catch (Exception e) {
             log.error("Invoice regeneration command failed for workorderId={}", workorderId, e);

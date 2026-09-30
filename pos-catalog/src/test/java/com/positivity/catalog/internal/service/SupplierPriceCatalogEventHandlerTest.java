@@ -406,6 +406,21 @@ class SupplierPriceCatalogEventHandlerTest {
         }
 
         @Test
+        void recordsAMalformedChunkAsProcessedWithoutApplyingIt() {
+            handle("""
+                    {"eventId":"e-bad","eventType":"supplier.pricecatalog.updated","aggregateVersion":1,
+                     "payload":{"importManifestId":"%s","vendorProfileId":"%s","chunkSequence":1,"chunkCount":1,
+                       "lines":"not-an-array"}}
+                    """.formatted(MANIFEST_ID, PROFILE_ID));
+
+            verify(priceEntryRepository, never()).save(any());
+            verify(priceImportChunkRepository, never()).save(any());
+            ArgumentCaptor<ProcessedEvent> mark = ArgumentCaptor.forClass(ProcessedEvent.class);
+            verify(processedEventRepository).save(mark.capture());
+            assertThat(mark.getValue().getEventId()).isEqualTo("e-bad");
+        }
+
+        @Test
         void rethrowsTransientDatabaseErrorsSoTheContainerRetries() {
             when(priceEntryRepository.save(any(SupplierPriceEntryEntity.class)))
                     .thenThrow(new QueryTimeoutException("db busy"));

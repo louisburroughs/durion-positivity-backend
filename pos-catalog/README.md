@@ -169,7 +169,12 @@ touched by this path, so a vendor's marketing feed can never redefine what a pro
 `SupplierPriceCatalogEventHandler` and `supplier.catalog.updated` to `SupplierCatalogEnrichmentHandler`.
 The former second group, `pos-catalog-supplier-catalog-enrichment`, is retired: `processed_events` is
 keyed by `event_id` alone, so two groups on one topic suppressed each other (#2177). A new supplier
-event type gets a branch in `SupplierEventsListener`, not a listener of its own.
+event type gets a branch in `SupplierEventsListener`, not a listener of its own. Enrichments the
+race already lost are not recovered by this change or by a replay: the PRICAT group recorded every
+skipped `supplier.catalog.updated` id as ignored, so the same id republished is skipped again, and
+pos-supplier only re-publishes a design whose `contentHash` changed. Recovering them means deleting
+the `processed_events` rows for `supplier.catalog.updated` ids that have no matching `tread_design`
+and resetting the group's offsets, or an owner-side re-emit of the MKCAT designs under new ids.
 An unchanged republication (same `contentHash`) is a no-op; a changed one is
 applied and re-matched, last write wins. Candidates are deliberately scoped, never the whole catalog:
 only the products the design's own vendor has actually priced via PRICAT

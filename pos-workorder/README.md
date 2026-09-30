@@ -677,6 +677,16 @@ never reflected and answers the generic code for its status instead (#1720).
 | `pos.workorder.fact-backfill.page-size` | `500` | Rows per transaction when backfilling actual-time workorder facts |
 | `pos.workorder.fact-backfill.max-rows-per-run` | `20000` | Rows per backfill command before it stops and reports a resume cursor |
 
+Every `@KafkaListener` in the module shares one error handler (`KafkaErrorHandlingConfig`,
+ADR-0044 §4, #2178): a failure a listener lets propagate is retried with exponential backoff (1 s
+doubling to a 30 s cap, five attempts) and then published to `{topic}.dlq` rather than logged and
+dropped. The command and fact listeners rethrow `TransientDataAccessException` (a lock timeout or
+deadlock) and swallow what they classify as permanent (a malformed payload, an unsupported
+command), so only a failure redelivery can fix reaches the handler. A dropped connection surfaces
+as `DataAccessResourceFailureException`, which Spring classes as non-transient, so it is still
+swallowed by those listeners; widening the rethrow is a platform-wide decision under ADR-0044, not
+a module one.
+
 ## Multitenancy (ADR-0062, WS3 wave 3)
 
 This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, every scoped entity

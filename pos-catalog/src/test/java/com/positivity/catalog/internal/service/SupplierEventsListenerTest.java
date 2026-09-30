@@ -144,6 +144,17 @@ class SupplierEventsListenerTest {
     }
 
     @Test
+    void rethrowsATransientDatabaseErrorFromTheGuardSoTheContainerRetries() {
+        when(processedEventRepository.existsById("e-7")).thenThrow(new QueryTimeoutException("db busy"));
+
+        assertThatThrownBy(() -> listener.onSupplierEvent(event("e-7", "supplier.catalog.updated")))
+                .isInstanceOf(QueryTimeoutException.class);
+
+        verifyNoInteractions(priceCatalogHandler, enrichmentHandler);
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
     void rethrowsATransientDatabaseErrorOnTheIgnoredPathSoTheContainerRetries() {
         when(processedEventRepository.save(any(ProcessedEvent.class))).thenThrow(new QueryTimeoutException("db busy"));
 

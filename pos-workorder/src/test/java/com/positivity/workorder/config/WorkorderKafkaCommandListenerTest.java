@@ -299,7 +299,7 @@ class WorkorderKafkaCommandListenerTest {
         // WorkorderAssignmentEventListener is a synchronous @EventListener, so a DB failure inside
         // it surfaces through publishEvent and must reach the container's error handler
         // (ADR-0044 §4) rather than the log-and-drop catch.
-        org.mockito.Mockito.doThrow(new QueryTimeoutException("connection blip"))
+        org.mockito.Mockito.doThrow(new QueryTimeoutException("lock wait timeout"))
                 .when(eventPublisher)
                 .publishEvent(any(AssignmentUpdatedEvent.class));
 
