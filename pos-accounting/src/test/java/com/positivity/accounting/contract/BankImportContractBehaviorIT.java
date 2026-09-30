@@ -367,6 +367,45 @@ class BankImportContractBehaviorIT extends BaseContractIntegrationTest {
         }
 
         @Test
+        void anOverPreciseAmountIsStagedRejectedCorrectedAndThenCommits() throws Exception {
+            // #2336: 12.345 is finer than USD's minor unit; 12.340 is not (trailing zeros do not count).
+            String id = uploaded(body(
+                    "date,description,amount\n2025-09-02,A,100.00\n2025-09-03,B,12.345\n2025-09-04,C,12.340",
+                    "2025-09-01",
+                    "2025-09-30",
+                    "0",
+                    "124.69",
+                    ACK));
+            mockMvc.perform(withAuth(get(IMPORTS + "/" + id)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("VALIDATED"))
+                    .andExpect(jsonPath("$.rowCount").value(3))
+                    .andExpect(jsonPath("$.acceptedCount").value(2))
+                    .andExpect(jsonPath("$.rejectedCount").value(1));
+            JsonNode rejected = json(mockMvc.perform(withAuth(get(IMPORTS + "/" + id + "/rows?status=REJECTED")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalElements").value(1))
+                    .andExpect(jsonPath("$.rows[0].rowNumber").value(2))
+                    .andExpect(jsonPath("$.rows[0].rowStatus").value("REJECTED"))
+                    .andExpect(jsonPath("$.rows[0].rejectionCode").value("AMOUNT_PRECISION_EXCEEDS_CURRENCY")));
+            mockMvc.perform(withAuth(get(IMPORTS + "/" + id + "/rows?status=PARSED")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalElements").value(2));
+
+            expectError(send(post(IMPORTS + "/" + id + "/commit"), Map.of()), 422, "IMPORT_NOT_COMMITTABLE");
+
+            String rowId = rejected.get("rows").get(0).get("rowId").asString();
+            send(put(IMPORTS + "/" + id + "/rows/" + rowId), Map.of("correctedValues", Map.of("signedAmount", "12.35")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.rowStatus").value("CORRECTED"))
+                    .andExpect(jsonPath("$.rejectionCode").doesNotExist());
+
+            send(post(IMPORTS + "/" + id + "/commit"), Map.of())
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.bankTransactionCount").value(3));
+        }
+
+        @Test
         void anUnknownImportOrRowIs404() throws Exception {
             expectError(
                     mockMvc.perform(withAuth(get(IMPORTS + "/" + UUIDv7Generator.generate()))),
