@@ -1023,7 +1023,7 @@
       "text": "Muestra los de la sucursal de Ottawa con poco inventario",
       "source": "new",
       "expected_tags": {
-        "follows_previous_turn": false,
+        "follows_previous_turn": true,
         "simple_chat": false,
         "needs_web_search": false,
         "about_inventory": true,
@@ -1042,7 +1042,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": "ones with explicit scope"
+      "notes": "the ones has no antecedent in the message (rule: pronoun/demonstrative without antecedent), explicit scope does not resolve it"
     },
     {
       "id": "es-0044",
@@ -1294,7 +1294,7 @@
         "needs_web_search": true,
         "about_inventory": false,
         "about_orders": false,
-        "implies_date_window": true,
+        "implies_date_window": false,
         "admin_account_question": false,
         "compound_question": false,
         "workflow_state": "IDLE",
@@ -1305,7 +1305,7 @@
         "entity": []
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "right now is a point in time, not a period"
     },
     {
       "id": "es-0055",
@@ -1580,7 +1580,7 @@
         "intent": "QUERY",
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
-        "domain": "workorder",
+        "domain": "events",
         "entity": [
           "workorder"
         ]
@@ -1588,7 +1588,7 @@
       "hard_negative_for": [
         "implies_date_window"
       ],
-      "notes": ""
+      "notes": "a document's activity history is grounded by the events scope (events-observability), same as the activity log"
     },
     {
       "id": "es-0066",
@@ -1624,7 +1624,7 @@
         "follows_previous_turn": false,
         "simple_chat": false,
         "needs_web_search": false,
-        "about_inventory": true,
+        "about_inventory": false,
         "about_orders": true,
         "implies_date_window": false,
         "admin_account_question": false,
@@ -1643,7 +1643,7 @@
       "hard_negative_for": [
         "needs_web_search"
       ],
-      "notes": ""
+      "notes": "payment status of an order; naming a SKU does not make it about stock. web order is not a web search"
     },
     {
       "id": "es-0068",
@@ -2037,7 +2037,7 @@
         "follows_previous_turn": false,
         "simple_chat": false,
         "needs_web_search": false,
-        "about_inventory": true,
+        "about_inventory": false,
         "about_orders": false,
         "implies_date_window": false,
         "admin_account_question": false,
@@ -2055,7 +2055,7 @@
       "hard_negative_for": [
         "implies_date_window"
       ],
-      "notes": "vehicle year is not a window"
+      "notes": "fitment/catalog lookup, not stock on hand. vehicle year is not a window"
     },
     {
       "id": "es-0084",
@@ -2591,7 +2591,7 @@
         "simple_chat": false,
         "needs_web_search": false,
         "about_inventory": false,
-        "about_orders": true,
+        "about_orders": false,
         "implies_date_window": false,
         "admin_account_question": true,
         "compound_question": false,
@@ -2606,7 +2606,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "a permission question about roles; not about a PO document itself"
     },
     {
       "id": "es-0106",
@@ -2624,7 +2624,7 @@
         "workflow_state": "IDLE",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "HIGH",
+        "risk": "MEDIUM",
         "domain": "admin",
         "entity": [
           "user"
@@ -2633,7 +2633,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "disabling an account is reversible; Score criteria put reversible changes at MEDIUM"
     },
     {
       "id": "es-0107",
@@ -2759,7 +2759,7 @@
         "workflow_state": "IDLE",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "HIGH",
+        "risk": "MEDIUM",
         "domain": "admin",
         "entity": [
           "user",
@@ -2769,7 +2769,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "a role assignment is revocable; MEDIUM per the Score criteria"
     },
     {
       "id": "es-0112",
@@ -2789,12 +2789,10 @@
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
         "domain": "admin",
-        "entity": [
-          "user"
-        ]
+        "entity": []
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "the audit log is not a lexicon entity"
     },
     {
       "id": "es-0113",
@@ -2837,7 +2835,7 @@
         "workflow_state": "IDLE",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "HIGH",
+        "risk": "MEDIUM",
         "domain": "security",
         "entity": [
           "user"
@@ -2846,7 +2844,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "a password reset is a correctable change; MEDIUM per the Score criteria"
     },
     {
       "id": "es-0115",
@@ -2961,7 +2959,7 @@
         "needs_web_search": false,
         "about_inventory": true,
         "about_orders": false,
-        "implies_date_window": true,
+        "implies_date_window": false,
         "admin_account_question": false,
         "compound_question": false,
         "workflow_state": "IDLE",
@@ -2976,7 +2974,7 @@
       "hard_negative_for": [
         "admin_account_question"
       ],
-      "notes": "inventory audit is not the platform audit log"
+      "notes": "inventory audit is not the platform audit log. when was the last X asks a point in time, not a period"
     },
     {
       "id": "es-0120",
@@ -3256,7 +3254,7 @@
         "intent": "QUERY",
         "complexity": "MULTI_DOMAIN",
         "risk": "LOW",
-        "domain": "inventory",
+        "domain": "master",
         "entity": [
           "purchase-order",
           "supplier",
@@ -3264,7 +3262,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "compound across inventory and accounting; several areas fit equally"
     },
     {
       "id": "es-0131",
@@ -3522,14 +3520,14 @@
         "intent": "QUERY",
         "complexity": "MULTI_DOMAIN",
         "risk": "LOW",
-        "domain": "accounting",
+        "domain": "master",
         "entity": [
           "journal-entry",
           "purchase-order"
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "compound across accounting and inventory (PO approval); several areas fit equally"
     },
     {
       "id": "es-0141",
@@ -3668,7 +3666,7 @@
         "follows_previous_turn": false,
         "simple_chat": false,
         "needs_web_search": false,
-        "about_inventory": true,
+        "about_inventory": false,
         "about_orders": false,
         "implies_date_window": false,
         "admin_account_question": false,
@@ -3687,7 +3685,7 @@
         "simple_chat",
         "implies_date_window"
       ],
-      "notes": "list of related items not compound"
+      "notes": "a parts/catalog lookup for a vehicle, not stock on hand. list of related items not compound"
     },
     {
       "id": "es-0147",
@@ -3880,7 +3878,7 @@
       "text": "Elige a Goodyear como proveedor de este pedido y envíalo",
       "source": "new",
       "expected_tags": {
-        "follows_previous_turn": false,
+        "follows_previous_turn": true,
         "simple_chat": false,
         "needs_web_search": false,
         "about_inventory": false,
@@ -3899,7 +3897,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "this order refers to the PO under construction, an antecedent outside the message. submit to the vendor is sent outside the shop: HIGH"
     },
     {
       "id": "es-0155",
@@ -3917,14 +3915,14 @@
         "workflow_state": "CREATING_PO",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "HIGH",
+        "risk": "MEDIUM",
         "domain": "inventory",
         "entity": [
           "purchase-order"
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "approving a PO is an internal status change that can still be cancelled; nothing is sent or paid yet"
     },
     {
       "id": "es-0156",
@@ -4335,7 +4333,7 @@
       "text": "El cliente devuelve estas balatas, reembolsa a la tarjeta",
       "source": "new",
       "expected_tags": {
-        "follows_previous_turn": false,
+        "follows_previous_turn": true,
         "simple_chat": false,
         "needs_web_search": false,
         "about_inventory": false,
@@ -4355,7 +4353,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "these brake pads has no antecedent in the message"
     },
     {
       "id": "es-0172",
@@ -4442,7 +4440,7 @@
       "text": "Trajo los rotores sin abrir, reembolsa el monto completo",
       "source": "new",
       "expected_tags": {
-        "follows_previous_turn": false,
+        "follows_previous_turn": true,
         "simple_chat": false,
         "needs_web_search": false,
         "about_inventory": false,
@@ -4463,7 +4461,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "she (or the dropped subject in es) has no antecedent in the message"
     },
     {
       "id": "es-0176",
@@ -4633,7 +4631,7 @@
         "needs_web_search": false,
         "about_inventory": true,
         "about_orders": false,
-        "implies_date_window": true,
+        "implies_date_window": false,
         "admin_account_question": false,
         "compound_question": false,
         "workflow_state": "IDLE",
@@ -4646,7 +4644,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "when was the last X asks a point in time, not a period"
     },
     {
       "id": "es-0183",
@@ -4731,7 +4729,7 @@
         "follows_previous_turn": false,
         "simple_chat": false,
         "needs_web_search": false,
-        "about_inventory": true,
+        "about_inventory": false,
         "about_orders": false,
         "implies_date_window": false,
         "admin_account_question": false,
@@ -4747,7 +4745,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "a policy question, not stock on hand"
     },
     {
       "id": "es-0187",
@@ -4808,7 +4806,7 @@
         "follows_previous_turn": false,
         "simple_chat": false,
         "needs_web_search": false,
-        "about_inventory": false,
+        "about_inventory": true,
         "about_orders": false,
         "implies_date_window": false,
         "admin_account_question": false,
@@ -4825,7 +4823,7 @@
       "hard_negative_for": [
         "workflow_state"
       ],
-      "notes": ""
+      "notes": "an ASN is a receiving document; receiving is inventory. question about an ASN is IDLE"
     },
     {
       "id": "es-0190",
@@ -4835,7 +4833,7 @@
         "follows_previous_turn": false,
         "simple_chat": false,
         "needs_web_search": false,
-        "about_inventory": false,
+        "about_inventory": true,
         "about_orders": false,
         "implies_date_window": false,
         "admin_account_question": false,
@@ -4853,7 +4851,7 @@
       "hard_negative_for": [
         "workflow_state"
       ],
-      "notes": ""
+      "notes": "open ASNs are receiving; receiving is inventory. question about ASNs is IDLE"
     },
     {
       "id": "es-0191",
@@ -4972,7 +4970,7 @@
         "needs_web_search": false,
         "about_inventory": false,
         "about_orders": false,
-        "implies_date_window": true,
+        "implies_date_window": false,
         "admin_account_question": false,
         "compound_question": false,
         "workflow_state": "IDLE",
@@ -4988,7 +4986,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "a scheduling target date is not a period the question covers (same as booking and rescheduling)"
     },
     {
       "id": "es-0196",
@@ -6261,7 +6259,7 @@
         "implies_date_window": false,
         "admin_account_question": false,
         "compound_question": false,
-        "workflow_state": "IDLE",
+        "workflow_state": "PROCESSING_RETURN",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
         "risk": "HIGH",
@@ -6273,7 +6271,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "issuing the refund on a return is processing the return now"
     },
     {
       "id": "es-0245",
@@ -6557,7 +6555,7 @@
         "workflow_state": "IDLE",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "HIGH",
+        "risk": "MEDIUM",
         "domain": "pricing",
         "entity": [
           "price"
@@ -6566,7 +6564,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "a price change is correctable, like the SKU price update"
     },
     {
       "id": "es-0256",
@@ -6733,7 +6731,7 @@
       "text": "¿El alternador de este vehículo sigue en garantía?",
       "source": "new",
       "expected_tags": {
-        "follows_previous_turn": false,
+        "follows_previous_turn": true,
         "simple_chat": false,
         "needs_web_search": false,
         "about_inventory": false,
@@ -6752,7 +6750,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "this vehicle has no antecedent in the message"
     },
     {
       "id": "es-0263",
@@ -7015,7 +7013,7 @@
       "text": "¿Cuál es su saldo pendiente?",
       "source": "analytics-gate/MULTI_TURN.json#s05 (translated)",
       "expected_tags": {
-        "follows_previous_turn": false,
+        "follows_previous_turn": true,
         "simple_chat": false,
         "needs_web_search": false,
         "about_inventory": false,
@@ -7034,7 +7032,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": "no cue token but depends on the earlier turn"
+      "notes": "their/leur/su has no antecedent in the message; the fixture is ground truth even though no heuristic cue token is present"
     },
     {
       "id": "es-0274",
@@ -7125,7 +7123,7 @@
         "implies_date_window": false,
         "admin_account_question": false,
         "compound_question": false,
-        "workflow_state": "IDLE",
+        "workflow_state": "PROCESSING_RETURN",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
         "risk": "HIGH",
@@ -7136,7 +7134,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "issuing a refund on an order is processing a refund now"
     },
     {
       "id": "es-0278",
@@ -7256,7 +7254,7 @@
         "workflow_state": "IDLE",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "HIGH",
+        "risk": "MEDIUM",
         "domain": "admin",
         "entity": [
           "role"
@@ -7265,7 +7263,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "a permission grant is revocable; MEDIUM per the Score criteria (see README, open question for the owner)"
     },
     {
       "id": "es-0283",
@@ -7389,14 +7387,14 @@
         "workflow_state": "IDLE",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "MEDIUM",
+        "risk": "HIGH",
         "domain": "events",
         "entity": [
           "order"
         ]
       },
       "hard_negative_for": [],
-      "notes": "audit log entry is platform audit"
+      "notes": "audit log entry is platform audit (events scope). an appended audit event cannot be undone: HIGH per the Score criteria"
     },
     {
       "id": "es-0288",
@@ -7513,7 +7511,7 @@
       "expected_tags": {
         "follows_previous_turn": false,
         "simple_chat": false,
-        "needs_web_search": true,
+        "needs_web_search": false,
         "about_inventory": false,
         "about_orders": false,
         "implies_date_window": false,
@@ -7527,7 +7525,7 @@
         "entity": []
       },
       "hard_negative_for": [],
-      "notes": "audit events are the platform audit log recent is not a web cue"
+      "notes": "audit events are the platform audit log, events scope. recent is not a web cue"
     },
     {
       "id": "es-0293",
@@ -7537,7 +7535,7 @@
         "follows_previous_turn": false,
         "simple_chat": false,
         "needs_web_search": false,
-        "about_inventory": true,
+        "about_inventory": false,
         "about_orders": false,
         "implies_date_window": true,
         "admin_account_question": false,
@@ -7552,7 +7550,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "about a notification, not about stock itself"
     },
     {
       "id": "es-0294",
@@ -7714,7 +7712,7 @@
         "about_inventory": false,
         "about_orders": false,
         "implies_date_window": false,
-        "admin_account_question": false,
+        "admin_account_question": true,
         "compound_question": false,
         "workflow_state": "IDLE",
         "intent": "QUERY",
@@ -7724,7 +7722,7 @@
         "entity": []
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "the platform's login policy is administration of the platform's logins"
     },
     {
       "id": "es-0301",
@@ -7737,7 +7735,7 @@
         "about_inventory": false,
         "about_orders": false,
         "implies_date_window": false,
-        "admin_account_question": false,
+        "admin_account_question": true,
         "compound_question": false,
         "workflow_state": "IDLE",
         "intent": "QUERY",
@@ -7747,7 +7745,7 @@
         "entity": []
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "the platform's login policy is administration of the platform's logins"
     },
     {
       "id": "es-0302",
@@ -7832,7 +7830,7 @@
         "needs_web_search": false,
         "about_inventory": false,
         "about_orders": false,
-        "implies_date_window": false,
+        "implies_date_window": true,
         "admin_account_question": false,
         "compound_question": false,
         "workflow_state": "IDLE",
@@ -7845,7 +7843,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "a shift on a named day covers that day's schedule"
     },
     {
       "id": "es-0306",
@@ -8016,7 +8014,7 @@
         "compound_question": false,
         "workflow_state": "IDLE",
         "intent": "QUERY",
-        "complexity": "SINGLE_LOOKUP",
+        "complexity": "MULTI_DOMAIN",
         "risk": "LOW",
         "domain": "reporting",
         "entity": [
@@ -8024,7 +8022,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "rank customers then compute their share of revenue: several steps"
     },
     {
       "id": "es-0313",
@@ -8324,7 +8322,7 @@
       "hard_negative_for": [
         "about_inventory"
       ],
-      "notes": ""
+      "notes": "spanglish part time is not a part"
     },
     {
       "id": "es-0324",
@@ -8351,7 +8349,7 @@
       "hard_negative_for": [
         "about_inventory"
       ],
-      "notes": ""
+      "notes": "spanglish store is not stock"
     },
     {
       "id": "es-0325",
@@ -8378,7 +8376,7 @@
       "hard_negative_for": [
         "about_inventory"
       ],
-      "notes": ""
+      "notes": "spanglish location is not inventory"
     },
     {
       "id": "es-0326",
@@ -8407,7 +8405,7 @@
         "about_inventory",
         "implies_date_window"
       ],
-      "notes": ""
+      "notes": "spanglish store credit is not stock"
     },
     {
       "id": "es-0327",
@@ -8434,7 +8432,7 @@
       "hard_negative_for": [
         "about_inventory"
       ],
-      "notes": ""
+      "notes": "spanglish part is not a spare part"
     },
     {
       "id": "es-0328",
@@ -8568,7 +8566,7 @@
         "about_orders",
         "implies_date_window"
       ],
-      "notes": ""
+      "notes": "spanglish sales tax (deliberate anglicism)"
     },
     {
       "id": "es-0333",
@@ -8580,7 +8578,7 @@
         "needs_web_search": false,
         "about_inventory": false,
         "about_orders": false,
-        "implies_date_window": true,
+        "implies_date_window": false,
         "admin_account_question": false,
         "compound_question": false,
         "workflow_state": "IDLE",
@@ -8593,7 +8591,7 @@
       "hard_negative_for": [
         "admin_account_question"
       ],
-      "notes": ""
+      "notes": "workshop audit is not the platform audit log. when was the last X asks a point in time"
     },
     {
       "id": "es-0334",
@@ -8648,7 +8646,7 @@
       "hard_negative_for": [
         "admin_account_question"
       ],
-      "notes": ""
+      "notes": "spanglish access and bay: shop access, not platform access; esta tarde is a period"
     },
     {
       "id": "es-0336",
@@ -8737,7 +8735,7 @@
       "text": "¿Tienen otra sucursal con esa llanta en existencia?",
       "source": "new",
       "expected_tags": {
-        "follows_previous_turn": false,
+        "follows_previous_turn": true,
         "simple_chat": false,
         "needs_web_search": false,
         "about_inventory": true,
@@ -8755,10 +8753,8 @@
           "stock-item"
         ]
       },
-      "hard_negative_for": [
-        "follows_previous_turn"
-      ],
-      "notes": ""
+      "hard_negative_for": [],
+      "notes": "esa llanta has no antecedent in the message; otra sucursal contrasts with one discussed earlier"
     },
     {
       "id": "es-0340",
@@ -9139,7 +9135,7 @@
       "text": "¿De qué pedido salió esta devolución?",
       "source": "new",
       "expected_tags": {
-        "follows_previous_turn": false,
+        "follows_previous_turn": true,
         "simple_chat": false,
         "needs_web_search": false,
         "about_inventory": false,
@@ -9158,7 +9154,7 @@
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "this return has no antecedent in the message"
     },
     {
       "id": "es-0355",
