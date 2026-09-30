@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration.retrieval;
 
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
+import com.positivity.mcp.internal.scopegraph.ScopeCallerFilter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -59,18 +60,9 @@ public class PermissionAwareMetadataFilter implements QueryDocumentRetriever {
         return visible;
     }
 
+    /** The rule itself lives in {@link ScopeCallerFilter#ragDocumentVisible}, shared with the ADR-0069 caller filter. */
     private boolean isVisible(@NonNull Document document) {
-        Set<String> required = requiredPermissions(document);
-        if (required.isEmpty()) {
-            return true; // public / unrestricted
-        }
-        if (required.contains(AUTHENTICATED)) {
-            // Visible to any authenticated caller. CurrentUserContext always carries the synthetic
-            // AUTHENTICATED code, so gate on its presence — safe even if this retriever is ever used
-            // outside an authenticated endpoint.
-            return callerPermissionCodes.contains(AUTHENTICATED);
-        }
-        return required.stream().anyMatch(callerPermissionCodes::contains);
+        return ScopeCallerFilter.ragDocumentVisible(requiredPermissions(document), callerPermissionCodes);
     }
 
     private static Set<String> requiredPermissions(@NonNull Document document) {

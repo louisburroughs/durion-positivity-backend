@@ -7,8 +7,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.config.ScopeGraphProperties;
 import com.positivity.mcp.internal.domain.EvalTurnTrace;
+import com.positivity.mcp.internal.domain.ScopeTrace;
 import com.positivity.mcp.internal.repository.EvalTurnTraceRepository;
+import com.positivity.mcp.internal.scopegraph.Access;
+import com.positivity.mcp.internal.scopegraph.MatchKind;
+import com.positivity.mcp.internal.scopegraph.NodeAttributes;
+import com.positivity.mcp.internal.scopegraph.ScopeMetrics;
+import com.positivity.mcp.internal.scopegraph.ScopeSet;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -231,5 +240,165 @@ class AlphaEvalTurnTraceRecorderTest {
         Thread thread = new Thread(action);
         thread.start();
         thread.join();
+    }
+
+    // ── ADR-0069 §9: the scope on the trace ─────────────────────────────────
+
+    private static ScopeSet scope() {
+        return new ScopeSet(
+                List.of(new ScopeSet.Seed("workorder", MatchKind.IDENTIFIER)),
+                List.of("estimate", "invoice"),
+                List.of("workorder"),
+                List.of(
+                        new ScopeSet.ScopeTool(
+                                "WorkorderFacadeTool", NodeAttributes.ToolSource.FACADE, 1, Access.READS),
+                        new ScopeSet.ScopeTool(
+                                "workorder_getworkorder", NodeAttributes.ToolSource.DISCOVERED, 1, Access.READS)),
+                List.of("workorder.status-lifecycle", "workorder.public"),
+                List.of("workorders.list"),
+                List.of("workorder.DRAFT"),
+                List.of(),
+                ScopeSet.Confidence.HIGH,
+                "c878c7206d2ed660",
+                Instant.parse("2026-09-30T12:00:00Z"));
+    }
+
+    private AlphaEvalTurnTraceRecorder scopeRecorder(ScopeGraphProperties properties, MeterRegistry meters) {
+        return new AlphaEvalTurnTraceRecorder(
+                repository,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                RETENTION,
+                "sha-81ff1e0",
+                properties,
+                new ScopeMetrics(properties, meters));
+    }
+
+    private static ScopeGraphProperties mode(ScopeGraphProperties.Mode mode, ScopeGraphProperties.Consumer... enforce) {
+        return new ScopeGraphProperties(mode, List.of(enforce), 0, 0, 0);
+    }
+
+    @Test
+    @DisplayName("ADR-0069: a turn with no recorded scope (mode off, simple chat) persists a null scope")
+    void noScopeRecordedPersistsNullScope() {
+        recorder.begin(USER, "hello");
+        recorder.recordToolCall("getWorkorder", "{}", "{}", null, 1);
+        recorder.complete("hi");
+
+        assertThat(savedTrace().scope()).isNull();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069: a recorded scope is persisted as keys, kinds and counts, with the in-scope shares computed at completion")
+    void scopeIsTracedWithInScopeShares() {
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        AlphaEvalTurnTraceRecorder shadow = scopeRecorder(mode(ScopeGraphProperties.Mode.SHADOW), meters);
+
+        shadow.begin(USER, "is WO-20391 billed?");
+        shadow.recordScope(scope());
+        // A facade callback is named after its @Tool method; the scope knows the facade's class name.
+        shadow.recordToolCall("getWorkorder", "{}", "{}", null, 3);
+        shadow.recordCalledCatalogTool("WorkorderFacadeTool");
+        shadow.recordToolCall("getInvoice", "{}", "{}", null, 4);
+        shadow.recordCalledCatalogTool("InvoiceFacadeTool");
+        // A call to a tool that was never offered has no catalog name: called, and in no scope.
+        shadow.recordToolCall("inventedTool", "{}", null, "Unknown tool", 0);
+        shadow.recordRetrievedDocuments(List.of("workorder.public", "billing.invoices"));
+        shadow.recordRetrievedDocuments(List.of("workorder.public", "workorder.status-lifecycle"));
+        shadow.complete("yes");
+
+        ScopeTrace traced = savedTrace().scope();
+        assertThat(traced).isNotNull();
+        assertThat(traced.mode()).isEqualTo("SHADOW");
+        assertThat(traced.enforced()).isEmpty();
+        assertThat(traced.graphHash()).isEqualTo("c878c7206d2ed660");
+        assertThat(traced.graphBuiltAt()).isEqualTo(Instant.parse("2026-09-30T12:00:00Z"));
+        assertThat(traced.confidence()).isEqualTo("HIGH");
+        assertThat(traced.seeds()).containsExactly(new ScopeTrace.SeedTrace("workorder", "IDENTIFIER"));
+        assertThat(traced.entityCount()).isEqualTo(3);
+        assertThat(traced.toolCount()).isEqualTo(2);
+        assertThat(traced.documentCount()).isEqualTo(2);
+        assertThat(traced.screenCount()).isEqualTo(1);
+        // No consumer acts on the scope in this wave.
+        assertThat(traced.addedTools()).isZero();
+        assertThat(traced.ragFilterApplied()).isFalse();
+        assertThat(traced.calledTools()).isEqualTo(3);
+        assertThat(traced.calledToolsInScope()).isEqualTo(1);
+        // Three distinct documents across two retrievals; two of them are in scope.
+        assertThat(traced.retrievedDocs()).isEqualTo(3);
+        assertThat(traced.retrievedDocsInScope()).isEqualTo(2);
+        // The scope holds nothing the caller typed.
+        assertThat(traced.toString()).doesNotContain("WO-20391", "billed");
+
+        assertThat(meters.get("mcp.scope.called_tool")
+                        .tag("in_scope", "true")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(meters.get("mcp.scope.called_tool")
+                        .tag("in_scope", "false")
+                        .counter()
+                        .count())
+                .isEqualTo(2.0);
+        assertThat(meters.get("mcp.scope.retrieved_doc")
+                        .tag("in_scope", "true")
+                        .counter()
+                        .count())
+                .isEqualTo(2.0);
+        assertThat(meters.get("mcp.scope.retrieved_doc")
+                        .tag("in_scope", "false")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("ADR-0069: with no retrieval observed the retrieved-document shares stay null, not zero")
+    void noRetrievalObservedLeavesDocumentSharesNull() {
+        recorder.begin(USER, "the work order");
+        recorder.recordScope(scope());
+        recorder.complete("ok");
+
+        ScopeTrace traced = savedTrace().scope();
+        assertThat(traced.retrievedDocs()).isNull();
+        assertThat(traced.retrievedDocsInScope()).isNull();
+        assertThat(traced.calledTools()).isZero();
+        assertThat(traced.calledToolsInScope()).isZero();
+    }
+
+    @Test
+    @DisplayName("ADR-0069: in enforce the trace names the enforced consumers; a failed turn still carries its scope")
+    void enforceNamesConsumersAndFailedTurnKeepsScope() {
+        AlphaEvalTurnTraceRecorder enforce = scopeRecorder(
+                mode(ScopeGraphProperties.Mode.ENFORCE, ScopeGraphProperties.Consumer.RAG), new SimpleMeterRegistry());
+
+        enforce.begin(USER, "the work order");
+        enforce.recordScope(scope());
+        enforce.fail(new IllegalStateException("model unavailable"));
+
+        EvalTurnTrace trace = savedTrace();
+        assertThat(trace.error()).contains("model unavailable");
+        assertThat(trace.scope().mode()).isEqualTo("ENFORCE");
+        assertThat(trace.scope().enforced()).containsExactly("RAG");
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069: the scope travels with the turn handle, so a share recorded on another thread lands on the same trace")
+    void scopeSharesRecordedAcrossThreads() throws Exception {
+        recorder.begin(USER, "the work order");
+        recorder.recordScope(scope());
+        Object handle = recorder.currentTurnHandle();
+
+        runOnAnotherThread(() -> recorder.runWithTurn(handle, () -> {
+            recorder.recordToolCall("getWorkorder", "{}", "{}", null, 2);
+            recorder.recordCalledCatalogTool("WorkorderFacadeTool");
+            recorder.recordRetrievedDocuments(List.of("workorder.public"));
+        }));
+        recorder.complete("ok");
+
+        ScopeTrace traced = savedTrace().scope();
+        assertThat(traced.calledToolsInScope()).isEqualTo(1);
+        assertThat(traced.retrievedDocsInScope()).isEqualTo(1);
     }
 }

@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
+import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -270,5 +271,52 @@ class ToolInvocationRecorderTest {
                 return body.apply(toolInput);
             }
         };
+    }
+
+    // ── ADR-0069 §9: what the scope trace needs from a tool call ────────────
+
+    @Test
+    @DisplayName("ADR-0069: a wrapped call also records the mcp_tool.name it resolved to, for the in-scope share")
+    void wrap_recordsTheCatalogToolName() {
+        when(repository.findToolIdByName("OrderFacadeTool")).thenReturn(Optional.of(TOOL_ID));
+        ToolCallback getOrder = recorder.wrap(callback("getOrder", input -> "ok"), "OrderFacadeTool");
+
+        getOrder.call("{}");
+
+        InOrder ordered = inOrder(traceRecorder);
+        // The trace keeps the callback's own name; the scope share is computed from the catalog name.
+        ordered.verify(traceRecorder).recordToolCall(eq("getOrder"), eq("{}"), eq("ok"), isNull(), anyInt());
+        ordered.verify(traceRecorder).recordCalledCatalogTool("OrderFacadeTool");
+    }
+
+    @Test
+    @DisplayName("ADR-0069: a call to a tool that was never offered records no catalog name")
+    void unknownToolCall_recordsNoCatalogName() {
+        recorder.recordUnknownToolCall("inventedTool", "{}", "Unknown tool 'inventedTool'");
+
+        verify(traceRecorder).recordToolCall(eq("inventedTool"), eq("{}"), isNull(), any(), eq(0));
+        verify(traceRecorder, org.mockito.Mockito.never()).recordCalledCatalogTool(any());
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069: the scope and the retrieved documents are forwarded to the trace, and a trace failure is swallowed")
+    void scopeAndRetrievedDocuments_areForwardedAndGuarded() {
+        ScopeSet scope = ScopeSet.empty();
+
+        recorder.recordScope(scope);
+        recorder.recordRetrievedDocuments(java.util.List.of("workorder.public"));
+
+        verify(traceRecorder).recordScope(scope);
+        verify(traceRecorder).recordRetrievedDocuments(java.util.List.of("workorder.public"));
+
+        org.mockito.Mockito.doThrow(new IllegalStateException("trace store down"))
+                .when(traceRecorder)
+                .recordScope(any());
+        recorder.recordScope(scope);
+
+        ToolInvocationRecorder untraced = new ToolInvocationRecorder(auditService, repository, userContext, null);
+        untraced.recordScope(scope);
+        untraced.recordRetrievedDocuments(java.util.List.of("workorder.public"));
     }
 }

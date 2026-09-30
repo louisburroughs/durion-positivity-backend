@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.config.ScopeGraphProperties;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
@@ -34,14 +35,19 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.scopegraph.ScopeResolver;
+import com.positivity.mcp.internal.scopegraph.ScopeResolverFixtures;
+import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import com.positivity.mcp.internal.service.ConversationMemoryHistory;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
+import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.RolePromptResolver;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.tenancy.BoundTenant;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -831,5 +837,282 @@ class SessionAgentManagerTest {
         assertThat(cache).isNotNull();
         cache.cleanUp();
         return cache.asMap().keySet();
+    }
+
+    // ── ADR-0069 §5 / §9: the scope is published, recorded and cleared, and changes nothing ──
+
+    private static final String SCOPE_MESSAGE = "is the work order WO-20391 in stock at the store?";
+
+    private static ScopeSet scopeOf(String message) {
+        return ScopeResolverFixtures.resolver(ScopeResolverFixtures.shadow(60), new SimpleMeterRegistry())
+                .resolve(message, Set.of("AUTHENTICATED", ScopeResolverFixtures.WORKORDER_VIEW), WorkflowState.IDLE);
+    }
+
+    private SessionAgentManager scopeManager(
+            ToolSelectionEngine selectionEngine,
+            SharedOrchestrationSupport support,
+            RequestScopedUserContext requestContext,
+            ToolInvocationRecorder recorder) {
+        return new SessionAgentManager(
+                chatModel,
+                embeddingModel,
+                embeddingStore,
+                toolRegistry,
+                support,
+                selectionEngine,
+                scopedContentRetrieverFactory,
+                null,
+                null,
+                rolePromptResolver,
+                simpleChatFastPath,
+                telemetryEmitter,
+                null, // openApiToolProvider
+                null, // answerResolutionLadder
+                requestContext,
+                null, // observationRegistry (#1655)
+                null, // roleDefaultPermissionsClient
+                recorder,
+                workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
+                FIXED_CLOCK,
+                30,
+                500,
+                50,
+                100,
+                0.6,
+                0.55);
+    }
+
+    /** What the agent saw in the request-scoped holder while it ran. */
+    private record SeenByAgent(Optional<ScopeSet> scope, Optional<CurrentUserContext> caller) {}
+
+    /** Seeds {@code target}'s cache with an agent that notes what is published while it runs. */
+    private java.util.concurrent.atomic.AtomicReference<SeenByAgent> seedObservingAgent(
+            SessionAgentManager target,
+            RequestScopedUserContext requestContext,
+            String role,
+            RuntimeException failure) {
+        java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        PosAssistant agent = mock(PosAssistant.class);
+        when(agent.reply(anyString(), anyString(), anyString())).thenAnswer(invocation -> {
+            seen.set(new SeenByAgent(requestContext.currentScope(), requestContext.current()));
+            if (failure != null) {
+                throw failure;
+            }
+            return new PosAssistant.Reply("answer", "CONTENT", List.of());
+        });
+        List<Object> selectedTools = sharedOrchestrationSupport.mergeTools(List.of(), List.of());
+        String key = (String) ReflectionTestUtils.invokeMethod(
+                target, "agentCacheKey", role, sharedOrchestrationSupport.toolCacheKey(selectedTools), null);
+        @SuppressWarnings("unchecked")
+        Cache<String, PosAssistant> cache =
+                (Cache<String, PosAssistant>) ReflectionTestUtils.getField(target, "roleAgentCache");
+        assertThat(cache).isNotNull();
+        cache.put(key, agent);
+        return seen;
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069: a resolved scope is recorded with the selection stages, published next to the caller, and cleared with it")
+    void chat_shadow_recordsPublishesAndClearsTheScope() {
+        ScopeSet scope = scopeOf(SCOPE_MESSAGE);
+        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
+                .thenReturn(
+                        new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.IDLE, scope));
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        SessionAgentManager scoped =
+                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, toolInvocationRecorder);
+        scoped.setScopeGraphProperties(ScopeResolverFixtures.shadow(60));
+        java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
+                seedObservingAgent(scoped, requestContext, "ROLE_ADMIN", null);
+        CurrentUserContext caller = userContext("user-1", USER_ID, "ROLE_ADMIN");
+
+        scoped.chat(caller, SCOPE_MESSAGE);
+
+        // Published for the agent's window, next to the caller.
+        assertThat(seen.get().scope()).containsSame(scope);
+        assertThat(seen.get().caller()).contains(caller);
+        // Cleared with the caller, in the same finally.
+        assertThat(requestContext.currentScope()).isEmpty();
+        assertThat(requestContext.current()).isEmpty();
+        // Recorded where the other selection stages are, before the agent runs.
+        org.mockito.InOrder stages = org.mockito.Mockito.inOrder(toolInvocationRecorder);
+        stages.verify(toolInvocationRecorder).recordSelectedTools(any());
+        stages.verify(toolInvocationRecorder).recordScope(scope);
+        stages.verify(toolInvocationRecorder).completeTurn("answer");
+        stages.verify(toolInvocationRecorder).clearTurn();
+
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter).emit(event.capture());
+        assertThat(event.getValue().schemaVersion()).isEqualTo(2);
+        assertThat(event.getValue().scopeMode()).isEqualTo("SHADOW");
+        assertThat(event.getValue().scopeGraphHash()).isEqualTo(scope.graphHash());
+        assertThat(event.getValue().scopeConfidence()).isEqualTo("HIGH");
+        assertThat(event.getValue().scopeEntityCount())
+                .isEqualTo(scope.entities().size());
+        assertThat(event.getValue().scopeToolCount()).isEqualTo(scope.tools().size());
+        assertThat(event.getValue().scopeDocCount())
+                .isEqualTo(scope.documentIds().size());
+        assertThat(event.getValue().scopeAddedToolCount()).isZero();
+        assertThat(event.getValue().scopeRagFilterApplied()).isFalse();
+    }
+
+    @Test
+    @DisplayName("ADR-0069: in mode off (no scope on the selection) nothing is recorded, published or reported")
+    void chat_off_recordsAndPublishesNoScope() {
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        SessionAgentManager off =
+                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, toolInvocationRecorder);
+        off.setScopeGraphProperties(ScopeGraphProperties.off());
+        java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
+                seedObservingAgent(off, requestContext, "ROLE_ADMIN", null);
+
+        off.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), SCOPE_MESSAGE);
+
+        assertThat(seen.get().caller()).isPresent();
+        assertThat(seen.get().scope()).isEmpty();
+        verify(toolInvocationRecorder, never()).recordScope(any());
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter).emit(event.capture());
+        assertThat(event.getValue().scopeMode()).isNull();
+        assertThat(event.getValue().scopeGraphHash()).isNull();
+        assertThat(event.getValue().scopeConfidence()).isNull();
+        assertThat(event.getValue().scopeEntityCount()).isNull();
+    }
+
+    @Test
+    @DisplayName("ADR-0069: a turn that fails still clears the scope, and its ERROR telemetry carries none")
+    void chat_failure_clearsTheScope() {
+        ScopeSet scope = scopeOf(SCOPE_MESSAGE);
+        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
+                .thenReturn(
+                        new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.IDLE, scope));
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        SessionAgentManager scoped =
+                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, toolInvocationRecorder);
+        java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen = seedObservingAgent(
+                scoped, requestContext, "ROLE_ADMIN", new IllegalStateException("model unavailable"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> scoped.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), SCOPE_MESSAGE))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(seen.get().scope()).containsSame(scope);
+        assertThat(requestContext.currentScope()).isEmpty();
+        assertThat(requestContext.current()).isEmpty();
+        verify(toolInvocationRecorder).recordScope(scope);
+        verify(toolInvocationRecorder).failTurn(any());
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter).emit(event.capture());
+        assertThat(event.getValue().outcome().status()).isEqualTo("ERROR");
+        assertThat(event.getValue().scopeMode()).isNull();
+    }
+
+    @Test
+    @DisplayName("ADR-0069: the simple-chat fast path resolves, records and publishes no scope")
+    void chat_simpleChat_resolvesNoScope() {
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Hello!"));
+        RequestScopedUserContext requestContext = org.mockito.Mockito.spy(new RequestScopedUserContext());
+        SessionAgentManager scoped =
+                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, toolInvocationRecorder);
+        scoped.setScopeGraphProperties(ScopeResolverFixtures.shadow(60));
+        clearInvocations(toolSelectionEngine);
+
+        scoped.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "hello");
+
+        verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anySet(), anyString());
+        verify(toolInvocationRecorder, never()).recordScope(any());
+        verify(requestContext, never()).recordScope(any());
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter).emit(event.capture());
+        assertThat(event.getValue().scopeMode()).isNull();
+    }
+
+    /** One full agent turn with a real selection engine; returns everything a scope could have changed. */
+    private List<Object> observableTurn(ScopeResolver resolver) {
+        clearInvocations(chatModel, scopedContentRetrieverFactory, rolePromptResolver, toolRegistryService);
+        SharedOrchestrationSupport fixedClockSupport = new SharedOrchestrationSupport(FIXED_CLOCK);
+        ToolSelectionEngine engine = new ToolSelectionEngine(
+                toolRegistry,
+                dateWindowFacadeTool,
+                new GlossaryFacadeTool(),
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                toolRegistryService,
+                fixedClockSupport,
+                3);
+        engine.setScopeResolver(resolver);
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        SessionAgentManager target = scopeManager(engine, fixedClockSupport, requestContext, null);
+        clearInvocations(scopedContentRetrieverFactory, rolePromptResolver, toolRegistryService);
+
+        String response = target.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), SCOPE_MESSAGE);
+
+        ArgumentCaptor<Prompt> prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, org.mockito.Mockito.atLeastOnce()).call(prompts.capture());
+        ArgumentCaptor<ToolSelectionContext> ranking = ArgumentCaptor.forClass(ToolSelectionContext.class);
+        verify(toolRegistryService).resolveCandidateTools(ranking.capture(), eq(3));
+        List<Object> observed = new ArrayList<>();
+        observed.add(response);
+        observed.add(roleAgentCacheKeys(target).stream().sorted().toList());
+        observed.add(ranking.getValue());
+        // The assembled prompt: every message the model received, and the tools it was offered.
+        observed.add(prompts.getAllValues().stream().map(Prompt::getContents).toList());
+        observed.add(prompts.getAllValues().stream()
+                .map(prompt -> prompt.getInstructions().stream()
+                        .map(message -> message.getMessageType() + ":" + message.getText())
+                        .toList())
+                .toList());
+        observed.add(prompts.getAllValues().stream()
+                .map(prompt -> prompt.getOptions()
+                                instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+                        ? options.getToolCallbacks().stream()
+                                .map(callback -> callback.getToolDefinition().name() + "|"
+                                        + callback.getToolDefinition().inputSchema())
+                                .toList()
+                        : List.of())
+                .toList());
+        // The retrievers: which scopes, sizes and floors they were built with, and the prompt layers.
+        observed.add(org.mockito.Mockito.mockingDetails(scopedContentRetrieverFactory).getInvocations().stream()
+                .map(Object::toString)
+                .toList());
+        observed.add(org.mockito.Mockito.mockingDetails(rolePromptResolver).getInvocations().stream()
+                .map(Object::toString)
+                .toList());
+        return observed;
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069: in shadow, tool selection, the retrievers and the assembled prompt are exactly what they are in off")
+    void chat_shadow_isIdenticalToOff() {
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
+                .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool")))
+                .thenAnswer(invocation -> new ArrayList<>(List.of(inventoryFacadeTool)));
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+
+        List<Object> off = observableTurn(null);
+        List<Object> shadow = observableTurn(ScopeResolverFixtures.resolver(ScopeResolverFixtures.shadow(60), meters));
+
+        // The scope really was resolved in the second turn, from a message that names an entity.
+        assertThat(meters.get("mcp.scope.resolved")
+                        .tag("confidence", "HIGH")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+        // The comparison is over real content: prompts were captured, tools offered, retrievers built.
+        assertThat(off.get(3).toString()).contains(SCOPE_MESSAGE);
+        assertThat(off.get(5).toString()).contains("checkStock");
+        assertThat(off.get(6).toString()).contains("scopedContentRetrieverFactory.create");
+        assertThat(shadow).isEqualTo(off);
     }
 }
