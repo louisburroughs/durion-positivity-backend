@@ -11,6 +11,7 @@ import com.positivity.people.internal.service.WorkSessionService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -40,8 +41,8 @@ public class WorkSessionController {
                     the actor from the security context.
                     Use this tool when a person clocks in for the day; do not use startWorkSessionBreak, which \
                     pauses an already running session.
-                    Preconditions: the person must exist in the identity replica, and the person must have no \
-                    session that is still open.
+                    Preconditions: the person must exist, either as an employee of this module or in the identity \
+                    replica, and the person must have no session that is still open.
                     Required inputs: personId (UUID) in the body; the body's actor field is ignored, because the \
                     recorded actor is always the authenticated username.
                     Authorization: the caller must be the person themself, or hold people:timekeeping:approve; \
@@ -238,7 +239,8 @@ public class WorkSessionController {
                     Use this tool to render a clock-in/out toggle for one person, for example after a toggle \
                     press or on a self-service view; use listPeopleAvailability instead to read the clock state \
                     of everyone at a location in one call, which is what a dispatch board needs.
-                    Preconditions: the person must exist in the identity replica.
+                    Preconditions: the person must exist, either as an employee of this module or in the identity \
+                    replica.
                     Required inputs: none are mandatory; personId (UUID) as a query parameter defaults to the \
                     caller's own linked person when omitted.
                     Authorization: a person reads their own state with people:self:view; reading another \
@@ -247,9 +249,11 @@ public class WorkSessionController {
                     Emits a PEOPLE_WORK_SESSION_CURRENT_GET audit event but changes no state.
                     Returns 200 with clockState CLOCKED_OUT and null session fields when nothing is open — never \
                     404 for that; 404 PERSON_NOT_FOUND when the person is unknown, 404 when personId is omitted \
-                    and the caller has no linked person, 403 FORBIDDEN when the caller is neither the person nor \
-                    a people:timekeeping:view holder, and 403 LOCATION_SCOPE_DENIED when the caller's grant does \
-                    not cover the person's location.
+                    and the caller's person link is present but no longer active, 503 \
+                    USER_LINK_REPLICATION_PENDING with a Retry-After header when personId is omitted and the \
+                    caller has no person link in the replica yet, 403 FORBIDDEN when the caller is neither the \
+                    person nor a people:timekeeping:view holder, and 403 LOCATION_SCOPE_DENIED when the caller's \
+                    grant does not cover the person's location.
                     """)
     @ApiResponse(responseCode = "200", description = "Current clock state returned; CLOCKED_OUT when nothing is open.")
     @ApiResponse(
@@ -259,7 +263,18 @@ public class WorkSessionController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "Person not found, or personId omitted and the caller has no linked person.",
+            description = "Person not found, or personId omitted and the caller's person link is no longer active.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "personId omitted and the caller's person link has not replicated from People Contact "
+                    + "yet (ApiError.code USER_LINK_REPLICATION_PENDING). Not-yet, not no: retry after the "
+                    + "Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_WORK_SESSION_CURRENT_GET", apiVersion = "1")
     @GetMapping("/current")

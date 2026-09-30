@@ -6,6 +6,7 @@ import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.LocationScopeDeniedException;
 import com.positivity.security.common.SecurityContextHelper;
+import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
@@ -54,12 +55,7 @@ public class WorkSessionAccessPolicy {
      * only by a link that is no longer ACTIVE.
      */
     public @NonNull Optional<UUID> callerPersonId() {
-        String username;
-        try {
-            username = SecurityContextHelper.getCurrentUsername().orElse(null);
-        } catch (IllegalStateException ex) {
-            username = null;
-        }
+        String username = currentUsernameOrNull();
         if (username == null) {
             return Optional.empty();
         }
@@ -68,6 +64,35 @@ public class WorkSessionAccessPolicy {
         // through the translation service's own transactional boundary would mark the caller's
         // transaction rollback-only even when caught here.
         return userPersonTranslationService.findActivePersonUuidForUser(username);
+    }
+
+    /**
+     * The caller's own person for a read that resolves "me" and has no default to fall back on
+     * (#1994). An ACTIVE link answers it. A caller the user-link replica holds no row for at all
+     * may simply not have replicated yet, so that is 503 {@code USER_LINK_REPLICATION_PENDING}; a
+     * link that is present but no longer ACTIVE, or an unauthenticated caller, stays a 404.
+     *
+     * <p>Authorization decisions keep using {@link #callerPersonId()}, where an unlinked caller is
+     * simply "not self".
+     */
+    public @NonNull UUID requireCallerPersonId() {
+        Optional<UUID> active = callerPersonId();
+        if (active.isPresent()) {
+            return active.get();
+        }
+        String username = currentUsernameOrNull();
+        if (username != null && !userPersonTranslationService.hasLinkForUser(username)) {
+            throw UserPersonTranslationService.userLinkReplicationPending();
+        }
+        throw new EntityNotFoundException("personId was not provided and no person is linked to the current user");
+    }
+
+    private static @Nullable String currentUsernameOrNull() {
+        try {
+            return SecurityContextHelper.getCurrentUsername().orElse(null);
+        } catch (IllegalStateException ex) {
+            return null;
+        }
     }
 
     /**

@@ -61,7 +61,7 @@ paths:
 
         Emits a PEOPLE_AVAILABILITY_LIST audit event but changes no state; this is a read-only projection.
 
-        Returns 404 when locationId is omitted and the requester has no active location assignment or no person link, and 403 LOCATION_SCOPE_DENIED when locationId is outside the caller''s location reach.
+        Returns 404 when locationId is omitted and the requester has no active location assignment, 503 USER_LINK_REPLICATION_PENDING with a Retry-After header when locationId is omitted and the requester''s person link has not replicated yet, and 403 LOCATION_SCOPE_DENIED when locationId is outside the caller''s location reach.
 
         '
       operationId: listPeopleAvailability
@@ -100,7 +100,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: locationId omitted and the requester has no active location assignment or person link.
+          description: locationId omitted and the requester has no active location assignment.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The requester''s person link has not replicated from People Contact yet (ApiError.code USER_LINK_REPLICATION_PENDING). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - people:availability:view
@@ -1187,7 +1199,7 @@ paths:
 
         Emits a PEOPLE_ME_LOCATIONS_LIST audit event but changes no state; this is a read-only projection.
 
-        Returns 200 with an empty list when the person has no assignment active today, 404 when no person is linked to the current user, and 401 when the security context carries no username.
+        Returns 200 with an empty list when the person has no assignment active today, 503 USER_LINK_REPLICATION_PENDING with a Retry-After header when the current user has no person link in the replica yet, and 401 when the security context carries no username.
 
         '
       operationId: listMyLocations
@@ -1200,12 +1212,18 @@ paths:
                   $ref: '#/components/schemas/StaffingAssignmentResponse'
                 type: array
           description: Active location assignments returned successfully.
-        '404':
+        '503':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: No person linked to the current user.
+          description: 'The current user''s person link has not replicated from People Contact yet (ApiError.code USER_LINK_REPLICATION_PENDING). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - people:self:view
@@ -1257,7 +1275,7 @@ paths:
 
         Use this tool as the stable source-data read for accounting time-export workflows; use getAttendanceDiscrepancyReport instead for variance analysis between attendance and job time.
 
-        Preconditions: every supplied locationId must resolve to an active location; rows missing approval or attendance timestamps are silently excluded.
+        Preconditions: every supplied locationId must resolve to an active location in the ext_location replica; rows missing approval or attendance timestamps are silently excluded.
 
         Required inputs: startDate and endDate (inclusive, yyyy-MM-dd, evaluated in UTC) and one or more locationId query parameters.
 
@@ -1265,7 +1283,7 @@ paths:
 
         Emits a PEOPLE_TIME_APPROVED_EXPORT_READ audit event but changes no state; this is a read-only projection sorted by entry date then time entry id.
 
-        Returns 400 when endDate is before startDate, when no locationId is supplied, or when a locationId is unknown or inactive, and 403 LOCATION_SCOPE_DENIED when any locationId is outside the caller''s location reach.
+        Returns 400 when endDate is before startDate, when no locationId is supplied, or when a locationId names a replicated location that is inactive; 403 LOCATION_SCOPE_DENIED when any locationId is outside the caller''s location reach; and 503 LOCATION_REPLICATION_PENDING with a Retry-After header when a locationId has no ext_location row yet (not yet, not no: retry).
 
         '
       operationId: listApprovedTimeForExport
@@ -1332,7 +1350,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Dependent service unavailable
+          description: 'A locationId has not replicated from Location yet (ApiError.code LOCATION_REPLICATION_PENDING, referenceId the location id). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - accounting:time:export
@@ -1438,12 +1462,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Unexpected server error
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Dependent service unavailable
       security:
       - bearerAuth:
         - accounting:time:export
@@ -1538,7 +1556,7 @@ paths:
 
         Emits a PEOPLE_STAFFING_ASSIGNMENT_CREATE event and publishes a staffing-assignment fact; a new primary demotes and ends any overlapping existing primary, and a person''s first active assignment is forced primary regardless of the flag.
 
-        Returns 409 when an overlapping assignment exists for the person, location, and role, 404 when the person, employee record, or active location cannot be resolved, 400 when the person''s employee status is not ACTIVE, and 403 LOCATION_SCOPE_DENIED when locationId is outside the caller''s location reach.
+        Returns 409 when an overlapping assignment exists for the person, location, and role, 404 when the person, employee record, or an inactive location cannot be resolved, 503 LOCATION_REPLICATION_PENDING with a Retry-After header when the location has not replicated from Location yet, 400 when the person''s employee status is not ACTIVE, and 403 LOCATION_SCOPE_DENIED when locationId is outside the caller''s location reach.
 
         '
       operationId: createStaffingAssignment
@@ -1582,13 +1600,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Location or person not found.
+          description: Person not found, or the location is present but inactive.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Overlapping assignment exists.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The location has not replicated from Location yet (ApiError.code LOCATION_REPLICATION_PENDING, referenceId the location id). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - people:employee:edit
@@ -1701,7 +1731,7 @@ paths:
 
         Emits a PEOPLE_STAFFING_ASSIGNMENT_UPDATE event and publishes a staffing-assignment fact; setting isPrimary true demotes and ends any other overlapping primary assignment.
 
-        Returns 404 when the assignment, person, employee record, or active location cannot be resolved, 409 when another assignment overlaps for the person, location, and role, 400 when the person''s employee status is not ACTIVE, and 403 LOCATION_SCOPE_DENIED when the current or requested location is outside the caller''s location reach.
+        Returns 404 when the assignment, person, employee record, or an inactive location cannot be resolved, 503 LOCATION_REPLICATION_PENDING with a Retry-After header when the requested location has not replicated from Location yet, 409 when another assignment overlaps for the person, location, and role, 400 when the person''s employee status is not ACTIVE, and 403 LOCATION_SCOPE_DENIED when the current or requested location is outside the caller''s location reach.
 
         '
       operationId: updateStaffingAssignment
@@ -1760,6 +1790,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Overlapping assignment exists.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The requested location has not replicated from Location yet (ApiError.code LOCATION_REPLICATION_PENDING, referenceId the location id). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - people:employee:edit
@@ -2686,7 +2728,7 @@ paths:
 
         Use this tool to render a clock-in/out toggle for one person, for example after a toggle press or on a self-service view; use listPeopleAvailability instead to read the clock state of everyone at a location in one call, which is what a dispatch board needs.
 
-        Preconditions: the person must exist in the identity replica.
+        Preconditions: the person must exist, either as an employee of this module or in the identity replica.
 
         Required inputs: none are mandatory; personId (UUID) as a query parameter defaults to the caller''s own linked person when omitted.
 
@@ -2694,7 +2736,7 @@ paths:
 
         Emits a PEOPLE_WORK_SESSION_CURRENT_GET audit event but changes no state.
 
-        Returns 200 with clockState CLOCKED_OUT and null session fields when nothing is open — never 404 for that; 404 PERSON_NOT_FOUND when the person is unknown, 404 when personId is omitted and the caller has no linked person, 403 FORBIDDEN when the caller is neither the person nor a people:timekeeping:view holder, and 403 LOCATION_SCOPE_DENIED when the caller''s grant does not cover the person''s location.
+        Returns 200 with clockState CLOCKED_OUT and null session fields when nothing is open — never 404 for that; 404 PERSON_NOT_FOUND when the person is unknown, 404 when personId is omitted and the caller''s person link is present but no longer active, 503 USER_LINK_REPLICATION_PENDING with a Retry-After header when personId is omitted and the caller has no person link in the replica yet, 403 FORBIDDEN when the caller is neither the person nor a people:timekeeping:view holder, and 403 LOCATION_SCOPE_DENIED when the caller''s grant does not cover the person''s location.
 
         '
       operationId: getCurrentWorkSession
@@ -2725,7 +2767,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Person not found, or personId omitted and the caller has no linked person.
+          description: Person not found, or personId omitted and the caller's person link is no longer active.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'personId omitted and the caller''s person link has not replicated from People Contact yet (ApiError.code USER_LINK_REPLICATION_PENDING). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth: []
       summary: Get A Person's Current Work-Session (Clock) State
@@ -2740,7 +2794,7 @@ paths:
 
         Use this tool when a person clocks in for the day; do not use startWorkSessionBreak, which pauses an already running session.
 
-        Preconditions: the person must exist in the identity replica, and the person must have no session that is still open.
+        Preconditions: the person must exist, either as an employee of this module or in the identity replica, and the person must have no session that is still open.
 
         Required inputs: personId (UUID) in the body; the body''s actor field is ignored, because the recorded actor is always the authenticated username.
 

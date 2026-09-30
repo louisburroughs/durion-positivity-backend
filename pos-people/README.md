@@ -138,6 +138,38 @@ refused location is a 403 with `ApiError.code` `LOCATION_SCOPE_DENIED` and never
   cover one of that person's active assignment locations today (a person with no assignment is
   outside every scoped caller's reach). See "Work sessions and clock state".
 
+## Not yet replicated is `503`, not a 4xx (#1994)
+
+The `ext_*` replicas (`ext_location`, `ext_people_contact_person`, `ext_people_contact_user_link`)
+arrive by event, so a row that is absent is either wrong or not here yet, and a 404 or 400 cannot
+tell the caller which. Where this module has nothing else that proves the entity exists, a replica
+miss answers `503 Service Unavailable` with a `Retry-After` header and a `<X>_REPLICATION_PENDING`
+code (`ApiError.referenceId` carries the awaited id, when there is one). Bulk ingest classifies the
+same exception as `REPLICATION_PENDING`. A row that is present but in the wrong state keeps its own
+status.
+
+| Code | Replica miss | Endpoint |
+| --- | --- | --- |
+| `LOCATION_REPLICATION_PENDING` | `ext_location` has no row for the location. A row that is present but inactive stays `404 Location is inactive` | `POST /v1/people/staffing/assignments`; `PUT /v1/people/staffing/assignments/{id}` |
+| `LOCATION_REPLICATION_PENDING` | `ext_location` has no row for a caller-supplied `locationId`. A row that is present but inactive stays `400 Unknown locationId` | `GET /v1/people/reports/approvedTime` |
+| `USER_LINK_REPLICATION_PENDING` | `ext_people_contact_user_link` has no row at all for the caller's username, on a read that answers "me" with no default | `GET /v1/people/me/locations`; `GET /v1/people/availability` without `locationId`; `GET /v1/people/workSessions/current` without `personId` |
+
+The user link needs a rule, because a user with no person link is also a legitimate, permanent
+state. A read that applies a default for a missing link keeps doing so and never sees the 503:
+`GET /v1/people/me/primary-location` falls back to the platform's top-level location (#1636), and
+authorization treats an unlinked caller as simply "not self". Only a read that answers the current
+user with no fallback turns a missing link row into the 503. A link row that is present but no
+longer `ACTIVE` stays a `404` on the work-session read.
+
+Where this module owns a local row that already proves the entity exists, it no longer gates on the
+replica (#1994, the same fault as #1987 for staffing assignments):
+
+- `POST /v1/people/workSessions/start` and `GET /v1/people/workSessions/current` accept a person
+  who has an `employee` row even when `ext_people_contact_person` has not caught up, as
+  `EmployeeService.getEmployee` already did. Only a person in neither place is `404 PERSON_NOT_FOUND`.
+- The approved-time export's location column falls back to the location id when the replica has no
+  name for it, instead of refusing the export.
+
 ## Configuration
 
 | Property                | Default  | Description                  |

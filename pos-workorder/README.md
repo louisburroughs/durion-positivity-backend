@@ -675,10 +675,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ESTIMATE_INCOMPLETE` | 422 | A DRAFT estimate was submitted for approval with no customer, no vehicle, no line items, or uncalculated totals (`EstimateIncompleteException`) |
 | `FRACTIONAL_QUANTITY_NOT_ALLOWED` | 422 | Quantity is not a whole number for a product the catalog declares indivisible |
 | `UOM_CONVERSION_UNDEFINED` | 422 | `uomCode` names no conversion row for the referenced product |
-| `SERVICE_POSITION_INVALID` | 422 | The named bay or mobile unit is unknown to the location replicas, belongs to a different site than the workorder, or is otherwise not one this workorder can be placed on |
+| `SERVICE_POSITION_INVALID` | 422 | The named bay or mobile unit belongs to a different site than the workorder, is of the other resource kind (a bay named as a mobile unit, or the reverse), or is otherwise not one this workorder can be placed on. An id neither location replica holds is `503 LOCATION_REPLICATION_PENDING`, not this |
 | `SERVICE_POSITION_INACTIVE` | 422 | The named bay or mobile unit is one pos-location has not marked active |
 | `SERVICE_POSITION_DUTY_CLASS_EXCEEDED` | 422 | The vehicle's GVWR class is above the position's `maxDutyClass` (DECISION-SHOPMGMT-021 rule 3); skipped when either class is unknown. Same code and status as pos-shop-manager's own submit-time check |
-| `TECHNICIAN_NOT_FOUND` | 422 | The technician named on an assignment is unknown to the `ext_person` replica |
 | `TECHNICIAN_NOT_ACTIVE` | 422 | The technician's latest `ext_people_employee` status is TERMINATED, DISABLED or SUSPENDED (`TechnicianNotActiveException`); no employee row means employed |
 | `TECHNICIAN_NOT_STAFFED_AT_SITE` | 422 | The technician is not staffed at the workorder's site |
 | `UNPROCESSABLE_CONTENT` | 422 | Generic code for a 422 `ResponseStatusException` whose reason is free text |
@@ -686,11 +685,45 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `INTERNAL_ERROR` | 500 | An unexpected failure the controller reports as such, and the code every 5xx `ResponseStatusException` with a free-text reason collapses to — including the pick and invoice queueing 503s, which do not reach the wire as 503 |
 | `DOCUMENT_SERVICE_UNAVAILABLE` | 502 | Generating the estimate PDF failed |
 | `CUSTOMER_REQUIREMENTS_UNAVAILABLE` | 503 | The customer-requirements verdict has not replicated yet; retry after the `Retry-After` header |
+| `TECHNICIAN_REPLICATION_PENDING` | 503 | The technician named on an assignment has no `ext_people_contact_person` row yet; `referenceId` is the technician id; retry after the `Retry-After` header (#1994) |
+| `LOCATION_REPLICATION_PENDING` | 503 | The bay or mobile unit named as a service position is in neither `ext_bay` nor `ext_mobile_unit` yet; `referenceId` is the position id (#1994) |
+| `PICK_LIST_REPLICATION_PENDING` | 503 | The workorder holds part lines pos-inventory generates pick tasks for, but its `ext_pick_list` row, or the tasks behind it, have not replicated yet; `referenceId` is the workorder id (#1994) |
 | `REQUEST_REJECTED` | varies | Generic code for a `ResponseStatusException` whose reason is free text and whose status is none of 400, 403, 404, 409 or 422 |
 
 A `ResponseStatusException` whose reason is a machine code (`new ResponseStatusException(NOT_FOUND,
 "TECHNICIAN_ASSIGNMENT_NOT_FOUND")`) answers that code under its own status; a free-text reason is
 never reflected and answers the generic code for its status instead (#1720).
+
+### Not yet replicated is `503`, not a 4xx (#1994)
+
+A replica row arrives by event, so an id with no row is either wrong or not here yet, and a 4xx
+cannot tell the caller which. Where this module has nothing else that proves the entity exists, a
+replica miss answers `503 Service Unavailable` with a `Retry-After` header and a
+`<X>_REPLICATION_PENDING` code (`ApiError.referenceId` carries the awaited id). Bulk ingest
+classifies the same exception as `REPLICATION_PENDING`. A row that is present but in the wrong
+state keeps its own status.
+
+| Code | Replica miss | Endpoint |
+| --- | --- | --- |
+| `TECHNICIAN_REPLICATION_PENDING` | `ext_people_contact_person` | `POST` / `PUT /v1/workorders/{id}/technician` |
+| `LOCATION_REPLICATION_PENDING` | `ext_bay` and `ext_mobile_unit`, for a well-formed `resourceId` of a stated `BAY` or `MOBILE_UNIT` (a position held by the other kind's replica stays `422 SERVICE_POSITION_INVALID`) | `PUT /v1/workorders/{id}/position` |
+| `PICK_LIST_REPLICATION_PENDING` | `ext_pick_list`, or an empty `ext_pick_task` set behind an existing list, for a workorder that has a servicing site and a part line with a product and a positive quantity (the lines `PromotedWorkorderDemandPublisher` asks pos-inventory to pick). A workorder with none of those keeps its `404` | the pick-list, scan, confirm, complete and consume endpoints under `/v1/workorders/{id}` |
+
+The pick-list `503` has no upper bound. The gate is a predicate on the workorder's current state
+(a servicing site and a pickable part line), not evidence that the generate command was ever
+queued: `InventoryCommandPublisher` sends `inventory.commands.v1` straight through Kafka, and
+nothing in this module records the request. So a workorder whose generate command never left
+answers `503` with `Retry-After` indefinitely: `workorder.kafka.enabled` was off when it was
+promoted, the send failed (`PromotedWorkorderDemandPublisher` logs the failure and moves on), or
+its part lines were added after promotion (no command is sent for those). An operator who sees
+the `503` outlast a few `Retry-After` intervals should check that log line and re-promote, or ask
+pos-inventory to generate the pick list, rather than keep retrying.
+
+Left as they are, on purpose: estimate tax (`LocationReferenceService`) treats a location that has
+not replicated as `taxPending` and never blocks the estimate; the part-quantity divisibility check
+(`ext_product_uom`) is configuration data that refuses with 422; the invoice hand-off answers
+`PENDING` while an invoice has not replicated. `GET /v1/workorders/{id}/pick-list/tasks` and
+`/picked-items` keep answering an empty list for a workorder with no pick list.
 
 ## Configuration
 

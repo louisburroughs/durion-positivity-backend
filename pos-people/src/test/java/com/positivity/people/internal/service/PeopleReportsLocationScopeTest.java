@@ -108,7 +108,7 @@ class PeopleReportsLocationScopeTest {
         when(timekeepingThresholdCache.createContext(any(), any())).thenReturn(thresholdContext);
         when(thresholdContext.resolveThresholdMinutes(any(), any())).thenReturn(30);
         when(locationReferenceService.isLocationActive(any())).thenReturn(true);
-        when(locationReferenceService.getLocationName(any())).thenReturn("Loc");
+        when(locationReferenceService.findLocationName(any())).thenReturn(Optional.of("Loc"));
         when(locationHierarchyService.descendantsOf(DISTRICT, Dimension.OTHER)).thenReturn(Set.of(DISTRICT, SHOP_A));
         when(locationHierarchyService.descendantsOf(SHOP_C, Dimension.OTHER)).thenReturn(Set.of(SHOP_C));
     }
@@ -326,10 +326,11 @@ class PeopleReportsLocationScopeTest {
         }
 
         @Test
-        @DisplayName("an unknown location is a 400 for a scoped caller too — validation precedes the gate")
-        void unknownLocationIs400BeforeTheGate() {
+        @DisplayName("an inactive location is a 400 for a scoped caller too — validation precedes the gate")
+        void inactiveLocationIs400BeforeTheGate() {
             LocationScopeFixtures.callerWith(ACTOR, otherScopedAt(DISTRICT));
             when(locationReferenceService.isLocationActive(SHOP_C)).thenReturn(false);
+            when(locationReferenceService.isLocationReplicated(SHOP_C)).thenReturn(true);
             List<UUID> locations = List.of(SHOP_C);
 
             assertThatThrownBy(() -> service.getApprovedTimeForExport(DAY, DAY, locations, ACTOR, null))

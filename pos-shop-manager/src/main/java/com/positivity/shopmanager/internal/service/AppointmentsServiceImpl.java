@@ -1095,6 +1095,12 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 ZonedDateTime.of(endLocal, zoneId).toInstant());
     }
 
+    /**
+     * Reads this module's own {@code shop} configuration row, not the {@code ext_location} replica:
+     * a location with no shop row is one nobody configured for scheduling, which no event will
+     * ever change, so the 404 {@code LOCATION_NOT_FOUND} callers get is accurate and not a
+     * replication lag (#1994 reviewed, left as is).
+     */
     private boolean locationLooksKnown(UUID locationId) {
         return shopRepository.existsById(locationId);
     }

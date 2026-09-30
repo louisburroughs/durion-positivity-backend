@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.web.common.ReplicationPendingException;
 import com.positivity.workorder.internal.dto.AssignTechnicianRequest;
 import com.positivity.workorder.internal.dto.ReassignTechnicianRequest;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentRecord;
@@ -20,7 +21,6 @@ import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotActiveException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
-import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
 import com.positivity.workorder.internal.exception.TechnicianNotStaffedAtSiteException;
 import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
@@ -265,13 +265,18 @@ class TechnicianAssignmentServiceImplTest {
         }
 
         @Test
-        @DisplayName("#1983: a technician the ext_person replica does not know is refused")
-        void refusesUnknownTechnician() {
+        @DisplayName("#1994: a technician the ext_person replica does not hold yet is 503 "
+                + "TECHNICIAN_REPLICATION_PENDING, not a 4xx")
+        void unreplicatedTechnicianIsReplicationPending() {
             givenWorkorder(WorkorderStatus.APPROVED);
             when(extPersonReplicaRepository.existsById(TECHNICIAN_ID)).thenReturn(false);
 
             assertThatThrownBy(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
-                    .isInstanceOf(TechnicianNotFoundException.class);
+                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("TECHNICIAN_REPLICATION_PENDING");
+                        assertThat(e.getReferenceId()).isEqualTo(TECHNICIAN_ID);
+                        assertThat(e.getMessage()).doesNotContain(TECHNICIAN_ID.toString());
+                    });
             verify(assignmentRepository, never()).saveAndFlush(any());
         }
 
@@ -340,6 +345,27 @@ class TechnicianAssignmentServiceImplTest {
 
             assertThat(existing.getCurrent()).isFalse();
             assertThat(existing.getReassignmentReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("#1994: a replacement technician the replica does not hold yet is 503 "
+                + "TECHNICIAN_REPLICATION_PENDING")
+        void unreplicatedReplacementIsReplicationPending() {
+            givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
+            when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
+                    .thenReturn(Optional.of(existing));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
+            when(extPersonReplicaRepository.existsById(TECHNICIAN_ID)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", null, null))
+                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("TECHNICIAN_REPLICATION_PENDING");
+                        assertThat(e.getReferenceId()).isEqualTo(TECHNICIAN_ID);
+                    });
+
+            assertThat(existing.getCurrent()).isTrue();
+            verify(assignmentRepository, never()).saveAndFlush(any());
         }
 
         @Test
@@ -719,13 +745,15 @@ class TechnicianAssignmentServiceImplTest {
         }
 
         @Test
-        @DisplayName("an unknown technician is still TECHNICIAN_NOT_FOUND, ahead of the employment check")
-        void unknownWinsOverEmployment() {
+        @DisplayName("an unreplicated technician is 503 TECHNICIAN_REPLICATION_PENDING, ahead of the employment check")
+        void unreplicatedWinsOverEmployment() {
             givenWorkorder(WorkorderStatus.APPROVED);
             when(extPersonReplicaRepository.existsById(TECHNICIAN_ID)).thenReturn(false);
 
             assertThatThrownBy(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
-                    .isInstanceOf(TechnicianNotFoundException.class);
+                    .isInstanceOfSatisfying(
+                            ReplicationPendingException.class,
+                            e -> assertThat(e.getCode()).isEqualTo("TECHNICIAN_REPLICATION_PENDING"));
             verify(peopleAvailabilityLocalService, never()).inactiveEmploymentStatus(any());
         }
     }

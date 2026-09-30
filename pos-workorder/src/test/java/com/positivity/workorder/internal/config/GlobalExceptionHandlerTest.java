@@ -34,7 +34,6 @@ import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundExcepti
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotActiveException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
-import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
 import com.positivity.workorder.internal.exception.TechnicianNotStaffedAtSiteException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
@@ -242,8 +241,6 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleTechnicianAlreadyAssigned", (HandlerInvocation)
                             request -> handler.handleTechnicianAlreadyAssigned(
                                     new TechnicianAlreadyAssignedException("already assigned", OTHER_ID), request)),
-                    Named.of("handleTechnicianNotFound", (HandlerInvocation) request ->
-                            handler.handleTechnicianNotFound(new TechnicianNotFoundException(SOME_ID), request)),
                     Named.of("handleTechnicianNotAssigned", (HandlerInvocation)
                             request -> handler.handleTechnicianNotAssigned(
                                     new TechnicianNotAssignedException("none assigned"), request)),

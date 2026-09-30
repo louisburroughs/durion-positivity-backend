@@ -11,8 +11,8 @@ import java.util.UUID;
  * service (ADR-0044 §6). A person with no employee row at all is allowed: replica lag, bootstrap
  * and a stalled DLQ must not take a shop offline.
  *
- * <p>422, not 409 and not 404: the technician exists ({@link TechnicianNotFoundException} covers
- * "does not exist") and the request is well-formed. What fails is a cross-entity rule between the
+ * <p>422, not 409 and not 404: the technician exists (a technician the {@code ext_person} replica
+ * does not hold yet is 503 {@code TECHNICIAN_REPLICATION_PENDING}) and the request is well-formed. What fails is a cross-entity rule between the
  * technician and their employment, which ADR-0017 §2 places at 422. A {@code fieldErrors} entry
  * marks {@code technicianId} so a form can highlight the offending field.
  */

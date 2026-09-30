@@ -8,11 +8,13 @@ import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.exception.ReplicationPendingCodes;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
@@ -304,7 +306,16 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         }
 
         if (!locationReferenceService.isLocationActive(locationId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found or inactive: " + locationId);
+            // A location the replica has no row for may simply not have arrived from pos-location
+            // yet, so it is "not yet" (503); only a location that is present and inactive is a
+            // definite 404 (#1994).
+            if (!locationReferenceService.isLocationReplicated(locationId)) {
+                throw new ReplicationPendingException(
+                        ReplicationPendingCodes.LOCATION_REPLICATION_PENDING,
+                        "The location has not replicated from Location yet; retry shortly",
+                        locationId);
+            }
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Location is inactive: " + locationId);
         }
         return employee;
     }

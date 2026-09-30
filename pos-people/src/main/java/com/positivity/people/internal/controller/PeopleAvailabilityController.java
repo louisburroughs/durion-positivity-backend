@@ -12,6 +12,7 @@ import com.positivity.people.internal.service.UserPersonTranslationService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -62,9 +63,10 @@ public class PeopleAvailabilityController {
                     rather than refused, and a caller whose permission is not location-scoped is unaffected.
                     Emits a PEOPLE_AVAILABILITY_LIST audit event but changes no state; this is a read-only \
                     projection.
-                    Returns 404 when locationId is omitted and the requester has no active location assignment or no \
-                    person link, and 403 LOCATION_SCOPE_DENIED when locationId is outside the caller's location \
-                    reach.
+                    Returns 404 when locationId is omitted and the requester has no active location assignment, 503 \
+                    USER_LINK_REPLICATION_PENDING with a Retry-After header when locationId is omitted and the \
+                    requester's person link has not replicated yet, and 403 LOCATION_SCOPE_DENIED when locationId \
+                    is outside the caller's location reach.
                     """)
     @ApiResponse(responseCode = "200", description = "Availability data returned successfully.")
     @ApiResponse(
@@ -73,7 +75,17 @@ public class PeopleAvailabilityController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "locationId omitted and the requester has no active location assignment or person link.",
+            description = "locationId omitted and the requester has no active location assignment.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "The requester's person link has not replicated from People Contact yet (ApiError.code "
+                    + "USER_LINK_REPLICATION_PENDING). Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/availability")
     @EmitEvent(id = "PEOPLE_AVAILABILITY_LIST", apiVersion = "1")
@@ -147,13 +159,20 @@ public class PeopleAvailabilityController {
                     Required inputs: none; identity comes from the bearer token and there are no parameters.
                     Emits a PEOPLE_ME_LOCATIONS_LIST audit event but changes no state; this is a read-only \
                     projection.
-                    Returns 200 with an empty list when the person has no assignment active today, 404 when no \
-                    person is linked to the current user, and 401 when the security context carries no username.
+                    Returns 200 with an empty list when the person has no assignment active today, 503 \
+                    USER_LINK_REPLICATION_PENDING with a Retry-After header when the current user has no person \
+                    link in the replica yet, and 401 when the security context carries no username.
                     """)
     @ApiResponse(responseCode = "200", description = "Active location assignments returned successfully.")
     @ApiResponse(
-            responseCode = "404",
-            description = "No person linked to the current user.",
+            responseCode = "503",
+            description = "The current user's person link has not replicated from People Contact yet (ApiError.code "
+                    + "USER_LINK_REPLICATION_PENDING). Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/me/locations")
     @EmitEvent(id = "PEOPLE_ME_LOCATIONS_LIST", apiVersion = "1")

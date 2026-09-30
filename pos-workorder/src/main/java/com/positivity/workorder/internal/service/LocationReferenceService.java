@@ -31,6 +31,12 @@ public class LocationReferenceService {
     /**
      * Fetch the location's replica address and map it to a tax destination address.
      *
+     * <p>Left as an {@link IllegalStateException} rather than a replication-pending 503 (#1994
+     * reviewed): the only caller, {@code EstimateServiceImpl}, catches it and flags the estimate
+     * {@code taxPending} instead of blocking it (decision D-T5), so no caller sees a status. The
+     * class-level {@code noRollbackFor} keeps that catch from poisoning the caller's transaction,
+     * which a {@code ReplicationPendingException} would.
+     *
      * @param locationId the shop location backing the estimate
      * @return the destination address for tax calculation
      * @throws IllegalStateException if the location is not in the replica or lacks

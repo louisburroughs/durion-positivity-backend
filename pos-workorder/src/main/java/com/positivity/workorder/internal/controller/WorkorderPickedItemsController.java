@@ -9,6 +9,7 @@ import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkorderPickFacadeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -101,9 +102,10 @@ public class WorkorderPickedItemsController {
                     Emits a WORKORDER_PICKED_ITEMS_CONSUME event and publishes a consume command; callers must \
                     poll getPickedItems to observe the consumed quantities.
                     Returns 202 with per-item PENDING results, 404 when the pick list or a referenced pick task \
-                    is missing, 503 when the command feed is unavailable, and 403 LOCATION_SCOPE_DENIED when \
-                    the caller's location scope does not cover the workorder's own site (ADR-0061 mechanism, \
-                    #2204).
+                    is missing, 503 when the command feed is unavailable or, with PICK_LIST_REPLICATION_PENDING \
+                    and a Retry-After header, when the workorder holds part lines but its pick list or tasks \
+                    have not replicated from Inventory yet, and 403 LOCATION_SCOPE_DENIED when the caller's \
+                    location scope does not cover the workorder's own site (ADR-0061 mechanism, #2204).
                     """)
     @ApiResponse(
             responseCode = "202",
@@ -120,6 +122,18 @@ public class WorkorderPickedItemsController {
     @ApiResponse(
             responseCode = "404",
             description = "Workorder not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "The workorder holds part lines whose pick list or pick tasks have not replicated from "
+                    + "Inventory yet (ApiError.code PICK_LIST_REPLICATION_PENDING, referenceId the workorder "
+                    + "id). Not-yet, not no: retry after the "
+                    + "Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ConsumePickedItemsResponse> consumeWorkorderPickedItems(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")

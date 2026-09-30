@@ -9,16 +9,15 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Location existence/active checks and display names served from the {@code ext_location}
- * replica (ADR-0044 §6, #892). Replaces the retired synchronous {@code LocationReferenceClient}:
- * a location missing from the replica behaves exactly like the owner's 404 did — inactive for
- * validation, {@code 400 Unknown location} for name resolution.
+ * replica (ADR-0044 §6, #892). Replaces the retired synchronous {@code LocationReferenceClient}.
+ * The replica fills by event, so a location it does not hold yet is not proof the location does
+ * not exist (#1994): {@link #isLocationReplicated} lets a caller tell "not here yet" from
+ * "present but inactive", and the display-name lookups degrade instead of failing.
  */
 @Service
 @RequiredArgsConstructor
@@ -36,20 +35,12 @@ public class LocationReferenceService {
     }
 
     /**
-     * Resolve a location display name from the replica.
-     *
-     * @param locationId location identifier
-     * @return location display name, or the id string when the replica row has no name
-     * @throws ResponseStatusException 400 when the location is unknown
+     * True when the replica holds a row for the location, active or not. Lets a caller that just
+     * saw {@link #isLocationActive} answer {@code false} tell a location that has not replicated
+     * yet (503 {@code LOCATION_REPLICATION_PENDING}) from one that is present but inactive (404).
      */
-    @NonNull
-    public String getLocationName(@NonNull UUID locationId) {
-        ExtLocationReplica location = extLocationReplicaRepository
-                .findById(locationId)
-                .orElseThrow(
-                        () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown location: " + locationId));
-        String name = location.getName();
-        return name == null || name.isBlank() ? locationId.toString() : name;
+    public boolean isLocationReplicated(@NonNull UUID locationId) {
+        return extLocationReplicaRepository.existsById(locationId);
     }
 
     /**

@@ -20,6 +20,7 @@ import com.positivity.people.internal.dto.StaffingAssignmentBulkIngestRecord;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.service.EmployeeService;
 import com.positivity.people.internal.service.StaffingAssignmentService;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -197,6 +198,31 @@ class StaffingAssignmentBulkIngestControllerTest {
                 .andExpect(jsonPath("$.results[0].errorCode").value("STAFFING_ASSIGNMENT_INGEST_FAILED"))
                 .andExpect(jsonPath("$.results[0].errorMessage")
                         .value("An overlapping assignment already exists for this person, location, and role"));
+    }
+
+    /**
+     * #1994: a location the replica has not received yet is "not yet", not a bad row - the
+     * bulk-ingest classifier reads the exception's self-declared 503 and reports the row
+     * {@code REPLICATION_PENDING} so the caller resubmits it instead of fixing a valid id.
+     */
+    @Test
+    void bulkIngest_locationNotYetReplicated_isReportedReplicationPending() throws Exception {
+        clockIsFixed();
+        when(employeeService.resolveByEmployeeNumber("EMP-0001"))
+                .thenReturn(Optional.of(
+                        EmployeeIdentityDto.builder().personId(PERSON_ID).build()));
+        when(staffingAssignmentService.create(any(), anyString()))
+                .thenThrow(new ReplicationPendingException(
+                        "LOCATION_REPLICATION_PENDING",
+                        "The location has not replicated from Location yet; retry shortly",
+                        UUID.fromString("01960003-0000-7000-8000-0000000000c1")));
+
+        mockMvc.perform(post(PATH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request(List.of(record("EMP-0001"))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("REPLICATION_PENDING"));
     }
 
     /**

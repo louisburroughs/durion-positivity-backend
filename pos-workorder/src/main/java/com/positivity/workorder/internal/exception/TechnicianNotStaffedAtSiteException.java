@@ -18,8 +18,9 @@ import java.util.UUID;
  * <p>There is no override for this refusal and none is planned: a technician must be staffed at
  * the workorder's site, full stop.
  *
- * <p>422, not 409 and not 404: the technician exists ({@link TechnicianNotFoundException} covers
- * "does not exist") and the request is well-formed. What fails is a cross-entity rule between the
+ * <p>422, not 409 and not 404: the technician exists (an id the People replica has not
+ * delivered yet is a 503 {@code TECHNICIAN_REPLICATION_PENDING}) and the request is well-formed.
+ * What fails is a cross-entity rule between the
  * technician and the site the workorder stands at, which ADR-0017 §2 places at 422. The
  * workorder's site rides as {@code referenceId} so a dispatch board can link straight to it, and a
  * {@code fieldErrors} entry marks {@code technicianId} so a form can highlight the offending field.

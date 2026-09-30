@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.repository;
 
 import com.positivity.workorder.internal.entity.WorkorderPart;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -24,4 +25,11 @@ public interface WorkorderPartRepository extends JpaRepository<WorkorderPart, UU
     List<WorkorderPart> findByWorkorderIdAndWorkOrderServiceIsNull(UUID workorderId);
 
     List<WorkorderPart> findByWorkOrderService_WorkOrder_Id(UUID workorderId);
+
+    /**
+     * Whether the workorder holds a part line pos-inventory would generate a pick task for: one with
+     * a product and a positive quantity, the same filter {@code PromotedWorkorderDemandPublisher}
+     * applies before it asks for a pick list (#1994).
+     */
+    boolean existsByWorkorderIdAndProductEntityIdIsNotNullAndQuantityGreaterThan(UUID workorderId, BigDecimal quantity);
 }

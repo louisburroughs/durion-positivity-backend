@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.web.common.ReplicationPendingException;
 import com.positivity.workorder.internal.config.InventoryCommandPublisher;
 import com.positivity.workorder.internal.config.InventoryCommandPublisher.ConsumeLine;
 import com.positivity.workorder.internal.dto.pick.CompletePickTaskRequest;
@@ -17,10 +18,13 @@ import com.positivity.workorder.internal.entity.ExtPickListReplica;
 import com.positivity.workorder.internal.entity.ExtPickTaskReplica;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ConsumeItemStatus;
+import com.positivity.workorder.internal.exception.ReplicationPendingCodes;
 import com.positivity.workorder.internal.repository.ExtPickListReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPickTaskReplicaRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -55,6 +59,7 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
     private final ExtPickTaskReplicaRepository pickTaskReplicaRepository;
     private final ObjectProvider<InventoryCommandPublisher> inventoryCommandPublisher;
     private final WorkorderRepository workorderRepository;
+    private final WorkorderPartRepository workorderPartRepository;
 
     @Override
     @NonNull
@@ -72,8 +77,10 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
      * every caller to treat a missing list as a failure. The seeder swallowed the 404 and skipped
      * picking entirely as a result, which is why simulated jobs never moved stock.
      *
-     * <p>The pick-list header endpoint keeps its 404: asked for a specific resource, it either
-     * exists or it does not.
+     * <p>The pick-list header endpoint keeps its 404 for a workorder with nothing to pick: asked for
+     * a specific resource, it either exists or it does not. For a workorder whose promotion asked
+     * for a pick list that has not replicated yet it is a 503 (#1994), and this list stays empty,
+     * which is still the truthful answer to "what is there to pick right now".
      */
     @Override
     @NonNull
@@ -253,8 +260,7 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
                 .map(item -> {
                     ExtPickTaskReplica task = taskMap.get(item.getPickTaskId());
                     if (task == null) {
-                        throw new ResponseStatusException(
-                                HttpStatus.NOT_FOUND, "Pick task not found: " + item.getPickTaskId());
+                        throw pickTaskMissing(workorderId, item.getPickTaskId(), !tasks.isEmpty());
                     }
                     return new ConsumeLine(item.getPickTaskId(), task.getSkuId(), item.getQuantityToConsume());
                 })
@@ -320,9 +326,61 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
 
     @NonNull
     private ExtPickListReplica resolvePrimaryPickList(@NonNull UUID workorderId) {
-        return findPrimaryPickList(workorderId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "No pick list found for workorder " + workorderId));
+        return findPrimaryPickList(workorderId).orElseThrow(() -> noPickListYet(workorderId));
+    }
+
+    /**
+     * What a workorder with no replicated pick list answers (#1994). A workorder holding part lines
+     * that pos-inventory generates tasks for has a pick list on the way: promotion asks for one, and
+     * the list arrives on {@code inventory.events.v1}. Until it does, "no pick list" is "not yet",
+     * so 503 {@code PICK_LIST_REPLICATION_PENDING}. A workorder with nothing to pick (no such
+     * lines, no servicing site, or not held by this module at all) will never have a list, so it
+     * keeps its 404.
+     */
+    @NonNull
+    private RuntimeException noPickListYet(@NonNull UUID workorderId) {
+        if (pickListIsExpected(workorderId)) {
+            return pickListReplicationPending("pick list", workorderId);
+        }
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "No pick list found for workorder " + workorderId);
+    }
+
+    /**
+     * Whether promotion asked pos-inventory for a pick list for this workorder. Mirrors the gate in
+     * {@code PromotedWorkorderDemandPublisher}: a servicing site and at least one part with a
+     * product and a positive quantity.
+     */
+    private boolean pickListIsExpected(@NonNull UUID workorderId) {
+        return workorderRepository
+                .findById(workorderId)
+                .filter(workorder -> workorder.getShopId() != null)
+                .map(workorder ->
+                        workorderPartRepository.existsByWorkorderIdAndProductEntityIdIsNotNullAndQuantityGreaterThan(
+                                workorderId, BigDecimal.ZERO))
+                .orElse(false);
+    }
+
+    @NonNull
+    private static ReplicationPendingException pickListReplicationPending(
+            @NonNull String what, @NonNull UUID workorderId) {
+        return new ReplicationPendingException(
+                ReplicationPendingCodes.PICK_LIST_REPLICATION_PENDING,
+                "The workorder's " + what + " has not replicated from Inventory yet; retry shortly",
+                workorderId);
+    }
+
+    /**
+     * A task the caller named that the workorder's replicated pick list does not hold (#1994). An
+     * empty task set on a list that exists means the tasks have not replicated behind it yet, so
+     * "not yet" (503); a task set that is present but lacks the id is a wrong id (404).
+     */
+    @NonNull
+    private RuntimeException pickTaskMissing(
+            @NonNull UUID workorderId, @NonNull UUID pickTaskId, boolean pickListHasTasks) {
+        if (!pickListHasTasks && pickListIsExpected(workorderId)) {
+            return pickListReplicationPending("pick tasks", workorderId);
+        }
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Pick task not found: " + pickTaskId);
     }
 
     /** The workorder's primary pick list, if it has one; see {@link #getPickTasksForWorkorder}. */
@@ -335,11 +393,12 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
     @NonNull
     private ExtPickTaskReplica resolveTask(@NonNull UUID workorderId, @NonNull UUID pickTaskId) {
         ExtPickListReplica pickList = resolvePrimaryPickList(workorderId);
-        return pickTaskReplicaRepository.findByPickListIdOrderBySortOrderAsc(pickList.getPickListId()).stream()
+        List<ExtPickTaskReplica> tasks =
+                pickTaskReplicaRepository.findByPickListIdOrderBySortOrderAsc(pickList.getPickListId());
+        return tasks.stream()
                 .filter(task -> task.getPickTaskId().equals(pickTaskId))
                 .findFirst()
-                .orElseThrow(
-                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pick task not found: " + pickTaskId));
+                .orElseThrow(() -> pickTaskMissing(workorderId, pickTaskId, !tasks.isEmpty()));
     }
 
     private WorkorderPickListResponse mapPickList(ExtPickListReplica pickList) {

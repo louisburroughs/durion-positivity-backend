@@ -158,10 +158,11 @@ class StaffingAssignmentLocationScopeTest {
         }
 
         @Test
-        @DisplayName("an unknown location is a 404 for a scoped caller too — resolution precedes the gate")
-        void unknownLocationIs404BeforeTheGate() {
+        @DisplayName("an inactive location is a 404 for a scoped caller too — resolution precedes the gate")
+        void inactiveLocationIs404BeforeTheGate() {
             LocationScopeFixtures.callerWith(ACTOR, otherScopedAt(DISTRICT));
             when(locationReferenceService.isLocationActive(SHOP_C)).thenReturn(false);
+            when(locationReferenceService.isLocationReplicated(SHOP_C)).thenReturn(true);
             CreateStaffingAssignmentRequest request = createAt(SHOP_C);
 
             assertThatThrownBy(() -> service.create(request, ACTOR))
