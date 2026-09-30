@@ -76,4 +76,15 @@ class ReportExportArtifactTest {
 
         assertThat(a).isNotEqualTo(b);
     }
+
+    @Test
+    @DisplayName("toString names the content by size and never renders the report bytes")
+    void toString_omitsContent() {
+        ReportExportArtifact a = csv("account,balance\n1000,42.00\n");
+
+        assertThat(a.toString())
+                .isEqualTo("ReportExportArtifact[content=27 bytes, contentType=text/csv, filename=report.csv]")
+                .doesNotContain("account")
+                .doesNotContain("[97, ");
+    }
 }
