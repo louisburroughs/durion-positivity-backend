@@ -2,17 +2,21 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse;
+import com.positivity.workorder.internal.entity.ExtEmployeeReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.ExtStaffingAssignmentReplica;
+import com.positivity.workorder.internal.repository.ExtEmployeeReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtUserLinkReplicaRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +30,11 @@ import org.springframework.stereotype.Service;
  * {@code PeopleLocationClient}: availability = ACTIVE assignments effective on the date at the
  * location joined with person names — exactly what the retired endpoint computed. Real-time
  * fields (clock/break/PTO/schedule) were never populated by that endpoint and remain null.
+ *
+ * <p>Employment (#2119, #2120): a person whose latest {@code ext_people_employee} status is
+ * inactive ({@link ExtEmployeeReplica#INACTIVE_EMPLOYMENT_STATUSES}) is off the roster and not
+ * eligible anywhere. A person with no employee row is treated as employed — replica lag must not
+ * take a shop offline.
  */
 @Slf4j
 @Service
@@ -38,14 +47,21 @@ public class PeopleAvailabilityLocalService {
     private final ExtStaffingAssignmentReplicaRepository assignmentReplicaRepository;
     private final ExtPersonReplicaRepository personReplicaRepository;
     private final ExtUserLinkReplicaRepository linkReplicaRepository;
+    private final ExtEmployeeReplicaRepository employeeReplicaRepository;
 
     @NonNull
     public PeopleAvailabilityResponse fetchAvailability(@NonNull String locationId, @NonNull LocalDate date) {
         UUID locationUuid = UUID.fromString(locationId);
-        List<ExtStaffingAssignmentReplica> assignments =
+        List<ExtStaffingAssignmentReplica> effective =
                 assignmentReplicaRepository.findByLocationIdAndStatus(locationUuid, ACTIVE).stream()
                         .filter(a -> effectiveOn(a, date))
                         .toList();
+        Set<UUID> offboarded = inactivePersonIds(effective.stream()
+                .map(ExtStaffingAssignmentReplica::getPersonId)
+                .toList());
+        List<ExtStaffingAssignmentReplica> assignments = effective.stream()
+                .filter(a -> !offboarded.contains(a.getPersonId()))
+                .toList();
 
         Map<UUID, ExtPersonReplica> peopleById = personReplicaRepository
                 .findByPersonIdIn(assignments.stream()
@@ -108,15 +124,52 @@ public class PeopleAvailabilityLocalService {
      * @param siteId   the workorder's site — the unit's base site when the position is a mobile
      *                 unit, the workorder's own {@code locationId} otherwise
      * @param date     the date staffing must be effective on, normally today
-     * @return whether {@code personId} is eligible to hold a workorder at {@code siteId}
+     * @return whether {@code personId} is eligible to hold a workorder at {@code siteId}; always false
+     *         for a person whose latest employment status is inactive, checked before the
+     *         no-staffing softening above (#2120)
      */
     public boolean isEligibleAtSite(@NonNull UUID personId, @NonNull UUID siteId, @NonNull LocalDate date) {
+        if (inactiveEmploymentStatus(personId).isPresent()) {
+            return false;
+        }
         List<ExtStaffingAssignmentReplica> activeAssignments =
                 assignmentReplicaRepository.findByPersonIdAndStatus(personId, ACTIVE).stream()
                         .filter(a -> effectiveOn(a, date))
                         .toList();
         return activeAssignments.isEmpty()
                 || activeAssignments.stream().anyMatch(a -> siteId.equals(a.getLocationId()));
+    }
+
+    /**
+     * The person's employment status when it is inactive (TERMINATED, DISABLED or SUSPENDED) on
+     * their latest {@code ext_people_employee} row; empty when they are employed or have no row
+     * (#2119, #2120). The single definition of "off the roster" shared by the board and the assign
+     * gate.
+     */
+    @NonNull
+    public Optional<String> inactiveEmploymentStatus(@NonNull UUID personId) {
+        return ExtEmployeeReplica.latest(employeeReplicaRepository.findByPersonId(personId))
+                .map(ExtEmployeeReplica::getStatus)
+                .filter(ExtEmployeeReplica::isInactiveStatus);
+    }
+
+    private Set<UUID> inactivePersonIds(@NonNull List<UUID> personIds) {
+        if (personIds.isEmpty()) {
+            return Set.of();
+        }
+        Map<UUID, List<ExtEmployeeReplica>> byPerson =
+                employeeReplicaRepository.findByPersonIdIn(new HashSet<>(personIds)).stream()
+                        .collect(Collectors.groupingBy(ExtEmployeeReplica::getPersonId));
+        Set<UUID> inactive = new HashSet<>();
+        byPerson.forEach((personId, rows) -> {
+            if (ExtEmployeeReplica.latest(rows)
+                    .map(ExtEmployeeReplica::getStatus)
+                    .filter(ExtEmployeeReplica::isInactiveStatus)
+                    .isPresent()) {
+                inactive.add(personId);
+            }
+        });
+        return inactive;
     }
 
     private boolean effectiveOn(ExtStaffingAssignmentReplica assignment, LocalDate date) {

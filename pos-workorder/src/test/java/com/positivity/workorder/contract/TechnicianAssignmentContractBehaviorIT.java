@@ -7,6 +7,7 @@ import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
+import com.positivity.workorder.internal.entity.ExtEmployeeReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
@@ -18,6 +19,7 @@ import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtEmployeeReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
@@ -77,6 +79,9 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
     @Autowired
     private ExtStaffingAssignmentReplicaRepository extStaffingAssignmentReplicaRepository;
+
+    @Autowired
+    private ExtEmployeeReplicaRepository extEmployeeReplicaRepository;
 
     @Autowired
     private WorkorderStateTransitionRepository transitionRepository;
@@ -756,6 +761,59 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                         .orElseThrow()
                         .getTechnicianId())
                 .isEqualTo(testTechnicianId1);
+    }
+
+    @Test
+    @DisplayName("TA-015: #2120 assign refuses a TERMINATED technician with 422 TECHNICIAN_NOT_ACTIVE, and "
+            + "an ON_LEAVE one still succeeds")
+    void testAssignTechnician_RefusedWhenTerminated() {
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000088");
+        UUID workorderId = seedApprovedWorkorderAtSite(siteId);
+        testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        seedEmployment(testTechnicianId1, "TERMINATED");
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("technicianId", testTechnicianId1.toString()))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(422)
+                .body("code", equalTo("TECHNICIAN_NOT_ACTIVE"))
+                .body("message", containsString("TERMINATED"))
+                .body("fieldErrors[0].field", equalTo("technicianId"))
+                .body("nextAction", not(emptyOrNullString()))
+                .body("supportAction", not(emptyOrNullString()));
+
+        assertThat(assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId))
+                .isEmpty();
+
+        // The person goes on leave (a later employment fact replaces the row): employed, so assignable.
+        seedEmployment(testTechnicianId1, "ON_LEAVE");
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("technicianId", testTechnicianId1.toString()))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(200);
+    }
+
+    /** The person's single employment row, replaced in place — the shape people.employee.updated leaves. */
+    private void seedEmployment(UUID personId, String status) {
+        extEmployeeReplicaRepository.save(ExtEmployeeReplica.builder()
+                .employeeId(
+                        UUID.nameUUIDFromBytes(personId.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                .personId(personId)
+                .status(status)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.EPOCH)
+                .build());
     }
 
     /**
