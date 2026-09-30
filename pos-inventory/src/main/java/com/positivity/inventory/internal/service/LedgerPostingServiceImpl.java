@@ -11,7 +11,10 @@ import com.positivity.inventory.internal.exception.UomConversionUndefinedExcepti
 import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantResolver;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -27,9 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -64,9 +65,10 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Concurrency: the affected summary rows are locked with
  * {@code SELECT ... FOR UPDATE} before validating and applying deltas, in
  * deterministic key order to avoid deadlocks between concurrent batches.
- * First-time row creation happens in a nested transaction
- * ({@link StockSummaryRowInitializer}) so a lost creation race cannot poison
- * the posting transaction.
+ * First-time row creation is an in-transaction {@code INSERT ... ON CONFLICT DO
+ * NOTHING} ({@link InventoryStockSummaryRepository#insertIfAbsent}): one connection per
+ * posting, and a lost creation race raises no exception, so the posting transaction is
+ * never marked rollback-only.
  */
 @Service
 @Slf4j
@@ -74,7 +76,8 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
 
     private final InventoryLedgerEntryRepository ledgerRepository;
     private final InventoryStockSummaryRepository summaryRepository;
-    private final StockSummaryRowInitializer rowInitializer;
+    private final TenantResolver tenantResolver;
+    private final Clock clock;
     private final ExtProductReplicaRepository extProductReplicaRepository;
     private final InventoryLotStatusReconciler lotStatusReconciler;
     private final SerialUnitPostingService serialUnitPostingService;
@@ -91,7 +94,8 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
     public LedgerPostingServiceImpl(
             InventoryLedgerEntryRepository ledgerRepository,
             InventoryStockSummaryRepository summaryRepository,
-            StockSummaryRowInitializer rowInitializer,
+            TenantResolver tenantResolver,
+            Clock clock,
             ExtProductReplicaRepository extProductReplicaRepository,
             InventoryLotStatusReconciler lotStatusReconciler,
             SerialUnitPostingService serialUnitPostingService,
@@ -99,7 +103,8 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
             ObjectProvider<BackorderResolutionTrigger> backorderResolutionTrigger) {
         this.ledgerRepository = ledgerRepository;
         this.summaryRepository = summaryRepository;
-        this.rowInitializer = rowInitializer;
+        this.tenantResolver = tenantResolver;
+        this.clock = clock;
         this.extProductReplicaRepository = extProductReplicaRepository;
         this.lotStatusReconciler = lotStatusReconciler;
         this.serialUnitPostingService = serialUnitPostingService;
@@ -470,28 +475,21 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
     }
 
     /**
-     * Serializes summary-row creation in-JVM: since E1 the lot-agnostic row of every key holds a
-     * NULL {@code lot_id}, which only PostgreSQL's {@code NULLS NOT DISTINCT} unique index (V18)
-     * can reject as a duplicate — the JPA-generated H2 test schema cannot, so the constraint
-     * alone no longer closes the check-then-insert race locally. The monitor covers the
-     * initializer's whole REQUIRES_NEW transaction (the call goes through the proxy); across
-     * instances the PostgreSQL index remains the backstop.
+     * Creates the missing summary row inside this posting transaction ({@code INSERT ... ON CONFLICT DO
+     * NOTHING}, one connection, no rollback-only mark) and then takes the usual row lock. On Postgres the
+     * target-less {@code ON CONFLICT} also arbitrates the {@code NULLS NOT DISTINCT} unique index (V18), so a
+     * concurrent first posting of a lot-agnostic (NULL {@code lot_id}) key waits for the in-flight inserter and
+     * then locks the winner's row. H2's JPA-generated schema cannot reject a NULL-lot duplicate, so concurrent
+     * first use of a lot-agnostic key is only proven on Postgres ({@code LedgerFirstUseConcurrencyIT}).
      */
-    private static final Object ROW_CREATION_MONITOR = new Object();
-
     private InventoryStockSummary createAndLockRow(SummaryKey key) {
-        try {
-            synchronized (ROW_CREATION_MONITOR) {
-                rowInitializer.createRowIfAbsent(key.stockItemId(), key.locationId(), key.lotId());
-            }
-        } catch (DataIntegrityViolationException | UnexpectedRollbackException ex) {
-            // Lost the creation race to a concurrent posting; the row exists now.
-            log.debug(
-                    "Lost stock summary creation race for stockItemId={} locationId={} lotId={}",
-                    key.stockItemId(),
-                    key.locationId(),
-                    key.lotId());
-        }
+        summaryRepository.insertIfAbsent(
+                tenantResolver.require(),
+                UUIDv7Generator.generate(),
+                key.stockItemId(),
+                key.locationId(),
+                key.lotId(),
+                Instant.now(clock));
         return lockRow(key)
                 .orElseThrow(() ->
                         new IllegalStateException("Stock summary row missing after initialization for stockItemId="

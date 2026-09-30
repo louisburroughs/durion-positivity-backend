@@ -16,8 +16,9 @@ import com.positivity.inventory.internal.service.ApprovalThresholdEvaluator;
 import com.positivity.inventory.internal.service.CostingMethodResolver;
 import com.positivity.inventory.internal.service.InventoryFactPublisher;
 import com.positivity.inventory.internal.service.Quantities;
-import com.positivity.inventory.internal.service.SkuCostStateInitializer;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantResolver;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -62,7 +63,7 @@ public class RevaluationServiceImpl implements RevaluationService {
 
     private final RevaluationRecordRepository revaluationRepository;
     private final SkuCostStateRepository costStateRepository;
-    private final SkuCostStateInitializer costStateInitializer;
+    private final TenantResolver tenantResolver;
     private final CostingMethodResolver methodResolver;
     private final ApprovalThresholdEvaluator thresholdEvaluator;
     private final InventoryFactPublisher inventoryFactPublisher;
@@ -246,7 +247,9 @@ public class RevaluationServiceImpl implements RevaluationService {
 
     private SkuCostState loadOrSeedState(String stockItemId) {
         return costStateRepository.findByStockItemId(stockItemId).orElseGet(() -> {
-            costStateInitializer.createRowIfAbsent(stockItemId);
+            // Insert-if-absent inside this transaction: one connection, no violation, no rollback-only mark.
+            costStateRepository.insertIfAbsent(
+                    tenantResolver.require(), UUIDv7Generator.generate(), stockItemId, Instant.now(clock));
             return costStateRepository
                     .findByStockItemId(stockItemId)
                     .orElseThrow(() -> new IllegalStateException(

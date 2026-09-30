@@ -4,12 +4,15 @@ import com.positivity.inventory.internal.entity.InventoryLot;
 import com.positivity.inventory.internal.enums.ProductTrackingLevel;
 import com.positivity.inventory.internal.exception.LotNumberRequiredException;
 import com.positivity.inventory.internal.repository.InventoryLotRepository;
+import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantResolver;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,12 +32,11 @@ import org.springframework.stereotype.Component;
  *       story; demanding a lot number here would mismodel serialized stock.</li>
  * </ul>
  *
- * <p>Lot creation runs in its own {@code REQUIRES_NEW} transaction ({@link InventoryLotCreator},
- * mirroring the A1 summary-row initializer): a concurrent first receipt of the same new
- * (stockItemId, lotNumber) loses the unique-constraint race in the inner transaction only, and
- * this service re-reads the winner's row deterministically instead of surfacing a 500. The
- * trade-off is that a created lot row survives a rolled-back posting — harmless, the master row
- * is idempotent and carries no quantity.
+ * <p>Lot creation is an in-transaction {@code INSERT ... ON CONFLICT DO NOTHING}
+ * ({@link InventoryLotRepository#insertIfAbsent}) followed by a re-read: one connection per request, no
+ * constraint violation, no rollback-only mark. On Postgres a concurrent first receipt of the same new
+ * (stockItemId, lotNumber) waits for the in-flight inserter and then reads the winner's row. The lot row now
+ * rolls back with the receipt transaction that created it.
  */
 @Component
 @Slf4j
@@ -42,15 +44,18 @@ public class InventoryLotCaptureService {
 
     private final InventoryLotRepository lotRepository;
     private final ProductTrackingLevelService trackingLevelService;
-    private final InventoryLotCreator lotCreator;
+    private final TenantResolver tenantResolver;
+    private final Clock clock;
 
     public InventoryLotCaptureService(
             InventoryLotRepository lotRepository,
             ProductTrackingLevelService trackingLevelService,
-            InventoryLotCreator lotCreator) {
+            TenantResolver tenantResolver,
+            Clock clock) {
         this.lotRepository = lotRepository;
         this.trackingLevelService = trackingLevelService;
-        this.lotCreator = lotCreator;
+        this.tenantResolver = tenantResolver;
+        this.clock = clock;
     }
 
     /**
@@ -93,18 +98,30 @@ public class InventoryLotCaptureService {
         if (existing != null) {
             return existing.getLotId();
         }
-        try {
-            return lotCreator
-                    .create(stockItemId, normalizedLotNumber, vendorId, expirationDate)
-                    .getLotId();
-        } catch (DataIntegrityViolationException raced) {
-            // Concurrent first receipt of the same (stockItemId, lotNumber): the creator's
-            // REQUIRES_NEW transaction lost the unique-constraint race and rolled back alone —
-            // the winner's committed row is the lot.
-            return lotRepository
-                    .findByStockItemIdAndLotNumber(stockItemId, normalizedLotNumber)
-                    .orElseThrow(() -> raced)
-                    .getLotId();
+        // Insert-if-absent inside the caller's transaction (ON CONFLICT DO NOTHING: one connection, no
+        // violation, no rollback-only mark). On Postgres a concurrent first receipt of the same lot waits for
+        // the in-flight inserter; the re-read then returns the winner's row.
+        Instant now = Instant.now(clock);
+        int inserted = lotRepository.insertIfAbsent(
+                tenantResolver.require(),
+                UUIDv7Generator.generate(),
+                stockItemId,
+                normalizedLotNumber,
+                vendorId,
+                expirationDate,
+                now);
+        UUID lotId = lotRepository
+                .findByStockItemIdAndLotNumber(stockItemId, normalizedLotNumber)
+                .orElseThrow(() -> new IllegalStateException("Inventory lot missing after insert for stockItemId="
+                        + stockItemId + " lotNumber=" + normalizedLotNumber))
+                .getLotId();
+        if (inserted == 1) {
+            log.info(
+                    "Created inventory lot {} for stockItemId={} lotNumber={}",
+                    lotId,
+                    stockItemId,
+                    normalizedLotNumber);
         }
+        return lotId;
     }
 }

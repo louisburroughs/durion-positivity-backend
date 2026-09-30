@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -23,6 +24,7 @@ import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.RevaluationRecordRepository;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.tenancy.TenantResolver;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -57,7 +59,7 @@ class RevaluationServiceImplTest {
     private SkuCostStateRepository costStateRepository;
 
     @Mock
-    private SkuCostStateInitializer costStateInitializer;
+    private TenantResolver tenantResolver;
 
     @Mock
     private CostingMethodResolver methodResolver;
@@ -70,6 +72,8 @@ class RevaluationServiceImplTest {
 
     private final Clock fixedClock = Clock.fixed(Instant.parse("2026-07-24T00:00:00Z"), ZoneOffset.UTC);
 
+    private static final UUID TENANT = UUID.fromString("00000000-0000-0000-0000-000000000042");
+
     private RevaluationServiceImpl service;
 
     @BeforeEach
@@ -77,12 +81,13 @@ class RevaluationServiceImplTest {
         service = new RevaluationServiceImpl(
                 revaluationRepository,
                 costStateRepository,
-                costStateInitializer,
+                tenantResolver,
                 methodResolver,
                 thresholdEvaluator,
                 inventoryFactPublisher,
                 fixedClock);
         setUpAuthenticatedActor();
+        lenient().when(tenantResolver.require()).thenReturn(TENANT);
         // Mirror the DB @GeneratedValue: assign a UUIDv7 surrogate id on first save if absent.
         lenient().when(revaluationRepository.save(any(RevaluationRecord.class))).thenAnswer(inv -> {
             RevaluationRecord saved = inv.getArgument(0);
@@ -268,7 +273,7 @@ class RevaluationServiceImplTest {
 
         RevaluationResponse response = service.createRevaluation(request(new BigDecimal("6.0000"), null));
 
-        verify(costStateInitializer).createRowIfAbsent(SKU);
+        verify(costStateRepository).insertIfAbsent(eq(TENANT), any(UUID.class), eq(SKU), eq(Instant.now(fixedClock)));
         assertThat(response.getStatus()).isEqualTo(RevaluationStatus.AUTO_APPLIED);
         assertThat(response.getPreviousUnitCost()).isNull();
         // onHand 0 => value delta 0

@@ -5,7 +5,11 @@ import com.positivity.inventory.internal.entity.SkuCostState;
 import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
+import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantResolver;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -40,17 +44,20 @@ public class LedgerCostingService {
 
     private final CostingMethodResolver methodResolver;
     private final SkuCostStateRepository costStateRepository;
-    private final SkuCostStateInitializer costStateInitializer;
+    private final TenantResolver tenantResolver;
+    private final Clock clock;
     private final Map<CostingMethod, CostingStrategy> strategies;
 
     public LedgerCostingService(
             CostingMethodResolver methodResolver,
             SkuCostStateRepository costStateRepository,
-            SkuCostStateInitializer costStateInitializer,
+            TenantResolver tenantResolver,
+            Clock clock,
             List<CostingStrategy> costingStrategies) {
         this.methodResolver = methodResolver;
         this.costStateRepository = costStateRepository;
-        this.costStateInitializer = costStateInitializer;
+        this.tenantResolver = tenantResolver;
+        this.clock = clock;
         this.strategies = new EnumMap<>(CostingMethod.class);
         for (CostingStrategy strategy : costingStrategies) {
             this.strategies.put(strategy.method(), strategy);
@@ -98,12 +105,12 @@ public class LedgerCostingService {
 
     private SkuCostState loadOrSeedState(String stockItemId) {
         return costStateRepository.findByStockItemId(stockItemId).orElseGet(() -> {
-            // Establish the master row in a REQUIRES_NEW transaction so a concurrent first
-            // posting of the same new SKU loses the stock_item_id unique-index race in the
-            // inner transaction only — this posting then re-reads the winner's committed row
-            // as a managed entity to advance, instead of both seeding and one poisoning the
-            // whole ledger append on flush.
-            costStateInitializer.createRowIfAbsent(stockItemId);
+            // Insert-if-absent inside this posting transaction (ON CONFLICT DO NOTHING: one
+            // connection, no violation, no rollback-only mark). On Postgres a concurrent first
+            // posting of the same new SKU waits for the in-flight inserter, then this re-read
+            // returns the winner's row as a managed entity to advance.
+            costStateRepository.insertIfAbsent(
+                    tenantResolver.require(), UUIDv7Generator.generate(), stockItemId, Instant.now(clock));
             return costStateRepository
                     .findByStockItemId(stockItemId)
                     .orElseThrow(() -> new IllegalStateException(

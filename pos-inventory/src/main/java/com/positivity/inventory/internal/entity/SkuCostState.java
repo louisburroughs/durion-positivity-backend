@@ -49,7 +49,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @Table(
         name = "sku_cost_state",
-        indexes = @Index(name = "uq_sku_cost_state_stock_item", columnList = "stock_item_id", unique = true))
+        indexes = @Index(name = "uq_sku_cost_state_stock_item", columnList = "tenant_id, stock_item_id", unique = true))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -64,7 +64,7 @@ public class SkuCostState extends TenantScopedEntity {
     private UUID costStateId;
 
     /** Natural unique key: the SKU this running cost state belongs to (one row per stock item). */
-    @Column(name = "stock_item_id", nullable = false, updatable = false, length = 255, unique = true)
+    @Column(name = "stock_item_id", nullable = false, updatable = false, length = 255)
     private String stockItemId;
 
     /** Running weighted-average cost (AVERAGE) or latest-receipt-cost memo (STANDARD); null when unseeded. */

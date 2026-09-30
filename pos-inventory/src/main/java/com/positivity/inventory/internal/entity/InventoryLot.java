@@ -41,7 +41,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         uniqueConstraints =
                 @UniqueConstraint(
                         name = "uq_inventory_lot_sku_lot_number",
-                        columnNames = {"stock_item_id", "lot_number"}),
+                        columnNames = {"tenant_id", "stock_item_id", "lot_number"}),
         indexes = @Index(name = "idx_inventory_lot_stock_item", columnList = "stock_item_id"))
 @Data
 @NoArgsConstructor

@@ -44,8 +44,7 @@ import org.springframework.test.web.servlet.MockMvc;
  *
  * <p>The exception is thrown from a stubbed service rather than a real constraint: several
  * pos-inventory services catch {@code DataIntegrityViolationException} locally for race handling
- * (PutawayRuleServiceImpl, InventoryLotCaptureService, LedgerPostingServiceImpl,
- * SkuCostStateInitializer), so driving a genuine collision would exercise those catches instead of
+ * (PutawayRuleServiceImpl and similar), so driving a genuine collision would exercise those catches instead of
  * the advice chain this test is about.
  */
 @WebMvcTest(CostingMethodController.class)
