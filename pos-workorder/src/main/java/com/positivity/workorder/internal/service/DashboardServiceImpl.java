@@ -947,17 +947,33 @@ public class DashboardServiceImpl implements DashboardService {
                 continue;
             }
             String mechanicId = entry.getKey();
-            boolean custodyCollision = assignedCounts.getOrDefault(mechanicId, 0) > 1;
+            int assigned = assignedCounts.getOrDefault(mechanicId, 0);
+            boolean custodyCollision = assigned > 1;
             conflicts.add(ConflictEntry.builder()
                     .conflictType("DOUBLE_BOOKED_MECHANIC")
                     .severity(custodyCollision ? BLOCKING : WARNING)
                     .message(
                             custodyCollision
                                     ? MECHANIC_PREFIX + mechanicId + " is assigned to multiple workorders"
-                                    : MECHANIC_PREFIX + mechanicId + " is planned onto " + claims + " workorders")
+                                    : plannedCollisionMessage(mechanicId, claims, assigned))
                     .affectedResourceId(mechanicId)
                     .build());
         }
+    }
+
+    /**
+     * Wording for a non-custody collision (#2124). {@code claims} counts every workorder naming
+     * the person, held or merely planned, so a held job must not be reported as "planned": one
+     * current assignment plus planned claims reads as holding one and planned onto the rest, while
+     * planned-only claims read as a plan alone.
+     */
+    private static String plannedCollisionMessage(String mechanicId, int claims, int assigned) {
+        int planned = claims - assigned;
+        if (assigned == 0) {
+            return MECHANIC_PREFIX + mechanicId + " is planned onto " + planned + " workorders";
+        }
+        return MECHANIC_PREFIX + mechanicId + " holds " + assigned + " workorder and is planned onto " + planned
+                + " more";
     }
 
     private void detectMechanicStatusConflicts(

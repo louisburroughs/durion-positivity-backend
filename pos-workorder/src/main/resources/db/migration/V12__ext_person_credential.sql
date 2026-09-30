@@ -6,11 +6,10 @@
 --
 -- Same shape as pos-shop-manager's ext_person_credential: one row per credential fact, keyed by
 -- the owner's credential id and guarded by aggregate_version. The feed's status is stored as
--- received; readers judge expiry from expires_on against the date they are asking about. The table
--- starts empty and stays empty until a credential fact arrives; readers treat a person with no row
--- as "no credential data" (the skill check stays silent), never as "holds nothing".
---
--- Depends on V11__ext_people_employee.sql (employment branch): merge after it.
+-- received; readers judge whether a credential is held from issued_on / expires_on against the
+-- date they are asking about, and only REVOKED / SUPERSEDED stand as received. The table starts
+-- empty and stays empty until a credential fact arrives; readers treat a person with no row as
+-- "no credential data" (the skill check stays silent), never as "holds nothing".
 
 CREATE TABLE public.ext_person_credential (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,

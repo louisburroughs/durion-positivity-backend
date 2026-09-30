@@ -198,7 +198,7 @@ class DashboardServiceTest {
 
     @Test
     @DisplayName("AC-4a / #2124: Same mechanic planned (mechanic_ids only) on two workorders is a planned WARNING")
-    void getDashboard_doubleBookedMechanic_returnsBlockingConflict() {
+    void getDashboard_plannedOnlyMechanicOnTwoWorkorders_returnsPlannedWarning() {
         // Arrange
         // Issue CAP-142: AC-4a — same mechanic on 2 workorders on the same date
         Workorder wo1 = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-001", null);
@@ -1023,7 +1023,8 @@ class DashboardServiceTest {
     }
 
     @Test
-    @DisplayName("A technician assigned on one workorder and planned on another is a planned-wording WARNING (#2124)")
+    @DisplayName(
+            "A technician assigned on one workorder and planned on another is a WARNING worded as one held plus one planned (#2124)")
     void getDashboard_technicianAssignmentAndMechanicIdsOnDifferentWorkorders_flagsDoubleBooking() {
         // Arrange
         UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000b002");
@@ -1042,12 +1043,14 @@ class DashboardServiceTest {
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
 
-        // Assert — one claim is only a plan, so this cannot block
+        // Assert — one claim is only a plan, so this cannot block; and the held job must not be
+        // reported as merely planned.
         assertThat(response.getConflicts()).anySatisfy(c -> {
             assertThat(c.getConflictType()).isEqualTo("DOUBLE_BOOKED_MECHANIC");
             assertThat(c.getSeverity()).isEqualTo("WARNING");
             assertThat(c.getAffectedResourceId()).isEqualTo(technicianId.toString());
-            assertThat(c.getMessage()).contains("is planned onto 2 workorders");
+            assertThat(c.getMessage()).contains("holds 1 workorder and is planned onto 1 more");
+            assertThat(c.getMessage()).doesNotContain("planned onto 2");
         });
     }
 

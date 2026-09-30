@@ -23,8 +23,11 @@ import org.jspecify.annotations.NonNull;
  * table. It exists so the dispatch board can judge a workorder's required certifications against
  * what each mechanic actually holds.
  *
- * <p>{@link #status} is stored as received, but expiry is judged on read via {@link #isHeldOn}
- * against the date being asked about — the feed's view of "today" is not the facility's.
+ * <p>{@link #status} is stored as received but is not trusted for expiry: pos-people stamps it with
+ * its own clock's effective status, so {@code EXPIRED} arrives once the owner's UTC day has passed
+ * {@code expiresOn} even though the expiry day still counts here. {@link #isHeldOn} therefore judges
+ * the dates against the date being asked about — the feed's view of "today" is not the facility's —
+ * and only the owner's deliberate decisions (REVOKED, SUPERSEDED) stand as received.
  */
 @Data
 @Builder
@@ -34,8 +37,13 @@ import org.jspecify.annotations.NonNull;
 @Table(name = "ext_person_credential")
 public class ExtPersonCredentialReplica extends TenantScopedEntity {
 
-    /** The feed status of a credential that is in force; REVOKED and SUPERSEDED are the owner's decisions. */
-    public static final String STATUS_ACTIVE = "ACTIVE";
+    /**
+     * The owner's deliberate, terminal decisions. A date cannot produce either, so they stand as
+     * received; every other feed status is re-derived from the dates on read.
+     */
+    public static final String STATUS_REVOKED = "REVOKED";
+
+    public static final String STATUS_SUPERSEDED = "SUPERSEDED";
 
     @Id
     @Column(name = "credential_id", nullable = false)
@@ -97,11 +105,18 @@ public class ExtPersonCredentialReplica extends TenantScopedEntity {
     private Instant updatedAt;
 
     /**
-     * Whether the person holds this credential on {@code onDate}: the feed says ACTIVE, and it has
-     * not expired by then (a null {@code expiresOn} never expires; the expiry day itself still counts).
+     * Whether the person holds this credential on {@code onDate}. Mirrors pos-people's own
+     * {@code PersonCredential} and pos-shop-manager's {@code CredentialStatus.effective}: a REVOKED
+     * or SUPERSEDED credential is never held; otherwise the dates decide — issued on or before
+     * {@code onDate} (a null {@code issuedOn} is not a bar) and not expired by then (a null {@code
+     * expiresOn} never expires; the expiry day itself still counts). The feed's ACTIVE / EXPIRED
+     * value is ignored, because it reflects the owner's clock, not this date.
      */
     public boolean isHeldOn(@NonNull LocalDate onDate) {
-        return STATUS_ACTIVE.equals(status) && (expiresOn == null || !expiresOn.isBefore(onDate));
+        if (STATUS_REVOKED.equals(status) || STATUS_SUPERSEDED.equals(status)) {
+            return false;
+        }
+        return (issuedOn == null || !issuedOn.isAfter(onDate)) && (expiresOn == null || !expiresOn.isBefore(onDate));
     }
 
     /** ArchUnit UUIDv7 rule hook (ADR-0013): the key is the owner's UUIDv7, stored verbatim. */
