@@ -15,6 +15,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -154,7 +155,15 @@ public class KafkaCommandListener {
 
             applicationEventPublisher.publishEvent(event);
             log.info("Published AssignmentUpdatedEvent from Kafka for workorderId={}", event.getWorkorderId());
+        } catch (TransientDataAccessException e) {
+            // Let the container error handler retry with backoff and route to {topic}.dlq
+            // (ADR-0044 §4, #2178). Every handler this dispatches to is safe to redeliver: invoice
+            // generation is idempotent per workorder, replay and backfill re-queue by window, and
+            // an assignment update is a last-write-wins projection.
+            throw e;
         } catch (Exception e) {
+            // Malformed/unsupported commands are permanent failures: retrying cannot fix them,
+            // so log and drop instead of poisoning the partition.
             log.error("Failed to process Kafka command message: {}", message, e);
         }
     }
@@ -220,6 +229,11 @@ public class KafkaCommandListener {
                     workorderId,
                     response.getInvoiceId(),
                     response.getStatus());
+        } catch (TransientDataAccessException e) {
+            // A connection blip or lock timeout is not a business failure: rethrow so the outer
+            // catch in onCommand propagates it for container retry (#2178). Dropping it here would
+            // lose a regeneration the caller already had acknowledged as accepted.
+            throw e;
         } catch (Exception e) {
             log.error("Invoice regeneration command failed for workorderId={}", workorderId, e);
         }

@@ -164,10 +164,13 @@ fuzzy text matching, never by identifier. `TreadDesignEntity` plus its `tread_de
 association are the whole of it: no dimension, load index, article code or price field is ever
 touched by this path, so a vendor's marketing feed can never redefine what a product *is*.
 
-`SupplierCatalogEnrichmentListener` consumes `supplier.catalog.updated` off `supplier.events.v1`
-(its own Kafka consumer group, `pos-catalog-supplier-catalog-enrichment` — a second, independent
-group is required because `SupplierPriceCatalogEventsListener` already consumes the same topic for a
-different event type). An unchanged republication (same `contentHash`) is a no-op; a changed one is
+`SupplierEventsListener` is the single consumer of `supplier.events.v1` (group
+`pos-catalog-supplier-events`); it dispatches by event type, routing the PRICAT types to
+`SupplierPriceCatalogEventHandler` and `supplier.catalog.updated` to `SupplierCatalogEnrichmentHandler`.
+The former second group, `pos-catalog-supplier-catalog-enrichment`, is retired: `processed_events` is
+keyed by `event_id` alone, so two groups on one topic suppressed each other (#2177). A new supplier
+event type gets a branch in `SupplierEventsListener`, not a listener of its own.
+An unchanged republication (same `contentHash`) is a no-op; a changed one is
 applied and re-matched, last write wins. Candidates are deliberately scoped, never the whole catalog:
 only the products the design's own vendor has actually priced via PRICAT
 (`SupplierPriceEntryRepository`), scored by `TreadDesignMatcher` — character-trigram Jaccard overlap

@@ -428,7 +428,7 @@ the SPI, not a topic — vendors are outside our event mesh):
    `expected_line_count`, `content_checksum`, `source_revision`) and a chunk stream.
 2. Each chunk applies idempotently: chunk log row keyed
    `(import_manifest_id, chunk_sequence)` — re-delivery and resume are no-ops, mirroring
-   `SupplierPriceCatalogEventsListener`'s two-guard scheme.
+   `SupplierPriceCatalogEventHandler`'s two-guard scheme.
 3. Lines upsert by natural key `(source_code, provider_op_code, vehicle key, time_type)`:
    unchanged → skip; changed → supersede old row, insert new.
 4. Unmapped `provider_op_code` (no `service_operation_xref` row) → line lands in a review
