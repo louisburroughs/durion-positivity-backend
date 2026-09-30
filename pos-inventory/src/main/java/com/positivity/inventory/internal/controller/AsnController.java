@@ -11,6 +11,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -51,8 +52,8 @@ public class AsnController {
                     Use this tool when a vendor announces a shipment before it arrives; do not use \
                     createGoodsReceipt, which records goods actually received and posts stock, and do not use \
                     createReceivingSession, which starts a line-by-line receiving workflow.
-                    Preconditions: every purchase order in relatedPoIds must exist and be APPROVED, and no ASN may \
-                    already exist for the same vendorId and asnReferenceNumber pair.
+                    Preconditions: every purchase order in relatedPoIds must be replicated from pos-order and \
+                    APPROVED, and no ASN may already exist for the same vendorId and asnReferenceNumber pair.
                     Required inputs: vendorId (UUID), asnReferenceNumber, relatedPoIds (non-empty) and lineItems \
                     each naming poId and sku plus either quantityShipped in base UoM or the \
                     documentUom/documentQuantity pair, from which the base quantity is derived; shipDate and \
@@ -60,8 +61,10 @@ public class AsnController {
                     Emits an INVENTORY_ASN_CREATE event; no stock is posted and no on-hand quantity changes until \
                     a goods receipt or receiving session references the ASN.
                     Returns 409 when an ASN with the same vendor and reference number already exists, 400 when a \
-                    related purchase order is unknown or not APPROVED, and 422 when a documentUom has no \
-                    conversion path to the product's base UoM.
+                    related purchase order is not APPROVED, 503 with a Retry-After header and \
+                    PURCHASE_ORDER_REPLICATION_PENDING when a related purchase order or a referenced PO line has \
+                    not replicated from pos-order yet, and 422 when a documentUom has no conversion path to the \
+                    product's base UoM.
                     """,
             tags = {"ASN"})
     @ApiResponse(
@@ -83,6 +86,16 @@ public class AsnController {
     @ApiResponse(
             responseCode = "422",
             description = "Document UoM has no conversion path to the product's base UoM",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description =
+                    "PURCHASE_ORDER_REPLICATION_PENDING: a related purchase order or PO line has not replicated from pos-order yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AsnResponse> createAsn(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -172,8 +185,8 @@ public class AsnController {
                     Use this tool when goods physically arrive and should enter stock in one posting; do not use \
                     createAsn, which only declares an expected shipment, and do not use the session-based flow of \
                     createReceivingSession and receiveItemsIntoStaging.
-                    Preconditions: the purchase order must exist and be APPROVED or PARTIALLY_RECEIVED, the ASN \
-                    when supplied must exist, and the receipt total may not exceed the purchase order's open \
+                    Preconditions: the purchase order must be replicated from pos-order and APPROVED or \
+                    PARTIALLY_RECEIVED, the ASN when supplied must exist, and the receipt total may not exceed the purchase order's open \
                     balance unless the caller holds inventory:goods_receipt:override.
                     Required inputs: poId (UUID), locationId (UUID) and lines each naming sku and unitCostMinor \
                     plus either a whole-number quantityReceived in base UoM or the documentUom/documentQuantity \
@@ -182,9 +195,10 @@ public class AsnController {
                     Emits an INVENTORY_GOODS_RECEIPT_CREATE event, decrements the purchase order's open balance, \
                     moves the PO to PARTIALLY_RECEIVED or FULLY_RECEIVED, and updates the linked ASN's received \
                     quantities and status.
-                    Returns 404 when the ASN or a referenced PO line cannot be resolved, 400 when the purchase \
-                    order is unknown or not receivable, 403 when the caller lacks goods-receipt create authority, \
-                    and 422 when the receipt would exceed the open balance without the override authority, a UoM \
+                    Returns 404 when the ASN cannot be resolved, 400 when the purchase order is not receivable, \
+                    503 with a Retry-After header and PURCHASE_ORDER_REPLICATION_PENDING when the purchase order \
+                    or a referenced PO line has not replicated from pos-order yet, 403 when the caller lacks \
+                    goods-receipt create authority, and 422 when the receipt would exceed the open balance without the override authority, a UoM \
                     has no conversion path, a LOT-tracked line omits lotNumber, or a serialized line's serial count \
                     mismatches the received quantity.
                     """,
@@ -208,7 +222,7 @@ public class AsnController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "Referenced source document not found",
+            description = "Referenced ASN not found",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
@@ -218,6 +232,16 @@ public class AsnController {
             responseCode = "422",
             description = "Over-receipt without override authority, UoM conversion undefined, lot number required,"
                     + " or serial count mismatch",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description =
+                    "PURCHASE_ORDER_REPLICATION_PENDING: the purchase order or a referenced PO line has not replicated from pos-order yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<GoodsReceiptResponse> createGoodsReceipt(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

@@ -9,6 +9,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -60,8 +61,9 @@ public class ServiceRequirementController {
                     Emits a CATALOG_SERVICE_REQUIREMENTS_SET audit event and a catalog.service.updated fact \
                     (schema v3) carrying requirementsConfiguredAt and requiredSkills, so schedulers resolve the \
                     requirement from their replica without calling back.
-                    Returns 200 with the service, 404 when the service does not exist, and 422 with SKILL_UNKNOWN, \
-                    SKILL_RETIRED, SKILL_DUPLICATE or SKILL_CLASS_RANGE_INVALID naming the offending value.
+                    Returns 200 with the service, 404 when the service does not exist, 503 with a Retry-After header \
+                    and SKILL_REPLICATION_PENDING when a skillId is not in the replicated skill registry yet, and \
+                    422 with SKILL_RETIRED, SKILL_DUPLICATE or SKILL_CLASS_RANGE_INVALID naming the offending value.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -73,7 +75,17 @@ public class ServiceRequirementController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "A skill is unknown, retired, duplicated, or its class range is invalid",
+            description = "A skill is retired, duplicated, or its class range is invalid",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "SKILL_REPLICATION_PENDING: a skillId is not in the replicated skill registry yet."
+                    + " Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ServiceDto> setServiceRequirements(
             @Parameter(description = "Catalog service id") @PathVariable @NonNull UUID serviceId,

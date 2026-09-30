@@ -14,6 +14,7 @@ import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.shared.dto.VehicleResponse;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -108,6 +109,20 @@ class CrmVehicleServiceImplTest {
         Optional<VehicleResponse> result = service.getVehicleForCustomer(CUSTOMER_ID, VEHICLE_ID);
 
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getVehicleForCustomer_isReplicationPending_whenVehicleNotYetReplicated() {
+        CommercialParty party = commercialParty(CUSTOMER_ID);
+        when(personPartyRepository.findById(CUSTOMER_ID)).thenReturn(Optional.empty());
+        when(commercialPartyRepository.findById(CUSTOMER_ID)).thenReturn(Optional.of(party));
+        when(extVehicleRepository.findById(VEHICLE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getVehicleForCustomer(CUSTOMER_ID, VEHICLE_ID))
+                .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo("VEHICLE_REPLICATION_PENDING");
+                    assertThat(e.getReferenceId()).isEqualTo(VEHICLE_ID);
+                });
     }
 
     @Test

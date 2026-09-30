@@ -8,6 +8,7 @@ import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -142,7 +143,9 @@ public class PutawayRuleController {
                     Emits an INVENTORY_PUTAWAY_RULE_CREATE event; no stock moves and existing putaway tasks keep \
                     the destinations they were generated with.
                     Returns 400 when matchValue is missing for a typed rule, supplied for an ANY rule, or is not \
-                    a valid UUID, and 409 when an enabled ANY rule already exists.
+                    a valid UUID, 409 when an enabled ANY rule already exists, and 503 with a Retry-After header \
+                    and STORAGE_LOCATION_REPLICATION_PENDING when an enabled rule's destination is not in the \
+                    storage-location replica yet.
                     """,
             tags = {"Putaway"})
     @ApiResponse(
@@ -159,6 +162,16 @@ public class PutawayRuleController {
     @ApiResponse(
             responseCode = "409",
             description = "An enabled ANY rule already exists",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description =
+                    "STORAGE_LOCATION_REPLICATION_PENDING: the enabled rule's destination is not in the storage-location replica yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PutawayRuleResponse> createRule(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -203,7 +216,9 @@ public class PutawayRuleController {
                     Emits an INVENTORY_PUTAWAY_RULE_UPDATE event; no stock moves and putaway tasks already \
                     generated keep their destinations.
                     Returns 404 when the rule does not exist, 400 on the same validation failures as \
-                    createPutawayRule, and 409 when another enabled ANY rule already exists.
+                    createPutawayRule, 409 when another enabled ANY rule already exists, and 503 with a \
+                    Retry-After header and STORAGE_LOCATION_REPLICATION_PENDING when an enabled rule's destination \
+                    is not in the storage-location replica yet.
                     """,
             tags = {"Putaway"})
     @ApiResponse(
@@ -224,6 +239,16 @@ public class PutawayRuleController {
     @ApiResponse(
             responseCode = "409",
             description = "Another enabled ANY rule already exists",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description =
+                    "STORAGE_LOCATION_REPLICATION_PENDING: the enabled rule's destination is not in the storage-location replica yet. Not-yet, not no: retry after the Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PutawayRuleResponse> updateRule(
             @Parameter(description = "Putaway rule identifier", required = true) @PathVariable String ruleId,

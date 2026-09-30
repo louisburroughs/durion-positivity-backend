@@ -606,14 +606,14 @@ fallback code. Add a row in the same pull request as the controller or advice th
 
 | Code | Status | Description |
 |------|--------|-------------|
-| `VALIDATION_ERROR` | 400 | Request parameter or body validation failed: bean validation, a type mismatch, an unreadable body, a constraint violation, an invalid availability request, an invalid PO reference, an invalid count quantity, or an `IllegalArgumentException` from a service |
+| `VALIDATION_ERROR` | 400 | Request parameter or body validation failed: bean validation, a type mismatch, an unreadable body, a constraint violation, an invalid availability request, a purchase order that is replicated but not `APPROVED`, an invalid count quantity, or an `IllegalArgumentException` from a service |
 | `RECOUNT_LIMIT_EXCEEDED` | 400 | A cycle-count task has already been recounted the maximum number of times |
 | `SOURCE_DOCUMENT_ALREADY_RECEIVED` | 400 | A receiving session was opened for a source document that is already fully received |
 | `WORKORDER_CLOSED` | 400 | The workorder the consumption or pick targets is closed |
 | `INVALID_PARAM_COMBINATION` | 400 | The query parameters supplied cannot be combined |
 | `FORBIDDEN` | 403 | Caller lacks the required permission, or the request's location falls outside the caller's scope |
 | `PART_MATCH_PERMISSION_REQUIRED` | 403 | Confirming a part match needs a permission the caller lacks |
-| `NOT_FOUND` | 404 | Inventory resource not found: product, location, task, cycle-count plan, transfer order, scrap record, source document, receiving session, work order part line (`submitReturnToStock`) or allocation (`listShortageOptions`/`resolveShortage`, when `sku`/`shortQuantity` are omitted and `allocationId` is unknown) |
+| `NOT_FOUND` | 404 | Inventory resource not found: product, location, task, cycle-count plan, transfer order, scrap record, source document, receiving session, or allocation (`listShortageOptions`/`resolveShortage`, when `sku`/`shortQuantity` are omitted and `allocationId` is unknown) |
 | `CONFLICT` | 409 | An `IllegalStateException` from a service, or a duplicate ASN |
 | `DUPLICATE_ENABLED_ANY_PUTAWAY_RULE` | 409 | An enabled `ANY`-scope putaway rule already exists |
 | `CYCLE_COUNT_CONFLICT` | 409 | Cycle-count approval rejected; the task is flagged CONFLICT and the reviewer must choose a recount or a recomputed approval |
@@ -669,6 +669,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `SCRAP_LEDGER_POST_FAILED` | 500 | Ledger post for scrap failed unexpectedly; the scrap is left `FAILED` with the cause in `errorMessage`, and approving it retries (#2170) |
 | `NOT_IMPLEMENTED` | 501 | The operation is deliberately unimplemented; enveloped rather than answered with an empty body (#1720) |
 | `LOCATION_SERVICE_UNAVAILABLE` | 503 | pos-location could not be reached, or answered a server error, while a rollup read needed authoritative topology |
+| `PURCHASE_ORDER_REPLICATION_PENDING` | 503 | `createAsn` / `createGoodsReceipt`: the purchase order or a referenced PO line is not in the `ext_purchase_order` / `ext_purchase_order_line` replica yet (pos-order events have not been consumed). Carries `Retry-After` and `referenceId` = the awaited id; not-yet, not no, so retry (#1994). A replicated order that is not open for receiving stays `400` |
+| `WORKORDER_REPLICATION_PENDING` | 503 | `submitReturnToStock` and the receiving cross-dock: the workorder (or, for a cross-dock, its part line) is not in the `ext_workorder` / `ext_workorder_part` replica yet. Carries `Retry-After` and `referenceId`; retry (#1994). A present workorder in the wrong status stays `422 WORKORDER_NOT_RETURNABLE` / `400`; a return line missing from `ext_workorder_part` is judged by the consumption ledger instead and never answers 503 |
+| `STORAGE_LOCATION_REPLICATION_PENDING` | 503 | A putaway rule create/update (enabled rule) names a destination that a partially hydrated `ext_storage_location` replica does not hold. Carries `Retry-After` and `referenceId`; retry, then check the id if it persists (#1994). Missing product/UoM rows for a conversion stay `422 UOM_CONVERSION_UNDEFINED` (configuration data, not lag) |
 
 ## Configuration
 

@@ -9,9 +9,7 @@ import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
 import com.positivity.shopmanager.internal.exception.BookingHorizonExceededException;
 import com.positivity.shopmanager.internal.exception.ConflictOverrideStateException;
-import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
-import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.OpeningSearchPolicyException;
 import com.positivity.shopmanager.internal.exception.RescheduleApprovalReasonRequiredException;
@@ -82,22 +80,6 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().status()).isEqualTo(status.value());
         assertThat(response.getBody().timestamp()).isEqualTo(NOW.toString());
         assertThat(response.getBody().correlationId()).isNotBlank();
-    }
-
-    @Test
-    void mapsAMissingCrmCustomerToNotFound() {
-        assertEnvelope(
-                handler.handleCustomerNotFound(new CrmCustomerNotFoundException(CUSTOMER_ID), request()),
-                HttpStatus.NOT_FOUND,
-                "CUSTOMER_NOT_FOUND");
-    }
-
-    @Test
-    void mapsAMissingCrmVehicleToNotFound() {
-        assertEnvelope(
-                handler.handleVehicleNotFound(new CrmVehicleNotFoundException(VEHICLE_ID), request()),
-                HttpStatus.NOT_FOUND,
-                "VEHICLE_NOT_FOUND");
     }
 
     @Test
@@ -339,10 +321,6 @@ class GlobalExceptionHandlerTest {
                     new MethodArgumentNotValidException(methodParameter(), bindingResult);
 
             return Stream.of(
-                    Named.of("handleCustomerNotFound", (HandlerInvocation) request ->
-                            sut.handleCustomerNotFound(new CrmCustomerNotFoundException(CUSTOMER_ID), request)),
-                    Named.of("handleVehicleNotFound", (HandlerInvocation)
-                            request -> sut.handleVehicleNotFound(new CrmVehicleNotFoundException(VEHICLE_ID), request)),
                     Named.of("handleVehicleCustomerMismatch", (HandlerInvocation)
                             request -> sut.handleVehicleCustomerMismatch(
                                     new VehicleCustomerMismatchException(VEHICLE_ID, CUSTOMER_ID), request)),

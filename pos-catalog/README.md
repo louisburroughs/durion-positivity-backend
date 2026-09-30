@@ -71,7 +71,7 @@ Routing rule for new stories: computing **what a customer pays** → pos-price; 
 - `POST|GET /v1/catalog-items/service/{serviceId}/labor-standards`, `POST /.../{standardId}/supersede` — vehicle-keyed estimated service times (book time) with provenance (auth: `catalog:labor_standard:manage` / `:view`)
 - `POST /v1/catalog/labor-guide-imports?sourceCode=`, `GET /.../incomplete`, `GET /.../unmapped` — chunked labor-guide feed import from STORE-licensed sources, with counted completeness and the unmapped-operation curation queue (auth: `catalog:labor_standard:import` / `:view`)
 - `POST /v1/catalog/labor-times/resolve` — the ADR-0058 §5 service-to-service edge: resolve the applicable labor time for (service operation, vehicle) with provenance and typed degradation; sole approved caller is pos-workorder's `CatalogLaborTimeClientImpl` (auth: `catalog:labor_time:resolve`)
-- `PUT /v1/products/services/{serviceId}/requirements` — declare the skills a service requires, each scoped to a GVWR class range or ANY (CAP-329, `catalog:service_requirement:manage`); an empty list declares the service unconstrained. `ServiceDto` carries `requirementsConfiguredAt` and `requiredSkills` on every service read, and `catalog.service.updated` (schema v3) carries them to consumers. Skill ids are validated against the `ext_skill` replica (422 `SKILL_UNKNOWN` / `SKILL_RETIRED` / `SKILL_DUPLICATE` / `SKILL_CLASS_RANGE_INVALID`).
+- `PUT /v1/products/services/{serviceId}/requirements` — declare the skills a service requires, each scoped to a GVWR class range or ANY (CAP-329, `catalog:service_requirement:manage`); an empty list declares the service unconstrained. `ServiceDto` carries `requirementsConfiguredAt` and `requiredSkills` on every service read, and `catalog.service.updated` (schema v3) carries them to consumers. Skill ids are validated against the `ext_skill` replica (422 `SKILL_RETIRED` / `SKILL_DUPLICATE` / `SKILL_CLASS_RANGE_INVALID`; an id the replica does not hold yet is 503 `SKILL_REPLICATION_PENDING` with `Retry-After`, #1994).
 - `GET /v1/catalog/tread-designs/for-product/{productId}` — vendor-supplied MKCAT enrichment matched to a product (auth: `catalog:tread_design:view`)
 - `GET /v1/catalog/tread-designs/unmatched` — enrichment review worklist (`matchState` defaults to `UNMATCHED,REVIEW`; auth: `catalog:tread_design:view`)
 - `GET /v1/catalog/tread-designs/{treadDesignId}/candidates` — every scored candidate for one design (auth: `catalog:tread_design:view`)
@@ -256,6 +256,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `VALIDATION_ERROR` | 400 | Catalog data validation failed |
 | `BUSINESS_RULE_VIOLATION` | 409 | Catalog business rule was violated |
 | `CONFLICT` | 409 | Concurrent update detected; retry required |
+| `SKILL_REPLICATION_PENDING` | 503 | A `skillId` declared on `PUT /v1/products/services/{serviceId}/requirements` is not in the `ext_skill` replica yet (the registry is owned by pos-people and arrives by event). Carries `Retry-After` and `referenceId` = the skill id; not-yet, not no, so retry (#1994). A retired skill stays 422 `SKILL_RETIRED`; a bulk-ingest row raising it reports `REPLICATION_PENDING` |
 
 ## Configuration
 

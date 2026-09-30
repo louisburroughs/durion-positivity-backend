@@ -38,6 +38,7 @@ import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
 import com.positivity.shopmanager.internal.exception.KeylessDuplicateReplayException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
+import com.positivity.shopmanager.internal.exception.ReplicationPendingCodes;
 import com.positivity.shopmanager.internal.exception.RescheduleApprovalReasonRequiredException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
@@ -56,6 +57,7 @@ import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappin
 import com.positivity.shopmanager.internal.repository.WorkorderActuals;
 import com.positivity.shopmanager.internal.service.SchedulingConflictEvaluator.BookingAttempt;
 import com.positivity.shopmanager.internal.service.SchedulingConflictEvaluator.DetectedConflict;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -181,8 +183,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 request.getStartAt(), resolveZoneId(request.getLocationId()), Instant.now(clock));
 
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
-        // Local replica reads (ADR-0044 §6, #891): unknown ids raise the same not-found
-        // exceptions the retired CRM HTTP clients mapped 404s to.
+        // Local replica reads (ADR-0044 §6, #891): an id with no replica row may not have
+        // replicated yet, so it answers 503 CRM_REPLICATION_PENDING rather than a 404 (#1994).
         Map<String, Object> customerSnapshot = crmSnapshotService.getCustomerById(request.getCrmCustomerId());
         Map<String, Object> vehicleSnapshot = crmSnapshotService.getVehicleById(request.getCrmVehicleId());
         validateCrmRelationship(request.getCrmCustomerId(), request.getCrmVehicleId(), vehicleSnapshot);
@@ -414,10 +416,13 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      *       (field {@code resourceId}) — contradictory
      *   <li>{@code resourceId} present, {@code resourceType} omitted: inferred as {@code BAY} when
      *       an {@code ext_bay} row exists for it, else {@code MOBILE_UNIT} when an {@code
-     *       ext_mobile_unit} row does; neither is 422 {@code SERVICE_POSITION_INVALID}
+     *       ext_mobile_unit} row does; a well-formed id that neither holds is 503 {@code
+     *       LOCATION_REPLICATION_PENDING} (it may not have replicated yet, #1994), and a malformed
+     *       one is 422 {@code SERVICE_POSITION_INVALID}
      *   <li>{@code resourceType} explicitly {@code BAY} or {@code MOBILE_UNIT}: validated as that
-     *       kind — an id that resolves to the other kind, or to neither, is 422 {@code
-     *       SERVICE_POSITION_INVALID}
+     *       kind — an id that resolves to the other kind, or is malformed, is 422 {@code
+     *       SERVICE_POSITION_INVALID}; a well-formed id that neither replica holds is 503 {@code
+     *       LOCATION_REPLICATION_PENDING}
      * </ul>
      *
      * <p>A validated {@code BAY} additionally runs specialty and duty-class; a {@code MOBILE_UNIT}
@@ -472,19 +477,42 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             validateMobileUnitEligibility(locationId, unit.get(), resourceId);
             return ResourceType.MOBILE_UNIT;
         }
+        if (resourceUuid != null) {
+            throw locationReplicationPending("bay or mobile unit", resourceUuid);
+        }
         throw invalid("Resource", resourceId, "is not a known bay or mobile unit");
     }
 
     private ExtBayReplica findBayOrInvalid(String resourceId) {
-        return bayReplicaRepository
-                .findById(parseResourceIdOrInvalid("Bay", resourceId))
-                .orElseThrow(() -> invalid("Bay", resourceId, "is unknown"));
+        UUID bayId = parseResourceIdOrInvalid("Bay", resourceId);
+        return bayReplicaRepository.findById(bayId).orElseThrow(() -> {
+            if (mobileUnitReplicaRepository.existsById(bayId)) {
+                return invalid("Bay", resourceId, "is a mobile unit, not a bay");
+            }
+            return locationReplicationPending("bay", bayId);
+        });
     }
 
     private ExtMobileUnitReplica findMobileUnitOrInvalid(String resourceId) {
-        return mobileUnitReplicaRepository
-                .findById(parseResourceIdOrInvalid("Mobile unit", resourceId))
-                .orElseThrow(() -> invalid("Mobile unit", resourceId, "is unknown"));
+        UUID unitId = parseResourceIdOrInvalid("Mobile unit", resourceId);
+        return mobileUnitReplicaRepository.findById(unitId).orElseThrow(() -> {
+            if (bayReplicaRepository.existsById(unitId)) {
+                return invalid("Mobile unit", resourceId, "is a bay, not a mobile unit");
+            }
+            return locationReplicationPending("mobile unit", unitId);
+        });
+    }
+
+    /**
+     * A well-formed resource id that neither {@code ext_bay} nor {@code ext_mobile_unit} holds may
+     * be a bay Location published a moment ago, so it is "not yet", not "no" (#1994): the row
+     * arrives by event, and a 422 would send the caller away from an id about to become valid.
+     */
+    private static ReplicationPendingException locationReplicationPending(String resourceLabel, UUID resourceId) {
+        return new ReplicationPendingException(
+                ReplicationPendingCodes.LOCATION_REPLICATION_PENDING,
+                "The " + resourceLabel + " has not replicated from Location yet; retry shortly",
+                resourceId);
     }
 
     private void validateBayEligibility(

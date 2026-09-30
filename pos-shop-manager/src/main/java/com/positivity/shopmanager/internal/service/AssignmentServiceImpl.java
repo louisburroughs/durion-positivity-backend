@@ -9,6 +9,7 @@ import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import com.positivity.shopmanager.internal.enums.MechanicRoleEnum;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
+import com.positivity.shopmanager.internal.exception.ReplicationPendingCodes;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
@@ -21,6 +22,7 @@ import com.positivity.shopmanager.internal.service.dto.AssignmentResponse;
 import com.positivity.shopmanager.internal.service.dto.CreateAssignmentRequest;
 import com.positivity.shopmanager.internal.service.dto.MechanicAssignmentItem;
 import com.positivity.shopmanager.internal.service.enums.MechanicRole;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -102,10 +104,15 @@ public class AssignmentServiceImpl implements AssignmentService {
         // Resolve all mechanics first — fail fast before any persistence
         List<Mechanic> resolvedMechanics = new ArrayList<>(mechanics.size());
         for (MechanicAssignmentItem item : mechanics) {
+            // A well-formed person id with no mechanic row may belong to a mechanic whose staffing
+            // event has not been consumed yet, so it is "not yet", not "no" (#1987, #1994).
+            UUID personId = parsePersonId(item.getMechanicPersonId());
             var mechanic = mechanicRepository
-                    .findByPersonId(parsePersonId(item.getMechanicPersonId()))
-                    .orElseThrow(() -> new ShopManagerValidationException(
-                            "Mechanic not found for personId: " + item.getMechanicPersonId()));
+                    .findByPersonId(personId)
+                    .orElseThrow(() -> new ReplicationPendingException(
+                            ReplicationPendingCodes.MECHANIC_REPLICATION_PENDING,
+                            "The mechanic has not been projected from staffing events yet; retry shortly",
+                            personId));
             resolvedMechanics.add(mechanic);
         }
 

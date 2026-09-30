@@ -263,6 +263,39 @@ class GlobalApiExceptionHandlerTest {
     }
 
     @Test
+    void replicationPendingAnswers503WithRetryAfterAndItsOwnCode() throws Exception {
+        mockMvc.perform(get("/test/replication-pending"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "5"))
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(jsonPath("$.code").value("CRM_REPLICATION_PENDING"))
+                .andExpect(jsonPath("$.message").value("Customer has not replicated yet"))
+                .andExpect(jsonPath("$.status").value(503))
+                .andExpect(jsonPath("$.referenceId").value("01a0a52c-89f9-7ef9-9c97-583da36fa240"))
+                .andExpect(jsonPath("$.nextAction").value("Retry after the replica catches up"))
+                .andExpect(jsonPath("$.timestamp").value(FIXED_INSTANT.toString()))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    void replicationPendingRoundsRetryAfterUpToWholeSecondsWithAMinimumOfOne() throws Exception {
+        mockMvc.perform(get("/test/replication-pending-fractional"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "3"))
+                .andExpect(jsonPath("$.referenceId").doesNotExist());
+        mockMvc.perform(get("/test/replication-pending-zero"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "1"));
+    }
+
+    @Test
+    void replicationPendingEchoesTheClientCorrelationId() throws Exception {
+        mockMvc.perform(get("/test/replication-pending").header("X-Correlation-Id", "corr-9"))
+                .andExpect(header().string("X-Correlation-Id", "corr-9"))
+                .andExpect(jsonPath("$.correlationId").value("corr-9"));
+    }
+
+    @Test
     void springSecurityExceptionsAreRethrownForTheSecurityFilterChain() {
         assertThatThrownBy(() -> mockMvc.perform(get("/test/denied")))
                 .isInstanceOf(jakarta.servlet.ServletException.class)
@@ -386,6 +419,25 @@ class GlobalApiExceptionHandlerTest {
         @GetMapping("/test/response-status-conflict")
         String responseStatusConflict() {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Pick list is already released");
+        }
+
+        @GetMapping("/test/replication-pending")
+        String replicationPending() {
+            throw new ReplicationPendingException(
+                    "CRM_REPLICATION_PENDING",
+                    "Customer has not replicated yet",
+                    java.util.UUID.fromString("01a0a52c-89f9-7ef9-9c97-583da36fa240"));
+        }
+
+        @GetMapping("/test/replication-pending-fractional")
+        String replicationPendingFractional() {
+            throw new ReplicationPendingException(
+                    "CRM_REPLICATION_PENDING", "pending", java.time.Duration.ofMillis(2100), null);
+        }
+
+        @GetMapping("/test/replication-pending-zero")
+        String replicationPendingZero() {
+            throw new ReplicationPendingException("CRM_REPLICATION_PENDING", "pending", java.time.Duration.ZERO, null);
         }
 
         @GetMapping("/test/denied")

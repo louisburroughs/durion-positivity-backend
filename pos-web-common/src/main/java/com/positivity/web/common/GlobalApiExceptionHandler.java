@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -18,6 +19,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -59,6 +61,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class GlobalApiExceptionHandler {
     private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
+
+    private static final String REPLICATION_PENDING_NEXT_ACTION = "Retry after the replica catches up";
 
     /** Distinguishes "this service has no such route" from a resource that does not exist (#2076). */
     private static final String NO_ENDPOINT = "NO_ENDPOINT";
@@ -177,6 +181,56 @@ public class GlobalApiExceptionHandler {
                 yield internalError(correlationId);
             }
         };
+    }
+
+    /**
+     * A record this service replicates from another domain has not arrived yet (issue #1994).
+     * Answers {@code 503} with {@code Retry-After} and the exception's own
+     * {@code <X>_REPLICATION_PENDING} code, so a caller can tell "not yet" from "no". The message
+     * is the throw site's own text, written without request values; the awaited id, if known, is
+     * {@code referenceId}. Logged at WARN: a lagging replica is expected, not a server defect.
+     *
+     * <p>A module advice with an {@code Exception} or {@code RuntimeException} handler wins over
+     * this one, so such a module declares its own handler for the type that calls
+     * {@link #replicationPending}.
+     */
+    @ExceptionHandler(ReplicationPendingException.class)
+    public ResponseEntity<ApiError> handleReplicationPending(
+            @NonNull ReplicationPendingException ex,
+            @Nullable HttpServletRequest request,
+            @NonNull HttpServletResponse response) {
+        return replicationPending(ex, request, response);
+    }
+
+    /**
+     * The shared {@code 503} rendering of {@link ReplicationPendingException}, public so a module
+     * advice that must declare its own handler can reproduce this response exactly.
+     */
+    public ResponseEntity<ApiError> replicationPending(
+            @NonNull ReplicationPendingException ex,
+            @Nullable HttpServletRequest request,
+            @NonNull HttpServletResponse response) {
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+        log.warn(
+                "{} on {} [correlationId={}]: code={}",
+                ex.getClass().getSimpleName(),
+                request != null ? request.getRequestURI() : "",
+                correlationId,
+                ex.getCode());
+        UUID referenceId = ex.getReferenceId();
+        ApiError body = ApiError.guided(
+                ex.getCode(),
+                ex.getMessage(),
+                HttpStatus.SERVICE_UNAVAILABLE.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                referenceId != null ? referenceId.toString() : null,
+                REPLICATION_PENDING_NEXT_ACTION,
+                null);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(ex.retryAfterSeconds()))
+                .body(body);
     }
 
     /**

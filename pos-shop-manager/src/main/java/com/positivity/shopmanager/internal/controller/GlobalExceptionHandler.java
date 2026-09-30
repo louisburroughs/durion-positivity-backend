@@ -8,9 +8,7 @@ import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
 import com.positivity.shopmanager.internal.exception.BookingHorizonExceededException;
 import com.positivity.shopmanager.internal.exception.ConflictOverrideStateException;
-import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
-import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.OpeningSearchPolicyException;
 import com.positivity.shopmanager.internal.exception.RescheduleApprovalReasonRequiredException;
@@ -51,20 +49,6 @@ public class GlobalExceptionHandler {
 
     public GlobalExceptionHandler(@NonNull Clock clock) {
         this.clock = clock;
-    }
-
-    @ExceptionHandler(CrmCustomerNotFoundException.class)
-    public ResponseEntity<ApiError> handleCustomerNotFound(
-            CrmCustomerNotFoundException exception, HttpServletRequest request) {
-        UUID correlationId = resolveCorrelationId(request);
-        return respond(HttpStatus.NOT_FOUND, "CUSTOMER_NOT_FOUND", exception.getMessage(), correlationId);
-    }
-
-    @ExceptionHandler(CrmVehicleNotFoundException.class)
-    public ResponseEntity<ApiError> handleVehicleNotFound(
-            CrmVehicleNotFoundException exception, HttpServletRequest request) {
-        UUID correlationId = resolveCorrelationId(request);
-        return respond(HttpStatus.NOT_FOUND, "VEHICLE_NOT_FOUND", exception.getMessage(), correlationId);
     }
 
     @ExceptionHandler(VehicleCustomerMismatchException.class)

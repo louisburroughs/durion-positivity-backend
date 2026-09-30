@@ -33,6 +33,7 @@ import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -306,18 +307,19 @@ class AppointmentEligibilityTest {
     }
 
     @Test
-    @DisplayName("a resourceId with no resourceType that is neither an ext_bay nor an ext_mobile_unit row is 422"
-            + " SERVICE_POSITION_INVALID — omitting resourceType is not a way to skip validation")
-    void resourceIdUnknownToEitherReplicaIsInvalid() {
+    @DisplayName("a well-formed resourceId with no resourceType that neither ext_bay nor ext_mobile_unit holds yet is"
+            + " 503 LOCATION_REPLICATION_PENDING (#1994) — omitting resourceType is not a way to skip validation")
+    void resourceIdUnknownToEitherReplicaIsReplicationPending() {
         UUID unknownId = UUID.fromString("01960003-0000-7000-8000-0000000000ff");
         when(bayReplicaRepository.findById(unknownId)).thenReturn(Optional.empty());
         when(mobileUnitReplicaRepository.findById(unknownId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
                         appointmentsService.createAppointment(createRequest(null, unknownId.toString()), null, null))
-                .isInstanceOfSatisfying(
-                        ServicePositionEligibilityException.class,
-                        e -> assertThat(e.getCode()).isEqualTo(Code.SERVICE_POSITION_INVALID));
+                .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo("LOCATION_REPLICATION_PENDING");
+                    assertThat(e.getReferenceId()).isEqualTo(unknownId);
+                });
     }
 
     @Test
@@ -345,12 +347,27 @@ class AppointmentEligibilityTest {
     }
 
     @Test
-    @DisplayName("BAY unknown to the replica -> 422 SERVICE_POSITION_INVALID")
-    void unknownBayIsInvalid() {
+    @DisplayName("BAY not yet replicated -> 503 LOCATION_REPLICATION_PENDING, not a 422 (#1994)")
+    void bayNotYetReplicatedIsReplicationPending() {
         when(bayReplicaRepository.findById(BAY_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> appointmentsService.createAppointment(
                         createRequest(ResourceType.BAY, BAY_ID.toString()), null, null))
+                .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo("LOCATION_REPLICATION_PENDING");
+                    assertThat(e.getReferenceId()).isEqualTo(BAY_ID);
+                });
+        verify(appointmentRepository, never()).save(any(Appointment.class));
+    }
+
+    @Test
+    @DisplayName("BAY id that is a replicated mobile unit -> 422 SERVICE_POSITION_INVALID, not retryable (#1994)")
+    void bayIdHeldByTheMobileUnitReplicaKeepsItsStatus() {
+        when(bayReplicaRepository.findById(MOBILE_UNIT_ID)).thenReturn(Optional.empty());
+        when(mobileUnitReplicaRepository.existsById(MOBILE_UNIT_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> appointmentsService.createAppointment(
+                        createRequest(ResourceType.BAY, MOBILE_UNIT_ID.toString()), null, null))
                 .isInstanceOfSatisfying(
                         ServicePositionEligibilityException.class,
                         e -> assertThat(e.getCode()).isEqualTo(Code.SERVICE_POSITION_INVALID));
@@ -454,12 +471,26 @@ class AppointmentEligibilityTest {
     // ── MOBILE_UNIT: existence, location and active only — no specialty/duty-class ─────────────────
 
     @Test
-    @DisplayName("MOBILE_UNIT unknown -> 422 SERVICE_POSITION_INVALID")
-    void unknownMobileUnitIsInvalid() {
+    @DisplayName("MOBILE_UNIT not yet replicated -> 503 LOCATION_REPLICATION_PENDING (#1994)")
+    void mobileUnitNotYetReplicatedIsReplicationPending() {
         when(mobileUnitReplicaRepository.findById(MOBILE_UNIT_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> appointmentsService.createAppointment(
                         createRequest(ResourceType.MOBILE_UNIT, MOBILE_UNIT_ID.toString()), null, null))
+                .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo("LOCATION_REPLICATION_PENDING");
+                    assertThat(e.getReferenceId()).isEqualTo(MOBILE_UNIT_ID);
+                });
+    }
+
+    @Test
+    @DisplayName("MOBILE_UNIT id that is a replicated bay -> 422 SERVICE_POSITION_INVALID (#1994)")
+    void mobileUnitIdHeldByTheBayReplicaKeepsItsStatus() {
+        when(mobileUnitReplicaRepository.findById(BAY_ID)).thenReturn(Optional.empty());
+        when(bayReplicaRepository.existsById(BAY_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> appointmentsService.createAppointment(
+                        createRequest(ResourceType.MOBILE_UNIT, BAY_ID.toString()), null, null))
                 .isInstanceOfSatisfying(
                         ServicePositionEligibilityException.class,
                         e -> assertThat(e.getCode()).isEqualTo(Code.SERVICE_POSITION_INVALID));
@@ -592,8 +623,8 @@ class AppointmentEligibilityTest {
     }
 
     @Test
-    @DisplayName("reschedule of a legacy appointment whose resourceId is unknown to either replica now refuses,"
-            + " rather than silently letting it through")
+    @DisplayName("reschedule of a legacy appointment whose resourceId neither replica holds yet answers 503"
+            + " LOCATION_REPLICATION_PENDING, rather than silently letting it through")
     void rescheduleOfLegacyNullResourceTypeWithUnknownResourceIdRefuses() {
         scheduledAppointment(BAY_ID.toString(), null);
         when(bayReplicaRepository.findById(BAY_ID)).thenReturn(Optional.empty());
@@ -601,8 +632,8 @@ class AppointmentEligibilityTest {
 
         assertThatThrownBy(() -> appointmentsService.rescheduleAppointment(APPOINTMENT_ID, rescheduleRequest()))
                 .isInstanceOfSatisfying(
-                        ServicePositionEligibilityException.class,
-                        e -> assertThat(e.getCode()).isEqualTo(Code.SERVICE_POSITION_INVALID));
+                        ReplicationPendingException.class,
+                        e -> assertThat(e.getCode()).isEqualTo("LOCATION_REPLICATION_PENDING"));
         verify(rescheduleHistoryRepository, never()).save(any());
     }
 

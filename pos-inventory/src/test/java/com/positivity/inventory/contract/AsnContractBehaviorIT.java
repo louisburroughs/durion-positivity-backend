@@ -87,14 +87,14 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
      * Issue: #571
      */
     @Test
-    @DisplayName("POST /asns with non-existent / non-APPROVED PO → 400 Bad Request")
+    @DisplayName("POST /asns with a replicated but non-APPROVED PO → 400 Bad Request")
     void invalidPoReference_returns400() throws Exception {
         // Issue #571 AC #1: service must reject invalid PO references with
         // InvalidPoReferenceException
         UUID invalidPoId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(asnService.createAsn(any(CreateAsnRequest.class), anyString()))
                 .thenThrow(new InvalidPoReferenceException(
-                        "INVALID_PO_REFERENCE: PO " + invalidPoId + " is unknown or not APPROVED"));
+                        "INVALID_PO_REFERENCE: PO " + invalidPoId + " is not APPROVED"));
 
         String body = objectMapper.writeValueAsString(buildCreateAsnRequest(invalidPoId));
 

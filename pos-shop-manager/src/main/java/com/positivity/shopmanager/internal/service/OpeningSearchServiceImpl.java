@@ -17,9 +17,8 @@ import com.positivity.shopmanager.internal.enums.OpeningSearchEnums.NoOpeningRea
 import com.positivity.shopmanager.internal.enums.OpeningSearchEnums.OpeningConstraint;
 import com.positivity.shopmanager.internal.enums.OpeningSearchEnums.SkillFulfillment;
 import com.positivity.shopmanager.internal.enums.OpeningSearchEnums.StaffingAdvisoryCode;
-import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.OpeningSearchPolicyException;
-import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
+import com.positivity.shopmanager.internal.exception.ReplicationPendingCodes;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
@@ -27,6 +26,7 @@ import com.positivity.shopmanager.internal.repository.ExtCatalogServiceReplicaRe
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.service.LocationHoursParser.RawOperatingHoursEntry;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Duration;
@@ -116,7 +116,10 @@ public class OpeningSearchServiceImpl implements OpeningSearchService {
 
         ExtLocationReplica location = locationRepository
                 .findById(query.locationId())
-                .orElseThrow(() -> new LocationNotFoundException(query.locationId()));
+                .orElseThrow(() -> new ReplicationPendingException(
+                        ReplicationPendingCodes.LOCATION_REPLICATION_PENDING,
+                        "The location has not replicated from Location yet; retry shortly",
+                        query.locationId()));
         ZoneId zone = locationHoursParser.parseZone(location.getLocationId(), location.getTimezone());
         Map<DayOfWeek, RawOperatingHoursEntry> hoursByDow = location.getOperatingHours() == null
                 ? null
@@ -143,7 +146,7 @@ public class OpeningSearchServiceImpl implements OpeningSearchService {
         List<OpeningConstraint> constraints = constraints(!configured.isEmpty());
 
         List<ExtBayReplica> bays = bayRepository.findActiveByLocationOrdered(query.locationId());
-        // loadServices already refused any serviceId with no catalog row at all (ResourceNotFoundException),
+        // loadServices already refused any serviceId with no catalog row at all (CATALOG_REPLICATION_PENDING),
         // so "unresolved" here means only a resolved row with a blank/null operationCode (F6, #2280) — still
         // general work, and BookedOperations must carry that even though it drops out of the code set below.
         List<String> normalizedCodes = services.values().stream()
@@ -324,7 +327,10 @@ public class OpeningSearchServiceImpl implements OpeningSearchService {
                                 LinkedHashMap::new));
         for (UUID serviceId : serviceIds) {
             if (!services.containsKey(serviceId)) {
-                throw new ResourceNotFoundException("catalog service " + serviceId);
+                throw new ReplicationPendingException(
+                        ReplicationPendingCodes.CATALOG_REPLICATION_PENDING,
+                        "A requested service has not replicated from the catalog yet; retry shortly",
+                        serviceId);
             }
         }
         return services;

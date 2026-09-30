@@ -45,6 +45,8 @@ import com.positivity.warranty.internal.service.RegistrationService;
 import com.positivity.warranty.internal.service.ReimbursementService;
 import com.positivity.warranty.internal.service.SettlementReconciliationService;
 import com.positivity.warranty.internal.service.SettlementService;
+import com.positivity.web.common.ReplicationPendingException;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -88,7 +90,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
             PartReturnController.class,
             SettlementController.class
         })
-@Import({SecurityConfig.class, WarrantyControllersWebMvcTest.FixedClockConfig.class})
+@Import({
+    SecurityConfig.class,
+    WarrantyControllersWebMvcTest.FixedClockConfig.class,
+    WebCommonErrorAutoConfiguration.class
+})
 class WarrantyControllersWebMvcTest {
 
     /** TimeConfig-style Clock is not auto-configured in the slice; the advice needs one. */
@@ -561,10 +567,10 @@ class WarrantyControllersWebMvcTest {
         }
 
         @Test
-        void unresolvableCrossServiceReferenceIs422() throws Exception {
+        void unprocessableSettlementIs422() throws Exception {
             when(settlementService.create(eq(CLAIM_ID), any()))
                     .thenThrow(new WarrantyUnprocessableException(
-                            "WARRANTY_SETTLEMENT_WORKORDER_NOT_FOUND", "Replacement workorder could not be resolved"));
+                            "WARRANTY_SETTLEMENT_UNPROCESSABLE", "Settlement could not be processed"));
 
             mockMvc.perform(authed(
                             post("/v1/warranty/claims/{id}/settlements", CLAIM_ID)
@@ -575,7 +581,35 @@ class WarrantyControllersWebMvcTest {
                                             """.formatted(GENERIC_ID)),
                             WarrantyPermissions.CLAIM_SETTLE))
                     .andExpect(status().isUnprocessableEntity())
-                    .andExpect(jsonPath("$.code").value("WARRANTY_SETTLEMENT_WORKORDER_NOT_FOUND"));
+                    .andExpect(jsonPath("$.code").value("WARRANTY_SETTLEMENT_UNPROCESSABLE"));
+        }
+
+        /**
+         * #1994: a replacement workorder the ext_workorder replica has not received is not a 422.
+         * The exception passes through WarrantyExceptionHandler (no RuntimeException mapping) to the
+         * shared advice, which answers 503 with Retry-After.
+         */
+        @Test
+        void replacementWorkorderNotYetReplicatedIs503WithRetryAfter() throws Exception {
+            when(settlementService.create(eq(CLAIM_ID), any()))
+                    .thenThrow(new ReplicationPendingException(
+                            "WORKORDER_REPLICATION_PENDING",
+                            "The replacement workorder has not replicated yet",
+                            GENERIC_ID));
+
+            mockMvc.perform(authed(
+                            post("/v1/warranty/claims/{id}/settlements", CLAIM_ID)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content("""
+                                            {"settlementType": "REPLACEMENT_WORKORDER", "coveredAmount": 0,
+                                             "customerAmount": 0, "replacementWorkorderId": "%s"}
+                                            """.formatted(GENERIC_ID)),
+                            WarrantyPermissions.CLAIM_SETTLE))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(header().string("Retry-After", "5"))
+                    .andExpect(jsonPath("$.code").value("WORKORDER_REPLICATION_PENDING"))
+                    .andExpect(jsonPath("$.status").value(503))
+                    .andExpect(jsonPath("$.referenceId").value(GENERIC_ID.toString()));
         }
 
         @Test

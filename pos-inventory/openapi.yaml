@@ -291,13 +291,13 @@ paths:
 
         Use this tool when a vendor announces a shipment before it arrives; do not use createGoodsReceipt, which records goods actually received and posts stock, and do not use createReceivingSession, which starts a line-by-line receiving workflow.
 
-        Preconditions: every purchase order in relatedPoIds must exist and be APPROVED, and no ASN may already exist for the same vendorId and asnReferenceNumber pair.
+        Preconditions: every purchase order in relatedPoIds must be replicated from pos-order and APPROVED, and no ASN may already exist for the same vendorId and asnReferenceNumber pair.
 
         Required inputs: vendorId (UUID), asnReferenceNumber, relatedPoIds (non-empty) and lineItems each naming poId and sku plus either quantityShipped in base UoM or the documentUom/documentQuantity pair, from which the base quantity is derived; shipDate and expectedArrivalDate are optional.
 
         Emits an INVENTORY_ASN_CREATE event; no stock is posted and no on-hand quantity changes until a goods receipt or receiving session references the ASN.
 
-        Returns 409 when an ASN with the same vendor and reference number already exists, 400 when a related purchase order is unknown or not APPROVED, and 422 when a documentUom has no conversion path to the product''s base UoM.
+        Returns 409 when an ASN with the same vendor and reference number already exists, 400 when a related purchase order is not APPROVED, 503 with a Retry-After header and PURCHASE_ORDER_REPLICATION_PENDING when a related purchase order or a referenced PO line has not replicated from pos-order yet, and 422 when a documentUom has no conversion path to the product''s base UoM.
 
         '
       operationId: createAsn
@@ -357,6 +357,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Document UoM has no conversion path to the product's base UoM
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'PURCHASE_ORDER_REPLICATION_PENDING: a related purchase order or PO line has not replicated from pos-order yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - inventory:asn:create
@@ -2753,13 +2765,13 @@ paths:
 
         Use this tool when goods physically arrive and should enter stock in one posting; do not use createAsn, which only declares an expected shipment, and do not use the session-based flow of createReceivingSession and receiveItemsIntoStaging.
 
-        Preconditions: the purchase order must exist and be APPROVED or PARTIALLY_RECEIVED, the ASN when supplied must exist, and the receipt total may not exceed the purchase order''s open balance unless the caller holds inventory:goods_receipt:override.
+        Preconditions: the purchase order must be replicated from pos-order and APPROVED or PARTIALLY_RECEIVED, the ASN when supplied must exist, and the receipt total may not exceed the purchase order''s open balance unless the caller holds inventory:goods_receipt:override.
 
         Required inputs: poId (UUID), locationId (UUID) and lines each naming sku and unitCostMinor plus either a whole-number quantityReceived in base UoM or the documentUom/documentQuantity pair; lotNumber is mandatory for LOT-tracked SKUs, serialNumbers must enumerate exactly the received quantity for SERIAL-tracked SKUs, and asnId is optional.
 
         Emits an INVENTORY_GOODS_RECEIPT_CREATE event, decrements the purchase order''s open balance, moves the PO to PARTIALLY_RECEIVED or FULLY_RECEIVED, and updates the linked ASN''s received quantities and status.
 
-        Returns 404 when the ASN or a referenced PO line cannot be resolved, 400 when the purchase order is unknown or not receivable, 403 when the caller lacks goods-receipt create authority, and 422 when the receipt would exceed the open balance without the override authority, a UoM has no conversion path, a LOT-tracked line omits lotNumber, or a serialized line''s serial count mismatches the received quantity.
+        Returns 404 when the ASN cannot be resolved, 400 when the purchase order is not receivable, 503 with a Retry-After header and PURCHASE_ORDER_REPLICATION_PENDING when the purchase order or a referenced PO line has not replicated from pos-order yet, 403 when the caller lacks goods-receipt create authority, and 422 when the receipt would exceed the open balance without the override authority, a UoM has no conversion path, a LOT-tracked line omits lotNumber, or a serialized line''s serial count mismatches the received quantity.
 
         '
       operationId: createGoodsReceipt
@@ -2807,7 +2819,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Referenced source document not found
+          description: Referenced ASN not found
         '409':
           content:
             application/json:
@@ -2820,6 +2832,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Over-receipt without override authority, UoM conversion undefined, lot number required, or serial count mismatch
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'PURCHASE_ORDER_REPLICATION_PENDING: the purchase order or a referenced PO line has not replicated from pos-order yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - inventory:goods_receipt:create
@@ -4896,7 +4920,7 @@ paths:
 
         Emits an INVENTORY_PUTAWAY_RULE_CREATE event; no stock moves and existing putaway tasks keep the destinations they were generated with.
 
-        Returns 400 when matchValue is missing for a typed rule, supplied for an ANY rule, or is not a valid UUID, and 409 when an enabled ANY rule already exists.
+        Returns 400 when matchValue is missing for a typed rule, supplied for an ANY rule, or is not a valid UUID, 409 when an enabled ANY rule already exists, and 503 with a Retry-After header and STORAGE_LOCATION_REPLICATION_PENDING when an enabled rule''s destination is not in the storage-location replica yet.
 
         '
       operationId: createPutawayRule
@@ -4936,6 +4960,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: An enabled ANY rule already exists
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'STORAGE_LOCATION_REPLICATION_PENDING: the enabled rule''s destination is not in the storage-location replica yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - inventory:putaway_rule:manage
@@ -5038,7 +5074,7 @@ paths:
 
         Emits an INVENTORY_PUTAWAY_RULE_UPDATE event; no stock moves and putaway tasks already generated keep their destinations.
 
-        Returns 404 when the rule does not exist, 400 on the same validation failures as createPutawayRule, and 409 when another enabled ANY rule already exists.
+        Returns 404 when the rule does not exist, 400 on the same validation failures as createPutawayRule, 409 when another enabled ANY rule already exists, and 503 with a Retry-After header and STORAGE_LOCATION_REPLICATION_PENDING when an enabled rule''s destination is not in the storage-location replica yet.
 
         '
       operationId: updatePutawayRule
@@ -5091,6 +5127,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Another enabled ANY rule already exists
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'STORAGE_LOCATION_REPLICATION_PENDING: the enabled rule''s destination is not in the storage-location replica yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - inventory:putaway_rule:manage
@@ -5475,7 +5523,7 @@ paths:
 
         Emits an INVENTORY_RECEIVING_CROSSDOCK event, stamps the workorder reference on the line, updates the line to RECEIVED, RECEIVED_SHORT or RECEIVED_OVER, and completes the session when every line is settled.
 
-        Returns 404 when the session or line is not found, 400 when the workorder is closed or the quantity exceeds the expected quantity, 403 when the product mismatches the workorder demand without the override permission, and 422 when a LOT-tracked product resolves no lot number.
+        Returns 404 when the session or line is not found, 400 when the workorder is closed, the workorder line belongs to another workorder, or the quantity exceeds the expected quantity, 503 with a Retry-After header and WORKORDER_REPLICATION_PENDING when the workorder or its part line has not replicated from pos-workorder yet, 403 when the product mismatches the workorder demand without the override permission, and 422 when a LOT-tracked product resolves no lot number.
 
         '
       operationId: crossDockReceivingLine
@@ -5535,6 +5583,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Receiving session or line not found
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'WORKORDER_REPLICATION_PENDING: the workorder or its part line has not replicated from pos-workorder yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - inventory:receiving:complete
@@ -6400,13 +6460,13 @@ paths:
 
         Use this tool to hand back unused workorder parts; do not use receiveItemsIntoStaging or createGoodsReceipt, which receive vendor shipments rather than workorder returns.
 
-        Preconditions: each line''s itemId must name a real work order part line, and its quantity may not exceed that line''s returnable quantity (parts consumed minus parts already returned).
+        Preconditions: the workorder must be replicated from pos-workorder and COMPLETED or CLOSED, and each line''s quantity may not exceed that line''s returnable quantity (parts consumed minus parts already returned); the consumption ledger, not the work order part replica, is what proves a line exists, so a line not yet replicated is returnable to the extent it was consumed.
 
         Required inputs: workorderId (UUID) and lines (non-empty), each naming itemId (UUID, the work order line), a positive quantity, a reasonCode from the closed set NOT_NEEDED, WRONG_PART or CUSTOMER_REFUSED, and a locationId; storageLocationId is optional.
 
         Emits an INVENTORY_RETURN_SUBMIT_TO_STOCK event; the 202 response signals the posting completed.
 
-        Returns 400 when workorderId is missing, lines is empty, a quantity is not positive or a reasonCode is not one of the closed set, 404 when a line''s itemId does not name a work order part line, and 422 RETURN_QUANTITY_EXCEEDED when a line''s quantity exceeds what remains returnable.
+        Returns 400 when workorderId is missing, lines is empty, a quantity is not positive or a reasonCode is not one of the closed set, 503 with a Retry-After header and WORKORDER_REPLICATION_PENDING when the workorder has not replicated from pos-workorder yet, and 422 RETURN_QUANTITY_EXCEEDED when a line''s quantity exceeds what remains returnable (including a line nothing was consumed against) or WORKORDER_NOT_RETURNABLE when the workorder is not COMPLETED or CLOSED.
 
         '
       operationId: submitReturnToStock
@@ -6446,18 +6506,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: FORBIDDEN when the caller lacks inventory:return:write; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover every line's locationId (ADR-0061)
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: A line's itemId does not name a work order part line
         '422':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Return submission violates business policy
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'WORKORDER_REPLICATION_PENDING: the workorder has not replicated from pos-workorder yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - inventory:return:write

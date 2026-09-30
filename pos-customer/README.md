@@ -46,6 +46,17 @@ CRM service for the Durion Positivity ETSMS platform. Manages the customer party
 - Party-scoped detail reads now accept either party type for the same `partyId` domain.
 - Endpoints that are commercial-account oriented (for example `GET /v1/crm/commercial-accounts/{partyId}/contacts`) return an empty contact list for person parties instead of `404`.
 
+## Error codes
+
+Every non-2xx response carries the platform `ApiError` envelope (see
+[`durion/docs/architecture/api/ERROR_ENVELOPE.md`](../../durion/docs/architecture/api/ERROR_ENVELOPE.md)).
+This table lists only the replica-lag code; the module's other codes are defined beside the
+`CrmExceptionHandler` that mints them.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `VEHICLE_REPLICATION_PENDING` | 503 | `GET /v1/crm/{customerId}/vehicles/{vehicleId}`: the vehicle is not in the `ext_vehicle` replica yet (it arrives by `vehicle.events.v1`, and a vehicle id cannot be mapped to a VIN any other way). Carries `Retry-After` and `referenceId` = the vehicle id; not-yet, not no, so retry (#1994). A vehicle that is present but not associated with the customer stays `404 RESOURCE_NOT_FOUND` |
+
 ## Configuration
 
 | Property                | Default  | Description                  |

@@ -27,9 +27,7 @@ import com.positivity.shopmanager.internal.enums.OpeningSearchEnums.NoOpeningRea
 import com.positivity.shopmanager.internal.enums.OpeningSearchEnums.OpeningConstraint;
 import com.positivity.shopmanager.internal.enums.OpeningSearchEnums.SkillFulfillment;
 import com.positivity.shopmanager.internal.enums.OpeningSearchEnums.StaffingAdvisoryCode;
-import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.OpeningSearchPolicyException;
-import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
@@ -40,6 +38,7 @@ import com.positivity.shopmanager.internal.repository.ExtLocationReplicaReposito
 import com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtVehicleReplicaRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -675,10 +674,13 @@ class OpeningSearchServiceImplTest {
         }
 
         @Test
-        void unknownLocationIs404_andUnpublishedHoursAre422() {
+        void locationNotYetReplicatedIs503_andUnpublishedHoursAre422() {
             when(locationRepository.findById(LOCATION)).thenReturn(Optional.empty());
             assertThatThrownBy(() -> service.search(query(BRAKE_JOB, 60, TUE_0900)))
-                    .isInstanceOf(LocationNotFoundException.class);
+                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("LOCATION_REPLICATION_PENDING");
+                        assertThat(e.getReferenceId()).isEqualTo(LOCATION);
+                    });
 
             when(locationRepository.findById(LOCATION))
                     .thenReturn(Optional.of(location("America/New_York", null, null, 0, 0)));
@@ -689,12 +691,14 @@ class OpeningSearchServiceImplTest {
         }
 
         @Test
-        void unknownServiceIs404() {
+        void serviceNotYetReplicatedIs503() {
             UUID unknown = UUID.randomUUID();
             assertThatThrownBy(() -> service.search(new OpeningSearchQuery(
                             LOCATION, List.of(BRAKE_JOB, unknown), 60, TUE_0900, null, null, 30, 10)))
-                    .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining(unknown.toString());
+                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("CATALOG_REPLICATION_PENDING");
+                        assertThat(e.getReferenceId()).isEqualTo(unknown);
+                    });
         }
 
         @Test

@@ -133,6 +133,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `INSUFFICIENT_REFUNDABLE_AMOUNT` | 422 | Refund amount exceeds what was originally paid |
 | `EXCESSIVE_ADJUSTMENT` | 422 | Adjustment would drive the invoice total negative; a credit memo is required instead (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all) |
 | `INTERNAL_SERVER_ERROR` | 500 | The payment gateway call failed during a reversal |
+| `LOCATION_REPLICATION_PENDING` | 503 | The invoice's `ext_location` row has not replicated from `location.events.v1` yet, so its tax jurisdiction cannot be resolved (create, adjustment, finalize). Carries `Retry-After` and `referenceId` = the location id; not-yet, not no, so retry (#1994). A replicated location missing country/postal code stays `409` |
 
 ## Configuration
 

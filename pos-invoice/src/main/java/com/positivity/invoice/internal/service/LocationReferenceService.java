@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.service;
 import com.positivity.invoice.internal.entity.ExtLocationReplica;
 import com.positivity.invoice.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
+import com.positivity.web.common.ReplicationPendingException;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -22,6 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class LocationReferenceService {
 
+    /** Code of the 503 answered while the invoice's location row has not replicated yet (#1994). */
+    public static final String LOCATION_REPLICATION_PENDING = "LOCATION_REPLICATION_PENDING";
+
     private final ExtLocationReplicaRepository extLocationReplicaRepository;
 
     /**
@@ -29,15 +33,20 @@ public class LocationReferenceService {
      *
      * @param locationId the shop location backing the invoice
      * @return the destination address for tax calculation
-     * @throws IllegalStateException if the location is not in the replica or lacks the
-     *     country/postal code required for tax jurisdiction determination
+     * @throws ReplicationPendingException (503 {@code LOCATION_REPLICATION_PENDING}) if the
+     *     location is not in the replica yet — the invoice's own {@code locationId} is not proof
+     *     the id is wrong, only that {@code location.events.v1} has not been consumed (#1994)
+     * @throws IllegalStateException if the replicated location lacks the country/postal code
+     *     required for tax jurisdiction determination
      */
     @NonNull
     public TaxAddress resolveTaxAddress(@NonNull UUID locationId) {
         ExtLocationReplica location = extLocationReplicaRepository
                 .findById(locationId)
-                .orElseThrow(() -> new IllegalStateException("No location replica row for locationId " + locationId
-                        + " — verify the location.events.v1 feed is consumed"));
+                .orElseThrow(() -> new ReplicationPendingException(
+                        LOCATION_REPLICATION_PENDING,
+                        "The invoice's location has not replicated from Location yet; retry shortly",
+                        locationId));
 
         String country = trimToNull(location.getCountry());
         String postalCode = trimToNull(location.getPostalCode());

@@ -13,6 +13,7 @@ import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.AppointmentsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -70,6 +71,13 @@ public class AppointmentsController {
             "Caller holds appointments:cancel but its location scope does not cover the appointment's"
                     + " location (ApiError.code LOCATION_SCOPE_DENIED, see ../durion/docs/architecture/api/ERROR_ENVELOPE.md)";
 
+    private static final String REPLICATION_PENDING_DESCRIPTION =
+            "A record this service replicates from another domain has not arrived yet (ApiError.code"
+                    + " CRM_REPLICATION_PENDING for the customer or vehicle, LOCATION_REPLICATION_PENDING for the"
+                    + " bay or mobile unit). This is not-yet, not no: retry after the Retry-After interval.";
+
+    private static final String RETRY_AFTER_DESCRIPTION = "Seconds to wait before retrying";
+
     private final AppointmentsService appointmentsService;
 
     @Operation(operationId = "createAppointment", summary = "Create a New Shop Appointment", description = """
@@ -94,16 +102,19 @@ public class AppointmentsController {
                     fields. resourceType (BAY, MOBILE_UNIT or UNASSIGNED) is optional but is never a way to skip \
                     eligibility on a real resourceId: omit both to book UNASSIGNED; name a resourceId with \
                     resourceType omitted and it is inferred as BAY or MOBILE_UNIT from whichever replica holds that \
-                    id (400 if resourceId is set with resourceType UNASSIGNED, or unset with BAY/MOBILE_UNIT; 422 \
-                    SERVICE_POSITION_INVALID if it matches neither replica).
+                    id (400 if resourceId is set with resourceType UNASSIGNED, or unset with BAY/MOBILE_UNIT; 503 \
+                    LOCATION_REPLICATION_PENDING if a well-formed id matches neither replica yet).
                     Emits a SHOPMGR_APPOINTMENT_CREATE event and persists customer and vehicle snapshots on the \
                     appointment, which is created in SCHEDULED status with resourceType stored verbatim.
                     A caller whose appointments:create or shop:schedule:edit grant is location-scoped must have \
                     locationId within reach (ADR-0061).
                     Returns 400 when the slot is already booked, the idempotency key was reused with a different \
                     request, or sourceId is missing for a supplied sourceType; 403 LOCATION_SCOPE_DENIED when the \
-                    caller's location scope does not cover locationId; 404 when the customer or vehicle is \
-                    unknown; 409 when the vehicle does not belong to the customer; and 422 when the source estimate \
+                    caller's location scope does not cover locationId; 409 when the vehicle does not belong to the \
+                    customer; 503 with a Retry-After header and CRM_REPLICATION_PENDING when the customer or \
+                    vehicle has not replicated from CRM yet, or LOCATION_REPLICATION_PENDING when the named \
+                    bay or mobile unit has not replicated from Location yet (retry, do not treat as unknown); and \
+                    422 when the source estimate \
                     or work order is not eligible for scheduling, the start lies beyond the booking horizon, or the \
                     named resource fails DECISION-SHOPMGMT-021 eligibility (SERVICE_POSITION_INVALID, \
                     SERVICE_POSITION_INACTIVE, SERVICE_POSITION_NOT_EQUIPPED, \
@@ -125,10 +136,6 @@ public class AppointmentsController {
             description = CREATE_SCOPE_DENIED_DESCRIPTION,
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
-            responseCode = "404",
-            description = "Customer or vehicle not found in the local CRM replicas.",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
             responseCode = "409",
             description = "Scheduling conflict — a HARD rule fired (DECISION-SHOPMGMT-002 envelope listing every rule"
                     + " that fired, code verbatim) — or the vehicle does not belong to the supplied customer.",
@@ -139,7 +146,8 @@ public class AppointmentsController {
                     + " cannot be scheduled (ineligible status); BOOKING_HORIZON_EXCEEDED when startAt lies beyond"
                     + " the configured booking horizon (DECISION-SHOPMGMT-019; 180 facility-local days by default);"
                     + " or, for a resourceType of BAY or MOBILE_UNIT (DECISION-SHOPMGMT-021, fieldErrors names"
-                    + " resourceId), SERVICE_POSITION_INVALID (resourceId unknown, or at another location),"
+                    + " resourceId), SERVICE_POSITION_INVALID (resourceId malformed, of the other resource kind, or"
+                    + " at another location),"
                     + " SERVICE_POSITION_INACTIVE (not ACTIVE), SERVICE_POSITION_NOT_EQUIPPED (a BAY does not claim"
                     + " a specialty operation on the appointment, or takes no general work) or"
                     + " SERVICE_POSITION_DUTY_CLASS_EXCEEDED (the vehicle's GVWR class exceeds the bay's"
@@ -149,6 +157,15 @@ public class AppointmentsController {
             responseCode = "501",
             description = "Not implemented.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = REPLICATION_PENDING_DESCRIPTION,
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = RETRY_AFTER_DESCRIPTION,
+                            schema = @Schema(type = "integer")),
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_CREATE", apiVersion = "1")
     @PostMapping("/appointments")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -309,7 +326,8 @@ public class AppointmentsController {
                     SERVICE_POSITION_INVALID/INACTIVE/NOT_EQUIPPED/DUTY_CLASS_EXCEEDED failure on the resource the \
                     appointment ends up on (DECISION-SHOPMGMT-021, none overridable), or \
                     RESCHEDULE_APPROVAL_REASON_REQUIRED when approval is needed but approvalReason is missing or \
-                    blank.
+                    blank, and 503 with a Retry-After header and LOCATION_REPLICATION_PENDING when the target \
+                    bay or mobile unit has not replicated from Location yet.
                     """)
     @ApiResponse(responseCode = "200", description = "Appointment rescheduled successfully.")
     @ApiResponse(
@@ -337,13 +355,24 @@ public class AppointmentsController {
                     + " reschedule is recorded. BOOKING_HORIZON_EXCEEDED — newStartAt lies beyond the configured"
                     + " booking horizon (DECISION-SHOPMGMT-019; 180 facility-local days by default). Or, for the"
                     + " BAY or MOBILE_UNIT resource the appointment ends up on (DECISION-SHOPMGMT-021, fieldErrors"
-                    + " names resourceId): SERVICE_POSITION_INVALID (unknown, or at another location),"
+                    + " names resourceId): SERVICE_POSITION_INVALID (malformed, of the other resource kind, or at another location),"
                     + " SERVICE_POSITION_INACTIVE (not ACTIVE), SERVICE_POSITION_NOT_EQUIPPED (a BAY no longer"
                     + " claims a specialty operation on the appointment, or takes no general work) or"
                     + " SERVICE_POSITION_DUTY_CLASS_EXCEEDED (the vehicle's GVWR class exceeds the bay's"
                     + " maxDutyClass). Or RESCHEDULE_APPROVAL_REASON_REQUIRED (fieldErrors names approvalReason)"
                     + " when the caller holds appointments:reschedule:approve for a 3rd-or-later non-exempt"
                     + " reschedule but sent no non-blank approvalReason (DECISION-SHOPMGMT-004).",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "LOCATION_REPLICATION_PENDING — the bay or mobile unit the appointment ends up on has not"
+                    + " replicated from Location yet. Retry after the Retry-After interval; the appointment is"
+                    + " unchanged.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = RETRY_AFTER_DESCRIPTION,
+                            schema = @Schema(type = "integer")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PutMapping("/appointments/{appointmentId}/reschedule")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

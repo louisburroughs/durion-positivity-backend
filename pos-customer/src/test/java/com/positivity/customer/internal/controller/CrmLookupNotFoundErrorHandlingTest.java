@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.controller;
 
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,6 +12,8 @@ import com.positivity.customer.internal.config.CrmExceptionHandler;
 import com.positivity.customer.internal.service.CrmVehicleService;
 import com.positivity.customer.internal.service.CustomerRequirementsService;
 import com.positivity.customer.internal.service.PartyService;
+import com.positivity.web.common.ReplicationPendingException;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -34,7 +37,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * null} or an empty {@code Optional}), so every request below takes the not-found branch.
  */
 @WebMvcTest({CrmSnapshotController.class, CrmVehiclesController.class, CustomerRequirementsController.class})
-@Import({WebMvcTestSecurityConfig.class, CrmExceptionHandler.class})
+@Import({WebMvcTestSecurityConfig.class, CrmExceptionHandler.class, WebCommonErrorAutoConfiguration.class})
 @ActiveProfiles("test")
 @DisplayName("CRM lookups answer an unknown id with the 404 error envelope (#1720)")
 class CrmLookupNotFoundErrorHandlingTest {
@@ -82,5 +85,28 @@ class CrmLookupNotFoundErrorHandlingTest {
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.correlationId").value("corr-1720"));
+    }
+
+    /**
+     * #1994: a vehicle the {@code ext_vehicle} replica has not received is not "no such vehicle".
+     * The exception passes through this module's advice (no {@code RuntimeException} mapping) to the
+     * shared one, which answers 503 with {@code Retry-After}.
+     */
+    @org.junit.jupiter.api.Test
+    @DisplayName("a vehicle not yet replicated answers 503 VEHICLE_REPLICATION_PENDING with Retry-After (#1994)")
+    void vehicleNotYetReplicatedAnswers503WithRetryAfter() throws Exception {
+        when(crmVehicleService.getVehicleForCustomer(ID, OTHER_ID))
+                .thenThrow(new ReplicationPendingException(
+                        "VEHICLE_REPLICATION_PENDING", "The vehicle has not replicated yet", OTHER_ID));
+
+        mockMvc.perform(get("/v1/crm/{id}/vehicles/{other}", ID, OTHER_ID)
+                        .header("X-Authorities", "crm:vehicle:view")
+                        .header("X-Correlation-Id", "corr-1994"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "5"))
+                .andExpect(header().string("X-Correlation-Id", "corr-1994"))
+                .andExpect(jsonPath("$.code").value("VEHICLE_REPLICATION_PENDING"))
+                .andExpect(jsonPath("$.status").value(503))
+                .andExpect(jsonPath("$.referenceId").value(OTHER_ID.toString()));
     }
 }

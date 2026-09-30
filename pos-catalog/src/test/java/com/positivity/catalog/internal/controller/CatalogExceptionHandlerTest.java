@@ -119,7 +119,7 @@ class CatalogExceptionHandlerTest {
                     Named.of("handleBusinessConflict", (HandlerInvocation) request ->
                             sut.handleBusinessConflict(new CatalogBusinessRuleException("rule violated"), request)),
                     Named.of("handleUnprocessable", (HandlerInvocation) request -> sut.handleUnprocessable(
-                            new CatalogUnprocessableException("SKILL_UNKNOWN", "unknown skill"), request)),
+                            new CatalogUnprocessableException("SKILL_RETIRED", "retired skill"), request)),
                     Named.of("handleConflict", (HandlerInvocation) request -> sut.handleConflict(
                             new ObjectOptimisticLockingFailureException(Object.class, "id-123"), request)),
                     Named.of("handleServletException", (HandlerInvocation)

@@ -1128,7 +1128,7 @@ paths:
 
         Emits a WARRANTY_CLAIM_SETTLE event and enqueues warranty.claim.settled for pos-accounting; the first successful settlement moves the claim APPROVED to SETTLED, and a failed pos-invoice write keeps a durable FAILED settlement row for the reconciliation worklist.
 
-        Returns 400 when the type-specific reference id is missing, 404 when the claim does not exist, 409 when the claim is not settleable, 422 when the replacement workorder cannot be resolved, and 502 when the pos-invoice write fails (the settlement is recorded FAILED and staff retry with a fresh settlement after checking reconcileSettlements).
+        Returns 400 when the type-specific reference id is missing, 404 when the claim does not exist, 409 when the claim is not settleable, 503 with a Retry-After header and WORKORDER_REPLICATION_PENDING when the replacement workorder has not replicated from pos-workorder yet (nothing is recorded; retry), and 502 when the pos-invoice write fails (the settlement is recorded FAILED and staff retry with a fresh settlement after checking reconcileSettlements).
 
         '
       operationId: createSettlement
@@ -1175,18 +1175,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Claim is not in a settleable state.
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Referenced replacement workorder could not be resolved.
         '502':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: pos-invoice write failed; settlement recorded as FAILED.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'WORKORDER_REPLICATION_PENDING: the replacement workorder has not replicated from pos-workorder yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth: []
       summary: Execute a settlement

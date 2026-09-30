@@ -10,6 +10,7 @@ import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -35,6 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class CrmVehicleServiceImpl implements CrmVehicleService {
+    /** Code of the 503 answered while the requested vehicle row has not replicated yet (#1994). */
+    public static final String VEHICLE_REPLICATION_PENDING = "VEHICLE_REPLICATION_PENDING";
+
     private final Clock clock;
 
     private final ExtVehicleRepository extVehicleRepository;
@@ -43,6 +47,14 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
 
     /**
      * Retrieves a vehicle for a specific customer.
+     *
+     * <p>The vehicle is looked up by id in the {@code ext_vehicle} replica, which is fed by
+     * {@code vehicle.events.v1}; the id cannot be mapped to a VIN any other way. A vehicle the
+     * replica does not hold may therefore be one that has not replicated yet, so it is
+     * {@code 503 VEHICLE_REPLICATION_PENDING} rather than a not-found (#1994). A vehicle that is
+     * present but whose VIN the customer does not hold answers empty, and stays a 404.
+     *
+     * @throws ReplicationPendingException when the vehicle is not in the replica yet
      */
     @Override
     @Transactional(readOnly = true)
@@ -51,16 +63,17 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
 
         AbstractParty party = findPartyOrThrow(customerId);
 
-        return extVehicleRepository
+        ExtVehicle vehicle = extVehicleRepository
                 .findById(vehicleId)
-                .filter(vehicle -> {
-                    if (party.getVehicleVins().contains(vehicle.getVin())) {
-                        return true;
-                    }
-                    log.warn("Vehicle {} does not belong to customer {}", vehicleId, customerId);
-                    return false;
-                })
-                .map(this::mapToResponse);
+                .orElseThrow(() -> new ReplicationPendingException(
+                        VEHICLE_REPLICATION_PENDING,
+                        "The vehicle has not replicated from the vehicle registry yet; retry shortly",
+                        vehicleId));
+        if (!party.getVehicleVins().contains(vehicle.getVin())) {
+            log.warn("Vehicle {} does not belong to customer {}", vehicleId, customerId);
+            return Optional.empty();
+        }
+        return Optional.of(mapToResponse(vehicle));
     }
 
     @Transactional(readOnly = true)
