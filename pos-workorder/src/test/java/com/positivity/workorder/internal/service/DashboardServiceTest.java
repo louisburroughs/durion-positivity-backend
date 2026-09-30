@@ -190,12 +190,14 @@ class DashboardServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-4a: Double-booked mechanic → ConflictEntry BLOCKING /
-    // DOUBLE_BOOKED_MECHANIC
+    // AC-4a: Double-booked mechanic → ConflictEntry DOUBLE_BOOKED_MECHANIC.
+    // BLOCKING only when the person holds a current technician_assignment on two or
+    // more workorders; a collision involving a planned-only (mechanic_ids) entry is a
+    // WARNING worded as a plan (#2124).
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC-4a: Two workorders assigned to same mechanic generates DOUBLE_BOOKED_MECHANIC BLOCKING conflict")
+    @DisplayName("AC-4a / #2124: Same mechanic planned (mechanic_ids only) on two workorders is a planned WARNING")
     void getDashboard_doubleBookedMechanic_returnsBlockingConflict() {
         // Arrange
         // Issue CAP-142: AC-4a — same mechanic on 2 workorders on the same date
@@ -210,7 +212,9 @@ class DashboardServiceTest {
         // Assert
         assertThat(response.getConflicts()).anySatisfy(conflict -> {
             assertThat(conflict.getConflictType()).isEqualTo("DOUBLE_BOOKED_MECHANIC");
-            assertThat(conflict.getSeverity()).isEqualTo("BLOCKING");
+            assertThat(conflict.getSeverity()).isEqualTo("WARNING");
+            assertThat(conflict.getMessage()).contains("is planned onto 2 workorders");
+            assertThat(conflict.getMessage()).doesNotContain("is assigned to");
         });
     }
 
@@ -421,8 +425,8 @@ class DashboardServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // AC-4d: Mechanic clocked in for a different job → BLOCKING /
-    // DOUBLE_BOOKED_MECHANIC
+    // AC-4d: Mechanic clocked in for a different job → CLOCK_OUT_MISMATCH
+    // WARNING
     // -----------------------------------------------------------------------
 
     @Test
@@ -622,11 +626,10 @@ class DashboardServiceTest {
     }
 
     @Test
-    @DisplayName("AC-3b (edge): mechanic with no certifications on file is flagged for a required certification")
-    void getDashboard_mechanicWithNullCertifications_returnsSkillMismatchWarning() {
-        // Arrange — the mechanic resolved from People but carries no certifications
-        // list at all (never populated), which must be read the same as holding none
-        // of the required certs, not skipped as a data gap.
+    @DisplayName("#2122: mechanic with null certifications (no credential data) raises no skill mismatch")
+    void getDashboard_mechanicWithNullCertifications_noSkillConflict() {
+        // Arrange — the mechanic resolved from People but the credential replica has no row for
+        // them: null means "no data", and the check degrades to silence rather than warn falsely.
         Workorder wo = Workorder.builder()
                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .locationId(LOCATION_UUID)
@@ -635,7 +638,7 @@ class DashboardServiceTest {
                 .status(WorkorderStatus.WORK_IN_PROGRESS)
                 .build();
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
-        PersonAvailability mechanicNoCerts = PersonAvailability.builder()
+        PersonAvailability mechanicNoData = PersonAvailability.builder()
                 .personId("MECH-071")
                 .firstName("Priya")
                 .lastName("Rao")
@@ -644,7 +647,38 @@ class DashboardServiceTest {
                 .build();
         when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
                 .thenReturn(PeopleAvailabilityResponse.builder()
-                        .people(List.of(mechanicNoCerts))
+                        .people(List.of(mechanicNoData))
+                        .build());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getConflicts()).noneMatch(c -> "MECHANIC_SKILL_MISMATCH".equals(c.getConflictType()));
+    }
+
+    @Test
+    @DisplayName("#2122: mechanic with an empty certifications list holds none and is flagged")
+    void getDashboard_mechanicWithEmptyCertifications_returnsSkillMismatchWarning() {
+        // Arrange — credential rows exist for the person but none is currently held.
+        Workorder wo = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .locationId(LOCATION_UUID)
+                .mechanicIds("[\"MECH-073\"]")
+                .requiredCertifications("[\"BRAKE_CERT\"]")
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        PersonAvailability holdsNone = PersonAvailability.builder()
+                .personId("MECH-073")
+                .firstName("Sam")
+                .lastName("Ito")
+                .currentStatus("AVAILABLE")
+                .certifications(List.of())
+                .build();
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(holdsNone))
                         .build());
 
         // Act
@@ -653,7 +687,8 @@ class DashboardServiceTest {
         // Assert
         assertThat(response.getConflicts()).anySatisfy(conflict -> {
             assertThat(conflict.getConflictType()).isEqualTo("MECHANIC_SKILL_MISMATCH");
-            assertThat(conflict.getAffectedResourceId()).isEqualTo("MECH-071");
+            assertThat(conflict.getSeverity()).isEqualTo("WARNING");
+            assertThat(conflict.getAffectedResourceId()).isEqualTo("MECH-073");
         });
     }
 
@@ -894,11 +929,62 @@ class DashboardServiceTest {
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
 
-        // Assert
+        // Assert — still flagged, but as a plan: neither job is held, so it must not block.
         assertThat(response.getConflicts()).anySatisfy(c -> {
             assertThat(c.getConflictType()).isEqualTo("DOUBLE_BOOKED_MECHANIC");
+            assertThat(c.getSeverity()).isEqualTo("WARNING");
             assertThat(c.getAffectedResourceId()).isEqualTo(plannedMechanicId.toString());
+            assertThat(c.getMessage()).contains("is planned onto 2 workorders");
         });
+    }
+
+    @Test
+    @DisplayName("#2124: the planned wording names how many workorders the mechanic is planned onto")
+    void getDashboard_plannedMechanicOnThreeWorkorders_namesTheCount() {
+        UUID plannedMechanicId = UUID.fromString("00000000-0000-0000-0000-00000000e00a");
+        List<Workorder> planned = List.of(
+                buildWorkorder(
+                        UUID.fromString("00000000-0000-0000-0000-00000000d0a1"), plannedMechanicId.toString(), null),
+                buildWorkorder(
+                        UUID.fromString("00000000-0000-0000-0000-00000000d0a2"), plannedMechanicId.toString(), null),
+                buildWorkorder(
+                        UUID.fromString("00000000-0000-0000-0000-00000000d0a3"), plannedMechanicId.toString(), null));
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(planned);
+        when(technicianAssignmentRepository.findCurrentTechnicians(any())).thenReturn(List.of());
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getConflicts())
+                .filteredOn(c -> "DOUBLE_BOOKED_MECHANIC".equals(c.getConflictType()))
+                .singleElement()
+                .satisfies(c -> {
+                    assertThat(c.getSeverity()).isEqualTo("WARNING");
+                    assertThat(c.getMessage()).contains("is planned onto 3 workorders");
+                });
+    }
+
+    @Test
+    @DisplayName("#2124: a technician holding a current assignment on two workorders is a BLOCKING double booking")
+    void getDashboard_technicianAssignedOnTwoWorkorders_returnsBlockingConflict() {
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000b0a1");
+        Workorder first = assignmentOnlyWorkorder("00000000-0000-0000-0000-00000000a0a1", null);
+        Workorder second = assignmentOnlyWorkorder("00000000-0000-0000-0000-00000000a0a2", null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(first, second));
+        when(technicianAssignmentRepository.findCurrentTechnicians(any()))
+                .thenReturn(List.of(currentTechnician(first, technicianId), currentTechnician(second, technicianId)));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getConflicts())
+                .filteredOn(c -> "DOUBLE_BOOKED_MECHANIC".equals(c.getConflictType()))
+                .singleElement()
+                .satisfies(c -> {
+                    assertThat(c.getSeverity()).isEqualTo("BLOCKING");
+                    assertThat(c.getAffectedResourceId()).isEqualTo(technicianId.toString());
+                    assertThat(c.getMessage()).contains("is assigned to multiple workorders");
+                });
     }
 
     // -----------------------------------------------------------------------
@@ -937,7 +1023,7 @@ class DashboardServiceTest {
     }
 
     @Test
-    @DisplayName("A technician assigned on one workorder and in mechanic_ids on another is double-booked")
+    @DisplayName("A technician assigned on one workorder and planned on another is a planned-wording WARNING (#2124)")
     void getDashboard_technicianAssignmentAndMechanicIdsOnDifferentWorkorders_flagsDoubleBooking() {
         // Arrange
         UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000b002");
@@ -956,10 +1042,12 @@ class DashboardServiceTest {
         // Act
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
 
-        // Assert
+        // Assert — one claim is only a plan, so this cannot block
         assertThat(response.getConflicts()).anySatisfy(c -> {
             assertThat(c.getConflictType()).isEqualTo("DOUBLE_BOOKED_MECHANIC");
+            assertThat(c.getSeverity()).isEqualTo("WARNING");
             assertThat(c.getAffectedResourceId()).isEqualTo(technicianId.toString());
+            assertThat(c.getMessage()).contains("is planned onto 2 workorders");
         });
     }
 
