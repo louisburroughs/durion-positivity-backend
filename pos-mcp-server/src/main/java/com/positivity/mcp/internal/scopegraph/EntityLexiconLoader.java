@@ -40,7 +40,7 @@ public final class EntityLexiconLoader {
     /** Where the lexicon lives on the classpath. */
     public static final String CLASSPATH_LOCATION = "scope-graph/entities.yaml";
 
-    private static final Set<String> ROOT_FIELDS = Set.of("domain_scopes", "entities", "unscoped_tools");
+    private static final Set<String> ROOT_FIELDS = Set.of("domain_scopes", "domains", "entities", "unscoped_tools");
     private static final Set<String> ENTITY_FIELDS = Set.of(
             "key",
             "domain",
@@ -99,7 +99,8 @@ public final class EntityLexiconLoader {
         return new EntityLexicon(
                 stringMap(rootMap.get("domain_scopes"), "the lexicon root", "domain_scopes"),
                 entities,
-                strings(rootMap.get("unscoped_tools"), "the lexicon root", "unscoped_tools"));
+                strings(rootMap.get("unscoped_tools"), "the lexicon root", "unscoped_tools"),
+                stringMap(rootMap.get("domains"), "the lexicon root", "domains"));
     }
 
     /**

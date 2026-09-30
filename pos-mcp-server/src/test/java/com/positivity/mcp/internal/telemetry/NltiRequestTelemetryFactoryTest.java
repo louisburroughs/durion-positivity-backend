@@ -403,7 +403,9 @@ class NltiRequestTelemetryFactoryTest {
                 "MULTI_DOMAIN",
                 "master",
                 "CREATING_PO",
-                false);
+                false,
+                46,
+                18_432);
     }
 
     @Test
@@ -418,6 +420,8 @@ class NltiRequestTelemetryFactoryTest {
         assertThat(event.tagging().agreementRate()).isEqualTo(0.75);
         assertThat(event.tagging().workflowState()).isEqualTo("CREATING_PO");
         assertThat(event.tagging().simpleChat()).isFalse();
+        assertThat(event.tagging().questionCount()).isEqualTo(46);
+        assertThat(event.tagging().requestBodyBytes()).isEqualTo(18_432);
         // Spec §2.8: the Routing block keeps its shape and is filled from the tags while the Gate 4
         // router stays dormant.
         assertThat(event.routing()).isNotNull();
@@ -433,6 +437,8 @@ class NltiRequestTelemetryFactoryTest {
         assertThat(json.get("schemaVersion").intValue()).isEqualTo(3);
         assertThat(json.get("tagging").get("mode").textValue()).isEqualTo("SHADOW");
         assertThat(json.get("tagging").get("agreementRate").doubleValue()).isEqualTo(0.75);
+        assertThat(json.get("tagging").get("questionCount").intValue()).isEqualTo(46);
+        assertThat(json.get("tagging").get("requestBodyBytes").intValue()).isEqualTo(18_432);
         assertThat(json.get("tagging").has("fallbackReason")).isFalse();
         assertThat(MAPPER.writeValueAsString(event)).doesNotContain("\"scope");
     }
@@ -493,6 +499,8 @@ class NltiRequestTelemetryFactoryTest {
         assertThat(signal.domain()).isEqualTo("master");
         assertThat(signal.agreementRate()).isNull();
         assertThat(signal.providerModel()).isNull();
+        assertThat(signal.questionCount()).isNull();
+        assertThat(signal.requestBodyBytes()).isNull();
     }
 
     @Test

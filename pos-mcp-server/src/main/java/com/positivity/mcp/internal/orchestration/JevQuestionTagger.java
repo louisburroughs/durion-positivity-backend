@@ -9,10 +9,8 @@ import com.positivity.mcp.internal.config.TaggingProperties;
 import com.positivity.mcp.internal.domain.QuestionTagger;
 import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.TagAnswer;
-import com.positivity.mcp.internal.domain.TagQuestion;
 import com.positivity.mcp.internal.domain.TagSource;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.annotation.Conditional;
@@ -48,8 +46,8 @@ public class JevQuestionTagger implements QuestionTagger {
      */
     @Override
     public @NonNull QuestionTags tag(@NonNull String message) {
-        List<TagQuestion> asked = questions.questions();
-        JevResponse response = client.ask(message, asked);
+        TaggingQuestions.QuestionSet asked = questions.questionSet();
+        JevResponse response = client.ask(message, asked.questions());
         Map<String, TagAnswer> answers = new LinkedHashMap<>();
         response.answers().forEach((name, answer) -> answers.put(name, toTagAnswer(answer)));
         return new QuestionTags(
@@ -60,7 +58,10 @@ public class JevQuestionTagger implements QuestionTagger {
                 null,
                 response.model(),
                 response.latencyMs(),
-                response.stateTruncated());
+                response.stateTruncated(),
+                asked.size(),
+                response.requestBodyBytes(),
+                asked.optionListHash());
     }
 
     static @NonNull TagAnswer toTagAnswer(@NonNull JevAnswer answer) {

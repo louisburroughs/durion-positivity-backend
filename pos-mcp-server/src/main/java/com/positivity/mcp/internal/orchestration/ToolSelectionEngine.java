@@ -129,15 +129,17 @@ public class ToolSelectionEngine {
 
     /**
      * ADR-0068 §3.3: a session-less caller's workflow state is the {@code workflow_state} tag's acting
-     * value ({@link WorkflowState#DEFAULT} for {@link QuestionTags#none()}); a persisted {@code
-     * NltiSession} state goes through the {@link WorkflowState} overload and is never overridden.
+     * value; a persisted {@code NltiSession} state goes through the {@link WorkflowState} overload and
+     * is never overridden. An absent record ({@link QuestionTags#none()}: warm-up, a caller that never
+     * tagged) behaves exactly as {@code off}: the heuristic answers stand in, without a provider call.
      */
     public @NonNull ToolSelectionResult selectRoleTools(
             @NonNull String role,
             @NonNull Set<String> permissionCodes,
             @NonNull String message,
             @NonNull QuestionTags tags) {
-        return selectRoleTools(role, permissionCodes, message, tags.workflowState(), tags);
+        QuestionTags acting = tags.isNone() ? heuristicTags(message) : tags;
+        return selectRoleTools(role, permissionCodes, message, acting.workflowState(), acting);
     }
 
     /**
@@ -151,13 +153,15 @@ public class ToolSelectionEngine {
             @NonNull String message,
             @NonNull WorkflowState workflowState,
             @NonNull QuestionTags tags) {
+        // ADR-0068: an absent record behaves exactly as mode off (the heuristic answers, no provider).
+        QuestionTags acting = tags.isNone() ? heuristicTags(message) : tags;
         // ADR-0069 §5: the scope is resolved here, once the workflow state is known and before tool
         // ranking, because this is the one selection entry point both session managers call. The
         // only consumer that reads it here is the facade slot step (§6), and only when enforced.
         ScopeSet scope = resolveScope(message, permissionCodes, workflowState);
         RankedRoleTools ranked = roleToolsForMessage(role, permissionCodes, message, workflowState, scope);
         List<Object> fallbackTools = sharedOrchestrationSupport.mergeTools(
-                toolRegistry.resolveMasterTools(), fallbackToolsForTags(tags, ranked.gatedToolNames()));
+                toolRegistry.resolveMasterTools(), fallbackToolsForTags(acting, ranked.gatedToolNames()));
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
                     "MCP shared tool selection role={} permissionCodes={} workflowState={} roleTools={} scopeAddedTools={} fallbackTools={} queryPreview=\"{}\"",

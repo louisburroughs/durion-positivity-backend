@@ -6,6 +6,7 @@ import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.IntStream;
@@ -330,6 +331,23 @@ public class ToolRegistryService {
     public static boolean isAdminAccountQuestion(@NonNull String userInput) {
         return !matchedAdminQueryTerms(userInput).isEmpty()
                 && matchedVetoTerms(userInput).isEmpty();
+    }
+
+    /**
+     * ADR-0068: the rule behind {@link #isAdminAccountQuestion}, for the trace: {@code veto:<term>} when a
+     * veto term blocked a matched keyword, {@code match:<term>} when the path fires, empty when nothing
+     * matched. The sets are sorted, so the first term is deterministic.
+     */
+    public static @NonNull Optional<String> adminAccountRule(@NonNull String userInput) {
+        Set<String> matched = matchedAdminQueryTerms(userInput);
+        if (matched.isEmpty()) {
+            return Optional.empty();
+        }
+        Set<String> vetoes = matchedVetoTerms(userInput);
+        return Optional.of(
+                vetoes.isEmpty()
+                        ? "match:" + matched.iterator().next()
+                        : "veto:" + vetoes.iterator().next());
     }
 
     private static @NonNull Set<String> matchedAdminQueryTerms(@NonNull String userInput) {

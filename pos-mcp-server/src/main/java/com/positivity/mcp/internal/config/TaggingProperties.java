@@ -6,10 +6,12 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 /**
  * ADR-0068 §5, §6 / spec §2.1: the question-tagging switches ({@code mcp.tagging}).
@@ -25,8 +27,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param mode {@code off} (heuristic tagger only), {@code shadow} or {@code enforce}
  * @param enforcedTags tags (wire names) that act when {@code mode} is {@code enforce}
  * @param provider the System One endpoint (§5)
- * @param thresholds per-tag confidence threshold by wire name; {@value #DEFAULT_THRESHOLD} otherwise
+ * @param thresholds per-tag confidence threshold by tag name ({@code entity.<key>} for one entity);
+ *     {@value #DEFAULT_THRESHOLD} otherwise
  * @param maxStateChars the message is cut at this length before it becomes the {@code state}
+ * @param entityQuestions whether the {@code entity_<key>} Nouls are asked (default true); off fits a
+ *     small-context model during the bake-off (13 questions instead of 44)
  */
 @ConfigurationProperties(prefix = "mcp.tagging")
 public record TaggingProperties(
@@ -34,7 +39,18 @@ public record TaggingProperties(
         @Nullable List<String> enforcedTags,
         @Nullable Provider provider,
         @Nullable Map<String, Double> thresholds,
-        int maxStateChars) {
+        int maxStateChars,
+        @Nullable Boolean entityQuestions) {
+
+    /** The pre-{@code entity-questions} shape: entity Nouls asked. */
+    public TaggingProperties(
+            @Nullable TaggingMode mode,
+            @Nullable List<String> enforcedTags,
+            @Nullable Provider provider,
+            @Nullable Map<String, Double> thresholds,
+            int maxStateChars) {
+        this(mode, enforcedTags, provider, thresholds, maxStateChars, null);
+    }
 
     /** ADR-0068 §1: every tag's threshold until shadow data sets per-tag values. */
     public static final double DEFAULT_THRESHOLD = 0.75;
@@ -93,6 +109,8 @@ public record TaggingProperties(
         }
     }
 
+    /** Bound by Spring Boot (the record has a second, delegating constructor, as {@code StaticDocEntry} does). */
+    @ConstructorBinding
     public TaggingProperties {
         mode = mode == null ? TaggingMode.OFF : mode;
         enforcedTags = enforcedTags == null
@@ -115,6 +133,7 @@ public record TaggingProperties(
         if (maxStateChars <= 0) {
             maxStateChars = DEFAULT_MAX_STATE_CHARS;
         }
+        entityQuestions = entityQuestions == null ? Boolean.TRUE : entityQuestions;
     }
 
     /** The defaults: mode {@code off}, nothing enforced, the in-cell provider. */
@@ -142,8 +161,17 @@ public record TaggingProperties(
         return thresholds.getOrDefault(tag.wireName(), DEFAULT_THRESHOLD);
     }
 
-    /** As {@link #thresholdFor(TagName)}, by wire name; an unknown name takes the default. */
+    /**
+     * As {@link #thresholdFor(TagName)}, by wire name. An entity Noul {@code entity_<key>} takes
+     * {@code thresholds.entity.<key>} when set, else {@code thresholds.entity}; an unknown name takes
+     * the default.
+     */
     public double thresholdFor(@NonNull String wireName) {
+        Optional<String> entityKey = TagName.entityKey(wireName);
+        if (entityKey.isPresent()) {
+            Double perEntity = thresholds.get(TagName.ENTITY.wireName() + "." + entityKey.get());
+            return perEntity != null ? perEntity : thresholdFor(TagName.ENTITY);
+        }
         return TagName.fromWireName(wireName).map(this::thresholdFor).orElse(DEFAULT_THRESHOLD);
     }
 }

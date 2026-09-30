@@ -291,11 +291,25 @@ class EvalTurnTraceJsonCompatibilityTest {
                 212L,
                 null,
                 false,
+                46,
+                18_432,
+                "c878c7206d2ed660",
                 java.util.List.of(
-                        new TagTrace.TagEntry("simple_chat", "false", "HEURISTIC", "false", "false", 0.93, true),
                         new TagTrace.TagEntry(
-                                "workflow_state", "IDLE", "HEURISTIC", "IDLE", "CREATING_PO", 0.81, false),
-                        new TagTrace.TagEntry("entity_1", null, null, null, "work-order", 0.88, null)));
+                                "simple_chat", "false", "HEURISTIC", "false", null, "false", 0.93, 0.07, 0.75, true),
+                        new TagTrace.TagEntry(
+                                "workflow_state",
+                                "IDLE",
+                                "HEURISTIC",
+                                "IDLE",
+                                "phrase:purchase order",
+                                "CREATING_PO",
+                                0.81,
+                                null,
+                                0.75,
+                                false),
+                        new TagTrace.TagEntry(
+                                "entity_work-order", null, null, null, null, "true", 0.88, 0.88, 0.8, null)));
         EvalTurnTrace stamped = new EvalTurnTrace(
                 legacy.turnId(),
                 legacy.startedAt(),
@@ -333,6 +347,12 @@ class EvalTurnTraceJsonCompatibilityTest {
                 .contains("\"providerModel\":\"tev1:0.8b\"")
                 .contains("\"name\":\"workflow_state\"")
                 .contains("\"modelValue\":\"CREATING_PO\"")
+                .contains("\"heuristicRule\":\"phrase:purchase order\"")
+                .contains("\"modelProbability\":0.88")
+                .contains("\"threshold\":0.8")
+                .contains("\"questionCount\":46")
+                .contains("\"requestBodyBytes\":18432")
+                .contains("\"optionListHash\":\"c878c7206d2ed660\"")
                 .contains("\"agree\":false")
                 // The identifier the user typed is in the trace's userMessage, never in its tags.
                 .doesNotContain("WO-20391");

@@ -54,6 +54,27 @@ class EntityLexiconLoaderTest {
     }
 
     @Test
+    @DisplayName(
+            "ADR-0068: the domains block loads as scope -> sentence, and the shipped lexicon carries one per scope")
+    void domainsBlockLoads() {
+        EntityLexicon lexicon =
+                load("domains:\n  accounting: \"General ledger.\"\n  master: \"No single area.\"\nentities: []\n");
+
+        assertThat(lexicon.domains())
+                .containsOnly(
+                        java.util.Map.entry("accounting", "General ledger."),
+                        java.util.Map.entry("master", "No single area."));
+        assertThat(load("entities: []\n").domains()).isEmpty();
+        assertThatThrownBy(() -> load("domains: [accounting]\nentities: []\n"))
+                .isInstanceOf(EntityLexiconException.class)
+                .hasMessageContaining("domains");
+        assertThatThrownBy(() -> load("domains:\n  accounting: \"\"\nentities: []\n"))
+                .isInstanceOf(EntityLexiconException.class)
+                .hasMessageContaining("domains");
+        assertThat(EntityLexiconLoader.loadDefault().domains()).containsKeys("accounting", "workorder", "master");
+    }
+
+    @Test
     @DisplayName("text that is not YAML is rejected")
     void invalidYaml() {
         assertThatThrownBy(() -> load("entities: [unterminated")).isInstanceOf(EntityLexiconException.class);

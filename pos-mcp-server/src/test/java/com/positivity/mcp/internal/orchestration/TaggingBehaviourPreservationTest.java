@@ -136,6 +136,15 @@ class TaggingBehaviourPreservationTest {
         softly.assertAll();
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("fixtures")
+    @DisplayName("QuestionTags.none() (warm-up, an absent record) makes every consumer take the off decision")
+    void noneBehavesExactlyAsOff(Fixture fixture) {
+        TaggingDecisionSurfaces.Decisions withNone = surfaces.decideWithNone(fixture.message());
+        assertDecisions(fixture, withNone);
+        assertThat(withNone).isEqualTo(surfaces.decide(fixture.message()));
+    }
+
     private static void assertDecisions(Fixture fixture, TaggingDecisionSurfaces.Decisions actual) {
         SoftAssertions softly = new SoftAssertions();
         softly.assertThat(actual.simpleChat()).as("simpleChat").isEqualTo(fixture.simpleChat());

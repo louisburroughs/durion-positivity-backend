@@ -33,6 +33,10 @@ import org.jspecify.annotations.Nullable;
  * @param providerModel the model that answered, when the provider was called
  * @param latencyMs the provider call's wall time, when it was called (also on failure)
  * @param stateTruncated whether the message was cut at {@code max-state-chars} before it was sent
+ * @param questionCount how many questions the provider was asked, when it was called
+ * @param requestBodyBytes the size of the request body sent, when the provider was called
+ * @param optionListHash the hash of the option lists asked (domain options and entity keys), when
+ *     the provider was called; agreement on those tags is comparable within one hash only
  */
 public record QuestionTags(
         @NonNull TaggingMode mode,
@@ -42,18 +46,42 @@ public record QuestionTags(
         @Nullable FallbackReason fallbackReason,
         @Nullable String providerModel,
         @Nullable Long latencyMs,
-        boolean stateTruncated) {
+        boolean stateTruncated,
+        @Nullable Integer questionCount,
+        @Nullable Integer requestBodyBytes,
+        @Nullable String optionListHash) {
 
     private static final QuestionTags NONE =
             new QuestionTags(TaggingMode.OFF, Map.of(), Map.of(), Map.of(), null, null, null, false);
-
-    /** The Choice label an entity group answers when the message is about none of its entities. */
-    public static final String NO_ENTITY = "none";
 
     public QuestionTags {
         heuristic = sorted(heuristic);
         model = sorted(model);
         acting = sorted(acting);
+    }
+
+    /** Without the request-cost fields (a heuristic or fallback record). */
+    public QuestionTags(
+            @NonNull TaggingMode mode,
+            @NonNull Map<String, TagAnswer> heuristic,
+            @NonNull Map<String, TagAnswer> model,
+            @NonNull Map<String, TagAnswer> acting,
+            @Nullable FallbackReason fallbackReason,
+            @Nullable String providerModel,
+            @Nullable Long latencyMs,
+            boolean stateTruncated) {
+        this(
+                mode,
+                heuristic,
+                model,
+                acting,
+                fallbackReason,
+                providerModel,
+                latencyMs,
+                stateTruncated,
+                null,
+                null,
+                null);
     }
 
     /**
@@ -152,15 +180,15 @@ public record QuestionTags(
     }
 
     /**
-     * The entity keys the acting {@code entity_<n>} answers name (spec §2.4): every group whose answer
-     * is not {@value #NO_ENTITY}, in group order. Empty for a heuristic record, which answers no
-     * entity tag.
+     * The lexicon entity keys whose acting {@code entity_<key>} Noul is {@code true}, in key order.
+     * Empty for a heuristic record, which answers no entity tag (ADR-0069 §5.1 seeds those from the
+     * lexicon terms already).
      */
     public @NonNull List<String> entitySeeds() {
         List<String> seeds = new ArrayList<>();
         acting.forEach((name, answer) -> {
-            if (TagName.isEntityGroup(name) && !NO_ENTITY.equals(answer.value())) {
-                seeds.add(answer.value());
+            if (answer.isTrue()) {
+                TagName.entityKey(name).ifPresent(seeds::add);
             }
         });
         return List.copyOf(seeds);
@@ -173,7 +201,7 @@ public record QuestionTags(
 
     /**
      * The share of tags both taggers answered on which they agree; empty unless both answered at least
-     * one tag in common (the heuristic answers no entity tag, so the groups never count).
+     * one tag in common (the heuristic answers no entity tag, so those never count).
      */
     public @NonNull OptionalDouble agreementRate() {
         int compared = 0;

@@ -13,8 +13,8 @@ import org.jspecify.annotations.NonNull;
  * because Ollama requires them on every type (ADR-0068 §5).
  *
  * @param wireName the key under {@code questions} and under {@code answers}; a tag's wire name, or
- *     {@code entity_<n>} for an entity group
- * @param tag the tag the answer feeds; {@link TagName#ENTITY} for every group
+ *     {@code entity_<key>} for an entity Noul
+ * @param tag the tag the answer feeds; {@link TagName#ENTITY} for every entity Noul
  * @param choiceCriteria label to description, in option order; only for {@link
  *     TagName.Primitive#CHOICE}
  * @param scoreLevels the ordered levels, lowest first; only for {@link TagName.Primitive#SCORE}
@@ -43,10 +43,10 @@ public record TagQuestion(
         return new TagQuestion(tag.wireName(), tag, instructions, criteria, List.of());
     }
 
-    /** An entity group (spec §2.4): {@code entity_<index>} over the group's keys plus {@code none}. */
-    public static @NonNull TagQuestion entityGroup(
-            int index, @NonNull String instructions, @NonNull SequencedMap<String, String> criteria) {
-        return new TagQuestion(TagName.entityGroupName(index), TagName.ENTITY, instructions, criteria, List.of());
+    /** The entity Noul for lexicon entity {@code key}: {@code entity_<key>} (spec §2.4 as revised). */
+    public static @NonNull TagQuestion entity(@NonNull String key, @NonNull String instructions) {
+        return new TagQuestion(
+                TagName.entityWireName(key), TagName.ENTITY, instructions, new LinkedHashMap<>(), List.of());
     }
 
     public static @NonNull TagQuestion score(

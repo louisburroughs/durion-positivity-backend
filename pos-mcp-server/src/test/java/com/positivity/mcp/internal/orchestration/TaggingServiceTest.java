@@ -55,8 +55,19 @@ class TaggingServiceTest {
             QuestionTags h = heuristic.tag(message);
             Map<String, TagAnswer> answers = new LinkedHashMap<>();
             h.heuristic().forEach((name, answer) -> answers.put(name, opposite(name, answer)));
-            answers.put(TagName.entityGroupName(1), new TagAnswer("work-order", 0.9, TagSource.JEV));
-            return new QuestionTags(TaggingMode.SHADOW, Map.of(), answers, answers, null, "stub-model", 42L, true);
+            answers.put(TagName.entityWireName("work-order"), TagAnswer.noul(0.9));
+            return new QuestionTags(
+                    TaggingMode.SHADOW,
+                    Map.of(),
+                    answers,
+                    answers,
+                    null,
+                    "stub-model",
+                    42L,
+                    true,
+                    46,
+                    18_432,
+                    "abc123");
         }
 
         private TagAnswer opposite(String name, TagAnswer answer) {
@@ -127,10 +138,13 @@ class TaggingServiceTest {
             // ... while everything the model said is recorded beside it.
             assertThat(actual.mode()).isEqualTo(mode);
             assertThat(actual.model()).isNotEmpty();
-            assertThat(actual.model()).containsKey(TagName.entityGroupName(1));
+            assertThat(actual.model()).containsKey(TagName.entityWireName("work-order"));
             assertThat(actual.providerModel()).isEqualTo("stub-model");
             assertThat(actual.latencyMs()).isEqualTo(42L);
             assertThat(actual.stateTruncated()).isTrue();
+            assertThat(actual.questionCount()).isEqualTo(46);
+            assertThat(actual.requestBodyBytes()).isEqualTo(18_432);
+            assertThat(actual.optionListHash()).isEqualTo("abc123");
             assertThat(actual.fallbackReason()).isNull();
             assertThat(actual.agreementRate()).hasValue(0.0);
         }

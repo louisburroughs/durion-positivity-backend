@@ -91,9 +91,14 @@ public class JevClient {
      * @param answers one validated answer per question asked, by wire name
      * @param latencyMs wall time of the call
      * @param stateTruncated whether the state was cut at {@code max-state-chars}
+     * @param requestBodyBytes the size of the JSON body sent, for the cost of the wide request
      */
     public record JevResponse(
-            @NonNull String model, @NonNull Map<String, JevAnswer> answers, long latencyMs, boolean stateTruncated) {
+            @NonNull String model,
+            @NonNull Map<String, JevAnswer> answers,
+            long latencyMs,
+            boolean stateTruncated,
+            int requestBodyBytes) {
         public JevResponse {
             answers = Map.copyOf(answers);
         }
@@ -132,7 +137,7 @@ public class JevClient {
                     });
             status = exchange.status();
             long latencyMs = elapsedMs(startNanos);
-            JevResponse parsed = parse(exchange, provider, questions, latencyMs, truncated);
+            JevResponse parsed = parse(exchange, provider, questions, latencyMs, truncated, body.length);
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
                         "MCP tagging provider answered model={} host={} questions={} latencyMs={} stateTruncated={}",
@@ -170,7 +175,7 @@ public class JevClient {
     private record Exchange(int status, @NonNull String body) {}
 
     /** Spec §2.2 / ADR-0068 §4: exactly {@code model}, {@code state}, {@code keep_alive}, {@code questions}. */
-    static @NonNull Map<String, Object> requestBody(
+    public static @NonNull Map<String, Object> requestBody(
             TaggingProperties.@NonNull Provider provider, @NonNull String state, @NonNull List<TagQuestion> questions) {
         SequencedMap<String, Object> body = new LinkedHashMap<>();
         body.put("model", provider.model());
@@ -191,7 +196,8 @@ public class JevClient {
             TaggingProperties.@NonNull Provider provider,
             @NonNull List<TagQuestion> questions,
             long latencyMs,
-            boolean truncated) {
+            boolean truncated,
+            int requestBodyBytes) {
         int status = exchange.status();
         if (status == 429 || status == 529) {
             throw new JevProviderException(FallbackReason.RATE_LIMITED, "provider rate limited", status, null);
@@ -232,7 +238,8 @@ public class JevClient {
             parsed.put(question.wireName(), parseAnswer(question, answer, status));
         }
         String model = root.path("model").asText("");
-        return new JevResponse(model.isBlank() ? provider.model() : model, parsed, latencyMs, truncated);
+        return new JevResponse(
+                model.isBlank() ? provider.model() : model, parsed, latencyMs, truncated, requestBodyBytes);
     }
 
     private static @NonNull JevAnswer parseAnswer(@NonNull TagQuestion question, @NonNull JsonNode answer, int status) {

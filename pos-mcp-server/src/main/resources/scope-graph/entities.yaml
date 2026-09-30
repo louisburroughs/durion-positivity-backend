@@ -13,7 +13,14 @@
 #   domain_scopes   tool-catalog domain -> rag_scope, ONLY for the domains the two vocabularies spell
 #                   differently. The key is an mcp_tool.domain value: a facade domain, or for a
 #                   discovered operation the gateway routing prefix. The value is a rag-scope used by
-#                   a mcp.rag.preload.docs entry.
+#                   a mcp.rag.preload.docs entry. A tool domain with no matching rag-scope
+#                   (vehicle-inventory, people-contact, supplier, marketing, location, catalog,
+#                   vehicle-fitment) stays unmapped.
+#   domains         rag_scope -> one sentence, in the user's vocabulary, describing the area of the
+#                   business the scope covers (ADR-0068: the criteria of the `domain` Choice question;
+#                   its options are the distinct rag-scopes of mcp.rag.preload.docs plus master). Every
+#                   rag-scope used by either preload list must have a sentence, and every key here must
+#                   be such a scope or master (ScopeGraphRealConfigValidationTest).
 #   unscoped_tools  enabled tools that deliberately act on no entity. Every other enabled facade tool
 #                   must be listed under some entity's facade_tools.
 #   entities        the list below.
@@ -47,6 +54,23 @@ domain_scopes:
   price: pricing
   people: hr
   security-service: security
+
+domains:
+  accounting: "General ledger, journal entries, chart of accounts, financial statements, receivables and payables, bank reconciliation."
+  admin: "Administration of the platform: users, roles, permissions, access, audit."
+  customer: "Customers, their accounts and contacts, the vehicles they own, communication with them."
+  events: "System events, notifications, activity logs."
+  hr: "Employees, staff, work roles, schedules, HR functions."
+  inventory: "Stock on hand, availability, parts, receiving, transfers, adjustments, counts, purchase orders to suppliers."
+  order: "Customer sales orders and carts, returns and refunds."
+  pricing: "Prices, price lists, promotions, discounts, overrides, restrictions."
+  reporting: "Business reports, metrics, rankings and trends across areas."
+  security: "Sign-in, authentication, tokens, security policy."
+  shopmanager: "Shop operations: appointments, bays, schedules, technicians' work, shop settings."
+  tax: "Sales tax, rates, jurisdictions, tax reports."
+  warranty: "Warranty claims, coverage, settlements, part returns."
+  workorder: "Work orders, estimates and quotes, approvals, repair status and lifecycle."
+  master: "No single area, several equally, or the assistant/platform itself."
 
 unscoped_tools:
   - DateWindowFacadeTool

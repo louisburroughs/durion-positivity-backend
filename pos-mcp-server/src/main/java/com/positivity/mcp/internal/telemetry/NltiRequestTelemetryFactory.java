@@ -99,7 +99,9 @@ public final class NltiRequestTelemetryFactory {
             @NonNull String complexity,
             @NonNull String domain,
             @NonNull String workflowState,
-            boolean simpleChat) {
+            boolean simpleChat,
+            @Nullable Integer questionCount,
+            @Nullable Integer requestBodyBytes) {
 
         /** The signal of {@code tags}, or null for {@link QuestionTags#none()}. */
         public static @Nullable TaggingSignal of(@Nullable QuestionTags tags) {
@@ -117,7 +119,9 @@ public final class NltiRequestTelemetryFactory {
                     tags.complexity().name(),
                     tags.domain(),
                     tags.workflowState().name(),
-                    tags.simpleChat());
+                    tags.simpleChat(),
+                    tags.questionCount(),
+                    tags.requestBodyBytes());
         }
     }
 
@@ -362,7 +366,9 @@ public final class NltiRequestTelemetryFactory {
                                 tagging.complexity(),
                                 tagging.domain(),
                                 tagging.workflowState(),
-                                tagging.simpleChat()));
+                                tagging.simpleChat(),
+                                tagging.questionCount(),
+                                tagging.requestBodyBytes()));
     }
 
     /**

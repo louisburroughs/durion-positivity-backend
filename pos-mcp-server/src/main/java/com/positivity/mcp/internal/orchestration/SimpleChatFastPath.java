@@ -44,12 +44,13 @@ class SimpleChatFastPath {
 
     /**
      * ADR-0068 §1: the T0 decision read from the turn's {@code simple_chat} tag (its acting value is
-     * the heuristic classifier's answer in {@code off} and {@code shadow}). {@link QuestionTags#none()}
-     * is never simple chat. {@code message} is kept on the signature for the Wave 2 override rule
-     * ({@code follows_previous_turn}), which reads nothing from it either.
+     * the heuristic classifier's answer in {@code off} and {@code shadow}). An absent record ({@link
+     * QuestionTags#none()}: warm-up, a caller that never tagged) behaves exactly as {@code off}: the
+     * classifier decides. {@code message} is also what the Wave 2 override rule
+     * ({@code follows_previous_turn}) is applied to.
      */
     boolean isSimpleChat(@NonNull String message, @NonNull QuestionTags tags) {
-        return tags.simpleChat();
+        return tags.isNone() ? simpleChatClassifier.isSimpleChat(message) : tags.simpleChat();
     }
 
     /** The no-tool, no-RAG prompt answering a T0 message: master prompt + caller context. */

@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,7 +64,7 @@ import org.springframework.core.io.ClassPathResource;
  *
  * <p>The RAG file-header agreement rule is checked by its own test, not here.
  */
-class ScopeGraphRealConfigValidationTest {
+public class ScopeGraphRealConfigValidationTest {
 
     private static final Path MODULE_DIR = Paths.get(System.getProperty("user.dir"));
     private static final Path SEED = MODULE_DIR.resolve("src/main/resources/db/migration/V2__seed_mcp_server.sql");
@@ -107,6 +108,35 @@ class ScopeGraphRealConfigValidationTest {
         assertThat(unresolved)
                 .as("unresolved references under the %s profile, by kind: %s", profile, byKind(unresolved))
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0068: the lexicon's domains block describes every rag-scope of both preload lists and names no other scope")
+    void domainSentencesCoverEveryRagScopeAndNothingElse() {
+        EntityLexicon lexicon = EntityLexiconLoader.loadDefault();
+        Set<String> scopes = new TreeSet<>();
+        for (String profile : List.of("default", "alpha")) {
+            ragDocs(profile).stream()
+                    .map(StaticDocEntry::ragScope)
+                    .filter(java.util.Objects::nonNull)
+                    .forEach(scopes::add);
+        }
+        scopes.add("master");
+
+        assertThat(lexicon.domains().keySet())
+                .as("every rag-scope used by mcp.rag.preload.docs (and master) has a domains: sentence")
+                .containsAll(scopes);
+        assertThat(lexicon.domains().keySet())
+                .as("domains: names only rag-scopes of the preload lists, or master")
+                .isSubsetOf(scopes);
+        lexicon.domains()
+                .forEach((scope, sentence) -> assertThat(sentence)
+                        .as("sentence for %s", scope)
+                        .isNotBlank()
+                        .endsWith("."));
+        // The domain question stays under the option cap with this vocabulary.
+        assertThat(scopes).hasSizeLessThanOrEqualTo(26);
     }
 
     @Test
@@ -162,7 +192,7 @@ class ScopeGraphRealConfigValidationTest {
     // ---- mcp.rag.preload.docs, as the runtime binds it --------------------------------------------
 
     /** Shared with the parity and header tests of this package: one binding, the runtime's own. */
-    static List<StaticDocEntry> ragDocs(String profile) {
+    public static List<StaticDocEntry> ragDocs(String profile) {
         StandardEnvironment environment = new StandardEnvironment();
         addYaml(environment, "application.yml");
         if (!"default".equals(profile)) {

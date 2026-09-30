@@ -345,20 +345,29 @@ class ToolSelectionEngineTest {
     }
 
     @Test
-    @DisplayName("ADR-0068 spec §2.5: QuestionTags.none() selects on IDLE and adds only the glossary")
-    void selectRoleTools_noneTags_isTheWarmUpShape() {
+    @DisplayName("ADR-0068: QuestionTags.none() (warm-up, an absent record) selects exactly as mode off")
+    void selectRoleTools_noneTags_behavesAsOff() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN")).thenReturn(new ArrayList<>(List.of(orderFacadeTool)));
         when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
                 .thenReturn(gated(List.of()));
+        String message = "create po for sales last month";
 
-        ToolSelectionEngine.ToolSelectionResult result = toolSelectionEngine.selectRoleTools(
-                "ROLE_ADMIN", PERMISSION_CODES, "create po for sales last month", QuestionTags.none());
+        ToolSelectionEngine.ToolSelectionResult withNone =
+                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, message, QuestionTags.none());
+        ToolSelectionEngine.ToolSelectionResult off =
+                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, message);
 
-        assertThat(result.workflowState()).isEqualTo(WorkflowState.IDLE);
-        assertThat(result.fallbackTools()).containsExactlyInAnyOrder(exaWebSearchTool, glossaryFacadeTool);
+        assertThat(withNone.workflowState())
+                .isEqualTo(WorkflowState.CREATING_PO)
+                .isEqualTo(off.workflowState());
+        assertThat(withNone.fallbackTools())
+                .containsExactlyElementsOf(off.fallbackTools())
+                .contains(dateWindowFacadeTool, orderFacadeTool, glossaryFacadeTool);
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3));
-        assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
+        verify(toolRegistryService, org.mockito.Mockito.times(2))
+                .resolveCandidateSelection(contextCaptor.capture(), eq(3));
+        assertThat(contextCaptor.getAllValues())
+                .allMatch(context -> context.workflowState().equals("CREATING_PO"));
     }
 
     @Test

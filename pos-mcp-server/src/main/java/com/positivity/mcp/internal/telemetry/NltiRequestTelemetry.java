@@ -181,6 +181,8 @@ public record NltiRequestTelemetry(
      * @param domain the acting {@code domain}
      * @param workflowState the acting {@code workflow_state}
      * @param simpleChat the acting {@code simple_chat}
+     * @param questionCount how many questions the provider was asked, when it was called
+     * @param requestBodyBytes the size of the request body sent, when the provider was called
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Tagging(
@@ -194,5 +196,7 @@ public record NltiRequestTelemetry(
             @Nullable String complexity,
             @Nullable String domain,
             @Nullable String workflowState,
-            @Nullable Boolean simpleChat) {}
+            @Nullable Boolean simpleChat,
+            @Nullable Integer questionCount,
+            @Nullable Integer requestBodyBytes) {}
 }

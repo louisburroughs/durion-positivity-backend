@@ -412,8 +412,11 @@ public class AlphaEvalTurnTraceRecorder {
                         acting == null ? null : acting.value(),
                         acting == null ? null : acting.source().name(),
                         heuristic == null ? null : heuristic.value(),
+                        heuristic == null ? null : heuristic.rule(),
                         model == null ? null : model.value(),
                         model == null ? null : model.confidence(),
+                        model == null ? null : model.probability(),
+                        taggingProperties.thresholdFor(name),
                         heuristic == null || model == null ? null : QuestionTags.agrees(heuristic, model)));
             }
             return new TagTrace(
@@ -425,6 +428,9 @@ public class AlphaEvalTurnTraceRecorder {
                     tags.latencyMs(),
                     tags.fallbackReason() == null ? null : tags.fallbackReason().wireName(),
                     tags.stateTruncated(),
+                    tags.questionCount(),
+                    tags.requestBodyBytes(),
+                    tags.optionListHash(),
                     entries);
         }
 

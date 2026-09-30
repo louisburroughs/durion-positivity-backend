@@ -120,7 +120,10 @@ class TaggingService {
                 null,
                 model.providerModel(),
                 latencyMs,
-                model.stateTruncated());
+                model.stateTruncated(),
+                model.questionCount(),
+                model.requestBodyBytes(),
+                model.optionListHash());
     }
 
     private @NonNull QuestionTags fallback(

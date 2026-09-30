@@ -18,6 +18,11 @@ import org.jspecify.annotations.Nullable;
  * @param latencyMs the provider call's wall time, when it was called
  * @param fallbackReason why the turn took the heuristic answers instead of the model's, or null
  * @param stateTruncated whether the message was cut at {@code max-state-chars}
+ * @param questionCount how many questions the provider was asked, when it was called (the cost of
+ *     the wide request, for the bake-off)
+ * @param requestBodyBytes the size of the request body sent, when the provider was called
+ * @param optionListHash the hash of the option lists asked (domain options and entity keys), when
+ *     the provider was called
  * @param tags one entry per tag either tagger answered, by wire name
  */
 public record TagTrace(
@@ -27,6 +32,9 @@ public record TagTrace(
         @Nullable Long latencyMs,
         @Nullable String fallbackReason,
         boolean stateTruncated,
+        @Nullable Integer questionCount,
+        @Nullable Integer requestBodyBytes,
+        @Nullable String optionListHash,
         @NonNull List<TagEntry> tags) {
 
     public TagTrace {
@@ -35,12 +43,15 @@ public record TagTrace(
     }
 
     /**
-     * @param name the wire name ({@code simple_chat}, {@code entity_2}, ...)
+     * @param name the wire name ({@code simple_chat}, {@code entity_work-order}, ...)
      * @param actingValue the value consumers read, or null when neither tagger's answer acted
      * @param actingSource {@code HEURISTIC} or {@code JEV}
-     * @param heuristicValue the heuristic answer, or null (the heuristic answers no entity group)
+     * @param heuristicValue the heuristic answer, or null (the heuristic answers no entity tag)
+     * @param heuristicRule the heuristic rule that fired, where the heuristic exposes one cheaply
      * @param modelValue the model's answer, or null when it did not answer
      * @param modelConfidence the model's confidence, or null
+     * @param modelProbability the raw Noul {@code p} the model reported, or null
+     * @param threshold the confidence threshold in effect for the tag
      * @param agree whether the two answers agree; null unless both answered
      */
     public record TagEntry(
@@ -48,7 +59,10 @@ public record TagTrace(
             @Nullable String actingValue,
             @Nullable String actingSource,
             @Nullable String heuristicValue,
+            @Nullable String heuristicRule,
             @Nullable String modelValue,
             @Nullable Double modelConfidence,
+            @Nullable Double modelProbability,
+            double threshold,
             @Nullable Boolean agree) {}
 }

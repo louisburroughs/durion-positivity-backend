@@ -452,16 +452,22 @@ class AlphaEvalTurnTraceRecorderTest {
                 "sha-81ff1e0",
                 null,
                 null,
-                TaggingProperties.shadow(TaggingProperties.Provider.defaults()));
+                new TaggingProperties(
+                        TaggingMode.SHADOW,
+                        List.of(),
+                        null,
+                        Map.of("workflow_state", 0.9, "entity", 0.6, "entity.work-order", 0.85),
+                        0));
         Map<String, TagAnswer> heuristic = Map.of(
                 TagName.SIMPLE_CHAT.wireName(), TagAnswer.heuristic(false),
-                TagName.WORKFLOW_STATE.wireName(), TagAnswer.heuristic("IDLE"));
+                TagName.WORKFLOW_STATE.wireName(), TagAnswer.heuristic("IDLE", "phrase:purchase order"));
         Map<String, TagAnswer> model = Map.of(
                 TagName.SIMPLE_CHAT.wireName(), TagAnswer.noul(0.07),
                 TagName.WORKFLOW_STATE.wireName(), new TagAnswer("CREATING_PO", 0.81, TagSource.JEV),
-                TagName.entityGroupName(1), new TagAnswer("work-order", 0.88, TagSource.JEV));
-        QuestionTags tags =
-                new QuestionTags(TaggingMode.SHADOW, heuristic, model, heuristic, null, "tev1:0.8b", 212L, false);
+                TagName.entityWireName("work-order"), TagAnswer.noul(0.88),
+                TagName.entityWireName("invoice"), TagAnswer.noul(0.2));
+        QuestionTags tags = new QuestionTags(
+                TaggingMode.SHADOW, heuristic, model, heuristic, null, "tev1:0.8b", 212L, false, 46, 18_432, "abc123");
 
         shadowRecorder.begin(USER, "create a purchase order for WO-20391");
         shadowRecorder.recordTags(tags);
@@ -473,23 +479,38 @@ class AlphaEvalTurnTraceRecorderTest {
         assertThat(traced.providerModel()).isEqualTo("tev1:0.8b");
         assertThat(traced.latencyMs()).isEqualTo(212L);
         assertThat(traced.fallbackReason()).isNull();
+        assertThat(traced.questionCount()).isEqualTo(46);
+        assertThat(traced.requestBodyBytes()).isEqualTo(18_432);
+        assertThat(traced.optionListHash()).isEqualTo("abc123");
         assertThat(traced.tags())
                 .extracting(TagTrace.TagEntry::name)
-                .containsExactly("entity_1", "simple_chat", "workflow_state");
-        TagTrace.TagEntry simpleChat = traced.tags().get(1);
+                .containsExactly("entity_invoice", "entity_work-order", "simple_chat", "workflow_state");
+        TagTrace.TagEntry simpleChat = traced.tags().get(2);
         assertThat(simpleChat.actingValue()).isEqualTo("false");
         assertThat(simpleChat.actingSource()).isEqualTo("HEURISTIC");
+        assertThat(simpleChat.heuristicRule()).isNull();
         assertThat(simpleChat.modelValue()).isEqualTo("false");
         assertThat(simpleChat.modelConfidence()).isCloseTo(0.93, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(simpleChat.modelProbability()).isEqualTo(0.07);
+        assertThat(simpleChat.threshold()).isEqualTo(TaggingProperties.DEFAULT_THRESHOLD);
         assertThat(simpleChat.agree()).isTrue();
-        TagTrace.TagEntry workflow = traced.tags().get(2);
+        TagTrace.TagEntry workflow = traced.tags().get(3);
         assertThat(workflow.heuristicValue()).isEqualTo("IDLE");
+        assertThat(workflow.heuristicRule()).isEqualTo("phrase:purchase order");
         assertThat(workflow.modelValue()).isEqualTo("CREATING_PO");
+        assertThat(workflow.modelProbability()).isNull();
+        assertThat(workflow.threshold()).isEqualTo(0.9);
         assertThat(workflow.agree()).isFalse();
-        TagTrace.TagEntry entity = traced.tags().get(0);
-        assertThat(entity.actingValue()).isNull();
-        assertThat(entity.heuristicValue()).isNull();
-        assertThat(entity.agree()).isNull();
+        // Entity Nouls: no heuristic answer, the per-entity threshold when set, else the entity one.
+        TagTrace.TagEntry workOrder = traced.tags().get(1);
+        assertThat(workOrder.actingValue()).isNull();
+        assertThat(workOrder.heuristicValue()).isNull();
+        assertThat(workOrder.modelValue()).isEqualTo("true");
+        assertThat(workOrder.modelProbability()).isEqualTo(0.88);
+        assertThat(workOrder.threshold()).isEqualTo(0.85);
+        assertThat(workOrder.agree()).isNull();
+        assertThat(traced.tags().get(0).threshold()).isEqualTo(0.6);
+        assertThat(traced.tags().get(0).modelValue()).isEqualTo("false");
     }
 
     @Test
@@ -516,6 +537,8 @@ class AlphaEvalTurnTraceRecorderTest {
         assertThat(traced.enforcedTags()).containsExactly("simple_chat");
         assertThat(traced.fallbackReason()).isEqualTo("timeout");
         assertThat(traced.stateTruncated()).isTrue();
+        assertThat(traced.questionCount()).isNull();
+        assertThat(traced.requestBodyBytes()).isNull();
         assertThat(traced.tags()).singleElement().satisfies(entry -> {
             assertThat(entry.modelValue()).isNull();
             assertThat(entry.agree()).isNull();

@@ -13,7 +13,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -59,7 +61,7 @@ public class HeuristicQuestionTagger implements QuestionTagger {
      * extra schemas); {@code period} is accounting vocabulary far more often than it is a window,
      * and it names the {@code period} shortcut that is a shape bypass rather than a resolver call.
      */
-    private static final List<Pattern> DATE_WINDOW_WORD_PATTERNS = compileWordPatterns(Set.of(
+    private static final List<WordPattern> DATE_WINDOW_WORD_PATTERNS = compileWordPatterns(Set.of(
             "annual",
             "daily",
             "day",
@@ -93,7 +95,7 @@ public class HeuristicQuestionTagger implements QuestionTagger {
      * resolver for it; the near misses guarded by the test suite ("phone number for NAPA", "recent
      * notes on this vehicle") name no metric and stay out.
      */
-    private static final List<Pattern> IMPLIED_WINDOW_WORD_PATTERNS = compileWordPatterns(Set.of(
+    private static final List<WordPattern> IMPLIED_WINDOW_WORD_PATTERNS = compileWordPatterns(Set.of(
             "average",
             "avg",
             "billed",
@@ -147,6 +149,9 @@ public class HeuristicQuestionTagger implements QuestionTagger {
 
     /** Multi-word date vocabulary, matched as plain substrings rather than on word boundaries. */
     private static final Set<String> DATE_WINDOW_PHRASES = Set.of("to date", "so far this");
+
+    private static final List<String> DATE_WINDOW_PHRASES_ORDERED =
+            new TreeSet<>(DATE_WINDOW_PHRASES).stream().toList();
 
     /** The keyword guards of the three tag-added facade tools (formerly {@code fallbackToolsForMessage}). */
     private static final Set<String> WEB_SEARCH_TOKENS =
@@ -207,35 +212,56 @@ public class HeuristicQuestionTagger implements QuestionTagger {
     public @NonNull QuestionTags tag(@NonNull String message) {
         String lower = message.toLowerCase(Locale.ROOT);
         Map<String, TagAnswer> answers = new LinkedHashMap<>();
+        Optional<String> cue = SimpleChatClassifier.firstContinuationCue(message);
         answers.put(
                 TagName.FOLLOWS_PREVIOUS_TURN.wireName(),
-                TagAnswer.heuristic(SimpleChatClassifier.followsPreviousTurn(message)));
+                TagAnswer.heuristic(
+                        cue.isPresent(), cue.map(token -> "cue:" + token).orElse(null)));
+        // The classifier exposes no rule id cheaply (its catalog rules fold into one boolean).
         answers.put(TagName.SIMPLE_CHAT.wireName(), TagAnswer.heuristic(simpleChatClassifier.isSimpleChat(message)));
+        Optional<String> workflowPhrase = workflowPhrase(lower);
         answers.put(
                 TagName.WORKFLOW_STATE.wireName(),
-                TagAnswer.heuristic(deriveWorkflowState(lower).name()));
-        answers.put(TagName.NEEDS_WEB_SEARCH.wireName(), TagAnswer.heuristic(containsAny(lower, WEB_SEARCH_TOKENS)));
-        answers.put(TagName.ABOUT_INVENTORY.wireName(), TagAnswer.heuristic(containsAny(lower, INVENTORY_TOKENS)));
-        answers.put(TagName.ABOUT_ORDERS.wireName(), TagAnswer.heuristic(containsAny(lower, ORDER_TOKENS)));
-        answers.put(TagName.IMPLIES_DATE_WINDOW.wireName(), TagAnswer.heuristic(mentionsDateWindow(lower)));
+                TagAnswer.heuristic(
+                        deriveWorkflowState(lower).name(),
+                        workflowPhrase.map(phrase -> "phrase:" + phrase).orElse(null)));
+        answers.put(TagName.NEEDS_WEB_SEARCH.wireName(), keywordAnswer(lower, WEB_SEARCH_TOKENS));
+        answers.put(TagName.ABOUT_INVENTORY.wireName(), keywordAnswer(lower, INVENTORY_TOKENS));
+        answers.put(TagName.ABOUT_ORDERS.wireName(), keywordAnswer(lower, ORDER_TOKENS));
+        Optional<String> windowRule = dateWindowRule(lower);
+        answers.put(
+                TagName.IMPLIES_DATE_WINDOW.wireName(),
+                TagAnswer.heuristic(windowRule.isPresent(), windowRule.orElse(null)));
         answers.put(
                 TagName.ADMIN_ACCOUNT_QUESTION.wireName(),
-                TagAnswer.heuristic(ToolRegistryService.isAdminAccountQuestion(message)));
+                TagAnswer.heuristic(
+                        ToolRegistryService.isAdminAccountQuestion(message),
+                        ToolRegistryService.adminAccountRule(message).orElse(null)));
+        int subQueries =
+                RerankedContentRetriever.splitSubQueries(message, maxSubQueries).size();
         answers.put(
                 TagName.COMPOUND_QUESTION.wireName(),
-                TagAnswer.heuristic(RerankedContentRetriever.splitSubQueries(message, maxSubQueries)
-                                .size()
-                        >= 2));
+                TagAnswer.heuristic(subQueries >= 2, "sub_queries:" + subQueries));
         RouterClassification safe = RouterClassification.safeDefault();
         answers.put(
-                TagName.INTENT.wireName(), TagAnswer.heuristic(safe.intentType().name()));
+                TagName.INTENT.wireName(), TagAnswer.heuristic(safe.intentType().name(), SAFE_DEFAULT_RULE));
         answers.put(
                 TagName.COMPLEXITY.wireName(),
-                TagAnswer.heuristic(safe.complexity().name()));
+                TagAnswer.heuristic(safe.complexity().name(), SAFE_DEFAULT_RULE));
         answers.put(
-                TagName.RISK.wireName(), TagAnswer.heuristic(safe.riskLevel().name()));
-        answers.put(TagName.DOMAIN.wireName(), TagAnswer.heuristic(safe.domain()));
+                TagName.RISK.wireName(), TagAnswer.heuristic(safe.riskLevel().name(), SAFE_DEFAULT_RULE));
+        answers.put(TagName.DOMAIN.wireName(), TagAnswer.heuristic(safe.domain(), SAFE_DEFAULT_RULE));
         return QuestionTags.heuristic(answers);
+    }
+
+    /** The rule id of the router-derived tags: {@code RouterClassification.safeDefault()} (ADR-0068 §2). */
+    static final String SAFE_DEFAULT_RULE = "safe_default";
+
+    /** A keyword guard's answer with the token that fired ({@code keyword:stock}) when one did. */
+    private static @NonNull TagAnswer keywordAnswer(@NonNull String lower, @NonNull Set<String> tokens) {
+        Optional<String> token = firstMatch(lower, tokens);
+        return TagAnswer.heuristic(
+                token.isPresent(), token.map(word -> "keyword:" + word).orElse(null));
     }
 
     /**
@@ -254,6 +280,17 @@ public class HeuristicQuestionTagger implements QuestionTagger {
         return WorkflowState.IDLE;
     }
 
+    /** The phrase {@link #deriveWorkflowState} fired on, in the order it tests the lists; empty for IDLE. */
+    private static @NonNull Optional<String> workflowPhrase(@NonNull String lower) {
+        for (Set<String> phrases : List.of(CREATING_PO_PHRASES, RECEIVING_ASN_PHRASES, INVENTORY_RECON_PHRASES)) {
+            Optional<String> phrase = firstMatch(lower, phrases);
+            if (phrase.isPresent()) {
+                return phrase;
+            }
+        }
+        return Optional.empty();
+    }
+
     /**
      * Whether {@code text} names a date window (formerly {@code ToolSelectionEngine.mentionsDateWindow}).
      *
@@ -266,45 +303,69 @@ public class HeuristicQuestionTagger implements QuestionTagger {
      * vocabulary off the per-request regex-compilation path.
      */
     static boolean mentionsDateWindow(@NonNull String text) {
-        for (String phrase : DATE_WINDOW_PHRASES) {
+        return dateWindowRule(text).isPresent();
+    }
+
+    /**
+     * Which of the four date-window lists fired ({@code phrase:to date}, {@code word:month}, {@code
+     * implied:revenue}, {@code named_period:<regex>}), tested in {@link #mentionsDateWindow}'s order; the
+     * lists are sorted so the first hit is deterministic.
+     */
+    private static @NonNull Optional<String> dateWindowRule(@NonNull String text) {
+        for (String phrase : DATE_WINDOW_PHRASES_ORDERED) {
             if (text.contains(phrase)) {
-                return true;
+                return Optional.of("phrase:" + phrase);
             }
         }
-        for (Pattern pattern : DATE_WINDOW_WORD_PATTERNS) {
-            if (pattern.matcher(text).find()) {
-                return true;
+        for (WordPattern pattern : DATE_WINDOW_WORD_PATTERNS) {
+            if (pattern.pattern().matcher(text).find()) {
+                return Optional.of("word:" + pattern.word());
             }
         }
-        for (Pattern pattern : IMPLIED_WINDOW_WORD_PATTERNS) {
-            if (pattern.matcher(text).find()) {
-                return true;
+        for (WordPattern pattern : IMPLIED_WINDOW_WORD_PATTERNS) {
+            if (pattern.pattern().matcher(text).find()) {
+                return Optional.of("implied:" + pattern.word());
             }
         }
         for (Pattern pattern : NAMED_PERIOD_PATTERNS) {
             if (pattern.matcher(text).find()) {
-                return true;
+                return Optional.of("named_period:" + pattern.pattern());
             }
         }
-        return false;
+        return Optional.empty();
     }
 
-    private static @NonNull List<Pattern> compileWordPatterns(@NonNull Set<String> words) {
-        return words.stream()
-                .map(word -> Pattern.compile("\\b" + Pattern.quote(word) + "\\b"))
-                .toList();
+    /** A word-boundary pattern and the word it was built from (the trace's rule id). */
+    private record WordPattern(
+            @NonNull String word, @NonNull Pattern pattern) {}
+
+    /** Sorted, so the rule id reported for a message that matches several words is deterministic. */
+    private static @NonNull List<WordPattern> compileWordPatterns(@NonNull Set<String> words) {
+        return new TreeSet<>(words)
+                .stream()
+                        .map(word -> new WordPattern(word, Pattern.compile("\\b" + Pattern.quote(word) + "\\b")))
+                        .toList();
     }
 
     private static boolean containsAny(@NonNull String text, @NonNull Set<String> tokens) {
-        for (String token : tokens) {
+        return firstMatch(text, tokens).isPresent();
+    }
+
+    /**
+     * The first token (in sorted order, for a deterministic rule id) that {@code containsAny} matches: a
+     * phrase as a plain substring, a single word on word boundaries through {@link String#matches}, as
+     * before ADR-0068.
+     */
+    private static @NonNull Optional<String> firstMatch(@NonNull String text, @NonNull Set<String> tokens) {
+        for (String token : new TreeSet<>(tokens)) {
             if (token.contains(" ")) {
                 if (text.contains(token)) {
-                    return true;
+                    return Optional.of(token);
                 }
             } else if (text.matches(".*\\b" + token + "\\b.*")) {
-                return true;
+                return Optional.of(token);
             }
         }
-        return false;
+        return Optional.empty();
     }
 }

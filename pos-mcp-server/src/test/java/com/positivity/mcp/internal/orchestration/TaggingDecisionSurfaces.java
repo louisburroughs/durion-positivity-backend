@@ -18,6 +18,7 @@ import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.internal.repository.ToolPriorityRepository;
+import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.TenantToolPriorityResolver;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import java.time.Clock;
@@ -62,6 +63,11 @@ final class TaggingDecisionSurfaces {
 
     private final SimpleChatClassifier simpleChatClassifier;
     private final HeuristicQuestionTagger heuristicTagger;
+    private final DateWindowFacadeTool dateWindowFacadeTool;
+    private final GlossaryFacadeTool glossaryFacadeTool;
+    private final ExaWebSearchTool exaWebSearchTool;
+    private final InventoryFacadeTool inventoryFacadeTool;
+    private final OrderFacadeTool orderFacadeTool;
     private final ToolSelectionEngine toolSelectionEngine;
     private final ToolRegistryService toolRegistryService;
     private final SharedOrchestrationSupport sharedOrchestrationSupport;
@@ -76,26 +82,31 @@ final class TaggingDecisionSurfaces {
         when(masterAgentRegistry.resolveDomainTools(anyString())).thenReturn(List.of());
         // No ToolRegistryService: the engine derives the workflow state and the keyword-added tools
         // from the message alone, which is the surface under test here.
+        this.dateWindowFacadeTool = new DateWindowFacadeTool(clock);
+        this.glossaryFacadeTool = new GlossaryFacadeTool();
+        this.exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
+        this.inventoryFacadeTool = new InventoryFacadeTool(
+                RestClient.builder(),
+                "http://api-gateway",
+                "/inventory/v1/inventory/stock/{sku}",
+                "/inventory/v1/inventory/search?q={query}",
+                "/inventory/v1/inventory/locations/{locationId}/stock",
+                "/inventory/v1/inventory/replenishment/policies");
+        this.orderFacadeTool = new OrderFacadeTool(
+                RestClient.builder(),
+                "http://api-gateway",
+                "/order/v1/orders/{orderId}",
+                "/order/v1/orders/search?q={query}",
+                "/order/v1/orders/purchase-orders",
+                "/order/v1/orders/purchase-orders/{poId}",
+                "/order/v1/orders/purchase-orders/summary");
         this.toolSelectionEngine = new ToolSelectionEngine(
                 masterAgentRegistry,
-                new DateWindowFacadeTool(clock),
-                new GlossaryFacadeTool(),
-                new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5),
-                new InventoryFacadeTool(
-                        RestClient.builder(),
-                        "http://api-gateway",
-                        "/inventory/v1/inventory/stock/{sku}",
-                        "/inventory/v1/inventory/search?q={query}",
-                        "/inventory/v1/inventory/locations/{locationId}/stock",
-                        "/inventory/v1/inventory/replenishment/policies"),
-                new OrderFacadeTool(
-                        RestClient.builder(),
-                        "http://api-gateway",
-                        "/order/v1/orders/{orderId}",
-                        "/order/v1/orders/search?q={query}",
-                        "/order/v1/orders/purchase-orders",
-                        "/order/v1/orders/purchase-orders/{poId}",
-                        "/order/v1/orders/purchase-orders/summary"),
+                dateWindowFacadeTool,
+                glossaryFacadeTool,
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
                 null,
                 sharedOrchestrationSupport,
                 TOP_K);
@@ -145,6 +156,75 @@ final class TaggingDecisionSurfaces {
                 tags.aboutOrders(),
                 adminFastPath,
                 tags.compoundQuestion());
+    }
+
+    /**
+     * The decisions the consumers take when handed {@link QuestionTags#none()} (warm-up, a caller that
+     * never tagged): they must be exactly the {@code off} decisions. The compound split is read through
+     * {@code RerankedContentRetriever.splitSubQueries} with {@code none()} published on the request-scoped
+     * holder, the way the retriever would find it (in Wave 1 it reads no tag at all).
+     */
+    Decisions decideWithNone(String message) {
+        QuestionTags none = QuestionTags.none();
+        RequestScopedUserContext holder = new RequestScopedUserContext();
+        holder.recordTags(none);
+        try {
+            ToolSelectionEngine.ToolSelectionResult selection =
+                    toolSelectionEngine.selectRoleTools(ROLE, PERMISSION_CODES, message, none);
+            boolean adminFastPath = toolRegistryService
+                    .resolveCandidateSelection(new ToolSelectionContext(message, ROLE, "IDLE", PERMISSION_CODES), TOP_K)
+                    .adminFastPath();
+            // The keyword facades need a gated set to be offered at all: hand the engine one that
+            // names every facade, so the decision (not the gate) is what is compared.
+            ToolSelectionEngine.ToolSelectionResult gated =
+                    gatedEngine().selectRoleTools(ROLE, PERMISSION_CODES, message, none);
+            List<String> fallback = sharedOrchestrationSupport.toolNames(gated.fallbackTools());
+            boolean compound = RerankedContentRetriever.splitSubQueries(message, MAX_SUB_QUERIES)
+                            .size()
+                    >= 2;
+            return new Decisions(
+                    simpleChatFastPath().isSimpleChat(message, none),
+                    SimpleChatClassifier.followsPreviousTurn(message),
+                    selection.workflowState().name(),
+                    fallback.contains("DateWindowFacadeTool"),
+                    fallback.contains("ExaWebSearchTool"),
+                    fallback.contains("InventoryFacadeTool"),
+                    fallback.contains("OrderFacadeTool"),
+                    adminFastPath,
+                    compound);
+        } finally {
+            holder.clear();
+        }
+    }
+
+    /** An engine whose registry service gates every facade, so tag-added facades show in the result. */
+    private ToolSelectionEngine gatedEngine() {
+        ToolRegistryService gating = mock(ToolRegistryService.class);
+        when(gating.resolveCandidateSelection(any(ToolSelectionContext.class), anyInt()))
+                .thenReturn(new ToolRegistryService.CandidateSelection(
+                        List.of(),
+                        Set.of(
+                                "DateWindowFacadeTool",
+                                "ExaWebSearchTool",
+                                "GlossaryFacadeTool",
+                                "InventoryFacadeTool",
+                                "OrderFacadeTool"),
+                        false));
+        MasterAgentRegistry registry = mock(MasterAgentRegistry.class);
+        when(registry.resolveMasterTools()).thenReturn(List.of());
+        when(registry.resolveDomainTools(anyString())).thenReturn(List.of());
+        ToolSelectionEngine engine = new ToolSelectionEngine(
+                registry,
+                dateWindowFacadeTool,
+                glossaryFacadeTool,
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                gating,
+                sharedOrchestrationSupport,
+                TOP_K);
+        engine.setHeuristicTagger(heuristicTagger);
+        return engine;
     }
 
     /** The heuristic record alone, for asserting the tagger against the fixture directly. */

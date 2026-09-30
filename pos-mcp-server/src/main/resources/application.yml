@@ -158,6 +158,10 @@ mcp:
     # The message is cut at this many characters before it becomes the request state (tev1 reads
     # about 2,000 tokens); a cut message is still tagged and the cut is counted.
     max-state-chars: ${MCP_TAGGING_MAX_STATE_CHARS:4000}
+    # Whether the one-Noul-per-lexicon-entity questions are asked (44 questions, ~18 KB body, about 4.6k
+    # tokens) or only the 13 fixed ones (~8 KB, about 2k tokens). Off fits a small-context model (tev1
+    # reads about 2,000 tokens) during the section 6 bake-off, which decides the setting per model.
+    entity-questions: ${MCP_TAGGING_ENTITY_QUESTIONS:true}
   rag:
     table-name: mcp_document_embedding
     # G5.4 #1194 cutover complete + #1207 (V33): the embedding column is 1024-dim bge-m3; the 768
