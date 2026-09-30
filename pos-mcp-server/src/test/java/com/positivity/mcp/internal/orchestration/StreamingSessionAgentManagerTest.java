@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.config.ScopeGraphProperties;
 import com.positivity.mcp.internal.domain.EvalTurnTrace;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
@@ -41,6 +42,9 @@ import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.repository.EvalTurnTraceRepository;
+import com.positivity.mcp.internal.scopegraph.ScopeResolver;
+import com.positivity.mcp.internal.scopegraph.ScopeResolverFixtures;
+import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import com.positivity.mcp.internal.service.AlphaEvalTurnTraceRecorder;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
@@ -48,9 +52,11 @@ import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.RolePromptResolver;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import com.positivity.mcp.internal.service.ToolRegistryService;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.tenancy.BoundTenant;
 import com.positivity.tenancy.TenantContext;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Member;
 import java.time.Clock;
 import java.time.Instant;
@@ -981,5 +987,313 @@ class StreamingSessionAgentManagerTest {
                 100,
                 0.6,
                 0.55);
+    }
+
+    // ── ADR-0069 §5 / §9: transport parity with the blocking manager ────────
+
+    private static final String SCOPE_MESSAGE = "is the work order WO-20391 in stock at the store?";
+
+    private static ScopeSet scopeOf(String message) {
+        return ScopeResolverFixtures.resolver(ScopeResolverFixtures.shadow(60), new SimpleMeterRegistry())
+                .resolve(message, Set.of("AUTHENTICATED", ScopeResolverFixtures.WORKORDER_VIEW), WorkflowState.IDLE);
+    }
+
+    private StreamingSessionAgentManager scopeManager(
+            ToolSelectionEngine selectionEngine,
+            SharedOrchestrationSupport support,
+            RequestScopedUserContext requestContext,
+            ToolInvocationRecorder recorder) {
+        return new StreamingSessionAgentManager(
+                streamingChatModel,
+                toolRegistry,
+                support,
+                selectionEngine,
+                scopedContentRetrieverFactory,
+                rolePromptResolver,
+                simpleChatFastPath,
+                null, // toolExecutionAuditLogger
+                telemetryEmitter,
+                null, // openApiToolProvider
+                requestContext,
+                null, // observationRegistry
+                null, // roleDefaultPermissionsClient
+                recorder,
+                workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true,
+                FIXED_CLOCK,
+                30,
+                500,
+                50,
+                100,
+                0.6,
+                0.55);
+    }
+
+    /** What the agent saw in the request-scoped holder while it ran, and on which thread. */
+    private record SeenByAgent(Optional<ScopeSet> scope, Optional<CurrentUserContext> caller, Thread thread) {}
+
+    /** Seeds {@code target}'s cache with an agent that notes what is published while it assembles its stream. */
+    private java.util.concurrent.atomic.AtomicReference<SeenByAgent> seedObservingAgent(
+            StreamingSessionAgentManager target,
+            RequestScopedUserContext requestContext,
+            String role,
+            Flux<String> tokens) {
+        java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        StreamingPosAssistant agent = (memoryId, userMessage, userContext) -> {
+            seen.set(new SeenByAgent(requestContext.currentScope(), requestContext.current(), Thread.currentThread()));
+            return tokens;
+        };
+        List<Object> selectedTools = sharedOrchestrationSupport.mergeTools(List.of(), List.of());
+        String key = (String) ReflectionTestUtils.invokeMethod(
+                target, "agentCacheKey", role, sharedOrchestrationSupport.toolCacheKey(selectedTools), null);
+        @SuppressWarnings("unchecked")
+        Cache<String, StreamingPosAssistant> cache =
+                (Cache<String, StreamingPosAssistant>) ReflectionTestUtils.getField(target, "roleAgentCache");
+        assertThat(cache).isNotNull();
+        cache.put(key, agent);
+        return seen;
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069: a streamed turn records its scope with the selection stages, publishes it next to the caller on the subscribing thread, and clears it there")
+    void streamChat_shadow_recordsPublishesAndClearsTheScopeAcrossTheThreadHop() throws Exception {
+        ScopeSet scope = scopeOf(SCOPE_MESSAGE);
+        when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
+                .thenReturn(
+                        new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.IDLE, scope));
+        ToolInvocationRecorder recorder = recorderRunningBoundActions();
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        StreamingSessionAgentManager scoped =
+                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, recorder);
+        scoped.setScopeGraphProperties(ScopeResolverFixtures.shadow(60));
+        java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
+                seedObservingAgent(scoped, requestContext, "ROLE_CASHIER", Flux.just("42 ", "open"));
+        CurrentUserContext caller = userContext("user-1", USER_ID, "ROLE_CASHIER");
+        // One dedicated thread stands in for the Reactor thread that subscribes the stream, so the
+        // same thread can be asked afterwards what it still holds.
+        java.util.concurrent.ExecutorService subscriber = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            Flux<String> stream = scoped.streamChat(caller, SCOPE_MESSAGE);
+
+            // Assembling the stream on the request thread publishes nothing there.
+            assertThat(requestContext.currentScope()).isEmpty();
+            assertThat(requestContext.current()).isEmpty();
+            // Recorded on the request thread, where the other selection stages are recorded.
+            org.mockito.InOrder stages = org.mockito.Mockito.inOrder(recorder);
+            stages.verify(recorder).recordSelectedTools(any());
+            stages.verify(recorder).recordScope(scope);
+
+            List<String> tokens = stream.subscribeOn(reactor.core.scheduler.Schedulers.fromExecutor(subscriber))
+                    .collectList()
+                    .block(java.time.Duration.ofSeconds(5));
+
+            assertThat(tokens).containsExactly("42 ", "open");
+            // The scope crossed to the subscribing thread and was published next to the caller.
+            assertThat(seen.get().thread()).isNotSameAs(Thread.currentThread());
+            assertThat(seen.get().scope()).containsSame(scope);
+            assertThat(seen.get().caller()).contains(caller);
+            // Cleared with the caller, on that same thread, so a pooled thread cannot carry it on.
+            assertThat(subscriber
+                            .submit(() -> requestContext.currentScope().isPresent()
+                                    || requestContext.current().isPresent())
+                            .get(5, java.util.concurrent.TimeUnit.SECONDS))
+                    .isFalse();
+            assertThat(requestContext.currentScope()).isEmpty();
+        } finally {
+            subscriber.shutdownNow();
+        }
+
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter, timeout(5_000)).emit(event.capture());
+        assertThat(event.getValue().schemaVersion()).isEqualTo(2);
+        assertThat(event.getValue().scopeMode()).isEqualTo("SHADOW");
+        assertThat(event.getValue().scopeGraphHash()).isEqualTo(scope.graphHash());
+        assertThat(event.getValue().scopeConfidence()).isEqualTo("HIGH");
+        assertThat(event.getValue().scopeEntityCount())
+                .isEqualTo(scope.entities().size());
+        assertThat(event.getValue().scopeToolCount()).isEqualTo(scope.tools().size());
+        assertThat(event.getValue().scopeDocCount())
+                .isEqualTo(scope.documentIds().size());
+        assertThat(event.getValue().scopeAddedToolCount()).isZero();
+        assertThat(event.getValue().scopeRagFilterApplied()).isFalse();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069: in mode off (no scope on the selection) a streamed turn records, publishes and reports none")
+    void streamChat_off_recordsAndPublishesNoScope() {
+        ToolInvocationRecorder recorder = recorderRunningBoundActions();
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        StreamingSessionAgentManager off =
+                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, recorder);
+        off.setScopeGraphProperties(ScopeGraphProperties.off());
+        java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
+                seedObservingAgent(off, requestContext, "ROLE_CASHIER", Flux.just("ok"));
+
+        off.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), SCOPE_MESSAGE)
+                .collectList()
+                .block(java.time.Duration.ofSeconds(5));
+
+        assertThat(seen.get().caller()).isPresent();
+        assertThat(seen.get().scope()).isEmpty();
+        verify(recorder, never()).recordScope(any());
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter, timeout(5_000)).emit(event.capture());
+        assertThat(event.getValue().scopeMode()).isNull();
+        assertThat(event.getValue().scopeGraphHash()).isNull();
+        assertThat(event.getValue().scopeConfidence()).isNull();
+        assertThat(event.getValue().scopeEntityCount()).isNull();
+    }
+
+    @Test
+    @DisplayName("ADR-0069: a streamed turn that fails still clears the scope, and its ERROR telemetry carries none")
+    void streamChat_failure_clearsTheScope() {
+        ScopeSet scope = scopeOf(SCOPE_MESSAGE);
+        when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
+                .thenReturn(
+                        new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.IDLE, scope));
+        ToolInvocationRecorder recorder = recorderRunningBoundActions();
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        StreamingSessionAgentManager scoped =
+                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, recorder);
+        java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen = seedObservingAgent(
+                scoped, requestContext, "ROLE_CASHIER", Flux.error(new IllegalStateException("model unavailable")));
+
+        assertThatThrownBy(() -> scoped.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), SCOPE_MESSAGE)
+                        .collectList()
+                        .block(java.time.Duration.ofSeconds(5)))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(seen.get().scope()).containsSame(scope);
+        assertThat(requestContext.currentScope()).isEmpty();
+        assertThat(requestContext.current()).isEmpty();
+        verify(recorder).recordScope(scope);
+        verify(recorder, timeout(5_000)).failTurn(any());
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter, timeout(5_000)).emit(event.capture());
+        assertThat(event.getValue().outcome().status()).isEqualTo("ERROR");
+        assertThat(event.getValue().scopeMode()).isNull();
+    }
+
+    @Test
+    @DisplayName("ADR-0069: the streamed simple-chat fast path resolves, records and publishes no scope")
+    void streamChat_simpleChat_resolvesNoScope() {
+        when(streamingChatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenReturn(Flux.just(streamedChunk("Hi")));
+        ToolInvocationRecorder recorder = recorderRunningBoundActions();
+        RequestScopedUserContext requestContext = spy(new RequestScopedUserContext());
+        StreamingSessionAgentManager scoped =
+                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, recorder);
+        scoped.setScopeGraphProperties(ScopeResolverFixtures.shadow(60));
+        clearInvocations(toolSelectionEngine);
+
+        scoped.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "hello")
+                .collectList()
+                .block(java.time.Duration.ofSeconds(5));
+
+        verify(toolSelectionEngine, never()).selectRoleTools(any(), any(), any());
+        verify(recorder, never()).recordScope(any());
+        verify(requestContext, never()).recordScope(any());
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter, timeout(5_000)).emit(event.capture());
+        assertThat(event.getValue().scopeMode()).isNull();
+    }
+
+    /** One full streamed agent turn with a real selection engine; returns everything a scope could have changed. */
+    private List<Object> observableTurn(ScopeResolver resolver) {
+        clearInvocations(streamingChatModel, scopedContentRetrieverFactory, rolePromptResolver, toolRegistryService);
+        SharedOrchestrationSupport fixedClockSupport = new SharedOrchestrationSupport(FIXED_CLOCK);
+        ToolSelectionEngine engine = new ToolSelectionEngine(
+                toolRegistry,
+                dateWindowFacadeTool,
+                new GlossaryFacadeTool(),
+                exaWebSearchTool,
+                inventoryFacadeTool,
+                orderFacadeTool,
+                toolRegistryService,
+                fixedClockSupport,
+                3);
+        engine.setScopeResolver(resolver);
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        StreamingSessionAgentManager target = scopeManager(engine, fixedClockSupport, requestContext, null);
+        clearInvocations(scopedContentRetrieverFactory, rolePromptResolver, toolRegistryService);
+
+        List<String> tokens = target.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), SCOPE_MESSAGE)
+                .collectList()
+                .block(java.time.Duration.ofSeconds(5));
+
+        ArgumentCaptor<org.springframework.ai.chat.prompt.Prompt> prompts =
+                ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
+        verify(streamingChatModel, atLeastOnce()).stream(prompts.capture());
+        ArgumentCaptor<ToolSelectionContext> ranking = ArgumentCaptor.forClass(ToolSelectionContext.class);
+        verify(toolRegistryService).resolveCandidateTools(ranking.capture(), eq(3));
+        List<Object> observed = new ArrayList<>();
+        observed.add(tokens);
+        observed.add(roleAgentCacheKeys(target).stream().sorted().toList());
+        observed.add(ranking.getValue());
+        // The assembled prompt: every message the model received, and the tools it was offered.
+        observed.add(prompts.getAllValues().stream()
+                .map(org.springframework.ai.chat.prompt.Prompt::getContents)
+                .toList());
+        observed.add(prompts.getAllValues().stream()
+                .map(prompt -> prompt.getInstructions().stream()
+                        .map(message -> message.getMessageType() + ":" + message.getText())
+                        .toList())
+                .toList());
+        observed.add(prompts.getAllValues().stream()
+                .map(prompt -> prompt.getOptions()
+                                instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+                        ? options.getToolCallbacks().stream()
+                                .map(callback -> callback.getToolDefinition().name() + "|"
+                                        + callback.getToolDefinition().inputSchema())
+                                .toList()
+                        : List.of())
+                .toList());
+        // The retrievers: which scopes, sizes and floors they were built with, and the prompt layers.
+        observed.add(org.mockito.Mockito.mockingDetails(scopedContentRetrieverFactory).getInvocations().stream()
+                .map(Object::toString)
+                .toList());
+        observed.add(org.mockito.Mockito.mockingDetails(rolePromptResolver).getInvocations().stream()
+                .map(Object::toString)
+                .toList());
+        return observed;
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0069: in shadow, a streamed turn's tool selection, retrievers and assembled prompt are exactly what they are in off")
+    void streamChat_shadow_isIdenticalToOff() {
+        when(((org.springframework.ai.chat.model.ChatModel) streamingChatModel).getOptions())
+                .thenReturn(org.springframework.ai.ollama.api.OllamaChatOptions.builder()
+                        .model("test-model")
+                        .build());
+        when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
+                .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool")))
+                .thenAnswer(invocation -> new ArrayList<>(List.of(inventoryFacadeTool)));
+        when(streamingChatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenAnswer(invocation -> Flux.just(streamedChunk("Stock found")));
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+
+        List<Object> off = observableTurn(null);
+        List<Object> shadow = observableTurn(ScopeResolverFixtures.resolver(ScopeResolverFixtures.shadow(60), meters));
+
+        // The scope really was resolved in the second turn, from a message that names an entity.
+        assertThat(meters.get("mcp.scope.resolved")
+                        .tag("confidence", "HIGH")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+        // The comparison is over real content: prompts were captured, tools offered, retrievers built.
+        assertThat(off.get(3).toString()).contains(SCOPE_MESSAGE);
+        assertThat(off.get(5).toString()).contains("checkStock");
+        assertThat(off.get(6).toString()).contains("scopedContentRetrieverFactory.create");
+        assertThat(shadow).isEqualTo(off);
     }
 }

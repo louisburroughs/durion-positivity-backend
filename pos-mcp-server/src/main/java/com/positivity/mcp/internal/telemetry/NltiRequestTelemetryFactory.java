@@ -62,6 +62,26 @@ public final class NltiRequestTelemetryFactory {
             @Nullable String tierModel,
             @Nullable String routerModel) {}
 
+    /**
+     * The ADR-0069 scope resolution of one chat request (schema version 2). Counts, a hash and enum
+     * names only: no entity key, tool name or {@code document_id}, and never anything the user typed.
+     *
+     * @param mode {@code SHADOW} or {@code ENFORCE}
+     * @param graphHash the content hash of the graph snapshot the scope was resolved against
+     * @param confidence {@code NONE}, {@code LOW} or {@code HIGH}
+     * @param addedToolCount tools a consumer added to the request because of the scope
+     * @param ragFilterApplied whether the scope narrowed this request's retrieval
+     */
+    public record ScopeSignal(
+            @NonNull String mode,
+            @NonNull String graphHash,
+            @NonNull String confidence,
+            int entityCount,
+            int toolCount,
+            int docCount,
+            int addedToolCount,
+            boolean ragFilterApplied) {}
+
     /** As the full overload, without Gate 4 tier routing or Gate 6 write signals. */
     public static @NonNull NltiRequestTelemetry forChatRequest(
             @NonNull String correlationId,
@@ -120,6 +140,47 @@ public final class NltiRequestTelemetryFactory {
             @Nullable String errorCode,
             @Nullable TierRouting tierRouting,
             boolean writeCapableToolsPresent) {
+        return forChatRequest(
+                correlationId,
+                timestamp,
+                primaryRole,
+                permissionCodeCount,
+                selectedToolNames,
+                discoveredOpenapiTools,
+                promptLayers,
+                simpleChat,
+                simpleChatRule,
+                workflowState,
+                totalMs,
+                status,
+                errorCode,
+                tierRouting,
+                writeCapableToolsPresent,
+                null);
+    }
+
+    /**
+     * As above, with the request's ADR-0069 scope resolution. {@code scope} is null whenever no scope
+     * was resolved (mode {@code off}, simple chat, a failed request), and the eight {@code scope*}
+     * fields are then absent from the event rather than zero-filled.
+     */
+    public static @NonNull NltiRequestTelemetry forChatRequest(
+            @NonNull String correlationId,
+            @NonNull String timestamp,
+            @NonNull String primaryRole,
+            int permissionCodeCount,
+            @NonNull List<String> selectedToolNames,
+            @NonNull List<String> discoveredOpenapiTools,
+            @NonNull List<String> promptLayers,
+            boolean simpleChat,
+            @Nullable String simpleChatRule,
+            @Nullable String workflowState,
+            long totalMs,
+            @NonNull String status,
+            @Nullable String errorCode,
+            @Nullable TierRouting tierRouting,
+            boolean writeCapableToolsPresent,
+            @Nullable ScopeSignal scope) {
 
         Actor actor = new Actor(primaryRole, permissionCodeCount);
 
@@ -190,7 +251,15 @@ public final class NltiRequestTelemetryFactory {
                 write,
                 null,
                 latency,
-                outcome);
+                outcome,
+                scope == null ? null : scope.mode(),
+                scope == null ? null : scope.graphHash(),
+                scope == null ? null : scope.confidence(),
+                scope == null ? null : scope.entityCount(),
+                scope == null ? null : scope.toolCount(),
+                scope == null ? null : scope.docCount(),
+                scope == null ? null : scope.addedToolCount(),
+                scope == null ? null : scope.ragFilterApplied());
     }
 
     /**
@@ -246,7 +315,16 @@ public final class NltiRequestTelemetryFactory {
                         : new Write(write.isWrite(), write.confirmationOutcome(), write.planArgsProvenance()),
                 null,
                 totalMs == null ? null : new Latency(null, null, null, totalMs),
-                new Outcome(status, errorCode));
+                new Outcome(status, errorCode),
+                // This path resolves no scope (ADR-0069): the scope fields stay absent.
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     private static @Nullable PromptLayer toPromptLayer(@NonNull String name) {

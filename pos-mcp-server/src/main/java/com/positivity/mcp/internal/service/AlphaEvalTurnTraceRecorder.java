@@ -1,19 +1,27 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.config.ScopeGraphProperties;
 import com.positivity.mcp.internal.domain.EvalTurnTrace;
+import com.positivity.mcp.internal.domain.ScopeTrace;
 import com.positivity.mcp.internal.repository.EvalTurnTraceRepository;
+import com.positivity.mcp.internal.scopegraph.ScopeMetrics;
+import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
@@ -42,15 +50,35 @@ public class AlphaEvalTurnTraceRecorder {
      */
     private final ThreadLocal<TraceBuilder> activeTurn = new ThreadLocal<>();
 
+    /** ADR-0069: the rollout mode stamped on a recorded scope; {@code off} when not wired. */
+    private final ScopeGraphProperties scopeGraphProperties;
+
+    /** ADR-0069: the in-scope share meters, fed when a turn completes; absent when not wired. */
+    private final @Nullable ScopeMetrics scopeMetrics;
+
+    /** The pre-ADR-0069 construction: a recorded scope is traced, nothing is measured. */
+    public AlphaEvalTurnTraceRecorder(
+            @NonNull EvalTurnTraceRepository repository,
+            @NonNull Clock clock,
+            @NonNull Duration retention,
+            @NonNull String buildId) {
+        this(repository, clock, retention, buildId, null, null);
+    }
+
+    @Autowired
     public AlphaEvalTurnTraceRecorder(
             @NonNull EvalTurnTraceRepository repository,
             @NonNull Clock clock,
             @Value("${mcp.eval.turn-trace.retention:24h}") @NonNull Duration retention,
-            @Value("${mcp.build.id:unknown}") @NonNull String buildId) {
+            @Value("${mcp.build.id:unknown}") @NonNull String buildId,
+            @Nullable ScopeGraphProperties scopeGraphProperties,
+            @Nullable ScopeMetrics scopeMetrics) {
         this.repository = repository;
         this.clock = clock;
         this.retention = retention;
         this.buildId = buildId;
+        this.scopeGraphProperties = scopeGraphProperties == null ? ScopeGraphProperties.off() : scopeGraphProperties;
+        this.scopeMetrics = scopeMetrics;
     }
 
     public void begin(@NonNull CurrentUserContext user, @NonNull String userMessage) {
@@ -92,6 +120,35 @@ public class AlphaEvalTurnTraceRecorder {
             int elapsedMs) {
         current(builder -> builder.toolCalls.add(new EvalTurnTrace.ToolCallTrace(
                 builder.toolCalls.size() + 1, toolName, arguments, result, error, elapsedMs)));
+    }
+
+    /**
+     * ADR-0069 §9: the {@code mcp_tool.name} a recorded tool call resolved to. A facade callback is
+     * named after its {@code @Tool} method while the catalog, and with it the scope, knows the facade
+     * by its class name, so the in-scope share is computed from these names and not from the names
+     * in the trace's tool calls. A call to a tool that was never offered has no catalog name and is
+     * in no scope.
+     */
+    public void recordCalledCatalogTool(@NonNull String catalogToolName) {
+        current(builder -> builder.calledCatalogTools.add(catalogToolName));
+    }
+
+    /** ADR-0069 §9: the scope resolved for this turn. Not called in mode {@code off} or for simple chat. */
+    public void recordScope(@NonNull ScopeSet scope) {
+        current(builder -> builder.scope = scope);
+    }
+
+    /**
+     * ADR-0069 §9: the {@code document_id}s of the final top-K a retrieval handed to the model.
+     * A turn may retrieve more than once; the documents accumulate, each counted once.
+     */
+    public void recordRetrievedDocuments(@NonNull Collection<String> documentIds) {
+        current(builder -> {
+            if (builder.retrievedDocuments == null) {
+                builder.retrievedDocuments = new LinkedHashSet<>();
+            }
+            builder.retrievedDocuments.addAll(documentIds);
+        });
     }
 
     /**
@@ -143,11 +200,26 @@ public class AlphaEvalTurnTraceRecorder {
 
     private void finishLocked(@NonNull TraceBuilder builder, @Nullable String response, @Nullable String error) {
         try {
-            repository.save(builder.build(clock.instant(), retention, response, error));
+            EvalTurnTrace trace = builder.build(clock.instant(), retention, response, error, scopeGraphProperties);
+            repository.save(trace);
+            measureScope(trace.scope());
         } catch (RuntimeException exception) {
             LOGGER.warn("Failed to persist alpha evaluation turn trace", exception);
         } finally {
             activeTurn.remove();
+        }
+    }
+
+    /** The in-scope shares are counted only for a turn whose trace was written, so the two agree. */
+    private void measureScope(@Nullable ScopeTrace scope) {
+        if (scope == null || scopeMetrics == null) {
+            return;
+        }
+        if (scope.calledTools() != null && scope.calledToolsInScope() != null) {
+            scopeMetrics.recordCalledTools(scope.calledToolsInScope(), scope.calledTools());
+        }
+        if (scope.retrievedDocs() != null && scope.retrievedDocsInScope() != null) {
+            scopeMetrics.recordRetrievedDocuments(scope.retrievedDocsInScope(), scope.retrievedDocs());
         }
     }
 
@@ -232,6 +304,12 @@ public class AlphaEvalTurnTraceRecorder {
         private String systemPrompt;
         private List<EvalTurnTrace.ToolDefinitionTrace> offeredTools = List.of();
         private final List<EvalTurnTrace.ToolCallTrace> toolCalls = new ArrayList<>();
+        /** The {@code mcp_tool.name} of each executed call; a call to an unknown tool adds nothing. */
+        private final List<String> calledCatalogTools = new ArrayList<>();
+
+        private ScopeSet scope;
+        /** Null until a retrieval was observed for the turn. */
+        private Set<String> retrievedDocuments;
 
         private final String buildId;
 
@@ -243,7 +321,11 @@ public class AlphaEvalTurnTraceRecorder {
         }
 
         private EvalTurnTrace build(
-                Instant completedAt, Duration retention, @Nullable String response, @Nullable String error) {
+                Instant completedAt,
+                Duration retention,
+                @Nullable String response,
+                @Nullable String error,
+                ScopeGraphProperties scopeGraphProperties) {
             return new EvalTurnTrace(
                     UUIDv7Generator.generate(),
                     startedAt,
@@ -266,7 +348,49 @@ public class AlphaEvalTurnTraceRecorder {
                     buildId,
                     answerSource,
                     conversationId,
-                    messageId);
+                    messageId,
+                    scopeTrace(scopeGraphProperties));
+        }
+
+        /** ADR-0069 §9 / spec §2.11: the recorded scope plus the in-scope shares, known only now. */
+        private @Nullable ScopeTrace scopeTrace(ScopeGraphProperties scopeGraphProperties) {
+            if (scope == null) {
+                return null;
+            }
+            Set<String> scopeTools = scope.toolNames();
+            int calledInScope = (int)
+                    calledCatalogTools.stream().filter(scopeTools::contains).count();
+            Integer retrieved = retrievedDocuments == null ? null : retrievedDocuments.size();
+            Integer retrievedInScope = retrievedDocuments == null
+                    ? null
+                    : (int) retrievedDocuments.stream()
+                            .filter(scope.documentIds()::contains)
+                            .count();
+            return new ScopeTrace(
+                    scopeGraphProperties.mode().name(),
+                    scopeGraphProperties.mode() == ScopeGraphProperties.Mode.ENFORCE
+                            ? scopeGraphProperties.enforce().stream()
+                                    .map(Enum::name)
+                                    .toList()
+                            : List.of(),
+                    scope.graphHash(),
+                    scope.graphBuiltAt(),
+                    scope.confidence().name(),
+                    scope.seeds().stream()
+                            .map(seed -> new ScopeTrace.SeedTrace(
+                                    seed.entity(), seed.kind().name()))
+                            .toList(),
+                    scope.seeds().size() + scope.reachedEntities().size(),
+                    scope.tools().size(),
+                    scope.documentIds().size(),
+                    scope.screenKeys().size(),
+                    // No consumer acts on the scope yet: nothing is added and retrieval is not narrowed.
+                    0,
+                    false,
+                    calledInScope,
+                    toolCalls.size(),
+                    retrievedInScope,
+                    retrieved);
         }
     }
 }

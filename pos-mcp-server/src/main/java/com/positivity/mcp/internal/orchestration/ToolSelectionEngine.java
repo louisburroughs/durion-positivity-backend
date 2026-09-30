@@ -9,6 +9,8 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.scopegraph.ScopeResolver;
+import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,6 +21,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -148,6 +151,10 @@ public class ToolSelectionEngine {
 
     private final int candidateToolLimit;
 
+    /** ADR-0069: absent in hand-built constructions and in contexts without the scope-graph beans. */
+    @Nullable
+    private volatile ScopeResolver scopeResolver;
+
     public ToolSelectionEngine(
             @NonNull MasterAgentRegistry toolRegistry,
             @NonNull DateWindowFacadeTool dateWindowFacadeTool,
@@ -185,6 +192,10 @@ public class ToolSelectionEngine {
             @NonNull Set<String> permissionCodes,
             @NonNull String message,
             @NonNull WorkflowState workflowState) {
+        // ADR-0069 §5: the scope is resolved here, once the workflow state is known and before tool
+        // ranking, because this is the one selection entry point both session managers call. Nothing
+        // below reads it in this wave: selection is what it is without a scope.
+        ScopeSet scope = resolveScope(message, permissionCodes, workflowState);
         List<Object> roleTools = roleToolsForMessage(role, permissionCodes, message, workflowState);
         List<Object> fallbackTools = sharedOrchestrationSupport.mergeTools(
                 toolRegistry.resolveMasterTools(), fallbackToolsForMessage(message));
@@ -198,7 +209,34 @@ public class ToolSelectionEngine {
                     sharedOrchestrationSupport.toolNames(fallbackTools),
                     sharedOrchestrationSupport.preview(message));
         }
-        return new ToolSelectionResult(roleTools, fallbackTools, workflowState);
+        return new ToolSelectionResult(roleTools, fallbackTools, workflowState, scope);
+    }
+
+    /**
+     * ADR-0069 §9: wires the scope resolver. Setter-injected and optional so the many hand-built
+     * constructions of this class, and contexts without the scope-graph beans, keep resolving nothing.
+     */
+    @Autowired(required = false)
+    public void setScopeResolver(@Nullable ScopeResolver scopeResolver) {
+        this.scopeResolver = scopeResolver;
+    }
+
+    /** Null when no resolver is wired or the mode is {@code off}: the turn has no scope at all. */
+    private @Nullable ScopeSet resolveScope(
+            @NonNull String message, @NonNull Set<String> permissionCodes, @NonNull WorkflowState workflowState) {
+        ScopeResolver resolver = scopeResolver;
+        if (resolver == null || !resolver.enabled()) {
+            return null;
+        }
+        try {
+            return resolver.resolve(message, permissionCodes, workflowState);
+        } catch (RuntimeException exception) {
+            // The resolver already swallows its own failures; this guards a resolver that does not.
+            LOGGER.warn(
+                    "Scope resolution threw into tool selection; continuing with no scope: {}",
+                    exception.getClass().getSimpleName());
+            return null;
+        }
     }
 
     /**
@@ -512,14 +550,28 @@ public class ToolSelectionEngine {
         return Math.clamp((rankScore * 0.7) + (Math.clamp(priority, 0.0, 1.0) * 0.3), 0.0, 1.0);
     }
 
+    /**
+     * @param scope ADR-0069 §5: this turn's resolved scope, or null when none was resolved (mode
+     *     {@code off}, or no resolver wired). Recorded and published by the session managers; no
+     *     consumer acts on it yet.
+     */
     public record ToolSelectionResult(
             @NonNull List<Object> roleTools,
             @NonNull List<Object> fallbackTools,
-            @NonNull WorkflowState workflowState) {
+            @NonNull WorkflowState workflowState,
+            @Nullable ScopeSet scope) {
+
+        /** The pre-ADR-0069 shape: no scope. */
+        public ToolSelectionResult(
+                @NonNull List<Object> roleTools,
+                @NonNull List<Object> fallbackTools,
+                @NonNull WorkflowState workflowState) {
+            this(roleTools, fallbackTools, workflowState, null);
+        }
 
         /** Backward-compatible constructor defaulting to {@link WorkflowState#IDLE}. */
         public ToolSelectionResult(@NonNull List<Object> roleTools, @NonNull List<Object> fallbackTools) {
-            this(roleTools, fallbackTools, WorkflowState.IDLE);
+            this(roleTools, fallbackTools, WorkflowState.IDLE, null);
         }
     }
 }

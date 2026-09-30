@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.client.RoleDefaultPermissionsClient;
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.config.ScopeGraphProperties;
 import com.positivity.mcp.internal.config.StreamingAgentOrchestrationService;
 import com.positivity.mcp.internal.config.StreamingSessionAgentCacheMetrics;
 import com.positivity.mcp.internal.config.TieredChatModelResolver;
@@ -16,6 +17,7 @@ import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.retrieval.PermissionAwareMetadataFilter;
+import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import com.positivity.mcp.internal.security.PermissionCodes;
 import com.positivity.mcp.internal.service.NltiRouter;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
@@ -52,6 +54,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -124,6 +127,9 @@ public class StreamingSessionAgentManager
     private final int memoryMaxMessages;
     private final int rateLimitPerSession;
 
+    /** ADR-0069: the scope-graph rollout switches; absent in hand-built constructions. */
+    private volatile @Nullable ScopeGraphProperties scopeGraphProperties;
+
     public StreamingSessionAgentManager(
             @Qualifier("streamingChatModel") @NonNull StreamingChatModel streamingChatModel,
             @NonNull MasterAgentRegistry toolRegistry,
@@ -187,6 +193,16 @@ public class StreamingSessionAgentManager
                 .expireAfterWrite(Duration.ofMinutes(cacheTtlMinutes))
                 .build();
         prebuildRoleAgents();
+    }
+
+    /**
+     * ADR-0069 §9: the scope-graph rollout switches, read only to stamp the mode on telemetry.
+     * Setter-injected and optional so existing constructions keep working; nothing in this class
+     * changes behaviour on them.
+     */
+    @Autowired(required = false)
+    public void setScopeGraphProperties(@Nullable ScopeGraphProperties scopeGraphProperties) {
+        this.scopeGraphProperties = scopeGraphProperties;
     }
 
     @Override
@@ -299,6 +315,10 @@ public class StreamingSessionAgentManager
             }
             toolInvocationRecorder.recordWorkflowState(selection.workflowState().name());
             toolInvocationRecorder.recordSelectedTools(toolNames);
+            // ADR-0069 §9: the same stage, at the same point, as the blocking manager.
+            if (selection.scope() != null) {
+                toolInvocationRecorder.recordScope(selection.scope());
+            }
         }
         String ragScope = toolRegistry.resolveRagScopeForTools(allTools);
         AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope, false);
@@ -319,6 +339,10 @@ public class StreamingSessionAgentManager
         // thread, so the handle travels explicitly — bound inside streamTokens for the work, and
         // re-bound in the completion callbacks for the write.
         Object turnHandle = toolInvocationRecorder == null ? null : toolInvocationRecorder.currentTurnHandle();
+        // ADR-0069 §5: resolved on the request thread, but the agent runs where the Flux is
+        // subscribed. The scope travels the way the caller and the Authorization header do: captured
+        // here, handed to streamTokens, and published there next to the caller.
+        ScopeSet scope = selection.scope();
         StringBuilder streamedText = new StringBuilder();
         // ADR-0062 plan WS6: only the request thread carries the tenant; the Flux is subscribed and
         // completes on Reactor threads, so every callback that writes tenant-scoped data (the audit
@@ -333,6 +357,7 @@ public class StreamingSessionAgentManager
                                         userContext,
                                         currentUserContext,
                                         authorizationHeader,
+                                        scope,
                                         writeCapableToolsPresent,
                                         turnHandle,
                                         emitter))),
@@ -362,7 +387,8 @@ public class StreamingSessionAgentManager
                             null,
                             false,
                             tierRouting,
-                            writeCapable);
+                            writeCapable,
+                            scope);
                 }))
                 .doOnError(exception -> TenantContext.runAs(tenantId, () -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -392,7 +418,8 @@ public class StreamingSessionAgentManager
                             exception.getClass().getSimpleName(),
                             false,
                             tierRouting,
-                            writeCapableToolsPresent.get());
+                            writeCapableToolsPresent.get(),
+                            null);
                 }));
         return streamed;
     }
@@ -458,7 +485,9 @@ public class StreamingSessionAgentManager
                             null,
                             true,
                             null,
-                            false);
+                            false,
+                            // The fast path resolves no scope (ADR-0069).
+                            null);
                 }))
                 .doOnError(exception -> TenantContext.runAs(tenantId, () -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -487,7 +516,9 @@ public class StreamingSessionAgentManager
                             exception.getClass().getSimpleName(),
                             true,
                             null,
-                            false);
+                            false,
+                            // The fast path resolves no scope (ADR-0069).
+                            null);
                 }));
     }
 
@@ -595,8 +626,11 @@ public class StreamingSessionAgentManager
         QueryDocumentRetriever permissionFilteredRetriever = permissionFiltered(hybridRetriever);
         QueryDocumentRetriever rerankedRetriever =
                 new RerankedContentRetriever(permissionFilteredRetriever, TIER2_FINAL_TOP_K);
-        QueryDocumentRetriever resilientContentRetriever =
-                new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
+        // ADR-0069 §9: observes the final top-K for the scope trace and returns it untouched; a plain
+        // call-through unless a scope was published for the request.
+        QueryDocumentRetriever resilientContentRetriever = new ResilientContentRetriever(
+                new ScopeRetrievalObserver(rerankedRetriever, requestScopedUserContext, toolInvocationRecorder),
+                "tier2-hybrid-reranked-retriever");
 
         // #1193 cache safety: the WRITE-GATE layer is applied per request (the supplier reads the
         // request-scoped write-capability signal, resolved the same way tools are), so a cached
@@ -718,6 +752,7 @@ public class StreamingSessionAgentManager
             @NonNull String userContext,
             @NonNull CurrentUserContext currentUserContext,
             @Nullable String authorizationHeader,
+            @Nullable ScopeSet scope,
             @NonNull AtomicBoolean writeCapableToolsPresent,
             @Nullable Object turnHandle,
             @NonNull FluxSink<String> emitter) {
@@ -735,6 +770,7 @@ public class StreamingSessionAgentManager
                             userContext,
                             currentUserContext,
                             authorizationHeader,
+                            scope,
                             writeCapableToolsPresent,
                             emitter));
             return;
@@ -746,6 +782,7 @@ public class StreamingSessionAgentManager
                 userContext,
                 currentUserContext,
                 authorizationHeader,
+                scope,
                 writeCapableToolsPresent,
                 emitter);
     }
@@ -757,6 +794,7 @@ public class StreamingSessionAgentManager
             @NonNull String userContext,
             @NonNull CurrentUserContext currentUserContext,
             @Nullable String authorizationHeader,
+            @Nullable ScopeSet scope,
             @NonNull AtomicBoolean writeCapableToolsPresent,
             @NonNull FluxSink<String> emitter) {
         // Publish the caller for OpenApiToolProvider.provideTools, which the tool callback resolver invokes
@@ -769,6 +807,11 @@ public class StreamingSessionAgentManager
             // wording from here rather than the model's normalised copy, and the streaming path
             // needs it for the same reason the blocking one does.
             requestScopedUserContext.recordUserMessage(message);
+            // ADR-0069 §5: published next to the caller, for the same window, and cleared by the same
+            // clear() in the finally below.
+            if (scope != null) {
+                requestScopedUserContext.recordScope(scope);
+            }
         }
         try {
             // agent.chat resolves this request's tools synchronously at Flux-assembly time, so the
@@ -883,7 +926,8 @@ public class StreamingSessionAgentManager
             @Nullable String errorCode,
             boolean simpleChat,
             @Nullable TierRouting tierRouting,
-            boolean writeCapableToolsPresent) {
+            boolean writeCapableToolsPresent,
+            @Nullable ScopeSet scope) {
         if (telemetryEmitter == null) {
             return;
         }
@@ -904,7 +948,8 @@ public class StreamingSessionAgentManager
                     status,
                     errorCode,
                     tierRouting,
-                    writeCapableToolsPresent));
+                    writeCapableToolsPresent,
+                    ScopeShadowSupport.telemetrySignal(scope, scopeGraphProperties)));
         } catch (RuntimeException telemetryFailure) {
             LOGGER.warn(
                     "MCP streaming telemetry emission failed role={} status={}",
