@@ -27,6 +27,7 @@ import com.positivity.workorder.internal.exception.ServicePositionOccupiedExcept
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
+import com.positivity.workorder.internal.exception.TechnicianNotActiveException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
 import com.positivity.workorder.internal.exception.TechnicianNotStaffedAtSiteException;
@@ -491,6 +492,35 @@ public class GlobalExceptionHandler {
             TechnicianNotFoundException ex, HttpServletRequest request) {
         return buildErrorResponse(
                 HttpStatus.UNPROCESSABLE_ENTITY, TechnicianNotFoundException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    /**
+     * A technician who is no longer employed (latest {@code ext_people_employee} status TERMINATED,
+     * DISABLED or SUSPENDED) was assigned or reassigned (#2120).
+     *
+     * <p>422 for the same reason {@link #handleTechnicianNotStaffedAtSite} is: the technician
+     * exists, the request is well-formed, and a cross-entity rule fails. {@code fieldErrors} marks
+     * {@code technicianId}, and {@code nextAction}/{@code supportAction} name the fix and who can
+     * make it.
+     */
+    @ExceptionHandler(TechnicianNotActiveException.class)
+    public ResponseEntity<ApiError> handleTechnicianNotActive(
+            TechnicianNotActiveException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = new ApiError(
+                TechnicianNotActiveException.ERROR_CODE,
+                ex.getMessage(),
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                List.of(new ApiError.FieldError(TechnicianNotActiveException.FIELD, ex.getMessage())),
+                null,
+                TechnicianNotActiveException.NEXT_ACTION,
+                TechnicianNotActiveException.SUPPORT_ACTION);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return new ResponseEntity<>(body, headers, HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     /**

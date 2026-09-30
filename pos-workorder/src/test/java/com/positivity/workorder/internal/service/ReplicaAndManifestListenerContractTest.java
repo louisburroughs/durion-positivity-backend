@@ -20,6 +20,7 @@ import com.positivity.domainevents.location.BayUpdatedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.domainevents.location.MobileUnitDeletedV1;
 import com.positivity.domainevents.location.MobileUnitUpdatedV1;
+import com.positivity.domainevents.people.EmployeeUpdatedV1;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkRemovedV1;
@@ -29,6 +30,7 @@ import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtBaySpecialtyMapReplica;
 import com.positivity.workorder.internal.entity.ExtBayTypeReplica;
 import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
+import com.positivity.workorder.internal.entity.ExtEmployeeReplica;
 import com.positivity.workorder.internal.entity.ExtLocationReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
@@ -37,6 +39,7 @@ import com.positivity.workorder.internal.entity.ExtUserLinkReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtEmployeeReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
@@ -112,6 +115,9 @@ class ReplicaAndManifestListenerContractTest {
     private ExtStaffingAssignmentReplicaRepository assignmentRepository;
 
     @Mock
+    private ExtEmployeeReplicaRepository employeeRepository;
+
+    @Mock
     private ExtCustomerPartyReplicaRepository customerRepository;
 
     @Mock
@@ -154,6 +160,7 @@ class ReplicaAndManifestListenerContractTest {
         when(personRepository.findById(any())).thenReturn(Optional.empty());
         when(userLinkRepository.findById(any())).thenReturn(Optional.empty());
         when(assignmentRepository.findById(any())).thenReturn(Optional.empty());
+        when(employeeRepository.findById(any())).thenReturn(Optional.empty());
         when(customerRepository.findById(any())).thenReturn(Optional.empty());
         when(bayRepository.findById(any())).thenReturn(Optional.empty());
         when(mobileUnitRepository.findById(any())).thenReturn(Optional.empty());
@@ -165,6 +172,7 @@ class ReplicaAndManifestListenerContractTest {
                 personRepository,
                 userLinkRepository,
                 assignmentRepository,
+                employeeRepository,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 org.mockito.Mockito.mock(PlatformTransactionManager.class));
         customerListener = new CustomerEventsListener(
@@ -208,6 +216,13 @@ class ReplicaAndManifestListenerContractTest {
                  "createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-08-01T00:00:00Z"}""".formatted(ID);
     }
 
+    private static String employeePayload(String status) {
+        return """
+                {"employeeId":"%s","personId":"%s","employeeNumber":"E-100","status":"%s",
+                 "hireDate":"2024-01-02","terminationDate":"2026-08-14",
+                 "statusEffectiveAt":"2026-08-15T00:00:00Z"}""".formatted(ID, OTHER_ID, status);
+    }
+
     private ProcessedEvent capturedProcessedEvent() {
         ArgumentCaptor<ProcessedEvent> captor = ArgumentCaptor.forClass(ProcessedEvent.class);
         verify(processedEventRepository).save(captor.capture());
@@ -246,6 +261,51 @@ class ReplicaAndManifestListenerContractTest {
         }
 
         @Test
+        @DisplayName("#2119 employee: upserts the employment-status replica and writes the processed mark")
+        void employeeUpdatedUpserts() {
+            peopleListener.onPeopleEvent(
+                    envelope("evt-6", EmployeeUpdatedV1.EVENT_TYPE, employeePayload("TERMINATED")));
+
+            ArgumentCaptor<ExtEmployeeReplica> captor = ArgumentCaptor.forClass(ExtEmployeeReplica.class);
+            verify(employeeRepository).save(captor.capture());
+            ExtEmployeeReplica saved = captor.getValue();
+            assertThat(saved.getEmployeeId()).isEqualTo(ID);
+            assertThat(saved.getPersonId()).isEqualTo(OTHER_ID);
+            assertThat(saved.getStatus()).isEqualTo("TERMINATED");
+            assertThat(saved.getStatusEffectiveAt()).isEqualTo(Instant.parse("2026-08-15T00:00:00Z"));
+            assertThat(saved.getTerminationDate()).isEqualTo(java.time.LocalDate.parse("2026-08-14"));
+            assertThat(saved.getAggregateVersion()).isEqualTo(3);
+            ProcessedEvent mark = capturedProcessedEvent();
+            assertThat(mark.getEventId()).isEqualTo("evt-6");
+            assertThat(mark.getOwner()).isEqualTo(PeopleReplicaEventsListener.OWNER_PEOPLE);
+        }
+
+        @Test
+        @DisplayName("#2119 employee: skips a strictly stale version, applies an equal one, still writes the mark")
+        void employeeUpdatedStaleGuard() {
+            when(employeeRepository.findById(ID))
+                    .thenReturn(Optional.of(ExtEmployeeReplica.builder()
+                            .employeeId(ID)
+                            .personId(OTHER_ID)
+                            .status("ACTIVE")
+                            .aggregateVersion(5)
+                            .build()));
+
+            peopleListener.onPeopleEvent(
+                    envelope("evt-7", EmployeeUpdatedV1.EVENT_TYPE, employeePayload("TERMINATED")));
+
+            // Version 3 against a replica at 5: strictly older, skipped, but the fact is recorded.
+            verify(employeeRepository, never()).save(any());
+            assertThat(capturedProcessedEvent().getEventId()).isEqualTo("evt-7");
+
+            peopleListener.onPeopleEvent(
+                    envelope("evt-8", EmployeeUpdatedV1.EVENT_TYPE, 5, employeePayload("SUSPENDED")));
+            ArgumentCaptor<ExtEmployeeReplica> captor = ArgumentCaptor.forClass(ExtEmployeeReplica.class);
+            verify(employeeRepository).save(captor.capture());
+            assertThat(captor.getValue().getStatus()).isEqualTo("SUSPENDED");
+        }
+
+        @Test
         @DisplayName("maintains the user-link replica through update and removal")
         void userLinkLifecycle() {
             peopleListener.onPeopleContactEvent(
@@ -268,7 +328,7 @@ class ReplicaAndManifestListenerContractTest {
         @DisplayName("records an ignored type under the entry point's owner, keeping both manifests honest")
         void ignoredTypeRecordedPerEntryPoint() {
             peopleListener.onPeopleEvent("""
-                    {"eventId":"evt-5","eventType":"people.employee.updated","payload":{}}""");
+                    {"eventId":"evt-5","eventType":"people.time-off.updated","payload":{}}""");
 
             assertThat(capturedProcessedEvent().getOwner()).isEqualTo(PeopleReplicaEventsListener.OWNER_PEOPLE);
         }

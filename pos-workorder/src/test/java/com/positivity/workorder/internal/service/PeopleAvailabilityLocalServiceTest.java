@@ -4,7 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse;
+import com.positivity.workorder.internal.entity.ExtEmployeeReplica;
+import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.ExtStaffingAssignmentReplica;
+import com.positivity.workorder.internal.repository.ExtEmployeeReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtUserLinkReplicaRepository;
@@ -19,6 +23,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -47,12 +53,19 @@ class PeopleAvailabilityLocalServiceTest {
     @Mock
     private ExtUserLinkReplicaRepository linkReplicaRepository;
 
+    @Mock
+    private ExtEmployeeReplicaRepository employeeReplicaRepository;
+
     private PeopleAvailabilityLocalService service;
 
     @BeforeEach
     void setUp() {
         service = new PeopleAvailabilityLocalService(
-                CLOCK, assignmentReplicaRepository, personReplicaRepository, linkReplicaRepository);
+                CLOCK,
+                assignmentReplicaRepository,
+                personReplicaRepository,
+                linkReplicaRepository,
+                employeeReplicaRepository);
     }
 
     private static ExtStaffingAssignmentReplica row(UUID locationId, boolean primary, LocalDate from, LocalDate to) {
@@ -175,5 +188,138 @@ class PeopleAvailabilityLocalServiceTest {
         service.isEligibleAtSite(PERSON_ID, SITE_ID, TODAY);
 
         org.mockito.Mockito.verify(assignmentReplicaRepository).findByPersonIdAndStatus(PERSON_ID, ACTIVE);
+    }
+
+    private static ExtEmployeeReplica employee(String status, Instant statusEffectiveAt, Instant updatedAt) {
+        return ExtEmployeeReplica.builder()
+                .employeeId(UUID.randomUUID())
+                .personId(PERSON_ID)
+                .status(status)
+                .statusEffectiveAt(statusEffectiveAt)
+                .aggregateVersion(1L)
+                .updatedAt(updatedAt)
+                .build();
+    }
+
+    @Nested
+    @DisplayName("#2120: an offboarded technician is never eligible")
+    class InactiveEmployment {
+
+        @ParameterizedTest
+        @ValueSource(strings = {"TERMINATED", "DISABLED", "SUSPENDED"})
+        @DisplayName("inactive status is refused even with no staffing rows at all")
+        void inactiveIsNotEligibleWithoutStaffingRows(String status) {
+            when(employeeReplicaRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(List.of(employee(status, Instant.parse("2026-02-01T00:00:00Z"), Instant.EPOCH)));
+            // No staffing rows stubbed: the empty default is exactly the case that would otherwise pass.
+
+            assertThat(service.isEligibleAtSite(PERSON_ID, SITE_ID, TODAY)).isFalse();
+        }
+
+        @Test
+        @DisplayName("inactive status is refused before staffing is consulted at all")
+        void inactiveIsNotEligibleAtStaffedSite() {
+            when(employeeReplicaRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(List.of(employee("TERMINATED", null, Instant.EPOCH)));
+
+            assertThat(service.isEligibleAtSite(PERSON_ID, SITE_ID, TODAY)).isFalse();
+            org.mockito.Mockito.verifyNoInteractions(assignmentReplicaRepository);
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"ACTIVE", "ON_LEAVE"})
+        @DisplayName("ACTIVE and ON_LEAVE keep the no-staffing softening")
+        void employedStatusesStayEligible(String status) {
+            when(employeeReplicaRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(List.of(employee(status, null, Instant.EPOCH)));
+            when(assignmentReplicaRepository.findByPersonIdAndStatus(PERSON_ID, ACTIVE))
+                    .thenReturn(List.of());
+
+            assertThat(service.isEligibleAtSite(PERSON_ID, SITE_ID, TODAY)).isTrue();
+            assertThat(service.inactiveEmploymentStatus(PERSON_ID)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a rehire (later ACTIVE row) supersedes an earlier TERMINATED row")
+        void latestRowWins() {
+            when(employeeReplicaRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(List.of(
+                            employee("TERMINATED", Instant.parse("2025-06-01T00:00:00Z"), Instant.EPOCH),
+                            employee("ACTIVE", Instant.parse("2026-01-01T00:00:00Z"), Instant.EPOCH)));
+
+            assertThat(service.inactiveEmploymentStatus(PERSON_ID)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("statusEffectiveAt falls back to updatedAt when the fact carried none")
+        void fallsBackToUpdatedAt() {
+            when(employeeReplicaRepository.findByPersonId(PERSON_ID))
+                    .thenReturn(List.of(
+                            employee("ACTIVE", null, Instant.parse("2025-06-01T00:00:00Z")),
+                            employee("DISABLED", null, Instant.parse("2026-01-01T00:00:00Z"))));
+
+            assertThat(service.inactiveEmploymentStatus(PERSON_ID)).contains("DISABLED");
+        }
+    }
+
+    @Nested
+    @DisplayName("#2119: fetchAvailability roster")
+    class Roster {
+
+        private static final UUID KEPT_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f3310");
+
+        private ExtStaffingAssignmentReplica assignmentFor(UUID personId) {
+            ExtStaffingAssignmentReplica a = row(SITE_ID, true, null, null);
+            a.setPersonId(personId);
+            return a;
+        }
+
+        @Test
+        @DisplayName("excludes a TERMINATED person, keeps one with no employee row")
+        void terminatedExcludedNoRowKept() {
+            when(assignmentReplicaRepository.findByLocationIdAndStatus(SITE_ID, ACTIVE))
+                    .thenReturn(List.of(assignmentFor(PERSON_ID), assignmentFor(KEPT_ID)));
+            when(employeeReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(employee("TERMINATED", Instant.parse("2026-02-01T00:00:00Z"), Instant.EPOCH)));
+            when(personReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(ExtPersonReplica.builder()
+                            .personId(KEPT_ID)
+                            .firstName("Kept")
+                            .lastName("Tech")
+                            .aggregateVersion(1L)
+                            .updatedAt(Instant.EPOCH)
+                            .build()));
+
+            PeopleAvailabilityResponse response = service.fetchAvailability(SITE_ID.toString(), TODAY);
+
+            assertThat(response.getPeople())
+                    .extracting(PeopleAvailabilityResponse.PersonAvailability::getPersonId)
+                    .containsExactly(KEPT_ID.toString());
+        }
+
+        @Test
+        @DisplayName("keeps an ON_LEAVE person")
+        void onLeaveKept() {
+            when(assignmentReplicaRepository.findByLocationIdAndStatus(SITE_ID, ACTIVE))
+                    .thenReturn(List.of(assignmentFor(PERSON_ID)));
+            when(employeeReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(employee("ON_LEAVE", null, Instant.EPOCH)));
+            when(personReplicaRepository.findByPersonIdIn(any())).thenReturn(List.of());
+
+            assertThat(service.fetchAvailability(SITE_ID.toString(), TODAY).getPeople())
+                    .hasSize(1);
+        }
+
+        @Test
+        @DisplayName("an empty roster does not query the employee replica")
+        void emptyRoster() {
+            when(assignmentReplicaRepository.findByLocationIdAndStatus(SITE_ID, ACTIVE))
+                    .thenReturn(List.of());
+            when(personReplicaRepository.findByPersonIdIn(any())).thenReturn(List.of());
+
+            assertThat(service.fetchAvailability(SITE_ID.toString(), TODAY).getPeople())
+                    .isEmpty();
+            org.mockito.Mockito.verifyNoInteractions(employeeReplicaRepository);
+        }
     }
 }

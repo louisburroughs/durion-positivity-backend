@@ -646,6 +646,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `SERVICE_POSITION_INACTIVE` | 422 | The named bay or mobile unit is one pos-location has not marked active |
 | `SERVICE_POSITION_DUTY_CLASS_EXCEEDED` | 422 | The vehicle's GVWR class is above the position's `maxDutyClass` (DECISION-SHOPMGMT-021 rule 3); skipped when either class is unknown. Same code and status as pos-shop-manager's own submit-time check |
 | `TECHNICIAN_NOT_FOUND` | 422 | The technician named on an assignment is unknown to the `ext_person` replica |
+| `TECHNICIAN_NOT_ACTIVE` | 422 | The technician's latest `ext_people_employee` status is TERMINATED, DISABLED or SUSPENDED (`TechnicianNotActiveException`); no employee row means employed |
 | `TECHNICIAN_NOT_STAFFED_AT_SITE` | 422 | The technician is not staffed at the workorder's site |
 | `UNPROCESSABLE_CONTENT` | 422 | Generic code for a 422 `ResponseStatusException` whose reason is free text |
 | `PROMOTION_IDEMPOTENCY_INCONSISTENT` | 500 | A recorded promotion idempotency key resolves to no workorder (server defect, correlated) |
