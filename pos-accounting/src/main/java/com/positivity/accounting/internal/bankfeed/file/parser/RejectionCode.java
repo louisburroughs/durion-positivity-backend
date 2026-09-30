@@ -16,5 +16,10 @@ public enum RejectionCode {
     /** A mapped column is absent from the row, or a required value (date, amount, description) is blank. */
     REQUIRED_COLUMN_MISSING,
     /** A corrected date lies outside the statement window (an uncorrected one is {@code OUT_OF_WINDOW}). */
-    DATE_OUTSIDE_STATEMENT
+    DATE_OUTSIDE_STATEMENT,
+    /**
+     * The amount has more decimals than the import currency's minor unit; trailing zeros do not count (ADR-0067
+     * PC-6, #2336). Staged at upload rather than refused at commit, so the preparer can correct the row.
+     */
+    AMOUNT_PRECISION_EXCEEDS_CURRENCY
 }

@@ -157,7 +157,7 @@ public class TreadDesignServiceImpl implements TreadDesignService {
                 };
 
         // Age matchStateAt only when the decision actually moved (aligns with
-        // SupplierCatalogEnrichmentListener#setState) — re-resolving to the same state (e.g. a
+        // SupplierCatalogEnrichmentHandler#setState) — re-resolving to the same state (e.g. a
         // corrected note on an already-REJECTED design) is not the worklist re-ordering itself.
         if (design.getMatchState() != newState) {
             design.setMatchStateAt(Instant.now(clock));

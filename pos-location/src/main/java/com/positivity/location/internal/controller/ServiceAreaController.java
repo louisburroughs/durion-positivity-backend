@@ -63,20 +63,26 @@ public class ServiceAreaController {
                     Use this tool before wiring coverage rules that reference the area; do not use \
                     patchServiceArea, which edits an existing area.
                     Preconditions: at least one postal code entry must be supplied and every entry must carry a \
-                    countryCode; the name must not collide with an existing service area.
+                    countryCode (at most 2 characters) and a postalCode (at most 20 characters); the name must \
+                    not collide with an existing service area.
                     Required inputs: name and postalCodes, each entry with postalCode and countryCode; \
                     description is optional and active defaults to true.
                     Emits a LOCATION_SERVICE_AREA_CREATE event.
-                    Returns 201 with the created area and 409 when the name is already taken.
+                    Returns 201 with the created area, 400 VALIDATION_ERROR with fieldErrors for a blank name, an \
+                    empty postal code set or an entry that is blank or too long, and 409 \
+                    SERVICE_AREA_NAME_TAKEN when the name is already taken (SERVICE_AREA_CONFLICT for any other \
+                    uniqueness conflict). Nothing is stored on a refusal.
                     """)
     @ApiResponse(responseCode = "201", description = "Service area created")
     @ApiResponse(
             responseCode = "400",
-            description = "Empty postal code set, or an entry missing its countryCode",
+            description = "VALIDATION_ERROR: blank or over-long name, an empty postal code set, or an entry with a"
+                    + " blank or over-long postalCode (max 20) or countryCode (max 2)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Service area name already taken",
+            description = "SERVICE_AREA_NAME_TAKEN: the name is already taken (or SERVICE_AREA_CONFLICT for"
+                    + " another uniqueness conflict)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "LOCATION_SERVICE_AREA_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
@@ -120,24 +126,35 @@ public class ServiceAreaController {
     }
 
     @Operation(operationId = "patchServiceArea", summary = "Patch Fields of a Service Area", description = """
-                    Applies a partial update to a service area, accepting only the keys description and active.
-                    Use this tool to retire an area with active=false or amend its description; do not use it to \
-                    change which postal codes an area covers, use replaceServiceAreaPostalCodes instead. An area \
-                    cannot be renamed.
-                    Preconditions: the service area must exist.
-                    Required inputs: id (UUID) as a path parameter and a JSON object; keys other than description \
-                    and active are silently ignored.
+                    Applies a partial update to a service area, accepting the keys name, description and active; \
+                    a key that is absent leaves that field unchanged.
+                    Use this tool to rename an area, retire it with active=false or amend its description; do not \
+                    use it to change which postal codes an area covers, use replaceServiceAreaPostalCodes instead.
+                    Preconditions: the service area must exist; a new name must not collide with another service \
+                    area.
+                    Required inputs: id (UUID) as a path parameter and a JSON object where name is non-blank text, \
+                    description is text or null (which clears it) and active is a JSON boolean, so null, "yes" or 1 \
+                    are refused rather than read as false; keys other than these are silently ignored.
                     Emits a LOCATION_SERVICE_AREA_PATCH event.
-                    Returns 400 when the id is not a valid UUID and 404 when no service area exists for it.
+                    Returns 400 when the id is not a valid UUID, 400 VALIDATION_ERROR with fieldErrors when name, \
+                    description or active has the wrong type, 404 when no service area exists for the id and 409 \
+                    SERVICE_AREA_NAME_TAKEN when another area already holds the new name (SERVICE_AREA_CONFLICT for \
+                    any other uniqueness conflict); a refused patch changes nothing.
                     """)
     @ApiResponse(responseCode = "200", description = "Service area patched")
     @ApiResponse(
             responseCode = "400",
-            description = "Invalid service area id",
+            description = "Invalid service area id, or VALIDATION_ERROR: name is blank or not text, description is"
+                    + " not text or null, or active is not a JSON boolean (fieldErrors names the field)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Service area not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "SERVICE_AREA_NAME_TAKEN: the new name is already held by another service area (or"
+                    + " SERVICE_AREA_CONFLICT for another uniqueness conflict)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_PATCH", apiVersion = "1")
@@ -148,8 +165,9 @@ public class ServiceAreaController {
     public ResponseEntity<ServiceAreaResponse> patch(
             @PathVariable String id,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description =
-                                    "Free-form patch object; only the keys description and active are" + " recognized.",
+                            description = "Free-form patch object; only the keys name, description and active are"
+                                    + " recognized. Omit a key to leave it unchanged; description null clears"
+                                    + " it; active must be a JSON boolean.",
                             required = true,
                             content =
                                     @Content(
@@ -180,18 +198,24 @@ public class ServiceAreaController {
                     {"postalCodes": [...]}, each entry carrying postalCode and countryCode.
                     Emits a LOCATION_SERVICE_AREA_POSTAL_CODES_REPLACE event.
                     Returns 200 with the area as it stands afterwards, 400 when the id is not a valid UUID or \
-                    the set is empty or missing a countryCode, and 404 when no service area exists for the id.
+                    the set is empty or has an entry with a blank or over-long postalCode (max 20) or countryCode \
+                    (max 2), 404 when no service area exists for the id and 409 SERVICE_AREA_CONFLICT when the \
+                    replacement trips a uniqueness constraint.
                     Coverage resolution reads these rows directly: findEligibleMobileUnits matches an address \
                     through them, so removing a code stops every mobile unit covering that address.
                     """)
     @ApiResponse(responseCode = "200", description = "Postal codes replaced")
     @ApiResponse(
             responseCode = "400",
-            description = "Invalid service area id, or an empty or incomplete set",
+            description = "Invalid service area id, or an empty, incomplete or over-long set",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Service area not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "SERVICE_AREA_CONFLICT: the replacement trips a uniqueness constraint",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_POSTAL_CODES_REPLACE", apiVersion = "1")

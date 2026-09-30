@@ -138,13 +138,22 @@ Two consequences worth knowing before diagnosing the next one:
   role gets `inventory:adjustment:override`, which waives the negative-stock policy on overridable
   postings and remains with ADMIN and INVENTORY_CONTROLLER.
 
-**This endpoint is not location-scoped.** `StockMovementController.approveAdjustmentRequest` is a
-recorded ADR-0061 decision (see `location-scope.yaml`), but only
-`CycleCountAdjustmentController.createAdjustment` has one (gated on its resolved location since
-#2167); approval there is not confined to the caller's reach even though LOCATION_MANAGER and INVENTORY_MANAGER both carry
-`LOCATION` scope on `roles.location_scope`. The asymmetry between the two adjustment-approval paths
-predates #2149 — INVENTORY_MANAGER already held the grant under it — and closing it is a separate
-change, not one #2149's grant introduces.
+**Every endpoint on this controller is location-scoped (#2151).** The approval path used to be
+open: only `createAdjustment` was gated (#2167), so a `LOCATION_MANAGER` or `INVENTORY_MANAGER`
+carrying `LOCATION` scope on `roles.location_scope` could approve, reject or read another site's
+write-off, unlike `StockMovementController.approveAdjustmentRequest`. Now `approve`, `reject` and
+`GET /{adjustmentId}` are gates on the location the adjustment concerns (`403 LOCATION_SCOPE_DENIED`):
+its stored `locationId`, else — for a legacy row from before #2167 — the linked task's bin when it
+holds a location UUID, the same resolution the ledger posting uses (so a site manager can approve
+the bin the variance will post to, rather than only a global approver). The gate is taken after the
+not-found lookup so ids cannot be probed and before any state change. The status list, `/pending`
+and `/pending/count` are narrowed to the caller's reach on the stored `location_id` column alone;
+each is recorded in `location-scope.yaml`. **An adjustment with neither a `locationId` nor a task
+bin that names a location is denied to a location-scoped caller** (fail closed: the by-id endpoints
+answer 403), and the lists omit every row whose `location_id` is null, even one the by-id endpoints
+would admit through its task's bin; only a globally granted caller (ADMIN, INVENTORY_CONTROLLER)
+can act on or see those. Such rows are legacy: `location_id` was added by `V5` and adjustments
+created before it, or from a task-less request that named no location, carry none.
 
 Unlike #2138, the grant was missing from `scripts/fixtures/seed/alpha/security/role-permissions.csv`
 as well as from the tenant, so re-seeding alpha alone would not have fixed it. LOCATION_MANAGER is
@@ -181,7 +190,9 @@ rolled back, the record is inserted `FAILED` under the id the error names. List 
 adjustment or scrap posts it again, and a successful post clears `errorMessage`.
 
 **Which shelf the variance posts against.** An adjustment created from a task takes the task's bin
-location. A task-less adjustment takes the optional `locationId` on the create request; without
+location when it holds a location UUID, else the request's `locationId`; the task's plan is never
+consulted, since a plan names a site and the stock sits in the bins beneath it, not on the site row.
+A task-less adjustment takes the optional `locationId` on the create request; without
 one it posts against the stock item's location-less balance, which is almost never where counted
 stock sits, and the policy then judges the count against that balance (the `at location null` in
 #2167's rejection). Name the location. A `locationId` that contradicts the task's bin is refused

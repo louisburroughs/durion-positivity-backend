@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.bankfeed.file.enums.BankImportRowStatu
 import com.positivity.accounting.internal.bankfeed.file.parser.ParsedRow;
 import com.positivity.accounting.internal.bankfeed.file.parser.RejectionCode;
 import com.positivity.accounting.internal.bankrec.intake.BankIntakeLookup.BankAccountTerms;
+import com.positivity.accounting.internal.bankrec.intake.MinorUnit;
 import com.positivity.accounting.internal.bankrec.intake.TransactionNormalizer;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -108,8 +109,14 @@ final class ImportEvaluator {
 
     // ---- rows ----------------------------------------------------------------------------------
 
-    /** The staging rows of a freshly parsed file: parse rejections {@code REJECTED}, the rest to be evaluated. */
-    static @NonNull List<BankImportRow> fromParse(@NonNull UUID importId, @NonNull List<ParsedRow> parsed) {
+    /**
+     * The staging rows of a freshly parsed file: parse rejections {@code REJECTED}, the rest to be evaluated. A
+     * row whose amount is finer than {@code currency}'s minor unit is {@code REJECTED
+     * AMOUNT_PRECISION_EXCEEDS_CURRENCY} here (#2336) rather than at commit, so the preview shows it and the
+     * preparer can correct it.
+     */
+    static @NonNull List<BankImportRow> fromParse(
+            @NonNull UUID importId, @NonNull List<ParsedRow> parsed, @NonNull String currency) {
         List<BankImportRow> rows = new ArrayList<>(parsed.size());
         for (ParsedRow p : parsed) {
             BankImportRow row = new BankImportRow();
@@ -126,6 +133,12 @@ final class ImportEvaluator {
                 row.setRowStatus(BankImportRowStatus.REJECTED);
                 row.setRejectionCode(p.rejection().name());
                 row.setRejectionDetail(p.rejectionDetail());
+            } else if (p.signedAmount() != null && !MinorUnit.fits(p.signedAmount(), currency)) {
+                reject(
+                        row,
+                        RejectionCode.AMOUNT_PRECISION_EXCEEDS_CURRENCY,
+                        "Row " + p.rowNumber() + ": amount " + p.signedAmount().toPlainString() + " needs "
+                                + MinorUnit.detail(currency));
             } else {
                 row.setRowStatus(BankImportRowStatus.PARSED);
             }

@@ -38,7 +38,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * for the same vendor and product leaves the last-known code standing. A vendor PRICAT fetch is
  * one page of the vendor's catalogue at one moment, not a full snapshot the way
  * {@code catalog.product.updated} is — a line's absence this cycle is not the vendor unsetting a
- * code (mirrors {@code SupplierPriceCatalogEventsListener}'s "nothing here deletes" rule for the
+ * code (mirrors {@code SupplierPriceCatalogEventHandler}'s "nothing here deletes" rule for the
  * append-only entries this table is derived from).
  */
 @Data

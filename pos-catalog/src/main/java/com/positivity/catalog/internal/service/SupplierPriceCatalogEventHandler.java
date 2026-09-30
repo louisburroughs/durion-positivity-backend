@@ -26,7 +26,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -38,8 +37,12 @@ import tools.jackson.databind.ObjectMapper;
  * Applies vendor PRICAT imports from {@code supplier.events.v1} into append-only supplier price
  * entries (ADR-0053 §1–§2, §7).
  *
- * <p>pos-supplier owns the received document; pos-catalog owns the business fact. This listener is
+ * <p>pos-supplier owns the received document; pos-catalog owns the business fact. This handler is
  * the join between them, and it is the only writer of {@code supplier_price_entry}.
+ *
+ * <p>This class is not a Kafka consumer. {@link SupplierEventsListener} is the single consumer of
+ * {@code supplier.events.v1}; it parses the envelope, guards on {@code processed_events} and routes
+ * PRICAT event types here (#2177).
  *
  * <h2>Idempotency and ordering</h2>
  *
@@ -72,7 +75,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Component
 @ConditionalOnProperty(prefix = "pos.catalog.kafka", name = "enabled", havingValue = "true")
-public class SupplierPriceCatalogEventsListener {
+public class SupplierPriceCatalogEventHandler {
 
     /** Producing domain, per the repo-wide processed_events convention. */
     static final String OWNER = "supplier";
@@ -90,7 +93,7 @@ public class SupplierPriceCatalogEventsListener {
     /** The apply and its processed mark in one transaction; a failure's mark in its own. */
     private final TransactionTemplate handlerTransaction;
 
-    public SupplierPriceCatalogEventsListener(
+    public SupplierPriceCatalogEventHandler(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
@@ -114,27 +117,14 @@ public class SupplierPriceCatalogEventsListener {
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    @KafkaListener(
-            topics = "${pos.catalog.kafka.supplier-events-topic:supplier.events.v1}",
-            groupId = "${pos.catalog.kafka.supplier-events-consumer-group:pos-catalog-supplier-events}")
-    public void onSupplierEvent(@NonNull String message) {
-        JsonNode envelope;
-        try {
-            envelope = objectMapper.readTree(message);
-        } catch (Exception e) {
-            log.warn("Skipping unparsable supplier event", e);
-            return;
-        }
+    /**
+     * Applies one PRICAT event and marks it processed in the same transaction.
+     *
+     * @param envelope the parsed event envelope, already de-duplicated by the dispatcher
+     * @param eventId the envelope's non-blank {@code eventId}
+     */
+    public void handle(@NonNull JsonNode envelope, @NonNull String eventId) {
         String eventType = envelope.path("eventType").stringValue(null);
-        String eventId = envelope.path("eventId").stringValue(null);
-        if (eventId == null || eventId.isBlank()) {
-            log.warn("Skipping supplier event without eventId");
-            return;
-        }
-        if (processedEventRepository.existsById(eventId)) {
-            return;
-        }
-
         try {
             handlerTransaction.executeWithoutResult(_ -> {
                 if (SupplierPriceCatalogUpdatedV1.EVENT_TYPE.equals(eventType)) {
@@ -142,9 +132,11 @@ public class SupplierPriceCatalogEventsListener {
                 } else if (SupplierPriceCatalogImportCompletedV1.EVENT_TYPE.equals(eventType)) {
                     applyCompletion(envelope);
                 } else {
-                    // Ignored types still record their eventId so the owner's manifest reconciles
-                    // rather than reporting facts this module deliberately skipped as missing.
-                    log.debug("Ignoring supplier event type={} eventId={}", eventType, eventId);
+                    // Unreachable from SupplierEventsListener, which routes only the two types above.
+                    log.warn(
+                            "Unexpected supplier event type={} routed to PRICAT handler eventId={}",
+                            eventType,
+                            eventId);
                 }
                 recordProcessed(eventId, OWNER);
             });

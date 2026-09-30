@@ -71,19 +71,26 @@ public class ExtEmployeeReplica extends TenantScopedEntity {
     }
 
     /**
-     * The row that describes a person's current employment: the latest by {@code statusEffectiveAt}
-     * (falling back to {@code updatedAt} when the fact carried none), ties broken by
+     * The row that describes a person's current employment: the latest by {@code statusEffectiveAt},
+     * falling back to the fact's emission time ({@code aggregateVersion} is epoch millis at the
+     * producer) when the fact carried none; ties broken by {@code aggregateVersion}, then
      * {@code updatedAt}. A person may hold several employee rows over time (rehire).
+     *
+     * <p>The fallback is deliberately the producer's clock, never this replica's {@code updatedAt}:
+     * that column is stamped at ingest, so a manifest-driven replay of an old TERMINATED fact with
+     * no {@code statusEffectiveAt} would otherwise outrank a genuine, earlier-ingested ACTIVE rehire
+     * and lock the person out until pos-people re-emitted the ACTIVE row.
      */
     @NonNull
     public static Optional<ExtEmployeeReplica> latest(@NonNull Collection<ExtEmployeeReplica> rows) {
         return rows.stream()
                 .max(Comparator.comparing(ExtEmployeeReplica::effectiveInstant)
+                        .thenComparingLong(ExtEmployeeReplica::getAggregateVersion)
                         .thenComparing(ExtEmployeeReplica::getUpdatedAt));
     }
 
     private Instant effectiveInstant() {
-        return statusEffectiveAt != null ? statusEffectiveAt : updatedAt;
+        return statusEffectiveAt != null ? statusEffectiveAt : Instant.ofEpochMilli(aggregateVersion);
     }
 
     /** ArchUnit UUIDv7 rule hook (ADR-0013): the key is the owner's UUIDv7, stored verbatim. */
