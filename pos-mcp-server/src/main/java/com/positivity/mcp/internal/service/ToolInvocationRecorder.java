@@ -3,6 +3,8 @@ package com.positivity.mcp.internal.service;
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.domain.EvalTurnTrace.ToolDefinitionTrace;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
+import com.positivity.mcp.internal.scopegraph.ScopeSet;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -100,6 +102,16 @@ public class ToolInvocationRecorder {
 
     public void recordPrompt(@NonNull String systemPrompt, @NonNull List<ToolDefinitionTrace> toolDefinitions) {
         recordTrace(recorder -> recorder.recordPrompt(systemPrompt, toolDefinitions), "record prompt");
+    }
+
+    /** ADR-0069 §9: stamps this turn's resolved scope on the active trace. */
+    public void recordScope(@NonNull ScopeSet scope) {
+        recordTrace(recorder -> recorder.recordScope(scope), "record scope");
+    }
+
+    /** ADR-0069 §9: the {@code document_id}s of the final top-K one retrieval handed to the model. */
+    public void recordRetrievedDocuments(@NonNull Collection<String> documentIds) {
+        recordTrace(recorder -> recorder.recordRetrievedDocuments(documentIds), "record retrieved documents");
     }
 
     public void recordAnswerSource(@NonNull String answerSource) {
@@ -290,6 +302,9 @@ public class ToolInvocationRecorder {
             }
             try {
                 traceRecorder.recordToolCall(delegate.getToolDefinition().name(), toolInput, result, error, elapsedMs);
+                // ADR-0069: the scope knows a tool by its mcp_tool.name, which for a facade is not
+                // the callback's name.
+                traceRecorder.recordCalledCatalogTool(toolLookupName);
             } catch (RuntimeException exception) {
                 LOGGER.warn("Failed to append '{}' to the active eval turn trace", toolLookupName, exception);
             }

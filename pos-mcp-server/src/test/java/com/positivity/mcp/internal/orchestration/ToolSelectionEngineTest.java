@@ -6,15 +6,21 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.config.ScopeGraphProperties;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.scopegraph.ScopeResolver;
+import com.positivity.mcp.internal.scopegraph.ScopeResolverFixtures;
+import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import com.positivity.mcp.internal.service.ToolRegistryService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
@@ -386,5 +392,150 @@ class ToolSelectionEngineTest {
         // unconditionally to the keyword path but missing here hands that agent a prompt instructing
         // it to call a tool it does not have.
         assertThat(toolSelectionEngine.fullFallbackTools()).contains(dateWindowFacadeTool, glossaryFacadeTool);
+    }
+
+    // ── ADR-0069 §5 / §9: the scope is resolved here, and changes nothing ───
+
+    private static final Set<String> SCOPE_CODES =
+            Set.of("AUTHENTICATED", ScopeResolverFixtures.WORKORDER_VIEW, ScopeResolverFixtures.LOCATION_READ);
+
+    private static final String SCOPE_MESSAGE = "is the work order WO-20391 in stock at the store?";
+
+    private void stubSelection() {
+        ToolMetadata inventoryTool = new ToolMetadata(
+                UUID.randomUUID(),
+                "inventoryFacadeTool",
+                "Inventory",
+                "Inventory availability",
+                "inventory",
+                1.0,
+                "low",
+                200,
+                true,
+                "inventoryFacadeTool");
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
+                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of(inventoryTool));
+        when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
+    }
+
+    private static ScopeResolver scopeResolver(ScopeGraphProperties properties) {
+        return ScopeResolverFixtures.resolver(properties, new SimpleMeterRegistry());
+    }
+
+    @Test
+    @DisplayName("ADR-0069: with no resolver wired (every hand-built engine) the result carries no scope")
+    void noResolver_noScope() {
+        stubSelection();
+
+        assertThat(toolSelectionEngine
+                        .selectRoleTools("ROLE_ADMIN", SCOPE_CODES, SCOPE_MESSAGE)
+                        .scope())
+                .isNull();
+        // The older result constructors, which many tests build by hand, carry no scope either.
+        assertThat(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()).scope())
+                .isNull();
+        assertThat(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.CREATING_PO).scope())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("ADR-0069: in mode off a wired resolver resolves nothing and the result carries no scope")
+    void off_noScope() {
+        stubSelection();
+        ScopeResolver off = org.mockito.Mockito.spy(scopeResolver(ScopeGraphProperties.off()));
+        toolSelectionEngine.setScopeResolver(off);
+
+        ToolSelectionEngine.ToolSelectionResult result =
+                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", SCOPE_CODES, SCOPE_MESSAGE);
+
+        assertThat(result.scope()).isNull();
+        verify(off, org.mockito.Mockito.never()).resolve(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("ADR-0069: shadow resolves the turn's scope with the turn's workflow state, before tool ranking")
+    void shadow_resolvesScopeAfterWorkflowStateAndBeforeRanking() {
+        stubSelection();
+        ScopeResolver shadow = org.mockito.Mockito.spy(scopeResolver(ScopeResolverFixtures.shadow(60)));
+        toolSelectionEngine.setScopeResolver(shadow);
+
+        ToolSelectionEngine.ToolSelectionResult result = toolSelectionEngine.selectRoleTools(
+                "ROLE_ADMIN", SCOPE_CODES, SCOPE_MESSAGE, WorkflowState.CREATING_PO);
+
+        assertThat(result.scope()).isNotNull();
+        assertThat(result.scope().confidence()).isEqualTo(ScopeSet.Confidence.HIGH);
+        assertThat(result.scope().seeds()).extracting(ScopeSet.Seed::entity).containsExactly("workorder");
+        // WorkorderFacadeTool is valid in IDLE only, so the CREATING_PO turn's scope has no facade.
+        assertThat(result.scope().facadeTools()).isEmpty();
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(shadow, toolRegistryService);
+        order.verify(shadow).resolve(SCOPE_MESSAGE, SCOPE_CODES, WorkflowState.CREATING_PO);
+        order.verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
+    }
+
+    @Test
+    @DisplayName("ADR-0069: the session-less overload resolves the scope with the workflow state it derived")
+    void shadow_sessionLessOverloadUsesTheDerivedWorkflowState() {
+        ScopeResolver shadow = org.mockito.Mockito.spy(scopeResolver(ScopeResolverFixtures.shadow(60)));
+        toolSelectionEngine.setScopeResolver(shadow);
+
+        toolSelectionEngine.selectRoleTools("ROLE_USER", SCOPE_CODES, "create a purchase order for the work order");
+
+        verify(shadow).resolve("create a purchase order for the work order", SCOPE_CODES, WorkflowState.CREATING_PO);
+    }
+
+    @ParameterizedTest
+    @DisplayName("ADR-0069: shadow and enforce leave the selected tools exactly what they are in off")
+    @ValueSource(strings = {"SHADOW", "ENFORCE"})
+    void scopeDoesNotChangeSelection(String mode) {
+        stubSelection();
+        ToolSelectionEngine.ToolSelectionResult off =
+                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", SCOPE_CODES, SCOPE_MESSAGE);
+
+        toolSelectionEngine.setScopeResolver(scopeResolver(new ScopeGraphProperties(
+                ScopeGraphProperties.Mode.valueOf(mode),
+                // Even with every consumer listed, nothing acts on the scope in this wave.
+                List.of(ScopeGraphProperties.Consumer.values()),
+                60,
+                8,
+                400)));
+        ToolSelectionEngine.ToolSelectionResult on =
+                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", SCOPE_CODES, SCOPE_MESSAGE);
+
+        // The scope really was resolved, and holds tools the ranked selection does not.
+        assertThat(on.scope()).isNotNull();
+        assertThat(on.scope().toolNames()).contains("WorkorderFacadeTool");
+        assertThat(on.roleTools()).containsExactlyElementsOf(off.roleTools());
+        assertThat(on.fallbackTools()).containsExactlyElementsOf(off.fallbackTools());
+        assertThat(on.workflowState()).isEqualTo(off.workflowState());
+        assertThat(sharedOrchestrationSupport.toolCacheKey(
+                        sharedOrchestrationSupport.mergeTools(on.roleTools(), on.fallbackTools())))
+                .isEqualTo(sharedOrchestrationSupport.toolCacheKey(
+                        sharedOrchestrationSupport.mergeTools(off.roleTools(), off.fallbackTools())));
+        // The ranking was asked the same question both times.
+        ArgumentCaptor<ToolSelectionContext> contexts = ArgumentCaptor.forClass(ToolSelectionContext.class);
+        verify(toolRegistryService, org.mockito.Mockito.times(2)).resolveCandidateTools(contexts.capture(), eq(3));
+        assertThat(contexts.getAllValues().get(1))
+                .isEqualTo(contexts.getAllValues().get(0));
+    }
+
+    @Test
+    @DisplayName("ADR-0069: a resolver that throws costs the turn its scope and nothing else")
+    void resolverFailure_selectionUnchanged() {
+        stubSelection();
+        ToolSelectionEngine.ToolSelectionResult off =
+                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", SCOPE_CODES, SCOPE_MESSAGE);
+        ScopeResolver broken = org.mockito.Mockito.mock(ScopeResolver.class);
+        when(broken.enabled()).thenReturn(true);
+        when(broken.resolve(any(), any(), any())).thenThrow(new IllegalStateException("resolver exploded"));
+        toolSelectionEngine.setScopeResolver(broken);
+
+        ToolSelectionEngine.ToolSelectionResult result =
+                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", SCOPE_CODES, SCOPE_MESSAGE);
+
+        assertThat(result.scope()).isNull();
+        assertThat(result.roleTools()).containsExactlyElementsOf(off.roleTools());
+        assertThat(result.fallbackTools()).containsExactlyElementsOf(off.fallbackTools());
     }
 }
