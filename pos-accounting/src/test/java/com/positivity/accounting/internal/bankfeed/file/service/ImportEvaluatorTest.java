@@ -108,6 +108,18 @@ class ImportEvaluatorTest {
         }
 
         @Test
+        void aParseRejectionTakesPrecedenceOverPrecision() {
+            List<BankImportRow> rows = rows("2026-13-45,BAD,12.345");
+            evaluate(rows, Map.of());
+
+            // The parser's rejection names the first failing column; the amount is kept on the row and
+            // is precision-checked when the date is corrected (BankImportServiceImpl#correct).
+            assertThat(rows.get(0).getRowStatus()).isEqualTo(BankImportRowStatus.REJECTED);
+            assertThat(rows.get(0).getRejectionCode()).isEqualTo("DATE_UNPARSEABLE");
+            assertThat(rows.get(0).getSignedAmount()).isEqualByComparingTo("12.345");
+        }
+
+        @Test
         void evaluateDoesNotClearThePrecisionRejection() {
             List<BankImportRow> rows = rows("2026-09-03,ODD,12.345");
             evaluate(rows, Map.of());

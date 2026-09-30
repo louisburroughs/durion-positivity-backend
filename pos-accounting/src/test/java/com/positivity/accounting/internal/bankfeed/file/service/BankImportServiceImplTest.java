@@ -320,6 +320,63 @@ class BankImportServiceImplTest {
         }
 
         @Test
+        void correctingAnotherFieldLeavesAPrecisionRejectionInPlace() {
+            BankImportResponse response = service.create(
+                    upload("date,description,amount\n2026-09-02,DEP,100.00\n2026-09-03,ODD,12.345", "0", "112.34", ACK),
+                    null,
+                    null,
+                    null);
+            BankImportRow odd = rowStore.get(1);
+            assertThat(odd.getRejectionCode()).isEqualTo("AMOUNT_PRECISION_EXCEEDS_CURRENCY");
+
+            BankImportRowResponse afterDescription = service.updateRow(
+                    response.getImportId(),
+                    odd.getRowId(),
+                    BankImportRowUpdateRequest.builder()
+                            .correctedValues(Map.of("description", "ODD PAYEE"))
+                            .build());
+
+            // The amount is still 12.345: a description fix must not turn the row committable only for
+            // the intake to refuse it with a 422 the preparer never saw in the preview (#2336).
+            assertThat(afterDescription.getRowStatus()).isEqualTo(BankImportRowStatus.REJECTED);
+            assertThat(afterDescription.getRejectionCode()).isEqualTo("AMOUNT_PRECISION_EXCEEDS_CURRENCY");
+            assertThat(importStore.get(response.getImportId()).getRejectedCount())
+                    .isEqualTo(1);
+        }
+
+        @Test
+        void aDateCorrectionOnAParseRejectedRowStillChecksTheAmountPrecision() {
+            BankImportResponse response = service.create(
+                    upload("date,description,amount\n2026-09-02,DEP,100.00\n2026-13-45,ODD,12.345", "0", "112.34", ACK),
+                    null,
+                    null,
+                    null);
+            BankImportRow odd = rowStore.get(1);
+            // The parse rejection wins at staging; the over-precise amount was read but not yet checked.
+            assertThat(odd.getRejectionCode()).isEqualTo("DATE_UNPARSEABLE");
+
+            BankImportRowResponse afterDate = service.updateRow(
+                    response.getImportId(),
+                    odd.getRowId(),
+                    BankImportRowUpdateRequest.builder()
+                            .correctedValues(Map.of("date", "2026-09-03"))
+                            .build());
+
+            assertThat(afterDate.getRowStatus()).isEqualTo(BankImportRowStatus.REJECTED);
+            assertThat(afterDate.getRejectionCode()).isEqualTo("AMOUNT_PRECISION_EXCEEDS_CURRENCY");
+
+            BankImportRowResponse afterAmount = service.updateRow(
+                    response.getImportId(),
+                    odd.getRowId(),
+                    BankImportRowUpdateRequest.builder()
+                            .correctedValues(Map.of("signedAmount", "12.35"))
+                            .build());
+
+            assertThat(afterAmount.getRowStatus()).isEqualTo(BankImportRowStatus.CORRECTED);
+            assertThat(afterAmount.getRejectionCode()).isNull();
+        }
+
+        @Test
         void theUploadPassesTheImportCurrencyToTheRowCheck() {
             when(lookup.requireAccount(ACCOUNT))
                     .thenReturn(new BankAccountTerms(ACCOUNT, "1000", "Cash", "JPY", 0, null, false));

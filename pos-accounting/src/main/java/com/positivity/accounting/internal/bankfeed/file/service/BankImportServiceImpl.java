@@ -594,6 +594,16 @@ public class BankImportServiceImpl implements BankImportService {
                     RejectionCode.REQUIRED_COLUMN_MISSING,
                     "Row " + row.getRowNumber() + ": still missing " + String.join(", ", missing(row))
                             + " after the correction");
+        } else if (!MinorUnit.fits(row.getSignedAmount(), found.getCurrency())) {
+            // The effective amount, not only a supplied one (#2336): a row rejected for precision, or a
+            // parse-rejected row whose amount was read but never precision-checked, must not become
+            // CORRECTED on the strength of a date or description fix and then fail 422 at commit.
+            ImportEvaluator.reject(
+                    row,
+                    RejectionCode.AMOUNT_PRECISION_EXCEEDS_CURRENCY,
+                    "Row " + row.getRowNumber() + ": amount "
+                            + row.getSignedAmount().toPlainString() + " needs "
+                            + MinorUnit.detail(found.getCurrency()));
         } else {
             row.setRowStatus(BankImportRowStatus.CORRECTED);
             row.setRejectionCode(null);
