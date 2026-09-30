@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.scopegraph;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.mcp.internal.discovery.OpenApiToolMapper;
 import com.positivity.mcp.internal.scopegraph.OpenApiSchemaIndex.DomainIndex;
@@ -26,6 +27,26 @@ class OpenApiSchemaIndexBuilderTest {
         assertThat(index.operationSchemas("workorder_getworkorder")).containsExactly("workorder:WorkorderResponse");
         assertThat(index.operationSchemas("workorder_createworkorder"))
                 .containsExactly("workorder:WorkorderCreateRequest", "workorder:WorkorderResponse");
+    }
+
+    @Test
+    @DisplayName("a domain index is immutable down to its nested collections")
+    void domainIndexIsDeeplyImmutable() {
+        DomainIndex index = OpenApiSchemaIndexBuilder.build(
+                ScopeGraphTestFixtures.spec(),
+                ScopeGraphTestFixtures.DOMAIN,
+                (path, operation) ->
+                        OpenApiToolMapper.discoveredToolName(ScopeGraphTestFixtures.ROUTING_PREFIX + path, operation));
+
+        assertThatThrownBy(() ->
+                        index.operationSchemas().get("workorder_getworkorder").clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> index.schemaNames().add("Other")).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> index.enums().get("WorkorderResponse").clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() ->
+                        index.enums().get("WorkorderResponse").get("status").clear())
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test

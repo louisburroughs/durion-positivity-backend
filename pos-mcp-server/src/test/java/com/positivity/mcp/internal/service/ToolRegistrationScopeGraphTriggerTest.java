@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.service;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -68,24 +69,37 @@ class ToolRegistrationScopeGraphTriggerTest {
     }
 
     @Test
-    @DisplayName("without a holder (the pre-ADR-0069 constructor) registration is unchanged")
+    @DisplayName("a refresh cancelled by its timeout still requests one rebuild")
+    void rebuildAfterCancelledRefresh() {
+        when(fetcher.fetchAggregateSpec()).thenReturn(Mono.never());
+
+        // DiscoveryRefreshScheduler blocks with a timeout, which cancels the cycle; the only trigger
+        // left is doOnCancel.
+        Mono<Void> cycle = service(holder).registerDiscoveredTools();
+        assertThatCode(() -> cycle.block(Duration.ofMillis(100))).isInstanceOf(IllegalStateException.class);
+
+        verify(holder, times(1)).rebuild();
+    }
+
+    @Test
+    @DisplayName(
+            "without a holder (the pre-ADR-0069 constructor, or none in the context) the cycle completes as before")
     void noHolderIsANoOp() {
         when(fetcher.fetchAggregateSpec()).thenReturn(Mono.error(new IllegalStateException("gateway down")));
+        ToolRegistrationServiceImpl withoutProvider = new ToolRegistrationServiceImpl(
+                properties(),
+                fetcher,
+                mapper,
+                server,
+                mock(ToolMetadataRepository.class),
+                "http://api-gateway:8080",
+                new SimpleMeterRegistry(),
+                List.of());
 
-        new ToolRegistrationServiceImpl(
-                        properties(),
-                        fetcher,
-                        mapper,
-                        server,
-                        mock(ToolMetadataRepository.class),
-                        "http://api-gateway:8080",
-                        new SimpleMeterRegistry(),
-                        List.of())
-                .registerDiscoveredTools()
-                .block(Duration.ofSeconds(5));
-        service(null).registerDiscoveredTools().block(Duration.ofSeconds(5));
-
-        verify(holder, times(0)).rebuild();
+        assertThatCode(() -> withoutProvider.registerDiscoveredTools().block(Duration.ofSeconds(5)))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> service(null).registerDiscoveredTools().block(Duration.ofSeconds(5)))
+                .doesNotThrowAnyException();
     }
 
     @SuppressWarnings("unchecked")

@@ -22,8 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
  * same rows whichever tenant is or is not bound. The tenant-scoped {@code mcp_tool_priority} overlay
  * is deliberately not read: the graph describes the platform, not a tenant (ADR-0069, Constraints).
  *
- * <p>The statements are constants and the reads are one transaction, so the five passes see one
- * consistent catalog even while discovery is upserting.
+ * <p>The statements are constants and the reads are one read-only transaction at the default
+ * {@code READ COMMITTED} isolation, so each pass sees the rows committed when its own statement
+ * ran, not one snapshot for all five. A tool that discovery upserts between two passes can appear in
+ * a later pass only; the builder ignores a permission, workflow-state or prerequisite row whose tool
+ * it did not read, so the graph stays consistent with itself and the next rebuild picks the tool up.
  */
 @Component
 @Profile({"!test", "openapi"})

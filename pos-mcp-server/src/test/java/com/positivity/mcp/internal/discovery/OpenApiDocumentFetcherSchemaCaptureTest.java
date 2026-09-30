@@ -105,6 +105,32 @@ class OpenApiDocumentFetcherSchemaCaptureTest {
     }
 
     @Test
+    @DisplayName("a capture that dies, even with an Error, leaves discovery's own result untouched")
+    void captureErrorDoesNotFailDiscovery() {
+        OpenApiSchemaIndexHolder broken = new OpenApiSchemaIndexHolder() {
+            @Override
+            public void put(OpenApiSchemaIndex.DomainIndex index) {
+                throw new NoClassDefFoundError("simulated");
+            }
+        };
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered = fetcher(swaggerConfigClient(), SHADOW, broken)
+                .fetchAggregateSpec()
+                .block(Duration.ofSeconds(10));
+        OpenApiDocumentFetcher.DiscoveredOpenApi off = fetcher(
+                        swaggerConfigClient(), ScopeGraphProperties.off(), new OpenApiSchemaIndexHolder())
+                .fetchAggregateSpec()
+                .block(Duration.ofSeconds(10));
+
+        assertThat(discovered).isNotNull();
+        assertThat(off).isNotNull();
+        assertThat(discovered.openApi().getPaths().keySet())
+                .isEqualTo(off.openApi().getPaths().keySet());
+        assertThat(discovered.failedPrefixes()).isEmpty();
+        assertThat(broken.current().isEmpty()).isTrue();
+    }
+
+    @Test
     @DisplayName("a single merged aggregate is indexed by the domain of each path")
     void capturesPlainAggregate() {
         OpenApiSchemaIndexHolder holder = new OpenApiSchemaIndexHolder();

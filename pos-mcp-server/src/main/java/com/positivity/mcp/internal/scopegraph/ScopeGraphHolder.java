@@ -203,7 +203,10 @@ public class ScopeGraphHolder {
                     result.findings().size(),
                     result.unmappedTools());
             warnOnFindings(result);
-        } catch (RuntimeException exception) {
+        } catch (Throwable exception) {
+            if (isFatal(exception)) {
+                throw exception;
+            }
             if (buildFailures != null) {
                 buildFailures.increment();
             }
@@ -212,6 +215,15 @@ public class ScopeGraphHolder {
                     current.contentHash(),
                     exception.toString());
         }
+    }
+
+    /**
+     * What a build may not recover from: the VM is out of memory or broken. A stack overflow is not
+     * that (a runaway lexicon regex can cause one, and the stack is whole again once unwound), nor
+     * is a linkage error, so those are counted and logged like any other failed build.
+     */
+    private static boolean isFatal(Throwable exception) {
+        return exception instanceof VirtualMachineError && !(exception instanceof StackOverflowError);
     }
 
     /** Spec §2.5: at runtime a violation is logged once per build at WARN, never thrown. */

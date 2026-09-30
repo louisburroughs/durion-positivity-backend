@@ -20,7 +20,9 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>The graph holds platform definitions only (§8): entity types, terms, tools, documents, screens,
  * permissions and states. It is derived entirely from its sources, so it is never persisted; {@link
- * #contentHash()} and {@link #builtAt()} tie a turn to the version it used.
+ * #contentHash()} and {@link #builtAt()} tie a turn to the version it used. The hash covers every
+ * node with its attributes, every edge with its label, and the domain scopes, so two graphs that
+ * filter or render differently never share it.
  *
  * <p>Nodes and edges are kept sorted, so iteration order, and with it everything computed from the
  * graph, does not depend on the order the sources were read in.
@@ -47,7 +49,7 @@ public final class ScopeGraph {
         this.incoming = adjacency(edges, false);
         this.domainScopes = java.util.Collections.unmodifiableMap(new TreeMap<>(domainScopes));
         this.edgeCount = edges.size();
-        this.contentHash = hash(nodes.keySet(), edges);
+        this.contentHash = hash(nodes.values(), edges, this.domainScopes);
         this.builtAt = builtAt;
         this.entityOptions = keysOf(NodeType.ENTITY);
         this.domainOptions = keysOf(NodeType.DOMAIN);
@@ -180,20 +182,52 @@ public final class ScopeGraph {
         return java.util.Collections.unmodifiableMap(grouped);
     }
 
-    private static String hash(Collection<NodeId> nodeIds, Collection<Edge> edges) {
+    private static String hash(Collection<ScopeNode> nodes, Collection<Edge> edges, Map<String, String> domainScopes) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            for (NodeId id : nodeIds) {
-                digest.update(("N|" + id + "\n").getBytes(StandardCharsets.UTF_8));
+            for (ScopeNode node : nodes) {
+                digest.update(("N|" + node.id() + "|" + canonical(node.attributes()) + "\n")
+                        .getBytes(StandardCharsets.UTF_8));
             }
             for (Edge edge : edges) {
                 digest.update(("E|" + edge.key() + "\n").getBytes(StandardCharsets.UTF_8));
             }
+            domainScopes.forEach((domain, scope) ->
+                    digest.update(("S|" + domain + "|" + scope + "\n").getBytes(StandardCharsets.UTF_8)));
             return HexFormat.of().formatHex(digest.digest()).substring(0, HASH_LENGTH);
         } catch (NoSuchAlgorithmException exception) {
             // SHA-256 is required of every Java platform; reaching this is a broken runtime.
             throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
+    }
+
+    /**
+     * A node's attributes in one canonical form: the collections a record holds are copied without
+     * an iteration order, so they are sorted here and the text does not depend on the JVM run.
+     */
+    private static String canonical(@Nullable NodeAttributes attributes) {
+        return switch (attributes) {
+            case null -> "";
+            case NodeAttributes.Tool tool -> {
+                StringBuilder text = new StringBuilder("tool|")
+                        .append(tool.source())
+                        .append('|')
+                        .append(tool.domain())
+                        .append('|')
+                        .append(tool.httpMethod());
+                new TreeMap<>(tool.permissionGroups())
+                        .forEach((group, codes) ->
+                                text.append('|').append(group).append('=').append(new TreeSet<>(codes)));
+                yield text.toString();
+            }
+            case NodeAttributes.RagDoc doc ->
+                "rag|" + doc.ragScope() + "|" + doc.requiredPermissions() + "|" + doc.platformWide();
+            case NodeAttributes.Screen screen ->
+                "screen|" + screen.title() + "|" + screen.urlTemplate() + "|" + screen.domain() + "|"
+                        + screen.requiredPerm();
+            case NodeAttributes.Term term -> "term|" + term.language() + "|" + term.phrase() + "|" + term.glossary();
+            case NodeAttributes.IdentifierPattern pattern -> "id|" + pattern.pattern();
+        };
     }
 
     /**

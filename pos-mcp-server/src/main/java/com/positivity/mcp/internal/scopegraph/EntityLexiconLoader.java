@@ -70,8 +70,12 @@ public final class EntityLexiconLoader {
 
     public static @NonNull EntityLexicon load(@NonNull InputStream in) {
         Object root;
+        // SnakeYAML keeps the last of two equal keys by default, which would silently drop a list
+        // an author repeated while editing; a duplicate key is an error like any other shape error.
+        LoaderOptions options = new LoaderOptions();
+        options.setAllowDuplicateKeys(false);
         try (Reader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
-            root = new Yaml(new SafeConstructor(new LoaderOptions())).load(reader);
+            root = new Yaml(new SafeConstructor(options)).load(reader);
         } catch (YAMLException | IOException exception) {
             throw new EntityLexiconException(
                     "The entity lexicon is not valid YAML: " + exception.getMessage(), exception);

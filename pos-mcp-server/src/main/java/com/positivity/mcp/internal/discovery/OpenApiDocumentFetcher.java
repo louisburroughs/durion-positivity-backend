@@ -630,7 +630,10 @@ public class OpenApiDocumentFetcher {
                     unresolved,
                     OpenApiToolMapper.extractDomain(routingPrefix),
                     (path, operation) -> OpenApiToolMapper.discoveredToolName(routingPrefix + path, operation)));
-        } catch (RuntimeException ex) {
+        } catch (Throwable ex) {
+            if (isFatal(ex)) {
+                throw ex;
+            }
             log.warn("Could not index the schemas of prefix {} for the scope graph: {}", routingPrefix, ex.toString());
         }
     }
@@ -648,9 +651,21 @@ public class OpenApiDocumentFetcher {
             OpenApiSchemaIndexBuilder.buildByPathDomain(
                             unresolved, OpenApiToolMapper::extractDomain, OpenApiToolMapper::discoveredToolName)
                     .forEach(schemaIndexHolder::put);
-        } catch (RuntimeException ex) {
+        } catch (Throwable ex) {
+            if (isFatal(ex)) {
+                throw ex;
+            }
             log.warn("Could not index the aggregate spec's schemas for the scope graph: {}", ex.toString());
         }
+    }
+
+    /**
+     * The capture is observation only, so every failure but a broken VM is swallowed: a parser stack
+     * overflow on a pathological spec or a linkage error must not fail the fetch that discovery has
+     * already accepted.
+     */
+    private static boolean isFatal(Throwable ex) {
+        return ex instanceof VirtualMachineError && !(ex instanceof StackOverflowError);
     }
 
     /**

@@ -72,6 +72,23 @@ class EntityLexiconLoaderTest {
     }
 
     @Test
+    @DisplayName("a repeated YAML key is rejected instead of silently keeping the last one")
+    void duplicateYamlKey() {
+        assertThatThrownBy(() -> load("""
+                entities:
+                  - key: workorder
+                    domain: workorder
+                    schema_patterns: ["workorder:Workorder.*"]
+                    schema_patterns: ["workorder:Estimate.*"]
+                """))
+                .isInstanceOf(EntityLexiconException.class)
+                .hasMessageContaining("schema_patterns");
+        assertThatThrownBy(() -> load("entities: []\nentities: []\n"))
+                .isInstanceOf(EntityLexiconException.class)
+                .hasMessageContaining("entities");
+    }
+
+    @Test
     @DisplayName("a duplicate entity key is rejected and named")
     void duplicateKey() {
         assertThatThrownBy(() -> load("""

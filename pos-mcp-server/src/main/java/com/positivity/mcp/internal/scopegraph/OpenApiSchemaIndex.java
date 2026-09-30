@@ -43,10 +43,23 @@ public final class OpenApiSchemaIndex {
             @NonNull Set<String> schemaNames,
             @NonNull Map<String, Map<String, List<String>>> enums) {
 
+        /** Deep copies: the builder hands over sorted collections, and none of them may leak out mutable. */
         public DomainIndex {
-            operationSchemas = Map.copyOf(operationSchemas);
-            schemaNames = Set.copyOf(schemaNames);
-            enums = Map.copyOf(enums);
+            Map<String, Set<String>> operations = new TreeMap<>();
+            operationSchemas.forEach((tool, names) -> operations.put(tool, unmodifiableSorted(names)));
+            operationSchemas = java.util.Collections.unmodifiableMap(operations);
+            schemaNames = unmodifiableSorted(schemaNames);
+            Map<String, Map<String, List<String>>> copied = new TreeMap<>();
+            enums.forEach((schema, properties) -> {
+                Map<String, List<String>> values = new TreeMap<>();
+                properties.forEach((property, list) -> values.put(property, List.copyOf(list)));
+                copied.put(schema, java.util.Collections.unmodifiableMap(values));
+            });
+            enums = java.util.Collections.unmodifiableMap(copied);
+        }
+
+        private static Set<String> unmodifiableSorted(Set<String> names) {
+            return java.util.Collections.unmodifiableSet(new TreeSet<>(names));
         }
     }
 

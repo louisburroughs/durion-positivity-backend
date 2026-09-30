@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.scopegraph;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -191,6 +192,72 @@ class ScopeGraphHolderTest {
         holder.rebuild();
         runQueued();
         assertThat(holder.current().entityOptions()).containsExactly("build-3");
+    }
+
+    @Test
+    @DisplayName(
+            "a build that dies with an Error is counted and logged like any other failure, and the holder is not wedged")
+    void errorKeepsPreviousSnapshotAndIsCounted() {
+        AtomicInteger builds = new AtomicInteger();
+        ScopeGraphHolder holder = new ScopeGraphHolder(
+                SHADOW,
+                () -> {
+                    int build = builds.incrementAndGet();
+                    if (build == 2) {
+                        // A catastrophically backtracking lexicon regex ends here, not in a RuntimeException.
+                        throw new StackOverflowError();
+                    }
+                    if (build == 3) {
+                        throw new NoClassDefFoundError("io/swagger/Missing");
+                    }
+                    return result("build-" + build);
+                },
+                queued::add,
+                meters);
+
+        holder.rebuild();
+        runQueued();
+        ScopeGraph first = holder.current();
+        holder.rebuild();
+        runQueued();
+        holder.rebuild();
+        runQueued();
+
+        assertThat(holder.current()).isSameAs(first);
+        assertThat(meters.get("mcp.scope_graph.build.failures").counter().count())
+                .isEqualTo(2.0);
+        assertThat(logs.list)
+                .filteredOn(event -> event.getFormattedMessage().contains("Scope graph build failed"))
+                .hasSize(2);
+
+        holder.rebuild();
+        runQueued();
+        assertThat(holder.current().entityOptions()).containsExactly("build-4");
+    }
+
+    @Test
+    @DisplayName("an out-of-memory error is not swallowed, and still does not wedge the holder")
+    void outOfMemoryPropagates() {
+        AtomicInteger builds = new AtomicInteger();
+        ScopeGraphHolder holder = new ScopeGraphHolder(
+                SHADOW,
+                () -> {
+                    if (builds.incrementAndGet() == 1) {
+                        throw new OutOfMemoryError("simulated");
+                    }
+                    return result("build-" + builds.get());
+                },
+                queued::add,
+                meters);
+
+        holder.rebuild();
+        assertThatThrownBy(this::runQueued).isInstanceOf(OutOfMemoryError.class);
+        assertThat(meters.get("mcp.scope_graph.build.failures").counter().count())
+                .isZero();
+
+        holder.rebuild();
+        runQueued();
+        assertThat(holder.current().entityOptions()).containsExactly("build-2");
     }
 
     @Test

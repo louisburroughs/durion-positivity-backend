@@ -109,6 +109,49 @@ class ScopeGraphTest {
     }
 
     @Test
+    @DisplayName("the content hash changes when a node's attributes or a domain scope change, not only its identity")
+    void hashChangesWithAttributes() {
+        String base = sample(false).build(BUILT_AT).contentHash();
+        NodeId tool = NodeId.of(NodeType.TOOL, "WorkorderFacadeTool");
+
+        // The same permission codes regrouped: identical REQUIRES edges, a different AND structure.
+        ScopeGraph.Builder regrouped = sample(false);
+        regrouped.node(
+                NodeType.TOOL,
+                "WorkorderFacadeTool",
+                new NodeAttributes.Tool(
+                        NodeAttributes.ToolSource.FACADE,
+                        "workorder",
+                        null,
+                        Map.of("getWorkorder", Set.of(), "listWorkorders", Set.of("workorder:workorder:view"))));
+        ScopeGraph.Builder discovered = sample(false);
+        discovered.node(
+                NodeType.TOOL,
+                "WorkorderFacadeTool",
+                new NodeAttributes.Tool(
+                        NodeAttributes.ToolSource.DISCOVERED,
+                        "workorder",
+                        null,
+                        Map.of("getWorkorder", Set.of("workorder:workorder:view"))));
+        ScopeGraph.Builder pattern = sample(false);
+        pattern.node(NodeType.IDENTIFIER_PATTERN, "workorder-number", new NodeAttributes.IdentifierPattern("WO-\\d+"));
+        ScopeGraph.Builder otherPattern = sample(false);
+        otherPattern.node(
+                NodeType.IDENTIFIER_PATTERN, "workorder-number", new NodeAttributes.IdentifierPattern("WO-\\d{4}"));
+        ScopeGraph.Builder scope = sample(false);
+        scope.domainScope("shop-manager", "shop-manager");
+
+        assertThat(regrouped.build(BUILT_AT).contentHash()).isNotEqualTo(base);
+        assertThat(discovered.build(BUILT_AT).contentHash()).isNotEqualTo(base);
+        assertThat(pattern.build(BUILT_AT).contentHash())
+                .isNotEqualTo(base)
+                .isNotEqualTo(otherPattern.build(BUILT_AT).contentHash());
+        assertThat(scope.build(BUILT_AT).contentHash()).isNotEqualTo(base);
+        assertThat(sample(true).build(BUILT_AT).attributes(tool, NodeAttributes.Tool.class))
+                .isPresent();
+    }
+
+    @Test
     @DisplayName("an edge between node types its type does not join is rejected")
     void edgeTypesAreClosed() {
         ScopeGraph.Builder builder = ScopeGraph.builder();
