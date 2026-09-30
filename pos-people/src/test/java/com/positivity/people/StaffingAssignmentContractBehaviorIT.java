@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -559,8 +560,8 @@ class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("VE-119-101: Non-existent locationId returns 404 or 400")
-    void VE_119_101_nonExistentLocation_returns4xx() throws Exception {
+    @DisplayName("VE-119-101: a locationId with no ext_location row yet is 503 LOCATION_REPLICATION_PENDING (#1994)")
+    void VE_119_101_nonExistentLocation_returns503ReplicationPending() throws Exception {
         String nonExistentLocationId = "018e1c9f-dead-7000-8000-000000000000";
         String payload = """
 				{
@@ -572,11 +573,36 @@ class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
 				}
 				""".formatted(VALID_PERSON_ID, nonExistentLocationId);
 
-        // Expect 400 (inactive) or 404 (not found) — location service will reject
+        // The replica has no row at all for the location: "not yet", not "no" — retryable.
         mockMvc.perform(withAuth(post(STAFFING_BASE)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(jsonPath("$.code").value("LOCATION_REPLICATION_PENDING"))
+                .andExpect(jsonPath("$.referenceId").value(nonExistentLocationId));
+    }
+
+    @Test
+    @DisplayName("VE-119-101: a locationId whose ext_location row is present but inactive stays 404 (#1994)")
+    void VE_119_101_inactiveLocation_returns404() throws Exception {
+        String inactiveLocationId = "018e1c9f-dead-7000-8000-000000000000";
+        when(locationReferenceService.isLocationReplicated(UUID.fromString(inactiveLocationId)))
+                .thenReturn(true);
+        String payload = """
+				{
+				    "personId": "%s",
+				    "locationId": "%s",
+				    "role": "TECHNICIAN",
+				    "isPrimary": false,
+				    "effectiveFrom": "2026-02-01"
+				}
+				""".formatted(VALID_PERSON_ID, inactiveLocationId);
+
+        mockMvc.perform(withAuth(post(STAFFING_BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
+                .andExpect(status().isNotFound());
     }
 
     @Test

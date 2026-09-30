@@ -8,6 +8,7 @@ import com.positivity.people.internal.entity.ExtJobTimeReplica;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
+import com.positivity.people.internal.exception.ReplicationPendingCodes;
 import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
@@ -16,6 +17,7 @@ import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.LocationScope.Reach;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.web.common.ReplicationPendingException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -54,7 +56,8 @@ import org.springframework.stereotype.Service;
  * <li>{@link #getApprovedTimeForExport} names its locations — <b>gate</b>. Every supplied
  * location must be within the caller's reach or the request is a 403
  * {@code LOCATION_SCOPE_DENIED}. The gate runs after the existence/active validation so an
- * unknown location is the same 400 for every caller.</li>
+ * inactive location is the same 400 (and one not yet replicated the same 503
+ * {@code LOCATION_REPLICATION_PENDING}, #1994) for every caller.</li>
  * <li>{@link #getAttendanceDiscrepancyReport} takes {@code locationId} as an optional filter —
  * <b>gate</b> when named, <b>narrow</b> when absent: a scoped caller is not denied, the report
  * is restricted to their reach (assigned nodes plus replicated descendants on the dimension(s)
@@ -129,12 +132,22 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 
         for (UUID locationId : locationIds) {
             if (!locationReferenceService.isLocationActive(locationId)) {
+                // A location the replica has no row for may simply not have arrived from
+                // pos-location yet, so it is "not yet" (503); only a location that is present and
+                // inactive is a definite 400 (#1994).
+                if (!locationReferenceService.isLocationReplicated(locationId)) {
+                    throw new ReplicationPendingException(
+                            ReplicationPendingCodes.LOCATION_REPLICATION_PENDING,
+                            "The location has not replicated from Location yet; retry shortly",
+                            locationId);
+                }
                 throw new RequestValidationException("Unknown locationId: " + locationId);
             }
         }
 
         // Gate: every named location must be within the caller's reach, or this is a 403. Runs
-        // after the validation above so an unknown location is a 400 for every caller.
+        // after the validation above so an inactive location is a 400 (and an unreplicated one a
+        // 503) for every caller.
         LocationScope scope = SecurityContextHelper.locationScope();
         for (UUID locationId : locationIds) {
             scope.require(PeoplePermissions.ACCOUNTING_TIME_EXPORT, locationId);

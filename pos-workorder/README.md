@@ -686,6 +686,16 @@ state keeps its own status.
 | `LOCATION_REPLICATION_PENDING` | `ext_bay` and `ext_mobile_unit`, for a well-formed `resourceId` of a stated `BAY` or `MOBILE_UNIT` (a position held by the other kind's replica stays `422 SERVICE_POSITION_INVALID`) | `PUT /v1/workorders/{id}/position` |
 | `PICK_LIST_REPLICATION_PENDING` | `ext_pick_list`, or an empty `ext_pick_task` set behind an existing list, for a workorder that has a servicing site and a part line with a product and a positive quantity (the lines `PromotedWorkorderDemandPublisher` asks pos-inventory to pick). A workorder with none of those keeps its `404` | the pick-list, scan, confirm, complete and consume endpoints under `/v1/workorders/{id}` |
 
+The pick-list `503` has no upper bound. The gate is a predicate on the workorder's current state
+(a servicing site and a pickable part line), not evidence that the generate command was ever
+queued: `InventoryCommandPublisher` sends `inventory.commands.v1` straight through Kafka, and
+nothing in this module records the request. So a workorder whose generate command never left
+answers `503` with `Retry-After` indefinitely: `workorder.kafka.enabled` was off when it was
+promoted, the send failed (`PromotedWorkorderDemandPublisher` logs the failure and moves on), or
+its part lines were added after promotion (no command is sent for those). An operator who sees
+the `503` outlast a few `Retry-After` intervals should check that log line and re-promote, or ask
+pos-inventory to generate the pick list, rather than keep retrying.
+
 Left as they are, on purpose: estimate tax (`LocationReferenceService`) treats a location that has
 not replicated as `taxPending` and never blocks the estimate; the part-quantity divisibility check
 (`ext_product_uom`) is configuration data that refuses with 422; the invoice hand-off answers

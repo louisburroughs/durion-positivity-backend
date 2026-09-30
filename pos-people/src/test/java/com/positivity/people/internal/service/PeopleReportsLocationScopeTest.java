@@ -326,10 +326,11 @@ class PeopleReportsLocationScopeTest {
         }
 
         @Test
-        @DisplayName("an unknown location is a 400 for a scoped caller too — validation precedes the gate")
-        void unknownLocationIs400BeforeTheGate() {
+        @DisplayName("an inactive location is a 400 for a scoped caller too — validation precedes the gate")
+        void inactiveLocationIs400BeforeTheGate() {
             LocationScopeFixtures.callerWith(ACTOR, otherScopedAt(DISTRICT));
             when(locationReferenceService.isLocationActive(SHOP_C)).thenReturn(false);
+            when(locationReferenceService.isLocationReplicated(SHOP_C)).thenReturn(true);
             List<UUID> locations = List.of(SHOP_C);
 
             assertThatThrownBy(() -> service.getApprovedTimeForExport(DAY, DAY, locations, ACTOR, null))

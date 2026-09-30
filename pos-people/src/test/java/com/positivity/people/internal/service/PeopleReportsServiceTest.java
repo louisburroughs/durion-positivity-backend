@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
@@ -17,6 +18,7 @@ import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
+import com.positivity.web.common.ReplicationPendingException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -24,6 +26,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -244,17 +247,81 @@ class PeopleReportsServiceTest {
     }
 
     @Test
-    void getApprovedTimeForExport_unknownLocationThrowsBadRequestError() {
+    @DisplayName("#1994: a location the ext_location replica holds but marks inactive is still a 400")
+    void getApprovedTimeForExport_inactiveLocationThrowsBadRequestError() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         LocalDate startDate = LocalDate.parse("2026-02-10");
         LocalDate endDate = LocalDate.parse("2026-02-11");
         List<UUID> locations = List.of(locationId);
         when(locationReferenceService.isLocationActive(locationId)).thenReturn(false);
+        when(locationReferenceService.isLocationReplicated(locationId)).thenReturn(true);
 
         RequestValidationException exception = assertThrows(
                 RequestValidationException.class,
                 () -> service.getApprovedTimeForExport(startDate, endDate, locations, "test-actor", "corr-1"));
 
         assertTrue(exception.getMessage().contains("Unknown locationId"));
+        verifyNoInteractions(timeEntryRepository);
+    }
+
+    @Test
+    @DisplayName("#1994: a location the ext_location replica has no row for yet is 503 LOCATION_REPLICATION_PENDING")
+    void getApprovedTimeForExport_unreplicatedLocationIsReplicationPending() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        LocalDate startDate = LocalDate.parse("2026-02-10");
+        LocalDate endDate = LocalDate.parse("2026-02-11");
+        List<UUID> locations = List.of(locationId);
+        when(locationReferenceService.isLocationActive(locationId)).thenReturn(false);
+        when(locationReferenceService.isLocationReplicated(locationId)).thenReturn(false);
+
+        ReplicationPendingException exception = assertThrows(
+                ReplicationPendingException.class,
+                () -> service.getApprovedTimeForExport(startDate, endDate, locations, "test-actor", "corr-1"));
+
+        assertEquals("LOCATION_REPLICATION_PENDING", exception.getCode());
+        assertEquals(locationId, exception.getReferenceId());
+        assertFalse(exception.getMessage().contains(locationId.toString()));
+        verifyNoInteractions(timeEntryRepository);
+    }
+
+    @Test
+    @DisplayName("#1994: a location name the replica cannot supply degrades to the location id, never an error")
+    void getApprovedTimeForExport_missingLocationNameFallsBackToId() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000009");
+
+        TimeEntry approved = new TimeEntry();
+        approved.setTimeEntryId(UUID.fromString("00000000-0000-0000-0000-000000000011"));
+        approved.setPersonId(personUuid);
+        approved.setLocationId(locationId);
+        approved.setStatus(TimeEntryStatus.APPROVED);
+        approved.setAttendanceStartAt(Instant.parse("2026-02-10T08:00:00Z"));
+        approved.setAttendanceEndAt(Instant.parse("2026-02-10T16:00:00Z"));
+        approved.setApprovedAt(Instant.parse("2026-02-11T01:15:00Z"));
+        approved.setApprovedBy("manager-1");
+
+        when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
+        when(locationReferenceService.findLocationName(locationId)).thenReturn(Optional.empty());
+        when(extPersonReplicaRepository.findAllById(any()))
+                .thenReturn(List.of(ExtPersonReplica.builder()
+                        .personId(personUuid)
+                        .firstName("Jane")
+                        .lastName("Doe")
+                        .aggregateVersion(0)
+                        .updatedAt(Instant.now())
+                        .build()));
+        when(timeEntryRepository.findApprovedForExport(
+                        eq(TimeEntryStatus.APPROVED), any(), any(), eq(List.of(locationId))))
+                .thenReturn(List.of(approved));
+
+        List<ApprovedTimeExportResponse> result = service.getApprovedTimeForExport(
+                LocalDate.parse("2026-02-10"),
+                LocalDate.parse("2026-02-10"),
+                List.of(locationId),
+                "test-actor",
+                "corr-1");
+
+        assertEquals(1, result.size());
+        assertEquals(locationId.toString(), result.get(0).locationName());
     }
 }

@@ -622,6 +622,26 @@ class WorkorderPickFacadeServiceImplTest {
     }
 
     @Test
+    @DisplayName("#1994: an empty task set on a workorder that never qualified for a pick list is a wrong id: 404")
+    void emptyTasksOnAnUnqualifiedWorkorderStaysNotFound() {
+        promotedWorkorder(false);
+        pickListWithNoTasksYet();
+
+        assertNotFound(catchThrowable(() -> service.resolveScan(WORKORDER_ID, TASK_ID, scan(SKU_ID, LOCATION_ID))));
+        ConfirmPickLineRequest confirm = new ConfirmPickLineRequest();
+        confirm.setQuantityPicked(1);
+        assertNotFound(catchThrowable(() -> service.confirmPickLine(WORKORDER_ID, TASK_ID, TASK_ID, confirm)));
+        ConsumePickedItemsRequest consume = new ConsumePickedItemsRequest();
+        ConsumePickedItemsRequest.ConsumeItem item = new ConsumePickedItemsRequest.ConsumeItem();
+        item.setPickTaskId(TASK_ID);
+        item.setQuantityToConsume(1);
+        consume.setItems(List.of(item));
+        assertNotFound(catchThrowable(() -> service.consumePickedItems(WORKORDER_ID, consume)));
+        verify(publisher, never()).requestPickTaskConfirm(any(), any(), any(), any(), anyInt());
+        verify(publisher, never()).requestItemsConsume(any(), any(), any());
+    }
+
+    @Test
     @DisplayName("#1994: a task id absent from a pick list that does hold tasks is a wrong id: 404 stays")
     void unknownTaskOnAPopulatedPickListStaysNotFound() {
         promotedWorkorder(true);

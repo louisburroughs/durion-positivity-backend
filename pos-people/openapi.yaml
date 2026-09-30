@@ -1275,7 +1275,7 @@ paths:
 
         Use this tool as the stable source-data read for accounting time-export workflows; use getAttendanceDiscrepancyReport instead for variance analysis between attendance and job time.
 
-        Preconditions: every supplied locationId must resolve to an active location; rows missing approval or attendance timestamps are silently excluded.
+        Preconditions: every supplied locationId must resolve to an active location in the ext_location replica; rows missing approval or attendance timestamps are silently excluded.
 
         Required inputs: startDate and endDate (inclusive, yyyy-MM-dd, evaluated in UTC) and one or more locationId query parameters.
 
@@ -1283,7 +1283,7 @@ paths:
 
         Emits a PEOPLE_TIME_APPROVED_EXPORT_READ audit event but changes no state; this is a read-only projection sorted by entry date then time entry id.
 
-        Returns 400 when endDate is before startDate, when no locationId is supplied, or when a locationId is unknown or inactive, and 403 LOCATION_SCOPE_DENIED when any locationId is outside the caller''s location reach.
+        Returns 400 when endDate is before startDate, when no locationId is supplied, or when a locationId names a replicated location that is inactive; 403 LOCATION_SCOPE_DENIED when any locationId is outside the caller''s location reach; and 503 LOCATION_REPLICATION_PENDING with a Retry-After header when a locationId has no ext_location row yet (not yet, not no: retry).
 
         '
       operationId: listApprovedTimeForExport
@@ -1350,7 +1350,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Dependent service unavailable
+          description: 'A locationId has not replicated from Location yet (ApiError.code LOCATION_REPLICATION_PENDING, referenceId the location id). Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - accounting:time:export
@@ -1456,12 +1462,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Unexpected server error
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Dependent service unavailable
       security:
       - bearerAuth:
         - accounting:time:export

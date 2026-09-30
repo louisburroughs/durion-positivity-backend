@@ -31,10 +31,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.web.server.ResponseStatusException;
 
 @DisplayName("People Reports/Timekeeping ContractBehaviorIT")
 class ContractBehaviorIT extends BaseContractIntegrationTest {
@@ -206,13 +204,12 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("dependency failure: approved time export propagates 503")
-    void approvedTimeExport_dependencyFailure() throws Exception {
+    @DisplayName("replica degrade: a location name the replica cannot supply falls back to the id, still 200")
+    void approvedTimeExport_missingLocationNameFallsBackToId() throws Exception {
         seedTechnician(technicianId, "Jane", "Doe");
 
         when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
-        when(locationReferenceService.findLocationName(locationId))
-                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to fetch location"));
+        when(locationReferenceService.findLocationName(locationId)).thenReturn(Optional.empty());
 
         TimeEntry approved = new TimeEntry();
         approved.setPersonId(technicianId);
@@ -229,7 +226,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                         .param("endDate", "2026-02-16")
                         .param("locationId", locationId.toString())
                         .header("X-Authorities", "accounting:time:export")))
-                .andExpect(status().isServiceUnavailable());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].employeeName").value("Jane Doe"))
+                .andExpect(jsonPath("$[0].locationName").value(locationId.toString()));
     }
 
     @Test

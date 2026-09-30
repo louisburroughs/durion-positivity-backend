@@ -9,6 +9,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -68,10 +69,6 @@ public class PeopleReportsController {
                     + "LOCATION_SCOPE_DENIED: locationId is outside the caller's location reach",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
-            responseCode = "503",
-            description = "Dependent service unavailable",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
             responseCode = "500",
             description = "Unexpected server error",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -115,8 +112,8 @@ public class PeopleReportsController {
                     location names for a date range and one or more locations.
                     Use this tool as the stable source-data read for accounting time-export workflows; use \
                     getAttendanceDiscrepancyReport instead for variance analysis between attendance and job time.
-                    Preconditions: every supplied locationId must resolve to an active location; rows missing \
-                    approval or attendance timestamps are silently excluded.
+                    Preconditions: every supplied locationId must resolve to an active location in the \
+                    ext_location replica; rows missing approval or attendance timestamps are silently excluded.
                     Required inputs: startDate and endDate (inclusive, yyyy-MM-dd, evaluated in UTC) and one or more \
                     locationId query parameters.
                     Location scope: every locationId must lie within the caller's location reach, or the request \
@@ -125,8 +122,9 @@ public class PeopleReportsController {
                     Emits a PEOPLE_TIME_APPROVED_EXPORT_READ audit event but changes no state; this is a read-only \
                     projection sorted by entry date then time entry id.
                     Returns 400 when endDate is before startDate, when no locationId is supplied, or when a \
-                    locationId is unknown or inactive, and 403 LOCATION_SCOPE_DENIED when any locationId is \
-                    outside the caller's location reach.
+                    locationId names a replicated location that is inactive; 403 LOCATION_SCOPE_DENIED when any \
+                    locationId is outside the caller's location reach; and 503 LOCATION_REPLICATION_PENDING with a \
+                    Retry-After header when a locationId has no ext_location row yet (not yet, not no: retry).
                     """)
     @ApiResponse(responseCode = "200", description = "Approved time rows retrieved successfully")
     @ApiResponse(
@@ -140,8 +138,15 @@ public class PeopleReportsController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
-            description = "Dependent service unavailable",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
+            description = "A locationId has not replicated from Location yet (ApiError.code "
+                    + "LOCATION_REPLICATION_PENDING, referenceId the location id). Not-yet, not no: retry after the "
+                    + "Retry-After interval.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer")),
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",
             description = "Unexpected server error",

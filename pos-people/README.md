@@ -151,6 +151,7 @@ status.
 | Code | Replica miss | Endpoint |
 | --- | --- | --- |
 | `LOCATION_REPLICATION_PENDING` | `ext_location` has no row for the location. A row that is present but inactive stays `404 Location is inactive` | `POST /v1/people/staffing/assignments`; `PUT /v1/people/staffing/assignments/{id}` |
+| `LOCATION_REPLICATION_PENDING` | `ext_location` has no row for a caller-supplied `locationId`. A row that is present but inactive stays `400 Unknown locationId` | `GET /v1/people/reports/approvedTime` |
 | `USER_LINK_REPLICATION_PENDING` | `ext_people_contact_user_link` has no row at all for the caller's username, on a read that answers "me" with no default | `GET /v1/people/me/locations`; `GET /v1/people/availability` without `locationId`; `GET /v1/people/workSessions/current` without `personId` |
 
 The user link needs a rule, because a user with no person link is also a legitimate, permanent
