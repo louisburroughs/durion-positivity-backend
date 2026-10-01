@@ -13,11 +13,22 @@ import org.jspecify.annotations.NonNull;
  * @param entities the curated entities, in file order
  * @param unscopedTools enabled tools that deliberately act on no entity (date windows, glossary,
  *     web search); the explicit exemption from the "every tool acts on an entity" rule
+ * @param domains ADR-0068: rag-scope to one user-vocabulary sentence, the criteria of the {@code
+ *     domain} Choice question; keyed by the rag-scopes of {@code mcp.rag.preload.docs} plus {@code master}
  */
 public record EntityLexicon(
         @NonNull Map<String, String> domainScopes,
         @NonNull List<EntityDefinition> entities,
-        @NonNull List<String> unscopedTools) {
+        @NonNull List<String> unscopedTools,
+        @NonNull Map<String, String> domains) {
+
+    /** The pre-ADR-0068 shape: no {@code domains} sentences. */
+    public EntityLexicon(
+            @NonNull Map<String, String> domainScopes,
+            @NonNull List<EntityDefinition> entities,
+            @NonNull List<String> unscopedTools) {
+        this(domainScopes, entities, unscopedTools, Map.of());
+    }
 
     /** The languages every entity must carry at least one term in (ADR-0069 §3). */
     public static final List<String> REQUIRED_LANGUAGES = List.of("en", "fr", "es");
@@ -26,6 +37,7 @@ public record EntityLexicon(
         domainScopes = Map.copyOf(domainScopes);
         entities = List.copyOf(entities);
         unscopedTools = List.copyOf(unscopedTools);
+        domains = Map.copyOf(domains);
     }
 
     /**

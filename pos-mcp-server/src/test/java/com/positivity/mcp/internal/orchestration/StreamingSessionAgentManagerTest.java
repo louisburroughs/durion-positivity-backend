@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
@@ -30,6 +31,7 @@ import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.config.ScopeGraphProperties;
 import com.positivity.mcp.internal.config.ScopeGraphProperties.Consumer;
 import com.positivity.mcp.internal.domain.EvalTurnTrace;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
@@ -110,6 +112,8 @@ import reactor.core.publisher.Flux;
 @ExtendWith(BoundTenant.class)
 class StreamingSessionAgentManagerTest {
 
+    private static final HeuristicQuestionTagger HEURISTIC_TAGGER = HeuristicQuestionTagger.withDefaultCatalog();
+
     private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000000302");
     private static final Set<String> PERMISSION_CODES = Set.of("AUTHENTICATED", "mcp:chat:stream");
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-04-13T02:00:00Z"), ZoneOffset.UTC);
@@ -175,8 +179,12 @@ class StreamingSessionAgentManagerTest {
         lenient()
                 .when(rolePromptResolver.assemble(any(), any(), anyBoolean()))
                 .thenReturn(new RolePromptResolver.AssembledPrompt("prompt", List.of("BASE", "ROLE")));
+        // ADR-0068: the mocked engine tags with the heuristics, as the unwired real engine does.
         lenient()
-                .when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
+                .when(toolSelectionEngine.tag(anyString()))
+                .thenAnswer(inv -> HEURISTIC_TAGGER.tag(inv.getArgument(0)));
+        lenient()
+                .when(toolSelectionEngine.selectRoleTools(any(), any(), any(), any(QuestionTags.class)))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
         dateWindowFacadeTool = new DateWindowFacadeTool(Clock.systemUTC());
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
@@ -315,7 +323,10 @@ class StreamingSessionAgentManagerTest {
     @DisplayName("streamChat skips fallback tools already resolved for the role")
     void streamChat_skipsDuplicateFallbackTool() {
         when(toolSelectionEngine.selectRoleTools(
-                        "ROLE_DUPLICATE", PERMISSION_CODES, "search the internet for tire prices"))
+                        eq("ROLE_DUPLICATE"),
+                        eq(PERMISSION_CODES),
+                        eq("search the internet for tire prices"),
+                        any(QuestionTags.class)))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(
                         List.of(exaWebSearchTool), List.of(exaWebSearchTool)));
 
@@ -335,8 +346,8 @@ class StreamingSessionAgentManagerTest {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
 
         StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
@@ -347,7 +358,7 @@ class StreamingSessionAgentManagerTest {
 
         assertThat(result).isNotNull();
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3));
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
         assertThat(roleAgentCacheKeys(selectorManager))
                 .contains("ROLE_CASHIER::GlossaryFacadeTool+InventoryFacadeTool");
@@ -359,7 +370,11 @@ class StreamingSessionAgentManagerTest {
         String message = "create a purchase order for vendor acme";
         when(workflowStateService.resolveActiveState("user-1")).thenReturn(Optional.of(WorkflowState.CREATING_PO));
         when(toolSelectionEngine.selectRoleTools(
-                        eq("ROLE_CASHIER"), eq(PERMISSION_CODES), eq(message), eq(WorkflowState.CREATING_PO)))
+                        eq("ROLE_CASHIER"),
+                        eq(PERMISSION_CODES),
+                        eq(message),
+                        eq(WorkflowState.CREATING_PO),
+                        any(QuestionTags.class)))
                 .thenReturn(
                         new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.CREATING_PO));
 
@@ -368,22 +383,30 @@ class StreamingSessionAgentManagerTest {
         assertThat(result).isNotNull();
         // The persisted session state (not a message heuristic) gates selection, via the 4-arg overload.
         verify(toolSelectionEngine)
-                .selectRoleTools(eq("ROLE_CASHIER"), eq(PERMISSION_CODES), eq(message), eq(WorkflowState.CREATING_PO));
-        verify(toolSelectionEngine, never()).selectRoleTools("ROLE_CASHIER", PERMISSION_CODES, message);
+                .selectRoleTools(
+                        eq("ROLE_CASHIER"),
+                        eq(PERMISSION_CODES),
+                        eq(message),
+                        eq(WorkflowState.CREATING_PO),
+                        any(QuestionTags.class));
+        verify(toolSelectionEngine, never())
+                .selectRoleTools(eq("ROLE_CASHIER"), eq(PERMISSION_CODES), eq(message), any(QuestionTags.class));
     }
 
     @Test
     @DisplayName("streamChat uses shared tool selection even when registry service is unavailable")
     void streamChat_withoutRegistryService_usesSharedSelectionPath() {
         String message = "latest internet sales report";
-        when(toolSelectionEngine.selectRoleTools("ROLE_CASHIER", PERMISSION_CODES, message))
+        when(toolSelectionEngine.selectRoleTools(
+                        eq("ROLE_CASHIER"), eq(PERMISSION_CODES), eq(message), any(QuestionTags.class)))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(
                         List.of(orderFacadeTool), List.of(exaWebSearchTool, inventoryFacadeTool)));
 
         Flux<String> result = manager.streamChat(userContext("user-shared-path", USER_ID, "ROLE_CASHIER"), message);
 
         assertThat(result).isNotNull();
-        verify(toolSelectionEngine).selectRoleTools("ROLE_CASHIER", PERMISSION_CODES, message);
+        verify(toolSelectionEngine)
+                .selectRoleTools(eq("ROLE_CASHIER"), eq(PERMISSION_CODES), eq(message), any(QuestionTags.class));
         assertThat(roleAgentCacheKeys(manager))
                 .contains("ROLE_CASHIER::ExaWebSearchTool+InventoryFacadeTool+OrderFacadeTool");
     }
@@ -395,8 +418,8 @@ class StreamingSessionAgentManagerTest {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of());
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
 
         StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
         clearInvocations(toolRegistryService);
@@ -405,7 +428,7 @@ class StreamingSessionAgentManagerTest {
         Flux<String> result = selectorManager.streamChat(userContext("user-2", USER_ID, "ROLE_CASHIER"), message);
 
         assertThat(result).isNotNull();
-        verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(any(ToolSelectionContext.class), eq(3));
         // #1606/#1608: fail closed — the ungated domain set is no longer substituted.
         assertThat(roleAgentCacheKeys(selectorManager))
                 .doesNotContain("ROLE_CASHIER::GlossaryFacadeTool+InventoryFacadeTool+OrderFacadeTool");
@@ -417,7 +440,7 @@ class StreamingSessionAgentManagerTest {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
                 .thenThrow(new IllegalStateException("selector unavailable"));
 
         StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
@@ -428,7 +451,7 @@ class StreamingSessionAgentManagerTest {
                 selectorManager.streamChat(userContext("user-3", USER_ID, "ROLE_CASHIER"), "show sales orders");
 
         assertThat(result).isNotNull();
-        verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(any(ToolSelectionContext.class), eq(3));
         // #1606/#1608: fail closed — the ungated domain set is no longer substituted.
         assertThat(roleAgentCacheKeys(selectorManager))
                 .doesNotContain("ROLE_CASHIER::GlossaryFacadeTool+InventoryFacadeTool+OrderFacadeTool");
@@ -524,8 +547,8 @@ class StreamingSessionAgentManagerTest {
     void streamChat_withInventoryKeyword_includesInventoryFallbackTool() {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of());
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
 
         StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
 
@@ -541,13 +564,16 @@ class StreamingSessionAgentManagerTest {
     void streamChat_withWebKeyword_includesExaFallbackTool() {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of());
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
 
         StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
 
         selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "find latest internet news");
 
+        // PR #2367 review: the gated set never names web search, as in production; the engine's
+        // exemption alone offers it.
+        assertThat(gated(List.of()).gatedToolNames()).doesNotContain("ExaWebSearchTool");
         assertThat(roleAgentCacheKeys(selectorManager))
                 .contains("ROLE_CASHIER::ExaWebSearchTool+GlossaryFacadeTool")
                 .contains("ROLE_CASHIER::full");
@@ -589,7 +615,8 @@ class StreamingSessionAgentManagerTest {
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");
 
-        verify(toolSelectionEngine, times(3)).selectRoleTools(eq("ROLE_CASHIER"), any(), any());
+        verify(toolSelectionEngine, times(3))
+                .selectRoleTools(eq("ROLE_CASHIER"), any(), any(), any(QuestionTags.class));
     }
 
     @Test
@@ -921,7 +948,7 @@ class StreamingSessionAgentManagerTest {
     @DisplayName("a failure before the stream is assembled fails the turn and unbinds the thread (#1850)")
     void streamChat_failureBeforeAssemblyStillTerminatesTheTurn() {
         ToolInvocationRecorder recorder = recorderRunningBoundActions();
-        when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
+        when(toolSelectionEngine.selectRoleTools(any(), any(), any(), any(QuestionTags.class)))
                 .thenThrow(new IllegalStateException("selection exploded"));
 
         assertThatThrownBy(() -> managerWithRecorder(recorder)
@@ -1050,7 +1077,8 @@ class StreamingSessionAgentManagerTest {
     }
 
     /** What the agent saw in the request-scoped holder while it ran, and on which thread. */
-    private record SeenByAgent(Optional<ScopeSet> scope, Optional<CurrentUserContext> caller, Thread thread) {}
+    private record SeenByAgent(
+            Optional<ScopeSet> scope, Optional<CurrentUserContext> caller, Thread thread, QuestionTags tags) {}
 
     /** Seeds {@code target}'s cache with an agent that notes what is published while it assembles its stream. */
     private java.util.concurrent.atomic.AtomicReference<SeenByAgent> seedObservingAgent(
@@ -1061,7 +1089,11 @@ class StreamingSessionAgentManagerTest {
         java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
                 new java.util.concurrent.atomic.AtomicReference<>();
         StreamingPosAssistant agent = (memoryId, userMessage, userContext) -> {
-            seen.set(new SeenByAgent(requestContext.currentScope(), requestContext.current(), Thread.currentThread()));
+            seen.set(new SeenByAgent(
+                    requestContext.currentScope(),
+                    requestContext.current(),
+                    Thread.currentThread(),
+                    requestContext.currentTags()));
             return tokens;
         };
         List<Object> selectedTools = sharedOrchestrationSupport.mergeTools(List.of(), List.of());
@@ -1077,10 +1109,89 @@ class StreamingSessionAgentManagerTest {
 
     @Test
     @DisplayName(
+            "ADR-0068: a streamed turn is tagged once on the request thread, ahead of the simple-chat decision; the record crosses the subscribe hop, is published next to the caller and cleared there")
+    void streamChat_tagsOnce_recordsPublishesAndClearsTheTagsAcrossTheThreadHop() throws Exception {
+        QuestionTags tags = HEURISTIC_TAGGER.tag(SCOPE_MESSAGE);
+        when(toolSelectionEngine.tag(SCOPE_MESSAGE)).thenReturn(tags);
+        when(toolSelectionEngine.selectRoleTools(any(), any(), any(), same(tags)))
+                .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
+        ToolInvocationRecorder recorder = recorderRunningBoundActions();
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        StreamingSessionAgentManager scoped =
+                scopeManager(toolSelectionEngine, sharedOrchestrationSupport, requestContext, recorder, null);
+        java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
+                seedObservingAgent(scoped, requestContext, "ROLE_CASHIER", Flux.just("42 ", "open"));
+        CurrentUserContext caller = userContext("user-1", USER_ID, "ROLE_CASHIER");
+        java.util.concurrent.ExecutorService subscriber = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            Flux<String> stream = scoped.streamChat(caller, SCOPE_MESSAGE);
+
+            // Tagged and recorded on the request thread, before the simple-chat decision and the selection.
+            verify(toolSelectionEngine, times(1)).tag(anyString());
+            org.mockito.InOrder stages = org.mockito.Mockito.inOrder(toolSelectionEngine, recorder);
+            stages.verify(toolSelectionEngine).tag(SCOPE_MESSAGE);
+            stages.verify(recorder).recordTags(tags);
+            stages.verify(toolSelectionEngine).selectRoleTools(any(), any(), any(), same(tags));
+            stages.verify(recorder).recordSimpleChat(false);
+            // Assembling the stream on the request thread publishes nothing there.
+            assertThat(requestContext.currentTags().isNone()).isTrue();
+
+            List<String> tokens = stream.subscribeOn(reactor.core.scheduler.Schedulers.fromExecutor(subscriber))
+                    .collectList()
+                    .block(java.time.Duration.ofSeconds(5));
+
+            assertThat(tokens).containsExactly("42 ", "open");
+            // The record crossed to the subscribing thread and was published next to the caller.
+            assertThat(seen.get().thread()).isNotSameAs(Thread.currentThread());
+            assertThat(seen.get().tags()).isSameAs(tags);
+            assertThat(seen.get().caller()).contains(caller);
+            // Cleared with the caller, on that same thread.
+            assertThat(subscriber
+                            .submit(() -> !requestContext.currentTags().isNone()
+                                    || requestContext.current().isPresent())
+                            .get(5, java.util.concurrent.TimeUnit.SECONDS))
+                    .isFalse();
+        } finally {
+            subscriber.shutdownNow();
+        }
+
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter, timeout(5_000)).emit(event.capture());
+        assertThat(event.getValue().schemaVersion()).isEqualTo(3);
+        assertThat(event.getValue().tagging()).isNotNull();
+        assertThat(event.getValue().tagging().mode()).isEqualTo("OFF");
+        assertThat(event.getValue().tagging().simpleChat()).isFalse();
+        // The acting tag values live in the tagging block only; routing classification is the
+        // Gate 4 router's, and the router did not run (tiering is off).
+        assertThat(event.getValue().tagging().intent()).isEqualTo("UNKNOWN");
+        assertThat(event.getValue().routing().intentType()).isNull();
+        assertThat(event.getValue().routing().riskLevel()).isNull();
+        assertThat(event.getValue().routing().domain()).isNull();
+        assertThat(event.getValue().routing().complexity()).isNull();
+    }
+
+    @Test
+    @DisplayName("ADR-0068: streaming warm-up selects with QuestionTags.none() and never tags")
+    void streamPrebuild_neverTags() {
+        // Constructing a manager warms ROLE_CASHIER and ROLE_MANAGER.
+        scopeManager(
+                toolSelectionEngine,
+                sharedOrchestrationSupport,
+                new RequestScopedUserContext(),
+                recorderRunningBoundActions(),
+                null);
+
+        verify(toolSelectionEngine, never()).tag(anyString());
+        verify(toolSelectionEngine, atLeastOnce())
+                .selectRoleTools(eq("ROLE_CASHIER"), any(), eq("ROLE_CASHIER"), same(QuestionTags.none()));
+    }
+
+    @Test
+    @DisplayName(
             "ADR-0069: a streamed turn records its scope with the selection stages, publishes it next to the caller on the subscribing thread, and clears it there")
     void streamChat_shadow_recordsPublishesAndClearsTheScopeAcrossTheThreadHop() throws Exception {
         ScopeSet scope = scopeOf(SCOPE_MESSAGE);
-        when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
+        when(toolSelectionEngine.selectRoleTools(any(), any(), any(), any(QuestionTags.class)))
                 .thenReturn(
                         new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.IDLE, scope));
         ToolInvocationRecorder recorder = recorderRunningBoundActions();
@@ -1130,7 +1241,7 @@ class StreamingSessionAgentManagerTest {
 
         ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
         verify(telemetryEmitter, timeout(5_000)).emit(event.capture());
-        assertThat(event.getValue().schemaVersion()).isEqualTo(2);
+        assertThat(event.getValue().schemaVersion()).isEqualTo(3);
         assertThat(event.getValue().scopeMode()).isEqualTo("SHADOW");
         assertThat(event.getValue().scopeGraphHash()).isEqualTo(scope.graphHash());
         assertThat(event.getValue().scopeConfidence()).isEqualTo("HIGH");
@@ -1177,7 +1288,7 @@ class StreamingSessionAgentManagerTest {
     @DisplayName("ADR-0069: a streamed turn that fails still clears the scope, and its ERROR telemetry carries none")
     void streamChat_failure_clearsTheScope() {
         ScopeSet scope = scopeOf(SCOPE_MESSAGE);
-        when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
+        when(toolSelectionEngine.selectRoleTools(any(), any(), any(), any(QuestionTags.class)))
                 .thenReturn(
                         new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.IDLE, scope));
         ToolInvocationRecorder recorder = recorderRunningBoundActions();
@@ -1222,7 +1333,7 @@ class StreamingSessionAgentManagerTest {
                 .collectList()
                 .block(java.time.Duration.ofSeconds(5));
 
-        verify(toolSelectionEngine, never()).selectRoleTools(any(), any(), any());
+        verify(toolSelectionEngine, never()).selectRoleTools(any(), any(), any(), any(QuestionTags.class));
         verify(recorder, never()).recordScope(any());
         verify(requestContext, never()).recordScope(any());
         ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
@@ -1263,7 +1374,7 @@ class StreamingSessionAgentManagerTest {
                 ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
         verify(streamingChatModel, atLeastOnce()).stream(prompts.capture());
         ArgumentCaptor<ToolSelectionContext> ranking = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateTools(ranking.capture(), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(ranking.capture(), eq(3));
         List<Object> observed = new ArrayList<>();
         observed.add(tokens);
         observed.add(roleAgentCacheKeys(target).stream().sorted().toList());
@@ -1306,8 +1417,8 @@ class StreamingSessionAgentManagerTest {
                         .build());
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool")))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(inventoryFacadeTool)));
         when(streamingChatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
@@ -1354,8 +1465,8 @@ class StreamingSessionAgentManagerTest {
 
     /** A real engine over the fixture graph, wired to {@code consumers}, ranking to the order facade alone. */
     private ToolSelectionEngine orderRankingEngine(ScopeConsumers consumers, SimpleMeterRegistry meters) {
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(new ToolMetadata(
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of(new ToolMetadata(
                         UUID.randomUUID(),
                         "orderFacadeTool",
                         "Orders",
@@ -1365,7 +1476,7 @@ class StreamingSessionAgentManagerTest {
                         "low",
                         200,
                         true,
-                        "orderFacadeTool")));
+                        "orderFacadeTool"))));
         when(toolRegistry.resolveToolsByName(List.of("orderFacadeTool")))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool)));
         ToolSelectionEngine engine = realToolSelectionEngine();
@@ -1399,8 +1510,8 @@ class StreamingSessionAgentManagerTest {
         streamingModelAnswers("Stock found");
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool")))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(inventoryFacadeTool)));
         ScopeGraphProperties enforceNothing = ScopeResolverFixtures.enforce(60);
@@ -1536,7 +1647,7 @@ class StreamingSessionAgentManagerTest {
                         WORKORDER_ONLY_MESSAGE,
                         Set.of("AUTHENTICATED", ScopeResolverFixtures.WORKORDER_VIEW),
                         WorkflowState.IDLE);
-        when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
+        when(toolSelectionEngine.selectRoleTools(any(), any(), any(), any(QuestionTags.class)))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(
                         List.of(orderFacadeTool, inventoryFacadeTool),
                         List.of(),
@@ -1566,5 +1677,18 @@ class StreamingSessionAgentManagerTest {
                         .count())
                 .isZero();
         assertThat(requestContext.currentScopeAddedToolNames()).isEmpty();
+    }
+
+    /**
+     * ADR-0068 §2: the gated set names every facade the engine may add that has a seeded {@code
+     * mcp_tool_permission} row, beside the ranked candidates. {@code ExaWebSearchTool} is deliberately
+     * NOT here, as in {@code ToolSelectionEngineTest}: it has no {@code mcp_tool} row, so production
+     * never returns it in the gated set, and web search is offered through the engine's exemption.
+     */
+    private static ToolRegistryService.CandidateSelection gated(List<ToolMetadata> candidates) {
+        Set<String> names = new java.util.HashSet<>(
+                Set.of("DateWindowFacadeTool", "GlossaryFacadeTool", "InventoryFacadeTool", "OrderFacadeTool"));
+        candidates.forEach(candidate -> names.add(candidate.name()));
+        return new ToolRegistryService.CandidateSelection(candidates, names, false);
     }
 }

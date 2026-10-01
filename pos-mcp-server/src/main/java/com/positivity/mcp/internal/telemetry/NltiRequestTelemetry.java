@@ -6,7 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Structured per-request telemetry event ({@code nlti.request.telemetry} v2).
+ * Structured per-request telemetry event ({@code nlti.request.telemetry} v3).
  *
  * <p>This is the evaluation / observability stream defined by the NL-interface design (Gate 0).
  * It is intentionally distinct from {@code nlti_audit_event} (compliance audit) and
@@ -54,6 +54,16 @@ import org.jspecify.annotations.Nullable;
  * request: never in {@code mcp.scope-graph.mode: off}, never on the simple-chat path, never on the
  * NLTI path and never on an {@code ERROR} event. Every v1 field keeps its name, type and meaning, so
  * a v1 reader that ignores unknown fields reads a v2 event unchanged.
+ *
+ * <p><strong>Schema version 3 (ADR-0068).</strong> Adds the nullable {@code tagging} block: the
+ * turn's question tagging as a mode, the provider model, its latency, the fallback reason, the
+ * agreement rate between the two taggers and the acting values of the router-derived tags. It is
+ * present on every chat event that tagged (in every mode, {@code off} included, since the heuristic
+ * tagger always runs) and absent on the NLTI path. The acting tag values are recorded in that block
+ * only: the {@link Routing} block keeps both its shape and its v2 meaning, so its classification
+ * fields ({@code intentType}, {@code riskLevel}, {@code domain}, {@code complexity}) still come from
+ * the Gate 4 router alone and are absent when it did not run (the routing alert rules and the Gate 7
+ * risk panel read them that way). Every v2 field is unchanged.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record NltiRequestTelemetry(
@@ -79,9 +89,10 @@ public record NltiRequestTelemetry(
         @Nullable Integer scopeToolCount,
         @Nullable Integer scopeDocCount,
         @Nullable Integer scopeAddedToolCount,
-        @Nullable Boolean scopeRagFilterApplied) {
+        @Nullable Boolean scopeRagFilterApplied,
+        @Nullable Tagging tagging) {
 
-    public static final int SCHEMA_VERSION = 2;
+    public static final int SCHEMA_VERSION = 3;
     public static final String EVENT_TYPE = "nlti.request.telemetry";
 
     /** Model routing tier the request was served by. */
@@ -156,4 +167,37 @@ public record NltiRequestTelemetry(
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Outcome(String status, @Nullable String errorCode) {}
+
+    /**
+     * ADR-0068 §6 / spec §2.8: the turn's question tagging. Enum names, labels and numbers only.
+     *
+     * @param mode {@code OFF}, {@code SHADOW} or {@code ENFORCE}
+     * @param providerModel the decision model that answered, when the provider was called
+     * @param latencyMs the provider call's wall time, when it was called
+     * @param fallbackReason why the turn took the heuristic answers instead of the model's
+     * @param agreementRate share of tags both taggers answered on which they agree; null unless both ran
+     * @param intent the acting {@code intent}
+     * @param risk the acting {@code risk}
+     * @param complexity the acting {@code complexity}
+     * @param domain the acting {@code domain}
+     * @param workflowState the acting {@code workflow_state}
+     * @param simpleChat the acting {@code simple_chat}
+     * @param questionCount how many questions the provider was asked, when it was called
+     * @param requestBodyBytes the size of the request body sent, when the provider was called
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record Tagging(
+            String mode,
+            @Nullable String providerModel,
+            @Nullable Long latencyMs,
+            @Nullable String fallbackReason,
+            @Nullable Double agreementRate,
+            @Nullable String intent,
+            @Nullable String risk,
+            @Nullable String complexity,
+            @Nullable String domain,
+            @Nullable String workflowState,
+            @Nullable Boolean simpleChat,
+            @Nullable Integer questionCount,
+            @Nullable Integer requestBodyBytes) {}
 }

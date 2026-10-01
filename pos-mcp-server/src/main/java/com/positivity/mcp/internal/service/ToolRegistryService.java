@@ -6,6 +6,7 @@ import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.IntStream;
@@ -321,7 +322,35 @@ public class ToolRegistryService {
         return adminTools;
     }
 
-    private @NonNull Set<String> matchedAdminQueryTerms(@NonNull String userInput) {
+    /**
+     * ADR-0068 §1, {@code admin_account_question}: the heuristic value the fast path fires on, an
+     * admin keyword or phrase matched and no veto term, read here by {@code HeuristicQuestionTagger}
+     * so the three lists stay in this class (ADR-0068 §1 placement). The fast path itself is
+     * unchanged in Wave 1 and still decides from the same lists.
+     */
+    public static boolean isAdminAccountQuestion(@NonNull String userInput) {
+        return !matchedAdminQueryTerms(userInput).isEmpty()
+                && matchedVetoTerms(userInput).isEmpty();
+    }
+
+    /**
+     * ADR-0068: the rule behind {@link #isAdminAccountQuestion}, for the trace: {@code veto:<term>} when a
+     * veto term blocked a matched keyword, {@code match:<term>} when the path fires, empty when nothing
+     * matched. The sets are sorted, so the first term is deterministic.
+     */
+    public static @NonNull Optional<String> adminAccountRule(@NonNull String userInput) {
+        Set<String> matched = matchedAdminQueryTerms(userInput);
+        if (matched.isEmpty()) {
+            return Optional.empty();
+        }
+        Set<String> vetoes = matchedVetoTerms(userInput);
+        return Optional.of(
+                vetoes.isEmpty()
+                        ? "match:" + matched.iterator().next()
+                        : "veto:" + vetoes.iterator().next());
+    }
+
+    private static @NonNull Set<String> matchedAdminQueryTerms(@NonNull String userInput) {
         String normalized = userInput.toLowerCase(Locale.ROOT);
         Set<String> matches = new TreeSet<>();
         for (String keyword : ADMIN_QUERY_KEYWORDS) {
@@ -337,7 +366,7 @@ public class ToolRegistryService {
         return matches;
     }
 
-    private @NonNull Set<String> matchedVetoTerms(@NonNull String userInput) {
+    private static @NonNull Set<String> matchedVetoTerms(@NonNull String userInput) {
         String normalized = userInput.toLowerCase(Locale.ROOT);
         Set<String> matches = new TreeSet<>();
         for (String term : FAST_PATH_VETO_TERMS) {

@@ -128,6 +128,43 @@ mcp:
     added-tool-slots: 8
     # Token budget of the scope card appended to the system prompt.
     card-token-budget: 400
+  # ADR-0068: pre-LLM question tagging with a Jev-protocol decision model served by the cell's own
+  # Ollama container. Off by default: the heuristic tagger alone runs, no provider call, no meters.
+  tagging:
+    # off | shadow | enforce. shadow runs both taggers, consumers act on the heuristic result and the
+    # model's result is recorded; enforce additionally lets the tags in enforced-tags act (Wave 2).
+    # A literal value must be quoted ("off"): bare off is the YAML boolean false.
+    mode: ${MCP_TAGGING_MODE:off}
+    # Tags (wire names, comma-separated) that act when mode is enforce; promoted one at a time after a
+    # recorded gate run (ADR-0068 section 6). Empty behaves as shadow. Not acted on in Wave 1.
+    enforced-tags: ${MCP_TAGGING_ENFORCED_TAGS:}
+    provider:
+      # The System One endpoint (POST {base-url}/v1/systemone): the in-cell ollama container, never
+      # OLLAMA_CHAT_BASE_URL (hosted on alpha), so the message is tagged inside the cell (section 4).
+      base-url: ${MCP_TAGGING_BASE_URL:http://ollama:11434}
+      # A Jev-protocol decision model pulled into that container (Ollama 0.35+): tev1:0.8b, tev1 or
+      # nimble. The smallest by default; the section 6 bake-off sets the real one.
+      model: ${MCP_TAGGING_MODEL:tev1:0.8b}
+      # One overall deadline (connect, headers and body together) for the one tagging call per turn;
+      # on expiry the turn takes the heuristic answers. Not raised to fit a slow model (section 5).
+      timeout: ${MCP_TAGGING_TIMEOUT:800ms}
+      # Bearer token for an external provider only (section 4 condition); unset for the local one.
+      api-key: ${MCP_TAGGING_API_KEY:}
+      # Sent as keep_alive so the model stays resident between turns beside the embedding model.
+      keep-alive: ${MCP_TAGGING_KEEP_ALIVE:30m}
+    # Per-tag confidence threshold (mcp.tagging.thresholds.<tag>); 0.75 for every tag until shadow
+    # data sets per-tag values (section 1, section 6). Example: thresholds.simple_chat: 0.8
+    thresholds: {}
+    # The message is cut at this many characters before it becomes the request state (tev1 reads
+    # about 2,000 tokens); a cut message is still tagged and the cut is counted.
+    max-state-chars: ${MCP_TAGGING_MAX_STATE_CHARS:4000}
+    # Whether the one-Noul-per-lexicon-entity questions are asked (44 questions, ~18 KB body, about 4.6k
+    # tokens) or only the 13 fixed ones (~8 KB, about 2k tokens). They are asked only when this is true
+    # AND mcp.scope-graph.mode is not off (the scope graph is their only consumer). Off by default
+    # because the default model (tev1:0.8b) reads about 2,000 tokens and the 44-question request would
+    # overflow it; turn it on only for a model whose context holds it. The section 6 bake-off decides
+    # the setting per model.
+    entity-questions: ${MCP_TAGGING_ENTITY_QUESTIONS:false}
   rag:
     table-name: mcp_document_embedding
     # G5.4 #1194 cutover complete + #1207 (V33): the embedding column is 1024-dim bge-m3; the 768

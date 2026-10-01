@@ -8,9 +8,12 @@ import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +21,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.domain.ModelTier;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.RequestComplexity;
 import com.positivity.mcp.internal.domain.RouterClassification;
 import com.positivity.mcp.internal.enums.NltiIntentType;
@@ -64,6 +68,8 @@ import reactor.core.publisher.Flux;
 @ExtendWith(BoundTenant.class)
 class StreamingSessionAgentManagerTieringTest {
 
+    private static final HeuristicQuestionTagger HEURISTIC_TAGGER = HeuristicQuestionTagger.withDefaultCatalog();
+
     private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000002192");
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-08-07T02:00:00Z"), ZoneOffset.UTC);
     private static final String BUSINESS_MESSAGE = "show inventory stock";
@@ -104,8 +110,12 @@ class StreamingSessionAgentManagerTieringTest {
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of());
         lenient().when(toolRegistry.resolveDomainTools(anyString())).thenAnswer(inv -> new ArrayList<>());
         lenient().when(toolRegistry.resolveRagScopeForTools(anyCollection())).thenReturn("master");
+        // ADR-0068: the mocked engine tags with the heuristics, as the unwired real engine does.
         lenient()
-                .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
+                .when(toolSelectionEngine.tag(anyString()))
+                .thenAnswer(inv -> HEURISTIC_TAGGER.tag(inv.getArgument(0)));
+        lenient()
+                .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class)))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
         lenient().when(toolSelectionEngine.fullFallbackTools()).thenReturn(List.of());
         lenient().when(workflowStateService.resolveActiveState(anyString())).thenReturn(Optional.empty());
@@ -136,8 +146,9 @@ class StreamingSessionAgentManagerTieringTest {
                 manager.streamChat(userContext("user-1"), "hello").collectList().block();
 
         assertThat(tokens).containsExactly("Hello", "!");
-        verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anySet(), anyString());
-        verify(nltiRouter, never()).classify(anyString());
+        verify(toolSelectionEngine, never())
+                .selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class));
+        verify(nltiRouter, never()).classify(anyString(), any(QuestionTags.class));
         assertThat(roleAgentCacheKeys(manager)).isEmpty();
 
         ArgumentCaptor<NltiRequestTelemetry> eventCaptor = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
@@ -151,7 +162,7 @@ class StreamingSessionAgentManagerTieringTest {
     @Test
     @DisplayName("streaming cache key carries the tier: simple and complex agents are cached separately")
     void streamChat_tierKeyedCaching_separatesAgents() {
-        when(nltiRouter.classify(BUSINESS_MESSAGE))
+        when(nltiRouter.classify(eq(BUSINESS_MESSAGE), any(QuestionTags.class)))
                 .thenReturn(decision(NltiIntentType.QUERY, ModelTier.T2_SIMPLE))
                 .thenReturn(decision(NltiIntentType.ACTION, ModelTier.T2_COMPLEX));
         StreamingSessionAgentManager manager = buildManager(true, nltiRouter);
@@ -165,13 +176,51 @@ class StreamingSessionAgentManagerTieringTest {
     }
 
     @Test
+    @DisplayName(
+            "ADR-0068: a streamed turn is tagged once, before the router, and the same record reaches the router and the selection")
+    void streamChat_tagsOnceBeforeTheRouterAndTheSelection() {
+        QuestionTags tags = HEURISTIC_TAGGER.tag(BUSINESS_MESSAGE);
+        when(toolSelectionEngine.tag(BUSINESS_MESSAGE)).thenReturn(tags);
+        when(nltiRouter.classify(eq(BUSINESS_MESSAGE), same(tags)))
+                .thenReturn(decision(NltiIntentType.QUERY, ModelTier.T2_SIMPLE));
+        StreamingSessionAgentManager manager = buildManager(true, nltiRouter);
+        verify(toolSelectionEngine, never()).tag(anyString());
+
+        manager.streamChat(userContext("user-1"), BUSINESS_MESSAGE);
+
+        verify(toolSelectionEngine, times(1)).tag(anyString());
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(toolSelectionEngine, nltiRouter);
+        order.verify(toolSelectionEngine).tag(BUSINESS_MESSAGE);
+        order.verify(nltiRouter).classify(eq(BUSINESS_MESSAGE), same(tags));
+        order.verify(toolSelectionEngine).selectRoleTools(eq("ROLE_ADMIN"), anySet(), eq(BUSINESS_MESSAGE), same(tags));
+    }
+
+    @Test
+    @DisplayName("ADR-0068: a streamed simple-chat turn is tagged once and neither routed nor selected")
+    void streamChat_simpleChatIsTaggedOnceAndNeverRouted() {
+        when(streamingChatModel.stream(any(Prompt.class))).thenReturn(Flux.just(chatResponse("Hello")));
+        StreamingSessionAgentManager manager = buildManager(true, nltiRouter);
+
+        manager.streamChat(userContext("user-1"), "hello").collectList().block();
+
+        verify(toolSelectionEngine, times(1)).tag("hello");
+        verify(nltiRouter, never()).classify(anyString(), any(QuestionTags.class));
+        verify(toolSelectionEngine, never())
+                .selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class));
+        ArgumentCaptor<NltiRequestTelemetry> eventCaptor = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter).emit(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().tagging()).isNotNull();
+        assertThat(eventCaptor.getValue().tagging().simpleChat()).isTrue();
+    }
+
+    @Test
     @DisplayName("tiering disabled: router never consulted, legacy streaming cache key")
     void streamChat_tieringDisabled_keepsLegacyKey() {
         StreamingSessionAgentManager manager = buildManager(false, nltiRouter);
 
         manager.streamChat(userContext("user-1"), BUSINESS_MESSAGE);
 
-        verify(nltiRouter, never()).classify(anyString());
+        verify(nltiRouter, never()).classify(anyString(), any(QuestionTags.class));
         assertThat(roleAgentCacheKeys(manager)).contains("ROLE_ADMIN::none");
     }
 

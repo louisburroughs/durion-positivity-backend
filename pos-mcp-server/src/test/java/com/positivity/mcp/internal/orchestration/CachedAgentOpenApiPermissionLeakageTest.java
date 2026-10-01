@@ -22,6 +22,7 @@ import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.discovery.OperationProxyFactory;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
@@ -110,6 +111,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(BoundTenant.class)
 class CachedAgentOpenApiPermissionLeakageTest {
 
+    private static final HeuristicQuestionTagger HEURISTIC_TAGGER = HeuristicQuestionTagger.withDefaultCatalog();
+
     private static final UUID USER_A_ID = UUID.fromString("00000000-0000-7000-8000-000000001196");
     private static final UUID USER_B_ID = UUID.fromString("00000000-0000-7000-8000-000000002196");
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-08-07T02:00:00Z"), ZoneOffset.UTC);
@@ -194,8 +197,12 @@ class CachedAgentOpenApiPermissionLeakageTest {
         lenient().when(toolRegistry.resolveDomainTools(anyString())).thenAnswer(inv -> new ArrayList<>());
         lenient().when(toolRegistry.sharedTools()).thenReturn(List.of());
         lenient().when(toolRegistry.resolveRagScopeForTools(anyCollection())).thenReturn("master");
+        // ADR-0068: the mocked engine tags with the heuristics, as the unwired real engine does.
         lenient()
-                .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
+                .when(toolSelectionEngine.tag(anyString()))
+                .thenAnswer(inv -> HEURISTIC_TAGGER.tag(inv.getArgument(0)));
+        lenient()
+                .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class)))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
         lenient().when(toolSelectionEngine.fullFallbackTools()).thenReturn(List.of());
         lenient().when(workflowStateService.resolveActiveState(anyString())).thenReturn(Optional.empty());
@@ -253,8 +260,10 @@ class CachedAgentOpenApiPermissionLeakageTest {
         assertThat(codesCaptor.getAllValues().get(1)).doesNotContain(GATED_PERMISSION);
 
         // Selection layer: role-tool selection also received per-request codes, not A's.
-        verify(toolSelectionEngine).selectRoleTools(eq("ROLE_ADMIN"), eq(userA.permissionCodes()), eq(MESSAGE));
-        verify(toolSelectionEngine).selectRoleTools(eq("ROLE_ADMIN"), eq(userB.permissionCodes()), eq(MESSAGE));
+        verify(toolSelectionEngine)
+                .selectRoleTools(eq("ROLE_ADMIN"), eq(userA.permissionCodes()), eq(MESSAGE), any(QuestionTags.class));
+        verify(toolSelectionEngine)
+                .selectRoleTools(eq("ROLE_ADMIN"), eq(userB.permissionCodes()), eq(MESSAGE), any(QuestionTags.class));
 
         // Execution fail-closed at the source: resolving under B's context on the shared provider
         // (exactly what the cached agent does mid-chat) yields nothing to execute.

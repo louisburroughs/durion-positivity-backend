@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 import org.jspecify.annotations.NonNull;
@@ -68,6 +69,22 @@ final class SimpleChatClassifier {
 
     private SimpleChatClassifier(@NonNull Supplier<SimpleChatRuleCatalog> catalogSupplier) {
         this.catalogSupplier = catalogSupplier;
+    }
+
+    /**
+     * ADR-0068 §1, {@code follows_previous_turn}: whether any normalised token of {@code message} is a
+     * continuation cue. The same check {@link #isSimpleChat} applies as a strong task signal, exposed
+     * so the heuristic tagger answers the tag from the one list.
+     */
+    static boolean followsPreviousTurn(@NonNull String message) {
+        return firstContinuationCue(message).isPresent();
+    }
+
+    /** The first continuation cue (in cue-list order) among the message's tokens, for the trace's rule id. */
+    static @NonNull Optional<String> firstContinuationCue(@NonNull String message) {
+        String text = SimpleChatRuleCatalog.normalize(message);
+        Set<String> tokens = MessageFeatures.from(text).tokenSet();
+        return CONTINUATION_CUES.stream().filter(tokens::contains).sorted().findFirst();
     }
 
     boolean isSimpleChat(@NonNull String message) {

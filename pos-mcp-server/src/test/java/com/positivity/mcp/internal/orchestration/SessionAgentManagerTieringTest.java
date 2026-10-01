@@ -9,10 +9,12 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
@@ -22,6 +24,7 @@ import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.config.TieredChatModelResolver;
 import com.positivity.mcp.internal.domain.ModelTier;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.RequestComplexity;
 import com.positivity.mcp.internal.domain.RouterClassification;
 import com.positivity.mcp.internal.enums.NltiIntentType;
@@ -77,6 +80,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(BoundTenant.class)
 class SessionAgentManagerTieringTest {
 
+    private static final HeuristicQuestionTagger HEURISTIC_TAGGER = HeuristicQuestionTagger.withDefaultCatalog();
+
     private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000001192");
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-08-07T02:00:00Z"), ZoneOffset.UTC);
     private static final String SIMPLE_MESSAGE = "show inventory stock";
@@ -129,8 +134,12 @@ class SessionAgentManagerTieringTest {
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of());
         lenient().when(toolRegistry.resolveDomainTools(anyString())).thenAnswer(inv -> new ArrayList<>());
         lenient().when(toolRegistry.resolveRagScopeForTools(anyCollection())).thenReturn("master");
+        // ADR-0068: the mocked engine tags with the heuristics, as the unwired real engine does.
         lenient()
-                .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
+                .when(toolSelectionEngine.tag(anyString()))
+                .thenAnswer(inv -> HEURISTIC_TAGGER.tag(inv.getArgument(0)));
+        lenient()
+                .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class)))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
         lenient().when(toolSelectionEngine.fullFallbackTools()).thenReturn(List.of());
         lenient().when(workflowStateService.resolveActiveState(anyString())).thenReturn(Optional.empty());
@@ -165,8 +174,10 @@ class SessionAgentManagerTieringTest {
     @Test
     @DisplayName("cache key carries the tier: a T2-simple agent is never reused for a T2-complex request")
     void tierKeyedCaching_separatesSimpleAndComplexAgents() {
-        when(nltiRouter.classify(SIMPLE_MESSAGE)).thenReturn(decision(NltiIntentType.QUERY, ModelTier.T2_SIMPLE));
-        when(nltiRouter.classify(COMPLEX_MESSAGE)).thenReturn(decision(NltiIntentType.ACTION, ModelTier.T2_COMPLEX));
+        when(nltiRouter.classify(eq(SIMPLE_MESSAGE), any(QuestionTags.class)))
+                .thenReturn(decision(NltiIntentType.QUERY, ModelTier.T2_SIMPLE));
+        when(nltiRouter.classify(eq(COMPLEX_MESSAGE), any(QuestionTags.class)))
+                .thenReturn(decision(NltiIntentType.ACTION, ModelTier.T2_COMPLEX));
         SessionAgentManager manager = buildManager(true, nltiRouter, null, null, null);
 
         manager.chat(userContext("user-1"), SIMPLE_MESSAGE);
@@ -177,20 +188,64 @@ class SessionAgentManagerTieringTest {
     }
 
     @Test
+    @DisplayName(
+            "ADR-0068: the turn is tagged once, before the router, and the same record reaches the router and the selection")
+    void tagsOnceBeforeTheRouterAndTheSelection() {
+        QuestionTags tags = HEURISTIC_TAGGER.tag(SIMPLE_MESSAGE);
+        when(toolSelectionEngine.tag(SIMPLE_MESSAGE)).thenReturn(tags);
+        when(nltiRouter.classify(eq(SIMPLE_MESSAGE), same(tags)))
+                .thenReturn(decision(NltiIntentType.QUERY, ModelTier.T2_SIMPLE));
+        SessionAgentManager manager = buildManager(true, nltiRouter, null, null, null);
+        // Warm-up (in the constructor) never tags.
+        verify(toolSelectionEngine, never()).tag(anyString());
+
+        manager.chat(userContext("user-1"), SIMPLE_MESSAGE);
+
+        verify(toolSelectionEngine, times(1)).tag(anyString());
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(toolSelectionEngine, nltiRouter);
+        order.verify(toolSelectionEngine).tag(SIMPLE_MESSAGE);
+        order.verify(nltiRouter).classify(eq(SIMPLE_MESSAGE), same(tags));
+        order.verify(toolSelectionEngine).selectRoleTools(eq("ROLE_ADMIN"), anySet(), eq(SIMPLE_MESSAGE), same(tags));
+        NltiRequestTelemetry event = capturedEvent();
+        assertThat(event.tagging()).isNotNull();
+        assertThat(event.tagging().mode()).isEqualTo("OFF");
+        // The router ran, so its decision fills the routing block, not the tags' safe defaults.
+        assertThat(event.routing().intentType()).isEqualTo("QUERY");
+    }
+
+    @Test
+    @DisplayName("ADR-0068: a simple-chat turn is tagged once and neither routed nor selected")
+    void simpleChatIsTaggedOnceAndNeverRouted() {
+        SessionAgentManager manager = buildManager(true, nltiRouter, null, null, null);
+
+        manager.chat(userContext("user-1"), "hello");
+
+        verify(toolSelectionEngine, times(1)).tag("hello");
+        verify(nltiRouter, never()).classify(anyString(), any(QuestionTags.class));
+        verify(toolSelectionEngine, never())
+                .selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class));
+        NltiRequestTelemetry event = capturedEvent();
+        assertThat(event.routing().tier()).isEqualTo(NltiRequestTelemetry.Tier.T0_RULE);
+        assertThat(event.tagging()).isNotNull();
+        assertThat(event.tagging().simpleChat()).isTrue();
+    }
+
+    @Test
     @DisplayName("mcp.model.tiering-enabled=false: router never consulted, legacy cache key, default model")
     void tieringDisabled_skipsRouterAndKeepsLegacyKey() {
         SessionAgentManager manager = buildManager(false, nltiRouter, null, null, null);
 
         manager.chat(userContext("user-1"), SIMPLE_MESSAGE);
 
-        verify(nltiRouter, never()).classify(anyString());
+        verify(nltiRouter, never()).classify(anyString(), any(QuestionTags.class));
         assertThat(roleAgentCacheKeys(manager)).contains("ROLE_ADMIN::none");
     }
 
     @Test
     @DisplayName("telemetry carries the router decision, selected tier, and actual model names")
     void telemetryCarriesRouterDecisionAndModelNames() {
-        when(nltiRouter.classify(SIMPLE_MESSAGE)).thenReturn(decision(NltiIntentType.QUERY, ModelTier.T2_SIMPLE));
+        when(nltiRouter.classify(eq(SIMPLE_MESSAGE), any(QuestionTags.class)))
+                .thenReturn(decision(NltiIntentType.QUERY, ModelTier.T2_SIMPLE));
         TieredChatModelResolver resolver =
                 new TieredChatModelResolver(chatModel, (StreamingChatModel) chatModel, "qwen3:4b", "qwen3:8b", "");
         SessionAgentManager manager = buildManager(true, nltiRouter, resolver, null, null);
@@ -214,7 +269,8 @@ class SessionAgentManagerTieringTest {
     @DisplayName("#1193: write-capable openapi candidates flip the per-request WRITE-GATE flag and write telemetry;"
             + " the same cached agent serves a non-write request without the layer")
     void writeGateFlagIsPerRequest_neverBakedIntoCachedAgent() {
-        when(nltiRouter.classify(anyString())).thenReturn(decision(NltiIntentType.QUERY, ModelTier.T2_SIMPLE));
+        when(nltiRouter.classify(anyString(), any(QuestionTags.class)))
+                .thenReturn(decision(NltiIntentType.QUERY, ModelTier.T2_SIMPLE));
         OpenApiToolProvider openApiToolProvider = mock(OpenApiToolProvider.class);
         // First request resolves a write-capable discovered op; second resolves none.
         when(openApiToolProvider.resolveToolCallbacks(anyString()))

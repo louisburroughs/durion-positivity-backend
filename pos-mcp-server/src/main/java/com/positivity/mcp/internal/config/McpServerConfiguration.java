@@ -29,7 +29,8 @@ import org.springframework.web.reactive.function.client.WebClient;
     SiteMapProperties.class,
     ToolHttpProperties.class,
     ConversationProperties.class,
-    ScopeGraphProperties.class
+    ScopeGraphProperties.class,
+    TaggingProperties.class
 })
 public class McpServerConfiguration {
 

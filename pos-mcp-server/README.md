@@ -198,14 +198,110 @@ evidence are recorded in the ADR's changelog.
 `confidence`, `seeds[{entity, matchKind}]`, entity/tool/document/screen counts, `addedTools`, `ragFilterApplied`, and at
 completion `calledToolsInScope/calledTools` and `retrievedDocsInScope/retrievedDocs`). Older payloads read `scope: null`.
 
-**Telemetry.** `nlti.request.telemetry` is `schemaVersion` 2: eight additive, nullable fields (`scopeMode`,
+**Telemetry.** `nlti.request.telemetry` gained eight additive, nullable fields in `schemaVersion` 2 (`scopeMode`,
 `scopeGraphHash`, `scopeConfidence`, `scopeEntityCount`, `scopeToolCount`, `scopeDocCount`, `scopeAddedToolCount`,
-`scopeRagFilterApplied`), present only when a scope was resolved. Every version 1 field is unchanged.
+`scopeRagFilterApplied`), present only when a scope was resolved. Every version 1 field is unchanged. The event is
+`schemaVersion` 3 since ADR-0068 (see Question tagging below).
 
 **Metrics** (registered only when the mode is not `off`): `mcp.scope.resolved{confidence}`,
 `mcp.scope.size{kind=entities|tools|documents|screens}`, `mcp.scope.called_tool{in_scope}`,
 `mcp.scope.retrieved_doc{in_scope}`, `mcp.scope.fallback{consumer=rag|tools|card}`, `mcp.scope.errors`. The two
 `in_scope` shares are counted when the eval turn trace completes, so they need `mcp.eval.turn-trace.enabled`.
+
+## Question tagging (ADR-0068)
+
+One typed `QuestionTags` record per chat turn, taken **before** the simple-chat decision, the tier routing and the tool
+selection. In Wave 1 two consumers decide from it: `SimpleChatFastPath` and `ToolSelectionEngine` (whose acting answers
+are the heuristic ones in every mode). The others do not read it yet: the admin fast path
+(`ToolRegistryService.resolveCandidateSelection`) and the compound split (`RerankedContentRetriever`) still decide from the
+message text, and `RequestScopedUserContext.currentTags()`, which publishes the record to readers inside the cached
+agent, has no production caller. `NltiRouter` receives the record but does not act on it: it still asks the chat model,
+so tag-driven tiering is dormant. Moving those three onto the record is Wave 2. Two taggers stand behind the seam:
+`HeuristicQuestionTagger` (today's rules, moved unchanged; the permanent fallback) and `JevQuestionTagger`, which asks a
+Jev-protocol decision model served by the cell's **own** Ollama container at `POST {base-url}/v1/systemone`. **`mode: off`
+is the default: the heuristic tagger alone runs, no provider is called, no meter is registered, and no per-turn tagging
+log line is written.** The question set (`TaggingQuestions`) is still built once at startup in every mode, so `off` can
+log its one-time WARN when the entity lexicon cannot be loaded or the `domain` question is skipped (fewer than 2 or more
+than 26 rag-scope options).
+
+| Property                           | Env / Default                                          | Description                                                                                                                                                      |
+| ---------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp.tagging.mode`                 | `MCP_TAGGING_MODE` `off`                               | `off`: heuristics only. `shadow`: both taggers run, consumers act on the heuristic result, the model's result is recorded. `enforce`: as shadow, plus `enforced-tags` act (Wave 2). |
+| `mcp.tagging.enforced-tags`        | `MCP_TAGGING_ENFORCED_TAGS` _(empty)_                  | Tags (wire names) that act when `mode` is `enforce`; promoted one at a time (ADR-0068 §6). Bound but not acted on in Wave 1.                                    |
+| `mcp.tagging.provider.base-url`    | `MCP_TAGGING_BASE_URL` `http://ollama:11434`           | The System One endpoint: the in-cell `ollama` container, deliberately not `OLLAMA_CHAT_BASE_URL` (hosted on alpha), so the message never leaves the cell to be tagged (§4). |
+| `mcp.tagging.provider.model`       | `MCP_TAGGING_MODEL` `tev1:0.8b`                        | A decision model pulled into that container: `tev1:0.8b`, `tev1` or `nimble`. The §6 bake-off sets the real one.                                                 |
+| `mcp.tagging.provider.timeout`     | `MCP_TAGGING_TIMEOUT` `800ms`                          | One overall deadline for the one tagging call per turn (connect, response headers and body together, so a trickled body cannot stretch it); on expiry the call is cancelled and the turn takes the heuristic answers. Not raised to fit a slow model (§5). |
+| `mcp.tagging.provider.api-key`     | `MCP_TAGGING_API_KEY` _(unset)_                        | Bearer token for an external provider only (§4: a DPA with zero data retention first). Never logged.                                                             |
+| `mcp.tagging.provider.keep-alive`  | `MCP_TAGGING_KEEP_ALIVE` `30m`                         | Sent as `keep_alive` so the model stays resident beside the embedding model; blank omits it.                                                                    |
+| `mcp.tagging.thresholds.<tag>`     | `0.75`                                                 | Per-tag confidence threshold (§1); shadow data sets per-tag values before any promotion. `thresholds.entity` covers every entity Noul; `thresholds.entity.<key>` overrides it for one entity. |
+| `mcp.tagging.max-state-chars`      | `MCP_TAGGING_MAX_STATE_CHARS` `4000`                   | The message is cut here before it becomes the request `state`; a cut message is still tagged and the cut is counted.                                            |
+| `mcp.tagging.entity-questions`     | `MCP_TAGGING_ENTITY_QUESTIONS` `false`                 | Whether the `entity_<key>` Nouls are asked (44 questions, ~18 KB body, about 4.6k tokens) or only the 13 fixed ones (~8 KB, about 2k tokens). They are asked only when this is `true` **and** `mcp.scope-graph.mode` is not `off` (the scope graph is their only consumer). Off by default: the default model `tev1:0.8b` reads about 2,000 tokens, which the wide request overflows. The bake-off decides the setting per model; `optionListHash` reflects the set asked. |
+
+Quote a literal mode in YAML (`"off"`): bare `off` is the boolean `false`.
+
+**Dependency.** `shadow` and `enforce` need Ollama **0.35 or later** in the `ollama` container (the `/v1/systemone`
+endpoint shipped there) with the tagging model pulled beside `${OLLAMA_EMBEDDING_MODEL}`, and `OLLAMA_MAX_LOADED_MODELS`
+of at least 2 so neither model evicts the other between turns. This branch does not pin or pull them: the compose pin
+(`ollama` and `ollama-init` on 0.35.0), the shadow report (`scripts/tagging_shadow_report.py`) and the bake-off procedure
+(`pos-mcp-server/src/test/resources/eval/tagging-gate/README.md`) are proposed in PR #2368. Without them, `shadow`
+against an older Ollama simply records a `fallback` on every turn.
+
+**The request** carries only `model`, `state` (the message), `keep_alive` and the fixed `questions` (every one with
+`instructions`, as Ollama requires): never the caller, the tenant, the history or a forwarded header (§4). The tag set is
+closed and lives in code (`TaggingQuestions`): 13 questions by default (~8 KB, about 2k tokens), 44 for today's lexicon
+with `entity-questions: true` and the scope graph on (cap 64; ~18 KB body, about 4.6k tokens, for a one-line message;
+body cap 64 KiB). Every
+instruction starts with one short context clause ("Message from staff at a tire and auto service shop to its management
+assistant; may be in English, French or Spanish."):
+
+- twelve fixed tags: `follows_previous_turn`, `simple_chat`, `workflow_state` (a Choice over every `WorkflowState`),
+  `needs_web_search`, `about_inventory`, `about_orders`, `implies_date_window`, `admin_account_question`,
+  `compound_question`, `intent`, `complexity`, `risk` (a Score over LOW/MEDIUM/HIGH);
+- `domain`, a Choice whose options are **permanently the curated RAG-scope vocabulary**: the distinct `rag-scope` values
+  of `mcp.rag.preload.docs` plus `master` (15 today; never the 33 tool-catalog domains). Each option's criteria sentence
+  comes from the `domains:` block of `scope-graph/entities.yaml`; `ScopeGraphRealConfigValidationTest` requires a sentence
+  for every rag-scope of both preload lists and rejects any other key. `TierSelector`'s risky domains (`accounting`,
+  `tax`, `admin`, `security`) are spelled in this vocabulary. Tool domains with no rag-scope (`vehicle-inventory`,
+  `people-contact`, `supplier`, `marketing`, `location`, `catalog`, `vehicle-fitment`) are never options. A list over
+  the local models' 26-option cap skips the question (one WARN at startup), as a list under 2 options does;
+- one Noul per lexicon entity, `entity_<key>` (`entity_workorder`), asking "Is this message about any of these: <en
+  terms> (French: <fr>; Spanish: <es>)?" from the entity's terms, only when `entity-questions` is true and
+  `mcp.scope-graph.mode` is not `off`. An entity Noul yields a seed when `p ≥ 0.5` and its confidence meets
+  `thresholds.entity` (or `thresholds.entity.<key>`); the heuristic tagger answers no entity Noul.
+
+The client never logs the state or an answer string; a failure log carries the failure class, HTTP status, host, model
+and latency, and of an Ollama `{"error": …}` body only the text's length. Only typed values are read from a response
+(§3.6): the provider's own `model` string is ignored, and `providerModel`, the logs and the `{model}` meter tag always
+name the configured `mcp.tagging.provider.model`.
+
+**What `shadow` records.** The eval turn trace gains a nullable `tags` (`mode`, `enforcedTags`, `providerModel`,
+`latencyMs`, `fallbackReason`, `stateTruncated`, `questionCount`, `requestBodyBytes`, `optionListHash` — the hash of the
+domain options and entity keys asked, so agreement on those tags is compared within one hash — and per tag `{name,
+actingValue, actingSource, heuristicValue, heuristicRule, modelValue, modelConfidence, modelProbability, threshold,
+agree}`; `heuristicRule` names the rule that fired where the heuristic exposes one cheaply: `cue:those`,
+`phrase:create po`, `keyword:stock`, `word:month`, `implied:revenue`, `named_period:<regex>`, `match:users`,
+`veto:invoices`, `sub_queries:2`, `safe_default`; null for the simple-chat catalog); older payloads read `tags: null`.
+`nlti.request.telemetry` is `schemaVersion` 3 with a nullable `tagging` block (`mode`, `providerModel`, `latencyMs`,
+`fallbackReason`, `agreementRate`, `questionCount`, `requestBodyBytes`, and the acting `intent`, `risk`, `complexity`,
+`domain`, `workflowState`, `simpleChat`). The `routing` block is unchanged from version 2: its `intentType`,
+`riskLevel`, `domain` and `complexity` are the Gate 4 router's and are present only when the router ran, as the
+routing alert rules and the Gate 7 risk panel expect; tag values appear only in `tagging`. The message language is not recorded (unknown at runtime). Meters (only when the mode is not `off`):
+`mcp.tagging.latency{model}`, `mcp.tagging.requests{model,outcome=ok|timeout|error|rate_limited|malformed}`,
+`mcp.tagging.fallback{reason}`, `mcp.tagging.agreement{tag,agree}`, `mcp.tagging.state_truncated`.
+
+**Behaviour in `off` and `shadow`.** Every decision is today's decision, from the same rules, now taken once
+(`TaggingBehaviourPreservationTest` pins ~75 en/fr/es messages to the pre-refactor fixture). One deliberate change
+(§2, §3.1) applies in every mode: a keyword-added facade tool (inventory, orders, date window) is offered only if it is in
+the caller's permission-gated set; before, those additions bypassed `mcp_tool_permission` at selection. Two tools are
+exempt and behave as before: the glossary (always offered) and web search (offered on `needs_web_search`); neither has
+an `mcp_tool_permission` row to intersect with, and neither reads tenant data. Warm-up makes no tagging call: it
+passes `QuestionTags.none()` (no provider call, no published record, no tagging meter), and an absent record makes every
+consumer behave exactly as `off`, so selection still evaluates today's heuristic rules on the role name, as before
+ADR-0068.
+
+**`enforce` lands in Wave 2** (per-tag acting values, the `follows_previous_turn` override, the workflow-state precedence
+chain, the admin fast-path veto, the compound gate, the router mapped from tags and the scope-graph integration).
+In Wave 1 `enforced-tags` is bound and recorded but the acting value is always the heuristic one.
 
 ## Startup Behaviour
 

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.domain.ModelTier;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.RequestComplexity;
 import com.positivity.mcp.internal.domain.RouterClassification;
 import com.positivity.mcp.internal.enums.NltiIntentType;
@@ -70,9 +71,20 @@ public class NltiRouter {
 
     /**
      * Classifies a request and selects its tier. Never throws: any model or parse failure yields the
-     * safe default classification and {@link ModelTier#T2_COMPLEX}.
+     * safe default classification and {@link ModelTier#T2_COMPLEX}. Pre-ADR-0068 shape: no tags.
      */
     public @NonNull RoutingDecision classify(@NonNull String message) {
+        return classify(message, QuestionTags.none());
+    }
+
+    /**
+     * ADR-0068 §7: the managers pass the turn's tag record. In Wave 1 the router still asks the chat
+     * model and ignores the tags; Wave 2 maps {@code intent}, {@code risk}, {@code complexity} and
+     * {@code domain} from the record and removes the chat call. When tiering is disabled or the
+     * router is absent nothing calls this at all.
+     */
+    @SuppressWarnings("unused")
+    public @NonNull RoutingDecision classify(@NonNull String message, @NonNull QuestionTags tags) {
         try {
             String output = chatModel
                     .call(new Prompt(new SystemMessage(SYSTEM_PROMPT), new UserMessage("User request:\n" + message)))

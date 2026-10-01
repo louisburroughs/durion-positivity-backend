@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import java.util.List;
 import java.util.Optional;
@@ -74,6 +75,14 @@ public class RequestScopedUserContext {
 
     private static final ThreadLocal<Boolean> SCOPE_RAG_FILTER_APPLIED = new ThreadLocal<>();
     private static final ThreadLocal<String> SCOPE_CARD = new ThreadLocal<>();
+
+    /**
+     * This turn's tag record (ADR-0068 §1), published next to the caller and cleared with it, for the
+     * per-request readers inside the cached agent (the compound split in {@code
+     * RerankedContentRetriever}, the prompt supplier's telemetry). Unset outside a chat turn; a reader
+     * treats that as {@link QuestionTags#none()}.
+     */
+    private static final ThreadLocal<QuestionTags> TAGS = new ThreadLocal<>();
 
     public void set(@NonNull CurrentUserContext context) {
         set(context, null);
@@ -158,7 +167,19 @@ public class RequestScopedUserContext {
         return Optional.ofNullable(SCOPE_CARD.get());
     }
 
+    /** Publishes this turn's tag record for the readers that run inside the cached agent (ADR-0068 §1). */
+    public void recordTags(@NonNull QuestionTags tags) {
+        TAGS.set(tags);
+    }
+
+    /** This turn's tag record, or {@link QuestionTags#none()} when none was published. */
+    public @NonNull QuestionTags currentTags() {
+        QuestionTags tags = TAGS.get();
+        return tags == null ? QuestionTags.none() : tags;
+    }
+
     public void clear() {
+        TAGS.remove();
         SCOPE.remove();
         SCOPE_ADDED_TOOLS.remove();
         SCOPE_RAG_FILTER_APPLIED.remove();

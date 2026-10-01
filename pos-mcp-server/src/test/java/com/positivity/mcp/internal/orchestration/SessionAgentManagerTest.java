@@ -11,6 +11,8 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -24,6 +26,7 @@ import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.config.ScopeGraphProperties;
 import com.positivity.mcp.internal.config.ScopeGraphProperties.Consumer;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
@@ -110,6 +113,8 @@ import org.springframework.web.client.RestClient;
 @ExtendWith(BoundTenant.class)
 class SessionAgentManagerTest {
 
+    private static final HeuristicQuestionTagger HEURISTIC_TAGGER = HeuristicQuestionTagger.withDefaultCatalog();
+
     private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000000301");
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-04-13T02:00:00Z"), ZoneOffset.UTC);
 
@@ -174,10 +179,14 @@ class SessionAgentManagerTest {
         lenient().when(toolRegistry.resolveToolsByName(anyCollection())).thenAnswer(inv -> new ArrayList<>());
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient()
-                .when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), anyInt()))
-                .thenReturn(List.of());
+                .when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), anyInt()))
+                .thenReturn(gated(List.of()));
+        // ADR-0068: the mocked engine tags with the heuristics, as the unwired real engine does.
         lenient()
-                .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
+                .when(toolSelectionEngine.tag(anyString()))
+                .thenAnswer(inv -> HEURISTIC_TAGGER.tag(inv.getArgument(0)));
+        lenient()
+                .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class)))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
         // #778: default to session-less so existing tests exercise the
         // message-heuristic path.
@@ -464,8 +473,9 @@ class SessionAgentManagerTest {
         verify(toolInvocationRecorder).clearTurn();
         // Prompt resolution now happens deferred in systemMessageProvider lambda at
         // runtime
-        verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anySet(), anyString());
-        verify(toolRegistryService, never()).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
+        verify(toolSelectionEngine, never())
+                .selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class));
+        verify(toolRegistryService, never()).resolveCandidateSelection(any(ToolSelectionContext.class), anyInt());
     }
 
     @Test
@@ -475,8 +485,8 @@ class SessionAgentManagerTest {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
         SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
@@ -489,7 +499,7 @@ class SessionAgentManagerTest {
         // Prompt resolution now happens deferred in systemMessageProvider lambda at
         // runtime
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3));
         verify(scopedContentRetrieverFactory).create("inventory", 10, 0.6);
         verify(scopedContentRetrieverFactory).create("inventory", 20, 0.55);
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
@@ -503,8 +513,8 @@ class SessionAgentManagerTest {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
         SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
@@ -536,8 +546,8 @@ class SessionAgentManagerTest {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of());
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
         SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
         clearInvocations(toolRegistryService);
@@ -548,7 +558,7 @@ class SessionAgentManagerTest {
         assertThat(response).isEqualTo("Stock found");
         // Prompt resolution now happens deferred in systemMessageProvider lambda at
         // runtime
-        verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(any(ToolSelectionContext.class), eq(3));
         // Second-order effect of failing closed, asserted rather than glossed: RAG
         // scope is derived
         // from the resolved tool set, so emptying roleTools leaves only the keyword
@@ -565,12 +575,34 @@ class SessionAgentManagerTest {
                 .doesNotContain("ROLE_ADMIN::GlossaryFacadeTool+InventoryFacadeTool+OrderFacadeTool");
     }
 
+    /**
+     * PR #2367 review: production never puts ExaWebSearchTool in the gated set (it has no {@code
+     * mcp_tool} row), so the fixture leaves it out and web search must reach the agent through the
+     * engine's exemption alone.
+     */
+    @Test
+    @DisplayName("ADR-0068 §2: chat offers web search through the exemption although no gated set names it")
+    void chat_withWebKeyword_includesExaFallbackTool() {
+        ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
+        when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Here is the news"));
+        SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
+
+        selectorManager.chat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "find latest internet news");
+
+        assertThat(gated(List.of()).gatedToolNames()).doesNotContain("ExaWebSearchTool");
+        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::ExaWebSearchTool+GlossaryFacadeTool");
+    }
+
     @Test
     @DisplayName("chat threads the persisted non-IDLE session workflow state into tool selection (#778)")
     void chat_usesPersistedWorkflowState_whenSessionPresent() {
         String message = "create a purchase order for vendor acme";
         when(workflowStateService.resolveActiveState("user-1")).thenReturn(Optional.of(WorkflowState.CREATING_PO));
-        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString(), any(WorkflowState.class)))
+        when(toolSelectionEngine.selectRoleTools(
+                        anyString(), anySet(), anyString(), any(WorkflowState.class), any(QuestionTags.class)))
                 .thenReturn(
                         new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.CREATING_PO));
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("ok"));
@@ -583,8 +615,10 @@ class SessionAgentManagerTest {
                         eq("ROLE_ADMIN"),
                         eq(Set.of("AUTHENTICATED", "mcp:chat:execute")),
                         eq(message),
-                        eq(WorkflowState.CREATING_PO));
-        verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anySet(), anyString());
+                        eq(WorkflowState.CREATING_PO),
+                        any(QuestionTags.class));
+        verify(toolSelectionEngine, never())
+                .selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class));
     }
 
     @Test
@@ -897,7 +931,7 @@ class SessionAgentManagerTest {
     }
 
     /** What the agent saw in the request-scoped holder while it ran. */
-    private record SeenByAgent(Optional<ScopeSet> scope, Optional<CurrentUserContext> caller) {}
+    private record SeenByAgent(Optional<ScopeSet> scope, Optional<CurrentUserContext> caller, QuestionTags tags) {}
 
     /** Seeds {@code target}'s cache with an agent that notes what is published while it runs. */
     private java.util.concurrent.atomic.AtomicReference<SeenByAgent> seedObservingAgent(
@@ -909,7 +943,8 @@ class SessionAgentManagerTest {
                 new java.util.concurrent.atomic.AtomicReference<>();
         PosAssistant agent = mock(PosAssistant.class);
         when(agent.reply(anyString(), anyString(), anyString())).thenAnswer(invocation -> {
-            seen.set(new SeenByAgent(requestContext.currentScope(), requestContext.current()));
+            seen.set(new SeenByAgent(
+                    requestContext.currentScope(), requestContext.current(), requestContext.currentTags()));
             if (failure != null) {
                 throw failure;
             }
@@ -928,10 +963,76 @@ class SessionAgentManagerTest {
 
     @Test
     @DisplayName(
+            "ADR-0068: the turn is tagged once, ahead of the simple-chat decision, recorded, published next to the caller and cleared with it")
+    void chat_tagsOnce_recordsPublishesAndClearsTheTags() {
+        QuestionTags tags = HEURISTIC_TAGGER.tag(SCOPE_MESSAGE);
+        when(toolSelectionEngine.tag(SCOPE_MESSAGE)).thenReturn(tags);
+        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString(), same(tags)))
+                .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
+        RequestScopedUserContext requestContext = new RequestScopedUserContext();
+        SessionAgentManager scoped = scopeManager(
+                toolSelectionEngine, sharedOrchestrationSupport, requestContext, toolInvocationRecorder, null);
+        java.util.concurrent.atomic.AtomicReference<SeenByAgent> seen =
+                seedObservingAgent(scoped, requestContext, "ROLE_ADMIN", null);
+        CurrentUserContext caller = userContext("user-1", USER_ID, "ROLE_ADMIN");
+
+        scoped.chat(caller, SCOPE_MESSAGE);
+
+        // One tagging call for the turn (the warm-up in the constructor never tags).
+        verify(toolSelectionEngine, times(1)).tag(anyString());
+        // Published for the agent's window, next to the caller.
+        assertThat(seen.get().tags()).isSameAs(tags);
+        assertThat(seen.get().caller()).contains(caller);
+        // Cleared with the caller, in the same finally.
+        assertThat(requestContext.currentTags().isNone()).isTrue();
+        assertThat(requestContext.current()).isEmpty();
+        // Recorded first: the simple-chat decision and every later stage read the record.
+        org.mockito.InOrder stages = org.mockito.Mockito.inOrder(toolSelectionEngine, toolInvocationRecorder);
+        stages.verify(toolSelectionEngine).tag(SCOPE_MESSAGE);
+        stages.verify(toolInvocationRecorder).recordTags(tags);
+        stages.verify(toolInvocationRecorder).recordSimpleChat(false);
+        stages.verify(toolSelectionEngine).selectRoleTools(anyString(), anySet(), anyString(), same(tags));
+        stages.verify(toolInvocationRecorder).completeTurn("answer");
+
+        ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
+        verify(telemetryEmitter).emit(event.capture());
+        assertThat(event.getValue().schemaVersion()).isEqualTo(3);
+        assertThat(event.getValue().tagging()).isNotNull();
+        assertThat(event.getValue().tagging().mode()).isEqualTo("OFF");
+        assertThat(event.getValue().tagging().simpleChat()).isFalse();
+        assertThat(event.getValue().tagging().workflowState())
+                .isEqualTo(tags.workflowState().name());
+        // The acting tag values live in the tagging block only; routing classification is the
+        // Gate 4 router's, and the router did not run (tiering is off).
+        assertThat(event.getValue().tagging().intent()).isEqualTo("UNKNOWN");
+        assertThat(event.getValue().routing().intentType()).isNull();
+        assertThat(event.getValue().routing().riskLevel()).isNull();
+        assertThat(event.getValue().routing().domain()).isNull();
+        assertThat(event.getValue().routing().complexity()).isNull();
+    }
+
+    @Test
+    @DisplayName("ADR-0068: warm-up selects with QuestionTags.none() and never tags")
+    void prebuild_neverTags() {
+        // Constructing a manager warms ROLE_CASHIER and ROLE_MANAGER.
+        scopeManager(
+                toolSelectionEngine,
+                sharedOrchestrationSupport,
+                new RequestScopedUserContext(),
+                toolInvocationRecorder,
+                null);
+
+        verify(toolSelectionEngine, never()).tag(anyString());
+        verify(toolSelectionEngine, atLeastOnce())
+                .selectRoleTools(eq("ROLE_CASHIER"), anySet(), eq("ROLE_CASHIER"), same(QuestionTags.none()));
+    }
+
+    @Test
+    @DisplayName(
             "ADR-0069: a resolved scope is recorded with the selection stages, published next to the caller, and cleared with it")
     void chat_shadow_recordsPublishesAndClearsTheScope() {
         ScopeSet scope = scopeOf(SCOPE_MESSAGE);
-        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
+        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class)))
                 .thenReturn(
                         new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.IDLE, scope));
         RequestScopedUserContext requestContext = new RequestScopedUserContext();
@@ -962,7 +1063,7 @@ class SessionAgentManagerTest {
 
         ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
         verify(telemetryEmitter).emit(event.capture());
-        assertThat(event.getValue().schemaVersion()).isEqualTo(2);
+        assertThat(event.getValue().schemaVersion()).isEqualTo(3);
         assertThat(event.getValue().scopeMode()).isEqualTo("SHADOW");
         assertThat(event.getValue().scopeGraphHash()).isEqualTo(scope.graphHash());
         assertThat(event.getValue().scopeConfidence()).isEqualTo("HIGH");
@@ -1005,7 +1106,7 @@ class SessionAgentManagerTest {
     @DisplayName("ADR-0069: a turn that fails still clears the scope, and its ERROR telemetry carries none")
     void chat_failure_clearsTheScope() {
         ScopeSet scope = scopeOf(SCOPE_MESSAGE);
-        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
+        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class)))
                 .thenReturn(
                         new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.IDLE, scope));
         RequestScopedUserContext requestContext = new RequestScopedUserContext();
@@ -1044,7 +1145,8 @@ class SessionAgentManagerTest {
 
         scoped.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "hello");
 
-        verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anySet(), anyString());
+        verify(toolSelectionEngine, never())
+                .selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class));
         verify(toolInvocationRecorder, never()).recordScope(any());
         verify(requestContext, never()).recordScope(any());
         ArgumentCaptor<NltiRequestTelemetry> event = ArgumentCaptor.forClass(NltiRequestTelemetry.class);
@@ -1082,7 +1184,7 @@ class SessionAgentManagerTest {
         ArgumentCaptor<Prompt> prompts = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel, org.mockito.Mockito.atLeastOnce()).call(prompts.capture());
         ArgumentCaptor<ToolSelectionContext> ranking = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateTools(ranking.capture(), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(ranking.capture(), eq(3));
         List<Object> observed = new ArrayList<>();
         observed.add(response);
         observed.add(roleAgentCacheKeys(target).stream().sorted().toList());
@@ -1119,8 +1221,8 @@ class SessionAgentManagerTest {
     void chat_shadow_isIdenticalToOff() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool")))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(inventoryFacadeTool)));
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
@@ -1156,8 +1258,8 @@ class SessionAgentManagerTest {
 
     /** A real engine over the fixture graph, wired to {@code consumers}, ranking to the order facade alone. */
     private ToolSelectionEngine orderRankingEngine(ScopeConsumers consumers, SimpleMeterRegistry meters) {
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(orderToolMetadata()));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of(orderToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("orderFacadeTool")))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool)));
         ToolSelectionEngine engine = realToolSelectionEngine();
@@ -1193,8 +1295,8 @@ class SessionAgentManagerTest {
     void chat_enforceWithoutConsumers_isIdenticalToShadow() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
-                .thenReturn(List.of(inventoryToolMetadata()));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool")))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(inventoryFacadeTool)));
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
@@ -1394,7 +1496,7 @@ class SessionAgentManagerTest {
                         WORKORDER_ONLY_MESSAGE,
                         Set.of("AUTHENTICATED", ScopeResolverFixtures.WORKORDER_VIEW),
                         WorkflowState.IDLE);
-        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
+        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class)))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(
                         List.of(orderFacadeTool, inventoryFacadeTool),
                         List.of(),
@@ -1420,5 +1522,18 @@ class SessionAgentManagerTest {
                         .count())
                 .isZero();
         assertThat(requestContext.currentScopeAddedToolNames()).isEmpty();
+    }
+
+    /**
+     * ADR-0068 §2: the gated set names every facade the engine may add that has a seeded {@code
+     * mcp_tool_permission} row, beside the ranked candidates. {@code ExaWebSearchTool} is deliberately
+     * NOT here, as in {@code ToolSelectionEngineTest}: it has no {@code mcp_tool} row, so production
+     * never returns it in the gated set, and web search is offered through the engine's exemption.
+     */
+    private static ToolRegistryService.CandidateSelection gated(List<ToolMetadata> candidates) {
+        Set<String> names = new java.util.HashSet<>(
+                Set.of("DateWindowFacadeTool", "GlossaryFacadeTool", "InventoryFacadeTool", "OrderFacadeTool"));
+        candidates.forEach(candidate -> names.add(candidate.name()));
+        return new ToolRegistryService.CandidateSelection(candidates, names, false);
     }
 }

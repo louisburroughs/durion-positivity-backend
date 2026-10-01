@@ -11,6 +11,7 @@ import com.positivity.mcp.internal.config.SessionAgentCacheMetrics;
 import com.positivity.mcp.internal.config.TieredChatModelResolver;
 import com.positivity.mcp.internal.domain.ChatOutcome;
 import com.positivity.mcp.internal.domain.ModelTier;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.RagScope;
 import com.positivity.mcp.internal.domain.TurnSummary;
 import com.positivity.mcp.internal.domain.WorkflowState;
@@ -41,6 +42,7 @@ import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import com.positivity.mcp.internal.telemetry.FallbackUsage;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.TaggingSignal;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.TierRouting;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.tenancy.TenantContext;
@@ -271,6 +273,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
         long startMs = System.currentTimeMillis();
         NltiRouter.RoutingDecision routingDecision = null;
+        // ADR-0068 §1: null until the turn is tagged, so a failure before that emits no tagging block.
+        QuestionTags tags = null;
         // #1691: a failover flag left by a request that emitted no telemetry must not be charged
         // to this one.
         FallbackUsage.consume();
@@ -281,7 +285,13 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 toolInvocationRecorder.recordMessage(
                         ConversationIds.parseCanonical(conversationId), assistantMessageId);
             }
-            boolean simpleChat = simpleChatFastPath.isSimpleChat(message);
+            // ADR-0068 §1: the one tagging call of the turn, ahead of the simple-chat decision, the
+            // tier routing and the tool selection, which all read this record and nothing else.
+            tags = toolSelectionEngine.tag(message);
+            if (toolInvocationRecorder != null && !tags.isNone()) {
+                toolInvocationRecorder.recordTags(tags);
+            }
+            boolean simpleChat = simpleChatFastPath.isSimpleChat(message, tags);
             if (toolInvocationRecorder != null) {
                 toolInvocationRecorder.recordSimpleChat(simpleChat);
             }
@@ -301,7 +311,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 String messagePreview = sharedOrchestrationSupport.preview(message);
                 LOGGER.debug(
                         "MCP simple chat dispatch username={} role={} preview=\"{}\"", username, role, messagePreview);
-                SimpleChatReply simple = simpleChat(currentUserContext, message, startMs);
+                SimpleChatReply simple = simpleChat(currentUserContext, message, startMs, tags);
                 PosAssistant.Reply reply = simple.reply();
                 if (toolInvocationRecorder != null) {
                     toolInvocationRecorder.completeTurn(reply.text());
@@ -319,7 +329,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             // executor tier. Null when tiering is disabled or the router is not wired — the request
             // then uses the default model (documented rollback). The router picks a MODEL only; it
             // never affects tool or permission gating (Permission lock).
-            routingDecision = routeTier(message);
+            routingDecision = routeTier(message, tags);
             ModelTier tier = routingDecision == null ? null : routingDecision.tier();
             if (toolInvocationRecorder != null) {
                 toolInvocationRecorder.recordRouting(
@@ -330,13 +340,14 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             }
 
             // #778: gate tool selection by the subject's persisted session workflow state when they
-            // have one; otherwise fall back to message-heuristic derivation (session-less callers).
+            // have one; otherwise the workflow_state tag decides (session-less callers, ADR-0068 §3.3).
             Optional<WorkflowState> persistedState = workflowStateService.resolveActiveState(username);
+            QuestionTags turnTags = tags;
             ToolSelectionEngine.ToolSelectionResult selection = persistedState
                     .map(state -> toolSelectionEngine.selectRoleTools(
-                            role, currentUserContext.permissionCodes(), message, state))
-                    .orElseGet(() ->
-                            toolSelectionEngine.selectRoleTools(role, currentUserContext.permissionCodes(), message));
+                            role, currentUserContext.permissionCodes(), message, state, turnTags))
+                    .orElseGet(() -> toolSelectionEngine.selectRoleTools(
+                            role, currentUserContext.permissionCodes(), message, turnTags));
             List<Object> selectedTools =
                     sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
             List<String> selectedToolNames = sharedOrchestrationSupport.toolNames(selectedTools);
@@ -383,6 +394,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 // #1675: tools that need the caller's own wording read it from here rather than
                 // from a model-supplied copy, which arrives normalised with the preposition gone.
                 requestScopedUserContext.recordUserMessage(message);
+                // ADR-0068 §1: the tag record too, for the readers inside the cached agent.
+                requestScopedUserContext.recordTags(tags);
                 // ADR-0069 §5: published next to the caller, for the same window, and cleared by the
                 // same clear() in the finally below.
                 publication.publish(requestScopedUserContext);
@@ -428,7 +441,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     tierRoutingOf(routingDecision),
                     writeCapableToolsPresent,
                     selection.scope(),
-                    scopeOutcome);
+                    scopeOutcome,
+                    tags);
             if (toolInvocationRecorder != null) {
                 toolInvocationRecorder.completeTurn(reply.text());
             }
@@ -462,7 +476,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     tierRoutingOf(routingDecision),
                     currentWriteCapableToolsPresent(),
                     null,
-                    ScopeOutcome.NONE);
+                    ScopeOutcome.NONE,
+                    tags);
             throw new IllegalStateException(
                     "MCP chat failed role=%s elapsedMs=%d errorName=%s"
                             .formatted(role, elapsedMs, exception.getClass().getSimpleName()),
@@ -599,11 +614,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
      * rollback) or the router is not wired. Never throws: router failures safe-default inside
      * {@link NltiRouter#classify}.
      */
-    private NltiRouter.@Nullable RoutingDecision routeTier(@NonNull String message) {
+    private NltiRouter.@Nullable RoutingDecision routeTier(@NonNull String message, @NonNull QuestionTags tags) {
         if (!tieringEnabled || nltiRouter == null) {
             return null;
         }
-        return nltiRouter.classify(message);
+        // ADR-0068 §7: the router receives the turn's tags (it maps them in Wave 2).
+        return nltiRouter.classify(message, tags);
     }
 
     private @Nullable TierRouting tierRoutingOf(NltiRouter.@Nullable RoutingDecision decision) {
@@ -718,8 +734,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 // the warm cache matches the role's actual gated tool set; always include AUTHENTICATED.
                 // Callers whose actual permissionCodes still differ get a cache miss and build on
                 // demand via getOrCreateAgent (its key already varies with toolCacheKey).
-                ToolSelectionEngine.ToolSelectionResult selection =
-                        toolSelectionEngine.selectRoleTools(role, prebuildPermissionCodes(role), role);
+                // ADR-0068 spec §2.5: warm-up passes QuestionTags.none(), so it makes no provider call,
+                // publishes no tag record and touches no tagging meter. Selection still evaluates
+                // today's heuristic rules on the role name (the none() record falls back to them), as
+                // it did before ADR-0068.
+                ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(
+                        role, prebuildPermissionCodes(role), role, QuestionTags.none());
                 List<Object> selectedTools =
                         sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
                 String warmCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
@@ -820,7 +840,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private record SimpleChatReply(PosAssistant.@NonNull Reply reply, int latencyMs) {}
 
     private @NonNull SimpleChatReply simpleChat(
-            @NonNull CurrentUserContext currentUserContext, @NonNull String message, long requestStartMs) {
+            @NonNull CurrentUserContext currentUserContext,
+            @NonNull String message,
+            long requestStartMs,
+            @NonNull QuestionTags tags) {
         long simpleStartNanos = System.nanoTime();
         ChatResponseText.Extracted extracted = ChatResponseText.extractDetailed(chatModel
                 .call(simpleChatFastPath.prompt(currentUserContext, message))
@@ -857,7 +880,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 false,
                 // The fast path resolves no scope (ADR-0069).
                 null,
-                ScopeOutcome.NONE);
+                ScopeOutcome.NONE,
+                tags);
         // The fast path offers no tools; its answer source is the raw extraction source (#1816).
         return new SimpleChatReply(
                 new PosAssistant.Reply(response, extracted.source().name(), List.of()),
@@ -883,7 +907,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Nullable TierRouting tierRouting,
             boolean writeCapableToolsPresent,
             @Nullable ScopeSet scope,
-            @NonNull ScopeOutcome scopeOutcome) {
+            @NonNull ScopeOutcome scopeOutcome,
+            @Nullable QuestionTags tags) {
         if (telemetryEmitter == null) {
             return;
         }
@@ -912,7 +937,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     tierRouting,
                     writeCapableToolsPresent,
                     ScopeShadowSupport.telemetrySignal(
-                            scope, ScopeShadowSupport.propertiesOf(scopeConsumers), scopeOutcome)));
+                            scope, ScopeShadowSupport.propertiesOf(scopeConsumers), scopeOutcome),
+                    TaggingSignal.of(tags)));
         } catch (RuntimeException telemetryFailure) {
             LOGGER.warn(
                     "MCP telemetry emission failed role={} status={}",

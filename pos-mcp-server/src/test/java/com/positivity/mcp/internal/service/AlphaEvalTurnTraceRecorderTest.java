@@ -8,8 +8,16 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.config.ScopeGraphProperties;
+import com.positivity.mcp.internal.config.TaggingProperties;
 import com.positivity.mcp.internal.domain.EvalTurnTrace;
+import com.positivity.mcp.internal.domain.FallbackReason;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.ScopeTrace;
+import com.positivity.mcp.internal.domain.TagAnswer;
+import com.positivity.mcp.internal.domain.TagName;
+import com.positivity.mcp.internal.domain.TagSource;
+import com.positivity.mcp.internal.domain.TagTrace;
+import com.positivity.mcp.internal.domain.TaggingMode;
 import com.positivity.mcp.internal.repository.EvalTurnTraceRepository;
 import com.positivity.mcp.internal.scopegraph.Access;
 import com.positivity.mcp.internal.scopegraph.MatchKind;
@@ -23,6 +31,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -421,5 +430,119 @@ class AlphaEvalTurnTraceRecorderTest {
         ScopeTrace traced = savedTrace().scope();
         assertThat(traced.calledToolsInScope()).isEqualTo(1);
         assertThat(traced.retrievedDocsInScope()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("ADR-0068: a turn with no recorded tags persists null tags")
+    void noTagsRecordedPersistsNullTags() {
+        recorder.begin(USER, "hello");
+        recorder.complete("hi");
+
+        assertThat(savedTrace().tags()).isNull();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR-0068: a recorded shadow record is traced per tag with both values, the agreement and the provider")
+    void tagsAreTracedPerTagWithAgreement() {
+        AlphaEvalTurnTraceRecorder shadowRecorder = new AlphaEvalTurnTraceRecorder(
+                repository,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                RETENTION,
+                "sha-81ff1e0",
+                null,
+                null,
+                new TaggingProperties(
+                        TaggingMode.SHADOW,
+                        List.of(),
+                        null,
+                        Map.of("workflow_state", 0.9, "entity", 0.6, "entity.work-order", 0.85),
+                        0));
+        Map<String, TagAnswer> heuristic = Map.of(
+                TagName.SIMPLE_CHAT.wireName(), TagAnswer.heuristic(false),
+                TagName.WORKFLOW_STATE.wireName(), TagAnswer.heuristic("IDLE", "phrase:purchase order"));
+        Map<String, TagAnswer> model = Map.of(
+                TagName.SIMPLE_CHAT.wireName(), TagAnswer.noul(0.07),
+                TagName.WORKFLOW_STATE.wireName(), new TagAnswer("CREATING_PO", 0.81, TagSource.JEV),
+                TagName.entityWireName("work-order"), TagAnswer.noul(0.88),
+                TagName.entityWireName("invoice"), TagAnswer.noul(0.2));
+        QuestionTags tags = new QuestionTags(
+                TaggingMode.SHADOW, heuristic, model, heuristic, null, "tev1:0.8b", 212L, false, 46, 18_432, "abc123");
+
+        shadowRecorder.begin(USER, "create a purchase order for WO-20391");
+        shadowRecorder.recordTags(tags);
+        shadowRecorder.complete("done");
+
+        TagTrace traced = savedTrace().tags();
+        assertThat(traced.mode()).isEqualTo("SHADOW");
+        assertThat(traced.enforcedTags()).isEmpty();
+        assertThat(traced.providerModel()).isEqualTo("tev1:0.8b");
+        assertThat(traced.latencyMs()).isEqualTo(212L);
+        assertThat(traced.fallbackReason()).isNull();
+        assertThat(traced.questionCount()).isEqualTo(46);
+        assertThat(traced.requestBodyBytes()).isEqualTo(18_432);
+        assertThat(traced.optionListHash()).isEqualTo("abc123");
+        assertThat(traced.tags())
+                .extracting(TagTrace.TagEntry::name)
+                .containsExactly("entity_invoice", "entity_work-order", "simple_chat", "workflow_state");
+        TagTrace.TagEntry simpleChat = traced.tags().get(2);
+        assertThat(simpleChat.actingValue()).isEqualTo("false");
+        assertThat(simpleChat.actingSource()).isEqualTo("HEURISTIC");
+        assertThat(simpleChat.heuristicRule()).isNull();
+        assertThat(simpleChat.modelValue()).isEqualTo("false");
+        assertThat(simpleChat.modelConfidence()).isCloseTo(0.93, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(simpleChat.modelProbability()).isEqualTo(0.07);
+        assertThat(simpleChat.threshold()).isEqualTo(TaggingProperties.DEFAULT_THRESHOLD);
+        assertThat(simpleChat.agree()).isTrue();
+        TagTrace.TagEntry workflow = traced.tags().get(3);
+        assertThat(workflow.heuristicValue()).isEqualTo("IDLE");
+        assertThat(workflow.heuristicRule()).isEqualTo("phrase:purchase order");
+        assertThat(workflow.modelValue()).isEqualTo("CREATING_PO");
+        assertThat(workflow.modelProbability()).isNull();
+        assertThat(workflow.threshold()).isEqualTo(0.9);
+        assertThat(workflow.agree()).isFalse();
+        // Entity Nouls: no heuristic answer, the per-entity threshold when set, else the entity one.
+        TagTrace.TagEntry workOrder = traced.tags().get(1);
+        assertThat(workOrder.actingValue()).isNull();
+        assertThat(workOrder.heuristicValue()).isNull();
+        assertThat(workOrder.modelValue()).isEqualTo("true");
+        assertThat(workOrder.modelProbability()).isEqualTo(0.88);
+        assertThat(workOrder.threshold()).isEqualTo(0.85);
+        assertThat(workOrder.agree()).isNull();
+        assertThat(traced.tags().get(0).threshold()).isEqualTo(0.6);
+        assertThat(traced.tags().get(0).modelValue()).isEqualTo("false");
+    }
+
+    @Test
+    @DisplayName("ADR-0068: a fallback record carries its reason, and enforce stamps the enforced list")
+    void fallbackAndEnforcedTagsAreTraced() {
+        AlphaEvalTurnTraceRecorder enforceRecorder = new AlphaEvalTurnTraceRecorder(
+                repository,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                RETENTION,
+                "sha-81ff1e0",
+                null,
+                null,
+                new TaggingProperties(TaggingMode.ENFORCE, List.of("simple_chat"), null, Map.of(), 0));
+        Map<String, TagAnswer> heuristic = Map.of(TagName.SIMPLE_CHAT.wireName(), TagAnswer.heuristic(true));
+        QuestionTags fallback = new QuestionTags(
+                TaggingMode.ENFORCE, heuristic, Map.of(), heuristic, FallbackReason.TIMEOUT, "tev1:0.8b", 800L, true);
+
+        enforceRecorder.begin(USER, "hello");
+        enforceRecorder.recordTags(fallback);
+        enforceRecorder.complete("hi");
+
+        TagTrace traced = savedTrace().tags();
+        assertThat(traced.mode()).isEqualTo("ENFORCE");
+        assertThat(traced.enforcedTags()).containsExactly("simple_chat");
+        assertThat(traced.fallbackReason()).isEqualTo("timeout");
+        assertThat(traced.stateTruncated()).isTrue();
+        assertThat(traced.questionCount()).isNull();
+        assertThat(traced.requestBodyBytes()).isNull();
+        assertThat(traced.tags()).singleElement().satisfies(entry -> {
+            assertThat(entry.modelValue()).isNull();
+            assertThat(entry.agree()).isNull();
+            assertThat(entry.actingValue()).isEqualTo("true");
+        });
     }
 }

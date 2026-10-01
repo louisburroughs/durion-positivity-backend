@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.service.RolePromptResolver;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import org.jspecify.annotations.NonNull;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
  * managers (Gate 4, closing the Gate 2A divergence: the T0 short-circuit was previously
  * blocking-only). Classification is rule-based ({@link SimpleChatClassifier}) — no LLM and no tool
  * selection are involved; the reply prompt is the master system prompt plus the caller context.
+ * Since ADR-0068 the decision is read from the turn's {@link QuestionTags} record.
  */
 @Component
 class SimpleChatFastPath {
@@ -31,9 +33,24 @@ class SimpleChatFastPath {
         this.sharedOrchestrationSupport = sharedOrchestrationSupport;
     }
 
-    /** True when the message is pure social chat (greeting/thanks/capability) — the T0 rule path. */
+    /**
+     * True when the message is pure social chat (greeting/thanks/capability) — the T0 rule path.
+     * Pre-ADR-0068 shape: classifies the message directly. The managers pass the turn's tag record to
+     * {@link #isSimpleChat(String, QuestionTags)} instead, so the classifier runs once per turn.
+     */
     boolean isSimpleChat(@NonNull String message) {
         return simpleChatClassifier.isSimpleChat(message);
+    }
+
+    /**
+     * ADR-0068 §1: the T0 decision read from the turn's {@code simple_chat} tag (its acting value is
+     * the heuristic classifier's answer in {@code off} and {@code shadow}). An absent record ({@link
+     * QuestionTags#none()}: warm-up, a caller that never tagged) behaves exactly as {@code off}: the
+     * classifier decides. {@code message} is also what the Wave 2 override rule
+     * ({@code follows_previous_turn}) is applied to.
+     */
+    boolean isSimpleChat(@NonNull String message, @NonNull QuestionTags tags) {
+        return tags.isNone() ? simpleChatClassifier.isSimpleChat(message) : tags.simpleChat();
     }
 
     /** The no-tool, no-RAG prompt answering a T0 message: master prompt + caller context. */

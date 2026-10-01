@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.domain.EvalTurnTrace.ToolDefinitionTrace;
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.internal.scopegraph.ScopeSet;
 import java.util.Collection;
@@ -102,6 +103,11 @@ public class ToolInvocationRecorder {
 
     public void recordPrompt(@NonNull String systemPrompt, @NonNull List<ToolDefinitionTrace> toolDefinitions) {
         recordTrace(recorder -> recorder.recordPrompt(systemPrompt, toolDefinitions), "record prompt");
+    }
+
+    /** ADR-0068 §6: stamps this turn's tag record on the active trace. */
+    public void recordTags(@NonNull QuestionTags tags) {
+        recordTrace(recorder -> recorder.recordTags(tags), "record tags");
     }
 
     /** ADR-0069 §9: stamps this turn's resolved scope on the active trace. */
