@@ -231,6 +231,7 @@ class OpenApiDocumentFetcherSchemaCaptureTest {
                 List.of(),
                 AGGREGATE_URL,
                 List.of(),
+                List.of(),
                 Map.of());
     }
 

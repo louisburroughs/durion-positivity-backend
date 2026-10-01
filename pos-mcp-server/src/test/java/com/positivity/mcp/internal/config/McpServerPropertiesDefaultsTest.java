@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -14,6 +15,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.HttpMethod;
 
 class McpServerPropertiesDefaultsTest {
 
@@ -32,6 +34,77 @@ class McpServerPropertiesDefaultsTest {
                     assertThat(props.excludedPathFragments())
                             .containsExactlyInAnyOrder("/admin/", "/actuator/", "/internal/");
                 });
+    }
+
+    @Test
+    @DisplayName("#2370: excluded-write-path-patterns defaults cover the audit and platform-event surfaces, writes "
+            + "only")
+    void excludedWritePathPatterns_defaultToAuditAndPlatformEventSurfaces() {
+        new ApplicationContextRunner()
+                .withInitializer(loadYaml("application.yml"))
+                .withUserConfiguration(Config.class)
+                .run(ctx -> {
+                    McpServerProperties props = ctx.getBean(McpServerProperties.class);
+                    assertThat(props.excludedWritePathPatterns())
+                            .containsExactlyInAnyOrder(
+                                    "^/security-service/v1/audit/",
+                                    "^/event-receiver/v1/events(/|$)",
+                                    "^/event-receiver/v1/eventTypes(/|$)",
+                                    "^/mcp-server/v1/(mcp|nlt)/audit(/|$)");
+                    // writes on the surfaces
+                    assertThat(props.excludesWrite("/security-service/v1/audit/events", HttpMethod.POST))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/security-service/v1/audit/events/**", HttpMethod.DELETE))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/security-service/v1/audit/pricing-snapshots", HttpMethod.POST))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/event-receiver/v1/events", HttpMethod.POST))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/event-receiver/v1/eventTypes", HttpMethod.POST))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/event-receiver/v1/eventTypes/{id}", HttpMethod.PUT))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/mcp-server/v1/mcp/audit", HttpMethod.POST))
+                            .isTrue();
+                    // reads on the same surfaces
+                    assertThat(props.excludesWrite("/security-service/v1/audit/events", HttpMethod.GET))
+                            .isFalse();
+                    assertThat(props.excludesWrite("/event-receiver/v1/events", HttpMethod.GET))
+                            .isFalse();
+                    // business paths that merely contain audit / events
+                    assertThat(props.excludesWrite("/accounting/v1/accounting/audit/refund", HttpMethod.POST))
+                            .isFalse();
+                    assertThat(props.excludesWrite("/accounting/v1/accounting/events/{eventId}/retry", HttpMethod.POST))
+                            .isFalse();
+                    assertThat(props.excludesWrite("/shop-manager/v1/shop/audit", HttpMethod.POST))
+                            .isFalse();
+                    assertThat(props.excludesWrite(
+                                    "/order/v1/orders/purchase-orders/{poId}/transmission-events", HttpMethod.POST))
+                            .isFalse();
+                });
+    }
+
+    @Test
+    @DisplayName("#2370: the alpha profile keeps the write exclusion (it overrides excluded-path-fragments, not this)")
+    void excludedWritePathPatterns_surviveTheAlphaProfile() {
+        new ApplicationContextRunner()
+                .withInitializer(loadYaml("application-alpha.yml", "application.yml"))
+                .withUserConfiguration(Config.class)
+                .run(ctx -> {
+                    McpServerProperties props = ctx.getBean(McpServerProperties.class);
+                    assertThat(props.excludedWritePathPatterns()).hasSize(4);
+                    assertThat(props.excludesWrite("/security-service/v1/audit/events", HttpMethod.POST))
+                            .isTrue();
+                });
+    }
+
+    @Test
+    @DisplayName("#2370: an excluded-write-path-patterns entry that is not a regular expression fails construction")
+    void excludedWritePathPatterns_rejectInvalidRegex() {
+        assertThatThrownBy(() -> new McpServerProperties(
+                        null, null, null, null, null, null, null, null, null, List.of("^/ok/", "(unclosed"), null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("(unclosed");
     }
 
     @Test

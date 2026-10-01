@@ -225,6 +225,131 @@ class OpenApiToolMapperTest {
         assertThat(ops).extracting(DiscoveredOperation::name).containsExactly("accounting_listinvoices");
     }
 
+    // ---- #2370: audit / platform-event writes are never agent tools -----------------------------
+
+    private static final List<String> WRITE_EXCLUSIONS = List.of(
+            "^/security-service/v1/audit/", "^/event-receiver/v1/events(/|$)", "^/event-receiver/v1/eventTypes(/|$)");
+
+    /** The routing-prefixed paths discovery sees: audit + platform-event surfaces and business look-alikes. */
+    private static OpenAPI auditAndEventPaths() {
+        PathItem auditEvents = new PathItem();
+        auditEvents.setGet(operation("searchAuditEvents"));
+        auditEvents.setPost(operation("createAuditEvent"));
+        PathItem auditEventsWildcard = new PathItem();
+        auditEventsWildcard.setPut(operation("rejectAuditEventUpdate"));
+        auditEventsWildcard.setDelete(operation("rejectAuditEventDelete"));
+        PathItem events = new PathItem();
+        events.setGet(operation("queryEventsByEntity"));
+        events.setPost(operation("receiveEvent"));
+        PathItem eventTypeById = new PathItem();
+        eventTypeById.setGet(operation("getEventTypeById"));
+        eventTypeById.setPut(operation("updateEventType"));
+        eventTypeById.setDelete(operation("deleteEventType"));
+        // Business paths that merely contain "audit" / "events": a bare fragment would drop these.
+        PathItem accountingAudit = new PathItem();
+        accountingAudit.setPost(operation("recordRefundAudit"));
+        PathItem accountingEventRetry = new PathItem();
+        accountingEventRetry.setPost(operation("retryAccountingEvent"));
+        return openApiWith(Map.of(
+                "/security-service/v1/audit/events", auditEvents,
+                "/security-service/v1/audit/events/**", auditEventsWildcard,
+                "/event-receiver/v1/events", events,
+                "/event-receiver/v1/eventTypes/{id}", eventTypeById,
+                "/accounting/v1/accounting/audit/refund", accountingAudit,
+                "/accounting/v1/accounting/events/{eventId}/retry", accountingEventRetry));
+    }
+
+    @Test
+    @DisplayName("#2370: toDiscoveredOperations drops non-GET operations on excluded-write paths, keeps GET and "
+            + "business look-alikes")
+    void toDiscoveredOperations_dropsWritesOnExcludedWritePaths_keepsReadsAndBusinessPaths() {
+        OpenApiToolMapper mapper = new OpenApiToolMapper(
+                propertiesWithWriteExclusions(WRITE_EXCLUSIONS), mock(OperationProxyFactory.class));
+
+        List<DiscoveredOperation> ops = mapper.toDiscoveredOperations("pos-api-gateway", auditAndEventPaths());
+
+        assertThat(ops)
+                .extracting(DiscoveredOperation::name)
+                .containsExactlyInAnyOrder(
+                        "security-service_searchauditevents",
+                        "event-receiver_queryeventsbyentity",
+                        "event-receiver_geteventtypebyid",
+                        "accounting_recordrefundaudit",
+                        "accounting_retryaccountingevent");
+        assertThat(ops)
+                .filteredOn(op ->
+                        op.name().startsWith("security-service_") || op.name().startsWith("event-receiver_"))
+                .extracting(DiscoveredOperation::httpMethod)
+                .containsOnly("GET");
+    }
+
+    @Test
+    @DisplayName("#2370: toAggregateToolSpecifications applies the same write exclusion to the MCP tool specs")
+    void toAggregateToolSpecifications_dropsWritesOnExcludedWritePaths() {
+        OperationProxyFactory mockFactory = mock(OperationProxyFactory.class);
+        when(mockFactory.handlerForBaseUri(any(), any(), any(), anyBoolean())).thenReturn((ex, req) -> Mono.empty());
+        OpenApiToolMapper mapper = new OpenApiToolMapper(propertiesWithWriteExclusions(WRITE_EXCLUSIONS), mockFactory);
+
+        List<McpServerFeatures.AsyncToolSpecification> specs =
+                mapper.toAggregateToolSpecifications(GATEWAY_URI, auditAndEventPaths());
+
+        assertThat(specs)
+                .extracting(spec -> spec.tool().name())
+                .containsExactlyInAnyOrder(
+                        "security-service_searchauditevents",
+                        "event-receiver_queryeventsbyentity",
+                        "event-receiver_geteventtypebyid",
+                        "accounting_recordrefundaudit",
+                        "accounting_retryaccountingevent");
+    }
+
+    @Test
+    @DisplayName("#2370: excludedWriteDomains names the domains whose operations the write exclusion dropped")
+    void excludedWriteDomains_namesDomainsOfDroppedOperations() {
+        OpenApiToolMapper mapper = new OpenApiToolMapper(
+                propertiesWithWriteExclusions(WRITE_EXCLUSIONS), mock(OperationProxyFactory.class));
+
+        assertThat(mapper.excludedWriteDomains(auditAndEventPaths()))
+                .containsExactlyInAnyOrder("security-service", "event-receiver");
+        assertThat(new OpenApiToolMapper(propertiesWithExclusions(List.of()), mock(OperationProxyFactory.class))
+                        .excludedWriteDomains(auditAndEventPaths()))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2370: with no excluded-write patterns configured every write stays discoverable")
+    void toDiscoveredOperations_keepsWrites_whenNoWriteExclusionConfigured() {
+        OpenApiToolMapper mapper =
+                new OpenApiToolMapper(propertiesWithExclusions(List.of()), mock(OperationProxyFactory.class));
+
+        List<DiscoveredOperation> ops = mapper.toDiscoveredOperations("pos-api-gateway", auditAndEventPaths());
+
+        assertThat(ops).hasSize(11);
+        assertThat(ops).extracting(DiscoveredOperation::name).contains("security-service_createauditevent");
+    }
+
+    private static Operation operation(String operationId) {
+        Operation operation = new Operation();
+        operation.setOperationId(operationId);
+        operation.setSummary(operationId);
+        return operation;
+    }
+
+    private static McpServerProperties propertiesWithWriteExclusions(List<String> excludedWritePathPatterns) {
+        return new McpServerProperties(
+                "http://localhost:8086",
+                "/mcp/message",
+                "/mcp/sse",
+                "/v3/api-docs",
+                Duration.ofSeconds(5),
+                List.of(),
+                List.of(),
+                null,
+                List.of(),
+                excludedWritePathPatterns,
+                Map.of());
+    }
+
     private static McpServerProperties propertiesWithExclusions(List<String> excludedFragments) {
         return new McpServerProperties(
                 "http://localhost:8086",
@@ -236,6 +361,7 @@ class OpenApiToolMapperTest {
                 List.of(),
                 null,
                 excludedFragments,
+                List.of(),
                 Map.of());
     }
 
@@ -251,6 +377,7 @@ class OpenApiToolMapperTest {
                 includedPrefixes,
                 null,
                 excludedFragments,
+                List.of(),
                 Map.of());
     }
 

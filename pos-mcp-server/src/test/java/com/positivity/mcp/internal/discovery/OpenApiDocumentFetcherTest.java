@@ -522,6 +522,7 @@ class OpenApiDocumentFetcherTest {
                 List.of(),
                 aggregateSpecUrl,
                 List.of(),
+                List.of(),
                 specIdentityAliases);
         return new OpenApiDocumentFetcher(discoveryClient, webClient, props);
     }

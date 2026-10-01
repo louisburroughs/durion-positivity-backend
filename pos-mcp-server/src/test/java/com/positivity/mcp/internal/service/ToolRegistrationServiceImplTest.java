@@ -256,6 +256,46 @@ class ToolRegistrationServiceImplTest {
     }
 
     @Test
+    @DisplayName("#2370: a domain whose only operations were dropped by the write exclusion counts as seen, so its "
+            + "previously registered write rows are pruned rather than kept as unseen (#1819)")
+    void registerDiscoveredTools_prunesExcludedWriteRows_domainCountsAsSeen() {
+        // event-receiver's spec yields nothing this run because every operation on its emit path was
+        // excluded under mcp.server.excluded-write-path-patterns; the mapper reports the domain as
+        // write-excluded. The prune must run with event-receiver NOT excluded, so the stale
+        // event-receiver_receiveevent row (absent from keptNames) is deleted.
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("users_listusers");
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered =
+                new OpenApiDocumentFetcher.DiscoveredOpenApi("aggregate", GATEWAY_BASE_URI, new OpenAPI());
+        DiscoveredOperation op = new DiscoveredOperation(
+                "users_listusers",
+                "List users",
+                "GET",
+                "/security-service/v1/users",
+                "http://api-gateway:8080",
+                null,
+                List.of());
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(spec));
+        when(openApiToolMapper.toDiscoveredOperations("http://api-gateway:8080", discovered.openApi()))
+                .thenReturn(List.of(op));
+        when(openApiToolMapper.excludedWriteDomains(discovered.openApi())).thenReturn(Set.of("event-receiver"));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+        ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
+        when(repo.upsertDiscoveredOperation(any(), any()))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        when(repo.discoveredDomains())
+                .thenReturn(Set.of(OpenApiToolMapper.extractDomain("/security-service/v1/users"), "event-receiver"));
+        when(repo.pruneDiscoveredOperationsExcept(any(), any())).thenReturn(1);
+
+        serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        verify(repo).pruneDiscoveredOperationsExcept(Set.of("users_listusers"), Set.of());
+    }
+
+    @Test
     @DisplayName("a domain listed in mcp.discovery.prunable-when-unseen is reconciled even when it contributed "
             + "nothing — the operator escape hatch for a retired or renamed domain (#1819)")
     void registerDiscoveredTools_prunesAnUnseenDomainTheOperatorDeclaredGone() {
@@ -661,6 +701,7 @@ class ToolRegistrationServiceImplTest {
                 List.of(),
                 "http://gateway.test/v3/api-docs",
                 List.of(),
+                List.of(),
                 Map.of());
         return new ToolRegistrationServiceImpl(
                 properties,
@@ -684,6 +725,7 @@ class ToolRegistrationServiceImplTest {
                 includedServices,
                 List.of(),
                 "http://gateway.test/v3/api-docs",
+                List.of(),
                 List.of(),
                 Map.of());
         return new ToolRegistrationServiceImpl(

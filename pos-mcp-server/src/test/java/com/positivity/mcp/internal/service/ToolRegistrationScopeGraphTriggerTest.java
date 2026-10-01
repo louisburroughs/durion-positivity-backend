@@ -129,6 +129,7 @@ class ToolRegistrationScopeGraphTriggerTest {
                 List.of(),
                 "http://gateway.test/v3/api-docs",
                 List.of(),
+                List.of(),
                 Map.of());
     }
 
