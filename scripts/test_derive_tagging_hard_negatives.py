@@ -9,8 +9,10 @@ import io
 import json
 import os
 import pathlib
+import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from scripts import derive_tagging_hard_negatives as derive
 
@@ -77,9 +79,29 @@ class DeriveTest(unittest.TestCase):
             derive.derive(self.fixtures([]), {})
 
     def test_parse_answers_reads_the_java_output(self):
-        line = json.dumps({"text": "hello", "answers": {"simple_chat": "true"}})
+        line = json.dumps({"text": "hello", "answers": answers(simple_chat="true")})
         self.assertEqual(derive.parse_answers(["Picked up JAVA_TOOL_OPTIONS: ...", line]),
-                         {"hello": {"simple_chat": "true"}})
+                         {"hello": answers(simple_chat="true")})
+
+    def test_parse_answers_fails_loudly_when_a_tag_is_missing(self):
+        # a renamed or dropped wire name would otherwise read as "not positive" and silently
+        # empty every hard_negative_for list for that tag
+        for tag in derive.HARD_NEGATIVE_TAGS:
+            with self.subTest(tag=tag):
+                row = answers()
+                del row[tag]
+                with self.assertRaises(SystemExit) as raised:
+                    derive.parse_answers([json.dumps({"text": "hello", "answers": row})])
+                self.assertIn(tag, str(raised.exception))
+
+    def test_run_java_splits_only_on_newline(self):
+        # U+2028 / U+0085 are line breaks to str.splitlines() but legal raw inside a JSON string,
+        # and HeuristicAnswers.java prints them unescaped
+        text = "first\u2028second\u0085third"
+        stdout = json.dumps({"text": text, "answers": answers()}, ensure_ascii=False) + "\n"
+        done = subprocess.CompletedProcess([], 0, stdout=stdout, stderr="")
+        with mock.patch.object(derive.subprocess, "run", return_value=done):
+            self.assertEqual(derive.run_java([text], "cp", "java"), {text: answers()})
 
     def _gate_copy(self):
         """A temporary copy of the fixtures, so no test can rewrite the real ones."""
@@ -109,12 +131,26 @@ class DeriveTest(unittest.TestCase):
         self.assertIn(f"{first['id']}: ", out.getvalue())
         self.assertEqual({name: pathlib.Path(gate, name).read_bytes() for name in before}, before)
 
+    def test_default_mode_reports_and_writes_nothing_until_write(self):
+        gate = self._gate_copy()
+        first = derive.load_fixtures(pathlib.Path(gate))["en"][1]["utterances"][0]
+        answers_path = self._answers_file(gate, first["text"])
+        names = ("en.json", "fr-CA.json", "es.json")
+        before = {name: pathlib.Path(gate, name).read_bytes() for name in names}
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(derive.main(["--answers", answers_path, "--gate-dir", gate]), 0)
+        self.assertIn(f"{first['id']}: ", out.getvalue())
+        self.assertEqual({name: pathlib.Path(gate, name).read_bytes() for name in names}, before)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(derive.main(["--answers", answers_path, "--write", "--gate-dir", gate]), 0)
+        self.assertNotEqual({name: pathlib.Path(gate, name).read_bytes() for name in names}, before)
+
     def test_write_mode_rewrites_only_the_derived_lists(self):
         gate = self._gate_copy()
         first = derive.load_fixtures(pathlib.Path(gate))["en"][1]["utterances"][0]
         answers_path = self._answers_file(gate, first["text"])
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(derive.main(["--answers", answers_path, "--gate-dir", gate]), 0)
+            self.assertEqual(derive.main(["--answers", answers_path, "--write", "--gate-dir", gate]), 0)
         rewritten = derive.load_fixtures(pathlib.Path(gate))["en"][1]["utterances"][0]
         expected = derive.hard_negatives(first["expected_tags"], answers(about_inventory="true"))
         self.assertEqual(rewritten["hard_negative_for"], expected)

@@ -14,10 +14,13 @@ scripts/tagging_gate/HeuristicAnswers.java run in source-file mode against a bui
         -Dmdep.outputFile=/tmp/mcp-cp.txt -Dmdep.includeScope=runtime
     # back here; JDK 25
     python3 scripts/derive_tagging_hard_negatives.py \\
-        --classpath "$CHECKOUT/pos-mcp-server/target/classes:$(cat /tmp/mcp-cp.txt)" [--check]
+        --classpath "$CHECKOUT/pos-mcp-server/target/classes:$(cat /tmp/mcp-cp.txt)" [--check | --write]
 
---answers FILE reads the JSON lines HeuristicAnswers.java printed instead of running Java.
---check writes nothing and exits 1 when a fixture's hard_negative_for differs from the derivation.
+Report-only by default: it prints every utterance whose hard_negative_for differs from the
+derivation and writes nothing. --write rewrites the fixtures in --gate-dir (the real ones unless
+given). --check is the report that exits 1 on any difference (CI-style). --answers FILE reads the
+JSON lines HeuristicAnswers.java printed instead of running Java; every answer row must carry
+every tag in HARD_NEGATIVE_TAGS, or the run stops (the Java side drifted).
 Stdlib only.
 """
 
@@ -82,6 +85,10 @@ def parse_answers(lines):
         line = line.strip()
         if line.startswith("{"):
             record = json.loads(line)
+            missing = [tag for tag in HARD_NEGATIVE_TAGS if tag not in record["answers"]]
+            if missing:
+                raise SystemExit(f"heuristic answers for {record['text']!r} lack {missing}: "
+                                 f"HeuristicAnswers.java and HARD_NEGATIVE_TAGS have drifted")
             answers[record["text"]] = record["answers"]
     return answers
 
@@ -93,7 +100,11 @@ def run_java(texts, classpath, java):
     if result.returncode != 0:
         sys.stderr.write(result.stderr)
         raise SystemExit(f"{JAVA_SOURCE.name} failed with exit code {result.returncode}")
-    return parse_answers(result.stdout.splitlines())
+    # split on "\n" only: splitlines() would also break on U+2028 / U+0085 inside a JSON string
+    lines = result.stdout.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return parse_answers(lines)
 
 
 def derive(fixtures, answers):
@@ -116,7 +127,9 @@ def main(argv=None):
     source.add_argument("--classpath", help="pos-mcp-server classes + runtime classpath of a #2367 build")
     source.add_argument("--answers", help="JSON lines printed by HeuristicAnswers.java")
     parser.add_argument("--java", default="java", help="java launcher (JDK 25)")
-    parser.add_argument("--check", action="store_true", help="report differences, write nothing, exit 1 on any")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true", help="report differences, write nothing, exit 1 on any")
+    mode.add_argument("--write", action="store_true", help="rewrite the fixtures in --gate-dir (default: report only)")
     parser.add_argument("--gate-dir", default=str(GATE_DIR), help="directory holding en.json, fr-CA.json, es.json")
     args = parser.parse_args(argv)
 
@@ -133,6 +146,9 @@ def main(argv=None):
             print(f"{uid}: {old} -> {new}")
     if args.check:
         return 1 if changes else 0
+    if not args.write:
+        print(f"{sum(len(r) for r in changes.values())} utterance(s) differ; nothing written (pass --write)")
+        return 0
     for language, (path, fixture) in fixtures.items():
         if language in changes:
             path.write_text(dump(fixture), encoding="utf-8")

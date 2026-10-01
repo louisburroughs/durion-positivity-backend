@@ -44,7 +44,10 @@ numbers. The report prints a warning next to an unreviewed language.
   (`feat/adr-0068-w1-tagging-seam`, PR #2367; the class is not on main yet) over every text, not by
   hand. Re-derive it after a label or text edit, or if a heuristic rule changes, with
   `scripts/derive_tagging_hard_negatives.py` (it runs the tagger through
-  `scripts/tagging_gate/HeuristicAnswers.java` against a build of that branch; `--check` only reports).
+  `scripts/tagging_gate/HeuristicAnswers.java` against a build of that branch; it only reports by
+  default, `--write` rewrites the fixtures, `--check` exits 1 on any difference). It uses
+  `SimpleChatRuleDefaults.defaultCatalog()`: an environment with an edited simple-chat catalog
+  derives different hard negatives.
   The two platform-event utterances added per language on 2026-09-30 (`en-0329`/`0330`,
   `fr-CA-0356`/`0357`, `es-0356`/`0357`) carry an empty list until that derivation runs.
 - `notes`: why the label is what it is, where it is not obvious.
@@ -244,8 +247,8 @@ MODEL=tev1 LANG_FILE=en START=0 END=150 BATCH=1
 since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 jq -c ".utterances[$START:$END][] | {message: .text}" "$GATE/$LANG_FILE.json" |
   while read -r body; do                         # no conversationId: every turn is a fresh conversation
-    curl -sS -o /dev/null -X POST "$MCP_CHAT_URL" -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
-      -H "X-API-Version: 1" -H "Content-Type: application/json" -d "$body"
+    curl -sS --fail -o /dev/null -X POST "$MCP_CHAT_URL" -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
+      -H "X-API-Version: 1" -H "Content-Type: application/json" -d "$body" || echo "turn failed: $body" >&2
   done
 curl -sS -G "${MCP_CHAT_URL%/v1/mcp/chat}/v1/eval/turn-traces" --data-urlencode "since=$since" \
   --data-urlencode "limit=200" -H "Authorization: Bearer $MCP_BEARER_TOKEN" -H "X-API-Version: 1" \
@@ -254,7 +257,8 @@ jq length "traces-$MODEL-$LANG_FILE-$BATCH.json"   # 200 means turns were cut of
 ```
 
 Repeat with `START=150 END=300 BATCH=2` and `START=300 END=400 BATCH=3` for each language. Overlapping
-exports are safe: the report keeps a `turnId` once.
+exports are safe: the report keeps a `turnId` once. Rerunning a batch after a capped export:
+delete the truncated export first (the rerun's turns get new `turnId`s; keeping both scores them twice).
 
 ### Report
 

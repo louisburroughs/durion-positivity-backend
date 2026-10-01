@@ -512,30 +512,24 @@ services:
       ollama:
         condition: service_healthy
     # The values reach the script as environment, not interpolated into it, so the rendered
-    # command stays fixed. OLLAMA_TAGGING_MODEL defaults only when UNSET (`-`, not `:-`): set it
-    # empty to skip the tagging pull. pos-mcp-server reads the same variable (MCP_TAGGING_MODEL).
+    # command stays fixed. OLLAMA_TAGGING_MODEL takes the same `:-` default as pos-mcp-server's
+    # MCP_TAGGING_MODEL (unset or empty -> tev1:0.8b), so the pulled model is the one it calls.
     environment:
       OLLAMA_HOST: http://ollama:11434
       EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-bge-m3}
-      TAGGING_MODEL: ${OLLAMA_TAGGING_MODEL-tev1:0.8b}
+      TAGGING_MODEL: ${OLLAMA_TAGGING_MODEL:-tev1:0.8b}
       TAGGING_MODE: ${MCP_TAGGING_MODE:-off}
     entrypoint: [ "/bin/sh", "-c" ]
     # Embedding pull first; its exit code is the container's. The tagging model (ADR-0068) is
-    # pulled only when MCP_TAGGING_MODE is not off and OLLAMA_TAGGING_MODEL is non-empty, and a
-    # failed tagging pull is logged but never fails init: tagging falls back to the heuristic.
+    # pulled only when MCP_TAGGING_MODE is not off (off is the one way to skip it), and a failed
+    # tagging pull is logged but never fails init: tagging falls back to the heuristic.
     command:
       - |
         ollama pull "$$EMBEDDING_MODEL"
         rc=$$?
         case "$$TAGGING_MODE" in
           [Oo][Ff][Ff]) echo "MCP_TAGGING_MODE=off: tagging model not pulled" ;;
-          *)
-            if [ -z "$$TAGGING_MODEL" ]; then
-              echo "OLLAMA_TAGGING_MODEL is empty: tagging model not pulled"
-            else
-              ollama pull "$$TAGGING_MODEL" || echo "tagging model pull failed (non-fatal): $$TAGGING_MODEL"
-            fi
-            ;;
+          *) ollama pull "$$TAGGING_MODEL" || echo "tagging model pull failed (non-fatal): $$TAGGING_MODEL" ;;
         esac
         exit $$rc
     restart: "no"
@@ -1127,15 +1121,20 @@ services:
       # container (/v1/systemone, Ollama 0.35+), never OLLAMA_CHAT_BASE_URL: question text must
       # not leave the cell to be tagged (section 5). off = no tagging call; shadow = tag and
       # record only; enforce = tags drive routing for the configured enforced-tags.
-      # The model is OLLAMA_TAGGING_MODEL, the one variable ollama-init pulls, so the setting
-      # and the pulled model cannot diverge. ENTITY_QUESTIONS asks the 31 entity Nouls too
+      # The model is OLLAMA_TAGGING_MODEL, the one variable ollama-init pulls, with the same `:-`
+      # default there and here (unset or empty -> tev1:0.8b), so the setting and the pulled model
+      # cannot diverge. ENTITY_QUESTIONS asks the 31 entity Nouls too
       # (~18 KB body): leave it false for a small-context model; the bake-off decides per model.
       MCP_TAGGING_MODE: ${MCP_TAGGING_MODE:-off}
       MCP_TAGGING_BASE_URL: ${MCP_TAGGING_BASE_URL:-http://ollama:11434}
       MCP_TAGGING_MODEL: ${OLLAMA_TAGGING_MODEL:-tev1:0.8b}
       MCP_TAGGING_ENTITY_QUESTIONS: ${MCP_TAGGING_ENTITY_QUESTIONS:-false}
       MCP_TAGGING_TIMEOUT: ${MCP_TAGGING_TIMEOUT:-800ms}
-      MCP_TAGGING_KEEP_ALIVE: ${MCP_TAGGING_KEEP_ALIVE:-30m}
+      MCP_TAGGING_KEEP_ALIVE: ${MCP_TAGGING_KEEP_ALIVE:-24h}
+      # Eval turn-trace recorder (mcp.eval.turn-trace.*, application-alpha.yml): the tagging
+      # bake-off exports its traces from GET /v1/eval/turn-traces. Defaults match the yml.
+      MCP_EVAL_TURN_TRACE_ENABLED: ${MCP_EVAL_TURN_TRACE_ENABLED:-true}
+      MCP_EVAL_TURN_TRACE_RETENTION: ${MCP_EVAL_TURN_TRACE_RETENTION:-24h}
       MCP_RAG_CHUNKING_ENABLED: ${MCP_RAG_CHUNKING_ENABLED:-true}
       MCP_RAG_MAX_SEGMENT_SIZE: ${MCP_RAG_MAX_SEGMENT_SIZE:-2000}
       MCP_RAG_MAX_OVERLAP_SIZE: ${MCP_RAG_MAX_OVERLAP_SIZE:-200}
