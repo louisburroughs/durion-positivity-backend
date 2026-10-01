@@ -478,9 +478,15 @@ services:
     image: ollama/ollama:0.35.0
     container_name: ollama
     environment:
-      # Embedding model + tagging model stay resident together (ADR-0068 section 5); the
-      # default of one loaded model would evict and reload one of them on every turn.
-      OLLAMA_MAX_LOADED_MODELS: "2"
+      # Embedding model + tagging model stay resident together (ADR-0068 Implementation Notes,
+      # Container: at least 2). Ollama's own CPU default is 3; it is pinned here so a change of
+      # default cannot drop it below 2, and 3 leaves room for a second tagging candidate during
+      # the section 6 bake-off. Models load only while they fit in the container's memory.
+      OLLAMA_MAX_LOADED_MODELS: "3"
+      # Server default keep_alive for requests that send none (the embedding calls): the 5m
+      # default would evict bge-m3 between quiet turns and a cold load costs seconds. The
+      # tagging calls send their own keep_alive (MCP_TAGGING_KEEP_ALIVE on pos-mcp-server).
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-24h}
     ports:
       - "11434:11434"
     volumes:
@@ -505,15 +511,32 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+    # The values reach the script as environment, not interpolated into it, so the rendered
+    # command stays fixed. OLLAMA_TAGGING_MODEL defaults only when UNSET (`-`, not `:-`): set it
+    # empty to skip the tagging pull. pos-mcp-server reads the same variable (MCP_TAGGING_MODEL).
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-bge-m3}
+      TAGGING_MODEL: ${OLLAMA_TAGGING_MODEL-tev1:0.8b}
+      TAGGING_MODE: ${MCP_TAGGING_MODE:-off}
     entrypoint: [ "/bin/sh", "-c" ]
-    # Embedding pull first; its exit code is the container's. A failed tagging-model pull is
-    # logged but never fails init, so tagging stays optional (MCP_TAGGING_MODE=off by default).
+    # Embedding pull first; its exit code is the container's. The tagging model (ADR-0068) is
+    # pulled only when MCP_TAGGING_MODE is not off and OLLAMA_TAGGING_MODEL is non-empty, and a
+    # failed tagging pull is logged but never fails init: tagging falls back to the heuristic.
     command:
       - |
-        OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_EMBEDDING_MODEL:-bge-m3}
+        ollama pull "$$EMBEDDING_MODEL"
         rc=$$?
-        OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_TAGGING_MODEL:-tev1:0.8b} \
-          || echo "tagging model pull failed (non-fatal)"
+        case "$$TAGGING_MODE" in
+          [Oo][Ff][Ff]) echo "MCP_TAGGING_MODE=off: tagging model not pulled" ;;
+          *)
+            if [ -z "$$TAGGING_MODEL" ]; then
+              echo "OLLAMA_TAGGING_MODEL is empty: tagging model not pulled"
+            else
+              ollama pull "$$TAGGING_MODEL" || echo "tagging model pull failed (non-fatal): $$TAGGING_MODEL"
+            fi
+            ;;
+        esac
         exit $$rc
     restart: "no"
     volumes:
@@ -1104,9 +1127,15 @@ services:
       # container (/v1/systemone, Ollama 0.35+), never OLLAMA_CHAT_BASE_URL: question text must
       # not leave the cell to be tagged (section 5). off = no tagging call; shadow = tag and
       # record only; enforce = tags drive routing for the configured enforced-tags.
+      # The model is OLLAMA_TAGGING_MODEL, the one variable ollama-init pulls, so the setting
+      # and the pulled model cannot diverge. ENTITY_QUESTIONS asks the 31 entity Nouls too
+      # (~18 KB body): leave it false for a small-context model; the bake-off decides per model.
       MCP_TAGGING_MODE: ${MCP_TAGGING_MODE:-off}
-      MCP_TAGGING_PROVIDER_BASE_URL: ${MCP_TAGGING_PROVIDER_BASE_URL:-http://ollama:11434}
-      MCP_TAGGING_PROVIDER_MODEL: ${OLLAMA_TAGGING_MODEL:-tev1:0.8b}
+      MCP_TAGGING_BASE_URL: ${MCP_TAGGING_BASE_URL:-http://ollama:11434}
+      MCP_TAGGING_MODEL: ${OLLAMA_TAGGING_MODEL:-tev1:0.8b}
+      MCP_TAGGING_ENTITY_QUESTIONS: ${MCP_TAGGING_ENTITY_QUESTIONS:-false}
+      MCP_TAGGING_TIMEOUT: ${MCP_TAGGING_TIMEOUT:-800ms}
+      MCP_TAGGING_KEEP_ALIVE: ${MCP_TAGGING_KEEP_ALIVE:-30m}
       MCP_RAG_CHUNKING_ENABLED: ${MCP_RAG_CHUNKING_ENABLED:-true}
       MCP_RAG_MAX_SEGMENT_SIZE: ${MCP_RAG_MAX_SEGMENT_SIZE:-2000}
       MCP_RAG_MAX_OVERLAP_SIZE: ${MCP_RAG_MAX_OVERLAP_SIZE:-200}
