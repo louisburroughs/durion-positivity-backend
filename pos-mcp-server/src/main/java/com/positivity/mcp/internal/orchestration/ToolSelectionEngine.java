@@ -1,6 +1,8 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.positivity.mcp.internal.config.ScopeGraphProperties.Consumer;
 import com.positivity.mcp.internal.domain.QuestionTags;
+import com.positivity.mcp.internal.domain.TagSeeds;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
@@ -157,11 +159,12 @@ public class ToolSelectionEngine {
         QuestionTags acting = tags.isNone() ? heuristicTags(message) : tags;
         // ADR-0069 §5: the scope is resolved here, once the workflow state is known and before tool
         // ranking, because this is the one selection entry point both session managers call. The
-        // only consumer that reads it here is the facade slot step (§6), and only when enforced.
-        ScopeSet scope = resolveScope(message, permissionCodes, workflowState);
-        RankedRoleTools ranked = roleToolsForMessage(role, permissionCodes, message, workflowState, scope);
+        // consumers that read it here are the facade slot step (§6) and the lexicon lookups (§6 row
+        // 3), each only when enforced. ADR-0068 spec §2.7: the acting tags add their seeds.
+        ScopeSet scope = resolveScope(message, permissionCodes, workflowState, acting.tagSeeds());
+        RankedRoleTools ranked = roleToolsForMessage(role, permissionCodes, message, workflowState, scope, acting);
         List<Object> fallbackTools = sharedOrchestrationSupport.mergeTools(
-                toolRegistry.resolveMasterTools(), fallbackToolsForTags(acting, ranked.gatedToolNames()));
+                toolRegistry.resolveMasterTools(), fallbackToolsForTags(acting, ranked.gatedToolNames(), scope));
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
                     "MCP shared tool selection role={} permissionCodes={} workflowState={} roleTools={} scopeAddedTools={} fallbackTools={} queryPreview=\"{}\"",
@@ -214,15 +217,23 @@ public class ToolSelectionEngine {
         }
     }
 
-    /** Null when no resolver is wired or the mode is {@code off}: the turn has no scope at all. */
+    /**
+     * Null when no resolver is wired or the mode is {@code off}: the turn has no scope at all.
+     *
+     * @param tagSeeds ADR-0068 spec §2.7: the acting entity Nouls and {@code domain}; {@link
+     *     TagSeeds#none()} outside {@code enforce}, so the three-argument resolution
+     */
     private @Nullable ScopeSet resolveScope(
-            @NonNull String message, @NonNull Set<String> permissionCodes, @NonNull WorkflowState workflowState) {
+            @NonNull String message,
+            @NonNull Set<String> permissionCodes,
+            @NonNull WorkflowState workflowState,
+            @NonNull TagSeeds tagSeeds) {
         ScopeResolver resolver = scopeResolver;
         if (resolver == null || !resolver.enabled()) {
             return null;
         }
         try {
-            return resolver.resolve(message, permissionCodes, workflowState);
+            return resolver.resolve(message, permissionCodes, workflowState, tagSeeds);
         } catch (RuntimeException exception) {
             // The resolver already swallows its own failures; this guards a resolver that does not.
             LOGGER.warn(
@@ -280,7 +291,8 @@ public class ToolSelectionEngine {
             @NonNull Set<String> permissionCodes,
             @NonNull String message,
             @NonNull WorkflowState workflowState,
-            @Nullable ScopeSet scope) {
+            @Nullable ScopeSet scope,
+            @NonNull QuestionTags tags) {
         List<Object> fullRoleTools = toolRegistry.resolveDomainTools(role);
         if (toolRegistryService == null) {
             logToolSelectorUnavailable(role, permissionCodes, message, fullRoleTools);
@@ -294,8 +306,10 @@ public class ToolSelectionEngine {
                     new ToolSelectionContext(message, role, workflowState.name(), permissionCodes);
             // ADR-0069 §6 and ADR-0068 §2: both the scope's slot step and the tag-added facades are
             // intersected with the caller's gated set, which the ranking fetches anyway, so the
-            // resolution always returns the wider answer. The ranked cut itself is unchanged.
-            CandidateSelection selection = toolRegistryService.resolveCandidateSelection(context, candidateToolLimit);
+            // resolution always returns the wider answer. The ranked cut itself is unchanged; the tag
+            // record reaches the admin fast path's veto (ADR-0068 §3.4).
+            CandidateSelection selection =
+                    toolRegistryService.resolveCandidateSelection(context, candidateToolLimit, tags);
             List<ToolMetadata> candidates = selection.candidates();
             logCandidates(role, permissionCodes, workflowState.name(), candidates);
             List<String> selectedNames =
@@ -513,9 +527,17 @@ public class ToolSelectionEngine {
      * is added. Two tools are exempt from the intersection and are offered exactly as before: the
      * glossary (always) and web search (on {@code needs_web_search}). Neither has a permission to
      * intersect with, and neither reads tenant data.
+     *
+     * <p>ADR-0069 §6 row 3 / ADR-0068 spec §2.6: where the scope graph's {@code lookups} consumer is
+     * enforced, {@code about_inventory} and {@code about_orders} are replaced by the lexicon's facade
+     * tools of the turn's entity seeds, read from the {@link ScopeSet} as its hop-1 facades (the tools
+     * whose {@code ACTS_ON} edge reaches a seed entity, already filtered to what the caller may use).
+     * These stay tag-added: unioned with the scope's slot step, outside its {@code added-tool-slots}
+     * cap (ADR-0068 §3.2), and still intersected with the gated set (an unavailable gated set
+     * withholds them too). Without a scope (resolution failed) the two tags decide, as a fallback.
      */
     private @NonNull List<Object> fallbackToolsForTags(
-            @NonNull QuestionTags tags, @Nullable Set<String> gatedToolNames) {
+            @NonNull QuestionTags tags, @Nullable Set<String> gatedToolNames, @Nullable ScopeSet scope) {
         List<Object> selected = new ArrayList<>();
         // #1688: always offered, with no keyword guard. Every other entry here is gated on wording
         // that names its domain, but the glossary's job is to answer "is this metric defined?" — and
@@ -544,11 +566,19 @@ public class ToolSelectionEngine {
             // permission decision but the loss of a feature the keyword guard offered before ADR-0068.
             selected.add(exaWebSearchTool);
         }
-        if (tags.aboutInventory()) {
-            addIfGated(selected, inventoryFacadeTool, gatedToolNames);
-        }
-        if (tags.aboutOrders()) {
-            addIfGated(selected, orderFacadeTool, gatedToolNames);
+        ScopeConsumers consumers = scopeConsumers;
+        if (consumers != null && consumers.enforces(Consumer.LOOKUPS) && scope != null) {
+            addLexiconFacades(selected, scope, gatedToolNames);
+        } else {
+            if (consumers != null && consumers.enforces(Consumer.LOOKUPS)) {
+                consumers.recordFallback(Consumer.LOOKUPS);
+            }
+            if (tags.aboutInventory()) {
+                addIfGated(selected, inventoryFacadeTool, gatedToolNames);
+            }
+            if (tags.aboutOrders()) {
+                addIfGated(selected, orderFacadeTool, gatedToolNames);
+            }
         }
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
@@ -557,6 +587,39 @@ public class ToolSelectionEngine {
                     gatedToolNames != null);
         }
         return selected;
+    }
+
+    /**
+     * ADR-0069 §6 row 3: the lexicon facade tools of the seed entities (the scope's hop-1 facades), in
+     * slot order, each only when the gated set names it and it is not already selected; a null
+     * (unavailable) gated set names nothing.
+     */
+    private void addLexiconFacades(
+            @NonNull List<Object> selected, @NonNull ScopeSet scope, @Nullable Set<String> gatedToolNames) {
+        if (gatedToolNames == null) {
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("MCP lexicon facade lookups withheld (gated set unavailable)");
+            }
+            return;
+        }
+        List<String> names = scope.facadeTools().stream()
+                .filter(tool -> tool.hop() == 1)
+                .sorted(ScopeTool.SLOT_ORDER)
+                .map(ScopeTool::name)
+                .filter(gatedToolNames::contains)
+                .distinct()
+                .toList();
+        if (names.isEmpty()) {
+            return;
+        }
+        for (Object tool : toolRegistry.resolveToolsByName(names)) {
+            if (selected.stream().noneMatch(existing -> existing == tool)) {
+                selected.add(tool);
+            }
+        }
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("MCP lexicon facade lookups added={}", names);
+        }
     }
 
     /**

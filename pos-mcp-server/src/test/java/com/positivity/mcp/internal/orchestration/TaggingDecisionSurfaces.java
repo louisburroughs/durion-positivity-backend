@@ -213,7 +213,7 @@ final class TaggingDecisionSurfaces {
      */
     private ToolSelectionEngine gatedEngine() {
         ToolRegistryService gating = mock(ToolRegistryService.class);
-        when(gating.resolveCandidateSelection(any(ToolSelectionContext.class), anyInt()))
+        when(gating.resolveCandidateSelection(any(ToolSelectionContext.class), anyInt(), any(QuestionTags.class)))
                 .thenReturn(new ToolRegistryService.CandidateSelection(
                         List.of(),
                         Set.of("DateWindowFacadeTool", "GlossaryFacadeTool", "InventoryFacadeTool", "OrderFacadeTool"),

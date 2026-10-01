@@ -7,11 +7,15 @@ import com.positivity.mcp.internal.domain.QuestionTagger;
 import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.TagAnswer;
 import com.positivity.mcp.internal.domain.TagName;
+import com.positivity.mcp.internal.domain.WorkflowState;
+import com.positivity.mcp.internal.enums.NltiIntentType;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -27,10 +31,23 @@ import org.springframework.stereotype.Component;
  *   <li>Run the heuristic tagger (always; sub-millisecond).
  *   <li>If {@code mode} is not {@code off}, run the decision-model tagger inside the timeout budget.
  *       Any provider failure yields the heuristic record with {@code fallbackReason} set.
- *   <li>Merge per tag. In Wave 1 the acting value is always the heuristic one, whatever {@code mode}
- *       and {@code enforced-tags} say: {@code enforce} lands in Wave 2. Both answers are kept for the
+ *   <li>Merge per tag (spec §2.5 step 3). The acting value is the model's when {@code mode} is {@code
+ *       enforce}, the tag is listed in {@code enforced-tags}, its confidence meets its threshold and,
+ *       for a {@code :veto} entry, the heuristic said {@code true} (the model may only turn {@code
+ *       true} into {@code false}); otherwise the heuristic's, with {@code low_confidence} recorded for
+ *       a listed tag the model answered below threshold. {@code admin_account_question} is veto-only
+ *       whatever the list says (ADR-0068 §3.4); a non-{@code IDLE} {@code workflow_state} must also
+ *       meet {@code thresholds.workflow_state.non-idle} (spec §2.6). Both answers are kept for the
  *       trace.
+ *   <li>Where the scope graph's {@code lookups} consumer is enforced and the acting {@code intent} is
+ *       {@code ACTION}, the heuristic {@code workflow_state} is re-read from the lexicon (ADR-0068
+ *       §3.3, the graph lookup step; spec §2.6), after the merge because the acting intent is known
+ *       only then; it acts unless the model's answer already does.
  * </ol>
+ *
+ * <p>Spec §2.5, the T0 skip: when the heuristic {@code simple_chat} fired on an exact catalog rule the
+ * provider is not called at all; the record carries {@code fallbackReason = heuristic_certain} and a
+ * zero latency.
  *
  * <p>Never throws: a chat turn never fails because tagging failed (ADR-0068 §2). With {@code mode:
  * off} nothing here touches the meter registry or writes a log line.
@@ -48,6 +65,10 @@ class TaggingService {
     static final String FALLBACK = "mcp.tagging.fallback";
     static final String AGREEMENT = "mcp.tagging.agreement";
     static final String STATE_TRUNCATED = "mcp.tagging.state_truncated";
+    /** Per-tag {@code low_confidence} fallbacks in {@code enforce}, by tag (spec §2.5). */
+    static final String LOW_CONFIDENCE = "mcp.tagging.low_confidence";
+    /** Turns on which the provider was not called because the heuristic was certain (spec §2.5). */
+    static final String SKIPPED = "mcp.tagging.skipped";
 
     private final TaggingProperties properties;
     private final HeuristicQuestionTagger heuristicTagger;
@@ -92,11 +113,14 @@ class TaggingService {
         if (!properties.enabled() || modelTagger == null) {
             return heuristic;
         }
+        if (HeuristicQuestionTagger.isCertainSimpleChat(heuristic)) {
+            return skipped(heuristic);
+        }
         long startNanos = System.nanoTime();
         try {
             QuestionTags model = modelTagger.tag(message);
             long latencyMs = model.latencyMs() == null ? elapsedMs(startNanos) : model.latencyMs();
-            QuestionTags merged = merge(heuristic, model, latencyMs);
+            QuestionTags merged = withLexiconWorkflowState(merge(heuristic, model, latencyMs), message);
             recordSuccess(merged);
             return merged;
         } catch (JevProviderException failure) {
@@ -107,24 +131,140 @@ class TaggingService {
     }
 
     /**
-     * Spec §2.5 step 3, Wave 1 shape: the acting answers are the heuristic ones. Wave 2 replaces a
-     * listed tag's acting answer with the model's when {@code mode == enforce} and its confidence
-     * meets {@code thresholdFor(tag)}. The provider model is always the configured one (ADR-0068
-     * §3.6: no response string is used), whatever the tagger reported.
+     * Spec §2.5 step 3: the acting answer per tag. Every heuristic answer is visited, then the
+     * model-only ones (the {@code entity_<key>} Nouls, which the heuristic never answers). The provider
+     * model is always the configured one (ADR-0068 §3.6: no response string is used), whatever the
+     * tagger reported.
      */
     private @NonNull QuestionTags merge(@NonNull QuestionTags heuristic, @NonNull QuestionTags model, long latencyMs) {
+        Map<String, TagAnswer> acting = new LinkedHashMap<>();
+        Map<String, FallbackReason> tagFallbacks = new LinkedHashMap<>();
+        heuristic.heuristic().forEach((name, heuristicAnswer) -> {
+            TagAnswer modelAnswer = model.model().get(name);
+            acting.put(name, actingAnswer(name, heuristicAnswer, modelAnswer, tagFallbacks));
+        });
+        model.model().forEach((name, modelAnswer) -> {
+            if (heuristic.heuristic().containsKey(name) || !properties.enforces(name)) {
+                return;
+            }
+            if (meetsThreshold(name, modelAnswer)) {
+                acting.put(name, modelAnswer);
+            } else {
+                tagFallbacks.put(name, FallbackReason.LOW_CONFIDENCE);
+            }
+        });
         return new QuestionTags(
                 properties.mode(),
                 heuristic.heuristic(),
                 model.model(),
-                heuristic.heuristic(),
+                acting,
                 null,
                 properties.provider().model(),
                 latencyMs,
                 model.stateTruncated(),
                 model.questionCount(),
                 model.requestBodyBytes(),
-                model.optionListHash());
+                model.optionListHash(),
+                tagFallbacks);
+    }
+
+    /**
+     * ADR-0068 §6 / spec §2.5: the model's answer acts when the mode is {@code enforce}, the tag is
+     * listed, the confidence meets the threshold (for {@code workflow_state} a non-{@code IDLE} answer
+     * also meets {@code non-idle}) and the direction allows it; otherwise the heuristic's.
+     */
+    private @NonNull TagAnswer actingAnswer(
+            @NonNull String name,
+            @NonNull TagAnswer heuristicAnswer,
+            @Nullable TagAnswer modelAnswer,
+            @NonNull Map<String, FallbackReason> tagFallbacks) {
+        if (modelAnswer == null || !properties.enforces(name)) {
+            return heuristicAnswer;
+        }
+        TagName tag = TagName.fromWireName(name).orElse(null);
+        if (tag == null) {
+            return heuristicAnswer;
+        }
+        if (!meetsThreshold(name, modelAnswer)) {
+            tagFallbacks.put(name, FallbackReason.LOW_CONFIDENCE);
+            return heuristicAnswer;
+        }
+        if (properties.directionOf(tag) == TaggingProperties.Direction.VETO) {
+            // Acting value = heuristic AND model (spec §2.1): a heuristic false stands whatever the
+            // model says; a heuristic true is the model's to keep or veto (ADR-0068 §3.4).
+            return heuristicAnswer.isTrue() ? modelAnswer : heuristicAnswer;
+        }
+        return modelAnswer;
+    }
+
+    /** The tag's threshold, and for a non-{@code IDLE} workflow answer the stricter one too (spec §2.6). */
+    private boolean meetsThreshold(@NonNull String name, @NonNull TagAnswer modelAnswer) {
+        if (modelAnswer.confidence() < properties.thresholdFor(name)) {
+            return false;
+        }
+        if (TagName.WORKFLOW_STATE.wireName().equals(name)
+                && !WorkflowState.IDLE
+                        .name()
+                        .equalsIgnoreCase(modelAnswer.value().trim())) {
+            return modelAnswer.confidence() >= properties.nonIdleThreshold();
+        }
+        return true;
+    }
+
+    /**
+     * ADR-0068 §3.3 (the graph lookup step) / spec §2.6: with {@code lookups} enforced and the acting
+     * {@code intent} {@code ACTION}, the lexicon's {@code workflow_state} for an entity the message
+     * names replaces the phrase match as the heuristic answer; it acts unless the model's answer
+     * already does (the tag at or above threshold comes first in the chain). In {@code off} and {@code
+     * shadow} the acting intent is the heuristic {@code UNKNOWN}, so nothing changes there.
+     */
+    private @NonNull QuestionTags withLexiconWorkflowState(@NonNull QuestionTags merged, @NonNull String message) {
+        if (merged.intent() != NltiIntentType.ACTION || !heuristicTagger.lexiconLookupEnforced()) {
+            return merged;
+        }
+        Optional<TagAnswer> lookup = heuristicTagger.lexiconWorkflowState(message);
+        if (lookup.isEmpty()) {
+            return merged;
+        }
+        String name = TagName.WORKFLOW_STATE.wireName();
+        Map<String, TagAnswer> heuristic = new LinkedHashMap<>(merged.heuristic());
+        heuristic.put(name, lookup.get());
+        Map<String, TagAnswer> acting = new LinkedHashMap<>(merged.acting());
+        if (!merged.enforced(TagName.WORKFLOW_STATE)) {
+            acting.put(name, lookup.get());
+        }
+        return new QuestionTags(
+                merged.mode(),
+                heuristic,
+                merged.model(),
+                acting,
+                merged.fallbackReason(),
+                merged.providerModel(),
+                merged.latencyMs(),
+                merged.stateTruncated(),
+                merged.questionCount(),
+                merged.requestBodyBytes(),
+                merged.optionListHash(),
+                merged.tagFallbackReasons());
+    }
+
+    /** Spec §2.5, the T0 skip: no provider call; the heuristic record, marked {@code heuristic_certain}. */
+    private @NonNull QuestionTags skipped(@NonNull QuestionTags heuristic) {
+        if (meterRegistry != null) {
+            Counter.builder(SKIPPED)
+                    .tag("reason", FallbackReason.HEURISTIC_CERTAIN.wireName())
+                    .register(meterRegistry)
+                    .increment();
+        }
+        return new QuestionTags(
+                properties.mode(),
+                heuristic.heuristic(),
+                Map.of(),
+                heuristic.heuristic(),
+                FallbackReason.HEURISTIC_CERTAIN,
+                null,
+                0L,
+                false);
     }
 
     /**
@@ -193,6 +333,15 @@ class TaggingService {
         if (merged.stateTruncated()) {
             Counter.builder(STATE_TRUNCATED).register(meterRegistry).increment();
         }
+        merged.tagFallbackReasons()
+                .forEach((name, reason) -> Counter.builder(LOW_CONFIDENCE)
+                        .tag(
+                                "tag",
+                                TagName.fromWireName(name)
+                                        .map(TagName::wireName)
+                                        .orElse(name))
+                        .register(meterRegistry)
+                        .increment());
         for (Map.Entry<String, TagAnswer> entry : merged.heuristic().entrySet()) {
             TagAnswer modelAnswer = merged.model().get(entry.getKey());
             if (modelAnswer == null) {

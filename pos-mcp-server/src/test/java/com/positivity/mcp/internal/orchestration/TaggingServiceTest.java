@@ -29,9 +29,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 /** ADR-0068 §2, §6 / spec §2.5, §4: mode logic, merge, fallback reasons and meters. */
 class TaggingServiceTest {
 
+    /** Exact simple-chat catalog hits: the T0 skip never calls the provider for these (spec §2.5). */
+    private static final List<String> CERTAIN_T0 = List.of("hello", "merci", "buenos días");
+
+    /** Simple chat by the caps and the absence of a task signal, not by an exact rule: still tagged. */
+    private static final String UNCERTAIN_T0 = "merci beaucoup";
+
     private static final List<String> MESSAGES = List.of(
-            "hello",
-            "merci beaucoup",
+            UNCERTAIN_T0,
             "now rank those same ten by outstanding balance instead",
             "create po for 40 tires from Michelin",
             "we are receiving asn 5521 today",
@@ -109,14 +114,14 @@ class TaggingServiceTest {
 
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"SHADOW", "ENFORCE"})
-    @DisplayName("shadow (and Wave-1 enforce) == off on every decision, with a model that contradicts every tag")
+    @DisplayName(
+            "shadow, and enforce with an empty list, == off on every decision, with a model that contradicts every tag")
     void shadowEqualsOffOnEveryDecision(String modeName) {
         TaggingMode mode = TaggingMode.valueOf(modeName);
         OppositeTagger model = new OppositeTagger();
         SimpleMeterRegistry meters = new SimpleMeterRegistry();
-        // Wave 1: enforced-tags may be bound, but the acting value is always the heuristic one.
-        TaggingProperties properties = new TaggingProperties(
-                mode, List.of("simple_chat", "workflow_state", "risk", "entity"), null, Map.of(), 0);
+        // Spec §2.1: mode enforce with nothing listed behaves as shadow.
+        TaggingProperties properties = new TaggingProperties(mode, List.of(), null, Map.of(), 0);
         TaggingService off = new TaggingService(mode(TaggingMode.OFF), heuristic, null, meters);
         TaggingService on = new TaggingService(properties, heuristic, model, meters);
 
@@ -134,7 +139,10 @@ class TaggingServiceTest {
             assertThat(actual.adminAccountQuestion()).isEqualTo(expected.adminAccountQuestion());
             assertThat(actual.compoundQuestion()).isEqualTo(expected.compoundQuestion());
             assertThat(actual.routerClassification()).isEqualTo(RouterClassification.safeDefault());
-            assertThat(actual.entitySeeds()).as("no entity seed acts in Wave 1").isEmpty();
+            assertThat(actual.entitySeeds())
+                    .as("no entity seed acts outside enforce")
+                    .isEmpty();
+            assertThat(actual.tagFallbackReasons()).isEmpty();
             // ... while everything the model said is recorded beside it.
             assertThat(actual.mode()).isEqualTo(mode);
             assertThat(actual.model()).isNotEmpty();
@@ -198,7 +206,8 @@ class TaggingServiceTest {
                 false);
         TaggingService service = new TaggingService(properties, heuristic, reportsAnotherModel, meters);
 
-        QuestionTags tags = service.tag("hello");
+        // Not an exact simple-chat catalog hit: the T0 skip (spec §2.5) must not pre-empt the call.
+        QuestionTags tags = service.tag("list all users");
 
         assertThat(tags.providerModel()).isEqualTo("configured-model");
         assertThat(meters.get(TaggingService.REQUESTS)
@@ -231,6 +240,41 @@ class TaggingServiceTest {
         assertThat(whole.fallbackReason()).isEqualTo(reason);
         assertThat(whole.stateTruncated()).isFalse();
         assertThat(meters.get(TaggingService.STATE_TRUNCATED).counter().count()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("spec §2.5 T0 skip: an exact catalog hit makes no provider call and records heuristic_certain")
+    void exactCatalogHitSkipsTheProvider() {
+        OppositeTagger model = new OppositeTagger();
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        TaggingProperties enforce =
+                new TaggingProperties(TaggingMode.ENFORCE, List.of("simple_chat"), null, Map.of(), 0);
+        TaggingService service = new TaggingService(enforce, heuristic, model, meters);
+
+        for (String message : CERTAIN_T0) {
+            QuestionTags tags = service.tag(message);
+            assertThat(tags.simpleChat()).as(message).isTrue();
+            assertThat(tags.enforced(TagName.SIMPLE_CHAT)).isFalse();
+            assertThat(tags.model()).isEmpty();
+            assertThat(tags.fallbackReason()).isEqualTo(FallbackReason.HEURISTIC_CERTAIN);
+            assertThat(tags.latencyMs()).isZero();
+            assertThat(tags.providerModel()).isNull();
+            assertThat(tags.mode()).isEqualTo(TaggingMode.ENFORCE);
+            assertThat(tags.acting()).isEqualTo(tags.heuristic());
+        }
+        assertThat(model.calls).hasValue(0);
+        assertThat(meters.get(TaggingService.SKIPPED)
+                        .tags("reason", "heuristic_certain")
+                        .counter()
+                        .count())
+                .isEqualTo(CERTAIN_T0.size());
+        assertThat(meters.find(TaggingService.REQUESTS).counter()).isNull();
+        assertThat(meters.find(TaggingService.FALLBACK).counter()).isNull();
+
+        // A simple-chat message that is not an exact rule still goes to the provider.
+        assertThat(heuristic.tag(UNCERTAIN_T0).simpleChat()).isTrue();
+        service.tag(UNCERTAIN_T0);
+        assertThat(model.calls).hasValue(1);
     }
 
     @Test
@@ -289,10 +333,10 @@ class TaggingServiceTest {
         TaggingService service =
                 new TaggingService(mode(TaggingMode.SHADOW), heuristic, broken, new SimpleMeterRegistry());
 
-        QuestionTags tags = service.tag("hello");
+        QuestionTags tags = service.tag("list all users");
 
         assertThat(tags.fallbackReason()).isEqualTo(FallbackReason.ERROR);
-        assertThat(tags.simpleChat()).isTrue();
+        assertThat(tags.adminAccountQuestion()).isTrue();
     }
 
     @Test

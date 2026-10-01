@@ -179,7 +179,8 @@ class SessionAgentManagerTest {
         lenient().when(toolRegistry.resolveToolsByName(anyCollection())).thenAnswer(inv -> new ArrayList<>());
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
         lenient()
-                .when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), anyInt()))
+                .when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), anyInt(), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
         // ADR-0068: the mocked engine tags with the heuristics, as the unwired real engine does.
         lenient()
@@ -475,7 +476,8 @@ class SessionAgentManagerTest {
         // runtime
         verify(toolSelectionEngine, never())
                 .selectRoleTools(anyString(), anySet(), anyString(), any(QuestionTags.class));
-        verify(toolRegistryService, never()).resolveCandidateSelection(any(ToolSelectionContext.class), anyInt());
+        verify(toolRegistryService, never())
+                .resolveCandidateSelection(any(ToolSelectionContext.class), anyInt(), any(QuestionTags.class));
     }
 
     @Test
@@ -485,7 +487,8 @@ class SessionAgentManagerTest {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
@@ -499,7 +502,7 @@ class SessionAgentManagerTest {
         // Prompt resolution now happens deferred in systemMessageProvider lambda at
         // runtime
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3), any(QuestionTags.class));
         verify(scopedContentRetrieverFactory).create("inventory", 10, 0.6);
         verify(scopedContentRetrieverFactory).create("inventory", 20, 0.55);
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
@@ -513,7 +516,8 @@ class SessionAgentManagerTest {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
@@ -546,7 +550,8 @@ class SessionAgentManagerTest {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
         SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
@@ -558,7 +563,8 @@ class SessionAgentManagerTest {
         assertThat(response).isEqualTo("Stock found");
         // Prompt resolution now happens deferred in systemMessageProvider lambda at
         // runtime
-        verify(toolRegistryService).resolveCandidateSelection(any(ToolSelectionContext.class), eq(3));
+        verify(toolRegistryService)
+                .resolveCandidateSelection(any(ToolSelectionContext.class), eq(3), any(QuestionTags.class));
         // Second-order effect of failing closed, asserted rather than glossed: RAG
         // scope is derived
         // from the resolved tool set, so emptying roleTools leaves only the keyword
@@ -1163,7 +1169,7 @@ class SessionAgentManagerTest {
         ArgumentCaptor<Prompt> prompts = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel, org.mockito.Mockito.atLeastOnce()).call(prompts.capture());
         ArgumentCaptor<ToolSelectionContext> ranking = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateSelection(ranking.capture(), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(ranking.capture(), eq(3), any(QuestionTags.class));
         List<Object> observed = new ArrayList<>();
         observed.add(response);
         observed.add(roleAgentCacheKeys(target).stream().sorted().toList());
@@ -1200,7 +1206,8 @@ class SessionAgentManagerTest {
     void chat_shadow_isIdenticalToOff() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool")))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(inventoryFacadeTool)));
@@ -1237,7 +1244,8 @@ class SessionAgentManagerTest {
 
     /** A real engine over the fixture graph, wired to {@code consumers}, ranking to the order facade alone. */
     private ToolSelectionEngine orderRankingEngine(ScopeConsumers consumers, SimpleMeterRegistry meters) {
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of(orderToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("orderFacadeTool")))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool)));
@@ -1274,7 +1282,8 @@ class SessionAgentManagerTest {
     void chat_enforceWithoutConsumers_isIdenticalToShadow() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool")))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(inventoryFacadeTool)));

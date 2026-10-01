@@ -48,6 +48,10 @@
 #                   on the entity. Declared here because a facade row has no HTTP method or schema.
 #   screens         optional. mcp_screen_registry.screen_key values that show the entity. A screen no
 #                   entity lists falls back to the entities of its own domain.
+#   workflow_state  optional. A WorkflowState name (CREATING_PO, RECEIVING_ASN, ...): the workflow the
+#                   user is carrying out when a message names this entity with an ACTION intent
+#                   (ADR-0068 spec §2.7). Read only by the heuristic tagger where the scope graph's
+#                   `lookups` consumer is enforced; INVENTORY_RECON has no entity and stays phrase-only.
 
 domain_scopes:
   shop-manager: shopmanager
@@ -280,6 +284,7 @@ entities:
       - 'inventory:.*PurchaseSuggestion.*'
     facade_tools:
       - {tool: OrderFacadeTool, access: reads}
+    workflow_state: CREATING_PO
 
   - key: asn
     domain: inventory
@@ -298,6 +303,7 @@ entities:
       - 'inventory:GoodsReceiptResponse'
     schema_patterns:
       - 'inventory:(?!.*Transfer)(.*Asn.*|.*GoodsReceipt.*|.*Receiving.*|Receive.*|CrossDock.*)'
+    workflow_state: RECEIVING_ASN
 
   - key: stock-item
     domain: inventory

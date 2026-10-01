@@ -1,8 +1,10 @@
 package com.positivity.mcp.internal.scopegraph;
 
+import com.positivity.mcp.internal.domain.WorkflowState;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * ADR-0069 §3.1: the entity lexicon ({@code scope-graph/entities.yaml}), the one new curated source
@@ -52,6 +54,10 @@ public record EntityLexicon(
      *     not have to list each one
      * @param facadeTools the facade tools that act on the entity, each with its declared access
      * @param screens the {@code mcp_screen_registry.screen_key}s that show the entity
+     * @param workflowState ADR-0068 spec §2.7, optional: the workflow the user is carrying out when a
+     *     message names this entity with an {@code ACTION} intent ({@code purchase-order:
+     *     CREATING_PO}, {@code asn: RECEIVING_ASN}); read only through the heuristic tagger where
+     *     the {@code lookups} consumer is enforced
      */
     public record EntityDefinition(
             @NonNull String key,
@@ -62,7 +68,22 @@ public record EntityLexicon(
             @NonNull List<String> schemas,
             @NonNull List<String> schemaPatterns,
             @NonNull List<FacadeToolRef> facadeTools,
-            @NonNull List<String> screens) {
+            @NonNull List<String> screens,
+            @Nullable WorkflowState workflowState) {
+
+        /** The pre-ADR-0068 shape: no {@code workflow_state}. */
+        public EntityDefinition(
+                @NonNull String key,
+                @NonNull String domain,
+                @NonNull Map<String, List<String>> terms,
+                @NonNull List<Identifier> identifiers,
+                @NonNull List<Relation> relatesTo,
+                @NonNull List<String> schemas,
+                @NonNull List<String> schemaPatterns,
+                @NonNull List<FacadeToolRef> facadeTools,
+                @NonNull List<String> screens) {
+            this(key, domain, terms, identifiers, relatesTo, schemas, schemaPatterns, facadeTools, screens, null);
+        }
 
         public EntityDefinition {
             terms = Map.copyOf(terms);

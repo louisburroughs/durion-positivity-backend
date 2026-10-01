@@ -119,8 +119,11 @@ mcp:
     # off | shadow | enforce. shadow builds the graph and records the resolved scope; no consumer
     # acts on it. A literal value must be quoted ("off"): bare off is the YAML boolean false.
     mode: ${MCP_SCOPE_GRAPH_MODE:off}
-    # Consumers that act on the scope when mode is enforce: any of rag, tools, card (comma-separated).
-    # Each is promoted separately (ADR-0069 section 9); enforce with an empty list behaves as shadow.
+    # Consumers that act on the scope when mode is enforce: any of rag, tools, card, lookups
+    # (comma-separated). Each is promoted separately (ADR-0069 section 9); enforce with an empty list
+    # behaves as shadow. lookups (section 6 row 3): the lexicon facade tools of the seed entities
+    # replace the inventory/order keyword tags, and the lexicon workflow_state is the heuristic
+    # workflow source for an ACTION intent (ADR-0068 spec section 2.6).
     enforce: ${MCP_SCOPE_GRAPH_ENFORCE:}
     # Cap on the nodes of one expanded scope (two hops from the seed entities).
     max-nodes: 60
@@ -132,11 +135,15 @@ mcp:
   # Ollama container. Off by default: the heuristic tagger alone runs, no provider call, no meters.
   tagging:
     # off | shadow | enforce. shadow runs both taggers, consumers act on the heuristic result and the
-    # model's result is recorded; enforce additionally lets the tags in enforced-tags act (Wave 2).
+    # model's result is recorded; enforce additionally lets the tags in enforced-tags act.
     # A literal value must be quoted ("off"): bare off is the YAML boolean false.
     mode: ${MCP_TAGGING_MODE:off}
     # Tags (wire names, comma-separated) that act when mode is enforce; promoted one at a time after a
-    # recorded gate run (ADR-0068 section 6). Empty behaves as shadow. Not acted on in Wave 1.
+    # recorded gate run (ADR-0068 section 6). Empty behaves as shadow. An entry is <tag> (the model's
+    # answer acts at or above threshold) or <tag>:veto (the model may only turn the heuristic's true
+    # into false; simple_chat is promoted this way first). admin_account_question is veto-only always.
+    # Per-tag thresholds go under thresholds.<tag>; a non-IDLE workflow_state answer must also meet
+    # thresholds."workflow_state.non-idle" (defaults to thresholds.workflow_state).
     enforced-tags: ${MCP_TAGGING_ENFORCED_TAGS:}
     provider:
       # The System One endpoint (POST {base-url}/v1/systemone): the in-cell ollama container, never

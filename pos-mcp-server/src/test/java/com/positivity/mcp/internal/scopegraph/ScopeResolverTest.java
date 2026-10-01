@@ -12,6 +12,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.config.ScopeGraphProperties;
+import com.positivity.mcp.internal.domain.TagSeeds;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.scopegraph.NodeAttributes.ToolSource;
 import com.positivity.mcp.internal.scopegraph.ScopeSet.Confidence;
@@ -378,5 +379,81 @@ class ScopeResolverTest {
                 .tag("confidence", confidence)
                 .counter()
                 .count();
+    }
+
+    // ── ADR-0068 spec §2.7: tag seeds ───────────────────────────────────────
+
+    private ScopeSet resolve(String message, Set<String> codes, TagSeeds tagSeeds) {
+        return resolver(ScopeResolverFixtures.shadow(60)).resolve(message, codes, WorkflowState.IDLE, tagSeeds);
+    }
+
+    @Test
+    @DisplayName("an entity tag seed is a TAG seed of confidence LOW, expanded like any seed; a term match outranks it")
+    void entityTagSeedIsLow() {
+        ScopeSet tagged = resolve("what time do you close?", EVERYTHING, new TagSeeds(List.of("workorder"), null));
+
+        assertThat(tagged.seeds()).containsExactly(new Seed("workorder", MatchKind.TAG));
+        assertThat(tagged.confidence()).isEqualTo(Confidence.LOW);
+        assertThat(names(tagged.facadeTools())).contains("WorkorderFacadeTool");
+        assertThat(tagged.documentIds()).contains("workorder.status-lifecycle");
+
+        ScopeSet both = resolve("status of the work order", EVERYTHING, new TagSeeds(List.of("workorder"), null));
+        assertThat(both.seeds()).containsExactly(new Seed("workorder", MatchKind.EXACT_TERM));
+        assertThat(both.confidence()).isEqualTo(Confidence.HIGH);
+
+        ScopeSet unknown =
+                resolve("what time do you close?", EVERYTHING, new TagSeeds(List.of("no-such-entity"), null));
+        assertThat(unknown.confidence()).isEqualTo(Confidence.NONE);
+        assertThat(unknown.seeds()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a domain seed admits the Domain node and that scope's permitted documents, and no tool")
+    void domainSeedAdmitsDocumentsAndNoTools() {
+        ScopeSet billing = resolve("what time do you close?", EVERYTHING, new TagSeeds(List.of(), "billing"));
+
+        assertThat(billing.seeds()).isEmpty();
+        assertThat(billing.confidence()).isEqualTo(Confidence.LOW);
+        assertThat(billing.domains()).containsExactly("billing");
+        assertThat(billing.documentIds()).containsExactlyInAnyOrder("billing.invoices", "billing.secret");
+        assertThat(billing.tools()).as("a Domain is never expanded to tools").isEmpty();
+        assertThat(billing.entities()).isEmpty();
+
+        ScopeSet limited =
+                resolve("what time do you close?", Set.of(AUTHENTICATED), new TagSeeds(List.of(), "billing"));
+        assertThat(limited.documentIds()).containsExactly("billing.invoices");
+
+        ScopeSet unknown = resolve("what time do you close?", EVERYTHING, new TagSeeds(List.of(), "no-such-scope"));
+        assertThat(unknown.confidence()).isEqualTo(Confidence.NONE);
+    }
+
+    @Test
+    @DisplayName("a domain seed maps a RAG scope through the inverse of domain_scopes")
+    void domainSeedUsesTheInverseScopeMap() {
+        ScopeGraph.Builder builder = ScopeGraph.builder();
+        NodeId invoice = builder.node(NodeType.ENTITY, "invoice");
+        builder.edge(EdgeType.OWNED_BY, invoice, builder.node(NodeType.DOMAIN, "invoice-service"));
+        builder.domainScope("invoice-service", "billing");
+        NodeId doc =
+                builder.node(NodeType.RAG_DOC, "billing.doc", new NodeAttributes.RagDoc("billing", List.of(), false));
+        builder.edge(EdgeType.ABOUT, doc, invoice);
+        ScopeGraph mapped = builder.build(Instant.parse("2026-09-30T12:00:00Z"));
+
+        ScopeSet scope = ScopeResolver.resolve(
+                mapped, TermMatcher.of(mapped), "anything", EVERYTHING, "IDLE", 60, new TagSeeds(List.of(), "billing"));
+
+        assertThat(scope.domains()).containsExactly("invoice-service");
+        assertThat(scope.documentIds()).containsExactly("billing.doc");
+        assertThat(scope.entities())
+                .as("the Domain's entities are not expanded")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("TagSeeds.none() resolves exactly as the three-argument form")
+    void noneIsTheThreeArgumentForm() {
+        ScopeSet three = resolve("the invoices of this work order", EVERYTHING);
+        ScopeSet four = resolve("the invoices of this work order", EVERYTHING, TagSeeds.none());
+        assertThat(four).isEqualTo(three);
     }
 }

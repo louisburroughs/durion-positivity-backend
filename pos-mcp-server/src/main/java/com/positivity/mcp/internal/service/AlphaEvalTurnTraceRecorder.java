@@ -417,7 +417,10 @@ public class AlphaEvalTurnTraceRecorder {
                         model == null ? null : model.confidence(),
                         model == null ? null : model.probability(),
                         taggingProperties.thresholdFor(name),
-                        heuristic == null || model == null ? null : QuestionTags.agrees(heuristic, model)));
+                        heuristic == null || model == null ? null : QuestionTags.agrees(heuristic, model),
+                        tags.tagFallbackReasons().containsKey(name)
+                                ? tags.tagFallbackReasons().get(name).wireName()
+                                : null));
             }
             return new TagTrace(
                     tags.mode().name(),

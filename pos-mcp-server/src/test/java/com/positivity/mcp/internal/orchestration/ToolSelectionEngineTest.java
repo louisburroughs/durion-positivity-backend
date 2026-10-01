@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.config.ScopeGraphProperties;
 import com.positivity.mcp.internal.domain.QuestionTags;
+import com.positivity.mcp.internal.domain.TagSeeds;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
@@ -110,7 +111,8 @@ class ToolSelectionEngineTest {
                 "inventoryFacadeTool");
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of(inventoryTool)));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
 
@@ -121,7 +123,7 @@ class ToolSelectionEngineTest {
         assertThat(result.fallbackTools()).containsExactly(glossaryFacadeTool, inventoryFacadeTool);
 
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3), any(QuestionTags.class));
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
         assertThat(contextCaptor.getValue().permissionCodes()).isEqualTo(PERMISSION_CODES);
     }
@@ -141,7 +143,8 @@ class ToolSelectionEngineTest {
     void selectRoleTools_alwaysOffersTheDateWindowToolForADatedQuestion() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
 
         ToolSelectionEngine.ToolSelectionResult result = toolSelectionEngine.selectRoleTools(
@@ -162,7 +165,8 @@ class ToolSelectionEngineTest {
     void selectRoleTools_offersTheDateWindowToolAcrossCalendarVocabulary() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
 
         for (String question : List.of(
@@ -197,7 +201,8 @@ class ToolSelectionEngineTest {
     void selectRoleTools_offersTheDateWindowToolForAWindowlessMetricQuestion() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
 
         for (String question : List.of(
@@ -224,7 +229,8 @@ class ToolSelectionEngineTest {
     void selectRoleTools_withholdsTheDateWindowToolWhenNoWindowIsAsked() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
 
         // Near misses, not just an obviously undated question: each of these was pulled in by a
@@ -264,14 +270,15 @@ class ToolSelectionEngineTest {
     void selectRoleTools_derivesCreatingPoWorkflow() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
 
         toolSelectionEngine.selectRoleTools(
                 "ROLE_ADMIN", PERMISSION_CODES, "create PO for vendor NAPA with two line items");
 
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3), any(QuestionTags.class));
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("CREATING_PO");
     }
 
@@ -280,7 +287,8 @@ class ToolSelectionEngineTest {
     void selectRoleTools_emptyGatedSet_keepsUngatedFallbacksOnly() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(CandidateSelection.EMPTY);
 
         ToolSelectionEngine.ToolSelectionResult result =
@@ -300,7 +308,8 @@ class ToolSelectionEngineTest {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
         // The caller may use the inventory tool but not the order or date-window facades.
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(new CandidateSelection(List.of(), Set.of("InventoryFacadeTool"), false));
 
         ToolSelectionEngine.ToolSelectionResult result = toolSelectionEngine.selectRoleTools(
@@ -336,7 +345,8 @@ class ToolSelectionEngineTest {
     @DisplayName("ADR-0068 §2: when the ranked path fails closed nothing tag-driven is added")
     void selectRoleTools_gatingQueryThrows_addsOnlyTheGlossary() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN")).thenReturn(new ArrayList<>(List.of(orderFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenThrow(new IllegalStateException("bad SQL grammar [permission_group]"));
 
         ToolSelectionEngine.ToolSelectionResult result = toolSelectionEngine.selectRoleTools(
@@ -350,7 +360,8 @@ class ToolSelectionEngineTest {
     @DisplayName("ADR-0068: QuestionTags.none() (warm-up, an absent record) selects exactly as mode off")
     void selectRoleTools_noneTags_behavesAsOff() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN")).thenReturn(new ArrayList<>(List.of(orderFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
         String message = "create po for sales last month";
 
@@ -367,7 +378,7 @@ class ToolSelectionEngineTest {
                 .contains(dateWindowFacadeTool, orderFacadeTool, glossaryFacadeTool);
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
         verify(toolRegistryService, org.mockito.Mockito.times(2))
-                .resolveCandidateSelection(contextCaptor.capture(), eq(3));
+                .resolveCandidateSelection(contextCaptor.capture(), eq(3), any(QuestionTags.class));
         assertThat(contextCaptor.getAllValues())
                 .allMatch(context -> context.workflowState().equals("CREATING_PO"));
     }
@@ -381,7 +392,8 @@ class ToolSelectionEngineTest {
         // gate now matches no permission group.
         when(toolRegistry.resolveDomainTools("ROLE_TECHNICIAN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
 
         ToolSelectionEngine.ToolSelectionResult result =
@@ -398,7 +410,8 @@ class ToolSelectionEngineTest {
         // would silently revert authorisation from perm_bits to roles.
         when(toolRegistry.resolveDomainTools("ROLE_TECHNICIAN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenThrow(new IllegalStateException("bad SQL grammar [permission_group]"));
 
         ToolSelectionEngine.ToolSelectionResult result =
@@ -423,7 +436,8 @@ class ToolSelectionEngineTest {
                 "ghostFacadeTool");
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of(ghost)));
         when(toolRegistry.resolveToolsByName(List.of("ghostFacadeTool"))).thenReturn(List.of());
 
@@ -459,7 +473,8 @@ class ToolSelectionEngineTest {
         // and ReportingPeriods now rejects a missing range by telling the model to call
         // resolveNamedPeriod. If the tool is not offered for exactly this wording, that instruction
         // names a tool the model does not have and the turn dead-ends.
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
         ToolSelectionEngine.ToolSelectionResult result =
                 toolSelectionEngine.selectRoleTools("ROLE_USER", Set.of(), message);
@@ -548,7 +563,8 @@ class ToolSelectionEngineTest {
                 "inventoryFacadeTool");
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of(inventoryTool)));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
     }
@@ -597,7 +613,7 @@ class ToolSelectionEngineTest {
                 toolSelectionEngine.selectRoleTools("ROLE_ADMIN", SCOPE_CODES, SCOPE_MESSAGE);
 
         assertThat(result.scope()).isNull();
-        verify(off, org.mockito.Mockito.never()).resolve(any(), any(), any());
+        verify(off, org.mockito.Mockito.never()).resolve(any(), any(), any(), any());
     }
 
     @Test
@@ -616,8 +632,9 @@ class ToolSelectionEngineTest {
         // WorkorderFacadeTool is valid in IDLE only, so the CREATING_PO turn's scope has no facade.
         assertThat(result.scope().facadeTools()).isEmpty();
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(shadow, toolRegistryService);
-        order.verify(shadow).resolve(SCOPE_MESSAGE, SCOPE_CODES, WorkflowState.CREATING_PO);
-        order.verify(toolRegistryService).resolveCandidateSelection(any(ToolSelectionContext.class), eq(3));
+        order.verify(shadow).resolve(SCOPE_MESSAGE, SCOPE_CODES, WorkflowState.CREATING_PO, TagSeeds.none());
+        order.verify(toolRegistryService)
+                .resolveCandidateSelection(any(ToolSelectionContext.class), eq(3), any(QuestionTags.class));
     }
 
     @Test
@@ -628,7 +645,12 @@ class ToolSelectionEngineTest {
 
         toolSelectionEngine.selectRoleTools("ROLE_USER", SCOPE_CODES, "create a purchase order for the work order");
 
-        verify(shadow).resolve("create a purchase order for the work order", SCOPE_CODES, WorkflowState.CREATING_PO);
+        verify(shadow)
+                .resolve(
+                        "create a purchase order for the work order",
+                        SCOPE_CODES,
+                        WorkflowState.CREATING_PO,
+                        TagSeeds.none());
     }
 
     @ParameterizedTest
@@ -661,7 +683,8 @@ class ToolSelectionEngineTest {
                         sharedOrchestrationSupport.mergeTools(off.roleTools(), off.fallbackTools())));
         // The ranking was asked the same question both times.
         ArgumentCaptor<ToolSelectionContext> contexts = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService, org.mockito.Mockito.times(2)).resolveCandidateSelection(contexts.capture(), eq(3));
+        verify(toolRegistryService, org.mockito.Mockito.times(2))
+                .resolveCandidateSelection(contexts.capture(), eq(3), any(QuestionTags.class));
         assertThat(contexts.getAllValues().get(1))
                 .isEqualTo(contexts.getAllValues().get(0));
     }
@@ -674,7 +697,7 @@ class ToolSelectionEngineTest {
                 toolSelectionEngine.selectRoleTools("ROLE_ADMIN", SCOPE_CODES, SCOPE_MESSAGE);
         ScopeResolver broken = org.mockito.Mockito.mock(ScopeResolver.class);
         when(broken.enabled()).thenReturn(true);
-        when(broken.resolve(any(), any(), any())).thenThrow(new IllegalStateException("resolver exploded"));
+        when(broken.resolve(any(), any(), any(), any())).thenThrow(new IllegalStateException("resolver exploded"));
         toolSelectionEngine.setScopeResolver(broken);
 
         ToolSelectionEngine.ToolSelectionResult result =

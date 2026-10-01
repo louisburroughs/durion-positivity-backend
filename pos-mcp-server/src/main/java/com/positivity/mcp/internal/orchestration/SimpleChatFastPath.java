@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.domain.QuestionTags;
+import com.positivity.mcp.internal.domain.TagName;
 import com.positivity.mcp.internal.service.RolePromptResolver;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import org.jspecify.annotations.NonNull;
@@ -43,14 +44,26 @@ class SimpleChatFastPath {
     }
 
     /**
-     * ADR-0068 §1: the T0 decision read from the turn's {@code simple_chat} tag (its acting value is
-     * the heuristic classifier's answer in {@code off} and {@code shadow}). An absent record ({@link
+     * ADR-0068 §1: the T0 decision read from the turn's {@code simple_chat} tag: its acting value is
+     * the heuristic classifier's answer in {@code off} and {@code shadow}, and in {@code enforce} the
+     * model's where the tag is listed and met its threshold (spec §2.6). An absent record ({@link
      * QuestionTags#none()}: warm-up, a caller that never tagged) behaves exactly as {@code off}: the
-     * classifier decides. {@code message} is also what the Wave 2 override rule
-     * ({@code follows_previous_turn}) is applied to.
+     * classifier decides.
+     *
+     * <p>Spec §2.6, the override: an enforced {@code follows_previous_turn} answered {@code true}
+     * forces {@code false} whatever {@code simple_chat} says, because the T0 path answers without
+     * conversation history. Only an enforced answer overrides: the heuristic cue check is already
+     * folded into the heuristic {@code simple_chat}, and applying it again would change {@code shadow}
+     * ("thanks again" is an exact catalog hit that also carries a cue).
      */
     boolean isSimpleChat(@NonNull String message, @NonNull QuestionTags tags) {
-        return tags.isNone() ? simpleChatClassifier.isSimpleChat(message) : tags.simpleChat();
+        if (tags.isNone()) {
+            return simpleChatClassifier.isSimpleChat(message);
+        }
+        if (tags.enforced(TagName.FOLLOWS_PREVIOUS_TURN) && tags.followsPreviousTurn()) {
+            return false;
+        }
+        return tags.simpleChat();
     }
 
     /** The no-tool, no-RAG prompt answering a T0 message: master prompt + caller context. */

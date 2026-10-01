@@ -16,7 +16,13 @@ public enum MatchKind {
     /** Only a {@code BusinessGlossary} phrase matched; the lexicon itself did not name the entity. */
     GLOSSARY_TERM(false),
     /** A term matched only after folding: diacritics stripped, a trailing plural removed on either side. */
-    FOLDED_TERM(false);
+    FOLDED_TERM(false),
+    /**
+     * ADR-0068 spec §2.7: the decision model's {@code entity_<key>} Noul answered {@code true} at or
+     * above threshold in {@code enforce}; no lexicon term matched. {@code LOW} (ADR-0069 §5.4 reserves
+     * {@code HIGH} for identifier and exact-term seeds).
+     */
+    TAG(false);
 
     private final boolean high;
 

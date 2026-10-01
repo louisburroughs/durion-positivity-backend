@@ -665,8 +665,12 @@ public class StreamingSessionAgentManager
         // so the top-K is chosen from caller-visible docs and the broadened master scope cannot leak
         // gated docs. Codes are read per request from the thread-local caller context.
         QueryDocumentRetriever permissionFilteredRetriever = permissionFiltered(scopeFilteredRetriever);
-        QueryDocumentRetriever rerankedRetriever =
-                new RerankedContentRetriever(permissionFilteredRetriever, TIER2_FINAL_TOP_K);
+        // ADR-0068 spec §2.6: the compound gate reads the turn's tags from the request-scoped holder
+        // (the retriever is built per cached agent, the tags per turn).
+        QueryDocumentRetriever rerankedRetriever = new RerankedContentRetriever(
+                permissionFilteredRetriever,
+                TIER2_FINAL_TOP_K,
+                requestScopedUserContext == null ? QuestionTags::none : requestScopedUserContext::currentTags);
         // ADR-0069 §9: observes the final top-K for the scope trace and returns it untouched; a plain
         // call-through unless a scope was published for the request.
         QueryDocumentRetriever resilientContentRetriever = new ResilientContentRetriever(

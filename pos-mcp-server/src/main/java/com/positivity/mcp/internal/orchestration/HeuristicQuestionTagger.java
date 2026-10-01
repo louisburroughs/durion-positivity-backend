@@ -2,12 +2,15 @@ package com.positivity.mcp.internal.orchestration;
 
 import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.config.CompoundRerankProperties;
+import com.positivity.mcp.internal.config.ScopeGraphProperties.Consumer;
 import com.positivity.mcp.internal.domain.QuestionTagger;
 import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.RouterClassification;
 import com.positivity.mcp.internal.domain.TagAnswer;
 import com.positivity.mcp.internal.domain.TagName;
 import com.positivity.mcp.internal.domain.WorkflowState;
+import com.positivity.mcp.internal.scopegraph.LexiconLookup;
+import com.positivity.mcp.internal.scopegraph.ScopeConsumers;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +41,12 @@ import org.springframework.stereotype.Component;
  * {@link com.positivity.mcp.internal.domain.TagSource#HEURISTIC}. The router-derived tags answer
  * {@link RouterClassification#safeDefault()}; no entity tag is answered (the lexicon term match
  * already seeds the scope, ADR-0069 §5.1).
+ *
+ * <p>ADR-0068 §3.3 / spec §2.6: where the scope graph's {@code lookups} consumer is enforced, the
+ * heuristic {@code workflow_state} has a second source, the lexicon's {@code workflow_state} of an
+ * entity the message names ({@link #lexiconWorkflowState}). It applies only when the acting {@code
+ * intent} is {@code ACTION}, which is known after the merge, so {@link TaggingService} asks for it
+ * then; {@link #tag} itself always answers the phrase match.
  */
 @Component
 public class HeuristicQuestionTagger implements QuestionTagger {
@@ -183,20 +192,44 @@ public class HeuristicQuestionTagger implements QuestionTagger {
     /** {@code CompoundRerankProperties.maxSubQueries} when no properties are wired. */
     private static final int DEFAULT_MAX_SUB_QUERIES = 3;
 
+    /** The rule id of a {@code simple_chat} answered {@code true} by an exact catalog rule (the T0 skip, spec §2.5). */
+    static final String EXACT_CATALOG_RULE = "catalog:exact";
+
     private final SimpleChatClassifier simpleChatClassifier;
     private final int maxSubQueries;
 
+    /** ADR-0069 §6 row 3: the lexicon lookups; absent in hand-built constructions (no lookup ever). */
+    private final @Nullable LexiconLookup lexiconLookup;
+
+    /** ADR-0069 §6: the consumer switch the lookup is gated on; absent means never. */
+    private final @Nullable ScopeConsumers scopeConsumers;
+
     @Autowired
     HeuristicQuestionTagger(
-            @NonNull SimpleChatClassifier simpleChatClassifier, @Nullable CompoundRerankProperties rerankProperties) {
+            @NonNull SimpleChatClassifier simpleChatClassifier,
+            @Nullable CompoundRerankProperties rerankProperties,
+            @Nullable LexiconLookup lexiconLookup,
+            @Nullable ScopeConsumers scopeConsumers) {
         this(
                 simpleChatClassifier,
-                rerankProperties == null ? DEFAULT_MAX_SUB_QUERIES : rerankProperties.maxSubQueries());
+                rerankProperties == null ? DEFAULT_MAX_SUB_QUERIES : rerankProperties.maxSubQueries(),
+                lexiconLookup,
+                scopeConsumers);
     }
 
     HeuristicQuestionTagger(@NonNull SimpleChatClassifier simpleChatClassifier, int maxSubQueries) {
+        this(simpleChatClassifier, maxSubQueries, null, null);
+    }
+
+    HeuristicQuestionTagger(
+            @NonNull SimpleChatClassifier simpleChatClassifier,
+            int maxSubQueries,
+            @Nullable LexiconLookup lexiconLookup,
+            @Nullable ScopeConsumers scopeConsumers) {
         this.simpleChatClassifier = simpleChatClassifier;
         this.maxSubQueries = Math.max(1, maxSubQueries);
+        this.lexiconLookup = lexiconLookup;
+        this.scopeConsumers = scopeConsumers;
     }
 
     /**
@@ -217,8 +250,14 @@ public class HeuristicQuestionTagger implements QuestionTagger {
                 TagName.FOLLOWS_PREVIOUS_TURN.wireName(),
                 TagAnswer.heuristic(
                         cue.isPresent(), cue.map(token -> "cue:" + token).orElse(null)));
-        // The classifier exposes no rule id cheaply (its catalog rules fold into one boolean).
-        answers.put(TagName.SIMPLE_CHAT.wireName(), TagAnswer.heuristic(simpleChatClassifier.isSimpleChat(message)));
+        // The one rule the classifier exposes cheaply is the exact catalog hit (spec §2.5, the T0
+        // skip); its other rules fold into one boolean.
+        boolean simpleChat = simpleChatClassifier.isSimpleChat(message);
+        answers.put(
+                TagName.SIMPLE_CHAT.wireName(),
+                TagAnswer.heuristic(
+                        simpleChat,
+                        simpleChat && simpleChatClassifier.isExactRuleHit(message) ? EXACT_CATALOG_RULE : null));
         Optional<String> workflowPhrase = workflowPhrase(lower);
         answers.put(
                 TagName.WORKFLOW_STATE.wireName(),
@@ -256,6 +295,38 @@ public class HeuristicQuestionTagger implements QuestionTagger {
 
     /** The rule id of the router-derived tags: {@code RouterClassification.safeDefault()} (ADR-0068 §2). */
     static final String SAFE_DEFAULT_RULE = "safe_default";
+
+    /** True when {@code heuristic}'s {@code simple_chat} fired on an exact catalog rule: the T0 skip applies. */
+    static boolean isCertainSimpleChat(@NonNull QuestionTags heuristic) {
+        TagAnswer answer = heuristic.heuristic().get(TagName.SIMPLE_CHAT.wireName());
+        return answer != null && answer.isTrue() && EXACT_CATALOG_RULE.equals(answer.rule());
+    }
+
+    /** True when the lexicon lookup is a heuristic source on this context: graph built and {@code lookups} enforced. */
+    boolean lexiconLookupEnforced() {
+        return lexiconLookup != null && scopeConsumers != null && scopeConsumers.enforces(Consumer.LOOKUPS);
+    }
+
+    /**
+     * ADR-0068 §3.3 / spec §2.6, §2.7: the heuristic {@code workflow_state} from the lexicon, for a
+     * turn whose acting {@code intent} is {@code ACTION}: the {@code workflow_state} of an entity the
+     * message names by lexicon term or identifier ({@code lexicon:<entity>} as the rule). Empty when
+     * the lookup is not enforced or no named entity carries a state; the caller then keeps the phrase
+     * match. Never throws: a lookup failure is the phrase match.
+     */
+    @NonNull
+    Optional<TagAnswer> lexiconWorkflowState(@NonNull String message) {
+        if (!lexiconLookupEnforced() || lexiconLookup == null) {
+            return Optional.empty();
+        }
+        try {
+            return lexiconLookup
+                    .workflowStateFor(message)
+                    .map(lookup -> TagAnswer.heuristic(lookup.state().name(), "lexicon:" + lookup.entity()));
+        } catch (RuntimeException exception) {
+            return Optional.empty();
+        }
+    }
 
     /** A keyword guard's answer with the token that fired ({@code keyword:stock}) when one did. */
     private static @NonNull TagAnswer keywordAnswer(@NonNull String lower, @NonNull Set<String> tokens) {

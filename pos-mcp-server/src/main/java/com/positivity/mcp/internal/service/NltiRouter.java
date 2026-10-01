@@ -1,160 +1,61 @@
 package com.positivity.mcp.internal.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.domain.ModelTier;
 import com.positivity.mcp.internal.domain.QuestionTags;
-import com.positivity.mcp.internal.domain.RequestComplexity;
 import com.positivity.mcp.internal.domain.RouterClassification;
-import com.positivity.mcp.internal.enums.NltiIntentType;
-import com.positivity.mcp.internal.enums.NltiRiskLevel;
-import java.util.Locale;
 import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
- * Gate 4 T1 router. Classifies a request (intent / risk / domain / complexity) with a small model,
- * then maps it to a {@link ModelTier} via {@link TierSelector}.
+ * Gate 4 T1 router, since ADR-0068 §7 mapped from the turn's tags. Classifies a request (intent /
+ * risk / complexity / domain) from the acting {@code intent}, {@code risk}, {@code complexity} and
+ * {@code domain} tags of its {@link QuestionTags} record, then maps the classification to a {@link
+ * ModelTier} through the unchanged {@link TierSelector}.
  *
- * <p>Safety: the classifier prompt demands strict JSON; any missing/invalid output yields
- * {@link RouterClassification#safeDefault()} and any model error yields {@link ModelTier#T2_COMPLEX}
- * — risky requests are never silently downgraded to a small model.
+ * <p>The chat-model call of the original router is gone (ADR-0068 §7): nothing here generates or
+ * parses text. The {@code routerChatModel} bean and {@code mcp.model.router} stay defined until the
+ * router tags are promoted, then go.
+ *
+ * <p>Safety (ADR-0068 §3.5): a tag that is unlisted, below its threshold or absent takes {@link
+ * RouterClassification#safeDefault()}'s value for that field, per field, so a low-confidence {@code
+ * risk} is {@code HIGH}, an unknown {@code intent} is {@code UNKNOWN}, and the tier is {@link
+ * ModelTier#T2_COMPLEX}; risk never downgrades. {@link QuestionTags#none()} routes to the safe default.
  */
 @Component
 @Profile("alpha")
 public class NltiRouter {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(NltiRouter.class);
-
-    static final String SYSTEM_PROMPT = """
-            You are a request router for a tire/service ERP assistant. Classify the user request and
-            reply with ONLY a JSON object, no prose, exactly these keys:
-            {"intentType":"QUERY|ACTION|UNKNOWN","riskLevel":"LOW|MEDIUM|HIGH",\
-            "complexity":"single-lookup|multi-domain","domain":"<one lowercase business domain>"}
-            - intentType ACTION = the user wants to create/change/cancel something; QUERY = read/lookup.
-            - riskLevel HIGH for money movement, postings, deletions, or irreversible changes.
-            - complexity multi-domain when more than one entity/domain or several steps are involved.
-            - domain examples: workorder, invoice, accounting, tax, inventory, pricing, customer, vehicle, admin, security, shopmanager, master.
-            """;
-
-    /** A router run: the T1 classification and the tier it selects. */
+    /** A router run: the classification and the tier it selects. */
     public record RoutingDecision(
             @NonNull RouterClassification classification,
             @NonNull ModelTier tier) {}
 
-    private final ChatModel chatModel;
-    private final ObjectMapper objectMapper;
     private final TierSelector tierSelector;
 
-    public NltiRouter(
-            @Qualifier("routerChatModel") @NonNull ChatModel chatModel,
-            @NonNull ObjectMapper objectMapper,
-            @NonNull TierSelector tierSelector) {
-        this.chatModel = chatModel;
-        this.objectMapper = objectMapper;
+    public NltiRouter(@NonNull TierSelector tierSelector) {
         this.tierSelector = tierSelector;
     }
 
-    /** Routes a request to a model tier. Any failure defaults to {@link ModelTier#T2_COMPLEX}. */
+    /** Routes a request without a tag record: the safe default, {@link ModelTier#T2_COMPLEX}. */
     public @NonNull ModelTier route(@NonNull String message) {
         return classify(message).tier();
     }
 
-    /**
-     * Classifies a request and selects its tier. Never throws: any model or parse failure yields the
-     * safe default classification and {@link ModelTier#T2_COMPLEX}. Pre-ADR-0068 shape: no tags.
-     */
+    /** Classifies a request without a tag record: the safe default classification and its tier. */
     public @NonNull RoutingDecision classify(@NonNull String message) {
         return classify(message, QuestionTags.none());
     }
 
     /**
-     * ADR-0068 §7: the managers pass the turn's tag record. In Wave 1 the router still asks the chat
-     * model and ignores the tags; Wave 2 maps {@code intent}, {@code risk}, {@code complexity} and
-     * {@code domain} from the record and removes the chat call. When tiering is disabled or the
-     * router is absent nothing calls this at all.
+     * ADR-0068 §7: the classification is the record's {@link QuestionTags#routerClassification()}, the
+     * acting router tags with {@code safeDefault()} per absent or below-threshold field; the tier is
+     * {@link TierSelector#select}. Never throws and never calls a model. {@code message} is unused
+     * since the chat call was removed and is kept so the managers' call shape does not change.
      */
     @SuppressWarnings("unused")
     public @NonNull RoutingDecision classify(@NonNull String message, @NonNull QuestionTags tags) {
-        try {
-            String output = chatModel
-                    .call(new Prompt(new SystemMessage(SYSTEM_PROMPT), new UserMessage("User request:\n" + message)))
-                    .getResult()
-                    .getOutput()
-                    .getText();
-            // getText() is @Nullable; parse() requires @NonNull (java:S2637) — an empty model
-            // reply routes to the safe default, same as an unparseable one.
-            RouterClassification classification = output == null ? RouterClassification.safeDefault() : parse(output);
-            return new RoutingDecision(classification, tierSelector.select(classification));
-        } catch (RuntimeException exception) {
-            LOGGER.warn("MCP router classification failed; defaulting to T2_COMPLEX error={}", exception.toString());
-            return new RoutingDecision(RouterClassification.safeDefault(), ModelTier.T2_COMPLEX);
-        }
-    }
-
-    /** Parses the router model's output into a classification, falling back to the safe default. */
-    @NonNull
-    RouterClassification parse(@NonNull String rawOutput) {
-        try {
-            String json = extractJson(rawOutput);
-            if (json == null) {
-                return RouterClassification.safeDefault();
-            }
-            JsonNode node = objectMapper.readTree(json);
-            NltiIntentType intent =
-                    enumOrNull(NltiIntentType.class, node.path("intentType").asText());
-            NltiRiskLevel risk =
-                    enumOrNull(NltiRiskLevel.class, node.path("riskLevel").asText());
-            RequestComplexity complexity =
-                    complexityOrNull(node.path("complexity").asText());
-            String domain = node.path("domain").asText("master");
-            if (intent == null || risk == null || complexity == null) {
-                return RouterClassification.safeDefault();
-            }
-            return new RouterClassification(intent, risk, complexity, domain.isBlank() ? "master" : domain);
-        } catch (JsonProcessingException | RuntimeException e) {
-            return RouterClassification.safeDefault();
-        }
-    }
-
-    private static String extractJson(String raw) {
-        if (raw == null) {
-            return null;
-        }
-        int start = raw.indexOf('{');
-        int end = raw.lastIndexOf('}');
-        return (start >= 0 && end > start) ? raw.substring(start, end + 1) : null;
-    }
-
-    private static <E extends Enum<E>> E enumOrNull(Class<E> type, String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return Enum.valueOf(type, value.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
-    }
-
-    private static RequestComplexity complexityOrNull(String value) {
-        if (value == null) {
-            return null;
-        }
-        String v = value.trim().toLowerCase(Locale.ROOT).replace('-', '_');
-        return switch (v) {
-            case "single_lookup" -> RequestComplexity.SINGLE_LOOKUP;
-            case "multi_domain" -> RequestComplexity.MULTI_DOMAIN;
-            default -> null;
-        };
+        RouterClassification classification = tags.routerClassification();
+        return new RoutingDecision(classification, tierSelector.select(classification));
     }
 }

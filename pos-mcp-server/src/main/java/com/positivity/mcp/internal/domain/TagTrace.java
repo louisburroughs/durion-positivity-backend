@@ -53,6 +53,9 @@ public record TagTrace(
      * @param modelProbability the raw Noul {@code p} the model reported, or null
      * @param threshold the confidence threshold in effect for the tag
      * @param agree whether the two answers agree; null unless both answered
+     * @param fallbackReason ADR-0068 §6: {@code low_confidence} when the tag was listed in {@code
+     *     enforced-tags} but the model answered below its threshold, so the heuristic acted; null
+     *     otherwise
      */
     public record TagEntry(
             @NonNull String name,
@@ -64,5 +67,33 @@ public record TagTrace(
             @Nullable Double modelConfidence,
             @Nullable Double modelProbability,
             double threshold,
-            @Nullable Boolean agree) {}
+            @Nullable Boolean agree,
+            @Nullable String fallbackReason) {
+
+        /** Without a per-tag fallback reason. */
+        public TagEntry(
+                @NonNull String name,
+                @Nullable String actingValue,
+                @Nullable String actingSource,
+                @Nullable String heuristicValue,
+                @Nullable String heuristicRule,
+                @Nullable String modelValue,
+                @Nullable Double modelConfidence,
+                @Nullable Double modelProbability,
+                double threshold,
+                @Nullable Boolean agree) {
+            this(
+                    name,
+                    actingValue,
+                    actingSource,
+                    heuristicValue,
+                    heuristicRule,
+                    modelValue,
+                    modelConfidence,
+                    modelProbability,
+                    threshold,
+                    agree,
+                    null);
+        }
+    }
 }
