@@ -92,13 +92,18 @@ class GateFixtureTest(unittest.TestCase):
         cls.fixtures = {language: load(language) for language in LANGUAGES}
 
     def test_sources_stay_in_sync(self):
-        if ENTITIES_YAML.exists():
-            text = ENTITIES_YAML.read_text(encoding="utf-8")
-            entities = re.findall(r"^  - key: ([a-z0-9-]+)\n    domain: ([a-z-]+)", text, re.MULTILINE)
-            self.assertEqual(dict(entities), ENTITY_DOMAIN, "entity keys/domains drifted from entities.yaml")
-        if APPLICATION_YML.exists():
-            scopes = set(re.findall(r'rag-scope:\s*"?([a-z]+)"?', APPLICATION_YML.read_text(encoding="utf-8")))
-            self.assertEqual(scopes | {"master"}, set(CHOICE_OPTIONS["domain"]))
+        # The sources are part of this repo: a missing or moved file is a failure, not a skip,
+        # or the drift check would silently stop running.
+        self.assertTrue(ENTITIES_YAML.is_file(), f"{ENTITIES_YAML} not found")
+        self.assertTrue(APPLICATION_YML.is_file(), f"{APPLICATION_YML} not found")
+        text = ENTITIES_YAML.read_text(encoding="utf-8")
+        entities = re.findall(r"^  - key: ([a-z0-9-]+)\n    domain: ([a-z-]+)", text, re.MULTILINE)
+        self.assertEqual(dict(entities), ENTITY_DOMAIN, "entity keys/domains drifted from entities.yaml")
+        # Hyphens allowed: a rag-scope such as "shop-manager" must show up as drift, not vanish
+        # from the match.
+        scopes = set(re.findall(r'rag-scope:\s*"?([a-z][a-z0-9-]*)"?', APPLICATION_YML.read_text(encoding="utf-8")))
+        self.assertTrue(scopes, "no rag-scope values found in application.yml")
+        self.assertEqual(scopes | {"master"}, set(CHOICE_OPTIONS["domain"]))
 
     def test_schema(self):
         for language, reviewed in LANGUAGES.items():

@@ -40,8 +40,9 @@ numbers. The report prints a warning next to an unreviewed language.
   possibly empty array of lexicon keys from `scope-graph/entities.yaml`.
 - `hard_negative_for`: the tags for which the utterance is a negative that the heuristic tagger
   answers wrongly (true where the expected value is false, or non-`IDLE` where `IDLE` is expected).
-  It was derived mechanically by running `HeuristicQuestionTagger` (main at 53305a2bd) over every
-  text, not by hand. Re-derive it if a heuristic rule changes.
+  It was derived mechanically by running `HeuristicQuestionTagger` from the ADR-0068 wave 1 branch
+  (`feat/adr-0068-w1-tagging-seam`, PR #2367; the class is not on main yet) over every text, not by
+  hand. Re-derive it if a heuristic rule changes.
 - `notes`: why the label is what it is, where it is not obvious.
 
 ## Labelling rules (from the tag questions)
@@ -158,3 +159,102 @@ python3 scripts/tagging_shadow_report.py --file traces.json \
   --expected pos-mcp-server/src/test/resources/eval/tagging-gate/fr-CA.json \
   --expected pos-mcp-server/src/test/resources/eval/tagging-gate/es.json --verbose
 ```
+
+## Bake-off procedure (ADR-0068 section 6, spec 2.9)
+
+Chooses the tagging model before any tag is promoted. Run it on the host that will serve the model
+(the GPU-less alpha cell), one candidate at a time (`tev1:0.8b`, `nimble`, `tev1`), and choose the
+smallest model whose p95 fits the 800 ms budget and whose accuracy meets the promotion rule in
+en, fr-CA and es.
+
+### Prerequisites
+
+- `pos-mcp-server` on the `alpha` profile (the chat path and the turn-trace recorder exist only
+  there) with `mcp.eval.turn-trace.enabled` on (`MCP_EVAL_TURN_TRACE_ENABLED`, default `true` on
+  alpha). Traces expire after `MCP_EVAL_TURN_TRACE_RETENTION` (24h): export each batch the day it
+  runs.
+- In `.env`: `MCP_TAGGING_MODE=shadow`; `OLLAMA_TAGGING_MODEL=<candidate>`. Compose passes that one
+  variable to `ollama-init` (the pull) and to `pos-mcp-server` (`MCP_TAGGING_MODEL`); outside Compose
+  set `MCP_TAGGING_MODEL` to the same name. `MCP_TAGGING_ENTITY_QUESTIONS=false` for a model whose
+  context cannot hold the wide request (the entity Nouls make it ~18 KB, about 4.6k tokens; `tev1`
+  reads about 2,000), `true` for one that can. Record which setting each candidate ran with: it
+  changes `questionCount` and `optionListHash` on the trace. Leave `MCP_TAGGING_TIMEOUT` at `800ms`.
+- One bearer token for an actor holding `mcp:eval_trace:view` and chat access, used for every turn
+  and every export: `GET /v1/eval/turn-traces` returns the caller's own traces only. Do not chat as
+  that actor from anywhere else during a run.
+
+### Pull or swap a model
+
+```bash
+# .env: MCP_TAGGING_MODE=shadow, OLLAMA_TAGGING_MODEL=tev1
+docker compose run --rm ollama-init                     # pulls bge-m3 and the candidate
+docker exec ollama ollama list                          # the candidate is present
+docker exec ollama ollama stop tev1:0.8b                # unload the previous candidate, if any
+docker compose up -d --force-recreate pos-mcp-server    # picks up MCP_TAGGING_MODEL
+```
+
+`OLLAMA_MAX_LOADED_MODELS=3` keeps the embedding model and a candidate resident together (and a
+second candidate during a swap). Warm both models with a few chat turns that are not gate
+utterances, then check `docker exec ollama ollama ps` lists `bge-m3` and the candidate.
+
+### Run the gate in batches
+
+`GET /v1/eval/turn-traces` returns at most 200 traces, newest first, with no cursor, and a gate
+set has 328 (en) or 355 (fr-CA, es) utterances. Send each language in batches of fewer than 200
+turns (150 below), export each batch right after it, and check the export is short of the cap:
+
+```bash
+export MCP_CHAT_URL=http://localhost:18086/mcp-server/v1/mcp/chat   # scripts/analytics_gate_run.py default
+export MCP_BEARER_TOKEN=...                                          # the actor above
+GATE=pos-mcp-server/src/test/resources/eval/tagging-gate
+MODEL=tev1 LANG_FILE=en START=0 END=150 BATCH=1
+since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+jq -c ".utterances[$START:$END][] | {message: .text}" "$GATE/$LANG_FILE.json" |
+  while read -r body; do                         # no conversationId: every turn is a fresh conversation
+    curl -sS -o /dev/null -X POST "$MCP_CHAT_URL" -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
+      -H "X-API-Version: 1" -H "Content-Type: application/json" -d "$body"
+  done
+curl -sS -G "${MCP_CHAT_URL%/v1/mcp/chat}/v1/eval/turn-traces" --data-urlencode "since=$since" \
+  --data-urlencode "limit=200" -H "Authorization: Bearer $MCP_BEARER_TOKEN" -H "X-API-Version: 1" \
+  > "traces-$MODEL-$LANG_FILE-$BATCH.json"
+jq length "traces-$MODEL-$LANG_FILE-$BATCH.json"   # 200 means turns were cut off: rerun smaller
+```
+
+Repeat with `START=150 END=300 BATCH=2` and `START=300 END=400 BATCH=3` for each language. Overlapping
+exports are safe: the report keeps a `turnId` once.
+
+### Report
+
+One report per language and candidate, all of that language's batch exports at once:
+
+```bash
+python3 scripts/tagging_shadow_report.py --file traces-tev1-en-*.json --expected "$GATE/en.json" --verbose
+python3 scripts/tagging_shadow_report.py --file traces-tev1-fr-CA-*.json --expected "$GATE/fr-CA.json"
+python3 scripts/tagging_shadow_report.py --file traces-tev1-es-*.json --expected "$GATE/es.json"
+```
+
+Every utterance should join a trace (`utterances without a trace=0`); the report skips turns
+recorded in mode OFF and turns without a `tags` block.
+
+### Measure
+
+- **Latency:** `p50ms` / `p95ms` in the report are over the turns the model answered (no
+  `fallbackReason`), warm, with the embedding model loaded beside it; `fb p50` / `fb p95` and the
+  fallback rate by reason are reported apart. The NLTI overview dashboard's "Tagging latency" panel
+  shows the same calls live.
+- **Resident memory:** with both models warm (after a batch, `ollama ps` listing both), read the
+  `ollama` container's working set from the NLTI overview dashboard ("ollama container memory",
+  cAdvisor `container_memory_working_set_bytes{name="ollama"}`) or `docker stats --no-stream
+  ollama`, and the candidate's own `SIZE` from `docker exec ollama ollama ps`. The candidate's
+  resident memory is the working set minus the embedding-only baseline (measured once with the
+  candidate stopped: `ollama stop <candidate>`); `ollama ps` should agree within a few hundred MB.
+- **Accuracy:** per tag and language, the heuristic's accuracy against the model-plus-fallback
+  accuracy at each threshold, from the ground-truth section of the report.
+
+### Record
+
+Record each candidate in the ADR-0068 Changelog (durion repo,
+`docs/adr/0068-mcp-pre-llm-question-tagging-decision-model.adr.md`): model, host, the
+`MCP_TAGGING_ENTITY_QUESTIONS` setting, p50/p95 and fallback rate by reason, resident memory,
+per-tag accuracy against the heuristic in en, fr-CA and es (and whether fr-CA and es were
+native-reviewed yet), the chosen model and the thresholds the shadow data supports.
