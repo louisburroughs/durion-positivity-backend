@@ -41,7 +41,7 @@ numbers. The report prints a warning next to an unreviewed language.
 - `hard_negative_for`: the tags for which the utterance is a negative that the heuristic tagger
   answers wrongly (true where the expected value is false, or non-`IDLE` where `IDLE` is expected).
   It was derived mechanically by running `HeuristicQuestionTagger` from the ADR-0068 wave 1 branch
-  (`feat/adr-0068-w1-tagging-seam`, PR #2367; the class is not on main yet) over every text, not by
+  (`feat/adr-0068-w1-tagging-seam`, PR #2367; merged to main on 2026-10-01) over every text, not by
   hand. Re-derive it after a label or text edit, or if a heuristic rule changes, with
   `scripts/derive_tagging_hard_negatives.py` (it runs the tagger through
   `scripts/tagging_gate/HeuristicAnswers.java` against a build of that branch; it only reports by
@@ -49,7 +49,7 @@ numbers. The report prints a warning next to an unreviewed language.
   `SimpleChatRuleDefaults.defaultCatalog()`: an environment with an edited simple-chat catalog
   derives different hard negatives.
   The two platform-event utterances added per language on 2026-09-30 (`en-0329`/`0330`,
-  `fr-CA-0356`/`0357`, `es-0356`/`0357`) carry an empty list until that derivation runs.
+  `fr-CA-0356`/`0357`, `es-0356`/`0357`) carry an empty list, confirmed by the derivation on 2026-10-01.
 - `notes`: why the label is what it is, where it is not obvious.
 
 ## Labelling rules (from the tag questions)
@@ -72,10 +72,19 @@ domain agent, 2026-09-30; keep future edits consistent with these rules.
 - `simple_chat`: greetings, thanks, closings, small talk, and questions about the assistant itself,
   including an offer of help with no task yet ("can you help me with something?"). A bare answer or
   confirmation is not simple chat.
-- Bare answers and confirmations ("yes", "go ahead", "confirm", "sure"): `intent` `UNKNOWN` and
-  `risk` `LOW`. The message alone does not say whether a read or a change is being confirmed; the risk
-  of the pending action lives in the session, and the "risk never downgrades" rule of spec §2.6
-  protects it, not this label. `domain` `master`, `entity` empty.
+- Bare answers to a question the assistant asked, whether a confirmation ("yes", "go ahead",
+  "confirm", "sure"), a selection ("the first one") or a decline or negated selection ("no, not that
+  one", "not that one, the other one"): `intent` `UNKNOWN`, `risk` `HIGH`, `follows_previous_turn`
+  true, `domain` `master`, `entity` empty. Rule (NLTI agent, 2026-10-01, matching the `risk` Score
+  wording in `TaggingQuestions`): a bare answer resolves something the tagger cannot see (ADR-0068 §4,
+  the request carries the message text only), so `risk` takes the conservative value, HIGH (§3.5 "risk
+  never downgrades"; "when unsure between two levels, choose the higher"), while `intent` stays
+  `UNKNOWN` because the message itself names no operation (the Choice criteria reserve `ACTION` for a
+  message that does, "cancel it", "delete that one", which is labelled `ACTION` and by its own risk
+  criteria). A decline is HIGH too: the polarity of the unseen question is unknown ("no" to "keep the
+  old price?" approves a change) and "the other one" picks the target of an unseen action. The pending
+  action's real risk still lives in the session; this label only guarantees the turn that may release
+  it is never routed as a read.
 - `about_inventory`: stock on hand or availability, whether we carry a part, where it is stored,
   receiving (including ASN and goods-receipt documents), transfers, adjustments and counts. A fitment
   or catalog lookup with no stock question ("which pads fit a 2018 Silverado", "look up product X in
@@ -129,11 +138,14 @@ domain agent, 2026-09-30; keep future edits consistent with these rules.
   sent outside the shop (email, text, campaign, submitting a PO to the vendor), granting or widening
   access (granting a permission, assigning a role, creating or enabling an account), writing an audit
   event (emitting a manual audit event), or a change that cannot be undone (void/revert an invoice,
-  cancel a sales order, close a period, merge customers, terminate an employee). Access rule: the
-  criterion is *widening*. Disabling an account narrows access and resetting a password leaves the
-  holder's roles and permissions unchanged, so both stay `MEDIUM`; unlocking, re-enabling or creating
-  an account, or adding a role or permission, widens and is `HIGH`. Do not copy the write-safety
-  fixtures' labels.
+  cancel a sales order, close a period, merge customers, terminate an employee). Access rule: any
+  change to who can access the platform is `HIGH` (the merged Score wording: accounts, roles,
+  permissions, passwords), so granting, widening, disabling, unlocking or creating an account and
+  resetting a password are all `HIGH`; the product owner's decision named widening, and the wording
+  in code is the broader, conservative reading the fixtures follow. Bare answers (confirmation,
+  selection, decline) are `HIGH` by the Score wording's own sentence ("may approve a change you cannot
+  see: rate it HIGH"), see the bare-answer rule above; social chat with nothing pending ("ok, see you
+  tomorrow") is `simple_chat` and `LOW`. Do not copy the write-safety fixtures' labels.
 - Audit events, product rule for the tool catalogue (not a label): a tool call may trigger an audit
   event as a side effect of the operation it performs, but the assistant never emits an audit event
   itself. "Emit a manual audit event" is labelled as the user asked it (`ACTION`, `HIGH`, `admin`); the
@@ -175,6 +187,13 @@ scheduling and availability are `shopmanager`, employment, pay and time off are 
 the pos-event modules and every audit question is `admin`. The `TaggingQuestions` wording (risk HIGH
 criteria and the four domain sentences) must be updated to the same text before a shadow run is scored
 against these fixtures; this README is the ground truth until it is.
+
+Decided by the NLTI domain agent on 2026-10-01 and applied above: the risk of a bare answer
+(confirmation, selection, decline) is `HIGH`, not `LOW`, so that the fixtures agree with the `risk`
+Score wording now on main ("may approve a change you cannot see: rate it HIGH"); `intent` stays
+`UNKNOWN`. Seven utterances per language were relabelled (`*-0018`, `0019`, `0020`, `0021`, `0029`,
+`0034`, `0035`). `hard_negative_for` is unaffected: it covers the eight Nouls and `workflow_state`
+only (`HARD_NEGATIVE_TAGS` in `scripts/derive_tagging_hard_negatives.py`), never `risk` or `intent`.
 
 Open questions, labelled per the wording above until decided: whether a scheduling target date ("book
 on Thursday at 9") should imply a date window (labelled false); and the native review of the fr-CA

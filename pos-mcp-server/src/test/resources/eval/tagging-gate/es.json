@@ -411,14 +411,14 @@
         "workflow_state": "IDLE",
         "intent": "UNKNOWN",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "LOW",
+        "risk": "HIGH",
         "domain": "master",
         "entity": []
       },
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "bare confirmation: ADR-0068 §3.5 / Score wording: a bare answer to a question the assistant asked resolves something the tagger cannot see (§4: message text only), so risk is HIGH, not the LOW of a read; intent stays UNKNOWN because the message names no operation (ACTION needs a named change such as \"cancel it\")."
     },
     {
       "id": "es-0019",
@@ -436,14 +436,14 @@
         "workflow_state": "IDLE",
         "intent": "UNKNOWN",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "LOW",
+        "risk": "HIGH",
         "domain": "master",
         "entity": []
       },
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "bare decline with a negated selection (the question's polarity is unseen: \"no\" can approve a change too): ADR-0068 §3.5 / Score wording: a bare answer to a question the assistant asked resolves something the tagger cannot see (§4: message text only), so risk is HIGH, not the LOW of a read; intent stays UNKNOWN because the message names no operation (ACTION needs a named change such as \"cancel it\")."
     },
     {
       "id": "es-0020",
@@ -461,14 +461,14 @@
         "workflow_state": "IDLE",
         "intent": "UNKNOWN",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "LOW",
+        "risk": "HIGH",
         "domain": "master",
         "entity": []
       },
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "bare confirmation: ADR-0068 §3.5 / Score wording: a bare answer to a question the assistant asked resolves something the tagger cannot see (§4: message text only), so risk is HIGH, not the LOW of a read; intent stays UNKNOWN because the message names no operation (ACTION needs a named change such as \"cancel it\")."
     },
     {
       "id": "es-0021",
@@ -486,14 +486,14 @@
         "workflow_state": "IDLE",
         "intent": "UNKNOWN",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "LOW",
+        "risk": "HIGH",
         "domain": "master",
         "entity": []
       },
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "bare selection (may pick the target of an unseen change): ADR-0068 §3.5 / Score wording: a bare answer to a question the assistant asked resolves something the tagger cannot see (§4: message text only), so risk is HIGH, not the LOW of a read; intent stays UNKNOWN because the message names no operation (ACTION needs a named change such as \"cancel it\")."
     },
     {
       "id": "es-0022",
@@ -676,14 +676,14 @@
         "workflow_state": "IDLE",
         "intent": "UNKNOWN",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "LOW",
+        "risk": "HIGH",
         "domain": "master",
         "entity": []
       },
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "bare confirmation: ADR-0068 §3.5 / Score wording: a bare answer to a question the assistant asked resolves something the tagger cannot see (§4: message text only), so risk is HIGH, not the LOW of a read; intent stays UNKNOWN because the message names no operation (ACTION needs a named change such as \"cancel it\")."
     },
     {
       "id": "es-0030",
@@ -799,14 +799,14 @@
         "workflow_state": "IDLE",
         "intent": "UNKNOWN",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "LOW",
+        "risk": "HIGH",
         "domain": "master",
         "entity": []
       },
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "bare negated selection (\"the other one\" picks the target of an unseen action): ADR-0068 §3.5 / Score wording: a bare answer to a question the assistant asked resolves something the tagger cannot see (§4: message text only), so risk is HIGH, not the LOW of a read; intent stays UNKNOWN because the message names no operation (ACTION needs a named change such as \"cancel it\")."
     },
     {
       "id": "es-0035",
@@ -824,14 +824,14 @@
         "workflow_state": "IDLE",
         "intent": "UNKNOWN",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "LOW",
+        "risk": "HIGH",
         "domain": "master",
         "entity": []
       },
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "bare confirmation: ADR-0068 §3.5 / Score wording: a bare answer to a question the assistant asked resolves something the tagger cannot see (§4: message text only), so risk is HIGH, not the LOW of a read; intent stays UNKNOWN because the message names no operation (ACTION needs a named change such as \"cancel it\")."
     },
     {
       "id": "es-0036",
@@ -2625,7 +2625,7 @@
         "workflow_state": "IDLE",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "MEDIUM",
+        "risk": "HIGH",
         "domain": "admin",
         "entity": [
           "user"
@@ -2634,7 +2634,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": "disabling an account narrows access; the HIGH criterion is granting or widening access, so this is a correctable change: MEDIUM"
+      "notes": "disabling an account narrows access; the HIGH criterion is granting or widening access, so this is a correctable change: MEDIUM risk HIGH: the merged Score wording rates any change to who can access the platform (accounts, roles, permissions, passwords) HIGH; disabling an account or resetting a password is such a change."
     },
     {
       "id": "es-0107",
@@ -2836,7 +2836,7 @@
         "workflow_state": "IDLE",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "MEDIUM",
+        "risk": "HIGH",
         "domain": "security",
         "entity": [
           "user"
@@ -2845,7 +2845,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": "a password reset does not widen access (the holder keeps the same roles and permissions): a correctable change, MEDIUM"
+      "notes": "a password reset does not widen access (the holder keeps the same roles and permissions): a correctable change, MEDIUM risk HIGH: the merged Score wording rates any change to who can access the platform (accounts, roles, permissions, passwords) HIGH; disabling an account or resetting a password is such a change."
     },
     {
       "id": "es-0115",
