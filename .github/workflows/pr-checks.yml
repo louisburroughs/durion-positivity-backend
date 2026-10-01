@@ -152,6 +152,23 @@ jobs:
         run: |
           python3 -m unittest scripts.test_analytics_gate_run
 
+      - name: Tagging shadow report unit tests (test_tagging_shadow_report.py)
+        # ADR-0068 §6: the bake-off that chooses the tagging model and its thresholds reads this
+        # report, so a wrong percentile or agreement rate would pick the wrong model. Stdlib only,
+        # no build, no network, no database.
+        run: |
+          python3 -m unittest scripts.test_tagging_shadow_report
+
+      - name: Tagging gate fixture tests (test_tagging_gate_fixtures.py)
+        # ADR-0068 §6 / spec §2.9: the gate fixtures are the ground truth the tagging model is
+        # promoted on. This pins their schema, that every utterance carries every tag with an
+        # allowed value, unique ids, sync with entities.yaml / application.yml, and the per-language
+        # minimum counts, so a half-edited fixture cannot quietly weaken the bake-off. Stdlib only.
+        # test_derive_tagging_hard_negatives pins the hard_negative_for rule and that a re-derivation
+        # rewrites the fixtures without reformatting them (no Java: the heuristic answers are given).
+        run: |
+          python3 -m unittest scripts.test_tagging_gate_fixtures scripts.test_derive_tagging_hard_negatives
+
       - name: Permission generator unit tests (test_generate_permissions_*.py)
         # The generator now writes the two grant sources as well as the catalogs (#1848), so its
         # seed/CSV rewriting is the thing standing between a new @PreAuthorize and two red CI
