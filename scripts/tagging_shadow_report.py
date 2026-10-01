@@ -3,8 +3,9 @@
 
 Reads eval turn traces (EvalTurnTrace) whose `tags` block (TagTrace: mode, providerModel,
 latencyMs, fallbackReason, stateTruncated, tags[]) is present and prints, per provider model, turn
-count, tagging latency p50/p95 over the turns the model answered (no fallbackReason), the latency of
-the fallback turns separately, fallback rate by reason and state-truncation rate; and per tag the
+count, tagging latency p50/p95 over every provider call (fallbacks included: a timeout pays the whole
+budget, so a model that often times out cannot look fast), the same percentiles over the turns the model
+answered and over the fallback turns as diagnostics, fallback rate by reason and state-truncation rate; and per tag the
 model/heuristic agreement rate, a model-confidence histogram (deciles) and the agreement rate at
 each candidate threshold (0.50-0.95 step 0.05), so an operator can pick
 `mcp.tagging.thresholds.<tag>`. Turns recorded in mode OFF carry the heuristic answers alone (no
@@ -129,7 +130,8 @@ def build_report(traces, language=None, languages=None, expected=None, verbose=F
     report gains a `groundTruth` section (see score_against_fixture).
     """
     tagged = []
-    models = defaultdict(lambda: {"turns": 0, "latencies": [], "fallbackLatencies": [], "fallbacks": Counter(),
+    models = defaultdict(lambda: {"turns": 0, "latencies": [], "answeredLatencies": [], "fallbackLatencies": [],
+                                  "fallbacks": Counter(),
                                   "truncated": 0})
     tags = defaultdict(lambda: {"compared": 0, "agree": 0, "confidences": []})
     skipped = 0
@@ -150,7 +152,8 @@ def build_report(traces, language=None, languages=None, expected=None, verbose=F
         latency = _num(tagging.get("latencyMs"))
         fallback = tagging.get("fallbackReason")
         if latency is not None:
-            model["fallbackLatencies" if fallback else "latencies"].append(latency)
+            model["latencies"].append(latency)
+            model["fallbackLatencies" if fallback else "answeredLatencies"].append(latency)
         if fallback:
             model["fallbacks"][fallback] += 1
         if tagging.get("stateTruncated"):
@@ -173,6 +176,8 @@ def build_report(traces, language=None, languages=None, expected=None, verbose=F
             "answeredTurns": turns - sum(m["fallbacks"].values()),
             "latencyP50Ms": percentile(m["latencies"], 0.50),
             "latencyP95Ms": percentile(m["latencies"], 0.95),
+            "answeredLatencyP50Ms": percentile(m["answeredLatencies"], 0.50),
+            "answeredLatencyP95Ms": percentile(m["answeredLatencies"], 0.95),
             "fallbackLatencyP50Ms": percentile(m["fallbackLatencies"], 0.50),
             "fallbackLatencyP95Ms": percentile(m["fallbackLatencies"], 0.95),
             "fallbackRate": sum(m["fallbacks"].values()) / turns if turns else 0.0,
@@ -396,12 +401,14 @@ def _ms(value):
 def render_text(report):
     out = [f"Turns without a tags block (skipped): {report['turnsWithoutTagging']}",
            f"Turns in mode OFF, heuristic only (skipped): {report['turnsModeOff']}", ""]
-    out.append("p50/p95: turns the model answered; fb p50/p95: turns that fell back to the heuristic")
-    out.append(f"{'provider model':<24}{'turns':>7}{'p50ms':>8}{'p95ms':>8}{'fb p50':>8}{'fb p95':>8}"
+    out.append("p50/p95: every provider call (the ADR-0068 section 6 latency); ok p95: answered turns; "
+               "fb p50/p95: turns that fell back to the heuristic")
+    out.append(f"{'provider model':<24}{'turns':>7}{'p50ms':>8}{'p95ms':>8}{'ok p95':>8}{'fb p50':>8}{'fb p95':>8}"
                f"{'fallback':>10}{'truncated':>11}")
     for name, m in report["models"].items():
         out.append(
             f"{name:<24}{m['turns']:>7}{_ms(m['latencyP50Ms']):>8}{_ms(m['latencyP95Ms']):>8}"
+            f"{_ms(m['answeredLatencyP95Ms']):>8}"
             f"{_ms(m['fallbackLatencyP50Ms']):>8}{_ms(m['fallbackLatencyP95Ms']):>8}"
             f"{_pct(m['fallbackRate']):>10}{_pct(m['stateTruncationRate']):>11}"
         )

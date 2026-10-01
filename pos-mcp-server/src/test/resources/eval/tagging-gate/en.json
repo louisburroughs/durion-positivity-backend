@@ -1658,7 +1658,8 @@
         ]
       },
       "hard_negative_for": [
-        "needs_web_search"
+        "needs_web_search",
+        "about_inventory"
       ],
       "notes": "payment status of an order; naming a SKU does not make it about stock. web order is not a web search"
     },
@@ -2659,6 +2660,7 @@
         ]
       },
       "hard_negative_for": [
+        "about_orders",
         "workflow_state"
       ],
       "notes": "a permission question about roles; not about a PO document itself"
@@ -4738,6 +4740,7 @@
         ]
       },
       "hard_negative_for": [
+        "implies_date_window",
         "workflow_state"
       ],
       "notes": "when was the last X asks a point in time, not a period"
@@ -7633,7 +7636,9 @@
         "domain": "admin",
         "entity": []
       },
-      "hard_negative_for": [],
+      "hard_negative_for": [
+        "needs_web_search"
+      ],
       "notes": "every audit-log question is admin, not events (events is only the pos-event modules). recent is not a web cue"
     },
     {
@@ -7658,7 +7663,9 @@
           "stock-item"
         ]
       },
-      "hard_negative_for": [],
+      "hard_negative_for": [
+        "about_inventory"
+      ],
       "notes": "about a notification, not about stock itself"
     },
     {

@@ -275,9 +275,10 @@ recorded in mode OFF and turns without a `tags` block.
 
 ### Measure
 
-- **Latency:** `p50ms` / `p95ms` in the report are over the turns the model answered (no
-  `fallbackReason`), warm, with the embedding model loaded beside it; `fb p50` / `fb p95` and the
-  fallback rate by reason are reported apart. The NLTI overview dashboard's "Tagging latency" panel
+- **Latency:** `p50ms` / `p95ms` in the report are over every provider call, fallbacks included
+  (a timeout pays the whole budget, so a model that often times out cannot look fast), warm, with
+  the embedding model loaded beside it; this is the §6 latency. `ok p95` (answered turns only),
+  `fb p50` / `fb p95` (fallback turns only) and the fallback rate by reason are diagnostics. The NLTI overview dashboard's "Tagging latency" panel
   shows the same calls live.
 - **Resident memory:** with both models warm (after a batch, `ollama ps` listing both), read the
   `ollama` container's working set from the NLTI overview dashboard ("ollama container memory",

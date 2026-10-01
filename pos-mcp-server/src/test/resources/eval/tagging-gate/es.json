@@ -1641,7 +1641,8 @@
         ]
       },
       "hard_negative_for": [
-        "needs_web_search"
+        "needs_web_search",
+        "about_inventory"
       ],
       "notes": "payment status of an order; naming a SKU does not make it about stock. web order is not a web search"
     },
@@ -9225,7 +9226,9 @@
         "domain": "events",
         "entity": []
       },
-      "hard_negative_for": [],
+      "hard_negative_for": [
+        "simple_chat"
+      ],
       "notes": "platform event history is the pos-event modules: events. last hour is a named period"
     }
   ]

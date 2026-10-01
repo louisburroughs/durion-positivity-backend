@@ -145,11 +145,14 @@ class ShadowReportTest(unittest.TestCase):
         self.assertEqual(m["fallbackByReason"], {"timeout": 0.25})
         self.assertEqual(m["stateTruncationRate"], 0.25)
 
-    def test_latency_percentiles_exclude_fallback_turns(self):
+    def test_latency_percentiles_include_fallback_calls(self):
         m = report.build_report(FIXTURE)["models"]["tev1:0.8b"]
-        # over 100/200/400 only: the 800 ms timeout would make p95 800
+        # every call (100/200/800/400): the 800 ms timeout counts, so a model that times out cannot look fast
         self.assertEqual(m["latencyP50Ms"], 200)
-        self.assertEqual(m["latencyP95Ms"], 400)
+        self.assertEqual(m["latencyP95Ms"], 800)
+        # diagnostics: answered turns only (100/200/400), fallback turns only (800)
+        self.assertEqual(m["answeredLatencyP50Ms"], 200)
+        self.assertEqual(m["answeredLatencyP95Ms"], 400)
         self.assertEqual(m["fallbackLatencyP50Ms"], 800)
         self.assertEqual(m["fallbackLatencyP95Ms"], 800)
 

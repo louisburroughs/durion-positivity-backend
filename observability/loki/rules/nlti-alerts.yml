@@ -355,7 +355,7 @@ groups:
       # heuristic tagger always runs, no provider call), so OFF turns are filtered out of the
       # numerator, the denominator and the minimum-volume clause; the empty check drops events
       # without the block (the NLTI path, schema < 3). `drop telemetry` sheds the regexp-extracted
-      # copy of the whole line before aggregation. The >20 minimum-volume clause stops a quiet
+      # copy of the whole line before aggregation. The >=20 minimum-volume clause stops a quiet
       # hour from flapping the ratio.
       - alert: NltiTaggingFallbackRateHigh
         expr: |
@@ -393,7 +393,7 @@ groups:
               | __error__=""
               | tagging_mode != ""
               | tagging_mode != "OFF" [15m]
-          )) > 20
+          )) >= 20
         for: 15m
         labels:
           severity: P2
