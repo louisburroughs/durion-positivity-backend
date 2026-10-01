@@ -42,7 +42,9 @@ numbers. The report prints a warning next to an unreviewed language.
   answers wrongly (true where the expected value is false, or non-`IDLE` where `IDLE` is expected).
   It was derived mechanically by running `HeuristicQuestionTagger` from the ADR-0068 wave 1 branch
   (`feat/adr-0068-w1-tagging-seam`, PR #2367; the class is not on main yet) over every text, not by
-  hand. Re-derive it if a heuristic rule changes.
+  hand. Re-derive it after a label or text edit, or if a heuristic rule changes, with
+  `scripts/derive_tagging_hard_negatives.py` (it runs the tagger through
+  `scripts/tagging_gate/HeuristicAnswers.java` against a build of that branch; `--check` only reports).
 - `notes`: why the label is what it is, where it is not obvious.
 
 ## Labelling rules (from the tag questions)
