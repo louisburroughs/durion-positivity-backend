@@ -145,8 +145,10 @@ mcp:
     added-tool-slots: 8
     # Token budget of the scope card appended to the system prompt.
     card-token-budget: 400
-  # ADR-0068: pre-LLM question tagging with a Jev-protocol decision model served by the cell's own
-  # Ollama container. Off by default: the heuristic tagger alone runs, no provider call, no meters.
+  # ADR-0068: pre-LLM question tagging with a Jev-protocol decision model, served by the cell's own
+  # Ollama container by default (a hosted System One provider only under the section 4 condition,
+  # see provider.base-url). Off by default: the heuristic tagger alone runs, no provider call, no
+  # meters.
   tagging:
     # off | shadow | enforce. shadow runs both taggers, consumers act on the heuristic result and the
     # model's result is recorded; enforce additionally lets the tags in enforced-tags act.
@@ -160,18 +162,23 @@ mcp:
     # thresholds."workflow_state.non-idle" (defaults to thresholds.workflow_state).
     enforced-tags: ${MCP_TAGGING_ENFORCED_TAGS:}
     provider:
-      # The System One endpoint (POST {base-url}/v1/systemone): the in-cell ollama container, never
-      # OLLAMA_CHAT_BASE_URL (hosted on alpha), so the message is tagged inside the cell (section 4).
+      # The System One endpoint (POST {base-url}/v1/systemone). Default: the in-cell ollama container,
+      # never OLLAMA_CHAT_BASE_URL (hosted on alpha), so by default the message is tagged inside the
+      # cell. A hosted provider (https://api.typesafe.ai, same wire contract, api-key below) is
+      # allowed only where section 4 permits it: synthetic data, or a zero-retention DPA recorded in
+      # the ADR Changelog. ollama-init pulls no local model when the endpoint is not the container.
       base-url: ${MCP_TAGGING_BASE_URL:http://ollama:11434}
-      # A Jev-protocol decision model pulled into that container (Ollama 0.35+): tev1:0.8b, tev1 or
-      # nimble. The smallest by default; the section 6 bake-off sets the real one.
+      # A Jev-protocol decision model pulled into the local container (Ollama 0.35+): tev1:0.8b, tev1
+      # or nimble, the smallest by default; or the hosted provider's own name (jev-latest). The
+      # section 6 bake-off sets the real one.
       model: ${MCP_TAGGING_MODEL:tev1:0.8b}
       # One overall deadline (connect, headers and body together) for the one tagging call per turn;
       # on expiry the turn takes the heuristic answers. Not raised to fit a slow model (section 5).
       timeout: ${MCP_TAGGING_TIMEOUT:800ms}
-      # Bearer token for an external provider only (section 4 condition); unset for the local one.
+      # Bearer token for the hosted provider only (section 4 condition); unset for the local one.
       api-key: ${MCP_TAGGING_API_KEY:}
-      # Sent as keep_alive so the model stays resident between turns beside the embedding model.
+      # Sent as keep_alive so the local model stays resident between turns beside the embedding
+      # model. Empty omits the Ollama-only field (set it empty for the hosted provider).
       keep-alive: ${MCP_TAGGING_KEEP_ALIVE:30m}
     # Per-tag confidence threshold (mcp.tagging.thresholds.<tag>); 0.75 for every tag until shadow
     # data sets per-tag values (section 1, section 6). Example: thresholds.simple_chat: 0.8

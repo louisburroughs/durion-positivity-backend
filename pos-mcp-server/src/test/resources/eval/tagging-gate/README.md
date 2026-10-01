@@ -265,8 +265,24 @@ docker compose up -d --force-recreate pos-mcp-server    # picks up MCP_TAGGING_M
 ```
 
 `OLLAMA_MAX_LOADED_MODELS=3` keeps the embedding model and a candidate resident together (and a
-second candidate during a swap). Warm both models with a few chat turns that are not gate
-utterances, then check `docker exec ollama ollama ps` lists `bge-m3` and the candidate.
+second candidate during a swap). **Chat turns cannot warm a cold candidate**: the first request
+loads it, the 800 ms client abandons it, Ollama drops the half-loaded model, and the next turn starts
+cold again (325/325 timeouts on alpha, #2376). After every swap, warm the candidate by hand with one
+System One request and **no** client timeout, then verify it is resident before any gate turn:
+
+```bash
+# .env: OLLAMA_TAGGING_MODEL=<candidate>; one minimal request from the host (port 11434 is
+# published), same wire shape as the server's, and deliberately no --max-time
+curl -sS -X POST http://localhost:11434/v1/systemone -H "Content-Type: application/json" -d '{
+    "model": "'"$OLLAMA_TAGGING_MODEL"'", "state": "warm-up", "keep_alive": "24h",
+    "questions": {"simple_chat": {"type": "noul", "instructions": "Is this message small talk?"}}}'
+docker exec ollama ollama ps                            # MUST list bge-m3 and the candidate
+```
+
+Repeat the pair until `ollama ps` lists both models; one load took 2.2 s on alpha and the next
+request 62 ms. The embedding model warms itself on the first chat turn (its client timeout is
+`OLLAMA_EMBEDDING_TIMEOUT`, 30 s). Do not start a batch until `ollama ps` shows the candidate: a
+batch against a cold candidate records a `timeout` fallback on every turn and measures nothing.
 
 ### Run the gate in batches
 
