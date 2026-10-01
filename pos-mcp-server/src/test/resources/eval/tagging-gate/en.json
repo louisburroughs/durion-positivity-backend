@@ -2690,7 +2690,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": "disabling an account narrows access; the HIGH criterion is granting or widening access, so this is a correctable change: MEDIUM risk HIGH: the merged Score wording rates any change to who can access the platform (accounts, roles, permissions, passwords) HIGH; disabling an account or resetting a password is such a change."
+      "notes": "disabling an account changes who can access the platform; the merged Score wording rates any such change (accounts, roles, permissions, passwords) HIGH, even one that narrows access."
     },
     {
       "id": "en-0107",
@@ -2899,7 +2899,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": "a password reset does not widen access (the holder keeps the same roles and permissions): a correctable change, MEDIUM risk HIGH: the merged Score wording rates any change to who can access the platform (accounts, roles, permissions, passwords) HIGH; disabling an account or resetting a password is such a change."
+      "notes": "a password reset changes who can access the platform (the old credential stops working); the merged Score wording rates any such change (accounts, roles, permissions, passwords) HIGH, even though the holder keeps the same roles and permissions."
     },
     {
       "id": "en-0115",

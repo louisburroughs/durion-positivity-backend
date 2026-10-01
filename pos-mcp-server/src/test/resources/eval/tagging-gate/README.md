@@ -40,11 +40,11 @@ numbers. The report prints a warning next to an unreviewed language.
   possibly empty array of lexicon keys from `scope-graph/entities.yaml`.
 - `hard_negative_for`: the tags for which the utterance is a negative that the heuristic tagger
   answers wrongly (true where the expected value is false, or non-`IDLE` where `IDLE` is expected).
-  It was derived mechanically by running `HeuristicQuestionTagger` from the ADR-0068 wave 1 branch
-  (`feat/adr-0068-w1-tagging-seam`, PR #2367; merged to main on 2026-10-01) over every text, not by
-  hand. Re-derive it after a label or text edit, or if a heuristic rule changes, with
-  `scripts/derive_tagging_hard_negatives.py` (it runs the tagger through
-  `scripts/tagging_gate/HeuristicAnswers.java` against a build of that branch; it only reports by
+  It was derived mechanically by running `HeuristicQuestionTagger` (ADR-0068 wave 1, PR #2367, on
+  main since 2026-10-01) over every text, not by hand. Re-derive it after a label or text edit, or if
+  a heuristic rule changes, with `scripts/derive_tagging_hard_negatives.py` (it runs the tagger
+  through `scripts/tagging_gate/HeuristicAnswers.java` against a build of the current
+  `pos-mcp-server` checkout; it only reports by
   default, `--write` rewrites the fixtures, `--check` exits 1 on any difference). It uses
   `SimpleChatRuleDefaults.defaultCatalog()`: an environment with an edited simple-chat catalog
   derives different hard negatives.
@@ -131,17 +131,15 @@ domain agent, 2026-09-30; keep future edits consistent with these rules.
   widening someone's access (an account, role or permission), writing an audit event, or any other
   change that cannot be undone"): `LOW` reading; `MEDIUM` a change that can be corrected later (note,
   appointment, draft, status, price or labor-rate change, adding a customer or ledger account,
-  approving an estimate or a PO, creating a claim, a stock transfer or restock, and account
-  administration that does not widen access: disabling an account, resetting a password); `HIGH`
-  money moves (payment, refund, store credit, paying a bill), a posting to accounting (journal entry,
-  write-off, revaluation, count adjustments, finishing a bank reconciliation), a deletion, something
-  sent outside the shop (email, text, campaign, submitting a PO to the vendor), granting or widening
-  access (granting a permission, assigning a role, creating or enabling an account), writing an audit
-  event (emitting a manual audit event), or a change that cannot be undone (void/revert an invoice,
-  cancel a sales order, close a period, merge customers, terminate an employee). Access rule: any
-  change to who can access the platform is `HIGH` (the merged Score wording: accounts, roles,
-  permissions, passwords), so granting, widening, disabling, unlocking or creating an account and
-  resetting a password are all `HIGH`; the product owner's decision named widening, and the wording
+  approving an estimate or a PO, creating a claim, a stock transfer or restock); `HIGH` money moves
+  (payment, refund, store credit, paying a bill), a posting to accounting (journal entry, write-off,
+  revaluation, count adjustments, finishing a bank reconciliation), a deletion, something sent outside
+  the shop (email, text, campaign, submitting a PO to the vendor), any change to who can access the
+  platform (granting a permission, assigning a role, creating, enabling, disabling or unlocking an
+  account, resetting a password), writing an audit event (emitting a manual audit event), or a change
+  that cannot be undone (void/revert an invoice, cancel a sales order, close a period, merge
+  customers, terminate an employee). Access changes follow the merged Score wording (accounts, roles,
+  permissions, passwords): the product owner's decision named granting or widening, and the wording
   in code is the broader, conservative reading the fixtures follow. Bare answers (confirmation,
   selection, decline) are `HIGH` by the Score wording's own sentence ("may approve a change you cannot
   see: rate it HIGH"), see the bare-answer rule above; social chat with nothing pending ("ok, see you
