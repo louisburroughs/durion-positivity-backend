@@ -1,18 +1,28 @@
 #!/usr/bin/env python3
 """Shadow report for pre-LLM question tagging (ADR-0068 section 6, spec 2.9).
 
-Reads eval turn traces that carry a `tagging` block (TagTrace) and prints, per provider model,
-turn count, tagging latency p50/p95, fallback rate by reason and state-truncation rate; and per
-tag the model/heuristic agreement rate, a model-confidence histogram (deciles) and the agreement
-rate at each candidate threshold (0.50-0.95 step 0.05), so an operator can pick
-`mcp.tagging.thresholds.<tag>`.
+Reads eval turn traces (EvalTurnTrace) whose `tags` block (TagTrace: mode, providerModel,
+latencyMs, fallbackReason, stateTruncated, tags[]) is present and prints, per provider model, turn
+count, tagging latency p50/p95 over the turns the model answered (no fallbackReason), the latency of
+the fallback turns separately, fallback rate by reason and state-truncation rate; and per tag the
+model/heuristic agreement rate, a model-confidence histogram (deciles) and the agreement rate at
+each candidate threshold (0.50-0.95 step 0.05), so an operator can pick
+`mcp.tagging.thresholds.<tag>`. Turns recorded in mode OFF carry the heuristic answers alone (no
+provider was called) and are counted, then skipped.
 
 Input, one of:
-  --file PATH        JSON array or NDJSON of EvalTurnTrace objects ("-" reads stdin)
-  --base-url URL     page GET {URL}/v1/eval/turn-traces?since=...&limit=... with --token
-                     (the endpoint returns the CALLER'S OWN traces only, newest first, at most 200
-                     per call, and has no cursor: use --window-hours to keep the window under
-                     200 turns, or export the traces and use --file).
+  --file PATH        JSON array or NDJSON of EvalTurnTrace objects ("-" reads stdin). Repeatable,
+                     and several paths may follow one --file: the files are merged and a turn
+                     present in more than one (same turnId) is kept once, so overlapping batch
+                     exports are safe.
+  --base-url URL     GET {URL}/v1/eval/turn-traces?since=...&limit=... with --token, sending
+                     X-API-Version ($MCP_API_VERSION, default 1). The endpoint returns the
+                     CALLER'S OWN traces only, newest first, at most 200 per call, and has no
+                     cursor: a full gate set (328-355 utterances per language) does not fit one
+                     call. Run it in batches of fewer than 200 turns, export each batch, and pass
+                     the exports to --file (README of the tagging-gate fixtures, "Bake-off
+                     procedure"). A warning is printed when a call returns as many traces as the
+                     limit, since older turns were then cut off.
 
 Language: EvalTurnTrace carries no language field, so a language split is one report per gate run
 (en, fr, es). --messages-file maps turnId -> language ({"<turnId>": "fr"} JSON) for a mixed
@@ -33,6 +43,7 @@ Stdlib only, like scripts/nlti_live_verify.py.
 import argparse
 import json
 import math
+import os
 import sys
 import urllib.error
 import urllib.parse
@@ -65,13 +76,36 @@ def parse_traces(text):
         return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def fetch_traces(base_url, token, since, limit, timeout=30):
+def merge_traces(batches):
+    """Concatenate trace lists, keeping the first copy of each turnId (overlapping exports)."""
+    merged, seen = [], set()
+    for batch in batches:
+        for trace in batch:
+            turn = trace.get("turnId") if isinstance(trace, dict) else None
+            key = ("turn", str(turn)) if turn is not None else ("json", json.dumps(trace, sort_keys=True))
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(trace)
+    return merged
+
+
+def build_request(base_url, token, since, limit):
+    """The GET request for one page of the caller's traces (gateway-compatible headers)."""
     query = urllib.parse.urlencode({"since": since, "limit": limit})
-    request = urllib.request.Request(
+    return urllib.request.Request(
         f"{base_url.rstrip('/')}/v1/eval/turn-traces?{query}",
-        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            # The gateway routes on X-API-Version, like scripts/analytics_gate_run.py.
+            "X-API-Version": os.environ.get("MCP_API_VERSION", "1"),
+        },
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+
+
+def fetch_traces(base_url, token, since, limit, timeout=30):
+    with urllib.request.urlopen(build_request(base_url, token, since, limit), timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -79,31 +113,46 @@ def _num(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
+def _is_off(tagging):
+    return str(tagging.get("mode") or "").upper() == "OFF"
+
+
 def build_report(traces, language=None, languages=None, expected=None, verbose=False):
-    """Aggregate traces into the report dict. Traces without a tagging block are counted and skipped.
+    """Aggregate traces into the report dict.
+
+    Traces without a `tags` block are counted (`turnsWithoutTagging`) and skipped; traces whose
+    block has mode OFF carry the heuristic answers alone, no provider call, so they are counted
+    (`turnsModeOff`) and skipped too, ground truth included. Latency percentiles cover the turns
+    with no fallbackReason (the model answered); fallback turns get their own percentiles.
 
     `expected` is a list of gate fixtures (dicts with `language` and `utterances`); when given, the
     report gains a `groundTruth` section (see score_against_fixture).
     """
     tagged = []
-    models = defaultdict(lambda: {"turns": 0, "latencies": [], "fallbacks": Counter(), "truncated": 0})
+    models = defaultdict(lambda: {"turns": 0, "latencies": [], "fallbackLatencies": [], "fallbacks": Counter(),
+                                  "truncated": 0})
     tags = defaultdict(lambda: {"compared": 0, "agree": 0, "confidences": []})
     skipped = 0
+    off = 0
     for trace in traces:
         if language and (languages or {}).get(str(trace.get("turnId"))) != language:
             continue
-        tagging = trace.get("tagging")
+        tagging = trace.get("tags")
         if not isinstance(tagging, dict):
             skipped += 1
+            continue
+        if _is_off(tagging):
+            off += 1
             continue
         tagged.append(trace)
         model = models[tagging.get("providerModel") or "unknown"]
         model["turns"] += 1
         latency = _num(tagging.get("latencyMs"))
+        fallback = tagging.get("fallbackReason")
         if latency is not None:
-            model["latencies"].append(latency)
-        if tagging.get("fallbackReason"):
-            model["fallbacks"][tagging["fallbackReason"]] += 1
+            model["fallbackLatencies" if fallback else "latencies"].append(latency)
+        if fallback:
+            model["fallbacks"][fallback] += 1
         if tagging.get("stateTruncated"):
             model["truncated"] += 1
         for tag in tagging.get("tags") or []:
@@ -116,13 +165,16 @@ def build_report(traces, language=None, languages=None, expected=None, verbose=F
             stat["agree"] += 1 if agree else 0
             stat["confidences"].append((confidence, bool(agree)))
 
-    report = {"turnsWithoutTagging": skipped, "models": {}, "tags": {}}
+    report = {"turnsWithoutTagging": skipped, "turnsModeOff": off, "models": {}, "tags": {}}
     for name, m in sorted(models.items()):
         turns = m["turns"]
         report["models"][name] = {
             "turns": turns,
+            "answeredTurns": turns - sum(m["fallbacks"].values()),
             "latencyP50Ms": percentile(m["latencies"], 0.50),
             "latencyP95Ms": percentile(m["latencies"], 0.95),
+            "fallbackLatencyP50Ms": percentile(m["fallbackLatencies"], 0.50),
+            "fallbackLatencyP95Ms": percentile(m["fallbackLatencies"], 0.95),
             "fallbackRate": sum(m["fallbacks"].values()) / turns if turns else 0.0,
             "fallbackByReason": {r: c / turns for r, c in sorted(m["fallbacks"].items())},
             "stateTruncationRate": m["truncated"] / turns if turns else 0.0,
@@ -216,7 +268,7 @@ def score_fixture_matches(matches):
     entity = {f"{t:.2f}": {"predicted": 0, "expected": 0, "hit": 0} for t in THRESHOLDS}
     for trace, utterance in matches:
         entries = {}
-        for entry in (trace.get("tagging") or {}).get("tags") or []:
+        for entry in (trace.get("tags") or {}).get("tags") or []:
             entries[entry.get("name") or "unknown"] = entry
         expected_tags = utterance.get("expected_tags") or {}
         for tag, raw_expected in expected_tags.items():
@@ -342,11 +394,15 @@ def _ms(value):
 
 
 def render_text(report):
-    out = [f"Turns without a tagging block (skipped): {report['turnsWithoutTagging']}", ""]
-    out.append(f"{'provider model':<24}{'turns':>7}{'p50ms':>8}{'p95ms':>8}{'fallback':>10}{'truncated':>11}")
+    out = [f"Turns without a tags block (skipped): {report['turnsWithoutTagging']}",
+           f"Turns in mode OFF, heuristic only (skipped): {report['turnsModeOff']}", ""]
+    out.append("p50/p95: turns the model answered; fb p50/p95: turns that fell back to the heuristic")
+    out.append(f"{'provider model':<24}{'turns':>7}{'p50ms':>8}{'p95ms':>8}{'fb p50':>8}{'fb p95':>8}"
+               f"{'fallback':>10}{'truncated':>11}")
     for name, m in report["models"].items():
         out.append(
             f"{name:<24}{m['turns']:>7}{_ms(m['latencyP50Ms']):>8}{_ms(m['latencyP95Ms']):>8}"
+            f"{_ms(m['fallbackLatencyP50Ms']):>8}{_ms(m['fallbackLatencyP95Ms']):>8}"
             f"{_pct(m['fallbackRate']):>10}{_pct(m['stateTruncationRate']):>11}"
         )
         for reason, rate in m["fallbackByReason"].items():
@@ -399,7 +455,9 @@ def main(argv=None):
         description="Question-tagging shadow report (ADR-0068 section 6).",
         epilog="Agreement at a threshold is computed over the answers whose model confidence is at or above it.",
     )
-    parser.add_argument("--file", help="JSON/NDJSON export of eval turn traces ('-' for stdin)")
+    parser.add_argument("--file", action="extend", nargs="+", metavar="PATH",
+                        help="JSON/NDJSON export of eval turn traces ('-' for stdin); repeatable, several paths "
+                             "allowed: merged, a turnId present twice is kept once")
     parser.add_argument("--base-url", help="gateway or pos-mcp-server base URL for GET /v1/eval/turn-traces")
     parser.add_argument("--token", help="bearer token of the actor whose traces to read (with --base-url)")
     parser.add_argument("--window-hours", type=float, default=2.0, help="look-back window for --base-url (default 2)")
@@ -419,20 +477,30 @@ def main(argv=None):
         parser.error("--language needs --messages-file (traces carry no language field)")
 
     if args.file:
-        text = sys.stdin.read() if args.file == "-" else open(args.file, encoding="utf-8").read()
-        traces = parse_traces(text)
+        if args.file.count("-") > 1:
+            parser.error("stdin ('-') can be given to --file once")
+        batches = []
+        for path in args.file:
+            if path == "-":
+                batches.append(parse_traces(sys.stdin.read()))
+            else:
+                with open(path, encoding="utf-8") as handle:
+                    batches.append(parse_traces(handle.read()))
+        traces = merge_traces(batches)
     else:
         if not args.token:
             parser.error("--base-url needs --token")
         since = (datetime.now(timezone.utc) - timedelta(hours=args.window_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        limit = max(1, min(args.limit, PAGE_LIMIT))
         try:
-            traces = fetch_traces(args.base_url, args.token, since, min(args.limit, PAGE_LIMIT))
+            traces = fetch_traces(args.base_url, args.token, since, limit)
         except (urllib.error.URLError, OSError) as exc:
             print(f"fetch failed: {exc}", file=sys.stderr)
             return 2
-        if len(traces) >= PAGE_LIMIT:
-            print(f"warning: {PAGE_LIMIT} traces returned, the window may be truncated; shrink --window-hours",
-                  file=sys.stderr)
+        if len(traces) >= limit:
+            print(f"warning: {len(traces)} traces returned, the limit ({limit}); older turns in the window were "
+                  "cut off. Shrink --window-hours, or run the gate in batches of fewer than "
+                  f"{PAGE_LIMIT} turns and pass each batch's export to --file", file=sys.stderr)
 
     languages = None
     if args.messages_file:
