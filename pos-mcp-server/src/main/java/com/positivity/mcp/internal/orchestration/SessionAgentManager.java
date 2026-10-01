@@ -734,8 +734,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 // the warm cache matches the role's actual gated tool set; always include AUTHENTICATED.
                 // Callers whose actual permissionCodes still differ get a cache miss and build on
                 // demand via getOrCreateAgent (its key already varies with toolCacheKey).
-                // ADR-0068 spec §2.5: warm-up does not tag. The role name is not a question, so
-                // heuristic answers for it would be meaningless and a provider call would count as a turn.
+                // ADR-0068 spec §2.5: warm-up passes QuestionTags.none(), so it makes no provider call,
+                // publishes no tag record and touches no tagging meter. Selection still evaluates
+                // today's heuristic rules on the role name (the none() record falls back to them), as
+                // it did before ADR-0068.
                 ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(
                         role, prebuildPermissionCodes(role), role, QuestionTags.none());
                 List<Object> selectedTools =

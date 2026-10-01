@@ -25,6 +25,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SequencedMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,10 +52,34 @@ class JevClientTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /** The trickled body: this many bytes, one every {@link #TRICKLE_INTERVAL_MS}. */
+    private static final int TRICKLE_BYTES = 40;
+
+    private static final long TRICKLE_INTERVAL_MS = 100;
+
+    /** How long the trickled body takes to end if nothing cuts it off (~4 s). */
+    private static final long TRICKLE_MS = TRICKLE_BYTES * TRICKLE_INTERVAL_MS;
+
+    /** How long the slow-headers stub withholds its headers. */
+    private static final long SLOW_HEADERS_MS = 4000;
+
+    /**
+     * Scheduling slack on a timing assertion: wide enough for a loaded CI runner, still well under
+     * {@link #TRICKLE_MS} and {@link #SLOW_HEADERS_MS}, so a call that waits for the stub fails it.
+     */
+    private static final long TIMING_SLACK_MS = 1500;
+
     private HttpServer server;
+    private ExecutorService serverExecutor;
+    private Level originalLevel;
     private final AtomicReference<String> lastBody = new AtomicReference<>();
     private final AtomicReference<Map<String, List<String>>> lastHeaders = new AtomicReference<>();
     private final AtomicReference<Responder> responder = new AtomicReference<>();
+    /** Counted down once the trickled body's first byte is on the wire: the call is in flight. */
+    private final CountDownLatch bodyStarted = new CountDownLatch(1);
+    /** Counted down when a trickled write fails: the client closed the connection. */
+    private final CountDownLatch clientGone = new CountDownLatch(1);
+
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
     private Logger logger;
 
@@ -64,17 +95,24 @@ class JevClientTest {
             lastHeaders.set(exchange.getRequestHeaders());
             responder.get().respond(exchange);
         });
+        // Handlers run off the dispatcher thread, so a stalled handler neither blocks a second
+        // exchange nor holds up stop(); the executor's shutdownNow() interrupts any still sleeping.
+        serverExecutor = Executors.newCachedThreadPool();
+        server.setExecutor(serverExecutor);
         server.start();
         logs.start();
         logger = (Logger) LoggerFactory.getLogger(JevClient.class);
+        originalLevel = logger.getLevel();
         logger.setLevel(Level.DEBUG);
         logger.addAppender(logs);
     }
 
     @AfterEach
     void stop() {
+        serverExecutor.shutdownNow();
         server.stop(0);
         logger.detachAppender(logs);
+        logger.setLevel(originalLevel);
         logs.stop();
     }
 
@@ -115,6 +153,35 @@ class JevClientTest {
                                     "probabilities": { "0": 0.55, "1": 0.30, "2": 0.15 }, "confidence": 0.35 } },
               "usage": { "input_tokens": 120, "output_tokens": 3 } }
             """;
+
+    /**
+     * Headers at once, then the first {@link #TRICKLE_BYTES} bytes of the happy body one every {@link
+     * #TRICKLE_INTERVAL_MS}: each read is well inside any budget, the body as a whole is not. Counts
+     * {@link #bodyStarted} down at the first byte and {@link #clientGone} down when a write fails.
+     */
+    private void trickleBody() {
+        responder.set(exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, 0);
+            byte[] body = HAPPY_BODY.getBytes(StandardCharsets.UTF_8);
+            try (OutputStream out = exchange.getResponseBody()) {
+                for (int index = 0; index < TRICKLE_BYTES; index++) {
+                    out.write(body[index]);
+                    out.flush();
+                    bodyStarted.countDown();
+                    Thread.sleep(TRICKLE_INTERVAL_MS);
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } catch (IOException closedByClient) {
+                clientGone.countDown();
+            }
+        });
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
+    }
 
     private void respondWith(int status, String body) {
         responder.set(exchange -> {
@@ -244,33 +311,143 @@ class JevClientTest {
     @DisplayName("headers at once, then a body trickled past the budget → TIMEOUT within the budget")
     void trickledBodyIsCutAtTheOverallDeadline() {
         Duration budget = Duration.ofMillis(400);
-        responder.set(exchange -> {
-            exchange.getResponseHeaders().add("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, 0);
-            try (OutputStream out = exchange.getResponseBody()) {
-                byte[] body = HAPPY_BODY.getBytes(StandardCharsets.UTF_8);
-                // One byte every 100 ms: each read is well inside the budget, the body as a whole is not.
-                for (int index = 0; index < Math.min(body.length, 40); index++) {
-                    out.write(body[index]);
-                    out.flush();
-                    Thread.sleep(100);
-                }
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-            } catch (IOException clientGone) {
-                // The client cancelled the exchange at its deadline.
-            }
-        });
+        trickleBody();
         JevClient client = new JevClient(properties(budget, null, "30m", 4000));
 
         long startNanos = System.nanoTime();
         assertFailure(() -> client.ask(STATE, questions()), FallbackReason.TIMEOUT, null);
-        long elapsedMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
+        long elapsedMs = elapsedMs(startNanos);
 
+        // The upper bound carries CI slack and must still sit well under the trickle, or it would
+        // not tell a call cut at the budget from one that waited for the body to end.
+        assertThat(budget.toMillis() + TIMING_SLACK_MS).isLessThan(TRICKLE_MS);
         assertThat(elapsedMs)
                 .as("the call ends at the budget, not when the trickled body ends (~4 s)")
                 .isGreaterThanOrEqualTo(budget.toMillis() - 50)
-                .isLessThan(budget.toMillis() + 300);
+                .isLessThan(budget.toMillis() + TIMING_SLACK_MS);
+    }
+
+    /**
+     * PR #2367 review: on expiry the exchange is cancelled, not abandoned. Without the cancel the
+     * client's own I/O keeps reading the trickled body in the background until it ends (~4 s).
+     */
+    @Test
+    @DisplayName(
+            "timeout cancels the pending exchange: the provider sees the connection closed well before the body ends")
+    void timeoutCancelsThePendingExchange() throws InterruptedException {
+        Duration budget = Duration.ofMillis(400);
+        trickleBody();
+        JevClient client = new JevClient(properties(budget, null, "30m", 4000));
+
+        long startNanos = System.nanoTime();
+        assertFailure(() -> client.ask(STATE, questions()), FallbackReason.TIMEOUT, null);
+
+        assertThat(clientGone.await(TIMING_SLACK_MS, TimeUnit.MILLISECONDS))
+                .as("the stub's next write fails once the client has dropped the exchange")
+                .isTrue();
+        assertThat(elapsedMs(startNanos))
+                .as("the connection closes at the budget, not when the trickled body ends")
+                .isLessThan(budget.toMillis() + TIMING_SLACK_MS)
+                .isLessThan(TRICKLE_MS);
+    }
+
+    /** A call in flight when the context closes ends at once as a typed ERROR fallback, never a hang. */
+    @Test
+    @DisplayName("destroy() during a call in flight → ERROR at once, the exchange aborted")
+    void destroyEndsACallInFlightAsAnError() throws Exception {
+        trickleBody();
+        // A budget far past the trickle: only destroy() can end this call early.
+        JevClient client = new JevClient(properties(Duration.ofSeconds(30), null, "30m", 4000));
+        ExecutorService caller = Executors.newSingleThreadExecutor();
+        try {
+            Future<JevClient.JevResponse> call = caller.submit(() -> client.ask(STATE, questions()));
+            assertThat(bodyStarted.await(5, TimeUnit.SECONDS)).isTrue();
+
+            long destroyNanos = System.nanoTime();
+            client.destroy();
+
+            assertThatThrownBy(() -> call.get(TIMING_SLACK_MS, TimeUnit.MILLISECONDS))
+                    .as("the call ends when the client shuts down, not when the trickled body ends")
+                    .isInstanceOf(ExecutionException.class)
+                    .cause()
+                    .isInstanceOfSatisfying(
+                            JevProviderException.class,
+                            failure -> assertThat(failure.reason()).isEqualTo(FallbackReason.ERROR));
+            assertThat(elapsedMs(destroyNanos)).isLessThan(TRICKLE_MS);
+            assertThat(clientGone.await(TIMING_SLACK_MS, TimeUnit.MILLISECONDS))
+                    .as("the shutdown aborts the exchange")
+                    .isTrue();
+            assertNoLogCarriesTheState();
+        } finally {
+            caller.shutdownNow();
+        }
+    }
+
+    /**
+     * Interrupting the caller mid-call ends it as a typed ERROR, cancels the exchange, and leaves the
+     * thread's interrupt flag set for the caller's own code to see.
+     */
+    @Test
+    @DisplayName("an interrupted caller → ERROR, the exchange cancelled, the interrupt flag kept")
+    void interruptedCallerGetsAnErrorAndKeepsItsInterruptFlag() throws InterruptedException {
+        trickleBody();
+        JevClient client = new JevClient(properties(Duration.ofSeconds(30), null, "30m", 4000));
+        AtomicReference<Throwable> thrown = new AtomicReference<>();
+        AtomicBoolean interruptedAfterwards = new AtomicBoolean();
+        Thread caller = new Thread(
+                () -> {
+                    try {
+                        client.ask(STATE, questions());
+                    } catch (RuntimeException failure) {
+                        thrown.set(failure);
+                    }
+                    interruptedAfterwards.set(Thread.currentThread().isInterrupted());
+                },
+                "jev-client-interrupt-test");
+        caller.start();
+        assertThat(bodyStarted.await(5, TimeUnit.SECONDS)).isTrue();
+
+        caller.interrupt();
+        caller.join(TIMING_SLACK_MS);
+
+        assertThat(caller.isAlive())
+                .as("the call ends on the interrupt, not when the trickled body ends")
+                .isFalse();
+        assertThat(thrown.get())
+                .isInstanceOfSatisfying(
+                        JevProviderException.class,
+                        failure -> assertThat(failure.reason()).isEqualTo(FallbackReason.ERROR));
+        assertThat(interruptedAfterwards.get())
+                .as("the interrupt flag is restored for the caller")
+                .isTrue();
+        assertThat(clientGone.await(TIMING_SLACK_MS, TimeUnit.MILLISECONDS))
+                .as("the interrupted call cancels its exchange")
+                .isTrue();
+        assertNoLogCarriesTheState();
+    }
+
+    /**
+     * A timeout beyond what a nanosecond deadline holds saturates at {@code Provider.MAX_TIMEOUT}: an
+     * absurd setting behaves as a very long budget, not as an overflow that fails every turn.
+     */
+    @Test
+    @DisplayName("an absurd timeout saturates to a very long budget: the call still succeeds")
+    void absurdTimeoutSaturatesInsteadOfOverflowing() {
+        respondWith(200, HAPPY_BODY);
+        TaggingProperties absurd = properties(Duration.ofSeconds(Long.MAX_VALUE), null, "30m", 4000);
+
+        assertThat(absurd.provider().timeout()).isEqualTo(TaggingProperties.Provider.MAX_TIMEOUT);
+        assertThat(properties(Duration.ofDays(365L * 1000), null, "30m", 4000)
+                        .provider()
+                        .timeout())
+                .isEqualTo(TaggingProperties.Provider.MAX_TIMEOUT);
+        assertThat(properties(Duration.ofDays(1), null, "30m", 4000).provider().timeout())
+                .as("a long but representable timeout is kept as set")
+                .isEqualTo(Duration.ofDays(1));
+
+        JevClient.JevResponse response = new JevClient(absurd).ask(STATE, questions());
+
+        assertThat(response.answers()).containsOnlyKeys("simple_chat", "workflow_state", "risk");
     }
 
     @Test
@@ -279,7 +456,7 @@ class JevClientTest {
         Duration budget = Duration.ofMillis(300);
         responder.set(exchange -> {
             try {
-                Thread.sleep(2000);
+                Thread.sleep(SLOW_HEADERS_MS);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -291,7 +468,10 @@ class JevClientTest {
         long startNanos = System.nanoTime();
         assertFailure(() -> client.ask(STATE, questions()), FallbackReason.TIMEOUT, null);
 
-        assertThat(Duration.ofNanos(System.nanoTime() - startNanos).toMillis()).isLessThan(budget.toMillis() + 300);
+        assertThat(budget.toMillis() + TIMING_SLACK_MS).isLessThan(SLOW_HEADERS_MS);
+        assertThat(elapsedMs(startNanos))
+                .as("the call ends at the budget, not when the withheld headers arrive (~4 s)")
+                .isLessThan(budget.toMillis() + TIMING_SLACK_MS);
     }
 
     @Test

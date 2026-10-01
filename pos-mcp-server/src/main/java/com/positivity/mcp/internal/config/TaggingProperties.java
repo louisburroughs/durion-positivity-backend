@@ -72,7 +72,7 @@ public record TaggingProperties(
      * @param baseUrl the in-cell Ollama container by default
      * @param model a Jev-protocol decision model pulled into that container; the §6 bake-off sets it
      * @param timeout the one overall deadline of the tagging call (connect, response headers and body
-     *     together); never raised to fit a slow model
+     *     together); never raised to fit a slow model. A value above {@link #MAX_TIMEOUT} saturates there
      * @param apiKey for an external provider only; sent as {@code Authorization: Bearer}, never logged
      * @param keepAlive sent as {@code keep_alive} so the model stays resident between turns; omitted
      *     from the request when blank
@@ -87,12 +87,21 @@ public record TaggingProperties(
         public static final String DEFAULT_BASE_URL = "http://ollama:11434";
         public static final String DEFAULT_MODEL = "tev1:0.8b";
         public static final Duration DEFAULT_TIMEOUT = Duration.ofMillis(800);
+
+        /**
+         * The longest timeout honoured: the largest budget a nanosecond deadline can hold (about 292
+         * years). A longer value saturates here, so an absurd setting behaves as a very long budget
+         * rather than overflowing the deadline arithmetic and failing every turn.
+         */
+        public static final Duration MAX_TIMEOUT = Duration.ofNanos(Long.MAX_VALUE);
+
         public static final String DEFAULT_KEEP_ALIVE = "30m";
 
         public Provider {
             baseUrl = baseUrl == null || baseUrl.isBlank() ? DEFAULT_BASE_URL : stripTrailingSlash(baseUrl);
             model = model == null || model.isBlank() ? DEFAULT_MODEL : model;
             timeout = timeout == null || timeout.isNegative() || timeout.isZero() ? DEFAULT_TIMEOUT : timeout;
+            timeout = timeout.compareTo(MAX_TIMEOUT) > 0 ? MAX_TIMEOUT : timeout;
             apiKey = apiKey == null || apiKey.isBlank() ? null : apiKey;
             keepAlive = keepAlive == null ? DEFAULT_KEEP_ALIVE : (keepAlive.isBlank() ? null : keepAlive);
         }

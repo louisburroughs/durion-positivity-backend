@@ -32,8 +32,11 @@ import org.springframework.stereotype.Component;
  *       trace.
  * </ol>
  *
- * <p>Never throws: a chat turn never fails because tagging failed (ADR-0068 §2). With {@code mode:
- * off} nothing here touches the meter registry or writes a log line.
+ * <p>Never throws for a provider failure: a chat turn never fails because the decision model failed
+ * (ADR-0068 §2). The heuristic tagger runs outside that guard on purpose: its rules are the ones
+ * that ran inline before ADR-0068, and a failure there propagates exactly as it did then, because
+ * there is no heuristic record to fall back to and inventing one would change the mode-{@code off}
+ * decisions. With {@code mode: off} nothing here touches the meter registry or writes a log line.
  *
  * <p>Package-private: its one caller is {@link ToolSelectionEngine#tag}, and the cross-module ArchUnit
  * rule reserves public {@code *Service} names for {@code internal.service}.

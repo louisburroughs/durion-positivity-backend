@@ -77,7 +77,8 @@ public class TaggingQuestions {
      * One request's questions and what identifies them.
      *
      * @param questions in wire order
-     * @param optionListHash SHA-256 (first 16 hex) over the domain options and the entity keys asked
+     * @param optionListHash SHA-256 (first 16 hex) over the domain options and the entity keys asked; a
+     *     skipped domain question contributes no options
      */
     public record QuestionSet(
             @NonNull List<TagQuestion> questions, @NonNull String optionListHash) {
@@ -172,18 +173,12 @@ public class TaggingQuestions {
             boolean entityQuestions) {
         List<TagQuestion> questions = new ArrayList<>(fixedQuestions());
         TagQuestion domain = domainQuestion(lexicon, preloadProperties);
-        // A Choice needs at least two options (spec §2.2); with no preload list only master is left,
-        // and a one-option question would fail the whole request. Likewise above the local models'
-        // option cap: the provider would reject every request, so every turn would fall back. The set
-        // is built once per context, so the warning is logged once; it names counts only.
-        int domainOptions = domain.options().size();
-        if (domainOptions > MAX_OPTIONS) {
-            LOGGER.warn(
-                    "Tagging domain question skipped: {} rag-scope options exceed the local-model limit of {}",
-                    domainOptions,
-                    MAX_OPTIONS);
-        } else if (domainOptions >= 2) {
+        // The hash names the option lists actually asked: a skipped domain question hashes as no
+        // domain options, so its agreement is never compared with a set that asked it.
+        List<String> askedDomainOptions = List.of();
+        if (asksDomain(domain.options().size())) {
             questions.add(domain);
+            askedDomainOptions = domain.options();
         }
         List<String> entityKeys = new ArrayList<>();
         if (entityQuestions) {
@@ -192,7 +187,31 @@ public class TaggingQuestions {
                 entityKeys.add(entity.key());
             }
         }
-        return new QuestionSet(questions, optionListHash(domain.options(), entityKeys));
+        return new QuestionSet(questions, optionListHash(askedDomainOptions, entityKeys));
+    }
+
+    /**
+     * Whether a {@code domain} Choice of {@code domainOptions} options can be asked, logging one WARN
+     * (counts only) when it cannot. A Choice needs at least two options (spec §2.2): with no preload
+     * list only master is left, and a one-option question would fail the whole request. Above the
+     * local models' option cap the provider would reject every request, so every turn would fall
+     * back. The set is built once per context, so either warning is logged once.
+     */
+    static boolean asksDomain(int domainOptions) {
+        if (domainOptions > MAX_OPTIONS) {
+            LOGGER.warn(
+                    "Tagging domain question skipped: {} rag-scope options exceed the local-model limit of {}",
+                    domainOptions,
+                    MAX_OPTIONS);
+            return false;
+        }
+        if (domainOptions < 2) {
+            LOGGER.warn(
+                    "Tagging domain question skipped: {} rag-scope option(s), a Choice needs at least 2",
+                    domainOptions);
+            return false;
+        }
+        return true;
     }
 
     /** The tags every request asks, whatever the lexicon: everything but {@code domain} and {@code entity}. */

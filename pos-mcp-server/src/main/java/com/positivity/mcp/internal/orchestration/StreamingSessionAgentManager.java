@@ -910,7 +910,10 @@ public class StreamingSessionAgentManager
                 // the warm cache matches the role's actual gated tool set; always include AUTHENTICATED.
                 // Callers whose actual permissionCodes still differ get a cache miss and build on
                 // demand (its key already varies with toolCacheKey).
-                // ADR-0068 spec §2.5: warm-up does not tag (the role name is not a question).
+                // ADR-0068 spec §2.5: warm-up passes QuestionTags.none(), so it makes no provider call,
+                // publishes no tag record and touches no tagging meter. Selection still evaluates
+                // today's heuristic rules on the role name (the none() record falls back to them), as
+                // it did before ADR-0068.
                 ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(
                         role, prebuildPermissionCodes(role), role, QuestionTags.none());
                 List<Object> selectedTools =

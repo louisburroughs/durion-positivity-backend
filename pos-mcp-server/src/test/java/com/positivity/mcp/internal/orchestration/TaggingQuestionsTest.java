@@ -337,7 +337,8 @@ class TaggingQuestionsTest {
     }
 
     @Test
-    @DisplayName("a domain option list over the 26-option local-model limit skips the domain question, logged once")
+    @DisplayName("a domain option list over the 26-option local-model limit skips the domain question, logged once,"
+            + " and the option-list hash then covers no domain options")
     void domainQuestionSkippedAboveTheOptionCap() {
         ch.qos.logback.classic.Logger logger =
                 (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(TaggingQuestions.class);
@@ -371,10 +372,89 @@ class TaggingQuestionsTest {
                     .singleElement()
                     .satisfies(domain -> assertThat(domain.options()).hasSize(TaggingQuestions.MAX_OPTIONS));
             assertThat(logs.list).hasSize(1);
+
+            // PR #2367 review: the hash names the option lists asked. The skipped question hashes as
+            // no domain options at all, not as the 27 it would have offered, so it differs from the
+            // asked case and equals the hash of a set with no domain question.
+            String noDomainHash = TaggingQuestions.optionListHash(List.of(), List.of());
+            assertThat(over.questionSet().optionListHash())
+                    .isNotEqualTo(atCap.questionSet().optionListHash())
+                    .isEqualTo(noDomainHash)
+                    .isNotEqualTo(TaggingQuestions.optionListHash(
+                            TaggingQuestions.domainQuestion(LEXICON, scopes(TaggingQuestions.MAX_OPTIONS))
+                                    .options(),
+                            List.of()));
+            assertThat(atCap.questionSet().optionListHash())
+                    .isEqualTo(TaggingQuestions.optionListHash(
+                            TaggingQuestions.domainQuestion(LEXICON, scopes(TaggingQuestions.MAX_OPTIONS - 1))
+                                    .options(),
+                            List.of()));
         } finally {
             logger.detachAppender(logs);
             logs.stop();
         }
+    }
+
+    /**
+     * PR #2367 review: a domain Choice of fewer than two options is skipped like one over the cap: one
+     * WARN naming counts only, and the option-list hash covers no domain options. Master is always an
+     * option, so a built set sees one at least; zero is defended at the guard itself.
+     */
+    @Test
+    @DisplayName("a domain option list under two options skips the domain question with exactly one WARN (counts"
+            + " only), hashed as no domain options")
+    void domainQuestionSkippedBelowTwoOptions() {
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(TaggingQuestions.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> logs =
+                new ch.qos.logback.core.read.ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            for (int options = 0; options < 2; options++) {
+                logs.list.clear();
+                assertThat(TaggingQuestions.asksDomain(options)).isFalse();
+                assertOneCountOnlyWarn(logs, options);
+            }
+            assertThat(TaggingQuestions.asksDomain(2)).isTrue();
+            assertThat(TaggingQuestions.asksDomain(TaggingQuestions.MAX_OPTIONS))
+                    .isTrue();
+
+            // End to end: with no preload list, or one whose docs name no rag scope, only master is
+            // left. The question is skipped, hashed as no domain options (unlike a set that asks it),
+            // and the set, built once, logs exactly one WARN.
+            String noDomainHash = TaggingQuestions.optionListHash(List.of(), List.of());
+            String askedHash = new TaggingQuestions(LEXICON, scopes(1), false)
+                    .questionSet()
+                    .optionListHash();
+            for (StaticRagPreloadProperties lonely :
+                    java.util.Arrays.asList(null, new StaticRagPreloadProperties(List.of()))) {
+                logs.list.clear();
+                TaggingQuestions masterOnly = new TaggingQuestions(LEXICON, lonely, false);
+                assertThat(masterOnly.questions()).containsExactlyElementsOf(TaggingQuestions.fixedQuestions());
+                assertThat(masterOnly.questionSet().optionListHash())
+                        .isEqualTo(noDomainHash)
+                        .isNotEqualTo(askedHash)
+                        .isNotEqualTo(
+                                TaggingQuestions.optionListHash(List.of(TaggingQuestions.MASTER_DOMAIN), List.of()));
+                masterOnly.questions();
+                masterOnly.questionSet();
+                assertOneCountOnlyWarn(logs, 1);
+            }
+        } finally {
+            logger.detachAppender(logs);
+            logs.stop();
+        }
+    }
+
+    private static void assertOneCountOnlyWarn(
+            ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> logs, int options) {
+        assertThat(logs.list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(ch.qos.logback.classic.Level.WARN);
+            assertThat(event.getFormattedMessage())
+                    .isEqualTo("Tagging domain question skipped: " + options
+                            + " rag-scope option(s), a Choice needs at least 2");
+        });
     }
 
     /** A preload list of {@code count} distinct rag scopes. */
