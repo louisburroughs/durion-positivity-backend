@@ -648,7 +648,9 @@ pos:
     session:
       ttl-hours: 24
     rate-limit:
-      per-session: 100
+      # Per-actor turns per window. The ADR-0068 gate sets send ~360 turns per language as one
+      # actor, so a bake-off raises it (docker-compose: POS_NLTI_RATE_LIMIT_PER_SESSION).
+      per-session: ${POS_NLTI_RATE_LIMIT_PER_SESSION:100}
       max-tracked-sessions: 100000
   location:
     base-url: ${POS_LOCATION_BASE_URL:http://pos-api-gateway}

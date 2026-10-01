@@ -232,9 +232,27 @@ en, fr-CA and es.
   context cannot hold the wide request (the entity Nouls make it ~18 KB, about 4.6k tokens; `tev1`
   reads about 2,000), `true` for one that can. Record which setting each candidate ran with: it
   changes `questionCount` and `optionListHash` on the trace. Leave `MCP_TAGGING_TIMEOUT` at `800ms`.
+- `POS_NLTI_RATE_LIMIT_PER_SESSION=100000` in `.env` for the duration of the run (default 100): the
+  per-actor chat counter does not decrement, so a 150-turn batch as one actor hits 429 part-way
+  through otherwise. Put it back afterwards.
+- `MCP_SCOPE_GRAPH_MODE=shadow` when the entity Nouls are wanted: they are asked only when the scope
+  graph is built, and `shadow` records the ADR-0069 scope on the same traces at no behaviour cost.
+- Hosted provider (TypeSafe System One, same wire contract) instead of the local container, where
+  ADR-0068 section 4 allows it (synthetic data, or a zero-retention DPA recorded in the Changelog):
+  `MCP_TAGGING_BASE_URL=https://api.typesafe.ai`, `MCP_TAGGING_API_KEY=<secret>`,
+  `OLLAMA_TAGGING_MODEL=jev-latest`, `MCP_TAGGING_KEEP_ALIVE=` (empty omits the Ollama-only field),
+  `MCP_TAGGING_ENTITY_QUESTIONS=true`. `ollama-init` skips the local pull when the base URL is not
+  the container. Measured on alpha 2026-10-01: p50 162 ms, p95 196 ms for 44 questions.
+- Local-provider findings on the GPU-less alpha `t3.2xlarge` (2026-10-01): a model that is not
+  resident is loaded by the first request, which the 800 ms client abandons, so it never becomes
+  resident — warm it once by hand (`curl` to `/v1/systemone` with no timeout) and confirm with
+  `ollama ps` (#2376). `tev1` and `tev1:0.8b` have a 2,050-token context and reject the
+  13-question request (`prompt 0 has 2107 tokens; expected 1–2050`); warm, a 7-question request
+  took 5.2 s. No local candidate meets the budget on that host; the ADR section 5 options apply.
 - One bearer token for an actor holding `mcp:eval_trace:view` and chat access, used for every turn
   and every export: `GET /v1/eval/turn-traces` returns the caller's own traces only. Do not chat as
-  that actor from anywhere else during a run.
+  that actor from anywhere else during a run. Access tokens live one hour: re-mint before each
+  batch.
 
 ### Pull or swap a model
 
