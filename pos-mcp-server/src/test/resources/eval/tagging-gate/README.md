@@ -232,9 +232,27 @@ en, fr-CA and es.
   context cannot hold the wide request (the entity Nouls make it ~18 KB, about 4.6k tokens; `tev1`
   reads about 2,000), `true` for one that can. Record which setting each candidate ran with: it
   changes `questionCount` and `optionListHash` on the trace. Leave `MCP_TAGGING_TIMEOUT` at `800ms`.
+- `POS_NLTI_RATE_LIMIT_PER_SESSION=100000` in `.env` for the duration of the run (default 100): the
+  per-actor chat counter does not decrement, so a 150-turn batch as one actor hits 429 part-way
+  through otherwise. Put it back afterwards.
+- `MCP_SCOPE_GRAPH_MODE=shadow` when the entity Nouls are wanted: they are asked only when the scope
+  graph is built, and `shadow` records the ADR-0069 scope on the same traces at no behaviour cost.
+- Hosted provider (TypeSafe System One, same wire contract) instead of the local container, where
+  ADR-0068 section 4 allows it (synthetic data, or a zero-retention DPA recorded in the Changelog):
+  `MCP_TAGGING_BASE_URL=https://api.typesafe.ai`, `MCP_TAGGING_API_KEY=<secret>`,
+  `OLLAMA_TAGGING_MODEL=jev-latest`, `MCP_TAGGING_KEEP_ALIVE=` (empty omits the Ollama-only field),
+  `MCP_TAGGING_ENTITY_QUESTIONS=true`. `ollama-init` skips the local pull when the base URL is not
+  the container. Measured on alpha 2026-10-01: p50 162 ms, p95 196 ms for 44 questions.
+- Local-provider findings on the GPU-less alpha `t3.2xlarge` (2026-10-01): a model that is not
+  resident is loaded by the first request, which the 800 ms client abandons, so it never becomes
+  resident — warm it once by hand (`curl` to `/v1/systemone` with no timeout) and confirm with
+  `ollama ps` (#2376). `tev1` and `tev1:0.8b` have a 2,050-token context and reject the
+  13-question request (`prompt 0 has 2107 tokens; expected 1–2050`); warm, a 7-question request
+  took 5.2 s. No local candidate meets the budget on that host; the ADR section 5 options apply.
 - One bearer token for an actor holding `mcp:eval_trace:view` and chat access, used for every turn
   and every export: `GET /v1/eval/turn-traces` returns the caller's own traces only. Do not chat as
-  that actor from anywhere else during a run.
+  that actor from anywhere else during a run. Access tokens live one hour: re-mint before each
+  batch.
 
 ### Pull or swap a model
 
@@ -247,8 +265,24 @@ docker compose up -d --force-recreate pos-mcp-server    # picks up MCP_TAGGING_M
 ```
 
 `OLLAMA_MAX_LOADED_MODELS=3` keeps the embedding model and a candidate resident together (and a
-second candidate during a swap). Warm both models with a few chat turns that are not gate
-utterances, then check `docker exec ollama ollama ps` lists `bge-m3` and the candidate.
+second candidate during a swap). **Chat turns cannot warm a cold candidate**: the first request
+loads it, the 800 ms client abandons it, Ollama drops the half-loaded model, and the next turn starts
+cold again (325/325 timeouts on alpha, #2376). After every swap, warm the candidate by hand with one
+System One request and **no** client timeout, then verify it is resident before any gate turn:
+
+```bash
+# .env: OLLAMA_TAGGING_MODEL=<candidate>; one minimal request from the host (port 11434 is
+# published), same wire shape as the server's, and deliberately no --max-time
+curl -sS -X POST http://localhost:11434/v1/systemone -H "Content-Type: application/json" -d '{
+    "model": "'"$OLLAMA_TAGGING_MODEL"'", "state": "warm-up", "keep_alive": "24h",
+    "questions": {"simple_chat": {"type": "noul", "instructions": "Is this message small talk?"}}}'
+docker exec ollama ollama ps                            # MUST list bge-m3 and the candidate
+```
+
+Repeat the pair until `ollama ps` lists both models; one load took 2.2 s on alpha and the next
+request 62 ms. The embedding model warms itself on the first chat turn (its client timeout is
+`OLLAMA_EMBEDDING_TIMEOUT`, 30 s). Do not start a batch until `ollama ps` shows the candidate: a
+batch against a cold candidate records a `timeout` fallback on every turn and measures nothing.
 
 ### Run the gate in batches
 
