@@ -12,7 +12,7 @@ import org.jspecify.annotations.NonNull;
  * response, and the name every threshold, trace entry and meter uses.
  *
  * <p>{@link #ENTITY} is the one tag asked as several questions: one Noul per lexicon entity, so the
- * wire carries {@code entity_<key>} ({@code entity_work-order}). Thresholds and {@code enforced-tags}
+ * wire carries {@code entity_<key>} ({@code entity_workorder}). Thresholds and {@code enforced-tags}
  * name {@code entity} (a per-entity threshold may be set as {@code thresholds.entity.<key>}).
  */
 public enum TagName {

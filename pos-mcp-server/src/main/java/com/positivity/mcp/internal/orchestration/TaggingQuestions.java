@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.positivity.mcp.internal.config.ScopeGraphProperties;
 import com.positivity.mcp.internal.config.StaticRagPreloadProperties;
 import com.positivity.mcp.internal.config.TaggingProperties;
 import com.positivity.mcp.internal.domain.RequestComplexity;
@@ -33,8 +34,10 @@ import org.springframework.stereotype.Component;
 /**
  * ADR-0068 §1 / spec §2.3: the closed question set of one tagging request, built from one list of tag
  * definitions in code. Twelve fixed tags, then the {@code domain} Choice, then one {@code entity_<key>}
- * Noul per lexicon entity when {@code mcp.tagging.entity-questions} is on (44 questions for today's lexicon;
- * 13 with it off, the default).
+ * Noul per lexicon entity (44 questions for today's lexicon; 13 without them, the default). The entity
+ * Nouls are asked only when {@code mcp.scope-graph.mode} is not {@code off} (they seed the ADR-0069
+ * scope, their only consumer) <em>and</em> {@code mcp.tagging.entity-questions} is true (the model's
+ * context must hold the wide request).
  *
  * <ul>
  *   <li>The {@code domain} options are permanently the curated RAG-scope vocabulary: the distinct
@@ -42,7 +45,7 @@ import org.springframework.stereotype.Component;
  *       the tool catalog's domains (33, over the 26-option cap, and spelled for tools). Each option's
  *       criteria sentence comes from the lexicon's {@code domains} block ({@code entities.yaml}).
  *   <li>The entity question is one Noul per entity, named by the lexicon key ({@code
- *       entity_work-order}), whose instructions list the entity's en, fr and es terms. No option cap
+ *       entity_workorder}), whose instructions list the entity's en, fr and es terms. No option cap
  *       applies, and the request stays well under the 64-question cap (a test pins it).
  * </ul>
  *
@@ -91,13 +94,25 @@ public class TaggingQuestions {
 
     @Autowired
     public TaggingQuestions(
-            @Nullable StaticRagPreloadProperties preloadProperties, @Nullable TaggingProperties taggingProperties) {
-        this(
-                loadLexicon(),
-                preloadProperties,
-                taggingProperties == null
-                        ? TaggingProperties.DEFAULT_ENTITY_QUESTIONS
-                        : taggingProperties.entityQuestions());
+            @Nullable StaticRagPreloadProperties preloadProperties,
+            @Nullable TaggingProperties taggingProperties,
+            @Nullable ScopeGraphProperties scopeGraphProperties) {
+        this(loadLexicon(), preloadProperties, asksEntityQuestions(taggingProperties, scopeGraphProperties));
+    }
+
+    /**
+     * ADR-0068 (NLTI domain review): the entity Nouls are asked only when the scope graph is on, the
+     * one consumer of their answers, and {@code mcp.tagging.entity-questions} allows the wide request.
+     * An absent properties bean takes that property's default (off), and an absent scope-graph bean
+     * means the graph is off.
+     */
+    static boolean asksEntityQuestions(
+            @Nullable TaggingProperties taggingProperties, @Nullable ScopeGraphProperties scopeGraphProperties) {
+        boolean entityQuestions = taggingProperties == null
+                ? TaggingProperties.DEFAULT_ENTITY_QUESTIONS
+                : taggingProperties.entityQuestions();
+        boolean scopeGraphOn = scopeGraphProperties != null && scopeGraphProperties.enabled();
+        return entityQuestions && scopeGraphOn;
     }
 
     /** For tests: an explicit lexicon and preload list, entity Nouls asked. */
@@ -190,24 +205,27 @@ public class TaggingQuestions {
                         + " ones, that customer, the second one), a bare answer or confirmation to a question the"
                         + " assistant asked (yes, no, go ahead, not that one), or a request to redo or change a"
                         + " previous result (again, instead, also, now sort by …)? A greeting, thanks or a closing"
-                        + " remark on its own does not count."));
+                        + " remark on its own does not count, nor does a word that points at the user's own shop or"
+                        + " location (this store, here)."));
         questions.add(TagQuestion.noul(
                 TagName.SIMPLE_CHAT,
                 CONTEXT + "Is this message only social or about the assistant itself, with no business data"
                         + " requested and nothing to do: a greeting, thanks, a closing remark, small talk, or a"
-                        + " question about what the assistant can do? A bare answer such as \"yes\" or \"the first"
-                        + " one\" is not simple chat."));
+                        + " general question about who the assistant is or what it can do? A message that names a"
+                        + " record or a task (\"can you show invoices?\", \"can you create a PO?\") is not simple"
+                        + " chat, and neither is a bare answer such as \"yes\" or \"the first one\"."));
         questions.add(TagQuestion.choice(
                 TagName.WORKFLOW_STATE,
                 CONTEXT + "Which multi-step operational workflow, if any, is the user starting or in the middle of"
                         + " with this message? Mentioning a document is not enough; the user must be carrying out the"
-                        + " workflow.",
+                        + " workflow. Choose IDLE when unsure.",
                 workflowCriteria()));
         questions.add(TagQuestion.noul(
                 TagName.NEEDS_WEB_SEARCH,
                 CONTEXT + "Does answering this message need information from outside the shop's own records, such"
                         + " as news, a recall, a manufacturer's specification, a tariff, weather, or an external"
-                        + " company's website?"));
+                        + " company's website? The shop's own current stock, recent invoices or online orders are its"
+                        + " own records and do not count."));
         questions.add(TagQuestion.noul(
                 TagName.ABOUT_INVENTORY,
                 CONTEXT + "Is this message about the shop's stock: what is on hand or available, a part, product or"
@@ -220,33 +238,40 @@ public class TaggingQuestions {
                         + " revenue or sales totals alone does not count."));
         questions.add(TagQuestion.noul(
                 TagName.IMPLIES_DATE_WINDOW,
-                CONTEXT + "Does the question cover a period of time, either named (last month, this quarter, year"
-                        + " to date, since January, July, 2025, Q3) or implied by a metric that only makes sense over"
-                        + " a period (revenue, totals, top or largest customers, spend, growth, trend, average)?"));
+                CONTEXT + "Does this message ask about data over a period of time, either named (last month, this"
+                        + " quarter, year to date, since January, July, 2025, Q3) or implied by a metric that only"
+                        + " makes sense over a period (revenue, totals, top or largest customers, spend, growth, trend,"
+                        + " average)? A single date or time for booking or moving something, a current value (right"
+                        + " now, today's rate), or a vehicle's model year is not a period."));
         questions.add(TagQuestion.noul(
                 TagName.ADMIN_ACCOUNT_QUESTION,
-                CONTEXT + "Is this message about administering the platform itself: its user accounts and logins,"
-                        + " roles, permissions, who can access what, registrations, or the audit log? A customer's,"
-                        + " supplier's or vendor's account, a bank account, a GL or ledger account, invoices,"
-                        + " receivables or payables are not administration."));
+                CONTEXT + "Is this message only a lookup of the platform's own administration data: its user"
+                        + " accounts and logins, which roles or permissions a user or role has, who can access what,"
+                        + " or the platform's audit log? A request to change any of these (disable an account, assign"
+                        + " a role, reset a password, grant a permission, add an audit event) is not a lookup. A"
+                        + " customer's, supplier's or vendor's account, a bank, GL or ledger account, invoices,"
+                        + " receivables, payables, workorders, a business approval limit, the sign-in or password"
+                        + " policy, or a staff member's own sign-in problem are not administration."));
         questions.add(TagQuestion.noul(
                 TagName.COMPOUND_QUESTION,
                 CONTEXT + "Does this message ask two or more separate questions or requests that need different"
-                        + " information to answer (for example a work order's status and who has access to the audit"
+                        + " information to answer (for example a workorder's status and who has access to the audit"
                         + " log), rather than one request with several conditions or a list of related items such"
                         + " as \"returns and refunds\"?"));
         SequencedMap<String, String> intent = new LinkedHashMap<>();
         intent.put(
                 NltiIntentType.QUERY.name(),
-                "Look up, list, count, summarise, compare or report on existing records; nothing changes.");
+                "Look up, list, count, summarise, compare or report on existing records, or ask how something"
+                        + " works; nothing changes.");
         intent.put(
                 NltiIntentType.ACTION.name(),
-                "Create, change, cancel, approve, post, send, schedule or delete something, or have the assistant"
-                        + " do it.");
+                "Create, change, cancel, approve, post, send, schedule, import or delete something, or have the"
+                        + " assistant do it, even when the request is short (\"cancel it\", \"delete that one\").");
         intent.put(
                 NltiIntentType.UNKNOWN.name(),
-                "It is not clear whether the user wants information or a change: social chat, a fragment, or a"
-                        + " request that fits neither.");
+                "Social chat, or a bare answer or confirmation (\"yes\", \"go ahead\", \"the first one\") whose"
+                        + " purpose the message alone does not show. A short request to change something is ACTION,"
+                        + " not UNKNOWN.");
         questions.add(TagQuestion.choice(
                 TagName.INTENT, CONTEXT + "Does the user want to read something, or to change something?", intent));
         SequencedMap<String, String> complexity = new LinkedHashMap<>();
@@ -257,18 +282,25 @@ public class TaggingQuestions {
         complexity.put(
                 RequestComplexity.MULTI_DOMAIN.name(),
                 "It needs data from more than one area of the business, or several steps combined, for example"
-                        + " joining customers with invoices and work orders, comparing periods, or ranking and then"
+                        + " joining customers with invoices and workorders, comparing periods, or ranking and then"
                         + " filtering.");
         questions.add(TagQuestion.choice(
                 TagName.COMPLEXITY,
-                CONTEXT + "How much does answering take: one lookup in one area, or several steps or areas?",
+                CONTEXT + "How much work does this message need: one lookup or one change in one area, or several"
+                        + " steps or areas?",
                 complexity));
         questions.add(TagQuestion.score(
                 TagName.RISK,
-                CONTEXT + "How risky is what the user asks for? LOW: reading or reporting; nothing changes. MEDIUM:"
-                        + " a change that can be corrected later, such as a note, an appointment, a draft or a status"
-                        + " update. HIGH: money moves, a posting to accounting, a deletion, something sent outside"
-                        + " the shop, or a change that cannot be undone.",
+                CONTEXT + "How risky is what the user asks for? LOW: reading, reporting or social chat; nothing"
+                        + " changes. MEDIUM: a change that can be corrected later, such as a note, an appointment, a"
+                        + " draft, a status update, a price change, or approving an estimate or purchase order. HIGH:"
+                        + " money moves or is recorded (a payment, refund, credit or bill), a posting to accounting"
+                        + " (including recording received stock or count adjustments), a deletion, voiding or"
+                        + " cancelling an order or invoice, a change to who can access the platform (accounts, roles,"
+                        + " permissions, passwords), something sent outside the shop, or a change that cannot be"
+                        + " undone. A bare confirmation or selection (\"yes\", \"go ahead\", \"confirm\", \"the first"
+                        + " one\") may approve a change you cannot see: rate it HIGH. When unsure between two levels,"
+                        + " choose the higher.",
                 List.of(NltiRiskLevel.LOW.name(), NltiRiskLevel.MEDIUM.name(), NltiRiskLevel.HIGH.name())));
         return List.copyOf(questions);
     }
@@ -286,7 +318,7 @@ public class TaggingQuestions {
                         + " vendor, submitting or approving the new order.");
         criteria.put(
                 WorkflowState.RECEIVING_ASN.name(),
-                "Receiving a supplier shipment right now against an advanced shipment notice or purchase order:"
+                "Receiving a supplier shipment right now against an advance shipping notice (ASN) or purchase order:"
                         + " checking in delivered items, quantities received, discrepancies.");
         criteria.put(
                 WorkflowState.INVENTORY_RECON.name(),
@@ -334,8 +366,8 @@ public class TaggingQuestions {
         return TagQuestion.choice(
                 TagName.DOMAIN,
                 CONTEXT + "Which one area of the business is this message mainly about? Choose \"master\" when no"
-                        + " single area fits, when several fit equally, or when the message is about the assistant"
-                        + " or the platform in general.",
+                        + " single area fits, when several fit equally, or when the message is social chat, or the"
+                        + " assistant itself.",
                 criteria);
     }
 
@@ -346,10 +378,13 @@ public class TaggingQuestions {
         return List.copyOf(byKey.values());
     }
 
-    /** One Noul per entity: "Is this message about a &lt;en terms&gt; (&lt;fr&gt;; &lt;es&gt;)?" */
+    /**
+     * One Noul per entity: "Is this message about any of these: &lt;en terms&gt; (French: &lt;fr&gt;;
+     * Spanish: &lt;es&gt;)?"
+     */
     static @NonNull TagQuestion entityQuestion(@NonNull EntityDefinition entity) {
-        String instructions = CONTEXT + "Is this message about a " + terms(entity, "en") + " (" + terms(entity, "fr")
-                + "; " + terms(entity, "es") + ")?";
+        String instructions = CONTEXT + "Is this message about any of these: " + terms(entity, "en") + " (French: "
+                + terms(entity, "fr") + "; Spanish: " + terms(entity, "es") + ")?";
         return TagQuestion.entity(entity.key(), instructions);
     }
 

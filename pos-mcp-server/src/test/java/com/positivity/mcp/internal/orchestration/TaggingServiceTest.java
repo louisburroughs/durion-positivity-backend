@@ -55,7 +55,7 @@ class TaggingServiceTest {
             QuestionTags h = heuristic.tag(message);
             Map<String, TagAnswer> answers = new LinkedHashMap<>();
             h.heuristic().forEach((name, answer) -> answers.put(name, opposite(name, answer)));
-            answers.put(TagName.entityWireName("work-order"), TagAnswer.noul(0.9));
+            answers.put(TagName.entityWireName("workorder"), TagAnswer.noul(0.9));
             return new QuestionTags(
                     TaggingMode.SHADOW,
                     Map.of(),
@@ -138,7 +138,7 @@ class TaggingServiceTest {
             // ... while everything the model said is recorded beside it.
             assertThat(actual.mode()).isEqualTo(mode);
             assertThat(actual.model()).isNotEmpty();
-            assertThat(actual.model()).containsKey(TagName.entityWireName("work-order"));
+            assertThat(actual.model()).containsKey(TagName.entityWireName("workorder"));
             // ADR-0068 §3.6: the model the tagger reports ("stub-model") is never used; the configured one is.
             assertThat(actual.providerModel()).isEqualTo(TaggingProperties.Provider.DEFAULT_MODEL);
             assertThat(actual.latencyMs()).isEqualTo(42L);

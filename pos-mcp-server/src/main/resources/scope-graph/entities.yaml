@@ -56,21 +56,21 @@ domain_scopes:
   security-service: security
 
 domains:
-  accounting: "General ledger, journal entries, chart of accounts, financial statements, receivables and payables, bank reconciliation."
-  admin: "Administration of the platform: users, roles, permissions, access, audit."
+  accounting: "General ledger, journal entries, chart of accounts, financial statements, revenue, margin and profit figures, customer invoices and payments, credit memos, receivables and payables, vendor bills, bank reconciliation."
+  admin: "Governance of administrative changes: what needs approval, approval gates and approval configuration, the blast radius and audit trail of an admin change."
   customer: "Customers, their accounts and contacts, the vehicles they own, communication with them."
-  events: "System events, notifications, activity logs."
-  hr: "Employees, staff, work roles, schedules, HR functions."
-  inventory: "Stock on hand, availability, parts, receiving, transfers, adjustments, counts, purchase orders to suppliers."
-  order: "Customer sales orders and carts, returns and refunds."
+  events: "System events and notifications, and the activity history of a record: what happened to it, when and by whom."
+  hr: "Employees and staff records: hiring and offboarding, staffing assignments to locations, shifts and availability, time off, clock-in and clock-out, certifications."
+  inventory: "Stock on hand, availability, parts, reorder points, receiving and ASNs, transfers, adjustments, counts, suppliers and purchase orders to suppliers."
+  order: "Customer sales orders and carts, returns and refunds (not purchase orders to suppliers)."
   pricing: "Prices, price lists, promotions, discounts, overrides, restrictions."
-  reporting: "Business reports, metrics, rankings and trends across areas."
-  security: "Sign-in, authentication, tokens, security policy."
-  shopmanager: "Shop operations: appointments, bays, schedules, technicians' work, shop settings."
+  reporting: "Operational reports and KPIs: work in progress, cycle time, throughput, technician utilization and billed hours, rework, parts metrics, dashboards. Money figures (revenue, margin, profit) are accounting."
+  security: "User accounts and sign-in, passwords and tokens, roles and the permissions each role grants, who can access what, and the platform's security audit log."
+  shopmanager: "Shop operations: locations, hours and settings, bays and mobile units, appointments and the shop schedule, assigning technicians and bays to jobs."
   tax: "Sales tax, rates, jurisdictions, tax reports."
   warranty: "Warranty claims, coverage, settlements, part returns."
-  workorder: "Work orders, estimates and quotes, approvals, repair status and lifecycle."
-  master: "No single area, several equally, or the assistant/platform itself."
+  workorder: "Workorders (repair orders), estimates and quotes, approvals, repair status and lifecycle."
+  master: "No single area, several areas equally, social chat, or the assistant itself (what it can do, how to use it)."
 
 unscoped_tools:
   - DateWindowFacadeTool

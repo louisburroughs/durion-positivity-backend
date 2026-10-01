@@ -229,7 +229,7 @@ written.**
 | `mcp.tagging.provider.keep-alive`  | `MCP_TAGGING_KEEP_ALIVE` `30m`                         | Sent as `keep_alive` so the model stays resident beside the embedding model; blank omits it.                                                                    |
 | `mcp.tagging.thresholds.<tag>`     | `0.75`                                                 | Per-tag confidence threshold (§1); shadow data sets per-tag values before any promotion. `thresholds.entity` covers every entity Noul; `thresholds.entity.<key>` overrides it for one entity. |
 | `mcp.tagging.max-state-chars`      | `MCP_TAGGING_MAX_STATE_CHARS` `4000`                   | The message is cut here before it becomes the request `state`; a cut message is still tagged and the cut is counted.                                            |
-| `mcp.tagging.entity-questions`     | `MCP_TAGGING_ENTITY_QUESTIONS` `false`                 | Whether the `entity_<key>` Nouls are asked (44 questions, ~18 KB body, about 4.6k tokens) or only the 13 fixed ones (~8 KB, about 2k tokens). Off by default: the default model `tev1:0.8b` reads about 2,000 tokens, which the wide request overflows. The bake-off decides the setting per model; `optionListHash` reflects the set asked. |
+| `mcp.tagging.entity-questions`     | `MCP_TAGGING_ENTITY_QUESTIONS` `false`                 | Whether the `entity_<key>` Nouls are asked (44 questions, ~18 KB body, about 4.6k tokens) or only the 13 fixed ones (~8 KB, about 2k tokens). They are asked only when this is `true` **and** `mcp.scope-graph.mode` is not `off` (the scope graph is their only consumer). Off by default: the default model `tev1:0.8b` reads about 2,000 tokens, which the wide request overflows. The bake-off decides the setting per model; `optionListHash` reflects the set asked. |
 
 Quote a literal mode in YAML (`"off"`): bare `off` is the boolean `false`.
 
@@ -241,7 +241,8 @@ land in Wave 3; until then `shadow` against an older Ollama simply records a `fa
 **The request** carries only `model`, `state` (the message), `keep_alive` and the fixed `questions` (every one with
 `instructions`, as Ollama requires): never the caller, the tenant, the history or a forwarded header (§4). The tag set is
 closed and lives in code (`TaggingQuestions`): 13 questions by default (~8 KB, about 2k tokens), 44 for today's lexicon
-with `entity-questions: true` (cap 64; ~18 KB body, about 4.6k tokens, for a one-line message; body cap 64 KiB). Every
+with `entity-questions: true` and the scope graph on (cap 64; ~18 KB body, about 4.6k tokens, for a one-line message;
+body cap 64 KiB). Every
 instruction starts with one short context clause ("Message from staff at a tire and auto service shop to its management
 assistant; may be in English, French or Spanish."):
 
@@ -255,8 +256,9 @@ assistant; may be in English, French or Spanish."):
   `tax`, `admin`, `security`) are spelled in this vocabulary. Tool domains with no rag-scope (`vehicle-inventory`,
   `people-contact`, `supplier`, `marketing`, `location`, `catalog`, `vehicle-fitment`) are never options. A list over
   the local models' 26-option cap skips the question (one WARN at startup), as a list under 2 options does;
-- one Noul per lexicon entity, `entity_<key>` (`entity_work-order`), asking "Is this message about a <en terms> (<fr>;
-  <es>)?" from the entity's terms. An entity Noul yields a seed when `p ≥ 0.5` and its confidence meets
+- one Noul per lexicon entity, `entity_<key>` (`entity_workorder`), asking "Is this message about any of these: <en
+  terms> (French: <fr>; Spanish: <es>)?" from the entity's terms, only when `entity-questions` is true and
+  `mcp.scope-graph.mode` is not `off`. An entity Noul yields a seed when `p ≥ 0.5` and its confidence meets
   `thresholds.entity` (or `thresholds.entity.<key>`); the heuristic tagger answers no entity Noul.
 
 The client never logs the state or an answer string; a failure log carries the failure class, HTTP status, host, model

@@ -159,9 +159,11 @@ mcp:
     # about 2,000 tokens); a cut message is still tagged and the cut is counted.
     max-state-chars: ${MCP_TAGGING_MAX_STATE_CHARS:4000}
     # Whether the one-Noul-per-lexicon-entity questions are asked (44 questions, ~18 KB body, about 4.6k
-    # tokens) or only the 13 fixed ones (~8 KB, about 2k tokens). Off by default because the default
-    # model (tev1:0.8b) reads about 2,000 tokens and the 44-question request would overflow it; turn it
-    # on only for a model whose context holds it. The section 6 bake-off decides the setting per model.
+    # tokens) or only the 13 fixed ones (~8 KB, about 2k tokens). They are asked only when this is true
+    # AND mcp.scope-graph.mode is not off (the scope graph is their only consumer). Off by default
+    # because the default model (tev1:0.8b) reads about 2,000 tokens and the 44-question request would
+    # overflow it; turn it on only for a model whose context holds it. The section 6 bake-off decides
+    # the setting per model.
     entity-questions: ${MCP_TAGGING_ENTITY_QUESTIONS:false}
   rag:
     table-name: mcp_document_embedding
