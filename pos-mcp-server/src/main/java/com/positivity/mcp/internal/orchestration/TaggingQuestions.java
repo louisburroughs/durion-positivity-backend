@@ -297,8 +297,8 @@ public class TaggingQuestions {
                         + " money moves or is recorded (a payment, refund, credit or bill), a posting to accounting"
                         + " (including recording received stock or count adjustments), a deletion, voiding or"
                         + " cancelling an order or invoice, a change to who can access the platform (accounts, roles,"
-                        + " permissions, passwords), something sent outside the shop, or a change that cannot be"
-                        + " undone. A bare confirmation or selection (\"yes\", \"go ahead\", \"confirm\", \"the first"
+                        + " permissions, passwords), writing an audit event, something sent outside the shop, or a"
+                        + " change that cannot be undone. A bare confirmation or selection (\"yes\", \"go ahead\", \"confirm\", \"the first"
                         + " one\") may approve a change you cannot see: rate it HIGH. When unsure between two levels,"
                         + " choose the higher.",
                 List.of(NltiRiskLevel.LOW.name(), NltiRiskLevel.MEDIUM.name(), NltiRiskLevel.HIGH.name())));
