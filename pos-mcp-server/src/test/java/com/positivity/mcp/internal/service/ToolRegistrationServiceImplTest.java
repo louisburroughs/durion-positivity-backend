@@ -3,6 +3,8 @@ package com.positivity.mcp.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_DEFAULTS;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -15,6 +17,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.positivity.mcp.internal.config.McpServerProperties;
 import com.positivity.mcp.internal.discovery.OpenApiDocumentFetcher;
 import com.positivity.mcp.internal.discovery.OpenApiToolMapper;
+import com.positivity.mcp.internal.discovery.OperationProxyFactory;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -22,15 +25,20 @@ import io.modelcontextprotocol.server.McpAsyncServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.Paths;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
@@ -51,6 +59,10 @@ class ToolRegistrationServiceImplTest {
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     private static final URI GATEWAY_BASE_URI = URI.create("http://gateway.test");
+
+    /** The configured #2370 defaults that matter here, as regexes over the routing-prefixed path. */
+    private static final List<String> WRITE_EXCLUSIONS = List.of(
+            "^/security-service/v1/audit/", "^/event-receiver/v1/events(/|$)", "^/event-receiver/v1/eventTypes(/|$)");
 
     @Test
     @DisplayName("registerDiscoveredTools fetches aggregate spec and registers tools via addTool")
@@ -679,6 +691,95 @@ class ToolRegistrationServiceImplTest {
         assertThat(meterRegistry.get("tools.pruned").counter().count()).isEqualTo(0.0);
     }
 
+    // ---- #2370: neither Eureka fallback registers an audit or platform-event write ---------------
+
+    @Test
+    @DisplayName("#2370: the full per-service Eureka fallback (aggregate unavailable) never registers an audit or "
+            + "platform-event write; GET on the same paths stays a tool")
+    void registerDiscoveredTools_fullPerServiceFallback_neverRegistersExcludedWrites() {
+        OperationProxyFactory proxyFactory = stubProxyFactory();
+        URI securityBase = URI.create("http://security-service.test");
+        URI eventsBase = URI.create("http://event-receiver.test");
+        OpenAPI securityApi = securityServiceOwnSpec();
+        OpenAPI eventsApi = eventReceiverOwnSpec();
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.empty());
+        // Eureka service ids, as DiscoveryClient reports them: the spring.application.name.
+        when(openApiDocumentFetcher.fallbackServiceIds()).thenReturn(List.of("security-service", "event-receiver"));
+        when(openApiDocumentFetcher.fetchForService("security-service"))
+                .thenReturn(Mono.just(
+                        new OpenApiDocumentFetcher.DiscoveredOpenApi("security-service", securityBase, securityApi)));
+        when(openApiDocumentFetcher.fetchForService("event-receiver"))
+                .thenReturn(Mono.just(
+                        new OpenApiDocumentFetcher.DiscoveredOpenApi("event-receiver", eventsBase, eventsApi)));
+        stubLiveToolSurface();
+
+        serviceWithRealMapper(proxyFactory, mock(ToolMetadataRepository.class))
+                .registerDiscoveredTools()
+                .block(Duration.ofSeconds(5));
+
+        assertThat(registeredToolNames())
+                .doesNotContain(
+                        "security-service_createauditevent",
+                        "security-service_rejectauditeventupdate",
+                        "security-service_rejectauditeventdelete",
+                        "event-receiver_receiveevent",
+                        "event-receiver_updateeventtype",
+                        "event-receiver_deleteeventtype")
+                .containsExactlyInAnyOrder(
+                        "security-service_searchauditevents",
+                        "event-receiver_queryeventsbyentity",
+                        "event-receiver_geteventtypebyid");
+    }
+
+    @Test
+    @DisplayName("#2370: the targeted per-service fallback for a partial aggregate's failed prefixes never "
+            + "registers an audit or platform-event write; GET on the same paths stays a tool")
+    void registerDiscoveredTools_targetedFallbackForFailedPrefixes_neverRegistersExcludedWrites() {
+        OperationProxyFactory proxyFactory = stubProxyFactory();
+        URI securityBase = URI.create("http://security-service.test");
+        URI eventsBase = URI.create("http://event-receiver.test");
+        OpenAPI securityApi = securityServiceOwnSpec();
+        OpenAPI eventsApi = eventReceiverOwnSpec();
+        // A partial aggregate: accounting merged, the two audit/event services failed to fetch.
+        PathItem invoices = new PathItem();
+        invoices.setGet(operation("listInvoices"));
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered = new OpenApiDocumentFetcher.DiscoveredOpenApi(
+                "aggregate",
+                GATEWAY_BASE_URI,
+                openApiWith(Map.of("/accounting/v1/accounting/invoices", invoices)),
+                List.of("/security-service", "/event-receiver"));
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        when(openApiDocumentFetcher.fetchForService("security-service"))
+                .thenReturn(Mono.just(
+                        new OpenApiDocumentFetcher.DiscoveredOpenApi("security-service", securityBase, securityApi)));
+        when(openApiDocumentFetcher.fetchForService("event-receiver"))
+                .thenReturn(Mono.just(
+                        new OpenApiDocumentFetcher.DiscoveredOpenApi("event-receiver", eventsBase, eventsApi)));
+        stubLiveToolSurface();
+
+        serviceWithRealMapper(proxyFactory, mock(ToolMetadataRepository.class))
+                .registerDiscoveredTools()
+                .block(Duration.ofSeconds(5));
+
+        // The targeted fallback ran (its tools reached the live surface) and added no excluded write.
+        verify(mcpAsyncServer, times(2)).notifyToolsListChanged();
+        assertThat(registeredToolNames())
+                .doesNotContain(
+                        "security-service_createauditevent",
+                        "security-service_rejectauditeventupdate",
+                        "security-service_rejectauditeventdelete",
+                        "event-receiver_receiveevent",
+                        "event-receiver_updateeventtype",
+                        "event-receiver_deleteeventtype")
+                .containsExactlyInAnyOrder(
+                        "accounting_listinvoices",
+                        "security-service_searchauditevents",
+                        "event-receiver_queryeventsbyentity",
+                        "event-receiver_geteventtypebyid");
+    }
+
     // --- helpers ---
 
     private ToolRegistrationServiceImpl serviceUnderTest() {
@@ -737,6 +838,102 @@ class ToolRegistrationServiceImplTest {
                 "http://api-gateway:8080",
                 meterRegistry,
                 prunableWhenUnseen);
+    }
+
+    private static McpServerProperties propertiesWithWriteExclusions() {
+        return new McpServerProperties(
+                "http://localhost:8086",
+                "/mcp/message",
+                "/mcp/sse",
+                "/v3/api-docs",
+                Duration.ofSeconds(5),
+                List.of(),
+                List.of(),
+                "http://gateway.test/v3/api-docs",
+                List.of(),
+                WRITE_EXCLUSIONS,
+                Map.of());
+    }
+
+    /** The service wired to a REAL mapper, so the per-service mapping the fallbacks use is exercised. */
+    private ToolRegistrationServiceImpl serviceWithRealMapper(
+            OperationProxyFactory proxyFactory, ToolMetadataRepository toolMetadataRepository) {
+        McpServerProperties properties = propertiesWithWriteExclusions();
+        return new ToolRegistrationServiceImpl(
+                properties,
+                openApiDocumentFetcher,
+                new OpenApiToolMapper(properties, proxyFactory),
+                mcpAsyncServer,
+                toolMetadataRepository,
+                "http://api-gateway:8080",
+                meterRegistry,
+                List.of());
+    }
+
+    /**
+     * A proxy factory whose handlers are inert. Its handler methods are package-private to the
+     * discovery package, so they are answered by return type rather than stubbed by name.
+     */
+    private static OperationProxyFactory stubProxyFactory() {
+        BiFunction<?, ?, ?> inert = (exchange, request) -> Mono.empty();
+        return mock(
+                OperationProxyFactory.class,
+                invocation -> BiFunction.class.equals(invocation.getMethod().getReturnType())
+                        ? inert
+                        : RETURNS_DEFAULTS.answer(invocation));
+    }
+
+    private void stubLiveToolSurface() {
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+    }
+
+    private List<String> registeredToolNames() {
+        ArgumentCaptor<McpServerFeatures.AsyncToolSpecification> added =
+                ArgumentCaptor.forClass(McpServerFeatures.AsyncToolSpecification.class);
+        verify(mcpAsyncServer, atLeastOnce()).addTool(added.capture());
+        return added.getAllValues().stream()
+                .map(specification -> specification.tool().name())
+                .toList();
+    }
+
+    /** pos-security-service's own spec as fetched through Eureka: paths carry no routing prefix. */
+    private static OpenAPI securityServiceOwnSpec() {
+        PathItem auditEvents = new PathItem();
+        auditEvents.setGet(operation("searchAuditEvents"));
+        auditEvents.setPost(operation("createAuditEvent"));
+        PathItem auditEventsWildcard = new PathItem();
+        auditEventsWildcard.setPut(operation("rejectAuditEventUpdate"));
+        auditEventsWildcard.setDelete(operation("rejectAuditEventDelete"));
+        return openApiWith(Map.of("/v1/audit/events", auditEvents, "/v1/audit/events/**", auditEventsWildcard));
+    }
+
+    /** pos-event-receiver's own spec as fetched through Eureka. */
+    private static OpenAPI eventReceiverOwnSpec() {
+        PathItem events = new PathItem();
+        events.setGet(operation("queryEventsByEntity"));
+        events.setPost(operation("receiveEvent"));
+        PathItem eventTypeById = new PathItem();
+        eventTypeById.setGet(operation("getEventTypeById"));
+        eventTypeById.setPut(operation("updateEventType"));
+        eventTypeById.setDelete(operation("deleteEventType"));
+        return openApiWith(Map.of("/v1/events", events, "/v1/eventTypes/{id}", eventTypeById));
+    }
+
+    private static Operation operation(String operationId) {
+        Operation operation = new Operation();
+        operation.setOperationId(operationId);
+        operation.setSummary(operationId);
+        return operation;
+    }
+
+    private static OpenAPI openApiWith(Map<String, PathItem> pathItems) {
+        Paths paths = new Paths();
+        pathItems.forEach(paths::addPathItem);
+        OpenAPI openApi = new OpenAPI();
+        openApi.setPaths(paths);
+        return openApi;
     }
 
     private static ListAppender<ILoggingEvent> attachLogAppender() {

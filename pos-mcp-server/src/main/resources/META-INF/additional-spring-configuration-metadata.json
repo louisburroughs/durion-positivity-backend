@@ -56,7 +56,7 @@
     {
       "name": "mcp.server.excluded-write-path-patterns",
       "type": "java.util.List<java.lang.String>",
-      "description": "Regular expressions over the routing-prefixed aggregate path whose non-GET operations are excluded from MCP tool discovery (#2370: audit and platform-event writes are never agent tools; GET stays discoverable)."
+      "description": "Regular expressions over the routing-prefixed path (the aggregate path, or a per-service fallback path with the service's routing prefix prepended) whose non-GET operations are excluded from MCP tool discovery (#2370: audit and platform-event writes are never agent tools; GET stays discoverable)."
     },
     {
       "name": "mcp.server.discovery-max-spec-bytes",

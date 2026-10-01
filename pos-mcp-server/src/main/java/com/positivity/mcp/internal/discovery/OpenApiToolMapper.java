@@ -50,6 +50,14 @@ public class OpenApiToolMapper {
         this.proxyFactory = proxyFactory;
     }
 
+    /**
+     * Maps one service's own OpenAPI (fetched through Eureka by the #645 full fallback and the #1632
+     * targeted failed-prefix fallback) to tool specifications named {@code {serviceId}_{operationId}}.
+     * Its paths carry no routing prefix ({@code /v1/audit/events}), so the #2370 write exclusion is
+     * matched against the path as the gateway routes it: the service's routing prefix, derived from
+     * its id by {@link #routingDomain}, prepended ({@code /security-service/v1/audit/events}). Every
+     * non-GET operation the aggregate path would drop is dropped here too; GET stays.
+     */
     @NonNull
     public List<McpServerFeatures.AsyncToolSpecification> toToolSpecifications(
             @NonNull String serviceId, @NonNull URI baseUri, @NonNull OpenAPI openApi) {
@@ -58,17 +66,37 @@ public class OpenApiToolMapper {
             return specs;
         }
 
+        String routingPrefix = "/" + routingDomain(serviceId);
         openApi.getPaths().forEach((path, pathItem) -> {
             if (!properties.includesPath(path)) {
                 return;
             }
-            addOperation(specs, openApi, serviceId, baseUri, path, pathItem.getGet(), HttpMethod.GET);
-            addOperation(specs, openApi, serviceId, baseUri, path, pathItem.getPost(), HttpMethod.POST);
-            addOperation(specs, openApi, serviceId, baseUri, path, pathItem.getPut(), HttpMethod.PUT);
-            addOperation(specs, openApi, serviceId, baseUri, path, pathItem.getDelete(), HttpMethod.DELETE);
-            addOperation(specs, openApi, serviceId, baseUri, path, pathItem.getPatch(), HttpMethod.PATCH);
+            operationsOf(pathItem).forEach((method, operation) -> {
+                if (properties.excludesWrite(routingPrefix + path, method)) {
+                    LOGGER.debug(
+                            "Per-service discovery of {} excluded write operation {} {} (#2370: audit/platform-event"
+                                    + " writes are never agent tools)",
+                            serviceId,
+                            method,
+                            routingPrefix + path);
+                    return;
+                }
+                addOperation(specs, openApi, serviceId, baseUri, path, operation, method);
+            });
         });
         return specs;
+    }
+
+    /**
+     * The gateway routing prefix, without its leading slash, of a Eureka service id: lower-cased,
+     * conventional {@code pos-} prefix stripped ({@code pos-vehicle-fitment} → {@code
+     * vehicle-fitment}, {@code SECURITY-SERVICE} → {@code security-service}). It is also the
+     * tool-catalog domain the aggregate path persists as {@code mcp_tool.domain}. The targeted
+     * failed-prefix fallback already passes the prefix itself, which maps to itself.
+     */
+    static @NonNull String routingDomain(@NonNull String serviceId) {
+        String lower = serviceId.toLowerCase(Locale.ROOT);
+        return lower.startsWith("pos-") ? lower.substring(4) : lower;
     }
 
     /**

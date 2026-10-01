@@ -269,8 +269,10 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     /**
      * Shared per-service discovery step used by both the full per-service fallback and the #1632
      * targeted failed-prefix fallback: fetch one service's own OpenAPI via Eureka and map it to tool
-     * specifications. Fail-soft — an unreachable service or fetch/map error is logged at WARN and
-     * yields an empty result, never aborting the batch.
+     * specifications. The mapper applies the #2370 write exclusion here exactly as on the aggregate
+     * path, so neither fallback can put an audit or platform-event write on the live tool surface.
+     * Fail-soft — an unreachable service or fetch/map error is logged at WARN and yields an empty
+     * result, never aborting the batch.
      */
     private @NonNull Mono<List<McpServerFeatures.AsyncToolSpecification>> fetchSpecificationsForService(
             @NonNull String serviceId) {

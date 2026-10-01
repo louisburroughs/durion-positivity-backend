@@ -107,11 +107,13 @@ mcp:
     # evidence; a tool call may CAUSE one as a side effect, the assistant never writes one itself, and
     # platform event emission/registration is service-to-service. GET on the same paths stays
     # discoverable (reading the audit log is a legitimate admin question, ADR-0068). Entries are regexes
-    # over the routing-prefixed aggregate path, anchored on the prefix because a bare "/audit/" or
-    # "/events" would also drop business writes (pos-accounting's audit-trail records and event
-    # retry/reprocess, for instance). Configuration, not a vendor extension: ADR-0042.
+    # over the routing-prefixed path (the aggregate's, and a per-service fallback spec's with the
+    # service's routing prefix prepended), anchored on the prefix because a bare "/audit/" or "/events"
+    # would also drop business writes (pos-accounting's event submit/retry/reprocess, for instance).
+    # Configuration, not a vendor extension: ADR-0042.
     excluded-write-path-patterns:
       - ^/security-service/v1/audit/           # /v1/audit/events, /events/**, /exports, /pricing-snapshots
+      - ^/accounting/v1/accounting/audit/      # POST cancellation, price-override, refund (audit-trail writes)
       - ^/event-receiver/v1/events(/|$)        # POST /v1/events (emit)
       - ^/event-receiver/v1/eventTypes(/|$)    # POST /v1/eventTypes, PUT/DELETE /v1/eventTypes/{id}
       - ^/mcp-server/v1/(mcp|nlt)/audit(/|$)   # this module's own audit surface, should it gain writes

@@ -105,13 +105,19 @@ may *cause* an audit event in the service that performs the action, but the assi
 deletes evidence itself, and platform event emission and registration are service-to-service. The
 `mcp.server.excluded-write-path-patterns` defaults drop every non-GET operation on `pos-security-service`
 `/v1/audit/**` (`POST /v1/audit/events`, `PUT`/`DELETE /v1/audit/events/**`, `POST /v1/audit/exports`,
-`POST /v1/audit/pricing-snapshots`), `pos-event-receiver` `/v1/events` (emit) and `/v1/eventTypes` (register,
-update, delete), and this module's own `/v1/mcp/audit` or `/v1/nlt/audit` should they gain writes. `GET` on the
-same paths stays discoverable (reading the audit log is a legitimate admin question, ADR-0068). The patterns are
-anchored on the routing prefix so business paths that merely contain `audit` or `events` (pos-accounting's
-audit-trail records and event retry, for instance) keep their writes; rows registered before the exclusion are
-pruned on the next discovery run. `DiscoveryAuditWriteExclusionRealSpecsTest` checks all of this against the
-module specs in the reactor checkout.
+`POST /v1/audit/pricing-snapshots`), `pos-accounting` `/v1/accounting/audit/**` (`POST cancellation`,
+`price-override`, `refund`: audit-trail writes), `pos-event-receiver` `/v1/events` (emit) and `/v1/eventTypes`
+(register, update, delete), and this module's own `/v1/mcp/audit` or `/v1/nlt/audit` should they gain writes.
+`GET` on the same paths stays discoverable (reading the audit log is a legitimate admin question, ADR-0068). The
+patterns are anchored on the routing prefix so business paths that merely contain `audit` or `events`
+(pos-accounting's event submit, retry and reprocess, for instance) keep their writes; rows registered before the
+exclusion are pruned on the next discovery run. The per-service Eureka fallback applies the same exclusion: when
+the aggregate yields no tools, or a partial aggregate's failed prefixes are retried service by service, each
+service's own spec carries unprefixed paths (`/v1/audit/events`), so they are matched with the service's routing
+prefix prepended (its Eureka id, lower-cased, `pos-` stripped: `security-service` or `pos-security-service` →
+`/security-service/v1/audit/events`). Neither fallback can put an excluded write on the live tool list.
+`DiscoveryAuditWriteExclusionRealSpecsTest` checks all of this, for the aggregate and the fallback mapping,
+against the module specs in the reactor checkout.
 
 ### Static RAG preload (`alpha` profile)
 

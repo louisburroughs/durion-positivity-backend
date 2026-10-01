@@ -246,8 +246,8 @@ class OpenApiToolMapperTest {
         eventTypeById.setPut(operation("updateEventType"));
         eventTypeById.setDelete(operation("deleteEventType"));
         // Business paths that merely contain "audit" / "events": a bare fragment would drop these.
-        PathItem accountingAudit = new PathItem();
-        accountingAudit.setPost(operation("recordRefundAudit"));
+        PathItem shopAudit = new PathItem();
+        shopAudit.setPost(operation("recordShopAudit"));
         PathItem accountingEventRetry = new PathItem();
         accountingEventRetry.setPost(operation("retryAccountingEvent"));
         return openApiWith(Map.of(
@@ -255,7 +255,7 @@ class OpenApiToolMapperTest {
                 "/security-service/v1/audit/events/**", auditEventsWildcard,
                 "/event-receiver/v1/events", events,
                 "/event-receiver/v1/eventTypes/{id}", eventTypeById,
-                "/accounting/v1/accounting/audit/refund", accountingAudit,
+                "/shop-manager/v1/shop/audit", shopAudit,
                 "/accounting/v1/accounting/events/{eventId}/retry", accountingEventRetry));
     }
 
@@ -274,7 +274,7 @@ class OpenApiToolMapperTest {
                         "security-service_searchauditevents",
                         "event-receiver_queryeventsbyentity",
                         "event-receiver_geteventtypebyid",
-                        "accounting_recordrefundaudit",
+                        "shop-manager_recordshopaudit",
                         "accounting_retryaccountingevent");
         assertThat(ops)
                 .filteredOn(op ->
@@ -299,8 +299,66 @@ class OpenApiToolMapperTest {
                         "security-service_searchauditevents",
                         "event-receiver_queryeventsbyentity",
                         "event-receiver_geteventtypebyid",
-                        "accounting_recordrefundaudit",
+                        "shop-manager_recordshopaudit",
                         "accounting_retryaccountingevent");
+    }
+
+    /** pos-security-service's own spec as the Eureka fallback fetches it: no routing prefix on the paths. */
+    private static OpenAPI securityServiceOwnPaths() {
+        PathItem auditEvents = new PathItem();
+        auditEvents.setGet(operation("searchAuditEvents"));
+        auditEvents.setPost(operation("createAuditEvent"));
+        PathItem auditEventsWildcard = new PathItem();
+        auditEventsWildcard.setPut(operation("rejectAuditEventUpdate"));
+        auditEventsWildcard.setDelete(operation("rejectAuditEventDelete"));
+        PathItem roles = new PathItem();
+        roles.setPost(operation("createRole"));
+        return openApiWith(Map.of(
+                "/v1/audit/events", auditEvents,
+                "/v1/audit/events/**", auditEventsWildcard,
+                "/v1/roles", roles));
+    }
+
+    /** pos-event-receiver's own spec as the Eureka fallback fetches it. */
+    private static OpenAPI eventReceiverOwnPaths() {
+        PathItem events = new PathItem();
+        events.setGet(operation("queryEventsByEntity"));
+        events.setPost(operation("receiveEvent"));
+        PathItem eventTypeById = new PathItem();
+        eventTypeById.setGet(operation("getEventTypeById"));
+        eventTypeById.setPut(operation("updateEventType"));
+        eventTypeById.setDelete(operation("deleteEventType"));
+        return openApiWith(Map.of("/v1/events", events, "/v1/eventTypes/{id}", eventTypeById));
+    }
+
+    @Test
+    @DisplayName("#2370: toToolSpecifications (per-service Eureka fallback) drops excluded writes, matched under the "
+            + "service's routing prefix, and keeps GET on the same paths")
+    void toToolSpecifications_dropsWritesOnExcludedWritePaths_underTheServiceRoutingPrefix() {
+        OperationProxyFactory mockFactory = mock(OperationProxyFactory.class);
+        when(mockFactory.handler(any(), any(), any(), anyBoolean())).thenReturn((ex, req) -> Mono.empty());
+        OpenApiToolMapper mapper = new OpenApiToolMapper(propertiesWithWriteExclusions(WRITE_EXCLUSIONS), mockFactory);
+        URI serviceUri = URI.create("http://service.test");
+
+        assertThat(mapper.toToolSpecifications("security-service", serviceUri, securityServiceOwnPaths()))
+                .extracting(spec -> spec.tool().name())
+                .containsExactlyInAnyOrder("security-service_searchauditevents", "security-service_createrole");
+        assertThat(mapper.toToolSpecifications("event-receiver", serviceUri, eventReceiverOwnPaths()))
+                .extracting(spec -> spec.tool().name())
+                .containsExactlyInAnyOrder("event-receiver_queryeventsbyentity", "event-receiver_geteventtypebyid");
+        // Eureka reports ids upper-cased, and included-services may name the module ("pos-..."): both
+        // resolve to the same routing prefix, so the exclusion still applies.
+        assertThat(mapper.toToolSpecifications("SECURITY-SERVICE", serviceUri, securityServiceOwnPaths()))
+                .extracting(spec -> spec.tool().name())
+                .containsExactlyInAnyOrder("security-service_searchauditevents", "security-service_createrole");
+        assertThat(mapper.toToolSpecifications("pos-event-receiver", serviceUri, eventReceiverOwnPaths()))
+                .extracting(spec -> spec.tool().name())
+                .containsExactlyInAnyOrder(
+                        "pos-event-receiver_queryeventsbyentity", "pos-event-receiver_geteventtypebyid");
+        // The patterns are anchored on the routing prefix: another service serving the same
+        // unprefixed path keeps its writes.
+        assertThat(mapper.toToolSpecifications("accounting", serviceUri, eventReceiverOwnPaths()))
+                .hasSize(5);
     }
 
     @Test

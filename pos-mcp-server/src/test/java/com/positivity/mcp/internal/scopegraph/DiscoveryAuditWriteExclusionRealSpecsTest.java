@@ -1,18 +1,21 @@
 package com.positivity.mcp.internal.scopegraph;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.RETURNS_DEFAULTS;
 import static org.mockito.Mockito.mock;
 
 import com.positivity.mcp.internal.config.McpServerProperties;
 import com.positivity.mcp.internal.discovery.OpenApiToolMapper;
 import com.positivity.mcp.internal.discovery.OperationProxyFactory;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
+import io.modelcontextprotocol.spec.McpSchema;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.Paths;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -23,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeAll;
@@ -33,6 +37,7 @@ import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
+import reactor.core.publisher.Mono;
 
 /**
  * #2370: audit events are evidence, and platform event emission/registration is service-to-service.
@@ -46,9 +51,13 @@ import org.springframework.core.io.ClassPathResource;
  *   <li>the GET operations on those same paths do survive (reading the audit log is a legitimate
  *       admin question, ADR-0068);
  *   <li>nothing outside those paths was removed: a path that merely contains {@code audit} or {@code
- *       events} in another service (pos-accounting's audit-trail records and event retry, for
+ *       events} in another service (pos-accounting's event submit, retry and reprocess, for
  *       instance) keeps its writes.
  * </ul>
+ *
+ * <p>The same checks run over the per-service Eureka fallback ({@code toToolSpecifications}, used by
+ * the full fallback when the aggregate yields nothing and by the targeted fallback for a partial
+ * aggregate's failed prefixes), whose specs carry unprefixed paths.
  *
  * <p>Same approach as {@link ScopeGraphRealConfigValidationTest}: the module specs are what {@code
  * API Artifacts Sync} regenerates, so a new audit write reaches this test at the next sync.
@@ -63,6 +72,7 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
      * checks the configuration rather than restating it. Paths are routing-prefixed.
      */
     private static final Predicate<String> IN_SCOPE = path -> path.startsWith("/security-service/v1/audit/")
+            || path.startsWith("/accounting/v1/accounting/audit/")
             || path.equals("/event-receiver/v1/events")
             || path.startsWith("/event-receiver/v1/events/")
             || path.equals("/event-receiver/v1/eventTypes")
@@ -77,6 +87,9 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
             "security-service_rejectauditeventdelete",
             "security-service_requestauditexport",
             "security-service_createpricingsnapshot",
+            "accounting_recordcancellationaudit",
+            "accounting_recordpriceoverrideaudit",
+            "accounting_recordrefundaudit",
             "event-receiver_receiveevent",
             "event-receiver_createeventtype",
             "event-receiver_upserteventtype",
@@ -89,17 +102,24 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
             "security-service_getauditevent",
             "security-service_getauditexportjob",
             "security-service_getpricingsnapshot",
+            "accounting_getaudittrailbyactor",
+            "accounting_getaudittrailbyorder_1",
+            "accounting_getaudittrailbyinvoice",
+            "accounting_getaudittrailbyorder",
+            "accounting_getaudittrailbydaterange",
+            "accounting_getaudittrailbytype",
             "event-receiver_queryeventsbyentity",
             "event-receiver_geteventsummarylastday",
             "event-receiver_listeventtypes",
             "event-receiver_geteventtypebyid",
             "mcp-server_searchnltiauditevents");
 
-    /** Business writes whose paths merely contain "audit" or "events"; each must stay discoverable. */
+    /**
+     * Business writes whose paths merely contain "audit" or "events"; each must stay discoverable.
+     * (pos-accounting's audit-trail writes under {@code /v1/accounting/audit/} are in scope and
+     * excluded above.)
+     */
     private static final Set<String> KNOWN_KEPT_LOOKALIKE_WRITES = Set.of(
-            "accounting_recordcancellationaudit",
-            "accounting_recordpriceoverrideaudit",
-            "accounting_recordrefundaudit",
             "accounting_submitaccountingevent",
             "accounting_reprocesssuspendedevent",
             "accounting_retryaccountingevent");
@@ -111,10 +131,14 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
 
     private static McpServerProperties properties;
 
+    /** Every module spec as its service serves it (unprefixed paths), keyed by its routing prefix. */
+    private static Map<String, OpenAPI> moduleSpecs;
+
     @BeforeAll
     static void discoverWithRealDefaults() {
         properties = bindServerProperties();
-        OpenAPI aggregate = prefixedAggregate();
+        moduleSpecs = moduleSpecs();
+        OpenAPI aggregate = prefixedAggregate(moduleSpecs);
         allOperations = new LinkedHashMap<>();
         aggregate
                 .getPaths()
@@ -207,6 +231,48 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
         assertThat(discovered.keySet())
                 .as("business writes on look-alike paths stay discoverable")
                 .containsAll(KNOWN_KEPT_LOOKALIKE_WRITES);
+        assertThat(discovered.keySet())
+                .as("pos-accounting's reconciliation audit read is outside the audit-trail surface and untouched")
+                .contains("accounting_getreconciliationaudit");
+    }
+
+    @Test
+    @DisplayName("the per-service Eureka fallback drops exactly the audit and platform-event writes, and nothing else")
+    void perServiceFallbackDropsExactlyTheScopedWrites() {
+        // The handler methods are package-private to the discovery package: answered by return type.
+        BiFunction<?, ?, ?> inert = (exchange, request) -> Mono.empty();
+        OperationProxyFactory proxyFactory = mock(
+                OperationProxyFactory.class,
+                invocation -> BiFunction.class.equals(invocation.getMethod().getReturnType())
+                        ? inert
+                        : RETURNS_DEFAULTS.answer(invocation));
+        OpenApiToolMapper mapper = new OpenApiToolMapper(properties, proxyFactory);
+        Set<String> declared = new TreeSet<>();
+        Set<String> registered = new TreeSet<>();
+        moduleSpecs.forEach((prefix, spec) -> {
+            spec.getPaths()
+                    .forEach((path, item) ->
+                            methods(item).keySet().forEach(method -> declared.add(method + " " + prefix + path)));
+            // The Eureka id as included-services names it ("pos-security-service"); DiscoveryClient's
+            // own spelling ("security-service") resolves to the same routing prefix.
+            String serviceId = MODULE_PREFIX + prefix.substring(1);
+            mapper.toToolSpecifications(serviceId, URI.create("http://" + serviceId + ".test"), spec)
+                    .forEach(specification -> registered.add(coordinates(prefix, specification.tool())));
+        });
+
+        Set<String> removed = new TreeSet<>(declared);
+        removed.removeAll(registered);
+        Set<String> scopedWrites = declared.stream()
+                .filter(coordinates -> !coordinates.startsWith("GET "))
+                .filter(coordinates -> IN_SCOPE.test(pathOf(coordinates)))
+                .collect(Collectors.toCollection(TreeSet::new));
+
+        assertThat(scopedWrites)
+                .as("the specs still declare audit/platform-event writes")
+                .isNotEmpty();
+        assertThat(removed)
+                .as("operations the per-service fallback did not register (#2370: exactly the scoped writes)")
+                .isEqualTo(scopedWrites);
     }
 
     // ---- inputs ----------------------------------------------------------------------------------
@@ -231,9 +297,22 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
      * Every module spec merged under its routing prefix ({@code pos-security-service} serves at {@code
      * /security-service/**}), as {@code OpenApiDocumentFetcher.prefixPaths} merges fetched specs.
      */
-    private static OpenAPI prefixedAggregate() {
-        Path reactor = MODULE_DIR.getParent();
+    private static OpenAPI prefixedAggregate(Map<String, OpenAPI> specs) {
         Paths paths = new Paths();
+        specs.forEach((prefix, openApi) -> {
+            if (openApi.getPaths() != null) {
+                openApi.getPaths().forEach((path, item) -> paths.addPathItem(prefix + path, item));
+            }
+        });
+        OpenAPI aggregate = new OpenAPI();
+        aggregate.setPaths(paths);
+        return aggregate;
+    }
+
+    /** Every module's {@code openapi.yaml} in the reactor checkout, keyed by its routing prefix. */
+    private static Map<String, OpenAPI> moduleSpecs() {
+        Path reactor = MODULE_DIR.getParent();
+        Map<String, OpenAPI> specs = new LinkedHashMap<>();
         List<String> modules = new ArrayList<>();
         try (DirectoryStream<Path> moduleDirs = Files.newDirectoryStream(reactor, MODULE_PREFIX + "*")) {
             for (Path module : moduleDirs) {
@@ -247,7 +326,7 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
                 assertThat(openApi).as("%s must parse as OpenAPI", spec).isNotNull();
                 modules.add(prefix);
                 if (openApi.getPaths() != null) {
-                    openApi.getPaths().forEach((path, item) -> paths.addPathItem(prefix + path, item));
+                    specs.put(prefix, openApi);
                 }
             }
         } catch (IOException exception) {
@@ -259,9 +338,7 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
                                 + " checkout)",
                         reactor.resolve(MODULE_PREFIX), MODULE_DIR)
                 .isNotEmpty();
-        OpenAPI aggregate = new OpenAPI();
-        aggregate.setPaths(paths);
-        return aggregate;
+        return specs;
     }
 
     private static Map<String, Operation> methods(PathItem item) {
@@ -278,6 +355,16 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
         if (operation != null) {
             methods.put(method, operation);
         }
+    }
+
+    /** "METHOD prefixed-path" of a per-service tool, read from its input schema's constants. */
+    private static String coordinates(String prefix, McpSchema.Tool tool) {
+        Map<String, Object> schema = tool.inputSchema().properties();
+        return constOf(schema.get("httpMethod")) + " " + prefix + constOf(schema.get("path"));
+    }
+
+    private static Object constOf(Object property) {
+        return ((Map<?, ?>) property).get("const");
     }
 
     private static String pathOf(String coordinates) {

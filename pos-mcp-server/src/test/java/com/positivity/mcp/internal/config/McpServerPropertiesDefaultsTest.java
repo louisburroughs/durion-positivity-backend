@@ -48,6 +48,7 @@ class McpServerPropertiesDefaultsTest {
                     assertThat(props.excludedWritePathPatterns())
                             .containsExactlyInAnyOrder(
                                     "^/security-service/v1/audit/",
+                                    "^/accounting/v1/accounting/audit/",
                                     "^/event-receiver/v1/events(/|$)",
                                     "^/event-receiver/v1/eventTypes(/|$)",
                                     "^/mcp-server/v1/(mcp|nlt)/audit(/|$)");
@@ -57,6 +58,12 @@ class McpServerPropertiesDefaultsTest {
                     assertThat(props.excludesWrite("/security-service/v1/audit/events/**", HttpMethod.DELETE))
                             .isTrue();
                     assertThat(props.excludesWrite("/security-service/v1/audit/pricing-snapshots", HttpMethod.POST))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/accounting/v1/accounting/audit/refund", HttpMethod.POST))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/accounting/v1/accounting/audit/cancellation", HttpMethod.POST))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/accounting/v1/accounting/audit/price-override", HttpMethod.POST))
                             .isTrue();
                     assertThat(props.excludesWrite("/event-receiver/v1/events", HttpMethod.POST))
                             .isTrue();
@@ -71,8 +78,12 @@ class McpServerPropertiesDefaultsTest {
                             .isFalse();
                     assertThat(props.excludesWrite("/event-receiver/v1/events", HttpMethod.GET))
                             .isFalse();
+                    assertThat(props.excludesWrite("/accounting/v1/accounting/audit/range", HttpMethod.GET))
+                            .isFalse();
                     // business paths that merely contain audit / events
-                    assertThat(props.excludesWrite("/accounting/v1/accounting/audit/refund", HttpMethod.POST))
+                    assertThat(props.excludesWrite(
+                                    "/accounting/v1/accounting/reconciliations/{reconciliationId}/audit",
+                                    HttpMethod.POST))
                             .isFalse();
                     assertThat(props.excludesWrite("/accounting/v1/accounting/events/{eventId}/retry", HttpMethod.POST))
                             .isFalse();
@@ -92,7 +103,7 @@ class McpServerPropertiesDefaultsTest {
                 .withUserConfiguration(Config.class)
                 .run(ctx -> {
                     McpServerProperties props = ctx.getBean(McpServerProperties.class);
-                    assertThat(props.excludedWritePathPatterns()).hasSize(4);
+                    assertThat(props.excludedWritePathPatterns()).hasSize(5);
                     assertThat(props.excludesWrite("/security-service/v1/audit/events", HttpMethod.POST))
                             .isTrue();
                 });
