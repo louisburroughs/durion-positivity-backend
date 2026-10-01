@@ -197,6 +197,29 @@ class TaggingEnforceMergeTest {
         }
 
         @Test
+        @DisplayName("veto on a model-only tag: entity:veto never seeds, however confident the model's true")
+        void vetoNeverActsOnAModelOnlyTag() {
+            String workorder = TagName.entityWireName("work-order");
+            TaggingService veto =
+                    service(enforce(List.of("entity:veto"), Map.of()), model(0.99, Map.of(workorder, "true")));
+            TaggingService symmetric =
+                    service(enforce(List.of("entity"), Map.of()), model(0.99, Map.of(workorder, "true")));
+
+            QuestionTags tags = veto.tag(PLAIN_MESSAGE);
+
+            assertThat(tags.model()).containsKey(workorder);
+            assertThat(tags.acting()).doesNotContainKey(workorder);
+            assertThat(tags.entitySeeds()).isEmpty();
+            assertThat(tags.tagSeeds().isEmpty()).isTrue();
+            assertThat(tags.tagFallbackReasons())
+                    .as("the direction, not the confidence, kept it from acting")
+                    .isEmpty();
+            assertThat(symmetric.tag(PLAIN_MESSAGE).entitySeeds())
+                    .as("the same answer under a symmetric entry does seed")
+                    .containsExactly("work-order");
+        }
+
+        @Test
         @DisplayName("veto below threshold: the heuristic true stands and low_confidence is recorded")
         void vetoBelowThresholdKeepsTheHeuristic() {
             TaggingService service = service(
@@ -349,6 +372,31 @@ class TaggingEnforceMergeTest {
             assertThat(tags.enforced(TagName.WORKFLOW_STATE)).isFalse();
             assertThat(tags.heuristic().get("workflow_state").rule()).isEqualTo("lexicon:purchase-order");
             assertThat(tags.acting().get("workflow_state").rule()).isEqualTo("lexicon:purchase-order");
+        }
+
+        @Test
+        @DisplayName("an acting entity_<key> seed is a lookup source: an ACTION tagged purchase-order is CREATING_PO")
+        void lookupReadsTheActingEntitySeeds() {
+            HeuristicQuestionTagger tagger =
+                    taggerWith(ScopeResolverFixtures.enforce(60, ScopeGraphProperties.Consumer.LOOKUPS));
+            String message = "buy 40 tires from Michelin";
+            String purchaseOrder = TagName.entityWireName("purchase-order");
+            TaggingService untagged =
+                    service(tagger, enforce(List.of("intent"), Map.of()), model(0.9, Map.of("intent", "ACTION")));
+            assertThat(untagged.tag(message).workflowState())
+                    .as("the wording names no entity with a workflow state and matches no phrase")
+                    .isEqualTo(WorkflowState.IDLE);
+            TaggingService tagged = service(
+                    tagger,
+                    enforce(List.of("intent", "entity"), Map.of()),
+                    model(0.9, Map.of("intent", "ACTION", purchaseOrder, "true")));
+
+            QuestionTags tags = tagged.tag(message);
+
+            assertThat(tags.entitySeeds()).containsExactly("purchase-order");
+            assertThat(tags.workflowState()).isEqualTo(WorkflowState.CREATING_PO);
+            assertThat(tags.enforced(TagName.WORKFLOW_STATE)).isFalse();
+            assertThat(tags.acting().get("workflow_state").rule()).isEqualTo("lexicon_tag:purchase-order");
         }
 
         @Test

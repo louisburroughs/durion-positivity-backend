@@ -514,6 +514,53 @@ class AlphaEvalTurnTraceRecorderTest {
     }
 
     @Test
+    @DisplayName("ADR-0068 spec §2.6: a non-IDLE workflow answer is traced with the non-idle threshold it had to meet")
+    void nonIdleWorkflowAnswerTracesTheEffectiveThreshold() {
+        TaggingProperties properties = new TaggingProperties(
+                TaggingMode.ENFORCE,
+                List.of("workflow_state"),
+                null,
+                Map.of("workflow_state", 0.7, "workflow_state.non-idle", 0.9),
+                0);
+        AlphaEvalTurnTraceRecorder enforceRecorder = new AlphaEvalTurnTraceRecorder(
+                repository, Clock.fixed(NOW, ZoneOffset.UTC), RETENTION, "sha-81ff1e0", null, null, properties);
+        String name = TagName.WORKFLOW_STATE.wireName();
+        Map<String, TagAnswer> heuristic = Map.of(name, TagAnswer.heuristic("IDLE", "phrase:none"));
+        // 0.8 clears the tag's 0.7 but not the non-idle 0.9, so the merge kept the heuristic.
+        Map<String, TagAnswer> model = Map.of(name, new TagAnswer("CREATING_PO", 0.8, TagSource.JEV));
+        QuestionTags tags = new QuestionTags(
+                TaggingMode.ENFORCE,
+                heuristic,
+                model,
+                heuristic,
+                null,
+                "tev1:0.8b",
+                90L,
+                false,
+                13,
+                8_000,
+                "abc123",
+                Map.of(name, FallbackReason.LOW_CONFIDENCE));
+
+        enforceRecorder.begin(USER, "start the PO");
+        enforceRecorder.recordTags(tags);
+        enforceRecorder.complete("ok");
+
+        assertThat(savedTrace().tags().tags()).singleElement().satisfies(entry -> {
+            assertThat(entry.modelValue()).isEqualTo("CREATING_PO");
+            assertThat(entry.modelConfidence()).isEqualTo(0.8);
+            assertThat(entry.fallbackReason()).isEqualTo("low_confidence");
+            assertThat(entry.threshold())
+                    .as("the threshold the 0.8 answer failed, not the tag's 0.7")
+                    .isEqualTo(0.9);
+        });
+        assertThat(properties.effectiveThreshold(name, "IDLE"))
+                .as("an IDLE answer meets the tag's own threshold only")
+                .isEqualTo(0.7);
+        assertThat(properties.effectiveThreshold(name, null)).isEqualTo(0.7);
+    }
+
+    @Test
     @DisplayName("ADR-0068: a fallback record carries its reason, and enforce stamps the enforced list")
     void fallbackAndEnforcedTagsAreTraced() {
         AlphaEvalTurnTraceRecorder enforceRecorder = new AlphaEvalTurnTraceRecorder(

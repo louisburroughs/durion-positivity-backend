@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.config;
 
 import com.positivity.mcp.internal.domain.TagName;
 import com.positivity.mcp.internal.domain.TaggingMode;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
@@ -244,5 +245,23 @@ public record TaggingProperties(
             return perEntity != null ? perEntity : thresholdFor(TagName.ENTITY);
         }
         return TagName.fromWireName(wireName).map(this::thresholdFor).orElse(DEFAULT_THRESHOLD);
+    }
+
+    /**
+     * The threshold a model answer {@code modelValue} to {@code wireName} must meet to act (spec §2.1,
+     * §2.6): {@link #thresholdFor(String)}, and for a non-{@code IDLE} {@code workflow_state} answer
+     * the larger of that and {@link #nonIdleThreshold()}, since it must meet both. The merge decides
+     * on it and the eval trace records it, so the two always name the same number.
+     *
+     * @param modelValue the model's answer, or null when it gave none (the tag's own threshold)
+     */
+    public double effectiveThreshold(@NonNull String wireName, @Nullable String modelValue) {
+        double threshold = thresholdFor(wireName);
+        if (modelValue != null
+                && TagName.WORKFLOW_STATE.wireName().equals(wireName)
+                && !WorkflowState.IDLE.name().equalsIgnoreCase(modelValue.trim())) {
+            return Math.max(threshold, nonIdleThreshold());
+        }
+        return threshold;
     }
 }

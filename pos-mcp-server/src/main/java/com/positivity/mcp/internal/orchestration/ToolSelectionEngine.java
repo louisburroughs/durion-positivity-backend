@@ -534,7 +534,9 @@ public class ToolSelectionEngine {
      * whose {@code ACTS_ON} edge reaches a seed entity, already filtered to what the caller may use).
      * These stay tag-added: unioned with the scope's slot step, outside its {@code added-tool-slots}
      * cap (ADR-0068 §3.2), and still intersected with the gated set (an unavailable gated set
-     * withholds them too). Without a scope (resolution failed) the two tags decide, as a fallback.
+     * withholds them too). The replacement needs an entity seed: without one (no entity named or
+     * tagged, a domain-only scope, the resolver's empty scope) the two tags decide as today. Only a
+     * missing scope (resolution threw) is counted under {@code mcp.scope.fallback{consumer=lookups}}.
      */
     private @NonNull List<Object> fallbackToolsForTags(
             @NonNull QuestionTags tags, @Nullable Set<String> gatedToolNames, @Nullable ScopeSet scope) {
@@ -567,10 +569,13 @@ public class ToolSelectionEngine {
             selected.add(exaWebSearchTool);
         }
         ScopeConsumers consumers = scopeConsumers;
-        if (consumers != null && consumers.enforces(Consumer.LOOKUPS) && scope != null) {
+        boolean lookups = consumers != null && consumers.enforces(Consumer.LOOKUPS);
+        if (lookups && scope != null && !scope.seeds().isEmpty()) {
             addLexiconFacades(selected, scope, gatedToolNames);
         } else {
-            if (consumers != null && consumers.enforces(Consumer.LOOKUPS)) {
+            // No entity seed (a NONE scope, a domain-only scope, the resolver's empty scope): today's
+            // guards stand, and that is not a fallback. Only a missing scope is one.
+            if (lookups && scope == null && consumers != null) {
                 consumers.recordFallback(Consumer.LOOKUPS);
             }
             if (tags.aboutInventory()) {

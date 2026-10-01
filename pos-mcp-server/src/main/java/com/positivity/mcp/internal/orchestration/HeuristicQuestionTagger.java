@@ -10,6 +10,7 @@ import com.positivity.mcp.internal.domain.TagAnswer;
 import com.positivity.mcp.internal.domain.TagName;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.scopegraph.LexiconLookup;
+import com.positivity.mcp.internal.scopegraph.MatchKind;
 import com.positivity.mcp.internal.scopegraph.ScopeConsumers;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import java.util.LinkedHashMap;
@@ -44,7 +45,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>ADR-0068 §3.3 / spec §2.6: where the scope graph's {@code lookups} consumer is enforced, the
  * heuristic {@code workflow_state} has a second source, the lexicon's {@code workflow_state} of an
- * entity the message names ({@link #lexiconWorkflowState}). It applies only when the acting {@code
+ * entity the message names or an acting {@code entity_<key>} tag seeds ({@link
+ * #lexiconWorkflowState}). It applies only when the acting {@code
  * intent} is {@code ACTION}, which is known after the merge, so {@link TaggingService} asks for it
  * then; {@link #tag} itself always answers the phrase match.
  */
@@ -296,6 +298,12 @@ public class HeuristicQuestionTagger implements QuestionTagger {
     /** The rule id of the router-derived tags: {@code RouterClassification.safeDefault()} (ADR-0068 §2). */
     static final String SAFE_DEFAULT_RULE = "safe_default";
 
+    /** The rule of a lexicon workflow state read from an entity the message names. */
+    static final String LEXICON_RULE_PREFIX = "lexicon:";
+
+    /** The rule of a lexicon workflow state read from an entity an acting {@code entity_<key>} tag seeds. */
+    static final String LEXICON_TAG_RULE_PREFIX = "lexicon_tag:";
+
     /** True when {@code heuristic}'s {@code simple_chat} fired on an exact catalog rule: the T0 skip applies. */
     static boolean isCertainSimpleChat(@NonNull QuestionTags heuristic) {
         TagAnswer answer = heuristic.heuristic().get(TagName.SIMPLE_CHAT.wireName());
@@ -310,19 +318,25 @@ public class HeuristicQuestionTagger implements QuestionTagger {
     /**
      * ADR-0068 §3.3 / spec §2.6, §2.7: the heuristic {@code workflow_state} from the lexicon, for a
      * turn whose acting {@code intent} is {@code ACTION}: the {@code workflow_state} of an entity the
-     * message names by lexicon term or identifier ({@code lexicon:<entity>} as the rule). Empty when
-     * the lookup is not enforced or no named entity carries a state; the caller then keeps the phrase
-     * match. Never throws: a lookup failure is the phrase match.
+     * message names by lexicon term or identifier ({@code lexicon:<entity>} as the rule) or, failing
+     * that, of an entity an acting {@code entity_<key>} tag seeds ({@code lexicon_tag:<entity>}).
+     * Empty when the lookup is not enforced or no such entity carries a state; the caller then keeps
+     * the phrase match. Never throws: a lookup failure is the phrase match.
+     *
+     * @param taggedEntities the acting {@code entity_<key>} seeds ({@link QuestionTags#entitySeeds()})
      */
     @NonNull
-    Optional<TagAnswer> lexiconWorkflowState(@NonNull String message) {
+    Optional<TagAnswer> lexiconWorkflowState(@NonNull String message, @NonNull List<String> taggedEntities) {
         if (!lexiconLookupEnforced() || lexiconLookup == null) {
             return Optional.empty();
         }
         try {
             return lexiconLookup
-                    .workflowStateFor(message)
-                    .map(lookup -> TagAnswer.heuristic(lookup.state().name(), "lexicon:" + lookup.entity()));
+                    .workflowStateFor(message, taggedEntities)
+                    .map(lookup -> TagAnswer.heuristic(
+                            lookup.state().name(),
+                            (lookup.kind() == MatchKind.TAG ? LEXICON_TAG_RULE_PREFIX : LEXICON_RULE_PREFIX)
+                                    + lookup.entity()));
         } catch (RuntimeException exception) {
             return Optional.empty();
         }

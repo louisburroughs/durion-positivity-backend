@@ -7,7 +7,6 @@ import com.positivity.mcp.internal.domain.QuestionTagger;
 import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.TagAnswer;
 import com.positivity.mcp.internal.domain.TagName;
-import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.enums.NltiIntentType;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -150,10 +149,18 @@ class TaggingService {
             if (heuristic.heuristic().containsKey(name) || !properties.enforces(name)) {
                 return;
             }
-            if (meetsThreshold(name, modelAnswer)) {
-                acting.put(name, modelAnswer);
-            } else {
+            if (!meetsThreshold(name, modelAnswer)) {
                 tagFallbacks.put(name, FallbackReason.LOW_CONFIDENCE);
+                return;
+            }
+            // Spec §2.1, as in actingAnswer: a :veto entry may only turn a heuristic true into false.
+            // A model-only tag has no heuristic answer, which reads as false, so under :veto the model
+            // can never make it act (entity:veto adds no seed).
+            boolean veto = TagName.fromWireName(name)
+                    .map(tag -> properties.directionOf(tag) == TaggingProperties.Direction.VETO)
+                    .orElse(true);
+            if (!veto) {
+                acting.put(name, modelAnswer);
             }
         });
         return new QuestionTags(
@@ -202,22 +209,14 @@ class TaggingService {
 
     /** The tag's threshold, and for a non-{@code IDLE} workflow answer the stricter one too (spec §2.6). */
     private boolean meetsThreshold(@NonNull String name, @NonNull TagAnswer modelAnswer) {
-        if (modelAnswer.confidence() < properties.thresholdFor(name)) {
-            return false;
-        }
-        if (TagName.WORKFLOW_STATE.wireName().equals(name)
-                && !WorkflowState.IDLE
-                        .name()
-                        .equalsIgnoreCase(modelAnswer.value().trim())) {
-            return modelAnswer.confidence() >= properties.nonIdleThreshold();
-        }
-        return true;
+        return modelAnswer.confidence() >= properties.effectiveThreshold(name, modelAnswer.value());
     }
 
     /**
      * ADR-0068 §3.3 (the graph lookup step) / spec §2.6: with {@code lookups} enforced and the acting
      * {@code intent} {@code ACTION}, the lexicon's {@code workflow_state} for an entity the message
-     * names replaces the phrase match as the heuristic answer; it acts unless the model's answer
+     * names or, failing that, an acting {@code entity_<key>} tag seeds replaces the phrase match as
+     * the heuristic answer; it acts unless the model's answer
      * already does (the tag at or above threshold comes first in the chain). In {@code off} and {@code
      * shadow} the acting intent is the heuristic {@code UNKNOWN}, so nothing changes there.
      */
@@ -225,7 +224,7 @@ class TaggingService {
         if (merged.intent() != NltiIntentType.ACTION || !heuristicTagger.lexiconLookupEnforced()) {
             return merged;
         }
-        Optional<TagAnswer> lookup = heuristicTagger.lexiconWorkflowState(message);
+        Optional<TagAnswer> lookup = heuristicTagger.lexiconWorkflowState(message, merged.entitySeeds());
         if (lookup.isEmpty()) {
             return merged;
         }

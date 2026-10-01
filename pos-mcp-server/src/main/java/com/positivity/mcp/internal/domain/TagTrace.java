@@ -51,7 +51,8 @@ public record TagTrace(
      * @param modelValue the model's answer, or null when it did not answer
      * @param modelConfidence the model's confidence, or null
      * @param modelProbability the raw Noul {@code p} the model reported, or null
-     * @param threshold the confidence threshold in effect for the tag
+     * @param threshold the confidence threshold the model answer had to meet: the tag's, or for a
+     *     non-{@code IDLE} {@code workflow_state} answer the stricter {@code non-idle} one when higher
      * @param agree whether the two answers agree; null unless both answered
      * @param fallbackReason ADR-0068 §6: {@code low_confidence} when the tag was listed in {@code
      *     enforced-tags} but the model answered below its threshold, so the heuristic acted; null

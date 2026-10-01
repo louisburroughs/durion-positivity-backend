@@ -3,11 +3,13 @@ package com.positivity.mcp.internal.scopegraph;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.scopegraph.EntityLexicon.EntityDefinition;
 import com.positivity.mcp.internal.scopegraph.ScopeSet.Seed;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.stream.Stream;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -85,10 +87,24 @@ public class LexiconLookup {
      * no named entity carries a state, which sends the caller to the phrase match.
      */
     public @NonNull Optional<WorkflowLookup> workflowStateFor(@NonNull String message) {
+        return workflowStateFor(message, List.of());
+    }
+
+    /**
+     * Spec §2.6, §2.7: as {@link #workflowStateFor(String)}, over the entities the message names and
+     * the entities the turn's acting {@code entity_<key>} tags seed ({@link MatchKind#TAG}). The
+     * lookup contract is entity to workflow state, whichever way the entity was recognised: an
+     * {@code ACTION} the model tagged {@code purchase-order} reads {@code CREATING_PO} though the
+     * wording names no purchase-order term. A message match outranks a tag seed ({@code TAG} is the
+     * weakest kind); a tagged key the lexicon does not know is ignored.
+     */
+    public @NonNull Optional<WorkflowLookup> workflowStateFor(
+            @NonNull String message, @NonNull Collection<String> taggedEntities) {
         if (workflowStates.isEmpty()) {
             return Optional.empty();
         }
-        return seeds(message).stream()
+        return Stream.concat(
+                        seeds(message).stream(), taggedEntities.stream().map(entity -> new Seed(entity, MatchKind.TAG)))
                 .filter(seed -> workflowStates.containsKey(seed.entity()))
                 .sorted(STRONGEST_FIRST)
                 .findFirst()

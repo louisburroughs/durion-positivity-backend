@@ -275,6 +275,15 @@ class TaggingEnforceConsumersTest {
 
         private final Object workorderFacade = new WorkorderFacadeTool();
 
+        private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+
+        private double lookupsFallbacks() {
+            return meters.get("mcp.scope.fallback")
+                    .tag("consumer", "lookups")
+                    .counter()
+                    .count();
+        }
+
         private final SharedOrchestrationSupport support =
                 new SharedOrchestrationSupport(Clock.fixed(Instant.parse("2026-09-30T12:00:00Z"), ZoneOffset.UTC));
         private final InventoryFacadeTool inventoryFacadeTool = new InventoryFacadeTool(
@@ -314,7 +323,6 @@ class TaggingEnforceConsumersTest {
                     gating,
                     support,
                     8);
-            SimpleMeterRegistry meters = new SimpleMeterRegistry();
             engine.setScopeResolver(ScopeResolverFixtures.resolver(properties, meters));
             engine.setScopeConsumers(ScopeResolverFixtures.consumers(properties, meters));
             return engine;
@@ -356,15 +364,39 @@ class TaggingEnforceConsumersTest {
         }
 
         @Test
-        @DisplayName("lookups enforced with no entity in the message: nothing replaces the guards, nothing is added")
-        void noSeedAddsNothing() {
+        @DisplayName("lookups enforced with no entity seed: the keyword guards stand and no fallback is counted")
+        void noSeedKeepsTheKeywordGuards() {
             String message = "is sku 4411 in stock at the downtown store?";
+            assertThat(HEURISTIC.tag(message).aboutInventory()).isTrue();
             ToolSelectionEngine lookups =
                     engine(ScopeResolverFixtures.enforce(60, ScopeGraphProperties.Consumer.LOOKUPS));
 
-            List<Object> added = fallback(lookups, message);
+            ToolSelectionEngine.ToolSelectionResult result =
+                    lookups.selectRoleTools("ROLE_USER", CODES, message, HEURISTIC.tag(message));
 
-            assertThat(added).doesNotContain(inventoryFacadeTool, workorderFacade);
+            assertThat(result.scope())
+                    .as("the resolver answered a scope, but with no entity seed")
+                    .isNotNull();
+            assertThat(result.scope().seeds()).isEmpty();
+            assertThat(result.fallbackTools()).contains(inventoryFacadeTool);
+            assertThat(result.fallbackTools()).doesNotContain(workorderFacade);
+            assertThat(lookupsFallbacks()).isZero();
+        }
+
+        @Test
+        @DisplayName("lookups enforced and no scope at all: the keyword guards decide and one fallback is counted")
+        void missingScopeIsTheFallback() {
+            String message = "is sku 4411 in stock at the downtown store?";
+            ToolSelectionEngine lookups =
+                    engine(ScopeResolverFixtures.enforce(60, ScopeGraphProperties.Consumer.LOOKUPS));
+            lookups.setScopeResolver(null);
+
+            ToolSelectionEngine.ToolSelectionResult result =
+                    lookups.selectRoleTools("ROLE_USER", CODES, message, HEURISTIC.tag(message));
+
+            assertThat(result.scope()).isNull();
+            assertThat(result.fallbackTools()).contains(inventoryFacadeTool);
+            assertThat(lookupsFallbacks()).isEqualTo(1.0);
         }
     }
 }
