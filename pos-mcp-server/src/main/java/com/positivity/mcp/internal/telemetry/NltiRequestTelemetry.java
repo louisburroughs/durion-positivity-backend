@@ -59,11 +59,13 @@ import org.jspecify.annotations.Nullable;
  * turn's question tagging as a mode, the provider model, its latency, the fallback reason, the
  * agreement rate between the two taggers and the acting values of the router-derived tags. It is
  * present on every chat event that tagged (in every mode, {@code off} included, since the heuristic
- * tagger always runs) and absent on the NLTI path. The acting tag values are recorded in that block
- * only: the {@link Routing} block keeps both its shape and its v2 meaning, so its classification
- * fields ({@code intentType}, {@code riskLevel}, {@code domain}, {@code complexity}) still come from
- * the Gate 4 router alone and are absent when it did not run (the routing alert rules and the Gate 7
- * risk panel read them that way). Every v2 field is unchanged.
+ * tagger always runs) and absent on the NLTI path. The {@link Routing} block keeps both its shape and
+ * its v2 meaning: its classification fields ({@code intentType}, {@code riskLevel}, {@code domain},
+ * {@code complexity}) are the classification the Gate 4 router selected the tier on, absent when it
+ * did not run (the routing alert rules and the Gate 7 risk panel read them that way). Since ADR-0068
+ * §7 the router is mapped from the acting router tags, so on a routed turn they equal the {@code
+ * tagging} block's {@code intent}, {@code risk}, {@code complexity} and {@code domain}; and as the
+ * router calls no model, {@link Model#routerModel} is absent. Every v2 field is unchanged.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record NltiRequestTelemetry(

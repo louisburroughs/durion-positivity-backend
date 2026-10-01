@@ -578,6 +578,9 @@ class StreamingSessionAgentManagerTest {
 
         selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "find latest internet news");
 
+        // PR #2367 review: the gated set never names web search, as in production; the engine's
+        // exemption alone offers it.
+        assertThat(gated(List.of()).gatedToolNames()).doesNotContain("ExaWebSearchTool");
         assertThat(roleAgentCacheKeys(selectorManager))
                 .contains("ROLE_CASHIER::ExaWebSearchTool+GlossaryFacadeTool")
                 .contains("ROLE_CASHIER::full");
@@ -1686,14 +1689,15 @@ class StreamingSessionAgentManagerTest {
         assertThat(requestContext.currentScopeAddedToolNames()).isEmpty();
     }
 
-    /** ADR-0068 §2: the gated set names every facade the engine may add, beside the ranked candidates. */
+    /**
+     * ADR-0068 §2: the gated set names every facade the engine may add that has a seeded {@code
+     * mcp_tool_permission} row, beside the ranked candidates. {@code ExaWebSearchTool} is deliberately
+     * NOT here, as in {@code ToolSelectionEngineTest}: it has no {@code mcp_tool} row, so production
+     * never returns it in the gated set, and web search is offered through the engine's exemption.
+     */
     private static ToolRegistryService.CandidateSelection gated(List<ToolMetadata> candidates) {
-        Set<String> names = new java.util.HashSet<>(Set.of(
-                "DateWindowFacadeTool",
-                "ExaWebSearchTool",
-                "GlossaryFacadeTool",
-                "InventoryFacadeTool",
-                "OrderFacadeTool"));
+        Set<String> names = new java.util.HashSet<>(
+                Set.of("DateWindowFacadeTool", "GlossaryFacadeTool", "InventoryFacadeTool", "OrderFacadeTool"));
         candidates.forEach(candidate -> names.add(candidate.name()));
         return new ToolRegistryService.CandidateSelection(candidates, names, false);
     }

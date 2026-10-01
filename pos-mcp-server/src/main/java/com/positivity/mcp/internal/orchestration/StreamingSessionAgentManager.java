@@ -284,7 +284,7 @@ public class StreamingSessionAgentManager
             return simpleStreamChat(currentUserContext, message, startMs, tenantId, tags);
         }
 
-        // Gate 4 (#1192): classify with the T1 router (temperature 0) and select the executor tier.
+        // Gate 4 (#1192): classify with the router (ADR-0068 §7: from the tags) and select the executor tier.
         // Null when tiering is disabled or the router is not wired — default model (rollback path).
         NltiRouter.RoutingDecision routingDecision = routeTier(message, tags);
         ModelTier tier = routingDecision == null ? null : routingDecision.tier();
@@ -559,7 +559,7 @@ public class StreamingSessionAgentManager
         if (!tieringEnabled || nltiRouter == null) {
             return null;
         }
-        // ADR-0068 §7: the router receives the turn's tags (it maps them in Wave 2).
+        // ADR-0068 §7: the router maps the turn's acting tags to the tier; it calls no model.
         return nltiRouter.classify(message, tags);
     }
 
@@ -569,8 +569,6 @@ public class StreamingSessionAgentManager
         }
         String tierModel =
                 tieredChatModelResolver == null ? null : tieredChatModelResolver.modelNameFor(decision.tier());
-        String routerModel =
-                tieredChatModelResolver == null ? null : tieredChatModelResolver.modelNameFor(ModelTier.T1_ROUTER);
         return new TierRouting(
                 decision.classification().intentType().name(),
                 decision.classification().riskLevel().name(),
@@ -578,7 +576,10 @@ public class StreamingSessionAgentManager
                 decision.classification().complexity().name(),
                 NltiRequestTelemetry.Tier.valueOf(decision.tier().name()),
                 tierModel,
-                routerModel);
+                // ADR-0068 §7: the router is mapped from the tags and calls no model, so there is no
+                // router model to report (mcp.model.router stays configured until the router tags are
+                // promoted, but nothing runs on it).
+                null);
     }
 
     /** Appends the WRITE_GATE layer to the captured baseline layers when the request assembled it. */
@@ -914,7 +915,10 @@ public class StreamingSessionAgentManager
                 // the warm cache matches the role's actual gated tool set; always include AUTHENTICATED.
                 // Callers whose actual permissionCodes still differ get a cache miss and build on
                 // demand (its key already varies with toolCacheKey).
-                // ADR-0068 spec §2.5: warm-up does not tag (the role name is not a question).
+                // ADR-0068 spec §2.5: warm-up passes QuestionTags.none(), so it makes no provider call,
+                // publishes no tag record and touches no tagging meter. Selection still evaluates
+                // today's heuristic rules on the role name (the none() record falls back to them), as
+                // it did before ADR-0068.
                 ToolSelectionEngine.ToolSelectionResult selection = toolSelectionEngine.selectRoleTools(
                         role, prebuildPermissionCodes(role), role, QuestionTags.none());
                 List<Object> selectedTools =

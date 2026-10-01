@@ -212,12 +212,19 @@ completion `calledToolsInScope/calledTools` and `retrievedDocsInScope/retrievedD
 ## Question tagging (ADR-0068)
 
 One typed `QuestionTags` record per chat turn, taken **before** the simple-chat decision, the tier routing and the tool
-selection, and read by every consumer that used to run its own keyword heuristic (`SimpleChatFastPath`,
-`ToolSelectionEngine`, the admin fast path, the compound split, `NltiRouter`). Two taggers stand behind the seam:
+selection, and read by every consumer that used to run its own keyword heuristic: `SimpleChatFastPath`,
+`ToolSelectionEngine` (workflow state for session-less callers, the tag-added facades, the scope seeds), the admin fast
+path (`ToolRegistryService.resolveCandidateSelection(context, topK, tags)`), the compound split
+(`RerankedContentRetriever`, through `RequestScopedUserContext.currentTags()`) and `NltiRouter`, which maps the router
+tags to the tier without a chat-model call. In `off` and `shadow` (and for every tag not listed in `enforced-tags`) the
+acting answers are the heuristic ones, so every decision but the tier is today's (see Behaviour in `off` and `shadow`);
+what changes in `enforce` is below. Two taggers stand behind the seam:
 `HeuristicQuestionTagger` (today's rules, moved unchanged; the permanent fallback) and `JevQuestionTagger`, which asks a
 Jev-protocol decision model served by the cell's **own** Ollama container at `POST {base-url}/v1/systemone`. **`mode: off`
-is the default: the heuristic tagger alone runs, no provider is called, no meter is registered, no tagging log line is
-written.**
+is the default: the heuristic tagger alone runs, no provider is called, no meter is registered, and no per-turn tagging
+log line is written.** The question set (`TaggingQuestions`) is still built once at startup in every mode, so `off` can
+log its one-time WARN when the entity lexicon cannot be loaded or the `domain` question is skipped (fewer than 2 or more
+than 26 rag-scope options).
 
 | Property                           | Env / Default                                          | Description                                                                                                                                                      |
 | ---------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -237,8 +244,10 @@ Quote a literal mode in YAML (`"off"`): bare `off` is the boolean `false`.
 
 **Dependency.** `shadow` and `enforce` need Ollama **0.35 or later** in the `ollama` container (the `/v1/systemone`
 endpoint shipped there) with the tagging model pulled beside `${OLLAMA_EMBEDDING_MODEL}`, and `OLLAMA_MAX_LOADED_MODELS`
-of at least 2 so neither model evicts the other between turns. The compose pin, the model pull and the bake-off report
-land in Wave 3; until then `shadow` against an older Ollama simply records a `fallback` on every turn.
+of at least 2 so neither model evicts the other between turns. This branch does not pin or pull them: the compose pin
+(`ollama` and `ollama-init` on 0.35.0), the shadow report (`scripts/tagging_shadow_report.py`) and the bake-off procedure
+(`pos-mcp-server/src/test/resources/eval/tagging-gate/README.md`) are proposed in PR #2368. Without them, `shadow`
+against an older Ollama simply records a `fallback` on every turn.
 
 **The request** carries only `model`, `state` (the message), `keep_alive` and the fixed `questions` (every one with
 `instructions`, as Ollama requires): never the caller, the tenant, the history or a forwarded header (§4). The tag set is
@@ -277,20 +286,28 @@ agree}`; `heuristicRule` names the rule that fired where the heuristic exposes o
 `veto:invoices`, `sub_queries:2`, `safe_default`; null for the simple-chat catalog); older payloads read `tags: null`.
 `nlti.request.telemetry` is `schemaVersion` 3 with a nullable `tagging` block (`mode`, `providerModel`, `latencyMs`,
 `fallbackReason`, `agreementRate`, `questionCount`, `requestBodyBytes`, and the acting `intent`, `risk`, `complexity`,
-`domain`, `workflowState`, `simpleChat`). The `routing` block is unchanged from version 2: its `intentType`,
-`riskLevel`, `domain` and `complexity` are the Gate 4 router's and are present only when the router ran, as the
-routing alert rules and the Gate 7 risk panel expect; tag values appear only in `tagging`. The message language is not recorded (unknown at runtime). Meters (only when the mode is not `off`):
+`domain`, `workflowState`, `simpleChat`). The `routing` block keeps its version-2 shape and meaning: its `intentType`,
+`riskLevel`, `domain` and `complexity` are the classification the Gate 4 router selected the tier on, present only when
+the router ran (tiering on, not a simple-chat turn), as the routing alert rules and the Gate 7 risk panel expect. Since
+the router is mapped from the tags (§7) that classification **is** the acting router tags, so on a routed turn those
+four fields equal `tagging.intent`, `risk`, `complexity` and `domain`; a turn the router did not route carries them in
+`tagging` only. The router calls no model, so `model.routerModel` is absent. The message language is not recorded
+(unknown at runtime). Meters (only when the mode is not `off`):
 `mcp.tagging.latency{model}`, `mcp.tagging.requests{model,outcome=ok|timeout|error|rate_limited|malformed}`,
 `mcp.tagging.fallback{reason}`, `mcp.tagging.agreement{tag,agree}`, `mcp.tagging.state_truncated`.
 
 **Behaviour in `off` and `shadow`.** Every decision is today's decision, from the same rules, now taken once
-(`TaggingBehaviourPreservationTest` pins ~75 en/fr/es messages to the pre-refactor fixture). One deliberate change
+(`TaggingBehaviourPreservationTest` pins ~75 en/fr/es messages to the pre-refactor fixture), except the tier: the
+router's chat-model call is gone in every mode (§7), and the heuristic answers `intent`, `risk`, `complexity` and
+`domain` with `safeDefault()`'s values, so with `mcp.model.tiering-enabled` on (off by default, #1683) every routed
+turn takes `T2_COMPLEX` until the router tags are enforced. One deliberate change
 (§2, §3.1) applies in every mode: a keyword-added facade tool (inventory, orders, date window) is offered only if it is in
 the caller's permission-gated set; before, those additions bypassed `mcp_tool_permission` at selection. Two tools are
 exempt and behave as before: the glossary (always offered) and web search (offered on `needs_web_search`); neither has
-an `mcp_tool_permission` row to intersect with, and neither reads tenant data. Warm-up never tags: it passes
-`QuestionTags.none()`, and an absent record makes every consumer behave exactly as `off` (the heuristic answers stand
-in, without a provider call).
+an `mcp_tool_permission` row to intersect with, and neither reads tenant data. Warm-up makes no tagging call: it
+passes `QuestionTags.none()` (no provider call, no published record, no tagging meter), and an absent record makes every
+consumer behave exactly as `off`, so selection still evaluates today's heuristic rules on the role name, as before
+ADR-0068.
 
 **Behaviour in `enforce`.** A tag acts only when it is listed in `enforced-tags`; `mode: enforce` with an empty list
 is exactly `shadow`. For a listed tag the acting value is the model's when its confidence meets `thresholds.<tag>` and,

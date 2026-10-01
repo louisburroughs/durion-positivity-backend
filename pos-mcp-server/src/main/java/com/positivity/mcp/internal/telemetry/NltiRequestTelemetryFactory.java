@@ -51,7 +51,8 @@ public final class NltiRequestTelemetryFactory {
 
     /**
      * The Gate 4 router decision for one request: the T1 classification signals, the selected tier,
-     * and the actual model names (tier executor + router). {@code fallbackUsed} is not carried here:
+     * and the actual model names (tier executor + router; the router's is null when the router
+     * calls no model, which since ADR-0068 §7 is every turn). {@code fallbackUsed} is not carried here:
      * failover ({@code mcp.model.fallback}) is orthogonal to tier routing and is read from
      * {@link FallbackUsage} when the event is built (#1691).
      */
@@ -248,8 +249,9 @@ public final class NltiRequestTelemetryFactory {
      * As above, with the request's ADR-0068 tagging (schema version 3). {@code tagging} is null when
      * the turn did not tag (a failure before tagging, {@link QuestionTags#none()}); the {@code
      * tagging} block is then absent. The tagging block never changes the {@link Routing} block,
-     * which is built exactly as in schema version 2: its classification fields come from the Gate 4
-     * router alone, when it ran.
+     * which is built exactly as in schema version 2: its classification fields are the Gate 4
+     * router's decision, when it ran. Since ADR-0068 §7 that decision is mapped from the same acting
+     * tags, so on a routed turn the two blocks agree.
      */
     public static @NonNull NltiRequestTelemetry forChatRequest(
             @NonNull String correlationId,
@@ -274,10 +276,11 @@ public final class NltiRequestTelemetryFactory {
 
         // Tier-0 rule path short-circuits before the Gate 4 router; the tool path carries the router
         // decision (when it ran) and the resolved workflow state (Gate 2C). Routing is omitted only
-        // when none of the signals apply. ADR-0068: the tags never fill this block. Its
-        // classification fields are the router's, present only when the router ran, because the
-        // routing-mix and unclassified-share alert rules and the Gate 7 risk panel read them as such;
-        // the acting tag values go in the separate tagging block.
+        // when none of the signals apply. ADR-0068: the tagging signal never fills this block. Its
+        // classification fields are the router's decision, present only when the router ran, because
+        // the routing-mix and unclassified-share alert rules and the Gate 7 risk panel read them as
+        // such; the router maps that decision from the acting tags (§7), which the tagging block
+        // carries on every tagged turn.
         Routing routing;
         if (simpleChat) {
             routing = new Routing(null, null, null, null, Tier.T0_RULE, simpleChatRule, workflowState);

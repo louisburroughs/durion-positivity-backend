@@ -581,6 +581,28 @@ class SessionAgentManagerTest {
                 .doesNotContain("ROLE_ADMIN::GlossaryFacadeTool+InventoryFacadeTool+OrderFacadeTool");
     }
 
+    /**
+     * PR #2367 review: production never puts ExaWebSearchTool in the gated set (it has no {@code
+     * mcp_tool} row), so the fixture leaves it out and web search must reach the agent through the
+     * engine's exemption alone.
+     */
+    @Test
+    @DisplayName("ADR-0068 §2: chat offers web search through the exemption although no gated set names it")
+    void chat_withWebKeyword_includesExaFallbackTool() {
+        ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
+        when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
+                .thenReturn(gated(List.of()));
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Here is the news"));
+        SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
+
+        selectorManager.chat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "find latest internet news");
+
+        assertThat(gated(List.of()).gatedToolNames()).doesNotContain("ExaWebSearchTool");
+        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::ExaWebSearchTool+GlossaryFacadeTool");
+    }
+
     @Test
     @DisplayName("chat threads the persisted non-IDLE session workflow state into tool selection (#778)")
     void chat_usesPersistedWorkflowState_whenSessionPresent() {
@@ -1512,14 +1534,15 @@ class SessionAgentManagerTest {
         assertThat(requestContext.currentScopeAddedToolNames()).isEmpty();
     }
 
-    /** ADR-0068 §2: the gated set names every facade the engine may add, beside the ranked candidates. */
+    /**
+     * ADR-0068 §2: the gated set names every facade the engine may add that has a seeded {@code
+     * mcp_tool_permission} row, beside the ranked candidates. {@code ExaWebSearchTool} is deliberately
+     * NOT here, as in {@code ToolSelectionEngineTest}: it has no {@code mcp_tool} row, so production
+     * never returns it in the gated set, and web search is offered through the engine's exemption.
+     */
     private static ToolRegistryService.CandidateSelection gated(List<ToolMetadata> candidates) {
-        Set<String> names = new java.util.HashSet<>(Set.of(
-                "DateWindowFacadeTool",
-                "ExaWebSearchTool",
-                "GlossaryFacadeTool",
-                "InventoryFacadeTool",
-                "OrderFacadeTool"));
+        Set<String> names = new java.util.HashSet<>(
+                Set.of("DateWindowFacadeTool", "GlossaryFacadeTool", "InventoryFacadeTool", "OrderFacadeTool"));
         candidates.forEach(candidate -> names.add(candidate.name()));
         return new ToolRegistryService.CandidateSelection(candidates, names, false);
     }
