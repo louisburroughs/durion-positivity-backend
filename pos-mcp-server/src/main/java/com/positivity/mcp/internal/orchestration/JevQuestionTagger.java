@@ -56,7 +56,8 @@ public class JevQuestionTagger implements QuestionTagger {
                 answers,
                 answers,
                 null,
-                response.model(),
+                // ADR-0068 §3.6: the configured model, never the provider's own model string.
+                properties.provider().model(),
                 response.latencyMs(),
                 response.stateTruncated(),
                 asked.size(),

@@ -78,7 +78,9 @@ class ToolSelectionEngineTest {
                 "/order/v1/orders/purchase-orders/{poId}",
                 "/order/v1/orders/purchase-orders/summary");
         sharedOrchestrationSupport = new SharedOrchestrationSupport(Clock.systemUTC());
-        when(toolRegistry.resolveMasterTools()).thenReturn(List.of(exaWebSearchTool));
+        // As in production: the seed has no mcp_tool row in a master/shared domain, so the master tool
+        // list is empty and every fallback tool below comes from fallbackToolsForTags itself.
+        when(toolRegistry.resolveMasterTools()).thenReturn(List.of());
         glossaryFacadeTool = new GlossaryFacadeTool();
         toolSelectionEngine = new ToolSelectionEngine(
                 toolRegistry,
@@ -116,7 +118,7 @@ class ToolSelectionEngineTest {
                 toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "show stock for sku ABC");
 
         assertThat(result.roleTools()).containsExactly(inventoryFacadeTool);
-        assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, glossaryFacadeTool, inventoryFacadeTool);
+        assertThat(result.fallbackTools()).containsExactly(glossaryFacadeTool, inventoryFacadeTool);
 
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
         verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3));
@@ -274,7 +276,7 @@ class ToolSelectionEngineTest {
     }
 
     @Test
-    @DisplayName("empty gated set keeps the master and glossary fallbacks but no role tools (#1606, ADR-0068 §2)")
+    @DisplayName("empty gated set keeps the glossary and web search fallbacks but no role tools (#1606, ADR-0068 §2)")
     void selectRoleTools_emptyGatedSet_keepsUngatedFallbacksOnly() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
@@ -286,8 +288,8 @@ class ToolSelectionEngineTest {
 
         // #1606: roleTools fail closed on an empty gated set — the ungated domain set is no longer
         // substituted. ADR-0068 §2: the keyword tags fire (web, orders, date window) but a caller who
-        // holds no permission group for any tool is offered none of the tag-added facades either; the
-        // master tools and the glossary (no permission row, no HTTP call) still populate.
+        // holds no permission group for any tool is offered none of the gated facades either. The
+        // glossary and web search are exempt from the intersection and still populate.
         assertThat(result.roleTools()).isEmpty();
         assertThat(result.fallbackTools()).containsExactlyInAnyOrder(exaWebSearchTool, glossaryFacadeTool);
     }
@@ -305,7 +307,7 @@ class ToolSelectionEngineTest {
                 "ROLE_ADMIN", PERMISSION_CODES, "how many sales orders for sku 4411 did we ship last month");
 
         assertThat(result.fallbackTools())
-                .containsExactlyInAnyOrder(exaWebSearchTool, glossaryFacadeTool, inventoryFacadeTool)
+                .containsExactlyInAnyOrder(glossaryFacadeTool, inventoryFacadeTool)
                 .doesNotContain(orderFacadeTool, dateWindowFacadeTool);
     }
 
@@ -327,7 +329,7 @@ class ToolSelectionEngineTest {
         ToolSelectionEngine.ToolSelectionResult result =
                 unwired.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "sales revenue last month by store");
 
-        assertThat(result.fallbackTools()).containsExactlyInAnyOrder(exaWebSearchTool, glossaryFacadeTool);
+        assertThat(result.fallbackTools()).containsExactly(glossaryFacadeTool);
     }
 
     @Test
@@ -341,7 +343,7 @@ class ToolSelectionEngineTest {
                 "ROLE_ADMIN", PERMISSION_CODES, "sales revenue last month by store");
 
         assertThat(result.roleTools()).isEmpty();
-        assertThat(result.fallbackTools()).containsExactlyInAnyOrder(exaWebSearchTool, glossaryFacadeTool);
+        assertThat(result.fallbackTools()).containsExactly(glossaryFacadeTool);
     }
 
     @Test
@@ -475,6 +477,56 @@ class ToolSelectionEngineTest {
         assertThat(toolSelectionEngine.fullFallbackTools()).contains(dateWindowFacadeTool, glossaryFacadeTool);
     }
 
+    /**
+     * PR #2367 review: ExaWebSearchTool has no mcp_tool or mcp_tool_permission row, so the gated set
+     * the registry builds never names it. Intersecting it with that set withheld web search from
+     * every caller on the chat path; before ADR-0068 the keyword guard offered it to any caller. It is
+     * exempt from the intersection, as the glossary is.
+     */
+    @ParameterizedTest
+    @DisplayName("ADR-0068 §2: web search is offered on needs_web_search although no gated set ever names it")
+    @ValueSource(strings = {"any recent news on the Michelin tire recall?", "search the web for the new tariff rates"})
+    void selectRoleTools_offersWebSearchOutsideTheGatedSet(String message) {
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN")).thenReturn(new ArrayList<>(List.of(orderFacadeTool)));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
+
+        ToolSelectionEngine.ToolSelectionResult result =
+                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, message);
+
+        assertThat(gated(List.of()).gatedToolNames()).doesNotContain("ExaWebSearchTool");
+        assertThat(result.fallbackTools()).contains(exaWebSearchTool, glossaryFacadeTool);
+    }
+
+    @Test
+    @DisplayName("ADR-0068 §2: web search is offered even when the gated set is unavailable, as before ADR-0068")
+    void selectRoleTools_offersWebSearchWhenTheGatedSetIsUnavailable() {
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN")).thenReturn(new ArrayList<>(List.of(orderFacadeTool)));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenThrow(new IllegalStateException("bad SQL grammar [permission_group]"));
+
+        ToolSelectionEngine.ToolSelectionResult result = toolSelectionEngine.selectRoleTools(
+                "ROLE_ADMIN", PERMISSION_CODES, "latest online news about our sales orders");
+
+        assertThat(result.roleTools()).isEmpty();
+        assertThat(result.fallbackTools())
+                .containsExactlyInAnyOrder(glossaryFacadeTool, exaWebSearchTool)
+                .doesNotContain(orderFacadeTool, dateWindowFacadeTool);
+    }
+
+    @Test
+    @DisplayName("web search is not offered to a message with no web cue")
+    void selectRoleTools_noWebCue_noWebSearch() {
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN")).thenReturn(new ArrayList<>(List.of(orderFacadeTool)));
+        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(gated(List.of()));
+
+        ToolSelectionEngine.ToolSelectionResult result =
+                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "show stock for sku ABC");
+
+        assertThat(result.fallbackTools()).doesNotContain(exaWebSearchTool);
+    }
+
     // ── ADR-0069 §5 / §9: the scope is resolved here, and changes nothing ───
 
     private static final Set<String> SCOPE_CODES =
@@ -501,14 +553,15 @@ class ToolSelectionEngineTest {
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
     }
 
-    /** Every facade this engine may add is in the caller's gated set, beside the ranked candidates. */
+    /**
+     * Every facade this engine may add that has a seeded {@code mcp_tool_permission} row is in the
+     * caller's gated set, beside the ranked candidates. {@code ExaWebSearchTool} is deliberately NOT
+     * here: it has no {@code mcp_tool} row, so {@code findEnabledByPermissionsAndWorkflow} never
+     * returns it in production, and putting it here would hide a selection that depends on it.
+     */
     private static CandidateSelection gated(List<ToolMetadata> candidates) {
-        Set<String> names = new java.util.HashSet<>(Set.of(
-                "DateWindowFacadeTool",
-                "ExaWebSearchTool",
-                "GlossaryFacadeTool",
-                "InventoryFacadeTool",
-                "OrderFacadeTool"));
+        Set<String> names = new java.util.HashSet<>(
+                Set.of("DateWindowFacadeTool", "GlossaryFacadeTool", "InventoryFacadeTool", "OrderFacadeTool"));
         candidates.forEach(candidate -> names.add(candidate.name()));
         return new CandidateSelection(candidates, names, false);
     }

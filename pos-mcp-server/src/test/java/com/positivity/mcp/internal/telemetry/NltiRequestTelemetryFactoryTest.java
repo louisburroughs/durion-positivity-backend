@@ -409,7 +409,7 @@ class NltiRequestTelemetryFactoryTest {
     }
 
     @Test
-    void forChatRequest_withTagging_carriesTheBlockAndFillsRoutingFromTheActingValues() throws Exception {
+    void forChatRequest_withTagging_carriesTheBlockAndLeavesRoutingToTheRouter() throws Exception {
         NltiRequestTelemetry event = chatEvent(false, null, shadowSignal());
 
         assertThat(event.tagging()).isNotNull();
@@ -422,15 +422,19 @@ class NltiRequestTelemetryFactoryTest {
         assertThat(event.tagging().simpleChat()).isFalse();
         assertThat(event.tagging().questionCount()).isEqualTo(46);
         assertThat(event.tagging().requestBodyBytes()).isEqualTo(18_432);
-        // Spec §2.8: the Routing block keeps its shape and is filled from the tags while the Gate 4
-        // router stays dormant.
-        assertThat(event.routing()).isNotNull();
-        assertThat(event.routing().intentType()).isEqualTo("UNKNOWN");
-        assertThat(event.routing().riskLevel()).isEqualTo("HIGH");
-        assertThat(event.routing().complexity()).isEqualTo("MULTI_DOMAIN");
-        assertThat(event.routing().domain()).isEqualTo("master");
+        assertThat(event.tagging().intent()).isEqualTo("UNKNOWN");
+        assertThat(event.tagging().risk()).isEqualTo("HIGH");
+        assertThat(event.tagging().complexity()).isEqualTo("MULTI_DOMAIN");
+        assertThat(event.tagging().domain()).isEqualTo("master");
+        // The Routing block keeps its v2 meaning: its classification is the Gate 4 router's, which did
+        // not run, so it carries the workflow state alone (the routing alert rules and the Gate 7 risk
+        // panel would otherwise count the tags' safe defaults as router decisions).
+        assertThat(event.routing()).isEqualTo(chatEvent(false, null, null).routing());
+        assertThat(event.routing().intentType()).isNull();
+        assertThat(event.routing().riskLevel()).isNull();
+        assertThat(event.routing().complexity()).isNull();
+        assertThat(event.routing().domain()).isNull();
         assertThat(event.routing().tier()).isNull();
-        // The selection's workflow state (passed by the manager) wins over the tag's.
         assertThat(event.routing().workflowState()).isEqualTo("IDLE");
 
         com.fasterxml.jackson.databind.JsonNode json = MAPPER.readTree(MAPPER.writeValueAsString(event));
@@ -440,6 +444,8 @@ class NltiRequestTelemetryFactoryTest {
         assertThat(json.get("tagging").get("questionCount").intValue()).isEqualTo(46);
         assertThat(json.get("tagging").get("requestBodyBytes").intValue()).isEqualTo(18_432);
         assertThat(json.get("tagging").has("fallbackReason")).isFalse();
+        assertThat(json.get("routing").has("intentType")).isFalse();
+        assertThat(json.get("routing").has("riskLevel")).isFalse();
         assertThat(MAPPER.writeValueAsString(event)).doesNotContain("\"scope");
     }
 
@@ -463,9 +469,50 @@ class NltiRequestTelemetryFactoryTest {
         NltiRequestTelemetry event = chatEvent(true, null, shadowSignal());
 
         assertThat(event.routing().tier()).isEqualTo(NltiRequestTelemetry.Tier.T0_RULE);
-        assertThat(event.routing().intentType()).isEqualTo("UNKNOWN");
+        assertThat(event.routing().intentType()).isNull();
         assertThat(event.routing().workflowState()).isNull();
         assertThat(event.tagging()).isNotNull();
+    }
+
+    @Test
+    void forChatRequest_t0HelloTurn_hasNoTagDerivedRouting() throws Exception {
+        // A real T0 turn: "hello" tagged by the heuristic tagger (mode off), served by the rule path.
+        QuestionTags hello = com.positivity.mcp.internal.orchestration.HeuristicQuestionTagger.withDefaultCatalog()
+                .tag("hello");
+        assertThat(hello.simpleChat()).isTrue();
+        NltiRequestTelemetry event = NltiRequestTelemetryFactory.forChatRequest(
+                "corr-hello",
+                "2026-09-30T12:00:00Z",
+                "ROLE_ADMIN",
+                12,
+                List.of(),
+                List.of(),
+                List.of("BASE"),
+                true,
+                "greeting",
+                null,
+                9L,
+                "SUCCESS",
+                null,
+                null,
+                false,
+                null,
+                NltiRequestTelemetryFactory.TaggingSignal.of(hello));
+
+        // Exactly the schema-version-2 routing of a T0 turn: the tier and the rule, nothing else.
+        assertThat(event.routing())
+                .isEqualTo(new NltiRequestTelemetry.Routing(
+                        null, null, null, null, NltiRequestTelemetry.Tier.T0_RULE, "greeting", null));
+        com.fasterxml.jackson.databind.JsonNode routing =
+                MAPPER.readTree(MAPPER.writeValueAsString(event)).get("routing");
+        assertThat(routing.has("intentType")).isFalse();
+        assertThat(routing.has("riskLevel")).isFalse();
+        assertThat(routing.has("domain")).isFalse();
+        assertThat(routing.has("complexity")).isFalse();
+        // The tag-derived values are recorded, in the tagging block.
+        assertThat(event.tagging().simpleChat()).isTrue();
+        assertThat(event.tagging().risk()).isEqualTo("HIGH");
+        assertThat(event.schemaVersion()).isEqualTo(3);
     }
 
     @Test

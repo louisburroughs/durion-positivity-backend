@@ -981,7 +981,13 @@ class SessionAgentManagerTest {
         assertThat(event.getValue().tagging().simpleChat()).isFalse();
         assertThat(event.getValue().tagging().workflowState())
                 .isEqualTo(tags.workflowState().name());
-        assertThat(event.getValue().routing().intentType()).isEqualTo("UNKNOWN");
+        // The acting tag values live in the tagging block only; routing classification is the
+        // Gate 4 router's, and the router did not run (tiering is off).
+        assertThat(event.getValue().tagging().intent()).isEqualTo("UNKNOWN");
+        assertThat(event.getValue().routing().intentType()).isNull();
+        assertThat(event.getValue().routing().riskLevel()).isNull();
+        assertThat(event.getValue().routing().domain()).isNull();
+        assertThat(event.getValue().routing().complexity()).isNull();
     }
 
     @Test

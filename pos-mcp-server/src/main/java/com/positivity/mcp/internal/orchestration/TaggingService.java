@@ -100,16 +100,17 @@ class TaggingService {
             recordSuccess(merged);
             return merged;
         } catch (JevProviderException failure) {
-            return fallback(heuristic, failure.reason(), elapsedMs(startNanos), failure);
+            return fallback(message, heuristic, failure.reason(), elapsedMs(startNanos), failure);
         } catch (RuntimeException unexpected) {
-            return fallback(heuristic, FallbackReason.ERROR, elapsedMs(startNanos), unexpected);
+            return fallback(message, heuristic, FallbackReason.ERROR, elapsedMs(startNanos), unexpected);
         }
     }
 
     /**
      * Spec §2.5 step 3, Wave 1 shape: the acting answers are the heuristic ones. Wave 2 replaces a
      * listed tag's acting answer with the model's when {@code mode == enforce} and its confidence
-     * meets {@code thresholdFor(tag)}.
+     * meets {@code thresholdFor(tag)}. The provider model is always the configured one (ADR-0068
+     * §3.6: no response string is used), whatever the tagger reported.
      */
     private @NonNull QuestionTags merge(@NonNull QuestionTags heuristic, @NonNull QuestionTags model, long latencyMs) {
         return new QuestionTags(
@@ -118,7 +119,7 @@ class TaggingService {
                 model.model(),
                 heuristic.heuristic(),
                 null,
-                model.providerModel(),
+                properties.provider().model(),
                 latencyMs,
                 model.stateTruncated(),
                 model.questionCount(),
@@ -126,7 +127,13 @@ class TaggingService {
                 model.optionListHash());
     }
 
+    /**
+     * The heuristic record of a turn whose provider call failed. {@code stateTruncated} is the real
+     * cut: a message over {@code max-state-chars} was cut before it was sent, whether or not the call
+     * then succeeded, and the cut is counted as on success.
+     */
     private @NonNull QuestionTags fallback(
+            @NonNull String message,
             @NonNull QuestionTags heuristic,
             @NonNull FallbackReason reason,
             long latencyMs,
@@ -146,6 +153,10 @@ class TaggingService {
                     .register(meterRegistry)
                     .record(Duration.ofMillis(latencyMs));
         }
+        boolean truncated = properties.truncates(message);
+        if (meterRegistry != null && truncated) {
+            Counter.builder(STATE_TRUNCATED).register(meterRegistry).increment();
+        }
         if (!(cause instanceof JevProviderException)) {
             // The client logs its own failures with the detail §4 allows; an unexpected exception
             // from the tagger itself is logged here by class only.
@@ -161,14 +172,15 @@ class TaggingService {
                 reason,
                 properties.provider().model(),
                 latencyMs,
-                false);
+                truncated);
     }
 
     private void recordSuccess(@NonNull QuestionTags merged) {
         if (meterRegistry == null) {
             return;
         }
-        String model = merged.providerModel() == null ? properties.provider().model() : merged.providerModel();
+        // ADR-0068 §3.6: the meter tag is the configured model, never a string from the response.
+        String model = properties.provider().model();
         Counter.builder(REQUESTS)
                 .tag("model", model)
                 .tag("outcome", "ok")

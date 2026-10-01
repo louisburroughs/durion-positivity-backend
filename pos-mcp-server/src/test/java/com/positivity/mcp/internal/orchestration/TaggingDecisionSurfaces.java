@@ -38,9 +38,11 @@ import org.springframework.web.client.RestClient;
  *
  * <p>Since the refactor the decisions are read from the {@link HeuristicQuestionTagger} record, the
  * one place they are taken; the engine's own result is still checked for the workflow state it
- * selects on and the {@code ToolRegistryService} fast path for the admin decision. The keyword-added
- * facades are no longer read from the engine's fallback list: with no {@code ToolRegistryService}
- * the gated set is unavailable and, by ADR-0068 §2, nothing tag-driven is added.
+ * selects on and the {@code ToolRegistryService} fast path for the admin decision. The gated
+ * keyword-added facades are no longer read from the engine's fallback list: with no {@code
+ * ToolRegistryService} the gated set is unavailable and, by ADR-0068 §2, none of them is added. Web
+ * search is exempt from the gated set (it has no permission row), so it is still read from the
+ * engine's result.
  */
 final class TaggingDecisionSurfaces {
 
@@ -143,15 +145,21 @@ final class TaggingDecisionSurfaces {
                 .resolveCandidateSelection(new ToolSelectionContext(message, ROLE, "IDLE", PERMISSION_CODES), TOP_K)
                 .adminFastPath();
         List<String> fallback = sharedOrchestrationSupport.toolNames(selection.fallbackTools());
-        if (!fallback.equals(List.of("GlossaryFacadeTool"))) {
-            throw new AssertionError("gated set unavailable, only the glossary may be added: " + fallback);
+        List<String> ungated = tags.needsWebSearch()
+                ? List.of("GlossaryFacadeTool", "ExaWebSearchTool")
+                : List.of("GlossaryFacadeTool");
+        if (!fallback.equals(ungated)) {
+            throw new AssertionError(
+                    "gated set unavailable, only the glossary and (on needs_web_search) web search may be added: "
+                            + fallback);
         }
         return new Decisions(
                 simpleChatFastPath().isSimpleChat(message, tags),
                 tags.followsPreviousTurn(),
                 selection.workflowState().name(),
                 tags.impliesDateWindow(),
-                tags.needsWebSearch(),
+                // Read from the engine's result: web search needs no gated set to be offered.
+                fallback.contains("ExaWebSearchTool"),
                 tags.aboutInventory(),
                 tags.aboutOrders(),
                 adminFastPath,
@@ -197,18 +205,18 @@ final class TaggingDecisionSurfaces {
         }
     }
 
-    /** An engine whose registry service gates every facade, so tag-added facades show in the result. */
+    /**
+     * An engine whose registry service gates every facade that has a seeded {@code mcp_tool_permission}
+     * row, so tag-added facades show in the result. {@code ExaWebSearchTool} has no such row, so, as in
+     * production, the gated set never names it: web search reaches the result only through its
+     * exemption from the intersection.
+     */
     private ToolSelectionEngine gatedEngine() {
         ToolRegistryService gating = mock(ToolRegistryService.class);
         when(gating.resolveCandidateSelection(any(ToolSelectionContext.class), anyInt()))
                 .thenReturn(new ToolRegistryService.CandidateSelection(
                         List.of(),
-                        Set.of(
-                                "DateWindowFacadeTool",
-                                "ExaWebSearchTool",
-                                "GlossaryFacadeTool",
-                                "InventoryFacadeTool",
-                                "OrderFacadeTool"),
+                        Set.of("DateWindowFacadeTool", "GlossaryFacadeTool", "InventoryFacadeTool", "OrderFacadeTool"),
                         false));
         MasterAgentRegistry registry = mock(MasterAgentRegistry.class);
         when(registry.resolveMasterTools()).thenReturn(List.of());

@@ -235,6 +235,78 @@ class JevClientTest {
         assertFailure(() -> client.ask(STATE, questions()), FallbackReason.TIMEOUT, null);
     }
 
+    /**
+     * PR #2367 review: the budget is ONE deadline for the whole call. A provider that sends its
+     * headers at once and then trickles the body, a byte well inside any per-read timeout each time,
+     * must still be cut off at the budget, not after the body ends.
+     */
+    @Test
+    @DisplayName("headers at once, then a body trickled past the budget → TIMEOUT within the budget")
+    void trickledBodyIsCutAtTheOverallDeadline() {
+        Duration budget = Duration.ofMillis(400);
+        responder.set(exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, 0);
+            try (OutputStream out = exchange.getResponseBody()) {
+                byte[] body = HAPPY_BODY.getBytes(StandardCharsets.UTF_8);
+                // One byte every 100 ms: each read is well inside the budget, the body as a whole is not.
+                for (int index = 0; index < Math.min(body.length, 40); index++) {
+                    out.write(body[index]);
+                    out.flush();
+                    Thread.sleep(100);
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } catch (IOException clientGone) {
+                // The client cancelled the exchange at its deadline.
+            }
+        });
+        JevClient client = new JevClient(properties(budget, null, "30m", 4000));
+
+        long startNanos = System.nanoTime();
+        assertFailure(() -> client.ask(STATE, questions()), FallbackReason.TIMEOUT, null);
+        long elapsedMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
+
+        assertThat(elapsedMs)
+                .as("the call ends at the budget, not when the trickled body ends (~4 s)")
+                .isGreaterThanOrEqualTo(budget.toMillis() - 50)
+                .isLessThan(budget.toMillis() + 300);
+    }
+
+    @Test
+    @DisplayName("headers withheld past the budget → TIMEOUT within the budget")
+    void slowHeadersAreCutAtTheOverallDeadline() {
+        Duration budget = Duration.ofMillis(300);
+        responder.set(exchange -> {
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            exchange.sendResponseHeaders(200, -1);
+            exchange.close();
+        });
+        JevClient client = new JevClient(properties(budget, null, "30m", 4000));
+
+        long startNanos = System.nanoTime();
+        assertFailure(() -> client.ask(STATE, questions()), FallbackReason.TIMEOUT, null);
+
+        assertThat(Duration.ofNanos(System.nanoTime() - startNanos).toMillis()).isLessThan(budget.toMillis() + 300);
+    }
+
+    @Test
+    @DisplayName("ADR-0068 §3.6: the provider's reported model string is never used, logged or returned")
+    void providerReportedModelIsIgnored() {
+        respondWith(200, HAPPY_BODY.replace("\"model\": \"tev1:0.8b\"", "\"model\": \"rogue-model {} injected\""));
+
+        JevClient.JevResponse response = client().ask(STATE, questions());
+
+        assertThat(response.model()).isEqualTo("tev1:0.8b");
+        assertThat(logs.list).isNotEmpty();
+        assertThat(logs.list).noneMatch(event -> event.getFormattedMessage().contains("rogue-model"));
+        assertThat(logs.list).anyMatch(event -> event.getFormattedMessage().contains("model=tev1:0.8b"));
+    }
+
     @Test
     @DisplayName("connection refused → ERROR")
     void connectionRefused() {
@@ -255,6 +327,28 @@ class JevClientTest {
     @ValueSource(ints = {429, 529})
     void rateLimited(int status) {
         respondWith(status, "{\"error\":\"overloaded\"}");
+
+        assertFailure(() -> client().ask(STATE, questions()), FallbackReason.RATE_LIMITED, status);
+    }
+
+    @ParameterizedTest(name = "HTTP {0} with an empty body → RATE_LIMITED")
+    @ValueSource(ints = {429, 529})
+    void rateLimitedWithAnEmptyBody(int status) {
+        responder.set(exchange -> {
+            exchange.sendResponseHeaders(status, -1);
+            exchange.close();
+        });
+
+        assertFailure(() -> client().ask(STATE, questions()), FallbackReason.RATE_LIMITED, status);
+    }
+
+    @ParameterizedTest(name = "HTTP {0} with a zero-length chunked body → RATE_LIMITED")
+    @ValueSource(ints = {429, 529})
+    void rateLimitedWithAZeroLengthChunkedBody(int status) {
+        responder.set(exchange -> {
+            exchange.sendResponseHeaders(status, 0);
+            exchange.getResponseBody().close();
+        });
 
         assertFailure(() -> client().ask(STATE, questions()), FallbackReason.RATE_LIMITED, status);
     }

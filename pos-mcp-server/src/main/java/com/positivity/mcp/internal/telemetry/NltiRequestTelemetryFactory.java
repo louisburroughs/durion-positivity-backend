@@ -247,9 +247,9 @@ public final class NltiRequestTelemetryFactory {
     /**
      * As above, with the request's ADR-0068 tagging (schema version 3). {@code tagging} is null when
      * the turn did not tag (a failure before tagging, {@link QuestionTags#none()}); the {@code
-     * tagging} block is then absent. When present, the {@link Routing} block's classification fields
-     * are filled from the acting tag values unless the Gate 4 router ran, whose decision wins (§7:
-     * in Wave 2 the router itself reads the tags, so the two agree).
+     * tagging} block is then absent. The tagging block never changes the {@link Routing} block,
+     * which is built exactly as in schema version 2: its classification fields come from the Gate 4
+     * router alone, when it ran.
      */
     public static @NonNull NltiRequestTelemetry forChatRequest(
             @NonNull String correlationId,
@@ -273,27 +273,25 @@ public final class NltiRequestTelemetryFactory {
         Actor actor = new Actor(primaryRole, permissionCodeCount);
 
         // Tier-0 rule path short-circuits before the Gate 4 router; the tool path carries the router
-        // decision (when it ran) and the resolved workflow state (Gate 2C). Since ADR-0068 the acting
-        // tag values fill the classification fields whenever the turn tagged; routing is omitted
-        // only when none of the signals apply.
-        String intentType =
-                tierRouting != null ? tierRouting.intentType() : (tagging != null ? tagging.intent() : null);
-        String riskLevel = tierRouting != null ? tierRouting.riskLevel() : (tagging != null ? tagging.risk() : null);
-        String domain = tierRouting != null ? tierRouting.domain() : (tagging != null ? tagging.domain() : null);
-        String complexity =
-                tierRouting != null ? tierRouting.complexity() : (tagging != null ? tagging.complexity() : null);
-        String routedWorkflowState = workflowState != null
-                ? workflowState
-                : (tagging != null && !simpleChat ? tagging.workflowState() : null);
+        // decision (when it ran) and the resolved workflow state (Gate 2C). Routing is omitted only
+        // when none of the signals apply. ADR-0068: the tags never fill this block. Its
+        // classification fields are the router's, present only when the router ran, because the
+        // routing-mix and unclassified-share alert rules and the Gate 7 risk panel read them as such;
+        // the acting tag values go in the separate tagging block.
         Routing routing;
         if (simpleChat) {
-            routing =
-                    new Routing(intentType, riskLevel, domain, complexity, Tier.T0_RULE, simpleChatRule, workflowState);
+            routing = new Routing(null, null, null, null, Tier.T0_RULE, simpleChatRule, workflowState);
         } else if (tierRouting != null) {
             routing = new Routing(
-                    intentType, riskLevel, domain, complexity, tierRouting.tier(), null, routedWorkflowState);
-        } else if (routedWorkflowState != null || tagging != null) {
-            routing = new Routing(intentType, riskLevel, domain, complexity, null, null, routedWorkflowState);
+                    tierRouting.intentType(),
+                    tierRouting.riskLevel(),
+                    tierRouting.domain(),
+                    tierRouting.complexity(),
+                    tierRouting.tier(),
+                    null,
+                    workflowState);
+        } else if (workflowState != null) {
+            routing = new Routing(null, null, null, null, null, null, workflowState);
         } else {
             routing = null;
         }

@@ -139,7 +139,8 @@ class TaggingServiceTest {
             assertThat(actual.mode()).isEqualTo(mode);
             assertThat(actual.model()).isNotEmpty();
             assertThat(actual.model()).containsKey(TagName.entityWireName("work-order"));
-            assertThat(actual.providerModel()).isEqualTo("stub-model");
+            // ADR-0068 §3.6: the model the tagger reports ("stub-model") is never used; the configured one is.
+            assertThat(actual.providerModel()).isEqualTo(TaggingProperties.Provider.DEFAULT_MODEL);
             assertThat(actual.latencyMs()).isEqualTo(42L);
             assertThat(actual.stateTruncated()).isTrue();
             assertThat(actual.questionCount()).isEqualTo(46);
@@ -150,10 +151,18 @@ class TaggingServiceTest {
         }
         assertThat(model.calls).hasValue(MESSAGES.size());
         assertThat(meters.get(TaggingService.REQUESTS)
-                        .tags("model", "stub-model", "outcome", "ok")
+                        .tags("model", TaggingProperties.Provider.DEFAULT_MODEL, "outcome", "ok")
                         .counter()
                         .count())
                 .isEqualTo(MESSAGES.size());
+        assertThat(meters.find(TaggingService.REQUESTS)
+                        .tags("model", "stub-model")
+                        .counter())
+                .isNull();
+        assertThat(meters.find(TaggingService.LATENCY)
+                        .tags("model", "stub-model")
+                        .timer())
+                .isNull();
         assertThat(meters.get(TaggingService.STATE_TRUNCATED).counter().count()).isEqualTo(MESSAGES.size());
         assertThat(meters.get(TaggingService.AGREEMENT)
                         .tags("tag", "simple_chat", "agree", "false")
@@ -166,10 +175,62 @@ class TaggingServiceTest {
                 .isNull();
         assertThat(meters.find(TaggingService.FALLBACK).counter()).isNull();
         assertThat(meters.get(TaggingService.LATENCY)
-                        .tags("model", "stub-model")
+                        .tags("model", TaggingProperties.Provider.DEFAULT_MODEL)
                         .timer()
                         .count())
                 .isEqualTo(MESSAGES.size());
+    }
+
+    @Test
+    @DisplayName("ADR-0068 §3.6: the configured model names the record and the meters, never the provider's string")
+    void providerReportedModelIsNeverUsed() {
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        TaggingProperties properties =
+                TaggingProperties.shadow(new TaggingProperties.Provider(null, "configured-model", null, null, null));
+        QuestionTagger reportsAnotherModel = message -> new QuestionTags(
+                TaggingMode.SHADOW,
+                Map.of(),
+                Map.of(TagName.SIMPLE_CHAT.wireName(), TagAnswer.noul(0.9)),
+                Map.of(TagName.SIMPLE_CHAT.wireName(), TagAnswer.noul(0.9)),
+                null,
+                "provider says {} %s\nmodel",
+                7L,
+                false);
+        TaggingService service = new TaggingService(properties, heuristic, reportsAnotherModel, meters);
+
+        QuestionTags tags = service.tag("hello");
+
+        assertThat(tags.providerModel()).isEqualTo("configured-model");
+        assertThat(meters.get(TaggingService.REQUESTS)
+                        .tags("model", "configured-model", "outcome", "ok")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(meters.getMeters())
+                .allSatisfy(meter -> assertThat(meter.getId().getTags())
+                        .noneMatch(tag -> tag.getValue().contains("provider says")));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"TIMEOUT", "ERROR"})
+    @DisplayName("a provider failure carries the real truncation flag of the message it was asked about")
+    void fallbackCarriesTheRealTruncationFlag(String reasonName) {
+        FallbackReason reason = FallbackReason.valueOf(reasonName);
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        TaggingProperties properties = new TaggingProperties(TaggingMode.SHADOW, List.of(), null, Map.of(), 20);
+        QuestionTagger failing = message -> {
+            throw new JevProviderException(reason, "stub failure", null, null);
+        };
+        TaggingService service = new TaggingService(properties, heuristic, failing, meters);
+
+        QuestionTags cut = service.tag("show me open workorders for every technician at the downtown store");
+        QuestionTags whole = service.tag("list all users");
+
+        assertThat(cut.fallbackReason()).isEqualTo(reason);
+        assertThat(cut.stateTruncated()).isTrue();
+        assertThat(whole.fallbackReason()).isEqualTo(reason);
+        assertThat(whole.stateTruncated()).isFalse();
+        assertThat(meters.get(TaggingService.STATE_TRUNCATED).counter().count()).isEqualTo(1.0);
     }
 
     @Test

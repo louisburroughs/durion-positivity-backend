@@ -30,8 +30,10 @@ import org.springframework.boot.context.properties.bind.ConstructorBinding;
  * @param thresholds per-tag confidence threshold by tag name ({@code entity.<key>} for one entity);
  *     {@value #DEFAULT_THRESHOLD} otherwise
  * @param maxStateChars the message is cut at this length before it becomes the {@code state}
- * @param entityQuestions whether the {@code entity_<key>} Nouls are asked (default true); off fits a
- *     small-context model during the bake-off (13 questions instead of 44)
+ * @param entityQuestions whether the {@code entity_<key>} Nouls are asked (default false: the 13 fixed
+ *     questions, about 2k tokens, fit the default {@code tev1:0.8b}, which reads about 2,000 tokens;
+ *     the 44-question set is about 4.6k tokens and would overflow it). The §6 bake-off turns it on per
+ *     model where the context allows
  */
 @ConfigurationProperties(prefix = "mcp.tagging")
 public record TaggingProperties(
@@ -42,7 +44,7 @@ public record TaggingProperties(
         int maxStateChars,
         @Nullable Boolean entityQuestions) {
 
-    /** The pre-{@code entity-questions} shape: entity Nouls asked. */
+    /** Without {@code entity-questions}: the default, entity Nouls not asked. */
     public TaggingProperties(
             @Nullable TaggingMode mode,
             @Nullable List<String> enforcedTags,
@@ -58,12 +60,19 @@ public record TaggingProperties(
     private static final int DEFAULT_MAX_STATE_CHARS = 4000;
 
     /**
+     * Off by default: the default model ({@link Provider#DEFAULT_MODEL}) reads about 2,000 tokens, which
+     * the 13 fixed questions fit and the 44-question set with one Noul per entity does not.
+     */
+    public static final boolean DEFAULT_ENTITY_QUESTIONS = false;
+
+    /**
      * The System One provider (ADR-0068 §5). The base URL is deliberately separate from {@code
      * spring.ai.ollama.base-url} so tagging can never follow the chat model off the cell.
      *
      * @param baseUrl the in-cell Ollama container by default
      * @param model a Jev-protocol decision model pulled into that container; the §6 bake-off sets it
-     * @param timeout the connect + read latency budget; never raised to fit a slow model
+     * @param timeout the one overall deadline of the tagging call (connect, response headers and body
+     *     together); never raised to fit a slow model
      * @param apiKey for an external provider only; sent as {@code Authorization: Bearer}, never logged
      * @param keepAlive sent as {@code keep_alive} so the model stays resident between turns; omitted
      *     from the request when blank
@@ -133,7 +142,7 @@ public record TaggingProperties(
         if (maxStateChars <= 0) {
             maxStateChars = DEFAULT_MAX_STATE_CHARS;
         }
-        entityQuestions = entityQuestions == null ? Boolean.TRUE : entityQuestions;
+        entityQuestions = entityQuestions == null ? DEFAULT_ENTITY_QUESTIONS : entityQuestions;
     }
 
     /** The defaults: mode {@code off}, nothing enforced, the in-cell provider. */
@@ -144,6 +153,11 @@ public record TaggingProperties(
     /** Mode {@code shadow} with the given provider and the other defaults. */
     public static @NonNull TaggingProperties shadow(@NonNull Provider provider) {
         return new TaggingProperties(TaggingMode.SHADOW, List.of(), provider, Map.of(), 0);
+    }
+
+    /** True when {@code state} is longer than {@code max-state-chars} and is cut before it is sent. */
+    public boolean truncates(@NonNull String state) {
+        return state.length() > maxStateChars;
     }
 
     /** True in {@code shadow} and {@code enforce}: the decision model is called. */

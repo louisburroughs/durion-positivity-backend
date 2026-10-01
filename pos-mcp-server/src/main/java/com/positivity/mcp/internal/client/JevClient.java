@@ -8,34 +8,44 @@ import com.positivity.mcp.internal.config.TaggingEnabledCondition;
 import com.positivity.mcp.internal.config.TaggingProperties;
 import com.positivity.mcp.internal.domain.FallbackReason;
 import com.positivity.mcp.internal.domain.TagQuestion;
-import java.io.InputStream;
 import java.net.SocketTimeoutException;
-import java.nio.charset.StandardCharsets;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SequencedMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Conditional;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestClient;
 
 /**
  * ADR-0068 §5: the thin System One client. Speaks {@code POST {base-url}/v1/systemone} as Ollama 0.35
- * and TypeSafe publish it, through a plain (never {@code @LoadBalanced}) {@link RestClient} whose
- * connect and read timeouts are the latency budget {@code mcp.tagging.provider.timeout}. No retries,
- * no circuit state: every failure is one {@link JevProviderException} and the caller falls back to
- * the heuristic record (§2).
+ * and TypeSafe publish it, through a plain JDK {@link HttpClient} (never {@code @LoadBalanced}, no
+ * interceptors). No retries, no circuit state: every failure is one {@link JevProviderException} and
+ * the caller falls back to the heuristic record (§2).
+ *
+ * <p>The latency budget {@code mcp.tagging.provider.timeout} is ONE overall deadline for the call:
+ * connect, request, response headers and the whole response body. A per-phase connect or read timeout
+ * cannot give that (each phase could take the full budget, and a read timeout restarts on every byte
+ * of a trickled body), so the call is sent asynchronously and the calling thread waits for it at most
+ * the budget, measured from the start of the call; on expiry the exchange is cancelled and the turn
+ * takes the heuristic answers ({@code TIMEOUT}). The caller stays synchronous: it never waits longer
+ * than the budget, and nothing outlives the call but the client's own I/O, which the cancellation
+ * aborts.
  *
  * <p>Data minimisation (§4): the request body carries exactly {@code model}, {@code state}, {@code
  * keep_alive} (when set) and {@code questions}. Nothing about the caller, the tenant or the
@@ -48,7 +58,7 @@ import org.springframework.web.client.RestClient;
  */
 @Component
 @Conditional(TaggingEnabledCondition.class)
-public class JevClient {
+public class JevClient implements DisposableBean {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(JevClient.class);
 
@@ -58,36 +68,44 @@ public class JevClient {
     private static final ObjectMapper MAPPER =
             new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    private final RestClient restClient;
+    private final HttpClient httpClient;
     private final TaggingProperties properties;
 
     @Autowired
     public JevClient(@NonNull TaggingProperties properties) {
-        this(buildRestClient(properties.provider()), properties);
+        this(buildHttpClient(properties.provider()), properties);
     }
 
-    /** Visible for testing: a pre-built client (bound to a stub server). */
-    JevClient(@NonNull RestClient restClient, @NonNull TaggingProperties properties) {
-        this.restClient = restClient;
+    /** Visible for testing: a pre-built client. */
+    JevClient(@NonNull HttpClient httpClient, @NonNull TaggingProperties properties) {
+        this.httpClient = httpClient;
         this.properties = properties;
     }
 
-    private static @NonNull RestClient buildRestClient(TaggingProperties.@NonNull Provider provider) {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(provider.timeout());
-        factory.setReadTimeout(provider.timeout());
-        // A fresh builder, not the shared or load-balanced one: no bearer-token relay, no Eureka
-        // lookup, no interceptor may add a header about the caller (ADR-0068 §4, §5).
-        return RestClient.builder()
-                .baseUrl(provider.baseUrl())
-                .requestFactory(factory)
+    private static @NonNull HttpClient buildHttpClient(TaggingProperties.@NonNull Provider provider) {
+        // A client of its own, not a shared or load-balanced one: no bearer-token relay, no Eureka
+        // lookup, no interceptor may add a header about the caller (ADR-0068 §4, §5). HTTP/1.1, as
+        // Ollama serves it (no h2c upgrade attempt); no redirects (a redirect could take the state off
+        // the configured host). The connect timeout only fails a dead host early; the overall
+        // deadline in ask() bounds the call.
+        return HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .connectTimeout(provider.timeout())
                 .build();
+    }
+
+    /** Aborts any call still in flight when the context closes. */
+    @Override
+    public void destroy() {
+        httpClient.shutdownNow();
     }
 
     /**
      * The result of one call.
      *
-     * @param model the model the provider reports, or the configured one when it reports none
+     * @param model the configured {@code mcp.tagging.provider.model}; never the model string the
+     *     provider reports (ADR-0068 §3.6: no response string is used)
      * @param answers one validated answer per question asked, by wire name
      * @param latencyMs wall time of the call
      * @param stateTruncated whether the state was cut at {@code max-state-chars}
@@ -111,37 +129,20 @@ public class JevClient {
      */
     public @NonNull JevResponse ask(@NonNull String state, @NonNull List<TagQuestion> questions) {
         TaggingProperties.Provider provider = properties.provider();
-        boolean truncated = state.length() > properties.maxStateChars();
-        String sent = truncated ? state.substring(0, properties.maxStateChars()) : state;
         long startNanos = System.nanoTime();
+        boolean truncated = properties.truncates(state);
+        String sent = truncated ? state.substring(0, properties.maxStateChars()) : state;
         int status = -1;
         try {
             byte[] body = MAPPER.writeValueAsBytes(requestBody(provider, sent, questions));
-            Exchange exchange = restClient
-                    .post()
-                    .uri(SYSTEM_ONE_PATH)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .headers(headers -> {
-                        if (provider.apiKey() != null) {
-                            headers.setBearerAuth(provider.apiKey());
-                        }
-                    })
-                    .body(body)
-                    .exchange((request, response) -> {
-                        try (InputStream in = response.getBody()) {
-                            return new Exchange(
-                                    response.getStatusCode().value(),
-                                    new String(in.readAllBytes(), StandardCharsets.UTF_8));
-                        }
-                    });
+            Exchange exchange = exchange(provider, body, startNanos);
             status = exchange.status();
             long latencyMs = elapsedMs(startNanos);
             JevResponse parsed = parse(exchange, provider, questions, latencyMs, truncated, body.length);
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
                         "MCP tagging provider answered model={} host={} questions={} latencyMs={} stateTruncated={}",
-                        parsed.model(),
+                        provider.model(),
                         provider.host(),
                         questions.size(),
                         latencyMs,
@@ -149,14 +150,6 @@ public class JevClient {
             }
             return parsed;
         } catch (JevProviderException failure) {
-            logFailure(failure, provider, status, elapsedMs(startNanos));
-            throw failure;
-        } catch (ResourceAccessException transport) {
-            JevProviderException failure = new JevProviderException(
-                    isTimeout(transport) ? FallbackReason.TIMEOUT : FallbackReason.ERROR,
-                    "provider transport failure: " + rootClass(transport),
-                    null,
-                    transport);
             logFailure(failure, provider, status, elapsedMs(startNanos));
             throw failure;
         } catch (JsonProcessingException serialization) {
@@ -172,7 +165,46 @@ public class JevClient {
         }
     }
 
-    private record Exchange(int status, @NonNull String body) {}
+    private record Exchange(int status, byte @NonNull [] body) {}
+
+    /**
+     * One POST under one overall deadline: the budget less what the call has already spent, so
+     * connect, headers and a trickled body together never exceed {@code provider.timeout}.
+     */
+    private @NonNull Exchange exchange(
+            TaggingProperties.@NonNull Provider provider, byte @NonNull [] body, long startNanos) {
+        Duration budget = provider.timeout();
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(provider.baseUrl() + SYSTEM_ONE_PATH))
+                .timeout(budget)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body));
+        if (provider.apiKey() != null) {
+            request.header("Authorization", "Bearer " + provider.apiKey());
+        }
+        CompletableFuture<HttpResponse<byte[]>> pending =
+                httpClient.sendAsync(request.build(), HttpResponse.BodyHandlers.ofByteArray());
+        try {
+            long remainingNanos = Math.max(0L, budget.toNanos() - (System.nanoTime() - startNanos));
+            HttpResponse<byte[]> response = pending.get(remainingNanos, TimeUnit.NANOSECONDS);
+            return new Exchange(response.statusCode(), response.body() == null ? new byte[0] : response.body());
+        } catch (TimeoutException expired) {
+            pending.cancel(true);
+            throw new JevProviderException(
+                    FallbackReason.TIMEOUT, "provider exceeded the timeout budget", null, expired);
+        } catch (ExecutionException failed) {
+            Throwable cause = failed.getCause() == null ? failed : failed.getCause();
+            throw new JevProviderException(
+                    isTimeout(cause) ? FallbackReason.TIMEOUT : FallbackReason.ERROR,
+                    "provider transport failure: " + rootClass(cause),
+                    null,
+                    cause);
+        } catch (InterruptedException interrupted) {
+            pending.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new JevProviderException(FallbackReason.ERROR, "provider call interrupted", null, interrupted);
+        }
+    }
 
     /** Spec §2.2 / ADR-0068 §4: exactly {@code model}, {@code state}, {@code keep_alive}, {@code questions}. */
     public static @NonNull Map<String, Object> requestBody(
@@ -199,6 +231,8 @@ public class JevClient {
             boolean truncated,
             int requestBodyBytes) {
         int status = exchange.status();
+        // The status decides before the body is looked at: a 429 or 529 is rate limiting whatever
+        // its body says, an empty one included.
         if (status == 429 || status == 529) {
             throw new JevProviderException(FallbackReason.RATE_LIMITED, "provider rate limited", status, null);
         }
@@ -208,7 +242,7 @@ public class JevClient {
         JsonNode root;
         try {
             root = MAPPER.readTree(exchange.body());
-        } catch (JsonProcessingException malformed) {
+        } catch (java.io.IOException malformed) {
             throw new JevProviderException(FallbackReason.MALFORMED, "response is not JSON", status, null);
         }
         if (root == null || !root.isObject()) {
@@ -237,9 +271,9 @@ public class JevClient {
             }
             parsed.put(question.wireName(), parseAnswer(question, answer, status));
         }
-        String model = root.path("model").asText("");
-        return new JevResponse(
-                model.isBlank() ? provider.model() : model, parsed, latencyMs, truncated, requestBodyBytes);
+        // ADR-0068 §3.6: only typed values are read from the response. The provider's own "model"
+        // string is ignored; the configured model names the answer in the trace, logs and meters.
+        return new JevResponse(provider.model(), parsed, latencyMs, truncated, requestBodyBytes);
     }
 
     private static @NonNull JevAnswer parseAnswer(@NonNull TagQuestion question, @NonNull JsonNode answer, int status) {

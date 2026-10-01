@@ -33,7 +33,8 @@ import org.springframework.stereotype.Component;
 /**
  * ADR-0068 §1 / spec §2.3: the closed question set of one tagging request, built from one list of tag
  * definitions in code. Twelve fixed tags, then the {@code domain} Choice, then one {@code entity_<key>}
- * Noul per lexicon entity (44 questions for today's lexicon; 13 with {@code mcp.tagging.entity-questions: false}).
+ * Noul per lexicon entity when {@code mcp.tagging.entity-questions} is on (44 questions for today's lexicon;
+ * 13 with it off, the default).
  *
  * <ul>
  *   <li>The {@code domain} options are permanently the curated RAG-scope vocabulary: the distinct
@@ -91,7 +92,12 @@ public class TaggingQuestions {
     @Autowired
     public TaggingQuestions(
             @Nullable StaticRagPreloadProperties preloadProperties, @Nullable TaggingProperties taggingProperties) {
-        this(loadLexicon(), preloadProperties, taggingProperties == null || taggingProperties.entityQuestions());
+        this(
+                loadLexicon(),
+                preloadProperties,
+                taggingProperties == null
+                        ? TaggingProperties.DEFAULT_ENTITY_QUESTIONS
+                        : taggingProperties.entityQuestions());
     }
 
     /** For tests: an explicit lexicon and preload list, entity Nouls asked. */
@@ -152,8 +158,16 @@ public class TaggingQuestions {
         List<TagQuestion> questions = new ArrayList<>(fixedQuestions());
         TagQuestion domain = domainQuestion(lexicon, preloadProperties);
         // A Choice needs at least two options (spec §2.2); with no preload list only master is left,
-        // and a one-option question would fail the whole request.
-        if (domain.options().size() >= 2) {
+        // and a one-option question would fail the whole request. Likewise above the local models'
+        // option cap: the provider would reject every request, so every turn would fall back. The set
+        // is built once per context, so the warning is logged once; it names counts only.
+        int domainOptions = domain.options().size();
+        if (domainOptions > MAX_OPTIONS) {
+            LOGGER.warn(
+                    "Tagging domain question skipped: {} rag-scope options exceed the local-model limit of {}",
+                    domainOptions,
+                    MAX_OPTIONS);
+        } else if (domainOptions >= 2) {
             questions.add(domain);
         }
         List<String> entityKeys = new ArrayList<>();

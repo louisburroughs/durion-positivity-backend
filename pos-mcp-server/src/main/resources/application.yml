@@ -145,8 +145,8 @@ mcp:
       # A Jev-protocol decision model pulled into that container (Ollama 0.35+): tev1:0.8b, tev1 or
       # nimble. The smallest by default; the section 6 bake-off sets the real one.
       model: ${MCP_TAGGING_MODEL:tev1:0.8b}
-      # Connect + read latency budget for the one tagging call per turn; on expiry the turn takes the
-      # heuristic answers. Not raised to fit a slow model (section 5).
+      # One overall deadline (connect, headers and body together) for the one tagging call per turn;
+      # on expiry the turn takes the heuristic answers. Not raised to fit a slow model (section 5).
       timeout: ${MCP_TAGGING_TIMEOUT:800ms}
       # Bearer token for an external provider only (section 4 condition); unset for the local one.
       api-key: ${MCP_TAGGING_API_KEY:}
@@ -159,9 +159,10 @@ mcp:
     # about 2,000 tokens); a cut message is still tagged and the cut is counted.
     max-state-chars: ${MCP_TAGGING_MAX_STATE_CHARS:4000}
     # Whether the one-Noul-per-lexicon-entity questions are asked (44 questions, ~18 KB body, about 4.6k
-    # tokens) or only the 13 fixed ones (~8 KB, about 2k tokens). Off fits a small-context model (tev1
-    # reads about 2,000 tokens) during the section 6 bake-off, which decides the setting per model.
-    entity-questions: ${MCP_TAGGING_ENTITY_QUESTIONS:true}
+    # tokens) or only the 13 fixed ones (~8 KB, about 2k tokens). Off by default because the default
+    # model (tev1:0.8b) reads about 2,000 tokens and the 44-question request would overflow it; turn it
+    # on only for a model whose context holds it. The section 6 bake-off decides the setting per model.
+    entity-questions: ${MCP_TAGGING_ENTITY_QUESTIONS:false}
   rag:
     table-name: mcp_document_embedding
     # G5.4 #1194 cutover complete + #1207 (V33): the embedding column is 1024-dim bge-m3; the 768

@@ -509,9 +509,10 @@ public class ToolSelectionEngine {
      * <p>ADR-0068 §2, §3.1 (a deliberate change): every tag-added facade is offered only if it is in
      * the caller's permission-gated set. Before, these additions bypassed {@code mcp_tool_permission}
      * at selection and relied on the downstream {@code @PreAuthorize}. When the gated set is
-     * unavailable (no {@code ToolRegistryService}, or the ranked path failed closed) nothing
-     * tag-driven is added. The glossary tool is the one exception and is unchanged: it makes no HTTP
-     * call and has no permission row.
+     * unavailable (no {@code ToolRegistryService}, or the ranked path failed closed) no gated facade
+     * is added. Two tools are exempt from the intersection and are offered exactly as before: the
+     * glossary (always) and web search (on {@code needs_web_search}). Neither has a permission to
+     * intersect with, and neither reads tenant data.
      */
     private @NonNull List<Object> fallbackToolsForTags(
             @NonNull QuestionTags tags, @Nullable Set<String> gatedToolNames) {
@@ -524,14 +525,6 @@ public class ToolSelectionEngine {
         // undefined ones, inverting the tool's purpose. It makes no HTTP call and carries one small
         // schema, so offering it unconditionally costs a few prompt tokens and nothing else.
         selected.add(glossaryFacadeTool);
-        if (gatedToolNames == null) {
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug(
-                        "MCP shared fallback tool matches tools={} (gated set unavailable: tag-added facades withheld)",
-                        sharedOrchestrationSupport.toolNames(selected));
-            }
-            return selected;
-        }
         // #1684: a dated question must always be able to reach resolveDateWindow. Its mcp_tool row
         // (V43) carries domain 'date-window', and no ROLE resolves to that domain agent —
         // resolveDomainTools is keyed on the domain string — so its only route into the candidate
@@ -543,7 +536,13 @@ public class ToolSelectionEngine {
             addIfGated(selected, dateWindowFacadeTool, gatedToolNames);
         }
         if (tags.needsWebSearch()) {
-            addIfGated(selected, exaWebSearchTool, gatedToolNames);
+            // Exempt from the gated-set intersection, like the glossary above. ExaWebSearchTool has no
+            // mcp_tool row and no mcp_tool_permission row (it is not a catalog tool, so the
+            // registry query that builds the gated set can never return it) and no @PreAuthorize: it
+            // queries the public web and reads no tenant data, so there is no permission to
+            // intersect with. Gating it would withhold web search from every caller, which is not a
+            // permission decision but the loss of a feature the keyword guard offered before ADR-0068.
+            selected.add(exaWebSearchTool);
         }
         if (tags.aboutInventory()) {
             addIfGated(selected, inventoryFacadeTool, gatedToolNames);
@@ -552,18 +551,29 @@ public class ToolSelectionEngine {
             addIfGated(selected, orderFacadeTool, gatedToolNames);
         }
         if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("MCP shared fallback tool matches tools={}", sharedOrchestrationSupport.toolNames(selected));
+            LOGGER.debug(
+                    "MCP shared fallback tool matches tools={} gatedSetAvailable={}",
+                    sharedOrchestrationSupport.toolNames(selected),
+                    gatedToolNames != null);
         }
         return selected;
     }
 
     /**
-     * ADR-0068 §2: adds {@code tool} only when the gated set names it. The gated set is keyed by
-     * {@code mcp_tool.name}, the facade's class simple name (some rows and tests spell it bean-style),
-     * matched the way {@code MasterAgentRegistry.resolveToolsByName} matches.
+     * ADR-0068 §2: adds {@code tool} only when the gated set names it; a null (unavailable) gated set
+     * names nothing. The gated set is keyed by {@code mcp_tool.name}, the facade's class simple name
+     * (some rows and tests spell it bean-style), matched the way {@code
+     * MasterAgentRegistry.resolveToolsByName} matches.
      */
-    private void addIfGated(@NonNull List<Object> selected, @NonNull Object tool, @NonNull Set<String> gatedToolNames) {
+    private void addIfGated(
+            @NonNull List<Object> selected, @NonNull Object tool, @Nullable Set<String> gatedToolNames) {
         String className = sharedOrchestrationSupport.toolName(tool);
+        if (gatedToolNames == null) {
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("MCP shared fallback tool withheld: {} (gated set unavailable)", className);
+            }
+            return;
+        }
         String beanStyle = java.beans.Introspector.decapitalize(className);
         boolean gated = gatedToolNames.stream()
                 .anyMatch(name -> name.equalsIgnoreCase(className) || name.equalsIgnoreCase(beanStyle));

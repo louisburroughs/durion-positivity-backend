@@ -213,8 +213,10 @@ class TaggingQuestionsTest {
                         TaggingQuestions.domainQuestion(LEXICON, preload(profile))
                                 .options(),
                         List.of()));
-        // The property drives the bean: default true, false honoured, the older 5-arg shape asks them.
+        // The property drives the bean: default false (the 5-arg shape takes the default), false honoured.
         assertThat(new TaggingProperties(null, null, null, null, 0).entityQuestions())
+                .isFalse();
+        assertThat(new TaggingProperties(null, null, null, null, 0, true).entityQuestions())
                 .isTrue();
         assertThat(new TaggingProperties(null, null, null, null, 0, false).entityQuestions())
                 .isFalse();
@@ -229,6 +231,103 @@ class TaggingQuestionsTest {
         System.out.printf(
                 "tagging questions profile=%s entity-questions=false count=%d bodyBytes=%d optionListHash=%s%n",
                 profile, off.size(), body.length, off.optionListHash());
+    }
+
+    /**
+     * PR #2367 review: the default model ({@code tev1:0.8b}) reads about 2,000 tokens, which the 44-question
+     * set (about 4.6k tokens) overflows. The defaults, as {@code application.yml} binds them with no
+     * environment override and as the record defaults them, must ask the fixed set only.
+     */
+    @Test
+    @DisplayName("the request built from the default properties asks the fixed questions only, no entity Nouls")
+    void defaultPropertiesAskTheFixedQuestionsOnly() throws Exception {
+        org.springframework.core.env.StandardEnvironment environment =
+                new org.springframework.core.env.StandardEnvironment();
+        // The default (profile-less) document of application.yml, placeholders resolved to their defaults.
+        environment
+                .getPropertySources()
+                .addLast(new org.springframework.boot.env.YamlPropertySourceLoader()
+                        .load("application.yml", new org.springframework.core.io.ClassPathResource("application.yml"))
+                        .getFirst());
+        TaggingProperties bound = org.springframework.boot.context.properties.bind.Binder.get(environment)
+                .bind("mcp.tagging", TaggingProperties.class)
+                .get();
+        assertThat(bound.provider().model()).isEqualTo(TaggingProperties.Provider.DEFAULT_MODEL);
+        assertThat(bound.entityQuestions()).as("application.yml default").isFalse();
+
+        for (TaggingProperties defaults : List.of(
+                bound, TaggingProperties.off(), TaggingProperties.shadow(TaggingProperties.Provider.defaults()))) {
+            List<TagQuestion> asked = new TaggingQuestions(preload("default"), defaults).questions();
+            Map<String, Object> request =
+                    JevClient.requestBody(defaults.provider(), "how many tires do we have on hand?", asked);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> wireQuestions = (Map<String, Object>) request.get("questions");
+
+            List<TagQuestion> fixedAndDomain = new java.util.ArrayList<>(TaggingQuestions.fixedQuestions());
+            fixedAndDomain.add(TaggingQuestions.domainQuestion(LEXICON, preload("default")));
+            assertThat(asked).containsExactlyElementsOf(fixedAndDomain);
+            assertThat(asked).noneMatch(question -> question.tag() == TagName.ENTITY);
+            assertThat(wireQuestions.keySet())
+                    .hasSize(13)
+                    .noneMatch(name -> name.startsWith("entity_"))
+                    .containsExactlyElementsOf(
+                            fixedAndDomain.stream().map(TagQuestion::wireName).toList());
+        }
+        // And with no properties bean at all.
+        assertThat(new TaggingQuestions(preload("default"), null).questions())
+                .noneMatch(question -> question.tag() == TagName.ENTITY)
+                .hasSize(13);
+    }
+
+    @Test
+    @DisplayName("a domain option list over the 26-option local-model limit skips the domain question, logged once")
+    void domainQuestionSkippedAboveTheOptionCap() {
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(TaggingQuestions.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> logs =
+                new ch.qos.logback.core.read.ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            // 26 scopes + master = 27 options: one over the cap.
+            TaggingQuestions over = new TaggingQuestions(LEXICON, scopes(TaggingQuestions.MAX_OPTIONS), false);
+            assertThat(over.questions()).noneMatch(question -> question.tag() == TagName.DOMAIN);
+            assertThat(over.questions()).containsExactlyElementsOf(TaggingQuestions.fixedQuestions());
+            assertThat(over.questions())
+                    .allSatisfy(question ->
+                            assertThat(question.options()).hasSizeLessThanOrEqualTo(TaggingQuestions.MAX_OPTIONS));
+            assertThat(logs.list)
+                    .filteredOn(event -> event.getLevel() == ch.qos.logback.classic.Level.WARN)
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getFormattedMessage())
+                            .contains("27")
+                            .contains(Integer.toString(TaggingQuestions.MAX_OPTIONS)));
+            // The set is built once: asking for it again logs nothing more.
+            over.questions();
+            over.questionSet();
+            assertThat(logs.list).hasSize(1);
+
+            // 25 scopes + master = 26 options: at the cap, still asked.
+            TaggingQuestions atCap = new TaggingQuestions(LEXICON, scopes(TaggingQuestions.MAX_OPTIONS - 1), false);
+            assertThat(atCap.questions())
+                    .filteredOn(question -> question.tag() == TagName.DOMAIN)
+                    .singleElement()
+                    .satisfies(domain -> assertThat(domain.options()).hasSize(TaggingQuestions.MAX_OPTIONS));
+            assertThat(logs.list).hasSize(1);
+        } finally {
+            logger.detachAppender(logs);
+            logs.stop();
+        }
+    }
+
+    /** A preload list of {@code count} distinct rag scopes. */
+    private static StaticRagPreloadProperties scopes(int count) {
+        List<StaticDocEntry> docs = new java.util.ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            String scope = String.format(java.util.Locale.ROOT, "scope-%02d", index);
+            docs.add(new StaticDocEntry(scope, "classpath:" + scope + ".md", scope));
+        }
+        return new StaticRagPreloadProperties(docs);
     }
 
     @Test
