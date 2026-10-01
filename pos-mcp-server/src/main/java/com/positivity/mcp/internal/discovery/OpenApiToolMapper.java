@@ -9,6 +9,7 @@ import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.Parameter;
@@ -18,18 +19,23 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 @Component
 public class OpenApiToolMapper {
+    private static final Logger LOGGER = LoggerFactory.getLogger(OpenApiToolMapper.class);
     private static final String STRING_TYPE = "string";
 
     private static final String OBJECT = "object";
@@ -44,6 +50,14 @@ public class OpenApiToolMapper {
         this.proxyFactory = proxyFactory;
     }
 
+    /**
+     * Maps one service's own OpenAPI (fetched through Eureka by the #645 full fallback and the #1632
+     * targeted failed-prefix fallback) to tool specifications named {@code {serviceId}_{operationId}}.
+     * Its paths carry no routing prefix ({@code /v1/audit/events}), so the #2370 write exclusion is
+     * matched against the path as the gateway routes it: the service's routing prefix, derived from
+     * its id by {@link #routingDomain}, prepended ({@code /security-service/v1/audit/events}). Every
+     * non-GET operation the aggregate path would drop is dropped here too; GET stays.
+     */
     @NonNull
     public List<McpServerFeatures.AsyncToolSpecification> toToolSpecifications(
             @NonNull String serviceId, @NonNull URI baseUri, @NonNull OpenAPI openApi) {
@@ -52,24 +66,48 @@ public class OpenApiToolMapper {
             return specs;
         }
 
+        String routingPrefix = "/" + routingDomain(serviceId);
         openApi.getPaths().forEach((path, pathItem) -> {
             if (!properties.includesPath(path)) {
                 return;
             }
-            addOperation(specs, openApi, serviceId, baseUri, path, pathItem.getGet(), HttpMethod.GET);
-            addOperation(specs, openApi, serviceId, baseUri, path, pathItem.getPost(), HttpMethod.POST);
-            addOperation(specs, openApi, serviceId, baseUri, path, pathItem.getPut(), HttpMethod.PUT);
-            addOperation(specs, openApi, serviceId, baseUri, path, pathItem.getDelete(), HttpMethod.DELETE);
-            addOperation(specs, openApi, serviceId, baseUri, path, pathItem.getPatch(), HttpMethod.PATCH);
+            operationsOf(pathItem).forEach((method, operation) -> {
+                if (properties.excludesWrite(routingPrefix + path, method)) {
+                    LOGGER.debug(
+                            "Per-service discovery of {} excluded write operation {} {} (#2370: audit/platform-event"
+                                    + " writes are never agent tools)",
+                            serviceId,
+                            method,
+                            routingPrefix + path);
+                    return;
+                }
+                addOperation(specs, openApi, serviceId, baseUri, path, operation, method);
+            });
         });
         return specs;
+    }
+
+    /**
+     * The gateway routing prefix, without its leading slash, of a Eureka service id: lower-cased,
+     * conventional {@code pos-} prefix stripped ({@code pos-vehicle-fitment} → {@code
+     * vehicle-fitment}, {@code SECURITY-SERVICE} → {@code security-service}). It is also the
+     * tool-catalog domain the aggregate path persists as {@code mcp_tool.domain}. The targeted
+     * failed-prefix fallback already passes the prefix itself, which maps to itself.
+     */
+    static @NonNull String routingDomain(@NonNull String serviceId) {
+        String lower = serviceId.toLowerCase(Locale.ROOT);
+        return lower.startsWith("pos-") ? lower.substring(4) : lower;
     }
 
     /**
      * Maps aggregate OpenAPI operations to tool specifications using the gateway base URI directly.
      * Tool names are derived as {@code {domain}_{operationId}} where the domain is the first
      * non-version path segment (e.g. {@code /v1/accounting/invoices} → {@code accounting}).
-     * Paths matching any configured {@code excludedPathFragments} are skipped.
+     * Paths matching any configured {@code excludedPathFragments} are skipped, and so is every
+     * non-GET operation on a path matching {@code excludedWritePathPatterns} (#2370: audit and
+     * platform-event writes are never agent tools). The exclusions are logged by
+     * {@link #toDiscoveredOperations}, which runs on the same aggregate in the same cycle, so each
+     * one appears once per run.
      */
     @NonNull
     public List<McpServerFeatures.AsyncToolSpecification> toAggregateToolSpecifications(
@@ -82,11 +120,12 @@ public class OpenApiToolMapper {
             if (!properties.includesPath(path) || properties.excludesPath(path)) {
                 return;
             }
-            addAggregateOperation(specs, openApi, gatewayBaseUri, path, pathItem.getGet(), HttpMethod.GET);
-            addAggregateOperation(specs, openApi, gatewayBaseUri, path, pathItem.getPost(), HttpMethod.POST);
-            addAggregateOperation(specs, openApi, gatewayBaseUri, path, pathItem.getPut(), HttpMethod.PUT);
-            addAggregateOperation(specs, openApi, gatewayBaseUri, path, pathItem.getDelete(), HttpMethod.DELETE);
-            addAggregateOperation(specs, openApi, gatewayBaseUri, path, pathItem.getPatch(), HttpMethod.PATCH);
+            operationsOf(pathItem).forEach((method, operation) -> {
+                if (properties.excludesWrite(path, method)) {
+                    return;
+                }
+                addAggregateOperation(specs, openApi, gatewayBaseUri, path, operation, method);
+            });
         });
         return specs;
     }
@@ -110,13 +149,63 @@ public class OpenApiToolMapper {
             if (!properties.includesPath(path) || properties.excludesPath(path)) {
                 return;
             }
-            addDiscoveredOperation(operations, serviceId, path, pathItem.getGet(), HttpMethod.GET);
-            addDiscoveredOperation(operations, serviceId, path, pathItem.getPost(), HttpMethod.POST);
-            addDiscoveredOperation(operations, serviceId, path, pathItem.getPut(), HttpMethod.PUT);
-            addDiscoveredOperation(operations, serviceId, path, pathItem.getDelete(), HttpMethod.DELETE);
-            addDiscoveredOperation(operations, serviceId, path, pathItem.getPatch(), HttpMethod.PATCH);
+            operationsOf(pathItem).forEach((method, operation) -> {
+                if (properties.excludesWrite(path, method)) {
+                    // #2370: the one log line per excluded operation per discovery run (no body).
+                    LOGGER.debug(
+                            "Discovery excluded write operation {} {} (#2370: audit/platform-event writes are never"
+                                    + " agent tools)",
+                            method,
+                            path);
+                    return;
+                }
+                addDiscoveredOperation(operations, serviceId, path, operation, method);
+            });
         });
         return operations;
+    }
+
+    /**
+     * #2370: the domains of the operations {@link #toDiscoveredOperations} dropped under {@code
+     * excludedWritePathPatterns}. The stale-row prune (#1819) treats a registered domain that
+     * contributed no operation this run as unseen and keeps its rows; a domain whose operations were
+     * all excluded on purpose was seen, so the caller unions this set into the run's discovered
+     * domains and the excluded operations' previously-registered rows are pruned.
+     */
+    @NonNull
+    public Set<String> excludedWriteDomains(@NonNull OpenAPI openApi) {
+        Set<String> domains = new LinkedHashSet<>();
+        if (openApi.getPaths() == null) {
+            return domains;
+        }
+        openApi.getPaths().forEach((path, pathItem) -> {
+            if (!properties.includesPath(path) || properties.excludesPath(path)) {
+                return;
+            }
+            operationsOf(pathItem).keySet().stream()
+                    .filter(method -> properties.excludesWrite(path, method))
+                    .findFirst()
+                    .ifPresent(method -> domains.add(extractDomain(path)));
+        });
+        return domains;
+    }
+
+    /** The operations a path item declares, in the order discovery has always visited them. */
+    private static @NonNull Map<HttpMethod, Operation> operationsOf(@NonNull PathItem pathItem) {
+        Map<HttpMethod, Operation> operations = new LinkedHashMap<>();
+        putIfPresent(operations, HttpMethod.GET, pathItem.getGet());
+        putIfPresent(operations, HttpMethod.POST, pathItem.getPost());
+        putIfPresent(operations, HttpMethod.PUT, pathItem.getPut());
+        putIfPresent(operations, HttpMethod.DELETE, pathItem.getDelete());
+        putIfPresent(operations, HttpMethod.PATCH, pathItem.getPatch());
+        return operations;
+    }
+
+    private static void putIfPresent(
+            @NonNull Map<HttpMethod, Operation> operations, @NonNull HttpMethod method, @Nullable Operation operation) {
+        if (operation != null) {
+            operations.put(method, operation);
+        }
     }
 
     private void addDiscoveredOperation(

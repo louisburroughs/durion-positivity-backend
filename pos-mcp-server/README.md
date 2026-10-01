@@ -88,10 +88,36 @@ Permission constants are defined in `McpPermissions`. Errors use the standard `A
 | `mcp.model.tiering-enabled`                 | `MCP_MODEL_TIERING_ENABLED` `false`         | Gate 4 tier routing. **Dormant** (#1683): with `mcp.model.simple`/`complex` blank both T2 tiers resolve to the same model, so enabling it only pays for a per-turn classification call whose outcome cannot change which model answers                                                                                                                                     |
 | `mcp.model.simple`                          | `MCP_MODEL_SIMPLE` _(blank)_                | T2-simple executor. Blank = the default executor model. Setting it to a genuinely smaller pulled model is the precondition for turning tiering back on                                                                                                                                                                                                                     |
 | `mcp.server.aggregate-spec-url`             | `MCP_AGGREGATE_SPEC_URL`                    | Gateway aggregate OpenAPI URL                                                                                                                                                                                                                                                                                                                                              |
+| `mcp.server.excluded-path-fragments`        | `/admin/`, `/actuator/`, `/internal/`       | Substrings that drop a whole path (every method) from tool discovery                                                                                                                                                                                                                                                                                                       |
+| `mcp.server.excluded-write-path-patterns`   | see [Tool discovery](#tool-discovery)       | Regexes over the routing-prefixed path whose non-GET operations are never discovered as tools (#2370); GET stays                                                                                                                                                                                                                                                            |
 | `pos.tools.http.connect-timeout`            | `POS_TOOLS_HTTP_CONNECT_TIMEOUT` `2s`       | Connect timeout on `loadBalancedRestClientBuilder` (facade HTTP calls, #1660)                                                                                                                                                                                                                                                                                              |
 | `pos.tools.http.read-timeout`               | `POS_TOOLS_HTTP_READ_TIMEOUT` `30s`         | Read timeout on `loadBalancedRestClientBuilder`; a stalled downstream now fails with a named `SocketTimeoutException` instead of holding the chat turn (#1660)                                                                                                                                                                                                             |
 | Exa web search                              | `EXA_API_KEY`                               | External web-search API key                                                                                                                                                                                                                                                                                                                                                |
 | DB connection                               | `MCP_DB_HOST/PORT/NAME/USER/PASSWORD`       | PostgreSQL + pgvector                                                                                                                                                                                                                                                                                                                                                      |
+
+### Tool discovery
+
+`ToolBootstrapRunner` fetches every service's OpenAPI spec through the gateway, prefixes each path with the
+service's routing prefix (`/security-service/v1/audit/events`) and registers one `mcp_tool` row per operation,
+minus `mcp.server.excluded-path-fragments` (admin, actuator and internal paths, every method). Audit and
+platform-event **writes** are additionally never offered as agent tools (#2370): a tool call the user authorises
+may *cause* an audit event in the service that performs the action, but the assistant never emits, alters or
+deletes evidence itself, and platform event emission and registration are service-to-service. The
+`mcp.server.excluded-write-path-patterns` defaults drop every non-GET operation on `pos-security-service`
+`/v1/audit/**` (`POST /v1/audit/events`, `PUT`/`DELETE /v1/audit/events/**`, `POST /v1/audit/exports`,
+`POST /v1/audit/pricing-snapshots`), `pos-accounting` `/v1/accounting/audit/**` (`POST cancellation`,
+`price-override`, `refund`: audit-trail writes), `pos-event-receiver` `/v1/events` (emit) and `/v1/eventTypes`
+(register, update, delete), and this module's own `/v1/mcp/audit` or `/v1/nlt/audit` should they gain writes.
+`GET` on the same paths stays discoverable (reading the audit log is a legitimate admin question, ADR-0068). The
+patterns are anchored on the routing prefix so business paths that merely contain `audit` or `events`
+(pos-accounting's event submit, retry and reprocess, for instance) keep their writes; rows registered before the
+exclusion are pruned on the next discovery run. The per-service Eureka fallback applies the same exclusion: when
+the aggregate yields no tools, or a partial aggregate's failed prefixes are retried service by service, each
+service's own spec carries unprefixed paths (`/v1/audit/events`), so they are matched with the service's routing
+prefix prepended (its Eureka id, lower-cased, `pos-` stripped: `security-service` or `pos-security-service` →
+`/security-service/v1/audit/events`). Neither fallback can put an excluded write on the live tool list.
+`DiscoveryAuditWriteExclusionRealSpecsTest` checks all of this, for the aggregate and the fallback mapping,
+against the module specs in the reactor checkout.
 
 ### Static RAG preload (`alpha` profile)
 

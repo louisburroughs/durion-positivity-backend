@@ -587,7 +587,7 @@ public class OpenApiDocumentFetcher {
                                 specTitle(openAPI));
                         return Mono.empty();
                     }
-                    captureServiceSchemas(parsed.rawForSchemaIndex(), "/" + routingDomain(serviceId));
+                    captureServiceSchemas(parsed.rawForSchemaIndex(), "/" + OpenApiToolMapper.routingDomain(serviceId));
                     return Mono.just(new DiscoveredOpenApi(serviceId, baseUri, openAPI));
                 })
                 .onErrorResume(ex -> {
@@ -666,17 +666,6 @@ public class OpenApiDocumentFetcher {
      */
     private static boolean isFatal(Throwable ex) {
         return ex instanceof VirtualMachineError && !(ex instanceof StackOverflowError);
-    }
-
-    /**
-     * The tool-catalog domain of a Eureka service id: lower-cased, conventional {@code pos-} prefix
-     * stripped ({@code pos-vehicle-fitment} → {@code vehicle-fitment}), which is the gateway routing
-     * prefix the aggregate path persists as {@code mcp_tool.domain}. The targeted failed-prefix
-     * fallback already passes the prefix itself.
-     */
-    private static @NonNull String routingDomain(@NonNull String serviceId) {
-        String lower = serviceId.toLowerCase(Locale.ROOT);
-        return lower.startsWith("pos-") ? lower.substring(4) : lower;
     }
 
     private Optional<ServiceInstance> pickInstance(@NonNull String serviceId) {

@@ -54,6 +54,11 @@
       "description": "Path fragment substrings that exclude matching API paths from aggregate MCP tool discovery."
     },
     {
+      "name": "mcp.server.excluded-write-path-patterns",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Regular expressions over the routing-prefixed path (the aggregate path, or a per-service fallback path with the service's routing prefix prepended) whose non-GET operations are excluded from MCP tool discovery (#2370: audit and platform-event writes are never agent tools; GET stays discoverable)."
+    },
+    {
       "name": "mcp.server.discovery-max-spec-bytes",
       "type": "java.lang.Integer",
       "description": "Maximum in-memory buffer size in bytes for a fetched OpenAPI spec during discovery.",

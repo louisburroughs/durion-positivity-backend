@@ -269,8 +269,10 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     /**
      * Shared per-service discovery step used by both the full per-service fallback and the #1632
      * targeted failed-prefix fallback: fetch one service's own OpenAPI via Eureka and map it to tool
-     * specifications. Fail-soft — an unreachable service or fetch/map error is logged at WARN and
-     * yields an empty result, never aborting the batch.
+     * specifications. The mapper applies the #2370 write exclusion here exactly as on the aggregate
+     * path, so neither fallback can put an audit or platform-event write on the live tool surface.
+     * Fail-soft — an unreachable service or fetch/map error is logged at WARN and yields an empty
+     * result, never aborting the batch.
      */
     private @NonNull Mono<List<McpServerFeatures.AsyncToolSpecification>> fetchSpecificationsForService(
             @NonNull String serviceId) {
@@ -336,6 +338,10 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                             openApiToolMapper.toDiscoveredOperations(gatewayBaseUrl, openApi);
                     Set<String> discoveredNames = discoveredNames(operations);
                     Set<String> discoveredDomains = discoveredDomains(operations);
+                    // #2370: a domain whose operations were dropped by the write exclusion was still
+                    // seen this run, so its stale rows (the excluded writes among them) are pruned
+                    // rather than kept as "unseen" (#1819).
+                    discoveredDomains.addAll(openApiToolMapper.excludedWriteDomains(openApi));
                     int persisted = persistAll(operations);
                     log.info(
                             "Persisted {} discovered openapi ops (source='openapi', {} workflow); "
@@ -361,13 +367,16 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                 .collect(Collectors.toSet());
     }
 
-    /** The domains the current run's operations belong to, derived exactly as persistOne stores them. */
+    /**
+     * The domains the current run's operations belong to, derived exactly as persistOne stores them.
+     * Mutable: the caller adds the domains of #2370-excluded operations.
+     */
     private static @NonNull Set<String> discoveredDomains(@NonNull List<DiscoveredOperation> operations) {
         return operations.stream()
                 .map(DiscoveredOperation::httpPath)
                 .filter(java.util.Objects::nonNull)
                 .map(OpenApiToolMapper::extractDomain)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toCollection(HashSet::new));
     }
 
     /** Persists every op with a usable path, skipping and warning past any single failure. Returns the count persisted. */
