@@ -45,6 +45,8 @@ numbers. The report prints a warning next to an unreviewed language.
   hand. Re-derive it after a label or text edit, or if a heuristic rule changes, with
   `scripts/derive_tagging_hard_negatives.py` (it runs the tagger through
   `scripts/tagging_gate/HeuristicAnswers.java` against a build of that branch; `--check` only reports).
+  The two platform-event utterances added per language on 2026-09-30 (`en-0329`/`0330`,
+  `fr-CA-0356`/`0357`, `es-0356`/`0357`) carry an empty list until that derivation runs.
 - `notes`: why the label is what it is, where it is not obvious.
 
 ## Labelling rules (from the tag questions)
@@ -112,24 +114,49 @@ domain agent, 2026-09-30; keep future edits consistent with these rules.
 - `complexity`: `MULTI_DOMAIN` when data from more than one area is joined, or several steps combine
   (rank then filter, compare periods, compute a share of a ranking). One ranking or one list is
   `SINGLE_LOOKUP`.
-- `risk`, strictly by the Score criteria: `LOW` reading; `MEDIUM` a change that can be corrected later
-  (note, appointment, draft, status, price or labor-rate change, adding a customer or ledger account,
-  approving an estimate or a PO, creating a claim, a stock transfer or restock, and reversible account
-  administration: disabling an account, assigning a role, resetting a password, granting a permission);
-  `HIGH` money moves (payment, refund, store credit, paying a bill), a posting to accounting (journal
-  entry, write-off, revaluation, count adjustments, finishing a bank reconciliation), a deletion,
-  something sent outside the shop (email, text, campaign, submitting a PO to the vendor), or a change
-  that cannot be undone (void/revert an invoice, cancel a sales order, close a period, merge customers,
-  terminate an employee, an appended audit event). Do not copy the write-safety fixtures' labels.
+- `risk`, strictly by the Score criteria (HIGH wording decided by the product owner, 2026-09-30:
+  "money moves, a posting to accounting, a deletion, something sent outside the shop, granting or
+  widening someone's access (an account, role or permission), writing an audit event, or any other
+  change that cannot be undone"): `LOW` reading; `MEDIUM` a change that can be corrected later (note,
+  appointment, draft, status, price or labor-rate change, adding a customer or ledger account,
+  approving an estimate or a PO, creating a claim, a stock transfer or restock, and account
+  administration that does not widen access: disabling an account, resetting a password); `HIGH`
+  money moves (payment, refund, store credit, paying a bill), a posting to accounting (journal entry,
+  write-off, revaluation, count adjustments, finishing a bank reconciliation), a deletion, something
+  sent outside the shop (email, text, campaign, submitting a PO to the vendor), granting or widening
+  access (granting a permission, assigning a role, creating or enabling an account), writing an audit
+  event (emitting a manual audit event), or a change that cannot be undone (void/revert an invoice,
+  cancel a sales order, close a period, merge customers, terminate an employee). Access rule: the
+  criterion is *widening*. Disabling an account narrows access and resetting a password leaves the
+  holder's roles and permissions unchanged, so both stay `MEDIUM`; unlocking, re-enabling or creating
+  an account, or adding a role or permission, widens and is `HIGH`. Do not copy the write-safety
+  fixtures' labels.
+- Audit events, product rule for the tool catalogue (not a label): a tool call may trigger an audit
+  event as a side effect of the operation it performs, but the assistant never emits an audit event
+  itself. "Emit a manual audit event" is labelled as the user asked it (`ACTION`, `HIGH`, `admin`); the
+  catalogue must not offer the assistant a tool whose purpose is to write one.
 - `domain` is the RAG-scope vocabulary; entities with no scope of their own map by the `domains:`
-  sentences in `entities.yaml`: vehicle and campaign → `customer`; invoice, payment, credit memo,
-  vendor bill, vendor spend and balances → `accounting` (receivables and payables; there is no invoice
-  scope); purchase order, ASN, supplier → `inventory`; location, bays, appointments, store hours and
-  address → `shopmanager`; user, role, permission, the platform audit log → `admin`; sign-in, tokens,
-  password policy → `security`; system events, notifications, per-entity activity history and the
-  assistant's audit events → `events` (grounded by `events-observability.md`); staff shifts, vacation,
-  certifications → `hr`. `master` for a bare follow-up, a compound question spanning two areas, and
-  the assistant or platform in general.
+  sentences in `entities.yaml`, with the four sentences restated by the product owner on 2026-09-30:
+  `hr` = "Employees as staff: employment, pay rates, time off, HR functions."; `shopmanager` = "Shop
+  operations: appointments, bays, day-to-day technician scheduling and availability, shop settings.";
+  `events` = "Platform events published by the pos-event modules: event types, event history and
+  notifications."; `admin` = "Administration of the platform: users, roles, permissions, access, and
+  the audit log." Mapping: vehicle and campaign → `customer`; invoice, payment, credit memo, vendor
+  bill, vendor spend and balances → `accounting` (receivables and payables; there is no invoice scope);
+  purchase order, ASN, supplier → `inventory`; location, bays, appointments, store hours and address,
+  and any staff scheduling or availability question (who is on shift, when a shift starts or ends, a
+  technician's availability on a day, who is assigned to a bay, the technicians' work schedule, the
+  store manager's schedule) → `shopmanager`; employment and HR functions (who holds a position, an
+  employee record, headcount, part-time status as the thing asked, pay, vacation balance, time off,
+  certifications, termination, an overtime audit) → `hr`; user, role, permission, access, and every
+  audit-log question (the platform audit log, the assistant's audit events, emitting an audit event,
+  who changed a role) → `admin`; sign-in, tokens, password policy → `security`; platform events and
+  notifications themselves (event types, event history, whether an alert or reminder went out, failed
+  notifications, what fired overnight) → `events`, and nothing else; a business record's activity
+  history ("what happened to WO-2024-0012", "the activity log for work order ...") is the record's own
+  domain (`workorder`, `order`, `customer`...), not `events`: the user wants the record's story, and
+  the record's module owns its history. `master` for a bare follow-up, a compound question spanning
+  two areas, and the assistant or platform in general.
 - `entity`: lexicon keys named or clearly referred to; the audit log, a period and a metric are not
   entities.
 - fr-CA and es keep deliberate anglicisms that real shop talk uses and the English keyword heuristics
@@ -139,12 +166,16 @@ domain agent, 2026-09-30; keep future edits consistent with these rules.
 - When a relabel to true (or non-`IDLE`) makes a `hard_negative_for` entry a positive, the entry is
   removed (the heuristic was right); `hard_negative_for` is otherwise never edited by hand.
 
-Open questions for the product owner, labelled per the wording above until decided: whether
-reversible account administration (role grant, permission grant, password reset) should be `HIGH`
-(would need the Score criteria changed); whether an appended audit event is `HIGH` because it cannot
-be undone; whether a scheduling target date should imply a date window; whether the platform's login
-policy is administration; the `hr` / `shopmanager` overlap on technician schedules and bay
-assignments; and `admin` versus `events` for the platform audit log.
+Decided by the product owner on 2026-09-30 and applied above: granting or widening access is `HIGH`;
+writing an audit event is `HIGH`; the platform's login policy is `admin_account_question: true`; staff
+scheduling and availability are `shopmanager`, employment, pay and time off are `hr`; `events` is only
+the pos-event modules and every audit question is `admin`. The `TaggingQuestions` wording (risk HIGH
+criteria and the four domain sentences) must be updated to the same text before a shadow run is scored
+against these fixtures; this README is the ground truth until it is.
+
+Open questions, labelled per the wording above until decided: whether a scheduling target date ("book
+on Thursday at 9") should imply a date window (labelled false); and the native review of the fr-CA
+and es translations (`reviewed: false` until a native reader sets `reviewed: true` and `reviewer`).
 
 ## Minimums (enforced by `scripts/test_tagging_gate_fixtures.py`, per language)
 

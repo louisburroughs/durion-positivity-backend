@@ -1578,7 +1578,7 @@
         "intent": "QUERY",
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
-        "domain": "events",
+        "domain": "workorder",
         "entity": [
           "workorder"
         ]
@@ -1587,7 +1587,7 @@
         "simple_chat",
         "implies_date_window"
       ],
-      "notes": "a document's activity history is grounded by the events scope (events-observability), same as the activity log"
+      "notes": "a business record's activity history belongs to the record's domain (workorder), not to events: events is only the pos-event modules"
     },
     {
       "id": "fr-CA-0066",
@@ -1739,13 +1739,13 @@
         "intent": "QUERY",
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
-        "domain": "hr",
+        "domain": "shopmanager",
         "entity": [
           "employee"
         ]
       },
       "hard_negative_for": [],
-      "notes": "store is not stock"
+      "notes": "store is not stock. a staff schedule is day-to-day scheduling: shopmanager, not hr"
     },
     {
       "id": "fr-CA-0072",
@@ -1764,13 +1764,13 @@
         "intent": "QUERY",
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
-        "domain": "hr",
+        "domain": "shopmanager",
         "entity": [
           "employee"
         ]
       },
       "hard_negative_for": [],
-      "notes": "availability is staff not stock"
+      "notes": "availability is staff not stock. technician availability is day-to-day scheduling: shopmanager, not hr"
     },
     {
       "id": "fr-CA-0073",
@@ -2632,7 +2632,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": "disabling an account is reversible; Score criteria put reversible changes at MEDIUM"
+      "notes": "disabling an account narrows access; the HIGH criterion is granting or widening access, so this is a correctable change: MEDIUM"
     },
     {
       "id": "fr-CA-0107",
@@ -2758,7 +2758,7 @@
         "workflow_state": "IDLE",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "MEDIUM",
+        "risk": "HIGH",
         "domain": "admin",
         "entity": [
           "user",
@@ -2768,7 +2768,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": "a role assignment is revocable; MEDIUM per the Score criteria"
+      "notes": "assigning a role widens someone's access: HIGH per the Score criteria (owner decision 2026-09-30)"
     },
     {
       "id": "fr-CA-0112",
@@ -2843,7 +2843,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": "a password reset is a correctable change; MEDIUM per the Score criteria"
+      "notes": "a password reset does not widen access (the holder keeps the same roles and permissions): a correctable change, MEDIUM"
     },
     {
       "id": "fr-CA-0115",
@@ -6839,14 +6839,14 @@
         "intent": "QUERY",
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
-        "domain": "hr",
+        "domain": "shopmanager",
         "entity": [
           "employee",
           "location"
         ]
       },
       "hard_negative_for": [],
-      "notes": ""
+      "notes": "bay assignment is day-to-day technician scheduling: shopmanager, not hr"
     },
     {
       "id": "fr-CA-0266",
@@ -7270,7 +7270,7 @@
         "workflow_state": "IDLE",
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
-        "risk": "MEDIUM",
+        "risk": "HIGH",
         "domain": "admin",
         "entity": [
           "role"
@@ -7279,7 +7279,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": "a permission grant is revocable; MEDIUM per the Score criteria (see README, open question for the owner)"
+      "notes": "granting a permission widens access: HIGH per the Score criteria (owner decision 2026-09-30)"
     },
     {
       "id": "fr-CA-0283",
@@ -7402,13 +7402,13 @@
         "intent": "ACTION",
         "complexity": "SINGLE_LOOKUP",
         "risk": "HIGH",
-        "domain": "events",
+        "domain": "admin",
         "entity": [
           "order"
         ]
       },
       "hard_negative_for": [],
-      "notes": "audit log entry is platform audit (events scope). an appended audit event cannot be undone: HIGH per the Score criteria"
+      "notes": "the audit log is admin, not events (events is only the pos-event modules). an appended audit event cannot be undone and writes an audit event: HIGH. the assistant never emits an audit event itself; a tool call may trigger one"
     },
     {
       "id": "fr-CA-0288",
@@ -7533,11 +7533,11 @@
         "intent": "QUERY",
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
-        "domain": "events",
+        "domain": "admin",
         "entity": []
       },
       "hard_negative_for": [],
-      "notes": "audit events are the platform audit log, events scope. recent is not a web cue"
+      "notes": "every audit-log question is admin, not events (events is only the pos-event modules). recent is not a web cue"
     },
     {
       "id": "fr-CA-0293",
@@ -7655,7 +7655,7 @@
         "intent": "QUERY",
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
-        "domain": "events",
+        "domain": "workorder",
         "entity": [
           "workorder"
         ]
@@ -7664,7 +7664,7 @@
         "simple_chat",
         "implies_date_window"
       ],
-      "notes": ""
+      "notes": "a business record's activity history belongs to the record's domain (workorder), not to events: events is only the pos-event modules"
     },
     {
       "id": "fr-CA-0298",
@@ -7848,13 +7848,13 @@
         "intent": "QUERY",
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
-        "domain": "hr",
+        "domain": "shopmanager",
         "entity": [
           "employee"
         ]
       },
       "hard_negative_for": [],
-      "notes": "a shift on a named day covers that day's schedule"
+      "notes": "a shift on a named day covers that day's schedule. a shift time is day-to-day scheduling: shopmanager, not hr"
     },
     {
       "id": "fr-CA-0306",
@@ -7873,7 +7873,7 @@
         "intent": "QUERY",
         "complexity": "SINGLE_LOOKUP",
         "risk": "LOW",
-        "domain": "hr",
+        "domain": "shopmanager",
         "entity": [
           "employee"
         ]
@@ -7881,7 +7881,7 @@
       "hard_negative_for": [
         "simple_chat"
       ],
-      "notes": ""
+      "notes": "a technician work schedule is day-to-day scheduling: shopmanager, not hr"
     },
     {
       "id": "fr-CA-0307",
@@ -9209,6 +9209,52 @@
       },
       "hard_negative_for": [],
       "notes": ""
+    },
+    {
+      "id": "fr-CA-0356",
+      "text": "Quels types d'événements la plateforme publie-t-elle?",
+      "source": "new",
+      "expected_tags": {
+        "follows_previous_turn": false,
+        "simple_chat": false,
+        "needs_web_search": false,
+        "about_inventory": false,
+        "about_orders": false,
+        "implies_date_window": false,
+        "admin_account_question": false,
+        "compound_question": false,
+        "workflow_state": "IDLE",
+        "intent": "QUERY",
+        "complexity": "SINGLE_LOOKUP",
+        "risk": "LOW",
+        "domain": "events",
+        "entity": []
+      },
+      "hard_negative_for": [],
+      "notes": "platform event types are published by the pos-event modules: events"
+    },
+    {
+      "id": "fr-CA-0357",
+      "text": "Montre l'historique des événements de la dernière heure",
+      "source": "new",
+      "expected_tags": {
+        "follows_previous_turn": false,
+        "simple_chat": false,
+        "needs_web_search": false,
+        "about_inventory": false,
+        "about_orders": false,
+        "implies_date_window": true,
+        "admin_account_question": false,
+        "compound_question": false,
+        "workflow_state": "IDLE",
+        "intent": "QUERY",
+        "complexity": "SINGLE_LOOKUP",
+        "risk": "LOW",
+        "domain": "events",
+        "entity": []
+      },
+      "hard_negative_for": [],
+      "notes": "platform event history is the pos-event modules: events. last hour is a named period"
     }
   ]
 }
