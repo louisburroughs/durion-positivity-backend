@@ -347,11 +347,16 @@ groups:
   - name: nlti-tagging
     interval: 1m
     rules:
-      # ADR-0068 Monitoring. Share of tagged turns (telemetry schema 3, tagging block present,
-      # i.e. mode shadow or enforce) that fell back to the heuristic for any tagging.fallbackReason
-      # (timeout, error, rate_limited, malformed, low_confidence, ...). Turns with mode off carry
-      # no tagging block and are excluded from both sides. The >20 minimum-volume clause stops a
-      # quiet hour from flapping the ratio.
+      # ADR-0068 Monitoring. Share of tagged turns that fell back to the heuristic because the
+      # provider FAILED: tagging.fallbackReason timeout, rate_limited, error or malformed (the
+      # FallbackReason wire names in pos-mcp-server). low_confidence is not a failure (the model
+      # answered, below the tag's threshold) and has its own non-paging rule below.
+      # The tagging block is present on every chat event in every mode, OFF included (the
+      # heuristic tagger always runs, no provider call), so OFF turns are filtered out of the
+      # numerator, the denominator and the minimum-volume clause; the empty check drops events
+      # without the block (the NLTI path, schema < 3). `drop telemetry` sheds the regexp-extracted
+      # copy of the whole line before aggregation. The >20 minimum-volume clause stops a quiet
+      # hour from flapping the ratio.
       - alert: NltiTaggingFallbackRateHigh
         expr: |
           (
@@ -359,19 +364,23 @@ groups:
                 {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
                   | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
                   | line_format "{{.telemetry}}"
+                  | drop telemetry
                   | json tagging_mode="tagging.mode", tagging_fallbackReason="tagging.fallbackReason"
                   | __error__=""
                   | tagging_mode != ""
-                  | tagging_fallbackReason != "" [15m]
+                  | tagging_mode != "OFF"
+                  | tagging_fallbackReason=~"timeout|rate_limited|error|malformed" [15m]
               ))
             /
               sum(count_over_time(
                 {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
                   | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
                   | line_format "{{.telemetry}}"
+                  | drop telemetry
                   | json tagging_mode="tagging.mode"
                   | __error__=""
-                  | tagging_mode != "" [15m]
+                  | tagging_mode != ""
+                  | tagging_mode != "OFF" [15m]
               ))
           ) > 0.2
           and on ()
@@ -379,13 +388,63 @@ groups:
             {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
               | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
               | line_format "{{.telemetry}}"
+              | drop telemetry
               | json tagging_mode="tagging.mode"
               | __error__=""
-              | tagging_mode != "" [15m]
+              | tagging_mode != ""
+              | tagging_mode != "OFF" [15m]
           )) > 20
         for: 15m
         labels:
           severity: P2
         annotations:
-          summary: More than 20% of tagged NLTI turns fell back to the heuristic over 15m (tagging.fallbackReason) — the tagging model is slow, failing or below its confidence floor.
+          summary: More than 20% of tagged NLTI turns lost the tagging model over 15m (tagging.fallbackReason timeout, rate_limited, error or malformed) — the ollama container is slow, overloaded or failing; turns run on the heuristic tags.
           runbook: https://github.com/louisburroughs/durion/blob/master/domains/general/mcp-server/operations/runbooks/downstream-timeout.md
+      # ADR-0068 section 6. Non-paging (P3, like the routing-mix rules): over a day, more than
+      # half of the tagged turns (mode SHADOW or ENFORCE) fell back with low_confidence, i.e. the
+      # model answered below mcp.tagging.thresholds.<tag>. Not an outage: the thresholds or the
+      # model need revisiting with scripts/tagging_shadow_report.py. Same OFF filter and
+      # minimum-volume guard as above, over 24h.
+      - alert: NltiTaggingLowConfidenceShareHigh
+        expr: |
+          (
+              sum(count_over_time(
+                {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                  | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                  | line_format "{{.telemetry}}"
+                  | drop telemetry
+                  | json tagging_mode="tagging.mode", tagging_fallbackReason="tagging.fallbackReason"
+                  | __error__=""
+                  | tagging_mode != ""
+                  | tagging_mode != "OFF"
+                  | tagging_fallbackReason="low_confidence" [24h]
+              ))
+            /
+              sum(count_over_time(
+                {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                  | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                  | line_format "{{.telemetry}}"
+                  | drop telemetry
+                  | json tagging_mode="tagging.mode"
+                  | __error__=""
+                  | tagging_mode != ""
+                  | tagging_mode != "OFF" [24h]
+              ))
+          ) > 0.5
+          and on ()
+          sum(count_over_time(
+            {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+              | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+              | line_format "{{.telemetry}}"
+              | drop telemetry
+              | json tagging_mode="tagging.mode"
+              | __error__=""
+              | tagging_mode != ""
+              | tagging_mode != "OFF" [24h]
+          )) > 100
+        for: 1h
+        labels:
+          severity: P3
+        annotations:
+          summary: More than 50% of tagged NLTI turns over 24h took the heuristic for low_confidence — revisit mcp.tagging.thresholds.<tag> or the tagging model (ADR-0068 section 6 shadow report).
+          runbook: https://github.com/louisburroughs/durion-positivity-backend/blob/main/pos-mcp-server/src/test/resources/eval/tagging-gate/README.md
