@@ -124,7 +124,8 @@ class ToolSelectionEngineScopeSlotsTest {
     }
 
     private void rankedCut(Set<String> gated, boolean fastPath, ToolMetadata... ranked) {
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(new CandidateSelection(List.of(ranked), gated, fastPath));
     }
 
@@ -194,7 +195,8 @@ class ToolSelectionEngineScopeSlotsTest {
         assertThat(noBeans.roleTools()).isEmpty();
         assertThat(noBeans.scopeAddedTools()).isEmpty();
 
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenThrow(new IllegalStateException("gate unavailable"));
         ToolSelectionEngine.ToolSelectionResult threw = engine.selectRoleTools("ROLE_ADMIN", CALLER, MESSAGE);
         assertThat(threw.roleTools()).isEmpty();
@@ -230,7 +232,8 @@ class ToolSelectionEngineScopeSlotsTest {
         assertThat(result.scopeAddedTools()).isEmpty();
         // ADR-0068 §2: the one resolution always returns the gated set (the same SQL as before); a
         // NONE scope adds nothing to it.
-        verify(toolRegistryService).resolveCandidateSelection(any(ToolSelectionContext.class), eq(3));
+        verify(toolRegistryService)
+                .resolveCandidateSelection(any(ToolSelectionContext.class), eq(3), any(QuestionTags.class));
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.config;
 
 import com.positivity.mcp.internal.domain.TagName;
 import com.positivity.mcp.internal.domain.TaggingMode;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
@@ -19,16 +20,20 @@ import org.springframework.boot.context.properties.bind.ConstructorBinding;
  * <p>{@code mode} is one value for the whole seam; {@code enforced-tags} names the tags that act once
  * the mode is {@code enforce}, because §6 promotes each tag separately and one mode value cannot
  * express that (an addition to the ADR's key list, spec §2.1). {@code mode: enforce} with an empty
- * list behaves as {@code shadow}. Wave 1 records the list but never acts on it.
+ * list behaves as {@code shadow}. An entry is {@code <tag>} (symmetric: the model's answer acts at or
+ * above threshold) or {@code <tag>:veto} (the model may only turn the heuristic's {@code true} into
+ * {@code false}); {@code admin_account_question} is veto-only whatever the entry says (ADR-0068 §3.4).
  *
  * <p>A bare {@code off} in YAML is the boolean {@code false}, not the string, so the YAML files write
  * the mode quoted or through a placeholder; {@link TaggingMode} is bound from the string.
  *
  * @param mode {@code off} (heuristic tagger only), {@code shadow} or {@code enforce}
- * @param enforcedTags tags (wire names) that act when {@code mode} is {@code enforce}
+ * @param enforcedTags tags (wire names, optionally suffixed {@code :veto}) that act when {@code mode}
+ *     is {@code enforce}
  * @param provider the System One endpoint (§5)
- * @param thresholds per-tag confidence threshold by tag name ({@code entity.<key>} for one entity);
- *     {@value #DEFAULT_THRESHOLD} otherwise
+ * @param thresholds per-tag confidence threshold by tag name ({@code entity.<key>} for one entity,
+ *     {@code workflow_state.non-idle} for a non-{@code IDLE} workflow answer); {@value
+ *     #DEFAULT_THRESHOLD} otherwise
  * @param maxStateChars the message is cut at this length before it becomes the {@code state}
  * @param entityQuestions whether the {@code entity_<key>} Nouls are asked (default false: the 13 fixed
  *     questions, about 2k tokens, fit the default {@code tev1:0.8b}, which reads about 2,000 tokens;
@@ -56,6 +61,23 @@ public record TaggingProperties(
 
     /** ADR-0068 §1: every tag's threshold until shadow data sets per-tag values. */
     public static final double DEFAULT_THRESHOLD = 0.75;
+
+    /** The {@code enforced-tags} suffix of a veto-only entry (spec §2.1). */
+    public static final String VETO_SUFFIX = ":veto";
+
+    /** The {@code thresholds} key of the stricter non-{@code IDLE} workflow threshold (spec §2.1). */
+    public static final String NON_IDLE_THRESHOLD_KEY = TagName.WORKFLOW_STATE.wireName() + ".non-idle";
+
+    /** Spec §2.1: how a listed tag's model answer may act. */
+    public enum Direction {
+        /** The model's answer acts whenever its confidence meets the threshold. */
+        SYMMETRIC,
+        /**
+         * The model may only turn the heuristic's {@code true} into {@code false} (acting value =
+         * heuristic AND model); a model {@code true} never acts over a heuristic {@code false}.
+         */
+        VETO
+    }
 
     private static final int DEFAULT_MAX_STATE_CHARS = 4000;
 
@@ -174,9 +196,36 @@ public record TaggingProperties(
         return mode != TaggingMode.OFF;
     }
 
-    /** True when {@code tag} acts: mode {@code enforce} and the tag is listed (Wave 2 reads this). */
+    /** True when {@code tag} acts: mode {@code enforce} and the tag is listed, with either direction. */
     public boolean enforces(@NonNull TagName tag) {
-        return mode == TaggingMode.ENFORCE && enforcedTags.contains(tag.wireName());
+        return mode == TaggingMode.ENFORCE
+                && (enforcedTags.contains(tag.wireName()) || enforcedTags.contains(tag.wireName() + VETO_SUFFIX));
+    }
+
+    /** As {@link #enforces(TagName)}, by wire name; an {@code entity_<key>} Noul acts when {@code entity} is listed. */
+    public boolean enforces(@NonNull String wireName) {
+        return TagName.fromWireName(wireName).map(this::enforces).orElse(false);
+    }
+
+    /**
+     * The direction {@code tag} acts in when listed: {@code VETO} for a {@code <tag>:veto} entry and
+     * always for {@code admin_account_question} (ADR-0068 §3.4: the fast path may be vetoed by a tag,
+     * never fired by one), {@code SYMMETRIC} otherwise.
+     */
+    public @NonNull Direction directionOf(@NonNull TagName tag) {
+        if (tag == TagName.ADMIN_ACCOUNT_QUESTION || enforcedTags.contains(tag.wireName() + VETO_SUFFIX)) {
+            return Direction.VETO;
+        }
+        return Direction.SYMMETRIC;
+    }
+
+    /**
+     * Spec §2.1: the threshold a non-{@code IDLE} {@code workflow_state} answer must additionally meet
+     * ({@code thresholds.workflow_state.non-idle}); the tag's own threshold when unset.
+     */
+    public double nonIdleThreshold() {
+        Double strict = thresholds.get(NON_IDLE_THRESHOLD_KEY);
+        return strict != null ? strict : thresholdFor(TagName.WORKFLOW_STATE);
     }
 
     /** The confidence threshold of {@code tag} (ADR-0068 §1); every entity group shares {@code entity}'s. */
@@ -196,5 +245,23 @@ public record TaggingProperties(
             return perEntity != null ? perEntity : thresholdFor(TagName.ENTITY);
         }
         return TagName.fromWireName(wireName).map(this::thresholdFor).orElse(DEFAULT_THRESHOLD);
+    }
+
+    /**
+     * The threshold a model answer {@code modelValue} to {@code wireName} must meet to act (spec §2.1,
+     * §2.6): {@link #thresholdFor(String)}, and for a non-{@code IDLE} {@code workflow_state} answer
+     * the larger of that and {@link #nonIdleThreshold()}, since it must meet both. The merge decides
+     * on it and the eval trace records it, so the two always name the same number.
+     *
+     * @param modelValue the model's answer, or null when it gave none (the tag's own threshold)
+     */
+    public double effectiveThreshold(@NonNull String wireName, @Nullable String modelValue) {
+        double threshold = thresholdFor(wireName);
+        if (modelValue != null
+                && TagName.WORKFLOW_STATE.wireName().equals(wireName)
+                && !WorkflowState.IDLE.name().equalsIgnoreCase(modelValue.trim())) {
+            return Math.max(threshold, nonIdleThreshold());
+        }
+        return threshold;
     }
 }

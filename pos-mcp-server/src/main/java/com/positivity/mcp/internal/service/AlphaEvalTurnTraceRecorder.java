@@ -416,8 +416,13 @@ public class AlphaEvalTurnTraceRecorder {
                         model == null ? null : model.value(),
                         model == null ? null : model.confidence(),
                         model == null ? null : model.probability(),
-                        taggingProperties.thresholdFor(name),
-                        heuristic == null || model == null ? null : QuestionTags.agrees(heuristic, model)));
+                        // The threshold the merge applied: for a non-IDLE workflow answer the
+                        // stricter non-idle one when it is higher (spec §2.6).
+                        taggingProperties.effectiveThreshold(name, model == null ? null : model.value()),
+                        heuristic == null || model == null ? null : QuestionTags.agrees(heuristic, model),
+                        tags.tagFallbackReasons().containsKey(name)
+                                ? tags.tagFallbackReasons().get(name).wireName()
+                                : null));
             }
             return new TagTrace(
                     tags.mode().name(),

@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.scopegraph;
 
+import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.scopegraph.EntityLexicon.EntityDefinition;
 import com.positivity.mcp.internal.scopegraph.EntityLexicon.FacadeToolRef;
 import com.positivity.mcp.internal.scopegraph.EntityLexicon.Identifier;
@@ -50,7 +51,8 @@ public final class EntityLexiconLoader {
             "schemas",
             "schema_patterns",
             "facade_tools",
-            "screens");
+            "screens",
+            "workflow_state");
     private static final Pattern SCHEMA_REFERENCE = Pattern.compile("[^:\\s]+:[^:\\s]+");
 
     private EntityLexiconLoader() {}
@@ -152,7 +154,25 @@ public final class EntityLexiconLoader {
                 schemas,
                 schemaPatterns,
                 facadeTools(map.get("facade_tools"), where),
-                strings(map.get("screens"), where, "screens"));
+                strings(map.get("screens"), where, "screens"),
+                workflowState(map.get("workflow_state"), where));
+    }
+
+    /** ADR-0068 spec §2.7: the optional {@code workflow_state}, one of the {@link WorkflowState} names. */
+    private static @Nullable WorkflowState workflowState(@Nullable Object raw, String where) {
+        if (raw == null) {
+            return null;
+        }
+        String value = requiredString(raw, where, "workflow_state");
+        for (WorkflowState state : WorkflowState.values()) {
+            if (state.name().equals(value)) {
+                return state;
+            }
+        }
+        throw new EntityLexiconException(where + ": 'workflow_state' is '" + value + "'; it must be one of "
+                + java.util.Arrays.stream(WorkflowState.values())
+                        .map(Enum::name)
+                        .toList());
     }
 
     private static Map<String, List<String>> terms(@Nullable Object raw, String where) {

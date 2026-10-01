@@ -27,6 +27,10 @@ import com.positivity.mcp.internal.domain.ModelTier;
 import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.RequestComplexity;
 import com.positivity.mcp.internal.domain.RouterClassification;
+import com.positivity.mcp.internal.domain.TagAnswer;
+import com.positivity.mcp.internal.domain.TagName;
+import com.positivity.mcp.internal.domain.TagSource;
+import com.positivity.mcp.internal.domain.TaggingMode;
 import com.positivity.mcp.internal.enums.NltiIntentType;
 import com.positivity.mcp.internal.enums.NltiRiskLevel;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
@@ -37,6 +41,7 @@ import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.RolePromptResolver;
+import com.positivity.mcp.internal.service.TierSelector;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.tenancy.BoundTenant;
@@ -45,6 +50,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -209,7 +215,8 @@ class SessionAgentManagerTieringTest {
         NltiRequestTelemetry event = capturedEvent();
         assertThat(event.tagging()).isNotNull();
         assertThat(event.tagging().mode()).isEqualTo("OFF");
-        // The router ran, so its decision fills the routing block, not the tags' safe defaults.
+        // The router ran, so its decision (mocked here; in production mapped from these same tags,
+        // ADR-0068 §7) fills the routing block.
         assertThat(event.routing().intentType()).isEqualTo("QUERY");
     }
 
@@ -261,8 +268,47 @@ class SessionAgentManagerTieringTest {
         assertThat(event.routing().tier()).isEqualTo(NltiRequestTelemetry.Tier.T2_SIMPLE);
         assertThat(event.model()).isNotNull();
         assertThat(event.model().tierModel()).isEqualTo("qwen3:8b");
-        assertThat(event.model().routerModel()).isEqualTo("qwen3:4b");
+        // ADR-0068 §7: the router maps the tags and calls no model, so no router model is reported
+        // although mcp.model.router ("qwen3:4b" here) is still configured.
+        assertThat(event.model().routerModel()).isNull();
         assertThat(event.model().fallbackUsed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("ADR-0068 §7: on a routed turn the routing classification is the acting router tags")
+    void routedTurn_routingClassificationIsTheActingRouterTags() {
+        Map<String, TagAnswer> heuristic =
+                new java.util.HashMap<>(HEURISTIC_TAGGER.tag(SIMPLE_MESSAGE).heuristic());
+        Map<String, TagAnswer> acting = new java.util.HashMap<>(heuristic);
+        acting.put(TagName.INTENT.wireName(), new TagAnswer("QUERY", 0.95, TagSource.JEV));
+        acting.put(TagName.RISK.wireName(), new TagAnswer("LOW", 0.95, TagSource.JEV));
+        acting.put(TagName.COMPLEXITY.wireName(), new TagAnswer("SINGLE_LOOKUP", 0.95, TagSource.JEV));
+        acting.put(TagName.DOMAIN.wireName(), new TagAnswer("inventory", 0.95, TagSource.JEV));
+        QuestionTags tags =
+                new QuestionTags(TaggingMode.ENFORCE, heuristic, acting, acting, null, "tev1:0.8b", 40L, false);
+        when(toolSelectionEngine.tag(SIMPLE_MESSAGE)).thenReturn(tags);
+        TieredChatModelResolver resolver =
+                new TieredChatModelResolver(chatModel, (StreamingChatModel) chatModel, "qwen3:4b", "qwen3:8b", "");
+        SessionAgentManager manager = buildManager(true, new NltiRouter(new TierSelector()), resolver, null, null);
+
+        manager.chat(userContext("user-1"), SIMPLE_MESSAGE);
+
+        NltiRequestTelemetry event = capturedEvent();
+        assertThat(event.routing().intentType())
+                .isEqualTo("QUERY")
+                .isEqualTo(event.tagging().intent());
+        assertThat(event.routing().riskLevel())
+                .isEqualTo("LOW")
+                .isEqualTo(event.tagging().risk());
+        assertThat(event.routing().complexity())
+                .isEqualTo("SINGLE_LOOKUP")
+                .isEqualTo(event.tagging().complexity());
+        assertThat(event.routing().domain())
+                .isEqualTo("inventory")
+                .isEqualTo(event.tagging().domain());
+        assertThat(event.routing().tier()).isEqualTo(NltiRequestTelemetry.Tier.T2_SIMPLE);
+        assertThat(event.model().tierModel()).isEqualTo("qwen3:8b");
+        assertThat(event.model().routerModel()).isNull();
     }
 
     @Test

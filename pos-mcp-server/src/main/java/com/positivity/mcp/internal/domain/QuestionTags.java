@@ -18,10 +18,10 @@ import org.jspecify.annotations.Nullable;
  * both answers are kept so the trace can record agreement.
  *
  * <p>Consumers read {@link #acting()} through the typed accessors below. In {@code off} and {@code
- * shadow} the acting answer is always the heuristic one; in {@code enforce} (Wave 2) it is the model's
- * for a listed tag at or above its threshold. A tag with no acting answer yields the safe default of
- * its consumer: not simple chat, {@link WorkflowState#DEFAULT}, no tool added, {@link
- * RouterClassification#safeDefault()}, no entity seed.
+ * shadow} the acting answer is always the heuristic one; in {@code enforce} it is the model's for a
+ * listed tag at or above its threshold (spec §2.5; {@link #enforced} tells a consumer which). A tag
+ * with no acting answer yields the safe default of its consumer: not simple chat, {@link
+ * WorkflowState#DEFAULT}, no tool added, {@link RouterClassification#safeDefault()}, no entity seed.
  *
  * @param mode the mode that produced this record; {@link TaggingMode#OFF} for a heuristic-only or
  *     empty record
@@ -37,6 +37,9 @@ import org.jspecify.annotations.Nullable;
  * @param requestBodyBytes the size of the request body sent, when the provider was called
  * @param optionListHash the hash of the option lists asked (domain options and entity keys), when
  *     the provider was called; agreement on those tags is comparable within one hash only
+ * @param tagFallbackReasons ADR-0068 §6, per tag by wire name: why a listed tag took the heuristic
+ *     answer although the model answered ({@link FallbackReason#LOW_CONFIDENCE}); empty outside
+ *     {@code enforce}
  */
 public record QuestionTags(
         @NonNull TaggingMode mode,
@@ -49,7 +52,8 @@ public record QuestionTags(
         boolean stateTruncated,
         @Nullable Integer questionCount,
         @Nullable Integer requestBodyBytes,
-        @Nullable String optionListHash) {
+        @Nullable String optionListHash,
+        @NonNull Map<String, FallbackReason> tagFallbackReasons) {
 
     private static final QuestionTags NONE =
             new QuestionTags(TaggingMode.OFF, Map.of(), Map.of(), Map.of(), null, null, null, false);
@@ -58,6 +62,35 @@ public record QuestionTags(
         heuristic = sorted(heuristic);
         model = sorted(model);
         acting = sorted(acting);
+        tagFallbackReasons = java.util.Collections.unmodifiableMap(new TreeMap<>(tagFallbackReasons));
+    }
+
+    /** Without per-tag fallback reasons (a record outside {@code enforce}). */
+    public QuestionTags(
+            @NonNull TaggingMode mode,
+            @NonNull Map<String, TagAnswer> heuristic,
+            @NonNull Map<String, TagAnswer> model,
+            @NonNull Map<String, TagAnswer> acting,
+            @Nullable FallbackReason fallbackReason,
+            @Nullable String providerModel,
+            @Nullable Long latencyMs,
+            boolean stateTruncated,
+            @Nullable Integer questionCount,
+            @Nullable Integer requestBodyBytes,
+            @Nullable String optionListHash) {
+        this(
+                mode,
+                heuristic,
+                model,
+                acting,
+                fallbackReason,
+                providerModel,
+                latencyMs,
+                stateTruncated,
+                questionCount,
+                requestBodyBytes,
+                optionListHash,
+                Map.of());
     }
 
     /** Without the request-cost fields (a heuristic or fallback record). */
@@ -109,6 +142,16 @@ public record QuestionTags(
     /** True when the acting Noul answer of {@code tag} is {@code true}; false when absent. */
     public boolean is(@NonNull TagName tag) {
         return answer(tag).map(TagAnswer::isTrue).orElse(false);
+    }
+
+    /**
+     * ADR-0068 §6: true when the decision model's answer is the one acting on {@code tag}, that is
+     * {@code mode == enforce}, the tag is listed in {@code enforced-tags}, its confidence met the
+     * threshold and (for a {@code :veto} entry) the direction allowed it. False in {@code off} and
+     * {@code shadow}, below threshold, and for {@link #none()}: the consumer then keeps today's rule.
+     */
+    public boolean enforced(@NonNull TagName tag) {
+        return answer(tag).map(answer -> answer.source() == TagSource.JEV).orElse(false);
     }
 
     public boolean simpleChat() {
@@ -192,6 +235,18 @@ public record QuestionTags(
             }
         });
         return List.copyOf(seeds);
+    }
+
+    /**
+     * Spec §2.7: the seeds the acting tags hand the scope resolver: every acting {@code entity_<key>}
+     * that is {@code true}, and the acting {@code domain} when it is not {@code master}. The heuristic
+     * answers neither (its {@code domain} is {@code master}), so this is {@link TagSeeds#none()} in
+     * {@code off} and {@code shadow}.
+     */
+    public @NonNull TagSeeds tagSeeds() {
+        String domain = domain();
+        return new TagSeeds(
+                entitySeeds(), RouterClassification.safeDefault().domain().equals(domain) ? null : domain);
     }
 
     /** True when the decision model answered this turn (whatever acted on it). */

@@ -97,10 +97,7 @@ final class TermMatcher {
     }
 
     static @NonNull TermMatcher of(@NonNull ScopeGraph graph) {
-        // Phrase -> what it denotes. The same phrase in two languages is one entry.
-        Map<String, Set<String>> exactEntities = new TreeMap<>(LONGEST_FIRST);
-        Map<String, Boolean> lexiconPhrase = new TreeMap<>();
-        Map<String, Set<String>> foldedEntities = new TreeMap<>(LONGEST_FIRST);
+        Terms terms = new Terms();
         for (ScopeNode node : graph.nodesOfType(NodeType.TERM)) {
             if (!(node.attributes() instanceof NodeAttributes.Term term)) {
                 continue;
@@ -110,49 +107,91 @@ final class TermMatcher {
                 // A glossary phrase that names no entity is a term that seeds nothing.
                 continue;
             }
-            String phrase = normalize(term.phrase());
-            if (phrase.isEmpty()) {
-                continue;
-            }
-            exactEntities.computeIfAbsent(phrase, ignored -> new TreeSet<>()).addAll(entities);
-            lexiconPhrase.merge(phrase, !term.glossary(), Boolean::logicalOr);
-            foldedEntities
-                    .computeIfAbsent(fold(phrase), ignored -> new TreeSet<>())
-                    .addAll(entities);
+            terms.phrase(term.phrase(), entities, !term.glossary());
         }
-
-        List<Entry> exactEntries = new ArrayList<>();
-        List<String> exactAlternatives = new ArrayList<>();
-        exactEntities.forEach((phrase, entities) -> {
-            exactEntries.add(new Entry(Set.copyOf(entities), !lexiconPhrase.get(phrase)));
-            exactAlternatives.add(exactRegex(phrase));
-        });
-        List<Entry> foldedEntries = new ArrayList<>();
-        List<String> foldedAlternatives = new ArrayList<>();
-        foldedEntities.forEach((phrase, entities) -> {
-            foldedEntries.add(new Entry(Set.copyOf(entities), false));
-            foldedAlternatives.add(foldedRegex(phrase));
-        });
-
-        List<IdentifierRule> identifiers = new ArrayList<>();
         for (ScopeNode node : graph.nodesOfType(NodeType.IDENTIFIER_PATTERN)) {
             Set<String> entities = targets(graph, node.id(), EdgeType.IDENTIFIES);
             if (entities.isEmpty() || !(node.attributes() instanceof NodeAttributes.IdentifierPattern identifier)) {
                 continue;
             }
+            terms.identifier(identifier.pattern(), entities);
+        }
+        return terms.build();
+    }
+
+    /**
+     * ADR-0068 spec §2.7: the lexicon's own terms and identifiers, without the graph (no glossary
+     * phrases). Matches a message the way the graph matcher matches the same lexicon, so the heuristic
+     * tagger's lookup seeds what the scope resolver would seed from the lexicon.
+     */
+    static @NonNull TermMatcher of(@NonNull EntityLexicon lexicon) {
+        Terms terms = new Terms();
+        Map<String, Set<String>> entitiesByIdentifier = new TreeMap<>();
+        Map<String, String> patternByIdentifier = new TreeMap<>();
+        for (EntityLexicon.EntityDefinition entity : lexicon.entities()) {
+            entity.terms()
+                    .values()
+                    .forEach(phrases -> phrases.forEach(phrase -> terms.phrase(phrase, Set.of(entity.key()), true)));
+            for (EntityLexicon.Identifier identifier : entity.identifiers()) {
+                entitiesByIdentifier
+                        .computeIfAbsent(identifier.key(), ignored -> new TreeSet<>())
+                        .add(entity.key());
+                patternByIdentifier.putIfAbsent(identifier.key(), identifier.pattern());
+            }
+        }
+        entitiesByIdentifier.forEach((key, entities) -> terms.identifier(patternByIdentifier.get(key), entities));
+        return terms.build();
+    }
+
+    /** The phrases and identifier patterns a matcher is built from, whichever source supplies them. */
+    private static final class Terms {
+        // Phrase -> what it denotes. The same phrase in two languages is one entry.
+        private final Map<String, Set<String>> exactEntities = new TreeMap<>(LONGEST_FIRST);
+        private final Map<String, Boolean> lexiconPhrase = new TreeMap<>();
+        private final Map<String, Set<String>> foldedEntities = new TreeMap<>(LONGEST_FIRST);
+        private final List<IdentifierRule> identifiers = new ArrayList<>();
+
+        void phrase(String rawPhrase, Set<String> entities, boolean fromLexicon) {
+            String phrase = normalize(rawPhrase);
+            if (phrase.isEmpty()) {
+                return;
+            }
+            exactEntities.computeIfAbsent(phrase, ignored -> new TreeSet<>()).addAll(entities);
+            lexiconPhrase.merge(phrase, fromLexicon, Boolean::logicalOr);
+            foldedEntities
+                    .computeIfAbsent(fold(phrase), ignored -> new TreeSet<>())
+                    .addAll(entities);
+        }
+
+        void identifier(String pattern, Set<String> entities) {
             try {
-                identifiers.add(new IdentifierRule(Pattern.compile(identifier.pattern()), Set.copyOf(entities)));
+                identifiers.add(new IdentifierRule(Pattern.compile(pattern), Set.copyOf(entities)));
             } catch (PatternSyntaxException invalid) {
                 // The lexicon loader rejects a pattern that does not compile; a graph built another
                 // way simply has one identifier fewer.
             }
         }
-        return new TermMatcher(
-                alternation(exactAlternatives, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-                List.copyOf(exactEntries),
-                alternation(foldedAlternatives, 0),
-                List.copyOf(foldedEntries),
-                List.copyOf(identifiers));
+
+        TermMatcher build() {
+            List<Entry> exactEntries = new ArrayList<>();
+            List<String> exactAlternatives = new ArrayList<>();
+            exactEntities.forEach((phrase, entities) -> {
+                exactEntries.add(new Entry(Set.copyOf(entities), !lexiconPhrase.get(phrase)));
+                exactAlternatives.add(exactRegex(phrase));
+            });
+            List<Entry> foldedEntries = new ArrayList<>();
+            List<String> foldedAlternatives = new ArrayList<>();
+            foldedEntities.forEach((phrase, entities) -> {
+                foldedEntries.add(new Entry(Set.copyOf(entities), false));
+                foldedAlternatives.add(foldedRegex(phrase));
+            });
+            return new TermMatcher(
+                    alternation(exactAlternatives, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
+                    List.copyOf(exactEntries),
+                    alternation(foldedAlternatives, 0),
+                    List.copyOf(foldedEntries),
+                    List.copyOf(identifiers));
+        }
     }
 
     /** The entities {@code message} names, each with the strongest way it was recognised, by entity key. */

@@ -88,17 +88,17 @@ class ScopeResolverWiringTest {
             assertThat(meters.get("mcp.scope.called_tool").counters()).hasSize(2);
             assertThat(meters.get("mcp.scope.errors").counter().count()).isZero();
             // ADR-0069 §6: one fallback counter per consumer, registered up front, none incremented.
-            assertThat(meters.get("mcp.scope.fallback").counters()).hasSize(3);
+            assertThat(meters.get("mcp.scope.fallback").counters()).hasSize(4);
             assertThat(meters.get("mcp.scope.fallback").counters().stream()
                             .map(counter -> counter.getId().getTag("consumer")))
-                    .containsExactlyInAnyOrder("rag", "tools", "card");
+                    .containsExactlyInAnyOrder("rag", "tools", "card", "lookups");
         });
     }
 
     @Test
     @DisplayName("mode enforce resolves exactly as shadow does, and the listed consumers are the ones that act")
     void enforceResolvesLikeShadow() {
-        runner.withPropertyValues("mcp.scope-graph.mode=enforce", "mcp.scope-graph.enforce=rag,tools,card")
+        runner.withPropertyValues("mcp.scope-graph.mode=enforce", "mcp.scope-graph.enforce=rag,tools,card,lookups")
                 .run(context -> {
                     assertThat(context.getBean(ScopeResolver.class).enabled()).isTrue();
                     ScopeConsumers consumers = context.getBean(ScopeConsumers.class);

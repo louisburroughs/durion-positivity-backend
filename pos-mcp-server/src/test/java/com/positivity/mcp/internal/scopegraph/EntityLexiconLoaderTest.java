@@ -164,6 +164,45 @@ class EntityLexiconLoaderTest {
     }
 
     @Test
+    @DisplayName("ADR-0068 spec §2.7: workflow_state loads as a WorkflowState and rejects any other value")
+    void workflowStateLoadsAndIsValidated() {
+        EntityLexicon lexicon = load("""
+                entities:
+                  - key: purchase-order
+                    domain: order
+                    workflow_state: CREATING_PO
+                  - key: invoice
+                    domain: invoice
+                """);
+        assertThat(lexicon.entities().get(0).workflowState())
+                .isEqualTo(com.positivity.mcp.internal.domain.WorkflowState.CREATING_PO);
+        assertThat(lexicon.entities().get(1).workflowState()).isNull();
+
+        assertThatThrownBy(() -> load("""
+                entities:
+                  - key: purchase-order
+                    domain: order
+                    workflow_state: creating_po
+                """))
+                .isInstanceOf(EntityLexiconException.class)
+                .hasMessageContaining("entity 'purchase-order'")
+                .hasMessageContaining("workflow_state")
+                .hasMessageContaining("creating_po")
+                .hasMessageContaining("CREATING_PO");
+
+        // The shipped lexicon carries the two states of spec §2.7 and no other.
+        EntityLexicon shipped = EntityLexiconLoader.loadDefault();
+        assertThat(shipped.entities().stream()
+                        .filter(entity -> entity.workflowState() != null)
+                        .collect(java.util.stream.Collectors.toMap(
+                                EntityDefinition::key, EntityDefinition::workflowState)))
+                .containsOnly(
+                        java.util.Map.entry(
+                                "purchase-order", com.positivity.mcp.internal.domain.WorkflowState.CREATING_PO),
+                        java.util.Map.entry("asn", com.positivity.mcp.internal.domain.WorkflowState.RECEIVING_ASN));
+    }
+
+    @Test
     @DisplayName("a regex that does not compile names the entity, for identifiers and schema patterns")
     void invalidRegex() {
         assertThatThrownBy(() -> load("""

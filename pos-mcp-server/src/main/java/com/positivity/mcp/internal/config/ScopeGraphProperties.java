@@ -40,7 +40,13 @@ public record ScopeGraphProperties(
     public enum Consumer {
         RAG,
         TOOLS,
-        CARD
+        CARD,
+        /**
+         * ADR-0069 §6 row 3 / ADR-0068 spec §2.7: the lexicon lookups. Entity seeds supply the
+         * tag-added facade tools (instead of the inventory / order keyword tags) and, for an {@code
+         * ACTION} intent, the heuristic workflow state through the lexicon's {@code workflow_state}.
+         */
+        LOOKUPS
     }
 
     public ScopeGraphProperties {

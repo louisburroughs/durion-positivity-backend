@@ -325,7 +325,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                                 simple.latencyMs()));
             }
 
-            // Gate 4 (#1192): classify the request with the T1 router (temperature 0) and select the
+            // Gate 4 (#1192): classify the request with the router (ADR-0068 §7: from the tags) and select the
             // executor tier. Null when tiering is disabled or the router is not wired — the request
             // then uses the default model (documented rollback). The router picks a MODEL only; it
             // never affects tool or permission gating (Permission lock).
@@ -556,8 +556,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         // not), fail-closed to public-only when absent. Broadening the master scope above makes this
         // gating load-bearing: without it, master-scope queries would surface gated domain docs.
         QueryDocumentRetriever permissionFilteredRetriever = permissionFiltered(scopeFilteredRetriever);
-        QueryDocumentRetriever rerankedRetriever =
-                new RerankedContentRetriever(permissionFilteredRetriever, TIER2_FINAL_TOP_K);
+        // ADR-0068 spec §2.6: the compound gate reads the turn's tags from the request-scoped holder
+        // (the retriever is built per cached agent, the tags per turn).
+        QueryDocumentRetriever rerankedRetriever = new RerankedContentRetriever(
+                permissionFilteredRetriever,
+                TIER2_FINAL_TOP_K,
+                requestScopedUserContext == null ? QuestionTags::none : requestScopedUserContext::currentTags);
         // ADR-0069 §9: observes the final top-K for the scope trace and returns it untouched; a plain
         // call-through unless a scope was published for the request.
         QueryDocumentRetriever resilientContentRetriever = new ResilientContentRetriever(
@@ -618,7 +622,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         if (!tieringEnabled || nltiRouter == null) {
             return null;
         }
-        // ADR-0068 §7: the router receives the turn's tags (it maps them in Wave 2).
+        // ADR-0068 §7: the router maps the turn's acting tags to the tier; it calls no model.
         return nltiRouter.classify(message, tags);
     }
 
@@ -628,8 +632,6 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         }
         String tierModel =
                 tieredChatModelResolver == null ? null : tieredChatModelResolver.modelNameFor(decision.tier());
-        String routerModel =
-                tieredChatModelResolver == null ? null : tieredChatModelResolver.modelNameFor(ModelTier.T1_ROUTER);
         return new TierRouting(
                 decision.classification().intentType().name(),
                 decision.classification().riskLevel().name(),
@@ -637,7 +639,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 decision.classification().complexity().name(),
                 NltiRequestTelemetry.Tier.valueOf(decision.tier().name()),
                 tierModel,
-                routerModel);
+                // ADR-0068 §7: the router is mapped from the tags and calls no model, so there is no
+                // router model to report (mcp.model.router stays configured until the router tags are
+                // promoted, but nothing runs on it).
+                null);
     }
 
     private boolean currentWriteCapableToolsPresent() {

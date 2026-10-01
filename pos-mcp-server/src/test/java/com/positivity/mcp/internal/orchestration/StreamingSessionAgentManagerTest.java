@@ -346,7 +346,8 @@ class StreamingSessionAgentManagerTest {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
 
@@ -358,7 +359,7 @@ class StreamingSessionAgentManagerTest {
 
         assertThat(result).isNotNull();
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(contextCaptor.capture(), eq(3), any(QuestionTags.class));
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
         assertThat(roleAgentCacheKeys(selectorManager))
                 .contains("ROLE_CASHIER::GlossaryFacadeTool+InventoryFacadeTool");
@@ -418,7 +419,8 @@ class StreamingSessionAgentManagerTest {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
 
         StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
@@ -428,7 +430,8 @@ class StreamingSessionAgentManagerTest {
         Flux<String> result = selectorManager.streamChat(userContext("user-2", USER_ID, "ROLE_CASHIER"), message);
 
         assertThat(result).isNotNull();
-        verify(toolRegistryService).resolveCandidateSelection(any(ToolSelectionContext.class), eq(3));
+        verify(toolRegistryService)
+                .resolveCandidateSelection(any(ToolSelectionContext.class), eq(3), any(QuestionTags.class));
         // #1606/#1608: fail closed — the ungated domain set is no longer substituted.
         assertThat(roleAgentCacheKeys(selectorManager))
                 .doesNotContain("ROLE_CASHIER::GlossaryFacadeTool+InventoryFacadeTool+OrderFacadeTool");
@@ -440,7 +443,8 @@ class StreamingSessionAgentManagerTest {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenThrow(new IllegalStateException("selector unavailable"));
 
         StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
@@ -451,7 +455,8 @@ class StreamingSessionAgentManagerTest {
                 selectorManager.streamChat(userContext("user-3", USER_ID, "ROLE_CASHIER"), "show sales orders");
 
         assertThat(result).isNotNull();
-        verify(toolRegistryService).resolveCandidateSelection(any(ToolSelectionContext.class), eq(3));
+        verify(toolRegistryService)
+                .resolveCandidateSelection(any(ToolSelectionContext.class), eq(3), any(QuestionTags.class));
         // #1606/#1608: fail closed — the ungated domain set is no longer substituted.
         assertThat(roleAgentCacheKeys(selectorManager))
                 .doesNotContain("ROLE_CASHIER::GlossaryFacadeTool+InventoryFacadeTool+OrderFacadeTool");
@@ -547,7 +552,8 @@ class StreamingSessionAgentManagerTest {
     void streamChat_withInventoryKeyword_includesInventoryFallbackTool() {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
 
         StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
@@ -564,7 +570,8 @@ class StreamingSessionAgentManagerTest {
     void streamChat_withWebKeyword_includesExaFallbackTool() {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of()));
 
         StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
@@ -1374,7 +1381,7 @@ class StreamingSessionAgentManagerTest {
                 ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
         verify(streamingChatModel, atLeastOnce()).stream(prompts.capture());
         ArgumentCaptor<ToolSelectionContext> ranking = ArgumentCaptor.forClass(ToolSelectionContext.class);
-        verify(toolRegistryService).resolveCandidateSelection(ranking.capture(), eq(3));
+        verify(toolRegistryService).resolveCandidateSelection(ranking.capture(), eq(3), any(QuestionTags.class));
         List<Object> observed = new ArrayList<>();
         observed.add(tokens);
         observed.add(roleAgentCacheKeys(target).stream().sorted().toList());
@@ -1417,7 +1424,8 @@ class StreamingSessionAgentManagerTest {
                         .build());
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool")))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(inventoryFacadeTool)));
@@ -1465,7 +1473,8 @@ class StreamingSessionAgentManagerTest {
 
     /** A real engine over the fixture graph, wired to {@code consumers}, ranking to the order facade alone. */
     private ToolSelectionEngine orderRankingEngine(ScopeConsumers consumers, SimpleMeterRegistry meters) {
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of(new ToolMetadata(
                         UUID.randomUUID(),
                         "orderFacadeTool",
@@ -1510,7 +1519,8 @@ class StreamingSessionAgentManagerTest {
         streamingModelAnswers("Stock found");
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
-        when(toolRegistryService.resolveCandidateSelection(any(ToolSelectionContext.class), eq(3)))
+        when(toolRegistryService.resolveCandidateSelection(
+                        any(ToolSelectionContext.class), eq(3), any(QuestionTags.class)))
                 .thenReturn(gated(List.of(inventoryToolMetadata())));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool")))
                 .thenAnswer(invocation -> new ArrayList<>(List.of(inventoryFacadeTool)));

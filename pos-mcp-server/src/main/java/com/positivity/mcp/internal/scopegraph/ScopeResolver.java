@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.scopegraph;
 
 import com.positivity.mcp.internal.config.ScopeGraphProperties;
+import com.positivity.mcp.internal.domain.TagSeeds;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.scopegraph.NodeAttributes.ToolSource;
 import com.positivity.mcp.internal.scopegraph.ScopeSet.Confidence;
@@ -68,6 +69,21 @@ public class ScopeResolver {
      */
     public @NonNull ScopeSet resolve(
             @NonNull String message, @NonNull Set<String> callerPermissionCodes, @NonNull WorkflowState workflowState) {
+        return resolve(message, callerPermissionCodes, workflowState, TagSeeds.none());
+    }
+
+    /**
+     * ADR-0068 spec §2.7: as {@link #resolve(String, Set, WorkflowState)}, with the seeds the acting
+     * tags add. An entity key seeds its node with {@link MatchKind#TAG} ({@code LOW}); a RAG scope
+     * seeds the {@code Domain} node(s) it maps to (the inverse of {@code domain_scopes}, identity when
+     * no row) and, as their one hop, the {@code RagDoc}s of that scope. A Domain is never expanded to
+     * its tools (ADR-0069 §2.8).
+     */
+    public @NonNull ScopeSet resolve(
+            @NonNull String message,
+            @NonNull Set<String> callerPermissionCodes,
+            @NonNull WorkflowState workflowState,
+            @NonNull TagSeeds tagSeeds) {
         if (!properties.enabled()) {
             return ScopeSet.empty();
         }
@@ -79,7 +95,8 @@ public class ScopeResolver {
                     message,
                     callerPermissionCodes,
                     workflowState.name(),
-                    properties.maxNodes());
+                    properties.maxNodes(),
+                    tagSeeds);
             metrics.recordResolved(scope);
             return scope;
         } catch (RuntimeException exception) {
@@ -100,15 +117,69 @@ public class ScopeResolver {
             @NonNull Set<String> callerPermissionCodes,
             @NonNull String workflowState,
             int maxNodes) {
+        return resolve(graph, matcher, message, callerPermissionCodes, workflowState, maxNodes, TagSeeds.none());
+    }
+
+    /** The resolution itself, with the tag seeds (spec §2.7). */
+    static @NonNull ScopeSet resolve(
+            @NonNull ScopeGraph graph,
+            @NonNull TermMatcher matcher,
+            @NonNull String message,
+            @NonNull Set<String> callerPermissionCodes,
+            @NonNull String workflowState,
+            int maxNodes,
+            @NonNull TagSeeds tagSeeds) {
         if (graph.isEmpty()) {
             return ScopeSet.none(graph);
         }
-        List<Seed> seeds = matcher.match(message);
-        if (seeds.isEmpty()) {
+        List<Seed> seeds = new ArrayList<>(matcher.match(message));
+        Set<String> seeded = new TreeSet<>();
+        seeds.forEach(seed -> seeded.add(seed.entity()));
+        for (String key : tagSeeds.entityKeys()) {
+            // A tag seed adds an entity the lexicon terms did not name; a term match is the stronger kind.
+            if (seeded.add(key) && graph.contains(NodeId.of(NodeType.ENTITY, key))) {
+                seeds.add(new Seed(key, MatchKind.TAG));
+            }
+        }
+        DomainSeed domainSeed = DomainSeed.of(graph, tagSeeds.ragScope());
+        if (seeds.isEmpty() && domainSeed.isEmpty()) {
             return ScopeSet.none(graph);
         }
-        Map<NodeId, Integer> reached = expand(graph, seeds, maxNodes);
+        Map<NodeId, Integer> reached = expand(graph, seeds, domainSeed, maxNodes);
         return assemble(graph, seeds, reached, callerPermissionCodes, workflowState);
+    }
+
+    /**
+     * Spec §2.7: the {@code Domain} node(s) whose RAG scope is the acting {@code domain} tag, and the
+     * {@code RagDoc}s of that scope. Empty when the tag seeds no domain or no node maps to it.
+     */
+    record DomainSeed(@NonNull Set<NodeId> domains, @NonNull Set<NodeId> documents) {
+
+        private static final DomainSeed NONE = new DomainSeed(Set.of(), Set.of());
+
+        static DomainSeed of(ScopeGraph graph, @org.jspecify.annotations.Nullable String ragScope) {
+            if (ragScope == null) {
+                return NONE;
+            }
+            Set<NodeId> domains = new TreeSet<>();
+            for (ScopeNode node : graph.nodesOfType(NodeType.DOMAIN)) {
+                if (graph.ragScopeOf(node.id().key()).equals(ragScope)) {
+                    domains.add(node.id());
+                }
+            }
+            Set<NodeId> documents = new TreeSet<>();
+            for (ScopeNode node : graph.nodesOfType(NodeType.RAG_DOC)) {
+                if (node.attributes() instanceof NodeAttributes.RagDoc doc
+                        && doc.ragScope().equals(ragScope)) {
+                    documents.add(node.id());
+                }
+            }
+            return domains.isEmpty() && documents.isEmpty() ? NONE : new DomainSeed(domains, documents);
+        }
+
+        boolean isEmpty() {
+            return domains.isEmpty() && documents.isEmpty();
+        }
     }
 
     /**
@@ -119,12 +190,25 @@ public class ScopeResolver {
      * @return the non-seed nodes in scope, in expansion order, each with its hop
      */
     static @NonNull Map<NodeId, Integer> expand(@NonNull ScopeGraph graph, @NonNull List<Seed> seeds, int maxNodes) {
+        return expand(graph, seeds, DomainSeed.NONE, maxNodes);
+    }
+
+    /**
+     * As {@link #expand(ScopeGraph, List, int)}, with a domain seed (spec §2.7): its Domain nodes are
+     * kept like the entity seeds (first hop, outside the budget) and its documents join the first hop
+     * in the ordinary hop order. Nothing is expanded from a Domain.
+     */
+    static @NonNull Map<NodeId, Integer> expand(
+            @NonNull ScopeGraph graph, @NonNull List<Seed> seeds, @NonNull DomainSeed domainSeed, int maxNodes) {
         Set<NodeId> seedIds = new TreeSet<>();
         seeds.forEach(seed -> seedIds.add(NodeId.of(NodeType.ENTITY, seed.entity())));
-        int budget = Math.max(0, maxNodes - seedIds.size());
+        int budget =
+                Math.max(0, maxNodes - seedIds.size() - domainSeed.domains().size());
         Map<NodeId, Integer> reached = new LinkedHashMap<>();
+        domainSeed.domains().forEach(domain -> reached.put(domain, FIRST_HOP));
 
         Set<NodeId> firstHop = new TreeSet<>(hopOrder(graph));
+        firstHop.addAll(domainSeed.documents());
         for (NodeId seed : seedIds) {
             sources(graph, seed, EdgeType.RELATES_TO, firstHop);
             targets(graph, seed, EdgeType.RELATES_TO, firstHop);
@@ -135,8 +219,10 @@ public class ScopeResolver {
             targets(graph, seed, EdgeType.HAS_STATE, firstHop);
         }
         firstHop.removeAll(seedIds);
+        firstHop.removeAll(domainSeed.domains());
+        int kept = domainSeed.domains().size();
         for (NodeId node : firstHop) {
-            if (reached.size() >= budget) {
+            if (reached.size() - kept >= budget) {
                 return reached;
             }
             reached.put(node, FIRST_HOP);
@@ -157,8 +243,9 @@ public class ScopeResolver {
         }
         secondHop.removeAll(seedIds);
         secondHop.removeAll(firstHop);
+        secondHop.removeAll(domainSeed.domains());
         for (NodeId node : secondHop) {
-            if (reached.size() >= budget) {
+            if (reached.size() - kept >= budget) {
                 return reached;
             }
             reached.put(node, SECOND_HOP);

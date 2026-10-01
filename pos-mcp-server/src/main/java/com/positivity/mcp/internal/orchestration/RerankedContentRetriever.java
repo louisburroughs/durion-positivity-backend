@@ -1,5 +1,7 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.positivity.mcp.internal.domain.QuestionTags;
+import com.positivity.mcp.internal.domain.TagName;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -10,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
@@ -36,6 +39,12 @@ import org.springframework.ai.document.Document;
  * byte-for-byte unchanged. Gated by
  * {@code mcp.rag.rerank.compound-slots-enabled} (default
  * {@code true}), applied via {@link CompoundRerankTuning}.
+ *
+ * <p>ADR-0068 spec §2.6, the compound gate: the retriever reads the turn's {@link QuestionTags} from
+ * the request-scoped holder (it is built per role agent, so the record cannot be a field). An enforced
+ * {@code compound_question} {@code false} skips the split; an enforced {@code true} widens the
+ * splitter ({@link #splitSubQueriesWidened}: a conjunction boundary needs no English starter word, so
+ * fr and es questions split too); no record, {@code none()} or a heuristic answer keeps today's split.
  */
 final class RerankedContentRetriever implements QueryDocumentRetriever {
 
@@ -61,6 +70,13 @@ final class RerankedContentRetriever implements QueryDocumentRetriever {
     private static final Pattern SUB_QUERY_BOUNDARY_CANDIDATE =
             Pattern.compile(" (and|plus|but) |(?<=[?;]) ", Pattern.CASE_INSENSITIVE);
 
+    /**
+     * The widened boundary (ADR-0068 spec §2.6): the conjunctions of en, fr and es, and the same
+     * sentence terminators; used only when the decision model said {@code compound_question}.
+     */
+    private static final Pattern WIDENED_SUB_QUERY_BOUNDARY =
+            Pattern.compile(" (and|plus|but|et|y|mais|pero) |(?<=[?;]) ", Pattern.CASE_INSENSITIVE);
+
     private static final Set<String> SUB_QUERY_STARTERS = Set.of(
             "what", "which", "who", "whom", "whose", "when", "where", "why", "how", "is", "are", "was", "were", "do",
             "does", "did", "can", "could", "should", "would", "will", "may", "must");
@@ -79,16 +95,35 @@ final class RerankedContentRetriever implements QueryDocumentRetriever {
     private final boolean compoundSlotsEnabled;
     private final int maxSubQueries;
 
+    /** ADR-0068: this turn's published tag record; {@link QuestionTags#none()} outside a chat turn. */
+    private final Supplier<QuestionTags> tagsSupplier;
+
     RerankedContentRetriever(@NonNull QueryDocumentRetriever delegate, int topK) {
-        this(delegate, topK, defaultCompoundSlotsEnabled, defaultMaxSubQueries);
+        this(delegate, topK, QuestionTags::none);
+    }
+
+    /** @param tagsSupplier the turn's tag record, read per call ({@code RequestScopedUserContext::currentTags}) */
+    RerankedContentRetriever(
+            @NonNull QueryDocumentRetriever delegate, int topK, @NonNull Supplier<QuestionTags> tagsSupplier) {
+        this(delegate, topK, defaultCompoundSlotsEnabled, defaultMaxSubQueries, tagsSupplier);
     }
 
     RerankedContentRetriever(
             @NonNull QueryDocumentRetriever delegate, int topK, boolean compoundSlotsEnabled, int maxSubQueries) {
+        this(delegate, topK, compoundSlotsEnabled, maxSubQueries, QuestionTags::none);
+    }
+
+    RerankedContentRetriever(
+            @NonNull QueryDocumentRetriever delegate,
+            int topK,
+            boolean compoundSlotsEnabled,
+            int maxSubQueries,
+            @NonNull Supplier<QuestionTags> tagsSupplier) {
         this.delegate = delegate;
         this.topK = Math.max(1, topK);
         this.compoundSlotsEnabled = compoundSlotsEnabled;
         this.maxSubQueries = Math.max(1, maxSubQueries);
+        this.tagsSupplier = tagsSupplier;
     }
 
     /**
@@ -118,7 +153,7 @@ final class RerankedContentRetriever implements QueryDocumentRetriever {
         if (!compoundSlotsEnabled || overallOrder.size() <= topK) {
             return topKOf(overallOrder);
         }
-        List<String> subQueries = splitSubQueries(queryText, maxSubQueries);
+        List<String> subQueries = subQueries(queryText);
         if (subQueries.size() < 2) {
             return topKOf(overallOrder);
         }
@@ -151,20 +186,51 @@ final class RerankedContentRetriever implements QueryDocumentRetriever {
     }
 
     /**
+     * ADR-0068 spec §2.6, the compound gate: which splitter this turn's tags select. Only an enforced
+     * answer changes anything; a heuristic answer (off, shadow, below threshold) and {@code none()}
+     * keep today's split.
+     */
+    private @NonNull List<String> subQueries(@NonNull String queryText) {
+        QuestionTags tags = tagsSupplier.get();
+        if (tags.enforced(TagName.COMPOUND_QUESTION)) {
+            return tags.compoundQuestion() ? splitSubQueriesWidened(queryText, maxSubQueries) : List.of();
+        }
+        return splitSubQueries(queryText, maxSubQueries);
+    }
+
+    /**
      * Splits a query into its information needs. Returns fewer than two entries
      * when the query is
      * single-need, in which case re-ranking behaves exactly as before #1180.
      */
     static @NonNull List<String> splitSubQueries(@NonNull String queryText, int maxSubQueries) {
+        return split(queryText, maxSubQueries, SUB_QUERY_BOUNDARY_CANDIDATE, true);
+    }
+
+    /**
+     * ADR-0068 spec §2.6: the widened split, for a turn the decision model called compound. A
+     * boundary at a conjunction ({@code and}, {@code plus}, {@code but}, {@code et}, {@code y}, {@code
+     * mais}, {@code pero}) or after {@code ?} / {@code ;} splits without the English starter-word
+     * check; a fragment still has to be an information need of its own ({@value #MIN_SUB_QUERY_TOKENS}
+     * tokens), so "returns and refunds" still does not split.
+     */
+    static @NonNull List<String> splitSubQueriesWidened(@NonNull String queryText, int maxSubQueries) {
+        return split(queryText, maxSubQueries, WIDENED_SUB_QUERY_BOUNDARY, false);
+    }
+
+    private static @NonNull List<String> split(
+            @NonNull String queryText, int maxSubQueries, @NonNull Pattern boundary, boolean requireStarter) {
         String normalizedQuery = normalize(queryText);
-        Matcher boundaryMatcher = SUB_QUERY_BOUNDARY_CANDIDATE.matcher(normalizedQuery);
+        Matcher boundaryMatcher = boundary.matcher(normalizedQuery);
         List<String> subQueries = new ArrayList<>();
         int maxResults = Math.max(1, maxSubQueries);
         int partStart = 0;
 
         while (boundaryMatcher.find()) {
             int boundaryEnd = boundaryMatcher.end();
-            if (boundaryMatcher.group(1) != null && !startsSubQuery(normalizedQuery, boundaryMatcher.end())) {
+            if (requireStarter
+                    && boundaryMatcher.group(1) != null
+                    && !startsSubQuery(normalizedQuery, boundaryMatcher.end())) {
                 if (!followsSentenceTerminator(normalizedQuery, boundaryMatcher.start())) {
                     continue;
                 }

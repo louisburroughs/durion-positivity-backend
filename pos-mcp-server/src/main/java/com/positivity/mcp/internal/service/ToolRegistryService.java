@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.service;
 
+import com.positivity.mcp.internal.domain.QuestionTags;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
@@ -116,6 +117,19 @@ public class ToolRegistryService {
      * changes.
      */
     public @NonNull CandidateSelection resolveCandidateSelection(@NonNull ToolSelectionContext context, int topK) {
+        return resolveCandidateSelection(context, topK, QuestionTags.none());
+    }
+
+    /**
+     * ADR-0068 §3.4: as {@link #resolveCandidateSelection(ToolSelectionContext, int)}, with the turn's
+     * tag record. The admin fast path fires only when the heuristic keyword or phrase matched without a
+     * veto term <em>and</em> the acting {@code admin_account_question} is {@code true}: a model {@code
+     * false} at or above threshold vetoes it, a model {@code true} never fires it alone. In {@code off}
+     * and {@code shadow} the acting value is the heuristic one, so the path fires exactly as before;
+     * {@link QuestionTags#none()} behaves the same.
+     */
+    public @NonNull CandidateSelection resolveCandidateSelection(
+            @NonNull ToolSelectionContext context, int topK, @NonNull QuestionTags tags) {
         if (topK <= 0) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
@@ -161,7 +175,7 @@ public class ToolRegistryService {
         Set<String> gatedToolNames =
                 gatedTools.stream().map(ToolMetadata::name).collect(java.util.stream.Collectors.toUnmodifiableSet());
 
-        List<ToolMetadata> adminFastPathSelection = adminFastPathSelection(context, gatedTools);
+        List<ToolMetadata> adminFastPathSelection = adminFastPathSelection(context, gatedTools, tags);
         if (!adminFastPathSelection.isEmpty()) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(
@@ -274,7 +288,7 @@ public class ToolRegistryService {
      * #resolveCandidateTools}). No role check is performed here.
      */
     private @NonNull List<ToolMetadata> adminFastPathSelection(
-            @NonNull ToolSelectionContext context, @NonNull List<ToolMetadata> gatedTools) {
+            @NonNull ToolSelectionContext context, @NonNull List<ToolMetadata> gatedTools, @NonNull QuestionTags tags) {
         Set<String> matchedTerms = matchedAdminQueryTerms(context.userInput());
         if (matchedTerms.isEmpty()) {
             return List.of();
@@ -290,6 +304,18 @@ public class ToolRegistryService {
                         matchedTerms,
                         vetoTerms,
                         preview(context.userInput()));
+            }
+            return List.of();
+        }
+        // ADR-0068 §3.4: the heuristic matched; the acting tag may still veto (a model false at or
+        // above threshold in enforce). An absent record decides from the lists alone, as before.
+        if (!tags.isNone() && !tags.adminAccountQuestion()) {
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug(
+                        "MCP tool fast-path vetoed by the admin_account_question tag role={} workflow={} matchedTerms={}",
+                        context.role(),
+                        context.workflowState(),
+                        matchedTerms);
             }
             return List.of();
         }
@@ -325,8 +351,9 @@ public class ToolRegistryService {
     /**
      * ADR-0068 §1, {@code admin_account_question}: the heuristic value the fast path fires on, an
      * admin keyword or phrase matched and no veto term, read here by {@code HeuristicQuestionTagger}
-     * so the three lists stay in this class (ADR-0068 §1 placement). The fast path itself is
-     * unchanged in Wave 1 and still decides from the same lists.
+     * so the three lists stay in this class (ADR-0068 §1 placement). The fast path still matches the
+     * same lists and, since ADR-0068 §3.4, also requires the acting tag to be {@code true}, so an
+     * enforced model answer can veto it but never fire it.
      */
     public static boolean isAdminAccountQuestion(@NonNull String userInput) {
         return !matchedAdminQueryTerms(userInput).isEmpty()

@@ -89,12 +89,11 @@ final class SimpleChatClassifier {
 
     boolean isSimpleChat(@NonNull String message) {
         String text = SimpleChatRuleCatalog.normalize(message);
-        if (text.isBlank() || text.length() > MAX_SIMPLE_CHAT_CHAR_LENGTH) {
+        if (!withinCaps(text)) {
             return false;
         }
-
         MessageFeatures features = MessageFeatures.from(text);
-        if (features.tokens().isEmpty() || features.tokenCount() > MAX_SIMPLE_CHAT_TOKEN_COUNT) {
+        if (!withinCaps(features)) {
             return false;
         }
 
@@ -104,6 +103,27 @@ final class SimpleChatClassifier {
         }
 
         return !hasStrongTaskSignal(text, features, catalog);
+    }
+
+    /**
+     * ADR-0068 spec §2.5, the T0 skip: true when {@link #isSimpleChat} answers {@code true} through an
+     * exact catalog rule (a greeting, thanks, social question, say-hello or capability phrase), the one
+     * branch where the heuristic is certain. The caps are applied exactly as {@link #isSimpleChat}
+     * applies them, so an exact hit is always simple chat.
+     */
+    boolean isExactRuleHit(@NonNull String message) {
+        String text = SimpleChatRuleCatalog.normalize(message);
+        return withinCaps(text)
+                && withinCaps(MessageFeatures.from(text))
+                && catalogSupplier.get().isPureSocialIntent(text);
+    }
+
+    private static boolean withinCaps(@NonNull String text) {
+        return !text.isBlank() && text.length() <= MAX_SIMPLE_CHAT_CHAR_LENGTH;
+    }
+
+    private static boolean withinCaps(@NonNull MessageFeatures features) {
+        return !features.tokens().isEmpty() && features.tokenCount() <= MAX_SIMPLE_CHAT_TOKEN_COUNT;
     }
 
     private static boolean hasStrongTaskSignal(
