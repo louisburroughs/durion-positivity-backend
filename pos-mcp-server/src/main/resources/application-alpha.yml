@@ -146,6 +146,12 @@ mcp:
           entities: [purchase-order, asn, stock-item, stock-transfer, stock-adjustment]
           # #1525: retargeted to the live pos-order code — rationale in application.yml.
           required-permissions: ["order:purchase_order:view"]
+        - id: "catalog.products-fitment"
+          source-path: "classpath:rag/catalog-products-fitment-guide.md"
+          # #2381: inventory scope and OR-gated read codes — rationale in application.yml.
+          rag-scope: "inventory"
+          entities: [product]
+          required-permissions: ["catalog:product:view", "vehicle-fitment:catalog:view"]
         - id: "people.human-resources"
           source-path: "classpath:rag/hr-functions-guide.md"
           rag-scope: "hr"

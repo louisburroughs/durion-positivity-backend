@@ -301,6 +301,14 @@ mcp:
           # #1525: retargeted from inventory:purchase_order:view, whose grants were retired by the
           # #1499 sweep (pos-security-service V28) — purchase orders live in pos-order now.
           required-permissions: ["order:purchase_order:view"]
+        - id: "catalog.products-fitment"
+          source-path: "classpath:rag/catalog-products-fitment-guide.md"
+          # #2381: products and vehicle fitment answer inventory-shaped questions ("do we carry",
+          # "which pads fit"), so the guide joins the inventory scope rather than adding a domain
+          # option the tagging gate fixtures do not use. OR-semantics: catalog readers or fitment readers.
+          rag-scope: "inventory"
+          entities: [product]
+          required-permissions: ["catalog:product:view", "vehicle-fitment:catalog:view"]
         - id: "people.human-resources"
           source-path: "classpath:rag/hr-functions-guide.md"
           rag-scope: "hr"
