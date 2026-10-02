@@ -824,6 +824,32 @@
     "compoundQuestion" : false,
     "note" : "#2371: added after the capture. The pre-ADR-0068 heuristic took the admin fast path here ('access' keyword, no veto term); 'cliente' and 'bancaria' are now veto terms, a deliberate change."
   }, {
+    "id" : "admin-veto-9-fr",
+    "message" : "Quelle permission faut-il pour voir le grand livre?",
+    "simpleChat" : false,
+    "followsPreviousTurn" : false,
+    "workflowState" : "IDLE",
+    "impliesDateWindow" : false,
+    "needsWebSearch" : false,
+    "aboutInventory" : false,
+    "aboutOrders" : false,
+    "adminFastPath" : false,
+    "compoundQuestion" : false,
+    "note" : "#2371 second pass: added after the capture. The pre-ADR-0068 heuristic took the admin fast path here ('permission' keyword, no veto term); 'grand livre' (ledger) is now a veto term, a deliberate change."
+  }, {
+    "id" : "admin-veto-10-es",
+    "message" : "¿Quién tiene access a las cuentas por cobrar?",
+    "simpleChat" : false,
+    "followsPreviousTurn" : false,
+    "workflowState" : "IDLE",
+    "impliesDateWindow" : false,
+    "needsWebSearch" : false,
+    "aboutInventory" : false,
+    "aboutOrders" : false,
+    "adminFastPath" : false,
+    "compoundQuestion" : false,
+    "note" : "#2371 second pass: added after the capture. The pre-ADR-0068 heuristic took the admin fast path here ('access' keyword, no veto term); 'por cobrar' (accounts receivable) is now a veto term, a deliberate change."
+  }, {
     "id" : "admin-7",
     "message" : "show the account state for user jdoe",
     "simpleChat" : false,

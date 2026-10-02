@@ -389,7 +389,18 @@ class ToolRegistryServiceTest {
                 "bancaire",
                 "banco",
                 "bancaria",
-                "bancario"
+                "bancario",
+                "recevable",
+                "comptes à recevoir",
+                "comptes à payer",
+                "grand livre",
+                "grand-livre",
+                "grands livres",
+                "grands-livres",
+                "por cobrar",
+                "por pagar",
+                "libro mayor",
+                "libros mayores"
             })
     @DisplayName("#2371: each added veto term blocks the fast path when an admin phrase is present")
     void isAdminAccountQuestion_addedVetoTerm_blocksFastPath(String term) {
@@ -426,7 +437,19 @@ class ToolRegistryServiceTest {
                 "¿El proveedor tiene access al portal?|proveedor",
                 "¿Quién tiene access a la cuenta bancaria?|bancaria",
                 "¿Quién tiene access al banco?|banco",
-                "¿Qué empleado bancario tiene access?|bancario"
+                "¿Qué empleado bancario tiene access?|bancario",
+                "Quelle permission faut-il pour voir le grand livre?|grand livre",
+                "Quelle permission faut-il pour le grand-livre des fournitures?|grand-livre",
+                "Quelle permission faut-il pour fermer les grands livres?|grands livres",
+                "Quelle permission faut-il pour voir les comptes recevables?|recevable",
+                "Quelle permission faut-il pour voir les comptes à recevoir?|comptes à recevoir",
+                "Quelle permission faut-il pour voir les comptes à payer?|comptes à payer",
+                "Quelle permission faut-il pour voir les comptes clients?|client",
+                "Quelle permission faut-il pour voir les dettes fournisseurs?|fournisseur",
+                "¿Quién tiene access a las cuentas por cobrar?|por cobrar",
+                "¿Quién tiene access a la cuenta por pagar?|por pagar",
+                "¿Quién tiene access al libro mayor?|libro mayor",
+                "¿Quién tiene access a los libros mayores?|libros mayores"
             })
     @DisplayName("#2371: the trace names the added veto term that blocked an otherwise-admin question")
     void adminAccountRule_namesTheNewVetoTerm(String message, String vetoTerm) {

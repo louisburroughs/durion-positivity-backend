@@ -120,6 +120,8 @@ class TaggingBehaviourPreservationTest {
                         tuple("admin-veto-6", false),
                         tuple("admin-veto-7-fr", false),
                         tuple("admin-veto-8-es", false),
+                        tuple("admin-veto-9-fr", false),
+                        tuple("admin-veto-10-es", false),
                         tuple("admin-7", true));
         // #2371 review: a vetoed question must also reach tool selection, so these two are no longer
         // simple chat ('ledger' and 'bank' are business keywords).
