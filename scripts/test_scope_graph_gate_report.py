@@ -228,6 +228,15 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(dict(skipped), {"proxyNoExpected": 1, "actorMismatch": 1})
         self.assertEqual(mismatches[0]["turnId"], _uuid(3))
 
+    def test_actor_proxy_joins_no_fixture_without_actor_role(self):
+        # Fail closed under the proxy too: a fixture that names no actor is evidence for no turn.
+        fixture = _fixture("f", "q", ["d"])
+        del fixture["actor"]
+        trace = _trace(1, "q", _scope("LOW", [], []), role="ROLE_SYSTEM_ADMINISTRATOR")
+        joined, skipped, _ = report.join_traces([trace], [fixture], actor_proxy="ROLE_SYSTEM_ADMINISTRATOR")
+        self.assertEqual(joined, {})
+        self.assertEqual(dict(skipped), {"actorMismatch": 1})
+
     def test_actor_proxy_prefers_a_role_match(self):
         own = _fixture("own", "q", ["d"], role="ROLE_SYSTEM_ADMINISTRATOR")
         other = _fixture("other", "q", ["d"], role="ROLE_TECHNICIAN")
@@ -268,6 +277,40 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(result["fixturesJoined"], 1)
         self.assertEqual(result["fixturesWithoutTrace"], 0)
         self.assertEqual(result["fixturesExempt"], {"proxyUntestable": 1})
+        text = report.render_text(result)
+        self.assertIn("proxyUntestable=1 (another actor's visibility check", text)
+        self.assertNotIn("simple-chat", text)
+
+    def test_visibility_fixture_without_actor_role_is_not_exempt_under_the_proxy(self):
+        negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"])
+        del negative["actor"]
+        result = report.build_report([], [negative], actor_proxy="ROLE_SYSTEM_ADMINISTRATOR")
+        self.assertEqual(result["fixturesWithoutTrace"], 1)
+        self.assertEqual(result["fixturesExempt"], {})
+
+    def test_a_fixture_one_run_joined_is_exempt_from_no_run(self):
+        # The technician's visibility fixture joined the shadow run by its own role, so it is testable:
+        # a missing enforce turn is missing evidence, not a proxyUntestable exemption.
+        positive = _fixture("pos", "what is a vin", ["glossary.vin"], role="ROLE_TECHNICIAN")
+        negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
+        vin = _trace(1, "what is a vin", _scope("LOW", [_doc("glossary.vin", "master")], []), role="ROLE_TECHNICIAN")
+        approve = _trace(2, "who can approve", _scope("LOW", [], []), role="ROLE_TECHNICIAN")
+        result = report.build_report([vin, approve], [positive, negative], verbose=True,
+                                     enforce_traces=[_enforce(vin, vin["scope"]["retrievedDocuments"])],
+                                     actor_proxy="ROLE_SYSTEM_ADMINISTRATOR")
+        self.assertEqual(result["fixturesExempt"], {})
+        self.assertEqual(result["fixturesWithoutEnforceTraceIds"], ["neg"])
+        self.assertEqual(result["gate"]["verdict"], "INCOMPLETE")
+
+    def test_simple_chat_in_one_run_does_not_excuse_a_fixture_another_run_joined(self):
+        fixture = _fixture("f", "how do orders work", ["order.guide"])
+        shadow = _trace(1, "how do orders work", _scope("LOW", [_doc("order.guide")], []))
+        simple = _trace(2, "how do orders work", None)
+        simple["simpleChat"] = True
+        result = report.build_report([shadow], [fixture], enforce_traces=[simple])
+        self.assertEqual(result["fixturesExempt"], {})
+        self.assertEqual(result["fixturesWithoutEnforceTrace"], 1)
+        self.assertEqual(result["gate"]["verdict"], "INCOMPLETE")
 
     def test_without_proxy_a_visibility_fixture_still_needs_its_trace(self):
         negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")

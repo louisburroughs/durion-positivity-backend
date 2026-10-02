@@ -38,9 +38,11 @@ The gate verdict, exit code 0 only on PASS:
                   single deployable snapshot;
   INCOMPLETE      a loaded fixture has no joined shadow trace, or (with --enforce-file /
                   --baseline-file) no joined enforce / baseline trace: the evidence does not cover the
-                  fixture set. Exempt, and listed instead: a fixture whose question took the simple-chat
-                  path (no scope, no RAG: the rag consumer never acts on it, `simpleChat`) and, under
-                  --actor-proxy, one that expects no document (`proxyUntestable`);
+                  fixture set. Exempt, and listed instead, while no run joined it: a fixture whose
+                  question took the simple-chat path (no scope, no RAG: the rag consumer never acts on
+                  it, `simpleChat`) and, under --actor-proxy, one of another named actor that expects
+                  no document (`proxyUntestable`); a fixture any run joined is testable, so every run
+                  must cover it;
   NONDETERMINISTIC the baseline run resolved some fixture differently from the shadow run (top-K order,
                   confidence, selected or offered tools): pin the tagging mode and change nothing
                   between the runs, then rerun;
@@ -107,10 +109,11 @@ with different expectations). A fixture joined by more than one turn of a run ke
 `startedAt` (`duplicateTurn`), so a rerun's turn replaces an older attempt's.
 
 Actor proxy (--actor-proxy ROLE): where no candidate's role matches, a turn asked as ROLE joins every
-candidate that expects at least one document (a fixture expecting none is a pure visibility check,
-`proxyNoExpected`). Its forbidden list is ignored: the proxy sees what the fixture's actor may not, so a
-forbidden hit says nothing. Proxy evidence measures whether the filter drops expected documents, not
-per-role visibility; the report says how many samples rest on it.
+candidate that names an actor and expects at least one document (a fixture expecting none is a pure
+visibility check, `proxyNoExpected`; one naming no actor stays unjoined, `actorMismatch`). Its
+forbidden list is ignored: the proxy sees what the fixture's actor may not, so a forbidden hit says
+nothing. Proxy evidence measures whether the filter drops expected documents, not per-role
+visibility; the report says how many samples rest on it.
 
 Stdlib only, like scripts/tagging_shadow_report.py.
 """
@@ -129,6 +132,10 @@ ENFORCE = "ENFORCE"
 RAG = "RAG"
 EPSILON = 1e-9
 METRICS = ("hitAtK", "mrr", "recallAtK")
+EXEMPT_REASONS = {
+    "simpleChat": "the turn took the no-RAG simple-chat path",
+    "proxyUntestable": "another actor's visibility check, which the actor proxy cannot make",
+}
 
 
 def parse_traces(text):
@@ -218,8 +225,8 @@ def join_traces(traces, fixtures, actor_proxy=None):
     trace (by startedAt); skipped is a Counter of noUserMessage, noFixture, actorMismatch (the query
     matched, no candidate's actor role did; a fixture without one matches no turn) and duplicateTurn
     (a turn for an already joined fixture); mismatches lists the actor-mismatched turns. With
-    actor_proxy, a turn asked as that role joins the candidates that expect a document (see the module
-    docstring); one whose candidates expect none counts as proxyNoExpected.
+    actor_proxy, a turn asked as that role joins the candidates that name an actor and expect a document
+    (see the module docstring); one whose named candidates expect none counts as proxyNoExpected.
     """
     exact, normalised = defaultdict(list), defaultdict(list)
     for index, fixture in enumerate(fixtures):
@@ -240,8 +247,9 @@ def join_traces(traces, fixtures, actor_proxy=None):
         role = trace.get("role")
         by_role = [i for i in candidates if _actor_role(fixtures[i]) == role]
         if not by_role and actor_proxy is not None and role == actor_proxy:
-            by_role = [i for i in candidates if _expected(fixtures[i], DEFAULT_K)[0]]
-            if not by_role:
+            named = [i for i in candidates if _actor_role(fixtures[i]) is not None]
+            by_role = [i for i in named if _expected(fixtures[i], DEFAULT_K)[0]]
+            if named and not by_role:
                 skipped["proxyNoExpected"] += 1
                 continue
         if not by_role:
@@ -263,20 +271,23 @@ def join_traces(traces, fixtures, actor_proxy=None):
     return joined, skipped, mismatches
 
 
-def _exempt_fixtures(fixtures, traces, actor_proxy):
+def _exempt_fixtures(fixtures, traces, actor_proxy, joined_runs):
     """Fixture index -> why it needs no trace: `simpleChat` (some turn asking its question took the
     simple-chat path, which resolves no scope and retrieves nothing, so the rag consumer cannot act
-    on it) or `proxyUntestable` (under the actor proxy, a fixture of another actor expecting no
-    document: a pure visibility check the proxy cannot make)."""
+    on it) or `proxyUntestable` (under the actor proxy, a fixture of another, named actor expecting
+    no document: a pure visibility check the proxy cannot make). A fixture any run joined (one of
+    `joined_runs`) is testable, so it is exempt from none: every run must then cover it."""
     simple = {normalise_text(t.get("userMessage")) for t in traces
               if isinstance(t, dict) and t.get("simpleChat") is True and not isinstance(t.get("scope"), dict)
               and isinstance(t.get("userMessage"), str)}
     exempt = {}
     for index, fixture in enumerate(fixtures):
+        if any(index in joined for joined in joined_runs):
+            continue
         query = fixture.get("query")
         if isinstance(query, str) and normalise_text(query) in simple:
             exempt[index] = "simpleChat"
-        elif (actor_proxy is not None and _actor_role(fixture) != actor_proxy
+        elif (actor_proxy is not None and _actor_role(fixture) not in (None, actor_proxy)
               and not _expected(fixture, DEFAULT_K)[0]):
             exempt[index] = "proxyUntestable"
     return exempt
@@ -515,7 +526,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
 
     fixture_ids = [f.get("fixture_id") for f in fixtures]
     exempt = _exempt_fixtures(fixtures, list(traces) + list(enforce_traces or []) + list(baseline_traces or []),
-                              actor_proxy)
+                              actor_proxy, (joined, enforce_joined, baseline_joined))
     without_trace = [fixture_ids[i] for i in range(len(fixtures)) if i not in joined and i not in exempt]
     without_enforce = [fixture_ids[i] for i in range(len(fixtures))
                        if i not in enforce_joined and i not in exempt]
@@ -523,8 +534,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
                         if i not in baseline_joined and i not in exempt]
     exempt_ids = defaultdict(list)
     for index in sorted(exempt):
-        if index not in joined:
-            exempt_ids[exempt[index]].append(fixture_ids[index])
+        exempt_ids[exempt[index]].append(fixture_ids[index])
     # The joined turns only: a stray turn that scores nothing does not split the evidence.
     scored_traces = {id(t): t for t in list(joined.values()) + list(enforce_joined.values())
                      + list(baseline_joined.values())}.values()
@@ -866,8 +876,8 @@ def render_text(report):
         out.append(f"Actor proxy {report['actorProxy']}: {report['proxiedSamples']} sample(s) joined through it "
                    "(forbidden lists ignored; per-role visibility not tested)")
     if report["fixturesExempt"]:
-        out.append("Fixtures needing no trace: " + ", ".join(f"{why}={n}" for why, n in report["fixturesExempt"].items())
-                   + " (simpleChat: the turn took the no-RAG simple-chat path)")
+        out.append("Fixtures needing no trace: " + ", ".join(f"{why}={n} ({EXEMPT_REASONS[why]})"
+                                                              for why, n in report["fixturesExempt"].items()))
     if report["enforceTraces"] is None:
         out.append("Enforce traces: none given (--enforce-file)")
     else:
