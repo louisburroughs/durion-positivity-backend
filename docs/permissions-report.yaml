@@ -1,9 +1,9 @@
-generatedAt: "2026-09-29T13:52:34.794497+00:00"
+generatedAt: "2026-10-02T15:37:14.446318+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 508
-  uniquePermissionCount: 508
+  permissionCount: 512
+  uniquePermissionCount: 512
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -493,7 +493,7 @@ manifests:
     domain: "invoice"
     serviceName: "pos-invoice"
     version: "1.0"
-    permissionCount: 12
+    permissionCount: 16
     permissions:
       - name: "invoice:analytics:view"
         description: "View invoice analytics reports (revenue-by-customer, invoicing lag; #1589, #1592)"
@@ -519,6 +519,14 @@ manifests:
         description: "Bypass the 5-reprint cap on an existing receipt (#2226, BILL-DEC-010)"
       - name: "invoice:refund:issue_manual"
         description: "Issue a manual out-of-band refund not anchored to a captured payment intent, against an invoice or directly against a customer party (#2226, BILL-DEC-010)"
+      - name: "invoice:payment:process"
+        description: "Take card tender against an invoice: initiate a payment through the gateway, up to 500.00 and in the default SALE_CAPTURE flow (#2393, BILL-DEC-008)"
+      - name: "invoice:payment:limit_override"
+        description: "Initiate an invoice payment above the 500.00 threshold; checked in the service when the amount exceeds it (#2393, BILL-DEC-010)"
+      - name: "invoice:payment:flow_select"
+        description: "Choose the AUTH_ONLY flow (an authorization hold) when initiating an invoice payment; checked in the service when the request asks for it (#2393, BILL-DEC-008)"
+      - name: "invoice:payment:capture"
+        description: "Capture all or part of a previously authorized invoice payment hold (#2393, BILL-DEC-008)"
   - module: "pos-location"
     path: "pos-location/src/main/resources/permissions.yaml"
     domain: "location"
@@ -2536,8 +2544,32 @@ permissions:
     serviceName: "pos-invoice"
     module: "pos-invoice"
     source: "pos-invoice/src/main/resources/permissions.yaml"
+  - name: "invoice:payment:capture"
+    description: "Capture all or part of a previously authorized invoice payment hold (#2393, BILL-DEC-008)"
+    domain: "invoice"
+    serviceName: "pos-invoice"
+    module: "pos-invoice"
+    source: "pos-invoice/src/main/resources/permissions.yaml"
+  - name: "invoice:payment:flow_select"
+    description: "Choose the AUTH_ONLY flow (an authorization hold) when initiating an invoice payment; checked in the service when the request asks for it (#2393, BILL-DEC-008)"
+    domain: "invoice"
+    serviceName: "pos-invoice"
+    module: "pos-invoice"
+    source: "pos-invoice/src/main/resources/permissions.yaml"
+  - name: "invoice:payment:limit_override"
+    description: "Initiate an invoice payment above the 500.00 threshold; checked in the service when the amount exceeds it (#2393, BILL-DEC-010)"
+    domain: "invoice"
+    serviceName: "pos-invoice"
+    module: "pos-invoice"
+    source: "pos-invoice/src/main/resources/permissions.yaml"
   - name: "invoice:payment:override"
     description: "Bypass the 24-hour void window and the 180-day refund window on a captured payment (#2226, BILL-DEC-010)"
+    domain: "invoice"
+    serviceName: "pos-invoice"
+    module: "pos-invoice"
+    source: "pos-invoice/src/main/resources/permissions.yaml"
+  - name: "invoice:payment:process"
+    description: "Take card tender against an invoice: initiate a payment through the gateway, up to 500.00 and in the default SALE_CAPTURE flow (#2393, BILL-DEC-008)"
     domain: "invoice"
     serviceName: "pos-invoice"
     module: "pos-invoice"

@@ -86,6 +86,36 @@ public final class InvoicePermissions {
      */
     public static final String REFUND_ISSUE_MANUAL = "invoice:refund:issue_manual";
 
+    /**
+     * Take card tender against an invoice: initiate a payment intent through the gateway (#2393,
+     * BILL-DEC-008). Replaces the unregistered {@code PROCESS_PAYMENT} raw string no role could
+     * hold.
+     */
+    public static final String PAYMENT_PROCESS = "invoice:payment:process";
+
+    /**
+     * Elevation that lets a payment above the 500.00 threshold be initiated (#2393, BILL-DEC-010).
+     * Replaces the unregistered {@code OVERRIDE_PAYMENT_LIMIT} raw string. Checked in
+     * {@code PaymentServiceImpl} only when the request amount exceeds the threshold, so it is not
+     * a {@code @PreAuthorize} requirement. Distinct from {@link #PAYMENT_OVERRIDE}, which bypasses
+     * the void and refund time windows.
+     */
+    public static final String PAYMENT_LIMIT_OVERRIDE = "invoice:payment:limit_override";
+
+    /**
+     * Choose the {@code AUTH_ONLY} flow (an authorization hold) instead of the default
+     * {@code SALE_CAPTURE} (#2393, BILL-DEC-008). Replaces the unregistered
+     * {@code SELECT_PAYMENT_FLOW} raw string. Checked in {@code PaymentServiceImpl} only when the
+     * request asks for {@code AUTH_ONLY}, so it is not a {@code @PreAuthorize} requirement.
+     */
+    public static final String PAYMENT_FLOW_SELECT = "invoice:payment:flow_select";
+
+    /**
+     * Capture all or part of a previously authorized payment hold (#2393, BILL-DEC-008). Replaces
+     * the unregistered {@code MANUAL_CAPTURE} raw string.
+     */
+    public static final String PAYMENT_CAPTURE = "invoice:payment:capture";
+
     private InvoicePermissions() {
         // Utility class - prevent instantiation
     }

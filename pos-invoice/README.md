@@ -39,8 +39,11 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 - `POST /v1/invoices/{invoiceId}/finalize` — finalize an invoice
 - `POST /v1/invoices/{invoiceId}/revert` — revert a finalized invoice
 - `POST /v1/invoices/{invoiceId}/adjustments` — apply an adjustment
-- `POST /v1/invoices/{invoiceId}/payments` — initiate payment (idempotent)
+- `POST /v1/invoices/{invoiceId}/payments` — initiate payment (idempotent; `invoice:payment:process`,
+  plus `invoice:payment:limit_override` when the amount exceeds 500.00 and
+  `invoice:payment:flow_select` to choose `AUTH_ONLY`, #2393)
 - `POST /v1/invoices/{invoiceId}/payments/{paymentId}/capture` — capture an authorized payment
+  (`invoice:payment:capture`, #2393)
 - `GET /v1/invoices/{invoiceId}/payments` — list every payment intent raised against an invoice,
   including its refunded and refundable amounts (#2226, #2215)
 - `GET /v1/invoices/{invoiceId}/payments/{paymentId}` — read a single payment intent's detail,
