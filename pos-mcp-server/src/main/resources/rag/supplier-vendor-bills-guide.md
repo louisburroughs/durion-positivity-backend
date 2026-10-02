@@ -14,6 +14,7 @@ RAG id: `accounting.supplier-vendor-bills`
 RAG scope: `accounting`
 Required permissions: `accounting:ap:view`, `accounting:credit-memo:read`
 Audience: internal staff who work accounts payable or customer credits.
+This document is reference context only and grants no access; access is enforced by permission codes at request time.
 
 This guide explains the accounts payable (AP) side of pos-accounting as it is implemented: the two kinds of supplier
 record, how a vendor bill arrives, how it is matched to a receipt, how bills are paid, and how open balances are read.
@@ -77,7 +78,8 @@ A bill carries `billNumber`, `billDate`, an optional `dueDate`, `totalAmount`, `
 1. **From a goods receipt.** `POST /v1/accounting/vendor-bills` (`accounting:ap:pay`) takes the receipt: vendor,
    purchase order, received date and lines (product, description, quantity, unit price). It creates a bill in
    `PENDING_RECEIPT_MATCH` totalling the lines, assigns a number
-   `BILL_<first 8 hex of vendorId>_<yyyyMMdd>_<7-digit sequence>`, and emits a GL posting event for the bill. A
+   `BILL_<first 8 characters of vendorId, upper case>_<yyyyMMdd>_<7-digit sequence>` (the date is the day the bill is
+   recorded), and emits a GL posting event for the bill. A
    repeated `eventId` returns the existing bill. Receiving an ASN in pos-inventory does not call this endpoint
    automatically today.
 2. **From a supplier's electronic invoice.** pos-supplier fetches invoices over EDIWheel and publishes each new one;
@@ -98,9 +100,10 @@ vendor in `PENDING_RECEIPT_MATCH`:
 - No bill at 50 points or more: rejected (400, no pending receipt). Several at 50 or more: `AMBIGUOUS`, the
   candidates are stored and the best bill goes to `MATCH_EXCEPTION`. One at 70 or more: high confidence; 50 to 69:
   medium confidence, `MATCH_EXCEPTION`.
-- A high-confidence match is then checked line by line: same line count, quantity within 0.1 %, unit price within
-  5 %, total within 5 %. Failing sets `MATCH_EXCEPTION`; passing approves a high-confidence bill (`APPROVED`), and a
-  bill that passes takes the invoice's number and due date.
+- A single match, high or medium confidence, is then checked line by line: same line count, quantity within 0.1 %,
+  unit price within 5 %, total within 5 %. Failing sets `MATCH_EXCEPTION`. Passing approves a high-confidence bill
+  (`APPROVED`) and leaves a medium-confidence one in `MATCH_EXCEPTION`; either way the bill takes the invoice's number
+  and due date.
 
 The code calls this a three-way match, but the vendor invoice carries no purchase-order reference, so the order is
 only checked for presence; the comparison is invoice against receipt.
@@ -129,9 +132,10 @@ Clearing an exception:
 ## Open balances and due dates
 
 - **What we owe a vendor:** `GET /v1/accounting/reports/financial/aged-payables?asOfDate=`
-  (`reporting:view:financial-statements`) gives per-vendor open balances in buckets 0-30, 31-60, 61-90 and 90+ days
-  past due. Open means `PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION` or `APPROVED`, minus allocations; only positive
-  balances count, foreign-currency bills are left out, and a bill with no due date ages from its bill date.
+  (`reporting:view:financial-statements`) gives per-vendor open balances in buckets current (not yet due, or up to
+  30 days past due), 31-60, 61-90 and 90+ days past due. Open means `PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION` or
+  `APPROVED`, minus allocations; only positive balances count, foreign-currency bills are left out, and a bill with
+  no due date ages from its bill date.
 - **Bills due in a window:** `GET /v1/accounting/vendor-bills?dueFrom=&dueTo=&status=` (`accounting:analytics:view`),
   window at most 366 days, ordered by due date.
 - **Spend by vendor:** `GET /v1/accounting/analytics/vendor-spend` (`accounting:analytics:view`), top vendors by paid
@@ -187,7 +191,9 @@ Platform sources (repository-relative):
 - `pos-domain-events/src/main/java/com/positivity/domainevents/supplier/SupplierInvoiceReceivedV1.java`
 - `pos-order/src/main/java/com/positivity/order/internal/service/ReturnOrderServiceImpl.java`
 - `pos-invoice/src/main/java/com/positivity/invoice/internal/service/InvoiceServiceImpl.java`
-- `durion/domains/accounting/.business-rules/AGENT_GUIDE.md`; `durion/docs/adr/` ADR-0044, ADR-0067
+- `durion/domains/accounting/.business-rules/AGENT_GUIDE.md`
+- `durion/docs/adr/0044-platform-event-only-domain-walls.adr.md`
+- `durion/docs/adr/0067-platform-tenant-functional-currency-and-multi-currency.adr.md`
 
 External sources:
 
@@ -199,4 +205,4 @@ External sources:
 4. "Debit note", Wikipedia, Wikimedia Foundation. <https://en.wikipedia.org/wiki/Debit_note>. Accessed 2026-10-02.
 5. "Payment Process Requests", Oracle Fusion Cloud Financials: Using Payables Invoice to Pay 25D, Oracle.
    <https://docs.oracle.com/en/cloud/saas/financials/25d/fappp/payment-process-requests.html>. Accessed 2026-10-02
-   (read through a search-result extract; the page itself was not reachable from the authoring environment).
+   (cited from a search-result extract; the page could not be opened from the authoring environment).

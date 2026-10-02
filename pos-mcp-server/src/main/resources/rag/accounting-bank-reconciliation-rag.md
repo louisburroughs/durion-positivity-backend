@@ -13,6 +13,7 @@ RAG id: `accounting.bank-reconciliation`
 RAG scope: `accounting`
 Required permissions: `accounting:reconciliation:view`
 Audience: internal staff who prepare or approve bank reconciliations.
+This document is reference context only and grants no access; access is enforced by permission codes at request time.
 
 This document describes the manual bank reconciliation implemented in pos-accounting: bringing in a bank statement,
 matching bank transactions to posted ledger lines, explaining what does not match, and submitting and approving the
@@ -27,7 +28,8 @@ General accounting knowledge, not platform behaviour.
   corrected (Sources [1]).
 - Differences come mainly from timing, from items the bank recorded that the books have not, and from errors
   (Sources [1]). A typical timing item is an outstanding cheque, issued but "not been presented at the bank for
-  payment" (Sources [1]). The platform models it, and the deposit in transit, as outstanding items (below).
+  payment" (Sources [1]). The platform records it, and the deposit in transit, as an outstanding item on the
+  reconciliation.
 - Fees, interest, missing or duplicate transactions and errors also appear as reconciling items, and reconciling at
   frequent intervals is good practice (Sources [1]).
 
@@ -101,24 +103,27 @@ on a contiguous one, and moves the account's baseline.
 
 ## Explaining what does not match
 
-**Outstanding items** are timing differences and post nothing (`POST .../{id}/outstanding-items`). Kinds:
+**Outstanding items** are timing differences and post nothing
+(`POST /v1/accounting/reconciliations/{id}/outstanding-items`). Kinds:
 `DEPOSIT_IN_TRANSIT` (positive ledger line), `OUTSTANDING_CHECK` (negative ledger line), `OTHER_LEDGER_TIMING`, and
 `BANK_ERROR_PENDING` on a bank row. An open item carries forward until matched, cleared or released. Statuses:
 `OPEN`, `CLEARED`, `CLEARED_IN_GAP`, `VOIDED`, `RELEASED`. An `OTHER_LEDGER_TIMING` item older than the aging days
 (default 90) counts as unexplained until reaffirmed (`.../reaffirm`).
 
 **Adjustments** post a real, balanced journal entry through the accounting-period gate
-(`POST .../{id}/adjustments`). Types and signs: `BANK_FEE` and `NSF_FEE` negative, `INTEREST_EARNED` positive,
-`TRANSFER` either sign against another bank account, `OTHER` either sign to the clearing account with exactly one link
-(a bank row, a match residual, or the statement's acknowledged gap). `GET .../adjustment-types` serves the list.
-Adjustment statuses: `POSTED`, `REVERSED`. Reverse a wrong one with `.../adjustments/{adjustmentId}/reverse`, not
-with the journal-entry reversal endpoint, which would leave the reconciliation's links in place. An `OTHER`
-adjustment above the tenant's approval threshold, or any `OTHER` that does not settle a match residual while no
-threshold is set, needs `accounting:reconciliation:approve`.
+(`POST /v1/accounting/reconciliations/{id}/adjustments`). Types and signs: `BANK_FEE` and `NSF_FEE` negative,
+`INTEREST_EARNED` positive, `TRANSFER` either sign against another bank account, `OTHER` either sign to the
+clearing account with exactly one link (a bank row, a match residual, or the statement's acknowledged gap).
+`GET /v1/accounting/reconciliations/adjustment-types` serves the list. Adjustment statuses: `POSTED`, `REVERSED`.
+Reverse a wrong one with `.../{id}/adjustments/{adjustmentId}/reverse`, not with the journal-entry reversal endpoint,
+which would leave the reconciliation's links in place. An `OTHER` adjustment above the tenant's approval threshold,
+or any `OTHER` that does not settle a match residual while no threshold is set, needs
+`accounting:reconciliation:approve`.
 
 ## Finishing a reconciliation
 
-`ReconciliationStatus`: `IN_PROGRESS`, `SUBMITTED`, `FINALIZED`, `INVALIDATED`, `SUPERSEDED`, `CANCELLED`.
+`ReconciliationStatus`: `IN_PROGRESS`, `SUBMITTED`, `FINALIZED`, `INVALIDATED`, `SUPERSEDED`, `CANCELLED`. The
+endpoints below are under `/v1/accounting/reconciliations`.
 
 1. Review: `GET .../{id}/review` returns the whole workspace and `readiness.canSubmit`; `.../report` the printable
    report; `.../audit` the audit trail.
@@ -164,5 +169,5 @@ Platform sources (repository-relative):
 
 External sources:
 
-1. "Reconciliation (accounting)", section "In banking", Wikipedia, Wikimedia Foundation.
+1. "Reconciliation (accounting)", sections "In banking" and "Methods", Wikipedia, Wikimedia Foundation.
    <https://en.wikipedia.org/wiki/Reconciliation_(accounting)>. Accessed 2026-10-02.
