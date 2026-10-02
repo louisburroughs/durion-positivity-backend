@@ -171,7 +171,8 @@ public class ScopeGraphRealConfigValidationTest {
         assertThat(catalog.toolPrerequisites()).isNotEmpty();
     }
 
-    private static ScopeGraphBuildResult build(String profile) {
+    /** Shared with the product-fitment test of this package: the real graph under one profile. */
+    static ScopeGraphBuildResult build(String profile) {
         Specs moduleSpecs = specs();
         return BUILDER.build(new ScopeGraphSources(
                 EntityLexiconLoader.loadDefault(),

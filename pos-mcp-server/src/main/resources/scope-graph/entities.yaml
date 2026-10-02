@@ -65,7 +65,7 @@ domains:
   customer: "Customers, their accounts and contacts, the vehicles they own, communication with them."
   events: "Platform events published by the pos-event modules: event types, event history and notifications."
   hr: "Employees as staff: employment, pay rates, time off, HR functions."
-  inventory: "Stock on hand, availability, parts, reorder points, receiving and ASNs, transfers, adjustments, counts, suppliers and purchase orders to suppliers."
+  inventory: "Stock on hand, availability, parts and the product catalog (SKUs, part numbers, which parts fit a vehicle by year, make and model), reorder points, receiving and ASNs, transfers, adjustments, counts, suppliers and purchase orders to suppliers."
   order: "Customer sales orders and carts, returns and refunds (not purchase orders to suppliers)."
   pricing: "Prices, price lists, promotions, discounts, overrides, restrictions."
   reporting: "Operational reports and KPIs: work in progress, cycle time, throughput, technician utilization and billed hours, rework, parts metrics, dashboards. Money figures (revenue, margin, profit) are accounting."
@@ -356,12 +356,27 @@ entities:
       - 'inventory:(.*Adjustment.*|.*Scrap.*|.*Revaluation.*)'
 
   # ---- catalog, pricing, tax -------------------------------------------------------------------
+  # #2381: fitment is not an entity of its own. A fitment question asks which PRODUCTS fit a vehicle
+  # described by attributes (year, make, model), and pos-vehicle-fitment answers it with product ids
+  # (rag/catalog-products-fitment-guide.md); the vehicle registry entity stays `vehicle`. So the
+  # fitment vocabulary, and the part kinds named after the seeded catalog subcategories
+  # (pos-catalog R__seed_reference_catalog.sql: brake pads, rotors, wiper blades, filters, batteries,
+  # spark plugs), denote `product`. Bare "fit" is left out: "can you fit him in" is scheduling. Tires
+  # are left out too: in the tagging gate fixtures "tire" names a service ("tire rotation"), a fee or
+  # a stock count more often than a product, and adding it halved the term's precision for no gain in
+  # F1. A hyphenated word takes no plural fold, so its plural is listed as well.
   - key: product
     domain: catalog
     terms:
-      en: [product, spare part, auto part, catalog item, sku]
-      fr: [produit, pièce, article du catalogue]
-      es: [producto, pieza, repuesto, artículo del catálogo]
+      en: [product, spare part, auto part, catalog item, sku, part number, fitment, part fitment, fits, compatible,
+           compatibility, year make model, year/make/model, ymm, brake pad, brake rotor, rotor, brake shoe,
+           wiper blade, oil filter, air filter, cabin air filter, battery, spark plug]
+      fr: [produit, pièce, article du catalogue, numéro de pièce, compatibilité, compatible, année/marque/modèle,
+           plaquette de frein, disque de frein, rotor, essuie-glace, essuie-glaces, filtre à huile, filtre à air,
+           filtre d'habitacle, batterie, bougie d'allumage]
+      es: [producto, pieza, repuesto, artículo del catálogo, número de parte, compatibilidad, compatible,
+           año/marca/modelo, balata, pastilla de freno, disco de freno, rotor, plumilla,
+           limpiaparabrisas, filtro de aceite, filtro de aire, filtro de cabina, batería, bujía]
     relates_to:
       - {entity: price, label: priced_by}
       - {entity: stock-item, label: stocked_as}
@@ -371,6 +386,9 @@ entities:
       - 'catalog:ProductDetailView'
     schema_patterns:
       - 'catalog:(?!(PriceBook|.*Msrp|EffectiveLocationPrice|LocationPriceOverride|ResolvePrice|SupplierPrice|UpdateStandardCost|ItemCost|Pricing|GuardrailPolicy)).*'
+      # The product side of pos-vehicle-fitment: applicability hints and the product-by-vehicle
+      # filter. The vehicle taxonomy DTOs (manufacturer, make, model, type) stay on `vehicle` only.
+      - 'vehicle-fitment:(.*Hint.*|FilterProducts.*|FitmentTagDto|.*FitmentBulkIngest.*)'
     facade_tools:
       - {tool: CatalogFacadeTool, access: reads}
       - {tool: PricingFacadeTool, access: reads}
