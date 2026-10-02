@@ -37,9 +37,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>It also finishes offboarding: it ends the assignments of DISABLED or TERMINATED employees that
  * are past their {@code effectiveTo} (a GRACE_PERIOD that ran out) or still open-ended with no row
- * pending. Every offboarding has a row, a disable and a status moved into TERMINATED or DISABLED
- * through {@code updateEmployee} (#2361) alike, so the open-ended case is left with those whose
- * row used up its attempts. Each ended assignment is published.
+ * pending. Every offboarding made through the API has a row, a disable and a status moved into
+ * TERMINATED or DISABLED through {@code updateEmployee} (#2361) alike, so the open-ended case is
+ * left with those whose row used up its attempts, and with an offboarded status written outside
+ * those two paths (a data fix, say), which never had a row. Each ended assignment is published.
  *
  * <p>Per tenant (ADR-0062 §3): the queue table is under row-level security, so the sweep runs
  * inside {@link TenantIterator#forEachActiveTenant}. Each row is worked in its own

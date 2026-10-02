@@ -119,9 +119,10 @@ public class OffboardingAssignmentEnder {
      * GRACE_PERIOD that has run out; nothing flips the status when the date passes, and
      * status-keyed consumers such as pos-shop-manager's mechanic projection would keep treating the
      * person as staffed), or open-ended ones no queue row will get to: those of an employee whose
-     * retry row gave up. An offboarding's own assignments are not among them while its row is
-     * pending (#2360), whether it came from {@code disableEmployee} or from a status moved into
-     * TERMINATED or DISABLED through {@code updateEmployee} (#2361). The caller ends each through
+     * retry row gave up, and those of an employee whose offboarded status was written outside the
+     * API's two paths and so never had a row. An offboarding's own assignments are not among them
+     * while its row is pending (#2360), whether it came from {@code disableEmployee} or from a status
+     * moved into TERMINATED or DISABLED through {@code updateEmployee} (#2361). The caller ends each through
      * {@link #endLingeringAssignment(UUID)} in a transaction of its own, so one bad row cannot roll
      * back the rest.
      *
