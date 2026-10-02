@@ -275,6 +275,31 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(result["fixturesWithoutTrace"], 1)
         self.assertEqual(result["fixturesExempt"], {})
 
+    def _tool_pair(self, shadow_tags, enforce_tags):
+        fixture = _fixture("f", "q", ["d"])
+        shadow = _trace(1, "q", _scope("HIGH", [_doc("d")], ["d"]))
+        enforce = _trace(2, "q", _scope("HIGH", [_doc("d")], ["d"]))
+        enforce["scope"]["mode"] = "ENFORCE"
+        enforce["scope"]["enforced"] = ["RAG"]
+        shadow["selectedTools"], enforce["selectedTools"] = ["A", "B"], ["A"]
+        shadow["tags"] = {"tags": [{"name": n, "actingValue": v} for n, v in shadow_tags.items()]}
+        enforce["tags"] = {"tags": [{"name": n, "actingValue": v} for n, v in enforce_tags.items()]}
+        return report.build_report([shadow], [fixture], enforce_traces=[enforce], verbose=True)
+
+    def test_tool_change_under_the_same_tags_fails(self):
+        result = self._tool_pair({"workflow_state": "IDLE"}, {"workflow_state": "IDLE"})
+        self.assertEqual(result["gate"]["verdict"], "FAIL")
+        self.assertEqual(result["toolSelectionChanges"], 1)
+        self.assertEqual(result["tagDriftToolChanges"], 0)
+
+    def test_tool_change_under_drifted_tags_is_listed_not_counted(self):
+        result = self._tool_pair({"workflow_state": "IDLE"}, {"workflow_state": "RECEIVING_ASN"})
+        self.assertEqual(result["gate"]["verdict"], "PASS")
+        self.assertEqual(result["toolSelectionChanges"], 0)
+        self.assertEqual(result["tagDriftToolChanges"], 1)
+        self.assertEqual(result["toolChangeList"][0]["tagDrift"], ["workflow_state"])
+        self.assertIn("tagDrift=['workflow_state']", report.render_text(result))
+
     def test_fixture_without_actor_role_joins_no_turn(self):
         # Fail closed: a fixture that names no actor cannot say which turn is evidence for it.
         fixture = _fixture("f", "q", ["d"])

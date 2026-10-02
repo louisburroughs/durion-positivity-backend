@@ -49,7 +49,10 @@ The gate verdict, exit code 0 only on PASS:
   INVALID_PAIR    a pair's enforce turn resolved another scope confidence than its shadow turn: the
                   two runs did not ask the same question of the graph;
   FAIL            any paired fixture regressed (an expected document of today's top-k missing from the
-                  enforce top-k, or its MRR fell) or surfaced a forbidden document it did not surface
+                  enforce top-k, or its MRR fell), changed its tool selection while asked under the same
+                  acting tags (a pair whose acting tag values differ is `tagDrift`: listed, not counted,
+                  since the tagger, not the rag consumer, changed the selection; its retrieval still
+                  counts), or surfaced a forbidden document it did not surface
                   today; or a mean hit@k, MRR or recall@k fell, or the forbidden total grew, overall,
                   within a fixture set (rag-lexical, rag-retrieval) or within a confidence bucket; or a
                   pair was given different tools (section 9's tool criterion: under RAG-only
@@ -414,6 +417,19 @@ def _differences(trace, other):
     return out
 
 
+def _acting_tags(trace):
+    """Tag name -> acting value of a turn's tagging record (ADR-0068), {} when it carries none."""
+    record = trace.get("tags") if isinstance(trace.get("tags"), dict) else {}
+    return {str(t.get("name")): str(t.get("actingValue")) for t in record.get("tags") or []
+            if isinstance(t, dict) and t.get("name") is not None}
+
+
+def _tag_drift(trace, other):
+    """The tag names whose acting value differs between two turns of one question."""
+    mine, theirs = _acting_tags(trace), _acting_tags(other)
+    return sorted(name for name in set(mine) | set(theirs) if mine.get(name) != theirs.get(name))
+
+
 def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=None, preload_docs=None,
                  enforce_traces=None, baseline_traces=None, actor_proxy=None):
     """Aggregate the shadow traces, the enforce traces (None: no enforce run given), the baseline
@@ -478,6 +494,8 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
             # Under RAG-only enforcement the tool selection must be today's (section 9's tool criterion).
             "toolsChanged": [] if enforce_trace is None else [
                 d for d in _differences(trace, enforce_trace) if d in ("selectedTools", "offeredTools")],
+            # The acting tag values the two turns disagree on: the tagger drifted between the runs.
+            "tagDrift": [] if enforce_trace is None else _tag_drift(trace, enforce_trace),
             # The A/A check: what a second shadow turn of the same question resolved differently.
             "baselineDiff": None if baseline_trace is None else _differences(trace, baseline_trace),
             "retrievedIds": [d.get("documentId") for d in retrieved],
@@ -519,7 +537,8 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
                        if block["gate"] and block["gate"]["verdict"] == "FAIL"]
     confidence_mismatches = sum(1 for s in samples
                                 if s["enforceConfidence"] is not None and s["enforceConfidence"] != s["confidence"])
-    tool_changes = sum(1 for s in samples if s["toolsChanged"])
+    tool_changes = sum(1 for s in samples if s["toolsChanged"] and not s["tagDrift"])
+    tag_drift_tool_changes = sum(1 for s in samples if s["toolsChanged"] and s["tagDrift"])
     nondeterministic = sum(1 for s in samples if s["baselineDiff"])
     reasons = []
     if not samples or not overall["scored"]:
@@ -569,6 +588,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         "fixturesWithoutBaselineTrace": None if baseline_traces is None else len(without_baseline),
         "nondeterministicFixtures": None if baseline_traces is None else nondeterministic,
         "toolSelectionChanges": None if enforce_traces is None else tool_changes,
+        "tagDriftToolChanges": None if enforce_traces is None else tag_drift_tool_changes,
         "graphHashes": dict(sorted(graph_hashes.items())),
         "enforcedConsumers": dict(sorted(Counter(
             ",".join(sorted(str(c).upper() for c in t["scope"].get("enforced") or [])) for t in enforce).items())),
@@ -612,7 +632,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         ]
         report["toolChangeList"] = [
             {"fixtureId": s["fixtureId"], "turnId": s["turnId"], "enforceTurnId": s["enforceTurnId"],
-             "changed": s["toolsChanged"]}
+             "changed": s["toolsChanged"], "tagDrift": s["tagDrift"]}
             for s in samples if s["toolsChanged"]
         ]
         if baseline_traces is not None:
@@ -900,14 +920,15 @@ def render_text(report):
     verbose_hint = "" if "regressionList" in report else " (--verbose lists them)"
     if report["enforceTraces"] is not None:
         out.append(f"Fixtures the enforce run regressed: {report['regressedFixtures']} (expected document lost in "
-                   f"{report['losses']}){verbose_hint}; tool selection changed in {report['toolSelectionChanges']} pair(s)")
+                   f"{report['losses']}){verbose_hint}; tool selection changed in {report['toolSelectionChanges']} pair(s)"
+                   f" (plus {report['tagDriftToolChanges']} under drifted tags, not counted)")
     for entry in report.get("lossList", []):
         out.append(f"    regressed {entry['fixtureId']} turn={entry['turnId']} enforceTurn={entry['enforceTurnId']} "
                    f"confidence={entry['confidence']} lost={entry['lost']} mrr={entry['mrr'][0]}->{entry['mrr'][1]} "
                    f"today={entry['today']} enforce={entry['enforce']}")
     for entry in report.get("toolChangeList", []):
         out.append(f"    tools changed {entry['fixtureId']} turn={entry['turnId']} enforceTurn={entry['enforceTurnId']} "
-                   f"changed={entry['changed']}")
+                   f"changed={entry['changed']}" + (f" tagDrift={entry['tagDrift']}" if entry["tagDrift"] else ""))
     for entry in report.get("nondeterministicList", []):
         out.append(f"    nondeterministic {entry['fixtureId']} turn={entry['turnId']} differs={entry['differs']}")
     out.append(f"Expected document dropped by the simulated filter in {report['regressions']} sample(s){verbose_hint}")
