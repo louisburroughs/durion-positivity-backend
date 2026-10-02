@@ -71,7 +71,10 @@
   handler's own transaction (`TransactionTemplate` with `PROPAGATION_REQUIRES_NEW`) and rethrows the retryable set
   for container retry. That set has one definition, `RetryableConsumerFailures` in `pos-tenancy-common`
   (`com.positivity.tenancy.kafka`): `TransientDataAccessException`, `RecoverableDataAccessException`,
-  `DataAccessResourceFailureException` and `TransactionException`, anywhere in the cause chain. A dropped
+  `DataAccessResourceFailureException`, `CannotCreateTransactionException`, `TransactionSystemException` and
+  `TransactionTimedOutException`, anywhere in the cause chain. Every other `TransactionException`
+  (`UnexpectedRollbackException`, `IllegalTransactionStateException`, `NoTransactionException`, ...) is permanent:
+  it reports a state the same code reaches again on redelivery. A dropped
   connection is a `DataAccessResourceFailureException`, which Spring files as non-transient, so don't write
   `catch (TransientDataAccessException e) { throw e; }`; the permanent catch asks the classifier first, before it
   logs, records or marks anything:

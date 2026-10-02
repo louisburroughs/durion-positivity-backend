@@ -754,8 +754,11 @@ what they classify as permanent (a malformed payload, an unsupported command), s
 redelivery can fix reaches the handler. The set is defined once, in `pos-tenancy-common`'s
 `RetryableConsumerFailures`: `TransientDataAccessException` (a lock timeout or deadlock),
 `RecoverableDataAccessException`, `DataAccessResourceFailureException` (a dropped or refused
-connection, which Spring classes as non-transient) and `TransactionException` (the handler's
-transaction could not be opened or committed), anywhere in the failure's cause chain. Each catch
+connection, which Spring classes as non-transient) and three transaction failures
+(`CannotCreateTransactionException`, `TransactionSystemException`, `TransactionTimedOutException`:
+the handler's transaction could not be opened, its commit failed in the infrastructure, or it timed
+out), anywhere in the failure's cause chain. Any other `TransactionException`, such as
+`UnexpectedRollbackException`, stays permanent: redelivery would reach the same state. Each catch
 asks the classifier before it logs or records anything, so a retryable failure never leaves a
 `processed_events` mark behind.
 

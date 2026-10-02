@@ -151,7 +151,7 @@ public class SupplierInvoiceEventsListener {
         } catch (Exception e) {
             if (RetryableConsumerFailures.isRetryable(e)) {
                 // Not a DataAccessException, but as retryable as one: the transaction could not be
-                // opened or committed (a TransactionException), or a lost connection came wrapped.
+                // opened, failed to commit or timed out, or a lost connection came wrapped.
                 // Rethrown before the mark below for the same reason as above (ADR-0044 §4, #2355).
                 throw e;
             }
