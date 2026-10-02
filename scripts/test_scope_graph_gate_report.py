@@ -245,6 +245,36 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(result["overall"]["today"]["forbiddenHits"], 0)
         self.assertIn("Actor proxy ROLE_SYSTEM_ADMINISTRATOR: 1 sample(s)", report.render_text(result))
 
+    def test_simple_chat_fixture_is_exempt_not_missing(self):
+        # The simple-chat path resolves no scope and retrieves nothing: the rag consumer never acts on it.
+        scoped = _fixture("scoped", "where is WO-1234", ["workorder.guide"])
+        chatty = _fixture("chatty", "how do orders work", ["order.guide"])
+        hit = _trace(1, "where is WO-1234", _scope("HIGH", [_doc("workorder.guide")], ["workorder.guide"]))
+        simple = _trace(2, "how do orders work", None)
+        simple["simpleChat"] = True
+        result = report.build_report([hit, simple], [scoped, chatty], verbose=True)
+        self.assertEqual(result["fixturesWithoutTrace"], 0)
+        self.assertEqual(result["fixturesExempt"], {"simpleChat": 1})
+        self.assertEqual(result["fixturesExemptIds"], {"simpleChat": ["chatty"]})
+        self.assertNotEqual(result["gate"]["verdict"], "INCOMPLETE")
+        self.assertIn("exempt (simpleChat): chatty", report.render_text(result))
+
+    def test_proxy_untestable_visibility_fixture_is_exempt(self):
+        positive = _fixture("pos", "who can approve", ["admin.governance"], role="ROLE_ADMIN")
+        negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
+        proxy = "ROLE_SYSTEM_ADMINISTRATOR"
+        turn = _trace(1, "who can approve", _scope("LOW", [_doc("admin.governance", "admin")], []), role=proxy)
+        result = report.build_report([turn], [positive, negative], actor_proxy=proxy)
+        self.assertEqual(result["fixturesJoined"], 1)
+        self.assertEqual(result["fixturesWithoutTrace"], 0)
+        self.assertEqual(result["fixturesExempt"], {"proxyUntestable": 1})
+
+    def test_without_proxy_a_visibility_fixture_still_needs_its_trace(self):
+        negative = _fixture("neg", "who can approve", [], forbidden=["admin.governance"], role="ROLE_TECHNICIAN")
+        result = report.build_report([], [negative])
+        self.assertEqual(result["fixturesWithoutTrace"], 1)
+        self.assertEqual(result["fixturesExempt"], {})
+
     def test_fixture_without_actor_role_joins_no_turn(self):
         # Fail closed: a fixture that names no actor cannot say which turn is evidence for it.
         fixture = _fixture("f", "q", ["d"])

@@ -38,7 +38,9 @@ The gate verdict, exit code 0 only on PASS:
                   single deployable snapshot;
   INCOMPLETE      a loaded fixture has no joined shadow trace, or (with --enforce-file /
                   --baseline-file) no joined enforce / baseline trace: the evidence does not cover the
-                  fixture set;
+                  fixture set. Exempt, and listed instead: a fixture whose question took the simple-chat
+                  path (no scope, no RAG: the rag consumer never acts on it, `simpleChat`) and, under
+                  --actor-proxy, one that expects no document (`proxyUntestable`);
   NONDETERMINISTIC the baseline run resolved some fixture differently from the shadow run (top-K order,
                   confidence, selected or offered tools): pin the tagging mode and change nothing
                   between the runs, then rerun;
@@ -258,6 +260,25 @@ def join_traces(traces, fixtures, actor_proxy=None):
     return joined, skipped, mismatches
 
 
+def _exempt_fixtures(fixtures, traces, actor_proxy):
+    """Fixture index -> why it needs no trace: `simpleChat` (some turn asking its question took the
+    simple-chat path, which resolves no scope and retrieves nothing, so the rag consumer cannot act
+    on it) or `proxyUntestable` (under the actor proxy, a fixture of another actor expecting no
+    document: a pure visibility check the proxy cannot make)."""
+    simple = {normalise_text(t.get("userMessage")) for t in traces
+              if isinstance(t, dict) and t.get("simpleChat") is True and not isinstance(t.get("scope"), dict)
+              and isinstance(t.get("userMessage"), str)}
+    exempt = {}
+    for index, fixture in enumerate(fixtures):
+        query = fixture.get("query")
+        if isinstance(query, str) and normalise_text(query) in simple:
+            exempt[index] = "simpleChat"
+        elif (actor_proxy is not None and _actor_role(fixture) != actor_proxy
+              and not _expected(fixture, DEFAULT_K)[0]):
+            exempt[index] = "proxyUntestable"
+    return exempt
+
+
 def _proxied(trace, fixture, actor_proxy):
     """Whether a joined pair rests on the actor proxy rather than on the fixture's own actor."""
     return actor_proxy is not None and trace.get("role") == actor_proxy and _actor_role(fixture) != actor_proxy
@@ -475,9 +496,17 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
     confidences = {name: aggregate(group) for name, group in sorted(by_confidence.items())}
 
     fixture_ids = [f.get("fixture_id") for f in fixtures]
-    without_trace = [fixture_ids[i] for i in range(len(fixtures)) if i not in joined]
-    without_enforce = [fixture_ids[i] for i in range(len(fixtures)) if i not in enforce_joined]
-    without_baseline = [fixture_ids[i] for i in range(len(fixtures)) if i not in baseline_joined]
+    exempt = _exempt_fixtures(fixtures, list(traces) + list(enforce_traces or []) + list(baseline_traces or []),
+                              actor_proxy)
+    without_trace = [fixture_ids[i] for i in range(len(fixtures)) if i not in joined and i not in exempt]
+    without_enforce = [fixture_ids[i] for i in range(len(fixtures))
+                       if i not in enforce_joined and i not in exempt]
+    without_baseline = [fixture_ids[i] for i in range(len(fixtures))
+                        if i not in baseline_joined and i not in exempt]
+    exempt_ids = defaultdict(list)
+    for index in sorted(exempt):
+        if index not in joined:
+            exempt_ids[exempt[index]].append(fixture_ids[index])
     # The joined turns only: a stray turn that scores nothing does not split the evidence.
     scored_traces = {id(t): t for t in list(joined.values()) + list(enforce_joined.values())
                      + list(baseline_joined.values())}.values()
@@ -549,6 +578,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
         "actorProxy": actor_proxy,
         "proxiedSamples": sum(1 for s in samples if s["proxied"]),
         "fixturesWithoutTrace": len(without_trace),
+        "fixturesExempt": {reason: len(ids) for reason, ids in sorted(exempt_ids.items())},
         "fixturesEnforceJoined": len(enforce_joined),
         "fixturesWithoutEnforceTrace": None if enforce_traces is None else len(without_enforce),
         "scopeTruncatedSamples": sum(1 for s in samples if s["scopeTruncated"]),
@@ -606,6 +636,7 @@ def build_report(traces, fixtures, k=DEFAULT_K, verbose=False, lexicon_entities=
             or (s["enforce"] is not None and s["enforce"]["forbiddenHits"])
         ]
         report["fixturesWithoutTraceIds"] = without_trace
+        report["fixturesExemptIds"] = dict(sorted(exempt_ids.items()))
         if enforce_traces is not None:
             report["fixturesWithoutEnforceTraceIds"] = without_enforce
         report["actorMismatches"] = mismatches + enforce_mismatches + baseline_mismatches
@@ -814,6 +845,9 @@ def render_text(report):
     if report["actorProxy"] is not None:
         out.append(f"Actor proxy {report['actorProxy']}: {report['proxiedSamples']} sample(s) joined through it "
                    "(forbidden lists ignored; per-role visibility not tested)")
+    if report["fixturesExempt"]:
+        out.append("Fixtures needing no trace: " + ", ".join(f"{why}={n}" for why, n in report["fixturesExempt"].items())
+                   + " (simpleChat: the turn took the no-RAG simple-chat path)")
     if report["enforceTraces"] is None:
         out.append("Enforce traces: none given (--enforce-file)")
     else:
@@ -885,6 +919,8 @@ def render_text(report):
                    f"simulated={entry['simulated']} enforce={entry['enforce']} new={entry['new']}")
     if report.get("fixturesWithoutTraceIds"):
         out.append("    no shadow trace for: " + ", ".join(str(f) for f in report["fixturesWithoutTraceIds"]))
+    for why, ids in (report.get("fixturesExemptIds") or {}).items():
+        out.append(f"    exempt ({why}): " + ", ".join(str(f) for f in ids))
     if report.get("fixturesWithoutEnforceTraceIds"):
         out.append("    no enforce trace for: " + ", ".join(str(f) for f in report["fixturesWithoutEnforceTraceIds"]))
     if report.get("fixturesWithoutBaselineTraceIds"):
