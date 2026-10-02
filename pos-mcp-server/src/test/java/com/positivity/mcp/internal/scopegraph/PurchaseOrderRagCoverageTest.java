@@ -77,7 +77,10 @@ class PurchaseOrderRagCoverageTest {
     private static final Pattern BACKTICKED_CODE = Pattern.compile("`((?:order|inventory):[a-z0-9_:-]+)`");
     private static final Pattern EMIT_EVENT = Pattern.compile("@EmitEvent\\(id = \"([A-Z_]+)\"");
     private static final Pattern ORDER_EVENT_ID = Pattern.compile("\\bORDER_PURCHASE_ORDER_[A-Z_]+\\b");
-    private static final Pattern MAPPING = Pattern.compile("@(Get|Post)Mapping(?:\\(\"([^\"]*)\"\\))?");
+    private static final Pattern MAPPING =
+            Pattern.compile("@(Get|Post|Put|Patch|Delete)Mapping(?:\\(\"([^\"]*)\"\\))?");
+    private static final Pattern GUIDE_ORDER_ENDPOINT =
+            Pattern.compile("`((?:GET|POST|PUT|PATCH|DELETE) /v1/orders/purchase-orders[^`]*)`");
     private static final Pattern REQUEST_MAPPING = Pattern.compile("@RequestMapping\\(\"([^\"]+)\"\\)");
     private static final Pattern ENUM_CONSTANT = Pattern.compile("^\\s*([A-Z][A-Z0-9_]*)\\b");
     private static final Pattern COMMENT = Pattern.compile("(?s)/\\*.*?\\*/|//[^\\n]*");
@@ -161,18 +164,24 @@ class PurchaseOrderRagCoverageTest {
         assertThat(base.group(1)).isEqualTo("/v1/orders/purchase-orders");
 
         Matcher mapping = MAPPING.matcher(controller);
-        int endpoints = 0;
+        Set<String> endpoints = new TreeSet<>();
         while (mapping.find()) {
-            endpoints++;
             String method = mapping.group(1).toUpperCase(java.util.Locale.ROOT);
-            String path = base.group(1) + (mapping.group(2) == null ? "" : mapping.group(2));
-            assertThat(guide).as("endpoint row").contains("`" + method + " " + path + "`");
+            endpoints.add(method + " " + base.group(1) + (mapping.group(2) == null ? "" : mapping.group(2)));
         }
-        assertThat(endpoints).as("mappings found in PurchaseOrderController").isGreaterThanOrEqualTo(7);
+        assertThat(endpoints).as("mappings found in PurchaseOrderController").hasSizeGreaterThanOrEqualTo(7);
+        // Both directions: a row the guide keeps after its mapping is removed or renamed is the
+        // stale surface this test exists to catch, so the two sets must be equal, not one within
+        // the other.
+        assertThat(new TreeSet<>(matches(GUIDE_ORDER_ENDPOINT, guide, 1)))
+                .as("purchase-order endpoints the guide lists vs PurchaseOrderController's mappings")
+                .isEqualTo(endpoints);
 
-        Set<String> emitted = matches(EMIT_EVENT, controller, 1);
-        assertThat(emitted).as("@EmitEvent ids on PurchaseOrderController").hasSize(endpoints);
-        emitted.forEach(id -> assertThat(guide).as("event id %s", id).contains("`" + id + "`"));
+        Set<String> emitted = new TreeSet<>(matches(EMIT_EVENT, controller, 1));
+        assertThat(emitted).as("@EmitEvent ids on PurchaseOrderController").hasSameSizeAs(endpoints);
+        assertThat(new TreeSet<>(matches(ORDER_EVENT_ID, guide, 0)))
+                .as("ORDER_PURCHASE_ORDER_* ids the guide names vs the controller's @EmitEvent ids")
+                .isEqualTo(emitted);
 
         String registry = Files.readString(ORDER_SRC.resolve("config/EventTypes.java"));
         matches(ORDER_EVENT_ID, guide, 0)

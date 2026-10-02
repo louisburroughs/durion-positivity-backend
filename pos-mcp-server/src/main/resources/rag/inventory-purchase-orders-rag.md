@@ -23,15 +23,17 @@ document says so instead of describing it.
 ## Ownership
 
 - The purchase-order aggregate lives in pos-order. Its controller is `PurchaseOrderController` and its base path is
-  `/v1/orders/purchase-orders`. Every purchase-order permission code has the form `order:purchase_order:<action>`.
-- pos-inventory does not store purchase orders. It keeps a read-only copy that it builds from the
-  `purchaseorder.updated` facts pos-order publishes on the `order.events.v1` topic, and it uses that copy to check
-  an order before goods are received against it.
+  `/v1/orders/purchase-orders`. Every permission code that gates a purchase-order endpoint has the form
+  `order:purchase_order:<action>`.
+- pos-inventory does not own purchase orders and cannot create or change one. It stores a read-only copy of each
+  order, which it builds from the `purchaseorder.updated` facts pos-order publishes on the `order.events.v1` topic,
+  and it uses that copy to check an order before goods are received against it.
 - Receiving is the part pos-inventory still owns. pos-inventory records what arrived and publishes a
   `goodsreceipt.recorded` fact on `inventory.events.v1`. pos-order consumes that fact and updates the order's open
   quantities, open balance and status.
 - The earlier purchase-order endpoints of pos-inventory, and its create, view and approve permission codes for
-  purchase orders, no longer exist.
+  purchase orders, no longer exist. One earlier code, `inventory:purchase_order:receive`, is still declared in
+  pos-inventory and gates no endpoint; "Receiving against a purchase order" below says what gates receiving.
 
 ## Endpoints, permissions and events
 
