@@ -47,8 +47,8 @@ public class OffboardingAssignmentEnder {
 
     /**
      * How long after an employee's status change the open-ended sweep leaves their assignments
-     * alone; matches the retry queue's first delay. A disable is already kept from the sweep by its
-     * queue row, so this only delays the offboardings that have none.
+     * alone; matches the retry queue's first delay. An offboarding is already kept from the sweep
+     * by its queue row, so this only delays an employee whose row has used up its attempts.
      */
     static final long SETTLE_SECONDS = 300;
 
@@ -118,11 +118,12 @@ public class OffboardingAssignmentEnder {
      * assignments of DISABLED or TERMINATED employees that are past their {@code effectiveTo} (a
      * GRACE_PERIOD that has run out; nothing flips the status when the date passes, and
      * status-keyed consumers such as pos-shop-manager's mechanic projection would keep treating the
-     * person as staffed), or open-ended ones no queue row will get to: those of an employee
-     * terminated through {@code updateEmployee}, which queues nothing, or whose retry row gave up.
-     * A disable's own assignments are not among them while its row is pending (#2360). The caller
-     * ends each through {@link #endLingeringAssignment(UUID)} in a transaction of its own, so one
-     * bad row cannot roll back the rest.
+     * person as staffed), or open-ended ones no queue row will get to: those of an employee whose
+     * retry row gave up. An offboarding's own assignments are not among them while its row is
+     * pending (#2360), whether it came from {@code disableEmployee} or from a status moved into
+     * TERMINATED or DISABLED through {@code updateEmployee} (#2361). The caller ends each through
+     * {@link #endLingeringAssignment(UUID)} in a transaction of its own, so one bad row cannot roll
+     * back the rest.
      *
      * @param maxAttempts the retry worker's attempt cap; a retry row at or past it no longer counts
      *     as pending

@@ -42,6 +42,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * worker's first delay has passed. Should the handler be held up for longer than that, the two are
  * serialized by the row itself: each reads it with a row lock before applying it, so the second
  * waits for the first to finish and then finds the row deleted and does nothing.
+ *
+ * <p>An offboarding through {@code updateEmployee} (a status moved into TERMINATED or DISABLED,
+ * #2361) arrives here the same way: that method writes the same row, always with the IMMEDIATE
+ * policy, and publishes the same event, so everything said of the disable above holds for it.
  */
 @Component
 @Slf4j
