@@ -22,6 +22,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
@@ -170,6 +171,19 @@ class VehicleEventsListenerTest {
         when(extVehicleReplica.save(any())).thenThrow(new QueryTimeoutException("db"));
 
         assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onVehicleEvent(updatedEvent("e-4", 7)));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Propagates lost-connection DB errors so the container retries")
+    void propagatesLostConnectionErrors() {
+        when(processedEvents.existsById("e-4")).thenReturn(false);
+        when(extVehicleReplica.findById(VEHICLE_ID)).thenReturn(Optional.empty());
+        when(extVehicleReplica.save(any())).thenThrow(new DataAccessResourceFailureException("connection reset"));
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
                 .isThrownBy(() -> listener.onVehicleEvent(updatedEvent("e-4", 7)));
 
         verify(processedEvents, never()).save(any());
