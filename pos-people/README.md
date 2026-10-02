@@ -183,6 +183,18 @@ Disabling an employee ends their staffing assignments per `assignmentPolicy`: `I
 active assignment now; `GRACE_PERIOD` (which requires `assignmentEndDate`, today or later) caps their
 `effectiveTo` at that date and leaves them `ACTIVE`.
 
+**A status change through `updateEmployee` is an offboarding too (#2361).** When `PUT
+/v1/people/employees/{employeeId}` moves an existing employee's status from one that is not offboarded
+(`ACTIVE`, `ON_LEAVE`, `SUSPENDED`) into `TERMINATED` or `DISABLED`, it is treated as an `IMMEDIATE`
+offboarding: that request carries no policy, so every active assignment is ended today, one dated into the
+future included. It goes through the same queue row, after-commit handler and worker as a disable,
+described below; the row's actor is the caller and its `disable_reason` is the fixed text `Status set to
+<status> through updateEmployee`. `statusEffectiveAt` is restamped, as on every status change through that
+endpoint. Nothing is queued when the status does not change, when it changes between statuses that are not
+offboarded, or when the employee already was `DISABLED` or `TERMINATED`: the earlier offboarding dealt with
+their assignments, so terminating an employee who was disabled with a `GRACE_PERIOD` leaves the grace-dated
+assignments to end on their date. A choice of policy still needs `disableEmployee`.
+
 **The policy is durable with the disable (#2360).** `disableEmployee` saves the status change and, in the
 same transaction, inserts an `employee_offboarding_retry_queue` row carrying the policy, the
 `assignmentEndDate` and the actor (attempts 0, first due five minutes later), then publishes an
@@ -210,11 +222,12 @@ ended. At the attempt limit the worker logs at error and leaves the row for an o
 **The sweep.** The same pass also ends `ACTIVE` assignments of `DISABLED`/`TERMINATED` employees that are
 past their `effectiveTo` (a grace period that ran out) or open-ended, and publishes
 `people.staffing-assignment.updated` for each. The open-ended case ends the assignment today whatever was
-asked for, so it only applies once the status change is five minutes old and no retry row is pending. A
-disable always has a row until its policy is applied, which leaves the open-ended case with two things:
-an offboarding that never had a row (a termination applied through `updateEmployee`, #2361) and a row that
-has used up its attempts, which no longer counts as pending; that last case is the one where a
-`GRACE_PERIOD` can still end early, and the gauge below is its alert. The sweep reads the candidate ids in
+asked for, so it only applies once the status change is five minutes old and no retry row is pending.
+Every offboarding has a row until its policy is applied, a disable and a termination through
+`updateEmployee` alike (#2361), which leaves the open-ended case with a row that has used up its attempts
+and so no longer counts as pending; that is the one case where a `GRACE_PERIOD` can still end early, and
+the gauge below is its alert. Beyond that it is a backstop for an offboarded status written by anything
+other than those two paths (a data fix, say), which no code does today. The sweep reads the candidate ids in
 one query and ends each assignment in a `REQUIRES_NEW` transaction of its own, so one assignment that
 cannot be ended does not roll back the others. It runs per tenant. There is no scheduler lock: with several
 instances a queue row is serialized by its row lock, and an open-ended assignment may be swept twice, which

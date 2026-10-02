@@ -58,10 +58,13 @@ public interface EmployeeLocationAssignmentRepository
      * whatever the request asked for. {@code disableEmployee} writes its retry row in the
      * transaction that changes the status (#2360), so a disabled employee's assignments are held
      * back by that row until the after-commit handler or the retry worker has applied the request's
-     * own policy and deleted it. What is left for this branch is an offboarding that never had a
-     * row (a termination applied through {@code updateEmployee}) and one whose row has reached
+     * own policy and deleted it. A status moved into TERMINATED or DISABLED through
+     * {@code updateEmployee} writes the same row, with the IMMEDIATE policy (#2361). What is left
+     * for this branch is two cases. One is an offboarding whose row has reached
      * {@code maxAttempts}: only a row with attempts left counts as pending, since an exhausted one
-     * is never worked again and must not hold the employee's assignments open forever.
+     * is never worked again and must not hold the employee's assignments open forever. The other is
+     * an offboarded status that never had a row, because it was written outside those two paths
+     * (a data fix, say); no code does that today, and this branch is its backstop.
      */
     @Query("""
             SELECT a FROM EmployeeLocationAssignment a
